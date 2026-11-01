@@ -1,16 +1,40 @@
 cmake_minimum_required(VERSION 3.13)
 
-# Must be set before pico_sdk_import.cmake
-set(PICO_BOARD pico2_w CACHE STRING "Board type")
-set(PICO_PLATFORM rp2350-arm-s CACHE STRING "Platform")
+# Select the target with -DNEUPOD_PLATFORM=rp2350|esp32s3|host (default rp2350).
+# Use a separate build directory per platform, e.g. build/rp2350, build/host.
+set(NEUPOD_PLATFORM "rp2350" CACHE STRING "Target platform: rp2350, esp32s3 or host")
+set_property(CACHE NEUPOD_PLATFORM PROPERTY STRINGS rp2350 esp32s3 host)
 
-include(pico_sdk_import.cmake)
+if(NEUPOD_PLATFORM STREQUAL "rp2350")
+  # The Pico SDK must be imported before project() so it can set the toolchain.
+  include(platforms/rp2350/sdk_import.cmake)
+  project(neupod C CXX ASM)
+  set(CMAKE_C_STANDARD 11)
+  set(CMAKE_CXX_STANDARD 17)
+  pico_sdk_init()
 
-project(neupod C CXX ASM)
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 17)
+  add_subdirectory(app)
+  add_subdirectory(platforms/rp2350)
 
-pico_sdk_init()
+elseif(NEUPOD_PLATFORM STREQUAL "host")
+  project(neupod C)
+  set(CMAKE_C_STANDARD 11)
+  enable_testing()
 
-add_subdirectory(hal/rp2350)
-add_subdirectory(app)
+  add_subdirectory(app)
+  add_subdirectory(hal/host)
+  if(EXISTS ${CMAKE_SOURCE_DIR}/tests/CMakeLists.txt)
+    add_subdirectory(tests)
+  endif()
+
+elseif(NEUPOD_PLATFORM STREQUAL "esp32s3")
+  # ESP-IDF owns the CMake project for its targets and cannot be nested under another
+  # project(); its project lives in platforms/esp32s3 and pulls in the same app/ sources.
+  message(FATAL_ERROR
+    "esp32s3 is built by ESP-IDF directly:\n"
+    "  . ~/esp/esp-idf/export.sh && idf.py -C platforms/esp32s3 -B build/esp32s3 build\n"
+    "or: scripts/build.sh esp32s3")
+
+else()
+  message(FATAL_ERROR "Unknown NEUPOD_PLATFORM '${NEUPOD_PLATFORM}' (rp2350, esp32s3, host)")
+endif()
