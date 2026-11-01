@@ -1,1 +1,33 @@
+# Build output (all platforms)
 build/
+build-*/
+platforms/esp32s3/build/
+platforms/esp32s3/managed_components/
+platforms/esp32s3/sdkconfig
+platforms/esp32s3/sdkconfig.old
+platforms/esp32s3/dependencies.lock
+
+# Firmware images outside releases/
+*.uf2
+!releases/**/*.uf2
+
+# Editor / IDE (keep shared settings)
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+.idea/
+
+# Host tooling
+__pycache__/
+*.pyc
+.venv/
+site/
+bin/
+obj/
+*.img
+
+# OS
+.DS_Store
+Thumbs.db
