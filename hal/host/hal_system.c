@@ -4,6 +4,7 @@
 #include <time.h>
 
 #include "hal_system.h"
+#include "host_internal.h"
 
 static struct timespec g_start;
 
@@ -20,8 +21,19 @@ uint32_t hal_millis(void) {
 }
 
 void hal_delay_ms(uint32_t ms) {
-    struct timespec ts = {.tv_sec = ms / 1000, .tv_nsec = (long)(ms % 1000) * 1000000L};
-    nanosleep(&ts, NULL);
+    // Sleep in short slices so the simulator window keeps pumping events (and a close request
+    // exits promptly) even during long delays.
+    uint32_t start = hal_millis();
+    for (;;) {
+        host_pump_events();
+        uint32_t elapsed = hal_millis() - start;
+        if (elapsed >= ms) {
+            return;
+        }
+        uint32_t slice = ms - elapsed < 10 ? ms - elapsed : 10;
+        struct timespec ts = {.tv_sec = 0, .tv_nsec = (long)slice * 1000000L};
+        nanosleep(&ts, NULL);
+    }
 }
 
 void hal_status_led(bool on) { (void)on; }

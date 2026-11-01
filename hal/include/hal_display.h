@@ -39,7 +39,8 @@ hal_status_t hal_display_set_window(uint16_t x, uint16_t y, uint16_t w, uint16_t
 
 /**
  * Stream @p count pixels into the current window. May return before the transfer completes
- * (DMA); @p pixels must stay valid until hal_display_wait() returns.
+ * (DMA); @p pixels must stay valid until hal_display_wait() returns. Writing more than w*h
+ * pixels in total wraps back to the window origin (as on the controller).
  */
 hal_status_t hal_display_blit(const hal_pixel_t *pixels, size_t count);
 

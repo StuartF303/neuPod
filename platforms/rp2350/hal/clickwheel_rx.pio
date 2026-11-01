@@ -1,0 +1,30 @@
+; SPDX-License-Identifier: MPL-2.0
+;
+; iPod click-wheel receiver SKELETON.
+;
+; The wheel free-runs its own ~53 kHz open-drain clock and streams 32-bit frames LSB first.
+; This program samples the data line once per clock and autopushes 32 bits into the RX FIFO
+; (ISR shifts right, so bit 0 of each word is the first bit received; hal_input.c feeds the
+; words to clickwheel_sync_push_word()).
+;
+; Pin mapping: IN base = clock pin (read here with "wait ... pin 0"), JMP pin = data pin.
+; Using JMP PIN for data lets the two lines be any GPIOs (the reserved set is not contiguous).
+;
+; TODO(hw): UNCONFIRMED -- sample edge. Rising edge is assumed below. If the data is valid on the
+;           falling edge instead, swap the two WAIT polarities.
+; TODO(hw): UNCONFIRMED -- which line is wheel->host data, and the frame-boundary signalling.
+;           Frame alignment is recovered in software by validity-checking (clickwheel_frame.c).
+
+.program clickwheel_rx
+
+.wrap_target
+    wait 0 pin 0        ; clock low (TODO(hw): edge polarity)
+    wait 1 pin 0        ; clock high: sample now (TODO(hw): edge polarity)
+    set y, 0            ; assume data low
+    jmp pin data_high   ; data line high?
+    jmp emit
+data_high:
+    set y, 1
+emit:
+    in y, 1             ; shift the sampled bit into the ISR (autopush every 32)
+.wrap

@@ -1,9 +1,34 @@
 # Portable application sources, shared by every platform build (incl. ESP-IDF components).
 set(NEUPOD_APP_DIR ${CMAKE_CURRENT_LIST_DIR})
-set(NEUPOD_APP_SOURCES
+
+# Split lists so the host/RP2350 builds can make separate static libs; NEUPOD_APP_SOURCES is the
+# union for build systems (ESP-IDF) that compile everything into one component.
+set(NEUPOD_CORE_SOURCES
   ${NEUPOD_APP_DIR}/app.c
 )
+set(NEUPOD_DEMO_SOURCES
+  ${NEUPOD_APP_DIR}/demos/display_test.c  # needs hal_display
+)
+set(NEUPOD_CLICKWHEEL_SOURCES
+  ${NEUPOD_APP_DIR}/input/clickwheel_frame.c
+)
+set(NEUPOD_FATFS_SOURCES
+  ${NEUPOD_APP_DIR}/third_party/fatfs/ff.c
+  ${NEUPOD_APP_DIR}/third_party/fatfs/ffunicode.c
+  ${NEUPOD_APP_DIR}/third_party/fatfs/ffsystem.c
+  ${NEUPOD_APP_DIR}/storage/diskio.c
+)
+set(NEUPOD_APP_SOURCES
+  ${NEUPOD_CORE_SOURCES}
+  ${NEUPOD_DEMO_SOURCES}
+  ${NEUPOD_CLICKWHEEL_SOURCES}
+  ${NEUPOD_FATFS_SOURCES}
+)
+# Warning flags for project code only (applied per source file; never to third_party or the SDK).
+set(NEUPOD_WARN_FLAGS -Wall -Wextra -Wshadow)
+
 set(NEUPOD_APP_INCLUDE_DIRS
   ${NEUPOD_APP_DIR}/include
+  ${NEUPOD_APP_DIR}/third_party/fatfs
   ${NEUPOD_APP_DIR}/../hal/include
 )
