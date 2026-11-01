@@ -49,7 +49,7 @@ Avoid any SoC needing external DDR (6–8 layers, impedance control).
 
 Required: 2.4 GHz Wi-Fi, Bluetooth audio (A2DP to AirPods/headphones/speakers), USB-C for charging and drag-and-drop file transfer (mass storage), digital audio out over USB-C.
 
-- **Radio for RP2350 route:** Infineon CYW43439 over SPI (Pico W / Pico 2 W reference design is open, ~~£2–3 + antenna) or an ESP32-C6 as radio co-processor over SPI (~~£1.50, Wi-Fi 6 + BT 5, easier to source).
+- **Radio for RP2350 route:** Infineon CYW43439 over SPI (Pico W / Pico 2 W reference design is open, ~£2–3 + antenna) or an ESP32-C6 as radio co-processor over SPI (~£1.50, Wi-Fi 6 + BLE 5 only, easier to source). The C6 has **no classic Bluetooth, so no A2DP**; it only suits Wi-Fi.
 - **Classic Bluetooth A2DP** is needed for most headphones; confirm the chosen radio supports BR/EDR, not just BLE.
 - **Antenna:** shell is a Faraday cage. Place a chip or FPC antenna by the headphone jack's plastic insert or under the click wheel (plastic). Keep-out and ground clearance per antenna datasheet.
 - **USB-C:** 5.1 kΩ CC pulldowns for 5 V from C-to-C cables; USB 2.0 data; no PD needed at 1–2 A. The 30-pin aperture (~21 × 3 mm) takes a mid-mount USB-C receptacle with a small printed/CNC filler.
@@ -221,7 +221,7 @@ About £35–55 in parts per board (RP2350 route ~£25–40), before the donor i
 - [ ] Measure usable cavity depth for the battery with the HDD removed.
 - [ ] Identify the stock LCD and click-wheel FPC pin counts and pitches.
 - [ ] Decide: RP2350-only vs RP2350 + Linux-module footprint.
-- [ ] Decide radio: CYW43439 vs ESP32-C6 co-processor (classic BT A2DP support is the deciding factor).
+- [ ] Decide radio: CYW43439 vs external QCC module for A2DP ([ADR-0007](adr/0007-bluetooth-audio-path.md)). The ESP32-C6 co-processor is ruled out for A2DP: BLE only, no classic BT.
 - [ ] Confirm Compute Module Zero availability and price.
 - [ ] Watch for Sprout's GitHub release (hardware files and firmware).
 

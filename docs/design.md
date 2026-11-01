@@ -26,9 +26,9 @@ Build the firmware and the replacement logic board in two phases:
 | --- | --- | --- |
 | Compute | Pico 2 W (RP2350A, 26 GPIO, 4 MB flash, no PSRAM) | RP2350B + 8 MB PSRAM + 16 MB flash |
 | Radio | CYW43439 on Pico 2 W via internal SPI (uses GP23/24/25/29 — not available to us) | CYW43439 or ESP32 co-processor — decision pending A2DP test |
-| Display | ER-TFT024IPS-3 on 4-wire SPI (SPI1), or stock Classic panel for driver work | Same panel, 8080-16 via PIO if pins allow |
-| Storage | microSD, SDIO 4-bit via PIO (or SPI0 shared with DAC control if pins are short) | SDIO 4-bit |
-| Audio | PCM5102A I²S breakout (no control bus) | CS43131 I²S + I²C |
+| Display | Adafruit 2.0" 320×240 IPS TFT (ST7789) on SPI1, landscape — see [wiring](wiring-phase1.md) | ER-TFT024IPS-3 (or RM690B0 AMOLED), 8080-16 via PIO if pins allow |
+| Storage | microSD, SDIO 4-bit via PIO on GP2–7 ([ADR-0006](adr/0006-storage-microsd-sdio.md); SPI mode is the fallback) | SDIO 4-bit |
+| Audio | Pimoroni Pico Audio Pack (I²S on GP9–11, mute/amp enable GP22) | CS43131 I²S + I²C |
 | Input | Donor click wheel via FPC breakout; hold switch from headphone flex | Same |
 | Power | USB from the Pico, LiPo SHIM for battery tests | BQ25895 + BQ27441, USB-C |
 | USB | Pico's native USB (TinyUSB: MSC + CDC) | Native USB on USB-C |
@@ -174,7 +174,7 @@ The wheel is a self-contained touch controller (a Cypress PSoC on the 5G; same p
 1. Click wheel: 4 lines + 3.3 V + GND. Pull-ups to 3.3 V on CLK/SDO (18 kΩ). PIO clocked-serial receiver; one GPIO for the host init packet.
 2. Hold + headphone detect: two GPIO inputs with pull-ups.
 3. I²C bus: Mikey (0x72) on the headphone flex if we want the inline remote; CS43131 and the fuel gauge later.
-4. Stock LCD: skip on the Pico 2 W. Use the ER-TFT024IPS-3 over SPI.
+4. Stock LCD: skip on the Pico 2 W. Use the Adafruit 2.0" ST7789 over SPI1 (the ER-TFT024IPS-3 is the final-board candidate).
 5. No change to the earlier pin budget except the wheel is confirmed as 4 lines, not 3.
 
 ## Firmware
@@ -217,9 +217,9 @@ primary source for every reused-part interface on this page.
 - [ ] Measure the headphone flex and battery connectors (pin count, pitch); confirm which flex pins are SDA/SCL for Mikey
 - [ ] Measure the stock LCD FPC and backlight string voltage (plan B only)
 - [ ] Order FPC breakouts to match the measured pitches
-- [ ] Decide SD mode for Phase 1 (SDIO vs SPI)
+- [x] Decide SD mode for Phase 1: SDIO 4-bit on GP2–7 ([ADR-0006](adr/0006-storage-microsd-sdio.md))
 - [ ] Prove BTstack A2DP source to AirPods on the Pico 2 W
-- [ ] Order: Pico 2 W (or Plus 2 W), Debug Probe, ER-TFTM024IPS-3 module, PCM5102A, SD breakout, FPC breakout assortment
+- [ ] Order: Pico 2 W (or Plus 2 W), Debug Probe, Adafruit 2.0" 320×240 IPS TFT (ST7789), Pimoroni Pico Audio Pack, SD breakout, FPC breakout assortment; ER-TFTM024IPS-3 module for final-panel evaluation
 
 - [ ] 3D-scan the mid-frame, original logic board, thin back and (when bought) thick back on the Revopoint Metro X (matte spray on chrome/steel/gloss connectors); flatbed-scan the bare board at ≥600 dpi for the 2D outline and hole centres; keep STL + DXF with the design files
 
@@ -245,8 +245,8 @@ primary source for every reused-part interface on this page.
   during that transfer is **unknown** — observe on the stock board.
 - [x] Where the 18 kΩ pull-ups sit: on the **wheel's own flex** (5G teardown). Treat the 6G the
   same but verify with a meter before adding board pull-ups.
-- [ ] Not yet in [click-wheel-protocol.md](click-wheel-protocol.md) and worth adding once
-  confirmed: after the init packet the wheel answers with a `0x8000023A`-type frame carrying button
+- [x] Added to [click-wheel-protocol.md](click-wheel-protocol.md) (1 Nov 2026), marked as
+  Rockbox-sourced: after the init packet the wheel answers with a `0x8000023A`-type frame carrying button
   state in bits 16–20; Rockbox's scroll constants (96 counts/rev, 4 counts per list step, 150 ms
   untouched debounce, 250 ms repeat timeout); Hold handling (stop the controller, drive the four
   lines low, re-init on release).

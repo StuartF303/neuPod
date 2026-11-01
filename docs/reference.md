@@ -163,7 +163,7 @@ Panel candidates and specifications: [Requirements → Display](requirements.md#
 
 - [ ] Check LCSC/JLCPCB stock for every final-board part before locking the BOM (RP2350B is
   JLCPCB part C42415655; RP2350A is C42411118).
-- [ ] Confirm the Pico Audio Pack's mute/amp-enable pin and polarity against its silkscreen.
+- [ ] Confirm the polarity of the Pico Audio Pack's mute/amp-enable line (GP22) against Pimoroni's pinout.
 - [ ] Order FPC breakouts once the donor's connector pitches are measured.
 - [ ] Source a QCC3008-class Bluetooth transmitter board for the A2DP bench comparison.
 

@@ -113,5 +113,5 @@ See [LICENSE.md](LICENSE.md) for which applies where.
 
 - [Rockbox](https://www.rockbox.org/) for the iPod Classic 6G (ipod6g) reverse-engineering,
   including the click-wheel protocol.
-- Sprout <!-- TODO: author and link --> for the prior art and licensing model.
+- [Sprout](https://certainthings.studio/sprout/) by certain things for the prior art and licensing model.
 - The iFlash, Moonlit and Elite Obsolete communities for keeping the iPod Classic alive.
