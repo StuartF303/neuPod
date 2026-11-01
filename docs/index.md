@@ -16,6 +16,7 @@ Two compute platforms are evaluated side by side from one source tree:
 | [Requirements](requirements.md) | What neuPod must do (exported from the Claude design doc) |
 | [Design](design.md) | How it does it (exported from the Claude design doc) |
 | [Reference](reference.md) | Datasheets, protocols, prior art (exported from the Claude design doc) |
+| [UI mock-ups](ui.md) | Screen designs at 320×240 and click-wheel interaction notes |
 | [Phase 1 wiring](wiring-phase1.md) | Pico 2 W breadboard pin plan |
 | [Click-wheel protocol](click-wheel-protocol.md) | iPod 6G click-wheel serial protocol |
 | [Architecture decisions](adr/index.md) | ADRs |
