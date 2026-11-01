@@ -1,0 +1,35 @@
+name: Hardware measurement
+description: Record a measured fact about the iPod 6G or neuPod hardware (pinout, timing, voltage, dimension)
+labels: [hardware, measurement]
+body:
+  - type: input
+    id: subject
+    attributes:
+      label: What was measured
+      placeholder: e.g. click-wheel CLK frequency, 4th wheel line function, FPC pitch
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Result
+      description: Values with units and tolerance.
+    validations:
+      required: true
+  - type: textarea
+    id: method
+    attributes:
+      label: Method and equipment
+      description: Instrument (scope, logic analyser, calipers…), settings, probe points.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Scope captures, .sr files, photos.
+  - type: input
+    id: unit
+    attributes:
+      label: Unit under test
+      placeholder: e.g. A1238 160 GB, wheel part marking

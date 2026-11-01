@@ -1,0 +1,45 @@
+site_name: neuPod
+site_description: Replacement logic board and firmware for the iPod Classic 6G
+site_url: https://stuartf303.github.io/neuPod/
+repo_url: https://github.com/StuartF303/neuPod
+repo_name: StuartF303/neuPod
+edit_uri: edit/main/docs/
+copyright: Documentation licensed CC BY 4.0
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Dark mode
+    - scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Light mode
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - Requirements: requirements.md
+  - Design: design.md
+  - Reference: reference.md
+  - Hardware:
+      - Phase 1 wiring: wiring-phase1.md
+      - Click-wheel protocol: click-wheel-protocol.md
+  - Decisions:
+      - adr/index.md
+      - ADR-0001 RP2350 as Phase 1 platform: adr/0001-rp2350-phase1-platform.md
+      - ADR-0002 ST7789 SPI display: adr/0002-display-st7789-spi-phase1.md
+      - ADR-0003 Audio quality policy: adr/0003-audio-quality-policy.md

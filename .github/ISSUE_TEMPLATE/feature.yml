@@ -1,0 +1,26 @@
+name: Feature request
+description: Propose new functionality
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options: [UI, playback, codecs, storage, display, input, audio, bluetooth, wifi, usb, power, hardware, tools, docs]
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
