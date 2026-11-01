@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" width="320" height="240" role="img" aria-label="Album browser: a row of album artwork with the centre one enlarged and reflected">
+  <style>text{font-family:-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;fill:#1d1d1b}</style>
+  <defs>
+    <linearGradient id="bar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f7f7f5"/><stop offset="1" stop-color="#d9d9d4"/>
+    </linearGradient>
+    <linearGradient id="sel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5f9df0"/><stop offset="1" stop-color="#2663c6"/>
+    </linearGradient>
+    <linearGradient id="art" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5a6b8a"/><stop offset="1" stop-color="#1e2a44"/>
+    </linearGradient>
+    <linearGradient id="art2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#b8743a"/><stop offset="1" stop-color="#4a2a10"/>
+    </linearGradient>
+    <linearGradient id="art3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4f8a6b"/><stop offset="1" stop-color="#143324"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="320" height="240" fill="#ffffff"/>
+  <rect x="0" y="0" width="320" height="24" fill="url(#bar)"/>
+  <line x1="0" y1="24" x2="320" y2="24" stroke="#b9b9b3" stroke-width="1"/>
+  <text x="160" y="17" text-anchor="middle" font-size="13" font-weight="600">Albums</text>
+  <!-- battery -->
+  <rect x="289" y="7" width="22" height="10" rx="2" fill="none" stroke="#5b5a56" stroke-width="1"/>
+  <rect x="290.5" y="8.5" width="15" height="7" rx="1" fill="#3fa34d"/>
+  <rect x="311" y="10" width="2" height="4" fill="#5b5a56"/>
+  <rect x="0" y="24" width="320" height="216" fill="#1a1a1c"/>
+  <rect x="14" y="70" width="70" height="70" rx="3" fill="url(#art3)"/>
+  <circle cx="49.0" cy="105.0" r="15.4" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="2.1"/>
+  <circle cx="49.0" cy="105.0" r="3.5" fill="#ffffff" fill-opacity="0.5"/>
+  <rect x="236" y="70" width="70" height="70" rx="3" fill="url(#art2)"/>
+  <circle cx="271.0" cy="105.0" r="15.4" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="2.1"/>
+  <circle cx="271.0" cy="105.0" r="3.5" fill="#ffffff" fill-opacity="0.5"/>
+  <rect x="110" y="48" width="100" height="100" rx="3" fill="url(#art)"/>
+  <circle cx="160.0" cy="98.0" r="22.0" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="3.0"/>
+  <circle cx="160.0" cy="98.0" r="5.0" fill="#ffffff" fill-opacity="0.5"/>
+  <rect x="14" y="140" width="70" height="20" fill="url(#art3)" opacity="0.25"/>
+  <rect x="236" y="140" width="70" height="20" fill="url(#art2)" opacity="0.25"/>
+  <rect x="110" y="148" width="100" height="24" fill="url(#art)" opacity="0.3"/>
+  <text x="160" y="196" text-anchor="middle" font-size="12.5" font-weight="600" style="fill:#ffffff">Album name</text>
+  <text x="160" y="212" text-anchor="middle" font-size="11" style="fill:#b0b0ab">Artist name · 2019</text>
+  <text x="160" y="232" text-anchor="middle" font-size="9.5" style="fill:#6f6f6a">scroll the wheel to flip · Select opens the album</text>
+
+</svg>

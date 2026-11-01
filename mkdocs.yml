@@ -35,6 +35,7 @@ nav:
   - Requirements: requirements.md
   - Design: design.md
   - Reference: reference.md
+  - UI: ui.md
   - Hardware:
       - Phase 1 wiring: wiring-phase1.md
       - Click-wheel protocol: click-wheel-protocol.md
@@ -43,3 +44,7 @@ nav:
       - ADR-0001 RP2350 as Phase 1 platform: adr/0001-rp2350-phase1-platform.md
       - ADR-0002 ST7789 SPI display: adr/0002-display-st7789-spi-phase1.md
       - ADR-0003 Audio quality policy: adr/0003-audio-quality-policy.md
+      - ADR-0004 Donor iPod Classic 6G: adr/0004-donor-ipod-classic-6g.md
+      - ADR-0005 Firmware architecture: adr/0005-firmware-architecture.md
+      - ADR-0006 Storage microSD SDIO: adr/0006-storage-microsd-sdio.md
+      - ADR-0007 Bluetooth audio path: adr/0007-bluetooth-audio-path.md
