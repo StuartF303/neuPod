@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scripts: `build.sh`, platform-aware `flash.sh`/`console.sh`, `setup-esp-idf.sh`.
 - Docs: wiring, click-wheel protocol, ADR-0001..0003, placeholders for requirements/design/
   reference; MkDocs Material site for GitHub Pages.
-- CI: firmware (rp2350, host, esp32s3 allow-failure), docs deploy, issue/PR templates,
+- CI: firmware (rp2350, host, esp32s3), docs deploy, issue/PR templates,
   CODEOWNERS, Dependabot.
 
 ### Changed

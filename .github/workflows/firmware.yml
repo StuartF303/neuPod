@@ -67,8 +67,6 @@ jobs:
         run: ctest --test-dir build/host --output-on-failure
 
   esp32s3:
-    # Allowed to fail until the ESP-IDF skeleton has been built for real.
-    continue-on-error: true
     runs-on: ubuntu-24.04
     container: espressif/idf:v5.3.2
     steps:
