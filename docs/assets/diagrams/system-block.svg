@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420" width="760" height="420" role="img" aria-label="neuPod system block diagram: MCU at the centre, reused iPod parts on the left, new parts on the right">
+  <style>
+    text { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 12px; fill: #1d1d1b; }
+    .t { font-size: 14px; font-weight: 600; }
+    .s { font-size: 10.5px; fill: #5b5a56; }
+    .box { fill: #ffffff; stroke: #6b6a66; stroke-width: 1.25; rx: 8; }
+    .mcu { fill: #e8f0e6; stroke: #4f7a48; stroke-width: 2; rx: 8; }
+    .reuse { fill: #f3efe6; stroke: #a08a5a; stroke-width: 1.25; rx: 8; }
+    .w { stroke: #6b6a66; stroke-width: 1.25; fill: none; }
+  </style>
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#6b6a66"/></marker></defs>
+  <text x="20" y="26" class="t">neuPod — system blocks (final board; Phase 1 uses breakouts for the right-hand column)</text>
+
+  <!-- MCU -->
+  <rect x="290" y="150" width="180" height="120" class="mcu"/>
+  <text x="380" y="176" text-anchor="middle" class="t">RP2350B</text>
+  <text x="380" y="194" text-anchor="middle" class="s">2× Cortex-M33 · PIO · DMA</text>
+  <text x="380" y="210" text-anchor="middle" class="s">8 MB PSRAM · 16 MB flash</text>
+  <text x="380" y="226" text-anchor="middle" class="s">alt: ESP32-S3 + QCC module</text>
+  <text x="380" y="252" text-anchor="middle" class="s">app/ + hal/ firmware</text>
+
+  <!-- Reused iPod parts (left) -->
+  <rect x="20" y="60" width="200" height="54" class="reuse"/>
+  <text x="120" y="82" text-anchor="middle" class="t">Click wheel</text>
+  <text x="120" y="100" text-anchor="middle" class="s">4 lines · 32-bit frames · PIO RX</text>
+
+  <rect x="20" y="130" width="200" height="54" class="reuse"/>
+  <text x="120" y="152" text-anchor="middle" class="t">Headphone / hold flex</text>
+  <text x="120" y="170" text-anchor="middle" class="s">3.5 mm jack · hold · detect · I²C 0x72</text>
+
+  <rect x="20" y="200" width="200" height="54" class="reuse"/>
+  <text x="120" y="222" text-anchor="middle" class="t">Display</text>
+  <text x="120" y="240" text-anchor="middle" class="s">2.4" IPS ST7789V · stock LCD = plan B</text>
+
+  <rect x="20" y="270" width="200" height="54" class="reuse"/>
+  <text x="120" y="292" text-anchor="middle" class="t">Shell + mid-frame</text>
+  <text x="120" y="310" text-anchor="middle" class="s">board outline · USB-C in 30-pin aperture</text>
+
+  <!-- New parts (right) -->
+  <rect x="540" y="40" width="200" height="54" class="box"/>
+  <text x="640" y="62" text-anchor="middle" class="t">Wi-Fi / Bluetooth</text>
+  <text x="640" y="80" text-anchor="middle" class="s">CYW43439 · BTstack A2DP · lwIP</text>
+
+  <rect x="540" y="110" width="200" height="54" class="box"/>
+  <text x="640" y="132" text-anchor="middle" class="t">microSD</text>
+  <text x="640" y="150" text-anchor="middle" class="s">SDIO 4-bit via PIO · exFAT · ≤2 TB</text>
+
+  <rect x="540" y="180" width="200" height="54" class="box"/>
+  <text x="640" y="202" text-anchor="middle" class="t">DAC + headphone amp</text>
+  <text x="640" y="220" text-anchor="middle" class="s">CS43131 · I²S + I²C · optional S/PDIF</text>
+
+  <rect x="540" y="250" width="200" height="54" class="box"/>
+  <text x="640" y="272" text-anchor="middle" class="t">Power</text>
+  <text x="640" y="290" text-anchor="middle" class="s">BQ25895 charger · MAX17048 · LiPo</text>
+
+  <rect x="540" y="320" width="200" height="54" class="box"/>
+  <text x="640" y="342" text-anchor="middle" class="t">USB-C</text>
+  <text x="640" y="360" text-anchor="middle" class="s">native USB: MSC · UAC2 · CDC · charge</text>
+
+  <!-- wires -->
+  <path d="M220 87 H255 V190 H290" class="w" marker-end="url(#a)"/>
+  <path d="M220 157 H262 V205 H290" class="w" marker-end="url(#a)"/>
+  <path d="M290 220 H262 V227 H220" class="w" marker-end="url(#a)"/>
+  <path d="M470 180 H505 V67 H540" class="w" marker-end="url(#a)"/>
+  <path d="M470 195 H512 V137 H540" class="w" marker-end="url(#a)"/>
+  <path d="M470 210 H540" class="w" marker-end="url(#a)"/>
+  <path d="M540 277 H512 V225 H470" class="w" marker-end="url(#a)"/>
+  <path d="M470 240 H505 V347 H540" class="w" marker-end="url(#a)"/>
+  <path d="M120 270 V254" class="w" stroke-dasharray="3 3"/>
+
+  <text x="20" y="400" class="s">Tan = reused from the donor iPod Classic 6G (A1238). White = new parts on the neuPod board. Green = compute.</text>
+</svg>

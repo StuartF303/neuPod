@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 360" width="760" height="360" role="img" aria-label="neuPod audio signal flow: file on microSD, decoded once into a 32-bit mixer, then routed to DAC, S/PDIF, USB or Bluetooth">
+  <style>
+    text { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 12px; fill: #1d1d1b; }
+    .t { font-size: 14px; font-weight: 600; }
+    .s { font-size: 10.5px; fill: #5b5a56; }
+    .box { fill: #ffffff; stroke: #6b6a66; stroke-width: 1.25; rx: 8; }
+    .core { fill: #e8f0e6; stroke: #4f7a48; stroke-width: 2; rx: 8; }
+    .lossy { fill: #fff4e0; stroke: #d97706; stroke-width: 1.25; rx: 8; }
+    .w { stroke: #6b6a66; stroke-width: 1.25; fill: none; }
+  </style>
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#6b6a66"/></marker></defs>
+  <text x="20" y="26" class="t">Audio path — lossless to every wired/digital sink; Bluetooth is the one lossy branch</text>
+
+  <rect x="20" y="130" width="140" height="60" class="box"/>
+  <text x="90" y="154" text-anchor="middle" class="t">microSD file</text>
+  <text x="90" y="172" text-anchor="middle" class="s">FLAC ALAC MP3 AAC Opus</text>
+
+  <rect x="200" y="130" width="140" height="60" class="box"/>
+  <text x="270" y="154" text-anchor="middle" class="t">Decoder</text>
+  <text x="270" y="172" text-anchor="middle" class="s">once · core 1 · no resample</text>
+
+  <rect x="380" y="120" width="140" height="80" class="core"/>
+  <text x="450" y="146" text-anchor="middle" class="t">32-bit mixer</text>
+  <text x="450" y="164" text-anchor="middle" class="s">volume · soft-mute</text>
+  <text x="450" y="180" text-anchor="middle" class="s">source rate preserved</text>
+
+  <rect x="580" y="50" width="160" height="50" class="box"/>
+  <text x="660" y="70" text-anchor="middle" class="t">I²S → CS43131</text>
+  <text x="660" y="88" text-anchor="middle" class="s">32/384 · headphone or line</text>
+
+  <rect x="580" y="115" width="160" height="50" class="box"/>
+  <text x="660" y="135" text-anchor="middle" class="t">PIO → S/PDIF optical</text>
+  <text x="660" y="153" text-anchor="middle" class="s">24/96 · combo jack (optional)</text>
+
+  <rect x="580" y="180" width="160" height="50" class="box"/>
+  <text x="660" y="200" text-anchor="middle" class="t">USB-C UAC2</text>
+  <text x="660" y="218" text-anchor="middle" class="s">bit-perfect PCM to a USB DAC</text>
+
+  <rect x="580" y="245" width="160" height="60" class="lossy"/>
+  <text x="660" y="266" text-anchor="middle" class="t">Bluetooth A2DP</text>
+  <text x="660" y="282" text-anchor="middle" class="s">SBC-XQ via BTstack, or</text>
+  <text x="660" y="296" text-anchor="middle" class="s">AAC / aptX HD via QCC module</text>
+
+  <path d="M160 160 H200" class="w" marker-end="url(#a)"/>
+  <path d="M340 160 H380" class="w" marker-end="url(#a)"/>
+  <path d="M520 150 H550 V75 H580" class="w" marker-end="url(#a)"/>
+  <path d="M520 155 H550 V140 H580" class="w" marker-end="url(#a)"/>
+  <path d="M520 165 H550 V205 H580" class="w" marker-end="url(#a)"/>
+  <path d="M520 170 H550 V275 H580" class="w" marker-end="url(#a)"/>
+
+  <rect x="200" y="230" width="140" height="60" class="box" stroke-dasharray="4 3"/>
+  <text x="270" y="254" text-anchor="middle" class="t">Recording (req.)</text>
+  <text x="270" y="272" text-anchor="middle" class="s">headset mic · HFP · MEMS</text>
+  <path d="M270 230 V200 H380" class="w" marker-end="url(#a)" stroke-dasharray="4 3"/>
+
+  <text x="20" y="340" class="s">Orange = lossy by nature. Dashed = optional or not yet designed. Policy: ADR-0003.</text>
+</svg>
