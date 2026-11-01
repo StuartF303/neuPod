@@ -1,23 +1,107 @@
 # neuPod
 
-Replacement logic board for the iPod Classic 6G, built around the Raspberry Pi Pico 2 W
-(RP2350 + CYW43439).
+[![firmware](https://github.com/StuartF303/neuPod/actions/workflows/firmware.yml/badge.svg)](https://github.com/StuartF303/neuPod/actions/workflows/firmware.yml)
+[![docs](https://github.com/StuartF303/neuPod/actions/workflows/docs.yml/badge.svg)](https://stuartf303.github.io/neuPod)
+[![firmware licence: MPL-2.0](https://img.shields.io/badge/firmware-MPL--2.0-blue)](LICENSE-MPL-2.0)
+[![hardware licence: CERN-OHL-S-2.0](https://img.shields.io/badge/hardware-CERN--OHL--S--2.0-green)](LICENSE-CERN-OHL-S-2.0)
+[![docs licence: CC BY 4.0](https://img.shields.io/badge/docs-CC%20BY%204.0-lightgrey)](LICENSE-CC-BY-4.0)
 
-Pin plan: see the neuPod design doc in Claude (source of truth for pin assignments).
+neuPod is a drop-in replacement logic board for the Apple iPod Classic 6G (A1238). It keeps the
+original shell, click wheel and (optionally) screen, and adds Wi-Fi, Bluetooth, microSD storage
+and USB-C. The firmware is written from scratch. Two compute platforms are being evaluated side
+by side from one tree: Raspberry Pi Pico 2 W / RP2350 (primary) and ESP32-S3 (comparison).
 
-## Layout
+## Status
 
-- `app/` — firmware entry point (`neupod` executable)
-- `hal/rp2350/` — `hal_rp2350` hardware abstraction (target)
-- `hal/host/` — host-side HAL for tests
-- `tests/`, `tools/`, `docs/`, `boards/`
-- `scripts/` — `flash.sh` (OpenOCD via Debug Probe), `console.sh` (UART via minicom)
+Phase 1 testbed (Pico 2 W on a breadboard):
 
-## Build
+| Item | Status |
+|------|:------:|
+| RP2350 build | ✅ |
+| UART console | ✅ |
+| Display | ⬜ |
+| microSD | ⬜ |
+| Audio | ⬜ |
+| I²C (fuel gauge, haptics) | ⬜ |
+| Click wheel | ⬜ |
+| Bluetooth A2DP | ⬜ |
+| Wi-Fi | ⬜ |
+| USB MSC | ⬜ |
 
-    mkdir build && cd build
-    cmake -G Ninja ..
-    ninja
+## Features (planned)
 
-Requires `PICO_SDK_PATH` (SDK >= 2.1.0). Board `pico2_w`, platform `rp2350-arm-s`.
-Console: UART0 (GP0/GP1) at 115200 via the Debug Probe.
+- Reuses the iPod Classic 6G shell, click wheel and optionally the original screen
+- microSD storage over 4-bit SDIO, FAT via FatFs
+- Lossless audio end-to-end on wired/digital paths: decode once to a 32-bit mixer, no
+  resampling unless the sink requires it
+- Codecs: MP3, AAC, FLAC, ALAC, Opus
+- Bluetooth A2DP (SBC / SBC-XQ) via BTstack, Wi-Fi, USB-C
+- Desktop (SDL2) build of the UI for development without hardware
+
+## Hardware platforms
+
+| Platform | Role | Rationale |
+|----------|------|-----------|
+| Raspberry Pi Pico 2 W (RP2350 + CYW43439) | Primary | PIO handles SDIO and the click-wheel protocol in hardware, and the CYW43439 provides Wi-Fi and Bluetooth with BTstack support. |
+| ESP32-S3 | Comparison | Integrated Wi-Fi/BLE and a mature ESP-IDF toolchain, built from the same portable `app/` sources for a like-for-like comparison. |
+
+See [ADR-0001](docs/adr/0001-rp2350-phase1-platform.md).
+
+## Repository layout
+
+```
+neuPod/
+├── app/                 portable C: UI, library index, playback, codecs, FatFs
+├── hal/
+│   ├── include/         HAL interface headers (hal_display.h, hal_input.h, …)
+│   └── host/            SDL2 desktop implementation
+├── platforms/
+│   ├── rp2350/          Pico SDK build entry + RP2350 HAL
+│   └── esp32s3/         ESP-IDF project skeleton + ESP32-S3 HAL
+├── tests/               host unit tests
+├── tools/               PC-side utilities (C#/.NET welcome)
+├── scripts/             build / flash / console helpers
+├── docs/                design docs, ADRs, wiring (published to GitHub Pages)
+└── boards/              KiCad (later)
+```
+
+## Quick start (RP2350)
+
+Dependencies (Debian/Ubuntu):
+
+    sudo apt install cmake ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi \
+        libstdc++-arm-none-eabi-newlib openocd minicom
+
+Pico SDK ≥ 2.1 (tested with 2.3.1):
+
+    export PICO_SDK_PATH=$HOME/pico/pico-sdk
+
+Build, flash via a Raspberry Pi Debug Probe, and open the UART0 console (115200 8N1):
+
+    cmake -S . -B build/rp2350 -G Ninja -DNEUPOD_PLATFORM=rp2350
+    ninja -C build/rp2350          # or: scripts/build.sh rp2350
+    scripts/flash.sh
+    scripts/console.sh
+
+## Documentation
+
+Everything lives in [`docs/`](docs/index.md) and is published at
+<https://stuartf303.github.io/neuPod>: [requirements](docs/requirements.md),
+[design](docs/design.md), [reference](docs/reference.md),
+[Phase 1 wiring](docs/wiring-phase1.md), [click-wheel protocol](docs/click-wheel-protocol.md)
+and [architecture decision records](docs/adr/).
+
+## Licence
+
+- Firmware and software: [MPL-2.0](LICENSE-MPL-2.0)
+- Hardware: [CERN-OHL-S-2.0](LICENSE-CERN-OHL-S-2.0)
+- Documentation: [CC BY 4.0](LICENSE-CC-BY-4.0)
+
+See [LICENSE.md](LICENSE.md) for which applies where.
+
+## Acknowledgements
+
+- [Rockbox](https://www.rockbox.org/) for the iPod Classic 6G (ipod6g) reverse-engineering,
+  including the click-wheel protocol.
+- Sprout <!-- TODO: author and link --> for the prior art and licensing model.
+- The iFlash, Moonlit and Elite Obsolete communities for keeping the iPod Classic alive.
