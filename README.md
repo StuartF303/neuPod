@@ -19,14 +19,18 @@ Phase 1 testbed (Pico 2 W on a breadboard):
 |------|:------:|
 | RP2350 build | ✅ |
 | UART console | ✅ |
-| Display | ⬜ |
+| Display (ST7789 driver + `display_test`) | 🟡 |
 | microSD | ⬜ |
 | Audio | ⬜ |
 | I²C (fuel gauge, haptics) | ⬜ |
-| Click wheel | ⬜ |
+| Click wheel (decoder ✅ tested on host; PIO receiver skeleton) | 🟡 |
 | Bluetooth A2DP | ⬜ |
 | Wi-Fi | ⬜ |
 | USB MSC | ⬜ |
+| Host build + unit tests | ✅ |
+| ESP32-S3 build | ⬜ skeleton, not yet built |
+
+✅ working · 🟡 code written, not yet tested on hardware · ⬜ not started
 
 ## Features (planned)
 
@@ -82,6 +86,12 @@ Build, flash via a Raspberry Pi Debug Probe, and open the UART0 console (115200 
     ninja -C build/rp2350          # or: scripts/build.sh rp2350
     scripts/flash.sh
     scripts/console.sh
+    scripts/flash.sh rp2350 display_test   # ST7789 colour bars
+
+Host build and tests (SDL2 optional — `sudo apt install libsdl2-dev` for the window):
+
+    scripts/build.sh host
+    ctest --test-dir build/host --output-on-failure
 
 ## Documentation
 
