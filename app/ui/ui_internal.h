@@ -67,6 +67,10 @@ typedef struct {
     uint8_t backlight_pct; /* 5..100 */
 } ui_state_t;
 extern ui_state_t g_ui_state;
+/** Show the stored backlight level on the panel. */
+void ui_apply_backlight(void);
+/** Remember a changed UI setting (RAM now, the card a moment later: settings_store.h). */
+void ui_state_persist(void);
 
 /** Create the persistent frame (status bar + content area) on @p scr. */
 void ui_frame_init(lv_obj_t *scr);

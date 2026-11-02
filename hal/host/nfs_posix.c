@@ -145,6 +145,9 @@ nfs_err_t nfs_open(nfs_file_t **out, const char *path, unsigned flags) {
         ((flags & NFS_O_EXCL) && !(flags & NFS_O_CREATE))) {
         return NFS_ERR_INVALID;
     }
+    if (wr && !nfs_write_scope_allows(norm)) {
+        return NFS_ERR_IO; // outside the active write scope (nfs.h)
+    }
     struct stat st;
     if (stat(full, &st) == 0 && S_ISDIR(st.st_mode)) {
         return NFS_ERR_IS_DIR;
@@ -312,6 +315,9 @@ nfs_err_t nfs_mkdir(const char *path) {
     if (strcmp(norm, "/") == 0) {
         return NFS_ERR_EXISTS;
     }
+    if (!nfs_write_scope_allows(norm)) {
+        return NFS_ERR_IO;
+    }
     return mkdir(full, 0777) == 0 ? NFS_OK : map_errno(errno);
 }
 
@@ -319,6 +325,9 @@ nfs_err_t nfs_unlink(const char *path) {
     RESOLVE(path);
     if (strcmp(norm, "/") == 0) {
         return NFS_ERR_INVALID;
+    }
+    if (!nfs_write_scope_allows(norm)) {
+        return NFS_ERR_IO;
     }
     struct stat st;
     if (stat(full, &st) != 0) {
@@ -342,6 +351,9 @@ nfs_err_t nfs_rename(const char *from, const char *to) {
     }
     if (strcmp(na, "/") == 0 || strcmp(nb, "/") == 0) {
         return NFS_ERR_INVALID;
+    }
+    if (!nfs_write_scope_allows(na) || !nfs_write_scope_allows(nb)) {
+        return NFS_ERR_IO;
     }
     struct stat st;
     if (stat(b, &st) == 0) {

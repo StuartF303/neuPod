@@ -71,6 +71,14 @@ void player_stop(void);
 /** Volume steps: positive = louder, 2 dB each, clamped to [hard cap, off]. Returns the new attenuation in dB. */
 uint32_t player_volume_step(int32_t steps);
 
+/**
+ * Apply a volume saved in the settings store (attenuation in dB) at boot. Ignored if the user already changed the volume
+ * this session, and clamped to be at most as loud as the power-on default (AUDIO_VOL_DEFAULT_ATT_DB): a saved loud setting
+ * never comes back at full blast after a power cycle (headphone safety).
+ */
+void player_restore_volume(uint32_t att_db);
+#define PLAYER_RESTORE_MIN_ATT_DB AUDIO_VOL_DEFAULT_ATT_DB
+
 /** Short name for a mode, e.g. "1 kHz tone". */
 const char *player_tone_name(tone_mode_t mode);
 

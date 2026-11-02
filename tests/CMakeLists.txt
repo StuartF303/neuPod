@@ -23,6 +23,12 @@ target_link_libraries(test_nfs neupod_storage_tests hal_host)
 add_test(NAME nfs COMMAND test_nfs)
 set_tests_properties(nfs PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
+add_executable(test_settings test_settings.c)
+target_link_libraries(test_settings neupod_settings hal_host) # hal_host last: nfs and hal_storage
+add_test(NAME settings COMMAND test_settings)
+set_tests_properties(settings PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_source_files_properties(test_settings.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
 set_source_files_properties(test_nfs.c test_clickwheel.c test_fatfs.c test_gfx.c test_storage_decode.c
   PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 

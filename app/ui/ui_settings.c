@@ -2,7 +2,7 @@
 /*
  * Settings: groups on the left, a live summary pane on the right (docs/ui.md mock-up). Select opens a
  * detail screen (About, Storage, Battery: live read-only lists; Display: backlight; Bluetooth: not built)
- * or, for Click feedback, toggles On/Off. Everything here is RAM-only: nothing persists across a reboot yet.
+ * or, for Click feedback, toggles On/Off. Backlight and click feedback are stored in the settings store (settings_store.h).
  */
 #include <stdarg.h>
 #include <stdio.h>
@@ -213,8 +213,6 @@ typedef struct {
     bool editing;
 } display_t;
 
-static void apply_backlight(void) { hal_display_backlight((uint8_t)((g_ui_state.backlight_pct * 255u + 50u) / 100u)); }
-
 static void display_get(void *ctx, int32_t i, ui_list_item_t *o) {
     const display_t *d = ctx;
     (void)i;
@@ -233,7 +231,8 @@ static void display_scroll(ui_screen_t *s, int32_t steps) {
     }
     int32_t v = (int32_t)g_ui_state.backlight_pct + steps * 5;
     g_ui_state.backlight_pct = (uint8_t)(v < 5 ? 5 : v > 100 ? 100 : v); /* never fully dark: you could not find the way back */
-    apply_backlight();
+    ui_apply_backlight();
+    ui_state_persist();
     ui_list_refresh(d->list);
 }
 
@@ -372,6 +371,7 @@ static bool settings_button(ui_screen_t *b, uint8_t btn) {
     case G_DISPLAY: next = make_display(); break;
     case G_CLICK:
         g_ui_state.click_feedback = !g_ui_state.click_feedback;
+        ui_state_persist();
         ui_list_refresh(s->list);
         settings_update_pane(s);
         ui_feedback_step(); /* a click when switched on is the confirmation */

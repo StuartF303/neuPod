@@ -30,6 +30,12 @@ target_include_directories(neupod_storage_tests PUBLIC ${NEUPOD_APP_DIR}/include
                                                        ${NEUPOD_APP_DIR}/../hal/include)
 target_compile_features(neupod_storage_tests PUBLIC c_std_11)
 
+# Settings store: key/value on the SD card (settings_store.h). Uses nfs (neupod_storage_tests holds nfs_path.c) and hal_storage.
+add_library(neupod_settings STATIC ${NEUPOD_SETTINGS_SOURCES})
+target_include_directories(neupod_settings PUBLIC ${NEUPOD_APP_DIR}/include ${NEUPOD_APP_DIR}/../hal/include)
+target_compile_features(neupod_settings PUBLIC c_std_11)
+target_link_libraries(neupod_settings PUBLIC neupod_storage_tests)
+
 # MAX17048 / DRV2605L drivers: need hal_i2c + hal_system only.
 add_library(neupod_drivers STATIC ${NEUPOD_DRIVER_SOURCES})
 target_include_directories(neupod_drivers PUBLIC ${NEUPOD_APP_DIR}/include
@@ -43,7 +49,7 @@ target_include_directories(neupod_i2c_tests PUBLIC ${NEUPOD_APP_DIR}/include
 target_compile_features(neupod_i2c_tests PUBLIC c_std_11)
 target_link_libraries(neupod_i2c_tests PUBLIC neupod_drivers)
 
-set_source_files_properties(${NEUPOD_DRIVER_SOURCES} ${NEUPOD_I2C_TEST_SOURCES} ${NEUPOD_STORAGE_TEST_SOURCES} PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+set_source_files_properties(${NEUPOD_DRIVER_SOURCES} ${NEUPOD_I2C_TEST_SOURCES} ${NEUPOD_STORAGE_TEST_SOURCES} ${NEUPOD_SETTINGS_SOURCES} PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 set_source_files_properties(${NEUPOD_CORE_SOURCES} ${NEUPOD_GFX_SOURCES} ${NEUPOD_DEMO_SOURCES}
   ${NEUPOD_CLICKWHEEL_SOURCES} ${NEUPOD_APP_DIR}/storage/diskio.c
   PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
@@ -82,7 +88,7 @@ add_dependencies(neupod_runtime neupod_version)
 target_include_directories(neupod_runtime PUBLIC ${NEUPOD_APP_DIR}/include ${NEUPOD_APP_DIR}/../hal/include
                                           PRIVATE ${NEUPOD_GEN_DIR})
 target_compile_features(neupod_runtime PUBLIC c_std_11)
-target_link_libraries(neupod_runtime PUBLIC neupod_rt_core neupod_drivers neupod_freertos lvgl)
+target_link_libraries(neupod_runtime PUBLIC neupod_rt_core neupod_drivers neupod_settings neupod_freertos lvgl)
 set_source_files_properties(${NEUPOD_RT_CORE_SOURCES} ${NEUPOD_RUNTIME_SOURCES} ${NEUPOD_AUDIO_CORE_SOURCES} ${NEUPOD_UI_SOURCES}
   PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 # codec.c sees the ALAC headers, whose FourCC enum constants are multi-character literals.

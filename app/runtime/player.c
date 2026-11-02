@@ -5,6 +5,7 @@
 #include "audio_engine.h"
 #include "os.h"
 #include "player.h"
+#include "settings_store.h"
 #include "storage_service.h"
 
 #define VOL_STEP_DB 2u
@@ -15,6 +16,7 @@ static player_info_t g_info;
 static uint32_t g_vol = AUDIO_VOL_DEFAULT_ATT_DB;
 static uint32_t g_started_ms;
 static uint32_t g_ended_base; // audio_pcm_ended_count() when the current file was requested
+static bool g_vol_touched;    // the volume was changed since boot (a late settings load must not override the user)
 static bool g_error_stopped;  // storage_stop_request() already sent for the current error
 
 static const char *codec_error_text(uint32_t e) {
@@ -172,10 +174,29 @@ uint32_t player_volume_step(int32_t steps) {
         att = 0;
     }
     g_vol = audio_vol_clamp((uint32_t)att);
+    g_vol_touched = true;
     uint32_t v = g_vol;
     unlock();
     (void)audio_set_volume(v);
+    settings_set_u8(SETTING_VOLUME_ATT_DB, (uint8_t)v); // persisted by the storage task a moment later
     return v;
+}
+
+void player_restore_volume(uint32_t att_db) {
+    // Headphone safety (docs/audio.md): a restored volume is never LOUDER than the power-on default, whatever was saved.
+    if (att_db < PLAYER_RESTORE_MIN_ATT_DB) {
+        att_db = PLAYER_RESTORE_MIN_ATT_DB;
+    }
+    lock();
+    bool apply = !g_vol_touched;
+    if (apply) {
+        g_vol = audio_vol_clamp(att_db);
+        att_db = g_vol;
+    }
+    unlock();
+    if (apply) {
+        (void)audio_set_volume(att_db);
+    }
 }
 
 void player_file_started(const player_file_t *f) {

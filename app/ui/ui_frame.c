@@ -11,11 +11,39 @@
 
 #include "battery_store.h"
 #include "capabilities.h"
+#include "hal_display.h"
 #include "haptic_service.h"
 #include "player.h"
+#include "settings_store.h"
 #include "ui_internal.h"
 
 ui_state_t g_ui_state = {.click_feedback = true, .backlight_pct = 100};
+
+void ui_apply_backlight(void) { hal_display_backlight((uint8_t)((g_ui_state.backlight_pct * 255u + 50u) / 100u)); }
+
+void ui_state_persist(void) {
+    settings_set_u8(SETTING_BACKLIGHT_PCT, g_ui_state.backlight_pct);
+    settings_set_u8(SETTING_CLICK_FEEDBACK, g_ui_state.click_feedback ? 1u : 0u);
+}
+
+// The settings store is loaded from the card some time after boot (storage task): when its contents are replaced, take
+// the stored backlight and click feedback. Out-of-range stored values are ignored (kept at the defaults).
+static uint32_t g_settings_gen_seen;
+static void sync_from_settings(void) {
+    uint32_t gen = settings_generation();
+    if (gen == g_settings_gen_seen) {
+        return;
+    }
+    g_settings_gen_seen = gen;
+    uint8_t v;
+    if (settings_get_u8(SETTING_BACKLIGHT_PCT, &v) && v >= 5 && v <= 100) {
+        g_ui_state.backlight_pct = v;
+        ui_apply_backlight();
+    }
+    if (settings_get_u8(SETTING_CLICK_FEEDBACK, &v) && v <= 1) {
+        g_ui_state.click_feedback = v != 0;
+    }
+}
 
 static lv_obj_t *g_content;
 static lv_obj_t *g_title;
@@ -185,6 +213,7 @@ static void update_battery(void) {
 
 void ui_frame_tick(uint32_t now_ms) {
     (void)now_ms;
+    sync_from_settings();
     update_battery();
     ui_screen_t *top = ui_stack_top(&g_stack);
     if (top != NULL && top->on_tick != NULL) {

@@ -25,6 +25,7 @@
 #include "player.h"
 #include "runtime.h"
 #include "runtime_config.h"
+#include "settings_service.h"
 #include "haptic_service.h"
 #include "storage_service.h"
 #include "ui.h"
@@ -255,6 +256,7 @@ void neupod_runtime_run(const neupod_runtime_config_t *cfg) {
     battery_store_init();
     g_i2c_mutex = os_mutex_create();
     g_input_queue = os_queue_create(sizeof(input_event_t), 16);
+    settings_service_init();
     storage_service_init();
     haptic_service_init();
     if (g_i2c_mutex == NULL || g_input_queue == NULL || !storage_service_ready() || !haptic_service_ready()) {

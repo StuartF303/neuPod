@@ -18,6 +18,7 @@
 #include "os.h"
 #include "runtime.h"
 #include "runtime_config.h"
+#include "settings_service.h"
 
 #define I2C_BUS_HZ 400000u
 #define I2C_LOCK_MS 500u
@@ -70,32 +71,39 @@ static const char *fs_name(hal_fs_type_t t) {
 
 // --- Checks ----------------------------------------------------------------------------------
 
-static void check_storage(void *arg) {
-    (void)arg;
+// Returns true when the card is usable (mounted, or the host's image): the settings store may then load and save.
+static bool check_storage_inner(void) {
     hal_storage_set_write_enabled(false); // read-only boot: the lock is the default, make it explicit
     hal_storage_status_t st = hal_storage_init();
     if (st != HAL_STORAGE_OK) {
         caps_resolve(CAP_STORAGE, false, st == HAL_STORAGE_NO_CARD ? BR_SD_NONE : BR_SD_INIT, "card init: %s", hal_storage_status_str(st));
-        return;
+        return false;
     }
     hal_card_info_t info;
     if (hal_storage_get_info(&info) != HAL_STORAGE_OK) {
         caps_resolve(CAP_STORAGE, false, BR_SD_INFO, "card info unreadable");
-        return;
+        return false;
     }
     st = hal_storage_mount();
     if (st == HAL_STORAGE_UNSUPPORTED) {
         // Host: the disk image is accessed through the file API, there is no FatFs mount.
         caps_resolve(CAP_STORAGE, true, NULL, "%s, no mount on this platform", hal_storage_card_type_str(info.type));
-        return;
+        return true;
     }
     if (st != HAL_STORAGE_OK) {
         caps_resolve(CAP_STORAGE, false, st == HAL_STORAGE_NO_FILESYSTEM ? BR_SD_NOFS : BR_SD_MOUNT, "mount: %s", hal_storage_status_str(st));
-        return;
+        return false;
     }
     uint32_t gb10 = (uint32_t)(info.capacity_bytes * 10u / 1000000000u); // tenths of a GB
     caps_resolve(CAP_STORAGE, true, NULL, "%s %u.%u GB, %s, read-only", hal_storage_card_type_str(info.type),
                  (unsigned)(gb10 / 10u), (unsigned)(gb10 % 10u), fs_name(hal_storage_fs_type()));
+    return true;
+}
+
+static void check_storage(void *arg) {
+    (void)arg;
+    bool ok = check_storage_inner();
+    settings_service_storage_result(ok); // after the verdict is posted: loading the settings must not delay the splash
 }
 
 static void check_battery(void *arg) {
