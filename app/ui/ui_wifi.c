@@ -220,7 +220,7 @@ static void on_action_done(void *ctx, bool ok, const wi_value_t *v) {
 
 static void ask_ssid(void) {
     g_flow.next = NEXT_ASK_SEC; /* "the text result is an SSID" */
-    ui_input_open(&(wi_request_t){.kind = WI_K_TEXT, .title = "Network name", .max_chars = HAL_WIFI_SSID_MAX, .done = on_text_done});
+    ui_input_open(&(wi_request_t){.kind = WI_K_TEXT, .title = "Network name", .max_chars = HAL_WIFI_SSID_MAX, .max_bytes = HAL_WIFI_SSID_MAX, .done = on_text_done});
 }
 
 static void ask_password(const char *ssid) {
@@ -228,7 +228,7 @@ static void ask_password(const char *ssid) {
     if (ssid != g_flow.target) {
         snprintf(g_flow.target, sizeof g_flow.target, "%s", ssid);
     }
-    ui_input_open(&(wi_request_t){.kind = WI_K_TEXT, .title = "Password", .max_chars = HAL_WIFI_PSK_MAX, .masked = true, .done = on_text_done});
+    ui_input_open(&(wi_request_t){.kind = WI_K_TEXT, .title = "Password", .max_chars = HAL_WIFI_PSK_MAX, .max_bytes = HAL_WIFI_PSK_MAX, .masked = true, .done = on_text_done});
 }
 
 static void tick_flow(wifi_screen_t *w) {

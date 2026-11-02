@@ -23,10 +23,16 @@ typedef struct {
     lv_obj_t *bar;
     lv_obj_t *field[5];
     ui_list_t *list;
-    char labels[WI_PICK_MAX][40];
 } in_screen_t;
 
 static bool g_open;
+
+static void wipe(void *p, size_t n) { /* passwords: do not leave them in freed LVGL memory or on the stack */
+    volatile uint8_t *v = p;
+    while (n-- > 0) {
+        *v++ = 0;
+    }
+}
 
 bool ui_input_active(void) { return g_open; }
 
@@ -139,11 +145,13 @@ static void feed(in_screen_t *s, wi_ev_t ev, int32_t steps) {
     }
     wi_done_fn done = s->rq.done;
     void *ctx = s->rq.ctx;
-    g_open = false; /* the callback may open the next modal */
+    /* g_open stays true until the modal is really gone: a modal opened from inside done() fails (returns false) instead of being
+     * popped with this one. Chain steps from the owning screen's tick. */
     if (done != NULL) {
         done(ctx, r == WI_OK, &v);
     }
-    ui_frame_pop(); /* destroys this screen: nothing may touch it afterwards */
+    wipe(&v, sizeof v);
+    ui_frame_pop(); /* destroys this screen (in_destroy clears g_open): nothing may touch it afterwards */
 }
 
 static void in_scroll(ui_screen_t *b, int32_t steps) { feed((in_screen_t *)b, WI_EV_SCROLL, steps); }
@@ -163,6 +171,8 @@ static bool in_button(ui_screen_t *b, uint8_t btn) {
 
 static void in_destroy(ui_screen_t *b) {
     in_screen_t *s = (in_screen_t *)b;
+    wipe(&s->m, sizeof s->m);
+    wipe(&s->rq, sizeof s->rq);
     if (s->list != NULL) {
         ui_list_destroy(s->list);
     }
@@ -181,6 +191,7 @@ bool ui_input_open(const wi_request_t *r) {
     ui_frame_suspend_top(); /* free the covered list's rows first: the pool peak matters more than a rebuild */
     in_screen_t *s = (in_screen_t *)ui_screen_new(sizeof *s, r->title != NULL ? r->title : "");
     if (s == NULL) {
+        ui_frame_resume_top(); /* the covered screen was suspended above: give it its rows back */
         return false;
     }
     s->rq = *r;
@@ -191,6 +202,7 @@ bool ui_input_open(const wi_request_t *r) {
     switch (r->kind) {
     case WI_K_TEXT:
         wi_text_init(&s->m.text, r->initial, r->max_chars, r->charset, r->masked, r->search);
+        wi_text_set_byte_limit(&s->m.text, r->max_bytes);
         s->value = ui_label(root, "", UI_L_TEXT);
         lv_obj_set_style_text_font(s->value, &lv_font_montserrat_20, 0);
         lv_label_set_long_mode(s->value, LV_LABEL_LONG_DOT);

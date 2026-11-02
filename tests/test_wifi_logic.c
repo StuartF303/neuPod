@@ -70,6 +70,24 @@ TEST(test_running_clock) {
     ASSERT_TRUE(clock_synced());
 }
 
+TEST(test_clock_wrap_and_sanity) {
+    // The millisecond counter wraps at 49.7 days: with the hourly re-anchor the time keeps advancing across the wrap.
+    clock_set_utc_at(2000000000u, 0xFFFF0000u, true);
+    uint32_t ms = 0xFFFF0000u;
+    uint32_t utc = 2000000000u;
+    for (int hour = 0; hour < 3; hour++) {
+        ms += 3600u * 1000u; // wraps through zero during the loop
+        utc += 3600u;
+        clock_tick_at(ms);
+        ASSERT_EQ(utc, clock_utc_at(ms));
+    }
+    ASSERT_EQ(utc + 30u, clock_utc_at(ms + 30000u));
+    ASSERT_FALSE(clock_ntp_plausible(1000));
+    ASSERT_FALSE(clock_ntp_plausible(1735689599u));
+    ASSERT_TRUE(clock_ntp_plausible(1735689600u));
+    ASSERT_TRUE(clock_ntp_plausible(2100000000u));
+}
+
 TEST(test_backoff) {
     wifi_backoff_t b;
     wifi_backoff_init(&b);
@@ -141,6 +159,7 @@ int main(void) {
     RUN(test_eu_dst_edges);
     RUN(test_local_time_zones);
     RUN(test_running_clock);
+    RUN(test_clock_wrap_and_sanity);
     RUN(test_backoff);
     RUN(test_backoff_late_in_uptime);
     RUN(test_link_loss_is_reported);

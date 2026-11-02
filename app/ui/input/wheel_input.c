@@ -60,21 +60,58 @@ uint32_t wi_text_chars(const wi_text_t *t) {
 
 void wi_text_init(wi_text_t *t, const char *initial, uint32_t max_chars, wi_charset_t cs, bool masked, bool search) {
     memset(t, 0, sizeof *t);
+    t->max_bytes = WI_TEXT_MAX;
     t->max_chars = max_chars == 0 || max_chars > WI_TEXT_MAX ? WI_TEXT_MAX : max_chars;
     t->charset = cs;
     t->masked = masked;
     t->search = search;
     t->page = cs == WI_CS_DIGITS || cs == WI_CS_HEX ? WI_PAGE_DIGITS : WI_PAGE_LOWER;
-    if (initial != NULL) {
-        size_t n = strlen(initial);
-        while (n > WI_TEXT_MAX) {
-            n--;
+    if (initial != NULL) { /* keep the valid, printable prefix: never an invalid sequence, a control byte or half a character */
+        size_t i = 0, n = 0;
+        while (initial[i] != '\0' && n < WI_TEXT_MAX) {
+            uint8_t c = (uint8_t)initial[i];
+            uint32_t l = c < 0x80u ? 1u : (c >= 0xC2u && c < 0xE0u) ? 2u : (c >= 0xE0u && c < 0xF0u) ? 3u : (c >= 0xF0u && c < 0xF5u) ? 4u : 0u;
+            if (l == 0 || (l == 1 && (c < 0x20u || c == 0x7Fu)) || n + l > WI_TEXT_MAX || n + l > t->max_bytes) {
+                break;
+            }
+            bool ok = true;
+            for (uint32_t k = 1; k < l; k++) {
+                ok = ok && is_cont((uint8_t)initial[i + k]);
+            }
+            if (!ok) {
+                break;
+            }
+            for (uint32_t k = 0; k < l; k++) {
+                t->text[n + k] = initial[i + k];
+            }
+            n += l;
+            i += l;
         }
-        while (n > 0 && is_cont((uint8_t)initial[n]) && initial[n] != '\0') {
-            n--; /* never cut a character */
-        }
-        memcpy(t->text, initial, n);
+        t->text[n] = '\0';
         t->len = t->cursor = (uint32_t)n;
+        while (wi_text_chars(t) > t->max_chars) { /* too many characters: drop from the end, a whole character at a time */
+            uint32_t e = t->len;
+            do {
+                e--;
+            } while (e > 0 && is_cont((uint8_t)t->text[e]));
+            t->text[e] = '\0';
+            t->len = t->cursor = e;
+        }
+    }
+}
+
+void wi_text_set_byte_limit(wi_text_t *t, uint32_t max_bytes) {
+    t->max_bytes = max_bytes == 0 || max_bytes > WI_TEXT_MAX ? WI_TEXT_MAX : max_bytes;
+    while (t->len > t->max_bytes) {
+        uint32_t e = t->len;
+        do {
+            e--;
+        } while (e > 0 && is_cont((uint8_t)t->text[e]));
+        t->text[e] = '\0';
+        t->len = e;
+    }
+    if (t->cursor > t->len) {
+        t->cursor = t->len;
     }
 }
 
@@ -121,6 +158,9 @@ wi_key_kind_t wi_text_strip_key(const wi_text_t *t, uint32_t i, char out[8]) {
 
 bool wi_text_insert(wi_text_t *t, uint32_t cp) {
     char b[4];
+    if (cp > 0x10FFFFu || (cp >= 0xD800u && cp <= 0xDFFFu)) {
+        return false; /* not a Unicode scalar value */
+    }
     uint32_t n = encode(cp, b);
     if (cp < 0x80u && (cp < 0x20u || cp == 0x7Fu || !allowed(t->charset, (char)cp))) {
         return false;
@@ -128,7 +168,7 @@ bool wi_text_insert(wi_text_t *t, uint32_t cp) {
     if (cp >= 0x80u && t->charset != WI_CS_ANY) {
         return false;
     }
-    if (wi_text_chars(t) >= t->max_chars || t->len + n > WI_TEXT_MAX) {
+    if (wi_text_chars(t) >= t->max_chars || t->len + n > t->max_bytes) {
         return false;
     }
     memmove(&t->text[t->cursor + n], &t->text[t->cursor], t->len - t->cursor + 1);
@@ -325,7 +365,9 @@ wi_result_t wi_picker_event(wi_picker_t *p, wi_ev_t ev, int32_t steps) {
     }
     case WI_EV_SELECT:
         if (p->multi) {
-            p->mask ^= 1u << p->sel;
+            if (p->count != 0) {
+                p->mask ^= 1u << p->sel;
+            }
             break;
         }
         return p->count == 0 ? WI_RUNNING : WI_OK;

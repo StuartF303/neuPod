@@ -38,6 +38,7 @@ typedef struct {
     uint32_t len;       /* bytes */
     uint32_t cursor;    /* byte offset, always on a UTF-8 boundary */
     uint32_t max_chars; /* code points, <= WI_TEXT_MAX */
+    uint32_t max_bytes; /* byte limit (<= WI_TEXT_MAX); for fields that are limited in bytes, e.g. an SSID */
     wi_charset_t charset;
     bool masked;        /* password: shown as dots unless show */
     bool show;
@@ -48,6 +49,8 @@ typedef struct {
 } wi_text_t;
 
 void wi_text_init(wi_text_t *t, const char *initial, uint32_t max_chars, wi_charset_t cs, bool masked, bool search);
+/** Limit the text to @p max_bytes bytes (0 = WI_TEXT_MAX); truncates the current text at a character boundary if it is longer. */
+void wi_text_set_byte_limit(wi_text_t *t, uint32_t max_bytes);
 wi_result_t wi_text_event(wi_text_t *t, wi_ev_t ev, int32_t steps);
 /** Type a code point directly (host keyboard shortcut / UART). False if rejected (charset, length). */
 bool wi_text_insert(wi_text_t *t, uint32_t cp);
@@ -112,6 +115,7 @@ void wi_letterjump_init(wi_letterjump_t *j);
 bool wi_letterjump_scroll(wi_letterjump_t *j, int32_t steps, uint32_t now_ms, char initial);
 /** Call from the UI tick: hides the overlay after WI_LJ_HIDE_MS without scrolling. */
 void wi_letterjump_tick(wi_letterjump_t *j, uint32_t now_ms);
+/** Contract: the list must be sorted by the NORMALISED initial: '#' (anything not A-Z, case-insensitive) first, then A..Z. */
 /** Index of the first item whose initial is >= @p letter in a list sorted by initial (binary search over @p initial_of). */
 int32_t wi_letter_first_index(int32_t count, char (*initial_of)(void *ctx, int32_t idx), void *ctx, char letter);
 

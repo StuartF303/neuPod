@@ -58,4 +58,9 @@
 #define RT_STACK_CHECK_RADIO 4096u   /* radio driver start-up and the Bluetooth hand-over (caps_resolve with a format) */
 #define RT_STACK_RADIO 6144u         /* the SDK's CYW43 worker task, which is also BTstack's thread (CYW43_TASK_STACK_SIZE is in words: 1536) */
 
+/* The CYW43 worker's stack is set by CYW43_TASK_STACK_SIZE (WORDS, platforms/rp2350/freertos/CMakeLists.txt); keep the two in step. */
+#ifdef CYW43_TASK_STACK_SIZE
+_Static_assert(RT_STACK_RADIO == CYW43_TASK_STACK_SIZE * 4u, "RT_STACK_RADIO must equal CYW43_TASK_STACK_SIZE words in bytes");
+#endif
+
 #endif // NEUPOD_RUNTIME_CONFIG_H

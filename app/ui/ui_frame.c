@@ -132,6 +132,16 @@ void ui_frame_suspend_top(void) {
     }
 }
 
+void ui_frame_resume_top(void) {
+    ui_screen_t *t = ui_stack_top(&g_stack);
+    if (t != NULL && t->suspended && t->resume != NULL) {
+        t->resume(t);
+    }
+    if (t != NULL) {
+        t->suspended = false;
+    }
+}
+
 void ui_frame_push(ui_screen_t *s) {
     if (s == NULL) {
         return;

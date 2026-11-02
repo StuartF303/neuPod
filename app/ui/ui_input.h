@@ -32,6 +32,7 @@ typedef struct {
     /* text */
     const char *initial;
     uint32_t max_chars;
+    uint32_t max_bytes; /**< 0 = WI_TEXT_MAX; Wi-Fi names and passwords are limited in BYTES (32 / 63), not characters */
     wi_charset_t charset;
     bool masked, search;
     /* number, slider */

@@ -83,6 +83,8 @@ void ui_frame_set_title(const char *t);
 ui_screen_t *ui_screen_new(size_t size, const char *title);
 /** Suspend the top screen now (frees its rebuildable objects); a modal calls this BEFORE building itself so the pool peak is lower. */
 void ui_frame_suspend_top(void);
+/** Undo ui_frame_suspend_top() when the modal could not be built. */
+void ui_frame_resume_top(void);
 void ui_frame_push(ui_screen_t *s);
 void ui_frame_pop(void);
 /** Route one input event (wheel counts are accelerated here). */

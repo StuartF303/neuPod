@@ -294,8 +294,13 @@ void wifi_get_info(wifi_info_t *out) {
 
 /* ---- the task ---- */
 static void on_time(uint32_t unix_s) {
-    clock_set_utc(unix_s, true);
-    printf("wifi: time set from NTP\n");
+    if (!clock_ntp_plausible(unix_s)) {
+        printf("wifi: ignoring an implausible NTP time (%u)\n", (unsigned)unix_s);
+        return;
+    }
+    if (clock_set_utc(unix_s, true)) {
+        printf("wifi: time set from NTP\n");
+    }
 }
 
 static void radio_on(void) {
@@ -407,6 +412,7 @@ void wifi_task(void *arg) {
             load_settings(); /* after the card's settings loaded (or defaults) */
         }
         hal_wifi_poll();
+        clock_tick();
 
         /* requests */
         req_t r;
@@ -432,7 +438,6 @@ void wifi_task(void *arg) {
                     snprintf(r.psk, sizeof r.psk, "%s", psk);
                 }
                 g_user_left = false;
-                lock();
                 lock();
                 for (uint32_t i = 0; i < WIFI_MAX_SAVED; i++) { /* a fresh try clears the "wrong password" mark */
                     if (strcmp(g_bad_auth[i], r.ssid) == 0) {

@@ -116,6 +116,30 @@ TEST(test_text_limits_charset_masking_utf8) {
     ASSERT_EQ(5, t.len);
 }
 
+TEST(test_text_byte_limit_and_validation) {
+    wi_text_t t;
+    wi_text_init(&t, "", 40, WI_CS_ANY, false, false);
+    wi_text_set_byte_limit(&t, 4); // an SSID-style limit in BYTES
+    ASSERT_TRUE(wi_text_insert(&t, 0xE9)); // 2 bytes
+    ASSERT_TRUE(wi_text_insert(&t, 0xE9)); // 4 bytes
+    ASSERT_FALSE(wi_text_insert(&t, 'x')); // over the byte limit though only 2 characters
+    ASSERT_FALSE(wi_text_insert(&t, 0x110000u)); // beyond Unicode
+    ASSERT_FALSE(wi_text_insert(&t, 0xD800u));   // a surrogate
+    // invalid initial text is cut at the first bad sequence; control bytes are refused
+    wi_text_init(&t, "ab\xFFzz", 10, WI_CS_ANY, false, false);
+    ASSERT_EQ(0, strcmp(t.text, "ab"));
+    wi_text_init(&t, "ok\x01no", 10, WI_CS_ANY, false, false);
+    ASSERT_EQ(0, strcmp(t.text, "ok"));
+    wi_text_init(&t, "caf\xC3", 10, WI_CS_ANY, false, false); // truncated sequence
+    ASSERT_EQ(0, strcmp(t.text, "caf"));
+    wi_text_init(&t, "abcdef", 3, WI_CS_ANY, false, false); // longer than max_chars
+    ASSERT_EQ(0, strcmp(t.text, "abc"));
+    wi_picker_t p;
+    wi_picker_init(&p, 0, 0, true, false);
+    wi_picker_event(&p, WI_EV_SELECT, 0);
+    ASSERT_EQ(0, p.mask); // an empty multi picker ticks nothing
+}
+
 TEST(test_text_search_changed) {
     wi_text_t t;
     wi_text_init(&t, "", 20, WI_CS_ANY, false, true);
@@ -259,6 +283,7 @@ int main(void) {
     RUN(test_text_typing_and_pages);
     RUN(test_text_cursor_backspace_cancel_confirm);
     RUN(test_text_limits_charset_masking_utf8);
+    RUN(test_text_byte_limit_and_validation);
     RUN(test_text_search_changed);
     RUN(test_number_and_slider);
     RUN(test_picker);

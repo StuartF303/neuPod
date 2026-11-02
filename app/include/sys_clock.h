@@ -33,8 +33,12 @@ bool clock_eu_dst(uint32_t utc);                            /* the EU rule at th
 void clock_local_tm(uint32_t utc, clock_zone_t zone, clock_tm_t *out);
 
 /* The running clock (UI/service tasks; one writer at a time, 32-bit reads are atomic on both targets). */
-void clock_set_utc(uint32_t unix_s, bool from_ntp);
-void clock_set_utc_at(uint32_t unix_s, uint32_t millis_now, bool from_ntp); /* tests */
+bool clock_set_utc(uint32_t unix_s, bool from_ntp);   /* false if another writer was mid-update: retry */
+bool clock_set_utc_at(uint32_t unix_s, uint32_t millis_now, bool from_ntp); /* tests */
+void clock_tick(void);                                 /* once a second from one task: re-anchors hourly (49.7-day wrap safe) */
+void clock_tick_at(uint32_t millis_now);
+#define CLOCK_MIN_PLAUSIBLE_UTC 1735689600u            /* 2025-01-01: an NTP answer earlier than this is rejected */
+bool clock_ntp_plausible(uint32_t unix_s);
 bool clock_synced(void);          /* the time is known (NTP or set by hand) */
 bool clock_ntp_synced(void);
 uint32_t clock_utc_now(void);     /* 0 when unknown */
