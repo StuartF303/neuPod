@@ -105,6 +105,14 @@ set_tests_properties(runtime_smoke PROPERTIES
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   TIMEOUT 120)
 
+add_test(NAME input_tour
+  COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --tour-input --snapshots ${CMAKE_BINARY_DIR}/snapshots_input)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_input)
+set_tests_properties(input_tour PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_fixture;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  TIMEOUT 120)
+
 # The bare-metal audio core (core 1) may not use the RTOS, stdio, malloc or SDK blocking primitives.
 add_test(NAME audio_core_rules
   COMMAND ${CMAKE_COMMAND} -DSRC_DIR=${CMAKE_SOURCE_DIR} -P ${CMAKE_SOURCE_DIR}/cmake/check_core1_rules.cmake)

@@ -118,6 +118,14 @@ ui_screen_t *ui_screen_new(size_t size, const char *title) {
     return s;
 }
 
+void ui_frame_suspend_top(void) {
+    ui_screen_t *t = ui_stack_top(&g_stack);
+    if (t != NULL && !t->suspended && t->suspend != NULL) {
+        t->suspend(t);
+        t->suspended = true;
+    }
+}
+
 void ui_frame_push(ui_screen_t *s) {
     if (s == NULL) {
         return;
@@ -133,6 +141,10 @@ void ui_frame_push(ui_screen_t *s) {
     }
     if (cur != NULL) {
         lv_obj_set_hidden(cur->root, true);
+        if (!cur->suspended && cur->suspend != NULL) {
+            cur->suspend(cur);
+            cur->suspended = true;
+        }
     }
     lv_obj_set_hidden(s->root, false);
     set_title(s->title);
@@ -149,6 +161,10 @@ void ui_frame_pop(void) {
     lv_obj_delete(s->root);
     lv_free(s);
     ui_screen_t *now = ui_stack_top(&g_stack);
+    if (now->suspended && now->resume != NULL) {
+        now->resume(now);
+    }
+    now->suspended = false;
     lv_obj_set_hidden(now->root, false);
     set_title(now->title);
 }

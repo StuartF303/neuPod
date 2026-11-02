@@ -32,6 +32,7 @@ struct ui_list {
     bool focus;
     row_t row[POOL];
     lv_obj_t *sb; /* scroll bar */
+    lv_obj_t *parent;
 };
 
 static void set_text(lv_obj_t *label, const char *text) {
@@ -100,6 +101,9 @@ static void update_scrollbar(ui_list_t *l) {
 }
 
 static void layout(ui_list_t *l, bool rebind_all) {
+    if (l->box == NULL) {
+        return; /* suspended */
+    }
     int32_t first = l->scroll_px / UI_ROW_H;
     for (int i = 0; i < POOL; i++) {
         row_t *r = &l->row[i];
@@ -138,6 +142,42 @@ static void scroll_to_window(ui_list_t *l, bool animate) {
     lv_anim_start(&a);
 }
 
+static void build(ui_list_t *l) {
+    l->box = lv_obj_create(l->parent);
+    lv_obj_remove_style_all(l->box);
+    lv_obj_set_size(l->box, l->w, UI_CONTENT_H);
+    lv_obj_set_pos(l->box, 0, 0);
+    lv_obj_set_scrollable(l->box, false);
+
+    for (int i = 0; i < POOL; i++) {
+        row_t *r = &l->row[i];
+        r->idx = -1;
+        r->obj = lv_obj_create(l->box);
+        lv_obj_remove_style_all(r->obj);
+        lv_obj_set_size(r->obj, l->w, UI_ROW_H);
+        lv_obj_set_scrollable(r->obj, false);
+        r->c_label = UI_L_TEXT;
+        r->c_detail = r->c_chev = UI_L_DIM;
+        r->label = ui_label(r->obj, "", UI_L_TEXT);
+        lv_label_set_long_mode(r->label, LV_LABEL_LONG_DOT);
+        lv_obj_set_height(r->label, 18); /* fixed height: "..." instead of wrapping onto a second line */
+        lv_obj_align(r->label, LV_ALIGN_LEFT_MID, 10, 0);
+        r->detail = ui_label(r->obj, "", UI_L_DIM);
+        r->chev = ui_label(r->obj, "", UI_L_DIM);
+        lv_obj_align(r->chev, LV_ALIGN_RIGHT_MID, -8, 0);
+        lv_obj_set_hidden(r->obj, true);
+    }
+    l->sb = lv_obj_create(l->box);
+    lv_obj_remove_style_all(l->sb);
+    lv_obj_set_size(l->sb, 3, 20);
+    lv_obj_set_x(l->sb, l->w - 5);
+    lv_obj_set_style_radius(l->sb, 2, 0);
+    lv_obj_set_style_bg_color(l->sb, lv_color_hex(UI_L_FAINT), 0);
+    lv_obj_set_style_bg_opa(l->sb, LV_OPA_COVER, 0);
+    lv_obj_set_hidden(l->sb, true);
+
+}
+
 ui_list_t *ui_list_create(lv_obj_t *parent, int32_t w, const ui_list_model_t *model) {
     ui_list_t *l = lv_malloc(sizeof *l);
     if (l == NULL) {
@@ -157,39 +197,8 @@ ui_list_t *ui_list_create(lv_obj_t *parent, int32_t w, const ui_list_model_t *mo
     l->focus = true;
     ui_nav_init(&l->nav, model->count, UI_ROWS_VISIBLE);
 
-    l->box = lv_obj_create(parent);
-    lv_obj_remove_style_all(l->box);
-    lv_obj_set_size(l->box, w, UI_CONTENT_H);
-    lv_obj_set_pos(l->box, 0, 0);
-    lv_obj_set_scrollable(l->box, false);
-
-    for (int i = 0; i < POOL; i++) {
-        row_t *r = &l->row[i];
-        r->idx = -1;
-        r->obj = lv_obj_create(l->box);
-        lv_obj_remove_style_all(r->obj);
-        lv_obj_set_size(r->obj, w, UI_ROW_H);
-        lv_obj_set_scrollable(r->obj, false);
-        r->c_label = UI_L_TEXT;
-        r->c_detail = r->c_chev = UI_L_DIM;
-        r->label = ui_label(r->obj, "", UI_L_TEXT);
-        lv_label_set_long_mode(r->label, LV_LABEL_LONG_DOT);
-        lv_obj_set_height(r->label, 18); /* fixed height: "..." instead of wrapping onto a second line */
-        lv_obj_align(r->label, LV_ALIGN_LEFT_MID, 10, 0);
-        r->detail = ui_label(r->obj, "", UI_L_DIM);
-        r->chev = ui_label(r->obj, "", UI_L_DIM);
-        lv_obj_align(r->chev, LV_ALIGN_RIGHT_MID, -8, 0);
-        lv_obj_set_hidden(r->obj, true);
-    }
-    l->sb = lv_obj_create(l->box);
-    lv_obj_remove_style_all(l->sb);
-    lv_obj_set_size(l->sb, 3, 20);
-    lv_obj_set_x(l->sb, w - 5);
-    lv_obj_set_style_radius(l->sb, 2, 0);
-    lv_obj_set_style_bg_color(l->sb, lv_color_hex(UI_L_FAINT), 0);
-    lv_obj_set_style_bg_opa(l->sb, LV_OPA_COVER, 0);
-    lv_obj_set_hidden(l->sb, true);
-
+    l->parent = parent;
+    build(l);
     layout(l, true);
     return l;
 }
@@ -199,7 +208,9 @@ void ui_list_destroy(ui_list_t *l) {
         return;
     }
     lv_anim_delete(l, scroll_anim_cb);
-    lv_obj_delete(l->box);
+    if (l->box != NULL) {
+        lv_obj_delete(l->box);
+    }
     lv_free(l);
 }
 
@@ -243,5 +254,22 @@ void ui_list_set_count(ui_list_t *l, int32_t count) {
 
 void ui_list_set_focus(ui_list_t *l, bool focus) {
     l->focus = focus;
+    layout(l, true);
+}
+
+void ui_list_suspend(ui_list_t *l) {
+    if (l == NULL || l->box == NULL) {
+        return;
+    }
+    lv_anim_delete(l, scroll_anim_cb);
+    lv_obj_delete(l->box); /* frees every row object: the pool is small (docs/ui-input.md) */
+    l->box = NULL;
+}
+
+void ui_list_resume(ui_list_t *l) {
+    if (l == NULL || l->box != NULL) {
+        return;
+    }
+    build(l);
     layout(l, true);
 }

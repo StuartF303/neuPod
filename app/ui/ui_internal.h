@@ -58,6 +58,9 @@ struct ui_screen {
     bool (*on_button)(ui_screen_t *s, uint8_t btn);   /* HAL_BTN_*, on press; true = handled (else Menu pops) */
     void (*on_tick)(ui_screen_t *s);                  /* every UI pass while on top (rate-limit inside) */
     void (*destroy)(ui_screen_t *s);                  /* release resources (the object itself is freed after) */
+    void (*suspend)(ui_screen_t *s);                  /* optional: another screen was pushed over this one (free what can be rebuilt) */
+    void (*resume)(ui_screen_t *s);                   /* optional: it is on top again */
+    bool suspended;
     void *ud;
 };
 
@@ -78,6 +81,8 @@ void ui_frame_init(lv_obj_t *scr);
 void ui_frame_set_title(const char *t);
 /** Allocate a zeroed screen object of @p size bytes (first member must be ui_screen_t) with its root. */
 ui_screen_t *ui_screen_new(size_t size, const char *title);
+/** Suspend the top screen now (frees its rebuildable objects); a modal calls this BEFORE building itself so the pool peak is lower. */
+void ui_frame_suspend_top(void);
 void ui_frame_push(ui_screen_t *s);
 void ui_frame_pop(void);
 /** Route one input event (wheel counts are accelerated here). */
@@ -117,6 +122,9 @@ void ui_list_refresh(ui_list_t *l);
 void ui_list_set_count(ui_list_t *l, int32_t count);
 /** Highlight style off (a pane that does not currently have focus). */
 void ui_list_set_focus(ui_list_t *l, bool focus);
+/** Free the row objects while another screen covers this one (modals); resume rebuilds them. */
+void ui_list_suspend(ui_list_t *l);
+void ui_list_resume(ui_list_t *l);
 
 /* ---- Screens (ui_screens.c, ui_files.c, ui_settings.c, ui_bluetooth.c) ------------------------------------------- */
 
@@ -129,6 +137,7 @@ ui_screen_t *ui_screen_extras_create(void);
 ui_screen_t *ui_screen_files_create(void);
 ui_screen_t *ui_screen_settings_create(void);
 ui_screen_t *ui_screen_bluetooth_create(void); /* ui_bluetooth.c */
+ui_screen_t *ui_screen_inputdemo_create(void); /* input/ui_input_demo.c */
 
 /** Small helpers shared by the screens. */
 lv_obj_t *ui_artwork(lv_obj_t *parent, int32_t x, int32_t y, int32_t size);

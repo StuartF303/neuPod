@@ -26,6 +26,14 @@
     "s s s snap:settings-bt _ snap:bt-idle s s _ snap:bt-scanning x x x x x x x x x snap:bt-found s _ snap:bt-pair "     \
     "m w w w _ snap:about m m s s _ snap:nowplaying m"
 
+// Wheel input widgets (Extras > Input widgets): text, password with show, live search, number, slider, choice, multi choice, date/time.
+#define TOUR_INPUT                                                                                 \
+    "x s s s _ snap:extras-in s s _ snap:in-list s _ s _ s _ snap:in-text p snap:in-result "         \
+    "s _ _ s _ s s _ w w _ snap:in-password p s _ snap:in-search-empty _ snap:in-search m m "  \
+    "s _ s s s snap:in-number p s _ s s s s s snap:in-slider p s _ s snap:in-choice p "              \
+    "s _ _ s s _ snap:in-multi p s _ s d s snap:in-datetime p snap:in-end"
+
+static unsigned g_expect = 18;
 static const char *g_snapshot_dir;
 static unsigned g_snapshots;
 static bool cfgp_tour; // a tour was requested: expect all its snapshots
@@ -55,7 +63,7 @@ static void on_done(void *ctx) {
         fprintf(stderr, "host: FAIL audio task served only %u blocks\n", (unsigned)a.blocks);
         rc = 2;
     }
-    if (g_snapshot_dir != NULL && g_snapshots < (cfgp_tour ? 18u : 2u)) {
+    if (g_snapshot_dir != NULL && g_snapshots < (cfgp_tour ? g_expect : 2u)) {
         fprintf(stderr, "host: FAIL expected splash and home snapshots, got %u\n", g_snapshots);
         rc = 3;
     }
@@ -72,6 +80,10 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--tour") == 0) {
             cfg.ui_script = TOUR;
             cfgp_tour = true; // scripted walk through the screens, snapshots written to --snapshots DIR
+        } else if (strcmp(argv[i], "--tour-input") == 0) {
+            cfg.ui_script = TOUR_INPUT;
+            cfgp_tour = true;
+            g_expect = 14;
         } else if (strcmp(argv[i], "--script") == 0 && i + 1 < argc) {
             cfg.ui_script = argv[++i]; // ad-hoc key script, same tokens as the tour
         } else if (strcmp(argv[i], "--splash-hold-ms") == 0 && i + 1 < argc) {

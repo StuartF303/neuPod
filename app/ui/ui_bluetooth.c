@@ -237,6 +237,9 @@ static void bt_destroy(ui_screen_t *s) {
     ui_list_destroy(((bt_screen_t *)s)->list);
 }
 
+static void list_suspend(ui_screen_t *x) { ui_list_suspend(((bt_screen_t *)x)->list); }
+static void list_resume(ui_screen_t *x) { ui_list_resume(((bt_screen_t *)x)->list); }
+
 ui_screen_t *ui_screen_bluetooth_create(void) {
     bt_screen_t *b = (bt_screen_t *)ui_screen_new(sizeof *b, "Bluetooth");
     if (b == NULL) {
@@ -246,6 +249,8 @@ ui_screen_t *ui_screen_bluetooth_create(void) {
     b->base.on_button = bt_button;
     b->base.on_tick = bt_tick;
     b->base.destroy = bt_destroy;
+    b->base.suspend = list_suspend;
+    b->base.resume = list_resume;
     bt_service_event_flush();
     b->shown = hal_bt_state();
     b->have_local = radio_usable(b->shown) && hal_bt_local_address(b->local);

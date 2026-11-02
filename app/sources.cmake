@@ -102,6 +102,8 @@ set(NEUPOD_UI_SOURCES
   ${NEUPOD_APP_DIR}/ui/ui_audio.c
   ${NEUPOD_APP_DIR}/ui/ui_settings.c
   ${NEUPOD_APP_DIR}/ui/ui_bluetooth.c
+  ${NEUPOD_APP_DIR}/ui/input/ui_input.c
+  ${NEUPOD_APP_DIR}/ui/input/ui_input_demo.c
 )
 set(NEUPOD_APP_SOURCES
   ${NEUPOD_CORE_SOURCES}

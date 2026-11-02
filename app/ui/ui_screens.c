@@ -182,7 +182,7 @@ ui_screen_t *ui_screen_music_create(void) {
 
 /* ---- Extras ---------------------------------------------------------------------------------------- */
 
-static const menu_entry_t k_extras[] = {{"Files", ui_screen_files_create}, {"Test tone", ui_screen_testtone_create}};
+static const menu_entry_t k_extras[] = {{"Files", ui_screen_files_create}, {"Test tone", ui_screen_testtone_create}, {"Input widgets", ui_screen_inputdemo_create}};
 
 ui_screen_t *ui_screen_extras_create(void) {
     menu_screen_t *m = menu_new("Extras", k_extras, (int32_t)(sizeof k_extras / sizeof k_extras[0]), UI_W);

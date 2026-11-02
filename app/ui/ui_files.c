@@ -12,6 +12,7 @@
 #include "os.h"
 #include "player.h"
 #include "storage_service.h"
+#include "ui_input.h"
 #include "ui_internal.h"
 
 #define MAX_DEPTH 8
@@ -33,6 +34,8 @@ typedef struct {
     char msg[72];
     lv_obj_t *toast; /* short notice over the last row (unsupported file type) */
     uint32_t toast_until;
+    wi_letterjump_t lj;           /* letter overlay while scrolling fast (the list is sorted by name within dirs/files) */
+    ui_letter_overlay_t *overlay;
 } files_t;
 
 static uint32_t g_seq;
@@ -125,6 +128,10 @@ static void show_toast(files_t *f, const char *text) {
 
 static void files_tick(ui_screen_t *s) {
     files_t *f = (files_t *)s;
+    if (f->lj.active) {
+        wi_letterjump_tick(&f->lj, os_tick_ms());
+        ui_letter_overlay_update(f->overlay, &f->lj);
+    }
     if (f->toast_until != 0 && (int32_t)(os_tick_ms() - f->toast_until) >= 0) {
         f->toast_until = 0;
         lv_obj_set_hidden(f->toast, true);
@@ -149,7 +156,15 @@ static void files_tick(ui_screen_t *s) {
     }
 }
 
-static void files_scroll(ui_screen_t *s, int32_t steps) { ui_list_move(((files_t *)s)->list, steps); }
+static void files_scroll(ui_screen_t *s, int32_t steps) {
+    files_t *f = (files_t *)s;
+    ui_list_move(f->list, steps);
+    int32_t i = ui_list_selected(f->list);
+    if (f->state == READY && i >= 0 && (uint32_t)i < f->count) {
+        wi_letterjump_scroll(&f->lj, steps, os_tick_ms(), storage_list_entries()[i].name[0]);
+        ui_letter_overlay_update(f->overlay, &f->lj);
+    }
+}
 
 static bool files_button(ui_screen_t *s, uint8_t btn) {
     files_t *f = (files_t *)s;
@@ -226,7 +241,10 @@ static bool files_button(ui_screen_t *s, uint8_t btn) {
     return false;
 }
 
-static void files_destroy(ui_screen_t *s) { ui_list_destroy(((files_t *)s)->list); }
+static void files_destroy(ui_screen_t *s) {
+    ui_letter_overlay_destroy(((files_t *)s)->overlay);
+    ui_list_destroy(((files_t *)s)->list);
+}
 
 ui_screen_t *ui_screen_files_create(void) {
     files_t *f = (files_t *)ui_screen_new(sizeof *f, "Files");
@@ -248,6 +266,8 @@ ui_screen_t *ui_screen_files_create(void) {
     lv_obj_set_pos(f->toast, 0, UI_CONTENT_H - UI_ROW_H);
     lv_label_set_long_mode(f->toast, LV_LABEL_LONG_DOT);
     lv_obj_set_hidden(f->toast, true);
+    wi_letterjump_init(&f->lj);
+    f->overlay = ui_letter_overlay_create(f->base.root);
     load(f);
     return &f->base;
 }
