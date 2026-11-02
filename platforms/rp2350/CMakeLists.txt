@@ -42,6 +42,8 @@ target_link_libraries(hal_rp2350_core PUBLIC
   hardware_clocks
   hardware_i2c
   pico_multicore
+  pico_rand
+  pico_unique_id
 )
 set_source_files_properties(hal/hal_core.c hal/hal_i2c.c i2c_test_main.c ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
   hal/hal_system.c hal/hal_radio_bt.c hal/hal_display.c hal/hal_console.c hal/hal_input.c hal/hal_audio.c hal/hal_audio_null.c main.c
@@ -168,3 +170,6 @@ target_compile_definitions(storage_test PRIVATE PICO_STACK_SIZE=0x1000)
 pico_enable_stdio_uart(storage_test 1)
 pico_enable_stdio_usb(storage_test 0)
 pico_add_extra_outputs(storage_test)
+
+# The crypto library needs hal_chip_id() / hal_random().
+target_link_libraries(neupod_crypto PUBLIC hal_rp2350_rtos)

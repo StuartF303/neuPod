@@ -2,6 +2,7 @@
 // Persistent key/value store on the SD card. Design and rules: app/include/settings_store.h, docs/bluetooth.md.
 #include <string.h>
 
+#include "crypto_secret.h"
 #include "hal_storage.h"
 #include "nfs.h"
 #include "settings_store.h"
@@ -447,11 +448,55 @@ bool settings_get_u8(uint32_t tag, uint8_t *out) {
 
 void settings_set_u8(uint32_t tag, uint8_t v) { (void)settings_put(tag, &v, 1); }
 
+/* ---- Secrets ---- */
+
+bool settings_put_secret(uint32_t tag, const void *data, uint32_t len) {
+    uint8_t rec[SETTINGS_VALUE_MAX];
+    if (len == 0 || len + SECRET_OVERHEAD > sizeof rec) {
+        return false;
+    }
+    size_t n = secret_seal(tag, data, len, rec, sizeof rec);
+    return n != 0 && settings_put(tag, rec, (uint32_t)n);
+}
+
+uint32_t settings_get_secret(uint32_t tag, void *buf, uint32_t size) {
+    uint8_t rec[SETTINGS_VALUE_MAX], plain[SETTINGS_VALUE_MAX];
+    uint32_t n = settings_get(tag, rec, sizeof rec);
+    if (n == 0) {
+        return 0;
+    }
+    int pl = secret_open(tag, rec, n, plain, sizeof plain);
+    if (pl <= 0) {
+        return 0;
+    }
+    if (buf != NULL) {
+        memcpy(buf, plain, (uint32_t)pl < size ? (uint32_t)pl : size);
+    }
+    return (uint32_t)pl;
+}
+
+void settings_migrate_bt_secrets(void) {
+    for (uint32_t i = 0; i < SETTINGS_MAX_ITEMS; i++) {
+        lock();
+        uint32_t tag = g_items[i].tag;
+        uint8_t len = g_items[i].len;
+        uint8_t plain[SETTINGS_VALUE_MAX];
+        bool todo = len != 0 && (tag >> 24) == 'B' && ((tag >> 16) & 0xFFu) == 'T' && len < SECRET_OVERHEAD;
+        if (todo) {
+            memcpy(plain, g_items[i].val, len);
+        }
+        unlock();
+        if (todo) {
+            (void)settings_put_secret(tag, plain, len); /* a sealed record is always >= SECRET_OVERHEAD + 1 bytes, so this runs once */
+        }
+    }
+}
+
 /* ---- BTstack storage adapter ---- */
 
 static int bt_get(void *ctx, uint32_t tag, uint8_t *buf, uint32_t size) {
     (void)ctx;
-    uint32_t len = settings_get(tag, buf, size);
+    uint32_t len = settings_get_secret(tag, buf, size); /* 0 when absent or not authentic: BTstack then pairs again */
     return (int)(buf != NULL && len > size ? size : len); /* BTstack: bytes copied, or the length for a NULL buffer */
 }
 
@@ -467,7 +512,7 @@ static bool writes_ok(void) {
 
 static int bt_put(void *ctx, uint32_t tag, const uint8_t *data, uint32_t size) {
     (void)ctx;
-    return writes_ok() && settings_put(tag, data, size) ? 0 : -1;
+    return writes_ok() && settings_put_secret(tag, data, size) ? 0 : -1;
 }
 
 static void bt_del(void *ctx, uint32_t tag) {

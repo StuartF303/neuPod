@@ -58,6 +58,15 @@ void hal_delay_ms(uint32_t ms);
 /** Drive the board status LED (no-op where the board has none). */
 void hal_status_led(bool on);
 
+/**
+ * The chip's unique 64-bit ID (RP2350: the OTP chip ID read by the boot ROM before main; no flash access). false if unavailable.
+ * NOT secret (docs/wifi.md): used only to bind the secrets file to one board.
+ */
+bool hal_chip_id(uint8_t id[8]);
+
+/** Fill @p buf with @p n random bytes (RP2350: the SDK's random source seeded from the ring oscillator and the ROM RNG; host: /dev/urandom). */
+void hal_random(void *buf, size_t n);
+
 /** Short platform name for logs, e.g. "rp2350", "esp32s3", "host". */
 const char *hal_platform_name(void);
 

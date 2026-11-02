@@ -380,7 +380,7 @@ TEST(test_bt_storage_adapter) {
     ASSERT_EQ(-1, bt->put(bt->ctx, 0x42544C00, rec, sizeof rec));
     ASSERT_EQ(SETTINGS_LOAD_FRESH, settings_load());
     ASSERT_EQ(0, bt->put(bt->ctx, 0x42544C00, rec, sizeof rec));
-    ASSERT_EQ(27, bt->get(bt->ctx, 0x42544C00, NULL, 0));          // length only
+    ASSERT_EQ(27, bt->get(bt->ctx, 0x42544C00, NULL, 0));          // length only (the plaintext length: it is stored sealed)
     ASSERT_EQ(8, bt->get(bt->ctx, 0x42544C00, got, sizeof got));    // copies what fits
     ASSERT_EQ(0, bt->get(bt->ctx, 0x42544C01, got, sizeof got));    // absent
     ASSERT_EQ(-1, bt->put(bt->ctx, 0x42544C01, rec, 0));            // empty value is not storable

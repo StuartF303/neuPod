@@ -40,8 +40,8 @@ extern "C" {
 #define SETTINGS_FILE SETTINGS_DIR "/settings.bin"
 #define SETTINGS_TMP_FILE SETTINGS_DIR "/settings.tmp"
 
-#define SETTINGS_MAX_ITEMS 24u /**< distinct tags kept (3 settings + link keys + BT device records) */
-#define SETTINGS_VALUE_MAX 48u /**< bytes per value (a BTstack link key record is 27) */
+#define SETTINGS_MAX_ITEMS 20u /**< distinct tags kept (settings, Wi-Fi networks, link keys, BT device records) */
+#define SETTINGS_VALUE_MAX 96u /**< bytes per stored value; a sealed secret holds up to 96 - 29 = 67 bytes of plaintext (Wi-Fi passwords are at most 63) */
 #define SETTINGS_VERSION 1u
 
 /** Tags of the user settings, four ASCII characters like BTstack's own ('NPxx'; BTstack uses 'BTL?' / 'BTD?'). */
@@ -117,6 +117,15 @@ void settings_delete(uint32_t tag);
 bool settings_get_u8(uint32_t tag, uint8_t *out);
 void settings_set_u8(uint32_t tag, uint8_t v);
 
+/* ---- Secrets (crypto_secret.h): AES-256-GCM sealed, bound to the chip ---- */
+
+/** Store @p len secret bytes (<= SETTINGS_VALUE_MAX - SECRET_OVERHEAD) sealed under @p tag. false if too long, or no key. */
+bool settings_put_secret(uint32_t tag, const void *data, uint32_t len);
+/** Read a secret: its length, or 0 if absent OR it does not authenticate (another board, edited card): ask the user again. */
+uint32_t settings_get_secret(uint32_t tag, void *buf, uint32_t size);
+/** Seal any plaintext BTstack record (tags 'BT..' shorter than a sealed record) written before secrets were encrypted. */
+void settings_migrate_bt_secrets(void);
+
 /* ---- BTstack ---- */
 
 /**
@@ -124,7 +133,7 @@ void settings_set_u8(uint32_t tag, uint8_t v);
  * While the card's contents are still to be loaded (or it is not yet known whether there is a card) writes are refused,
  * since the load would drop them; with no card they work for the session (RAM-only).
  */
-const hal_bt_storage_t *settings_bt_storage(void);
+const hal_bt_storage_t *settings_bt_storage(void); /* link keys and device records are stored SEALED (settings_put_secret) */
 
 /* ---- test hooks ---- */
 

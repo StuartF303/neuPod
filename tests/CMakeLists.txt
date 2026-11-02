@@ -28,6 +28,13 @@ target_link_libraries(test_bt_sim hal_host)
 add_test(NAME bt_sim COMMAND test_bt_sim)
 set_source_files_properties(test_bt_sim.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
+if(NEUPOD_HAVE_MBEDTLS)
+  add_executable(test_secret test_secret.c)
+  target_link_libraries(test_secret neupod_settings hal_host)
+  add_test(NAME secret COMMAND test_secret)
+  set_source_files_properties(test_secret.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+endif()
+
 add_executable(test_settings test_settings.c)
 target_link_libraries(test_settings neupod_settings hal_host) # hal_host last: nfs and hal_storage
 add_test(NAME settings COMMAND test_settings)
