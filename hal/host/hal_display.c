@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "hal_display.h"
+#include "hal_host.h"
 #include "host_internal.h"
 
 #define PANEL_W 320u
@@ -114,11 +115,11 @@ bool hal_display_get_inversion(void) { return g_inversion; }
 
 void hal_display_wait(void) {}
 
-static void dump_ppm(const char *path, const uint16_t *fb) {
+static bool dump_ppm(const char *path, const uint16_t *fb) {
     FILE *f = fopen(path, "wb");
     if (!f) {
         fprintf(stderr, "neuPod host: cannot write %s\n", path);
-        return;
+        return false;
     }
     fprintf(f, "P6\n%u %u\n255\n", PANEL_W, PANEL_H);
     for (size_t i = 0; i < PANEL_W * PANEL_H; i++) {
@@ -129,8 +130,16 @@ static void dump_ppm(const char *path, const uint16_t *fb) {
                           (uint8_t)(((p & 0x1F) << 3) | ((p >> 2) & 7))};
         fwrite(rgb, 1, 3, f);
     }
-    fclose(f);
+    return fclose(f) == 0;
 }
+
+bool hal_host_display_dump_ppm(const char *path) {
+    static uint16_t shown[PANEL_W * PANEL_H];
+    compose(shown);
+    return dump_ppm(path, shown);
+}
+
+void hal_display_service(void) { host_pump_events(); }
 
 void hal_display_present(void) {
     static uint16_t shown[PANEL_W * PANEL_H];
@@ -138,7 +147,7 @@ void hal_display_present(void) {
     host_window_present(shown, PANEL_W, PANEL_H, g_backlight);
     const char *ppm = getenv("NEUPOD_DISPLAY_PPM");
     if (ppm != NULL && ppm[0] != '\0') {
-        dump_ppm(ppm, shown);
+        (void)dump_ppm(ppm, shown);
     }
 }
 

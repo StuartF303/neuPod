@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
+// Minimal LED-blink app. Only the ESP-IDF skeleton (platforms/esp32s3) still uses this; the RP2350 and
+// host builds run the full runtime (app/runtime/runtime.c, neupod_runtime_run).
 #include <stdio.h>
 
 #include "hal_system.h"

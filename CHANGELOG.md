@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Runtime: single-core FreeRTOS on core 0 of the RP2350 and a bare-metal audio core on core 1 (ADR-0011),
+  and the POSIX port on the host; `os.h` portable OS layer; LVGL v9 UI with a boot splash
+  and placeholder home screen; concurrent read-only boot self-checks with a capabilities struct;
+  audio timing stub (lock-free ring, decoder stub, jitter/underrun stats); fatal-error path.
+  See `docs/runtime.md`, ADR-0009, ADR-0010.
 - Repository hygiene: `.gitignore`, `.editorconfig`, `.clang-format`, licence files
   (MPL-2.0 / CERN-OHL-S-2.0 / CC-BY-4.0), code of conduct, contributing guide, security policy.
 - Platform split: top-level `NEUPOD_PLATFORM=rp2350|esp32s3|host`; `platforms/rp2350` (Pico SDK,

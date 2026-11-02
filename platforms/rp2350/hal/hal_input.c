@@ -83,6 +83,8 @@ hal_status_t hal_input_init(void) {
     return HAL_OK;
 }
 
+bool hal_input_is_simulated(void) { return false; }
+
 hal_status_t hal_input_reinit(void) {
     if (!g_started) {
         return HAL_ENODEV;

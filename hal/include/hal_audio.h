@@ -29,7 +29,11 @@ hal_status_t hal_audio_init(void);
 /** True if the sink can run natively at @p sample_rate without resampling. */
 bool hal_audio_rate_supported(uint32_t sample_rate);
 
-/** Start a stream in @p fmt. Returns HAL_ENOTSUP if the format cannot be honoured. */
+/**
+ * Start a stream in @p fmt and its block clock; the first callback comes one block later.
+ * Call from the core that should take the clock interrupt. Returns HAL_ENOTSUP if the format
+ * cannot be honoured.
+ */
 hal_status_t hal_audio_open(const hal_audio_format *fmt);
 
 /**
@@ -41,6 +45,40 @@ int32_t hal_audio_write(const int32_t *samples, uint32_t frames);
 
 /** Frames that can currently be written without blocking. */
 uint32_t hal_audio_free_frames(void);
+
+/**
+ * Samples per pacing block: the sink asks for data in blocks of this many frames
+ * (256 frames = 5.8 ms at 44.1 kHz), matching a half of a typical I2S DMA buffer.
+ */
+#define HAL_AUDIO_BLOCK_FRAMES 256u
+
+/**
+ * Block-clock callback: called once per block period from the sink's clock context, i.e. the
+ * hardware timer interrupt on the core that called hal_audio_open() (I2S DMA interrupt later;
+ * on the host, a timer thread). It must hand the sink its next block with hal_audio_write().
+ * @p missed is the number of whole extra blocks that went by since the previous call (0 = on time;
+ * more means the sink under-ran). Runs in interrupt context: no locks, no malloc, no stdio, and
+ * nothing that needs an RTOS (docs/adr/0011-bare-metal-audio-core.md).
+ */
+typedef void (*hal_audio_block_cb)(uint32_t missed);
+
+/** Register the block callback. Call before hal_audio_open(). */
+void hal_audio_set_block_callback(hal_audio_block_cb cb);
+
+/** Blocks the sink wanted that the callback served late, since hal_audio_open(). */
+uint32_t hal_audio_underruns(void);
+
+/**
+ * Idle the calling core until an interrupt (or, on the host, a short sleep). May return early;
+ * callers loop. For the bare-metal audio core's main loop.
+ */
+void hal_audio_idle(void);
+
+/**
+ * Backend in use, for the boot self-check: "null" accepts and discards samples on a real-time
+ * clock (no DAC); a hardware backend returns e.g. "i2s".
+ */
+const char *hal_audio_backend_name(void);
 
 /** Mute / unmute the output stage. */
 void hal_audio_mute(bool mute);

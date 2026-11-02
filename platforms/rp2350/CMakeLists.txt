@@ -1,32 +1,46 @@
 # RP2350 (Pico 2 W) platform. Entered from the top-level CMakeLists.txt after pico_sdk_init().
 
-add_library(hal_rp2350 STATIC
-  hal/hal_system.c
+# HAL in three layers. hal_rp2350_core holds everything that does not care about the scheduler.
+# hal_rp2350 (bare metal: the display/storage/i2c test executables) and hal_rp2350_rtos (the
+# FreeRTOS runtime) differ in hal_system.c (cyw43 arch, deferred radio bring-up) and the audio sink.
+add_library(hal_rp2350_core STATIC
   hal/hal_display.c
   hal/hal_console.c
   hal/hal_input.c
   hal/hal_i2c.c
+  hal/hal_audio.c   # core-1 code: no RTOS dependency (ADR-0011), shared by both builds
+  hal/hal_core.c
   ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
 )
-target_include_directories(hal_rp2350 PUBLIC ${CMAKE_SOURCE_DIR}/hal/include)
-target_link_libraries(hal_rp2350 PUBLIC
+target_include_directories(hal_rp2350_core PUBLIC ${CMAKE_SOURCE_DIR}/hal/include)
+target_link_libraries(hal_rp2350_core PUBLIC
   neupod_clickwheel
   pico_stdlib
-  pico_cyw43_arch_none   # on-board LED is on the CYW43439
   hardware_spi
   hardware_dma
   hardware_pwm
   hardware_pio
   hardware_clocks
   hardware_i2c
+  pico_multicore
 )
-set_source_files_properties(hal/hal_i2c.c i2c_test_main.c ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
-  hal/hal_system.c hal/hal_display.c hal/hal_console.c hal/hal_input.c main.c
+set_source_files_properties(hal/hal_core.c hal/hal_i2c.c i2c_test_main.c ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
+  hal/hal_system.c hal/hal_display.c hal/hal_console.c hal/hal_input.c hal/hal_audio.c main.c
   display_test_main.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
-pico_generate_pio_header(hal_rp2350 ${CMAKE_CURRENT_LIST_DIR}/hal/clickwheel_rx.pio)
+pico_generate_pio_header(hal_rp2350_core ${CMAKE_CURRENT_LIST_DIR}/hal/clickwheel_rx.pio)
+
+# Bare metal: the SDK's threadsafe-background cyw43 arch (the LED lives on the CYW43439).
+add_library(hal_rp2350 STATIC hal/hal_system.c)
+target_link_libraries(hal_rp2350 PUBLIC hal_rp2350_core pico_cyw43_arch_none)
+
+# FreeRTOS (single-core, core 0): pico_cyw43_arch_sys_freertos (via neupod_freertos). Radio bring-up
+# waits for the scheduler (hal_system_late_init).
+add_library(hal_rp2350_rtos STATIC hal/hal_system.c)
+target_compile_definitions(hal_rp2350_rtos PRIVATE NEUPOD_RTOS=1)
+target_link_libraries(hal_rp2350_rtos PUBLIC hal_rp2350_core neupod_freertos)
 
 add_executable(neupod main.c)
-target_link_libraries(neupod neupod_app hal_rp2350)
+target_link_libraries(neupod neupod_runtime neupod_drivers hal_rp2350_rtos hal_rp2350_storage_rtos)
 
 # stdio over UART0 (GP0 TX / GP1 RX -> Debug Probe UART), not USB
 pico_enable_stdio_uart(neupod 1)
@@ -76,18 +90,24 @@ add_subdirectory(${NEUPOD_SD_LIB_DIR}/src ${CMAKE_BINARY_DIR}/sd_lib)
 target_include_directories(no-OS-FatFS-SD-SDIO-SPI-RPi-Pico BEFORE INTERFACE
   ${CMAKE_CURRENT_LIST_DIR}/ffconf)
 
-add_library(hal_rp2350_storage STATIC
-  hal/hal_storage.c
-  hal/hw_config.c
-  ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c
-  ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c   # portable file API on the library's FatFs
-)
-target_include_directories(hal_rp2350_storage PUBLIC ${CMAKE_SOURCE_DIR}/hal/include
-                                                     ${CMAKE_SOURCE_DIR}/app/include
-                                              PRIVATE ${CMAKE_SOURCE_DIR}/hal/common)
-target_link_libraries(hal_rp2350_storage PUBLIC no-OS-FatFS-SD-SDIO-SPI-RPi-Pico pico_stdlib)
-# Library error messages (bus errors, timeouts) go to the UART console.
-target_compile_definitions(hal_rp2350_storage PUBLIC USE_PRINTF)
+function(neupod_add_storage_lib name)
+  add_library(${name} STATIC
+    hal/hal_storage.c
+    hal/hw_config.c
+    ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c
+    ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c   # portable file API on the library's FatFs
+  )
+  target_include_directories(${name} PUBLIC ${CMAKE_SOURCE_DIR}/hal/include
+                                            ${CMAKE_SOURCE_DIR}/app/include
+                                     PRIVATE ${CMAKE_SOURCE_DIR}/hal/common)
+  target_link_libraries(${name} PUBLIC no-OS-FatFS-SD-SDIO-SPI-RPi-Pico pico_stdlib ${ARGN})
+  # Library error messages (bus errors, timeouts) go to the UART console.
+  target_compile_definitions(${name} PUBLIC USE_PRINTF)
+endfunction()
+neupod_add_storage_lib(hal_rp2350_storage)
+# Same sources for the runtime, built against the SDK's FreeRTOS adapter: the SD library embeds
+# pico_sync mutexes in its structs, whose layout changes with the adapter, so one copy cannot serve both.
+neupod_add_storage_lib(hal_rp2350_storage_rtos neupod_freertos)
 set_source_files_properties(hal/hal_storage.c hal/hw_config.c storage_test_main.c
   ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c
   PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")

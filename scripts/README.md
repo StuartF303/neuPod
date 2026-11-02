@@ -10,6 +10,14 @@ Build output goes to `build/<platform>/`.
 | `console.sh` | `console.sh [rp2350\|esp32s3]` | rp2350: minicom on the Debug Probe UART at 115200. esp32s3: `idf.py monitor`, port from `$PORT`. |
 | `setup-esp-idf.sh` | `setup-esp-idf.sh [git-ref]` | Installs ESP-IDF (default `v5.3.2`) to `~/esp/esp-idf` with ESP32-S3 tools. Override location with `$IDF_DIR`. |
 
+**RP2350 and the second core.** OpenOCD's reset leaves both cores halted by the debugger, and a plain
+"program ... reset exit" quits with core 1 still halted in the bootrom (PC `0xDA`), so the audio core
+never starts. `flash.sh` therefore programs and verifies, does `reset halt`, then resumes core 1 and
+core 0 (each only if still halted; in OpenOCD's SMP group resuming one core resumes both, so the
+second check normally finds it running, which is what the old "[rp2350.cm0] not halted / context
+restore failed" message was). The bare-metal test images are unaffected. `NEUPOD_OPENOCD_EXTRA` takes
+extra OpenOCD commands, inserted before `program`.
+
 Examples:
 
     scripts/build.sh rp2350 --clean

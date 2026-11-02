@@ -11,6 +11,7 @@
 #define SDL_MAIN_HANDLED
 #include <SDL.h>
 #include <stdio.h>
+#include <pthread.h>
 #include <stdlib.h>
 
 #include "hal_input.h"
@@ -20,6 +21,7 @@
 static SDL_Window *g_win;
 static SDL_Renderer *g_ren;
 static SDL_Texture *g_tex;
+static pthread_t g_owner; // SDL is single-threaded: only the thread that opened the window uses it
 
 static void window_close(void) {
     if (g_tex) {
@@ -41,6 +43,7 @@ bool host_window_open(int w, int h) {
     if (g_win) {
         return true;
     }
+    g_owner = pthread_self();
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         fprintf(stderr, "neuPod host: SDL_Init failed (%s); running headless\n", SDL_GetError());
         return false;
@@ -99,7 +102,7 @@ static uint8_t key_to_button(SDL_Keycode k) {
 }
 
 void host_pump_events(void) {
-    if (!g_win) {
+    if (!g_win || !pthread_equal(pthread_self(), g_owner)) {
         return;
     }
     SDL_Event e;

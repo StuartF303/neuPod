@@ -12,3 +12,6 @@ Format: [Michael Nygard](https://cognitect.com/blog/2011/11/15/documenting-archi
 | [0006](0006-storage-microsd-sdio.md) | Storage: microSD over 4-bit SDIO, exFAT | Proposed |
 | [0007](0007-bluetooth-audio-path.md) | Bluetooth audio path: BTstack or external transmitter | Proposed (deferred) |
 | [0008](0008-card-format.md) | Card format: exFAT with 128 KB clusters | Proposed |
+| [0009](0009-rtos-freertos-smp.md) | RTOS: FreeRTOS (SMP part amended by 0011) | Accepted, amended |
+| [0010](0010-ui-lvgl.md) | UI toolkit: LVGL v9 | Accepted |
+| [0011](0011-bare-metal-audio-core.md) | Single-core FreeRTOS on core 0, bare-metal audio core on core 1 | Accepted |

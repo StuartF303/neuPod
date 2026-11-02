@@ -18,9 +18,26 @@ case "$PLATFORM" in
             ELF="$ROOT/build/rp2350/platforms/rp2350/$ARG.elf"
         fi
         [[ -f "$ELF" ]] || { echo "ELF not found: $ELF (run scripts/build.sh rp2350)" >&2; exit 1; }
+        # OpenOCD's reset leaves BOTH cores halted by the debugger; "program ... reset exit" then
+        # quits with core 1 still halted at the bootrom (PC 0xDA), so an image that launches core 1
+        # (the audio core) never gets it. So: program and verify, reset-halt, and explicitly resume
+        # core 1 and core 0 (only if still halted). OpenOCD resumes the whole SMP group when one
+        # member is resumed, so by the time core 0 is reached it is usually already running: that is
+        # why the unconditional "resume" printed "[rp2350.cm0] not halted / context restore failed";
+        # the state check makes that message go away. Works for bare-metal test images too (core 1
+        # then just waits in the bootrom). NEUPOD_OPENOCD_EXTRA='-c "..."' adds commands for experiments.
+        EXTRA=()
+        if [[ -n "${NEUPOD_OPENOCD_EXTRA:-}" ]]; then eval "EXTRA=(${NEUPOD_OPENOCD_EXTRA})"; fi # honours quotes, e.g. '-c "..."'
         exec openocd -f interface/cmsis-dap.cfg -f target/rp2350.cfg \
             -c "adapter speed 5000" \
-            -c "program $ELF verify reset exit"
+            ${EXTRA[@]+"${EXTRA[@]}"} \
+            -c "program $ELF verify" \
+            -c "reset halt" \
+            -c "targets rp2350.cm1" \
+            -c 'if {[rp2350.cm1 curstate] eq "halted"} {resume}' \
+            -c "targets rp2350.cm0" \
+            -c 'if {[rp2350.cm0 curstate] eq "halted"} {resume}' \
+            -c "shutdown"
         ;;
     esp32s3)
         command -v idf.py >/dev/null || { echo "idf.py not found (. ~/esp/esp-idf/export.sh)" >&2; exit 1; }
