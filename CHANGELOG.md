@@ -6,7 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- RAM budget: FreeRTOS heap 112 to 80 KB and LVGL pool 96 to 72 KB (named constants in `app/os/memory_budget.h`); static RAM 481,588 to 436,480 bytes with BTstack and the settings store included. The CYW43 worker task has 6 KB of stack. `md5.h` renamed `neupod_md5.h` (clash with BTstack's `md5.h`).
+
 ### Added
+- Bluetooth stage 1 (see `docs/bluetooth.md`): BTstack classic (Pico SDK 2.3.1) on core 0 over the CYW43439, HCI bring-up with the local address and HCI version on the UART,
+  device discovery (name, address, Class of Device, RSSI, audio-sink flag) through `hal_bt_*` and a queue to the UI, Settings > Bluetooth screen (status, address, Scan, devices),
+  Bluetooth boot check (Wi-Fi stays degraded), host simulator with unit test and tour snapshots. No pairing or A2DP yet.
+- Settings store on the SD card (`/.neupod/settings.bin`, CRC, atomic save, RAM-only fallback, an nfs write scope that confines the save's unlocked writes to `/.neupod`):
+  volume (never restored louder than -30 dB), backlight and click feedback now persist; link keys for BTstack go here, never to the internal flash (core 1 runs from it).
+- `LICENSE.md`: BTstack and cyw43-driver licence terms (non-commercial unless on Raspberry Pi hardware; unresolved for a custom board), see the table there.
 - Codecs on the audio core: FLAC and MP3 (vendored `dr_flac` / `dr_mp3`, public domain / MIT-0) and ALAC (Apple's decoder core, Apache-2.0, with a C wrapper), all
   from one 116 KB static arena (no malloc on core 1); our own MP4/M4A demuxer (also for a later AAC) and tag readers (FLAC Vorbis comments, ID3v2, MP4 `ilst`) on core 0;
   Files plays `.wav`, `.flac`, `.mp3`, `.m4a`; Now Playing shows tags, a format badge and the length; FLAC MD5 verify mode (Right on a `.flac`); decoder CPU statistics;

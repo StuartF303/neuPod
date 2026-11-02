@@ -82,7 +82,8 @@ Consequences:
 ## Volume safety
 
 * Volume is **attenuation in whole dB**, applied in the 32-bit domain. Start-up level is **-30 dB** and is
-  sent to the audio core before anything can play; the audio core also boots at -30 dB by itself.
+  sent to the audio core before anything can play; the audio core also boots at -30 dB by itself. The volume is saved on the card
+  (settings store, [Bluetooth](bluetooth.md)) and restored at boot, but **never louder than -30 dB**: a saved louder level comes back as -30 dB.
 * The UI steps 2 dB per wheel click. The engine never applies gain above 0 dB, and a build-time hard cap
   (`NEUPOD_AUDIO_VOLUME_CAP_DB`, default 0, meaning full scale allowed) sets the loudest level; raise it for a
   headphone-safe build. At 80 dB or more the output is silent.

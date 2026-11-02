@@ -63,17 +63,17 @@ Priority 7 is the highest; the kernel idle task is 0.
 | Task | Priority | Stack | Period / trigger | Budget |
 | --- | --- | --- | --- | --- |
 | kernel timer service | 6 | 1.5 KB | kernel timers | microseconds |
-| storage | 5 | 8 KB | request queue; while a WAV plays, every 1 ms | directory listings and volume space for the UI (yields every 32 entries); streams the WAV from the card in 2 KB reads into the audio data ring; later: library scan, track prefetch |
+| storage | 5 | 8 KB | request queue; while a file streams, every 1 ms; otherwise every 500 ms | directory listings and volume space for the UI (yields every 32 entries); streams the file from the card in 2 KB reads into the audio data ring; loads the settings store after the card mounts and saves it about 1.5 s after a change ([Bluetooth](bluetooth.md)); later: library scan, track prefetch |
 | input | 4 | 2 KB | every 2 ms | well under 1 % (the wheel FIFO overflows after ~4.8 ms) |
 | I2C users, while on the bus | 4 (lifted) | n/a | boot checks, the 5 s gauge read | a few ms (see findings) |
-| CYW43 worker (SDK) | 3 | 4 KB | radio events | LED today, Wi-Fi / BTstack later |
+| CYW43 worker (SDK) | 3 | 6 KB | radio events; **every BTstack callback** | LED; Bluetooth (BTstack's one thread: HCI, scan, events posted to the UI queue); Wi-Fi later |
 | haptic (click feedback) | 4 | 2 KB | click queue (2 deep, non-blocking for the UI) | a few ms per click; back to standby after 2 s idle |
 | UI (LVGL) | 2 | 12 KB | 5 to 30 ms, from LVGL's own timer | frame strip render + 24-line blocking DMA |
 | monitor | 1 | 3 KB | 100 ms tick: heartbeat 1 s, gauge 5 s, stats 10 s | negligible |
 | boot checks (transient, 6) | 1 | 3 to 5 KB | once at boot | bounded by per-check deadlines |
 
-Core 1 has its own 16 KB stack array and a 116 KB codec arena (both static RAM). Heap: `heap_4`, 112 KB, holds task stacks and kernel objects; static RAM beyond that is the LVGL
-pool (96 KB), the two render buffers (30 KB), the directory-listing buffer (about 19 KB) and the audio core's rings and block buffer (about 28 KB).
+Core 1 has its own 16 KB stack array and a 116 KB codec arena (both static RAM). Heap: `heap_4`, 80 KB (`NEUPOD_RTOS_HEAP_BYTES`, `app/os/memory_budget.h`), holds task stacks and kernel objects; static RAM beyond that is the LVGL
+pool (72 KB, `NEUPOD_LVGL_POOL_BYTES`), the BTstack pools (about 7 KB), the settings store (about 5 KB), the two render buffers (30 KB), the directory-listing buffer (about 19 KB) and the audio core's rings and block buffer (about 28 KB).
 The monitor prints the heap low-water mark and each task's lowest free stack every 10 s. Input is above
 the UI so wheel frames are never lost while LVGL renders; the monitor is lowest; boot-check tasks sit
 below the UI so the splash keeps animating while they run.
@@ -88,14 +88,16 @@ below the UI so the splash keeps animating while they run.
 | I2C bus | one mutex (`rt_i2c_mutex`) around every battery / haptic transaction |
 | UI to haptic task | 2-deep byte queue, sent without waiting (`rt_haptic_click`) |
 | UI to player | `player.h`: a mutex-guarded state (what plays, volume) plus commands to the audio core; the storage task reports file start and errors; end of file and stream faults are read back from the audio core's counters and statistics |
-| UI to storage task | request queue (list a directory, free space); results come back on a result queue and the UI polls it. The entries live in one static buffer that the UI reads only after the result for its latest request arrived. Why a task: an SD directory scan is hundreds of sector reads and the UI task must never stall |
+| radio worker to UI | `hal_bt_event_fn` callback turned into a 16-deep queue of `hal_bt_event_t` by `bt_service.c` (state, device found/named, scan done); non-blocking send, dropped if the UI lags |
+| anyone to settings store | `settings_store.h`: RAM image behind a mutex; only the storage task reads or writes the card file |
+| UI to storage task | request queue (list a directory, free space, settings load); results come back on a result queue and the UI polls it. The entries live in one static buffer that the UI reads only after the result for its latest request arrived. Why a task: an SD directory scan is hundreds of sector reads and the UI task must never stall |
 
 ### UI performance
 
 The monitor prints every 10 s `ui: frames=… frame_us avg/max=… lvgl_mem=used/total (max …, frag …%)`: passes of
 `lv_timer_handler` that rendered something (render plus the blocking strip flush), their average and worst time in
 the window, and LVGL pool use. Each list screen costs about 15 KB of the pool (its rows are a fixed pool of
-objects, whatever the item count), so the pool is 96 KB and the stack is limited to 8 screens. The host tour also
+objects, whatever the item count), so the pool is 72 KB (it was 96 KB until the BTstack stack needed the room; the bench peak was about 38 KB) and the stack is limited to 8 screens. The host tour also
 prints `ui: screen '<name>' lvgl_mem=…` at every snapshot.
 
 ### What the monitor prints about audio
@@ -162,15 +164,16 @@ These led to ADR-0011; the details are kept because they are the reason for the 
 | Check | Passes when | Currently on the bench |
 | --- | --- | --- |
 | display | panel initialised | passes |
-| storage | card identified and the FAT/exFAT volume mounted; writes stay locked | passes with a card |
+| storage | card identified and the FAT/exFAT volume mounted; writes stay locked (the settings save opens them for `/.neupod` only, see [Bluetooth](bluetooth.md)) | passes with a card |
 | battery | MAX17048 ACKs at 0x36, VERSION 0x001X, cell voltage 2.5 to 4.6 V | passes with a cell |
 | haptics | DRV2605L ACKs at 0x5A, device ID 7; left in **standby** | passes when fitted |
 | click wheel | receiver starts, init packet sent, a valid frame arrives | **degraded** (not wired, init packet unimplemented) |
 | audio | the sink's stream runs: the audio core published its rate and served blocks (cannot detect the DAC: I2S is one-way) | passes with the I2S sink; **degraded** with the null sink |
-| Bluetooth, Wi-Fi | radio driver exists | **degraded** (not implemented) |
+| Bluetooth | the radio driver is up and BTstack's HCI reaches the working state (local address read) | passes on the Pico 2 W (stage 1; not yet seen on the board) |
+| Wi-Fi | radio driver exists | **degraded** (not implemented) |
 
-Deadlines: storage 4 s, battery and haptics 1.5 s, wheel 1.5 s, audio 0.5 s, radio 3 s. A check that
-misses its deadline is marked degraded and its later result is ignored. I2C runs at 400 kHz.
+Deadlines: storage 4 s, battery and haptics 1.5 s, wheel 1.5 s, audio 0.5 s, radio 4.8 s (the radio check keeps waiting up to 12 s, so a slow Bluetooth start still upgrades its result). A check that
+misses its deadline is marked degraded and its later result is ignored (except that radio upgrade). I2C runs at 400 kHz.
 
 ### Capabilities
 
@@ -228,5 +231,5 @@ degraded ("not connected").
 ## What is stubbed
 
 AAC decoder (FLAC, MP3, ALAC and WAV play), prefetch (logs requests), home screen (placeholder), click-wheel receiver (pins
-unconfirmed), radio. Not yet measured on hardware with this architecture: block jitter under UI load,
+unconfirmed), Wi-Fi, Bluetooth pairing and A2DP (stage 2, [Bluetooth](bluetooth.md)). Not yet measured on hardware with this architecture: block jitter under UI load,
 the panic LED, stack margins.

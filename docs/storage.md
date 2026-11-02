@@ -53,7 +53,8 @@ From `wiring-phase1.md` (3.3 V, DAT0-DAT3 must be consecutive GPIOs, CLK is DAT0
   refuses clocks above 25 MHz until it has succeeded.
 - **Write safety:** writes are locked by default. Only the tests that need them unlock writes,
   for as long as they run, and always lock again and delete their files (even after a failure
-  or `q`). Before unlocking, a test reads 16 MB of the card twice and compares; test files are
+  or `q`). In the runtime firmware one other piece of code opens the lock: the settings save, for the length of one save and only for
+  paths under `/.neupod` (an nfs write scope; [Bluetooth](bluetooth.md)). Before unlocking, a test reads 16 MB of the card twice and compares; test files are
   created exclusively (an existing file is never overwritten; the test stops and tells you).
 - **Write-fault latch:** the driver library ignores the card's status after a write and can leave
   the card waiting for data after a failed write. The HAL therefore checks the card status after
