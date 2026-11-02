@@ -15,7 +15,7 @@ set(FREERTOS_CONFIG_FILE_DIRECTORY ${CMAKE_CURRENT_LIST_DIR})
 include(${FREERTOS_KERNEL_PATH}/portable/ThirdParty/GCC/RP2350_ARM_NTZ/FreeRTOS_Kernel_import.cmake)
 
 add_library(neupod_freertos INTERFACE)
-target_include_directories(neupod_freertos INTERFACE ${CMAKE_SOURCE_DIR}/app/os)
+target_include_directories(neupod_freertos INTERFACE ${CMAKE_SOURCE_DIR}/app/os ${CMAKE_SOURCE_DIR}/app/include)
 target_link_libraries(neupod_freertos INTERFACE
   FreeRTOS-Kernel-Heap4
   # cyw43 flavour: pico_cyw43_arch_sys_freertos (no lwIP yet). The driver's worker task is created
