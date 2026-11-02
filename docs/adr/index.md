@@ -11,3 +11,4 @@ Format: [Michael Nygard](https://cognitect.com/blog/2011/11/15/documenting-archi
 | [0005](0005-firmware-architecture.md) | Firmware architecture: portable app over a HAL, host build | Proposed |
 | [0006](0006-storage-microsd-sdio.md) | Storage: microSD over 4-bit SDIO, exFAT | Proposed |
 | [0007](0007-bluetooth-audio-path.md) | Bluetooth audio path: BTstack or external transmitter | Proposed (deferred) |
+| [0008](0008-card-format.md) | Card format: exFAT with 128 KB clusters | Proposed |

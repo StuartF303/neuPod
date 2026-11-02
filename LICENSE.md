@@ -11,4 +11,5 @@ neuPod is split across three licences, mirroring the Sprout project:
 SPDX identifiers: `MPL-2.0`, `CERN-OHL-S-2.0`, `CC-BY-4.0`.
 
 Where a file carries its own SPDX header, that header takes precedence. Third-party code
-(e.g. the Pico SDK, ESP-IDF, FatFs, codec libraries) remains under its own licence.
+(e.g. the Pico SDK, ESP-IDF, FatFs, codec libraries, and the microSD driver submodule
+`lib/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico`, which is Apache-2.0) remains under its own licence.

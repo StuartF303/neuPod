@@ -10,7 +10,32 @@
 // at clk_peri / 2 (or slower even divisions), hits exactly 62.5 MHz; 150 MHz only gives 75/37.5.
 #define NEUPOD_SYS_CLOCK_KHZ 125000u
 
+// Stack watermark: the unused part of core 0's stack is painted at start-up (from the linker's
+// __StackBottom up to just below the current stack pointer) and measured on request.
+extern uint32_t __StackBottom[]; // linker symbol: lowest address of core 0's stack
+#define STACK_PAINT 0xA5A5A5A5u
+
+static void paint_stack(void) {
+    uint32_t *p = __StackBottom;
+    uint32_t *sp;
+    __asm volatile("mov %0, sp" : "=r"(sp));
+    for (; p < sp - 16; p++) { // stay clear of the live frames
+        *p = STACK_PAINT;
+    }
+}
+
+size_t hal_stack_free_min(void) {
+    const uint32_t *p = __StackBottom;
+    size_t words = 0;
+    while (*p == STACK_PAINT) {
+        p++;
+        words++;
+    }
+    return words * sizeof(uint32_t);
+}
+
 hal_status_t hal_system_init(void) {
+    paint_stack();
     // Must come BEFORE stdio_init_all(): the UART divisor is computed from clk_peri at init.
     set_sys_clock_khz(NEUPOD_SYS_CLOCK_KHZ, true);
     // set_sys_clock_khz() re-sources clk_peri from the 48 MHz USB PLL (unless
@@ -25,6 +50,8 @@ hal_status_t hal_system_init(void) {
     }
     return HAL_OK;
 }
+
+uint64_t hal_micros(void) { return to_us_since_boot(get_absolute_time()); }
 
 uint32_t hal_millis(void) { return to_ms_since_boot(get_absolute_time()); }
 

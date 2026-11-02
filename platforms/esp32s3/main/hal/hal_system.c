@@ -7,6 +7,10 @@
 
 hal_status_t hal_system_init(void) { return HAL_OK; }
 
+size_t hal_stack_free_min(void) { return 0; }
+
+uint64_t hal_micros(void) { return (uint64_t)esp_timer_get_time(); }
+
 uint32_t hal_millis(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
 
 void hal_delay_ms(uint32_t ms) {

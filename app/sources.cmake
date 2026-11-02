@@ -17,6 +17,12 @@ set(NEUPOD_DEMO_SOURCES
   ${NEUPOD_APP_DIR}/tests/display_tests.c  # needs hal_display + hal_console
   ${NEUPOD_APP_DIR}/tests/assets/test_image.c
 )
+set(NEUPOD_STORAGE_TEST_SOURCES
+  ${NEUPOD_APP_DIR}/tests/storage_tests.c  # needs hal_storage + hal_console (no FatFs headers)
+  ${NEUPOD_APP_DIR}/storage/nfs_path.c    # portable half of the nfs file API
+)
+# FatFs backend of nfs.h: RP2350 only, built against the SD library's ff.h (not in neupod_app).
+set(NEUPOD_NFS_FATFS_SOURCES ${NEUPOD_APP_DIR}/storage/nfs_fatfs.c)
 set(NEUPOD_CLICKWHEEL_SOURCES
   ${NEUPOD_APP_DIR}/input/clickwheel_frame.c
 )
@@ -30,6 +36,7 @@ set(NEUPOD_APP_SOURCES
   ${NEUPOD_CORE_SOURCES}
   ${NEUPOD_GFX_SOURCES}
   ${NEUPOD_DEMO_SOURCES}
+  ${NEUPOD_STORAGE_TEST_SOURCES}
   ${NEUPOD_CLICKWHEEL_SOURCES}
   ${NEUPOD_FATFS_SOURCES}
 )

@@ -5,13 +5,17 @@ add_library(hal_host STATIC
   hal_console.c
   hal_input.c
   hal_storage.c
+  nfs_posix.c
+  ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c
   host_window.c
 )
 target_include_directories(hal_host PUBLIC ${CMAKE_SOURCE_DIR}/hal/include)
+target_include_directories(hal_host PRIVATE ${CMAKE_SOURCE_DIR}/hal/common)
 target_link_libraries(hal_host PUBLIC neupod_clickwheel)
 # Default disk image (override at run time with NEUPOD_DISK_IMAGE).
 target_compile_definitions(hal_host PRIVATE
-  NEUPOD_DEFAULT_DISK_IMAGE="${CMAKE_BINARY_DIR}/disk.img")
+  NEUPOD_DEFAULT_DISK_IMAGE="${CMAKE_BINARY_DIR}/disk.img"
+  NEUPOD_DEFAULT_FS_ROOT="${CMAKE_BINARY_DIR}/fsroot")
 
 add_executable(neupod main.c)
 # hal_host after neupod_app: the app's static libs reference HAL symbols.
@@ -29,8 +33,12 @@ endif()
 add_executable(display_test display_test_main.c)
 target_link_libraries(display_test neupod_app hal_host)
 
+add_executable(storage_test storage_test_main.c)
+target_link_libraries(storage_test neupod_storage_tests hal_host)
+
 add_executable(now_playing now_playing_main.c)
 target_link_libraries(now_playing neupod_app hal_host)
 
-set_source_files_properties(hal_system.c hal_display.c hal_console.c hal_input.c hal_storage.c host_window.c
-  main.c display_test_main.c now_playing_main.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+set_source_files_properties(hal_system.c hal_display.c hal_console.c hal_input.c hal_storage.c nfs_posix.c host_window.c
+  ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c
+  main.c display_test_main.c now_playing_main.c storage_test_main.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")

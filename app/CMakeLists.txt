@@ -23,6 +23,14 @@ target_include_directories(neupod_app PUBLIC ${NEUPOD_APP_INCLUDE_DIRS})
 target_compile_features(neupod_app PUBLIC c_std_11)
 target_link_libraries(neupod_app PUBLIC neupod_clickwheel neupod_fatfs)
 
+# microSD test menu. Deliberately a separate lib that sees only app/include + hal/include (no
+# FatFs headers), so RP2350 targets can pair it with the SD library's own FatFs.
+add_library(neupod_storage_tests STATIC ${NEUPOD_STORAGE_TEST_SOURCES})
+target_include_directories(neupod_storage_tests PUBLIC ${NEUPOD_APP_DIR}/include
+                                                       ${NEUPOD_APP_DIR}/../hal/include)
+target_compile_features(neupod_storage_tests PUBLIC c_std_11)
+
+set_source_files_properties(${NEUPOD_STORAGE_TEST_SOURCES} PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 set_source_files_properties(${NEUPOD_CORE_SOURCES} ${NEUPOD_GFX_SOURCES} ${NEUPOD_DEMO_SOURCES}
   ${NEUPOD_CLICKWHEEL_SOURCES} ${NEUPOD_APP_DIR}/storage/diskio.c
   PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")

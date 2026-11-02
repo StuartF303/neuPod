@@ -14,6 +14,15 @@ hal_status_t hal_system_init(void) {
     return HAL_OK;
 }
 
+size_t hal_stack_free_min(void) { return 0; }
+
+uint64_t hal_micros(void) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (uint64_t)(now.tv_sec - g_start.tv_sec) * 1000000u +
+           (uint64_t)((now.tv_nsec - g_start.tv_nsec) / 1000);
+}
+
 uint32_t hal_millis(void) {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);

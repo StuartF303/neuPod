@@ -26,7 +26,8 @@ TEST(test_fatfs_roundtrip) {
     static FATFS fs;
     static BYTE work[FF_MAX_SS * 4];
     ASSERT_TRUE(make_image());
-    ASSERT_EQ(HAL_OK, hal_storage_init());
+    hal_storage_set_write_enabled(true); // writes are locked by default
+    ASSERT_EQ(HAL_STORAGE_OK, hal_storage_init());
     ASSERT_EQ(IMAGE_BYTES / 512, hal_storage_sector_count());
 
     ASSERT_EQ(FR_OK, f_mkfs("", NULL, work, sizeof work));

@@ -1,5 +1,11 @@
-/* neuPod local configuration: LFN (static buffer, cp437), mkfs enabled, no RTC, exFAT off,
-   read/write. Everything else is the stock FatFs R0.15 w/patch1 default. */
+/* neuPod card policy (shared by host and RP2350): exFAT on, LFN on the heap (UTF-8 API),
+   512-byte sectors only, relative paths + getcwd, fast seek, mkfs/expand/label, read/write, no RTC
+   (fixed timestamp), multi-partition (VolToPart: auto-detect, so MBR cards mount; used by
+   hal_storage_format to put a hand-written MBR in front of f_mkfs), full FAT scan for free space
+   (FSINFO not trusted).
+   Everything else is the stock FatFs R0.15 w/patch1 default.
+   platforms/rp2350/ffconf/ffconf.h MUST stay byte-identical to this file: the RP2350 CMake
+   configure step fails if they differ. */
 /*---------------------------------------------------------------------------/
 /  Configurations of FatFs Module
 /---------------------------------------------------------------------------*/
@@ -27,7 +33,7 @@
 /   3: f_lseek() function is removed in addition to 2. */
 
 
-#define FF_USE_FIND		0
+#define FF_USE_FIND		1
 /* This option switches filtered directory read functions, f_findfirst() and
 /  f_findnext(). (0:Disable, 1:Enable 2:Enable with matching altname[] too) */
 
@@ -36,11 +42,11 @@
 /* This option switches f_mkfs() function. (0:Disable or 1:Enable) */
 
 
-#define FF_USE_FASTSEEK	0
+#define FF_USE_FASTSEEK	1
 /* This option switches fast seek function. (0:Disable or 1:Enable) */
 
 
-#define FF_USE_EXPAND	0
+#define FF_USE_EXPAND	1
 /* This option switches f_expand function. (0:Disable or 1:Enable) */
 
 
@@ -49,7 +55,7 @@
 /  (0:Disable or 1:Enable) Also FF_FS_READONLY needs to be 0 to enable this option. */
 
 
-#define FF_USE_LABEL	0
+#define FF_USE_LABEL	1
 /* This option switches volume label functions, f_getlabel() and f_setlabel().
 /  (0:Disable or 1:Enable) */
 
@@ -58,7 +64,7 @@
 /* This option switches f_forward() function. (0:Disable or 1:Enable) */
 
 
-#define FF_USE_STRFUNC	0
+#define FF_USE_STRFUNC	1
 #define FF_PRINT_LLI	1
 #define FF_PRINT_FLOAT	1
 #define FF_STRF_ENCODE	3
@@ -115,7 +121,7 @@
 */
 
 
-#define FF_USE_LFN	1
+#define FF_USE_LFN	3
 #define FF_MAX_LFN		255
 /* The FF_USE_LFN switches the support for LFN (long file name).
 /
@@ -135,7 +141,7 @@
 /  ff_memfree() exemplified in ffsystem.c, need to be added to the project. */
 
 
-#define FF_LFN_UNICODE	0
+#define FF_LFN_UNICODE	2
 /* This option switches the character encoding on the API when LFN is enabled.
 /
 /   0: ANSI/OEM in current CP (TCHAR = char)
@@ -155,7 +161,7 @@
 /  on character encoding. When LFN is not enabled, these options have no effect. */
 
 
-#define FF_FS_RPATH		0
+#define FF_FS_RPATH		2
 /* This option configures support for relative path.
 /
 /   0: Disable relative path and remove related functions.
@@ -186,7 +192,7 @@
 */
 
 
-#define FF_MULTI_PARTITION	0
+#define FF_MULTI_PARTITION	1
 /* This option switches support for multiple volumes on the physical drive.
 /  By default (0), each logical drive number is bound to the same physical drive
 /  number and only an FAT volume found on the physical drive will be mounted.
@@ -233,7 +239,7 @@
 /  buffer in the filesystem object (FATFS) is used for the file data transfer. */
 
 
-#define FF_FS_EXFAT		0
+#define FF_FS_EXFAT		1
 /* This option switches support for exFAT filesystem. (0:Disable or 1:Enable)
 /  To enable exFAT, also LFN needs to be enabled. (FF_USE_LFN >= 1)
 /  Note that enabling exFAT discards ANSI C (C89) compatibility. */
@@ -253,7 +259,7 @@
 /  These options have no effect in read-only configuration (FF_FS_READONLY = 1). */
 
 
-#define FF_FS_NOFSINFO	0
+#define FF_FS_NOFSINFO	1
 /* If you need to know correct free space on the FAT32 volume, set bit 0 of this
 /  option, and f_getfree() function at the first time after volume mount will force
 /  a full FAT scan. Bit 1 controls the use of last allocated cluster number.

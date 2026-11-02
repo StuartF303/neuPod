@@ -36,3 +36,59 @@ target_link_libraries(display_test neupod_app hal_rp2350)
 pico_enable_stdio_uart(display_test 1)
 pico_enable_stdio_usb(display_test 0)
 pico_add_extra_outputs(display_test)
+
+# --- microSD (SDIO over PIO) ---------------------------------------------------------------------
+# carlk3's no-OS-FatFS-SD-SDIO-SPI-RPi-Pico (Apache-2.0), a git submodule pinned to a release tag.
+# It brings its own FatFs and diskio glue, so storage targets must NOT link neupod_fatfs /
+# app/storage/diskio.c (duplicate ff.c / disk_* symbols); that is why the storage test menu lives
+# in neupod_storage_tests, which has no FatFs headers.
+set(NEUPOD_SD_LIB_DIR ${CMAKE_SOURCE_DIR}/lib/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico)
+if(NOT EXISTS ${NEUPOD_SD_LIB_DIR}/src/CMakeLists.txt)
+  message(FATAL_ERROR "SD library submodule missing. Run: git submodule update --init --recursive")
+endif()
+
+# FatFs configuration: the library's default ffconf.h is replaced (not edited) by ours, put first in
+# its include path as the library's README describes. It must match the host's card policy file.
+file(READ ${CMAKE_CURRENT_LIST_DIR}/ffconf/ffconf.h NEUPOD_FFCONF_RP2350)
+file(READ ${CMAKE_SOURCE_DIR}/app/third_party/fatfs/ffconf.h NEUPOD_FFCONF_HOST)
+if(NOT NEUPOD_FFCONF_RP2350 STREQUAL NEUPOD_FFCONF_HOST)
+  message(FATAL_ERROR "platforms/rp2350/ffconf/ffconf.h differs from app/third_party/fatfs/ffconf.h; keep them identical")
+endif()
+# hal_storage.c assumes 4 PIO cycles per SD clock (the library's CLKDIV).
+file(READ ${NEUPOD_SD_LIB_DIR}/src/sd_driver/SDIO/rp2040_sdio.pio NEUPOD_SDIO_PIO_SRC)
+if(NOT NEUPOD_SDIO_PIO_SRC MATCHES "\\.define PUBLIC CLKDIV D0 \\+ 1 \\+ D1 \\+ 1" OR
+   NOT NEUPOD_SDIO_PIO_SRC MATCHES "\\.define D0 1\n\\.define D1 1")
+  message(FATAL_ERROR "SD library CLKDIV changed; update SDIO_PIO_CYCLES_PER_CLK in hal_storage.c")
+endif()
+
+add_subdirectory(${NEUPOD_SD_LIB_DIR}/src ${CMAKE_BINARY_DIR}/sd_lib)
+target_include_directories(no-OS-FatFS-SD-SDIO-SPI-RPi-Pico BEFORE INTERFACE
+  ${CMAKE_CURRENT_LIST_DIR}/ffconf)
+
+add_library(hal_rp2350_storage STATIC
+  hal/hal_storage.c
+  hal/hw_config.c
+  ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c
+  ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c   # portable file API on the library's FatFs
+)
+target_include_directories(hal_rp2350_storage PUBLIC ${CMAKE_SOURCE_DIR}/hal/include
+                                                     ${CMAKE_SOURCE_DIR}/app/include
+                                              PRIVATE ${CMAKE_SOURCE_DIR}/hal/common)
+target_link_libraries(hal_rp2350_storage PUBLIC no-OS-FatFS-SD-SDIO-SPI-RPi-Pico pico_stdlib)
+# Library error messages (bus errors, timeouts) go to the UART console.
+target_compile_definitions(hal_rp2350_storage PUBLIC USE_PRINTF)
+set_source_files_properties(hal/hal_storage.c hal/hw_config.c storage_test_main.c
+  ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c
+  PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+# microSD test menu (flash with: scripts/flash.sh rp2350 storage_test)
+add_executable(storage_test storage_test_main.c)
+target_link_libraries(storage_test neupod_storage_tests hal_rp2350 hal_rp2350_storage)
+# 4 KB main stack (the default is 2 KB). That is the maximum: core 0's stack lives in the 4 KB
+# SCRATCH_Y bank (0x4000 does not link: "region SCRATCH_Y overflowed"). FatFs (LFN buffers are
+# on the heap) plus the test menu are shallow enough; the stack high-water mark is printed after
+# every test (hal_stack_free_min) so any margin problem shows up on the bench.
+target_compile_definitions(storage_test PRIVATE PICO_STACK_SIZE=0x1000)
+pico_enable_stdio_uart(storage_test 1)
+pico_enable_stdio_usb(storage_test 0)
+pico_add_extra_outputs(storage_test)

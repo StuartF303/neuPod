@@ -20,7 +20,7 @@ Phase 1 testbed (Pico 2 W on a breadboard):
 | RP2350 build | ✅ |
 | UART console | ✅ |
 | Display (ST7789 SPI1 + DMA, 62.5 MHz; `display_test` suite) | ✅ |
-| microSD | ⬜ |
+| microSD (SDIO 4-bit, exFAT; `storage_test` suite) | ✅ |
 | Audio | ⬜ |
 | I²C (fuel gauge, haptics) | ⬜ |
 | Click wheel (decoder ✅ tested on host; PIO receiver skeleton) | 🟡 |

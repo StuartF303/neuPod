@@ -35,6 +35,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tools: `png2rgb565.py`, `gen_font.py`, `gen_test_image.py`; host `now_playing` viewer;
   gfx unit tests.
 
+- microSD over PIO SDIO 4-bit (carlk3 no-OS-FatFS v3.6.2 submodule): `hal_storage` with card info,
+  write guard + write-fault latch, High Speed (CMD6) support, `hal_storage_format()` (MBR +
+  AU-aligned exFAT, 128 KB clusters); portable `nfs` file API (FatFs on RP2350, POSIX on host);
+  `storage_test` with 9 tests + cleanup key; host unit tests; `docs/storage.md`, ADR-0008.
+  Verified on the bench: tests 1-7 pass on exFAT at 15.625 MHz.
+
+### Fixed
+- Worked around a carlk3 v3.6.2 bug where 256-block SDIO reads overrun the DMA descriptor table.
+
 ### Changed
 - RP2350 `clk_sys` is now 125 MHz with `clk_peri` on `clk_sys`, so SPI1 runs at exactly 62.5 MHz.
 - Display: MADCTL 0x60, RGB, INVON, offsets 0/0, backlight active-high — confirmed on hardware.

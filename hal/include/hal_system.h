@@ -21,6 +21,15 @@ hal_status_t hal_system_init(void);
 /** Milliseconds since hal_system_init(); wraps after ~49 days. */
 uint32_t hal_millis(void);
 
+/** Microseconds since hal_system_init() (64-bit, does not wrap in practice). */
+uint64_t hal_micros(void);
+
+/**
+ * Smallest amount of stack (bytes) that was ever free since hal_system_init(), measured by
+ * painting the unused stack at start-up; 0 where unknown (host, ESP32-S3).
+ */
+size_t hal_stack_free_min(void);
+
 /** Block the calling task for at least @p ms milliseconds. */
 void hal_delay_ms(uint32_t ms);
 
