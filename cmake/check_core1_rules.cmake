@@ -17,7 +17,7 @@ set(FILES
   app/audio/stream_io.c
   app/audio/codec.c
   app/include/arena.h
-  app/include/md5.h
+  app/include/neupod_md5.h
   app/include/stream_io.h
   app/include/codec.h
   app/include/codec_alloc.h

@@ -23,6 +23,11 @@ target_link_libraries(test_nfs neupod_storage_tests hal_host)
 add_test(NAME nfs COMMAND test_nfs)
 set_tests_properties(nfs PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
+add_executable(test_bt_sim test_bt_sim.c)
+target_link_libraries(test_bt_sim hal_host)
+add_test(NAME bt_sim COMMAND test_bt_sim)
+set_source_files_properties(test_bt_sim.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
 add_executable(test_settings test_settings.c)
 target_link_libraries(test_settings neupod_settings hal_host) # hal_host last: nfs and hal_storage
 add_test(NAME settings COMMAND test_settings)
@@ -94,11 +99,11 @@ foreach(I RANGE 1 300)
   file(WRITE ${CMAKE_BINARY_DIR}/fsroot_fixture/many/file_${I}.txt "x")
 endforeach()
 add_test(NAME runtime_smoke
-  COMMAND neupod --run-ms 30000 --splash-hold-ms 1500 --tour --snapshots ${CMAKE_BINARY_DIR}/snapshots)
+  COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --tour --snapshots ${CMAKE_BINARY_DIR}/snapshots)
 set_tests_properties(runtime_smoke PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_fixture;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-  TIMEOUT 90)
+  TIMEOUT 120)
 
 # The bare-metal audio core (core 1) may not use the RTOS, stdio, malloc or SDK blocking primitives.
 add_test(NAME audio_core_rules

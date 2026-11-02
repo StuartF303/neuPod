@@ -23,12 +23,14 @@
 #define BR_AUDIO "no audio output"
 #define BR_RADIO_NONE "not implemented"
 #define BR_RADIO_CHIP "radio chip failed"
+#define BR_BT_START "bluetooth not started"
+#define BR_BT_HCI "bluetooth stack down"
 #define BR_TIMEOUT "check timed out"
 #define BR_NOMEM "out of memory"
 
 #define BOOT_BRIEF_ALL                                                                             \
     BR_DISPLAY_INIT, BR_SD_NONE, BR_SD_INIT, BR_SD_INFO, BR_SD_NOFS, BR_SD_MOUNT, BR_I2C_BUSY,      \
         BR_I2C_INIT, BR_GAUGE, BR_NO_CELL, BR_BAD_CELL, BR_HAPTIC, BR_WHEEL_RX, BR_WHEEL_OFF,       \
-        BR_WHEEL_NOFRAME, BR_AUDIO, BR_RADIO_NONE, BR_RADIO_CHIP, BR_TIMEOUT, BR_NOMEM
+        BR_WHEEL_NOFRAME, BR_AUDIO, BR_RADIO_NONE, BR_RADIO_CHIP, BR_BT_START, BR_BT_HCI, BR_TIMEOUT, BR_NOMEM
 
 #endif

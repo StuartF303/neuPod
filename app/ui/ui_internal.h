@@ -118,7 +118,7 @@ void ui_list_set_count(ui_list_t *l, int32_t count);
 /** Highlight style off (a pane that does not currently have focus). */
 void ui_list_set_focus(ui_list_t *l, bool focus);
 
-/* ---- Screens (ui_screens.c, ui_files.c, ui_settings.c) ------------------------------------------- */
+/* ---- Screens (ui_screens.c, ui_files.c, ui_settings.c, ui_bluetooth.c) ------------------------------------------- */
 
 ui_screen_t *ui_screen_home_create(void);
 ui_screen_t *ui_screen_music_create(void);
@@ -128,6 +128,7 @@ ui_screen_t *ui_screen_testtone_create(void);   /* ui_audio.c */
 ui_screen_t *ui_screen_extras_create(void);
 ui_screen_t *ui_screen_files_create(void);
 ui_screen_t *ui_screen_settings_create(void);
+ui_screen_t *ui_screen_bluetooth_create(void); /* ui_bluetooth.c */
 
 /** Small helpers shared by the screens. */
 lv_obj_t *ui_artwork(lv_obj_t *parent, int32_t x, int32_t y, int32_t size);

@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "battery_store.h"
+#include "bt_service.h"
 #include "boot.h"
 #include "boot_briefs.h"
 #include "capabilities.h"
@@ -12,6 +13,7 @@
 #include "hal_haptic.h"
 #include "hal_i2c.h"
 #include "hal_input.h"
+#include "hal_radio.h"
 #include "hal_storage.h"
 #include "hal_system.h"
 #include "input_events.h"
@@ -28,7 +30,8 @@
 #define TIMEOUT_STORAGE_MS 4000u
 #define TIMEOUT_I2C_MS 1500u
 #define TIMEOUT_WHEEL_MS 1500u
-#define TIMEOUT_RADIO_MS 3000u
+#define TIMEOUT_RADIO_MS 4800u // radio driver (firmware load) + Bluetooth HCI bring-up (controller firmware patch); ends before the splash cap (5 s)
+#define RADIO_GIVE_UP_MS 12000u // the radio check keeps waiting this long, so a late HCI still upgrades the result
 
 static uint32_t g_start_ms;
 static bool g_started;
@@ -205,17 +208,41 @@ static void check_audio(void *arg) {
 
 static void check_radio(void *arg) {
     (void)arg;
-    // Bring up the radio chip's driver (RP2350: required for the status LED too).
+    // Bring up the radio chip's driver (RP2350: required for the status LED too; its async context is also BTstack's thread).
     hal_status_t st = hal_system_late_init();
-    if (st == HAL_OK) {
-        hal_status_led(true); // first LED write loads the chip firmware; do it here, not in the monitor
-        hal_status_led(false);
+    if (st != HAL_OK) {
+        caps_resolve(CAP_BLUETOOTH, false, BR_RADIO_CHIP, "radio chip did not initialise");
+        caps_resolve(CAP_WIFI, false, BR_RADIO_CHIP, "radio chip did not initialise");
+        return;
     }
-    const char *why = st == HAL_OK ? "no radio driver yet (Wi-Fi/BTstack not integrated)"
-                                   : "radio chip did not initialise";
-    const char *brief = st == HAL_OK ? BR_RADIO_NONE : BR_RADIO_CHIP;
-    caps_resolve(CAP_BLUETOOTH, false, brief, "%s", why);
-    caps_resolve(CAP_WIFI, false, brief, "%s", why);
+    hal_status_led(true); // first LED write loads the chip firmware; do it here, not in the monitor
+    hal_status_led(false);
+    caps_resolve(CAP_WIFI, false, BR_RADIO_NONE, "no Wi-Fi driver yet (Bluetooth comes first)");
+
+    st = bt_service_start(); // hci power on, BD_ADDR and HCI version go to the UART from the radio worker
+    if (st != HAL_OK) {
+        caps_resolve(CAP_BLUETOOTH, false, BR_BT_START, "Bluetooth start failed: %s", status_name(st));
+        return;
+    }
+    // Wait for HCI. Not given up at this check's deadline: boot_poll() marks the capability degraded then, and an OK that
+    // arrives later still upgrades it (caps_resolve_timeout), which is what a slow firmware load needs.
+    while (os_tick_ms() - g_start_ms < RADIO_GIVE_UP_MS) {
+        bt_service_tick();
+        hal_bt_state_t bs = hal_bt_state();
+        if (bs == HAL_BT_ON || bs == HAL_BT_SCANNING) {
+            uint8_t a[6] = {0};
+            (void)hal_bt_local_address(a);
+            caps_resolve(CAP_BLUETOOTH, true, NULL, "HCI up, BD_ADDR %02X:%02X:%02X:%02X:%02X:%02X", a[0], a[1], a[2], a[3],
+                         a[4], a[5]);
+            return;
+        }
+        if (bs == HAL_BT_FAILED) {
+            caps_resolve(CAP_BLUETOOTH, false, BR_BT_HCI, "Bluetooth controller did not come up");
+            return;
+        }
+        os_delay_ms(20);
+    }
+    caps_resolve(CAP_BLUETOOTH, false, BR_BT_HCI, "Bluetooth controller did not come up in %u s", (unsigned)(RADIO_GIVE_UP_MS / 1000u));
 }
 
 typedef struct {
@@ -240,7 +267,7 @@ static const check_t k_checks[] = {
     {"chk_hapt", check_haptics, RT_STACK_CHECK, TIMEOUT_I2C_MS, RT_PRIO_I2C, {CAP_HAPTICS, CAP_COUNT}},
     {"chk_whl", check_wheel, RT_STACK_CHECK, TIMEOUT_WHEEL_MS, RT_PRIO_CHECK, {CAP_WHEEL, CAP_COUNT}},
     {"chk_aud", check_audio, RT_STACK_CHECK, 500u, RT_PRIO_CHECK, {CAP_AUDIO, CAP_COUNT}},
-    {"chk_radio", check_radio, RT_STACK_CHECK, TIMEOUT_RADIO_MS, RT_PRIO_CHECK, {CAP_BLUETOOTH, CAP_WIFI}},
+    {"chk_radio", check_radio, RT_STACK_CHECK_RADIO, TIMEOUT_RADIO_MS, RT_PRIO_CHECK, {CAP_BLUETOOTH, CAP_WIFI}},
 };
 
 void boot_start(void) {

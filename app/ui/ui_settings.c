@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 /*
  * Settings: groups on the left, a live summary pane on the right (docs/ui.md mock-up). Select opens a
- * detail screen (About, Storage, Battery: live read-only lists; Display: backlight; Bluetooth: not built)
+ * detail screen (About, Storage, Battery: live read-only lists; Display: backlight; Bluetooth: status and device discovery)
  * or, for Click feedback, toggles On/Off. Backlight and click feedback are stored in the settings store (settings_store.h).
  */
 #include <stdarg.h>
@@ -13,6 +13,7 @@
 #include "hal_battery.h"
 #include "hal_core.h"
 #include "hal_display.h"
+#include "hal_radio.h"
 #include "hal_storage.h"
 #include "hal_system.h"
 #include "neupod_version.h"
@@ -201,9 +202,7 @@ static ui_screen_t *info_create(const char *title, info_kind_t kind) {
 static ui_screen_t *make_about(void) { return info_create("About", INFO_ABOUT); }
 static ui_screen_t *make_storage(void) { return info_create("Storage", INFO_STORAGE); }
 static ui_screen_t *make_battery(void) { return info_create("Battery", INFO_BATTERY); }
-static ui_screen_t *make_bluetooth(void) {
-    return ui_screen_placeholder_create("Bluetooth", "Not available yet", "Bluetooth audio needs the radio driver.");
-}
+static ui_screen_t *make_bluetooth(void) { return ui_screen_bluetooth_create(); }
 
 /* ---- Display: backlight --------------------------------------------------------------------------- */
 
@@ -315,9 +314,25 @@ static void pane_text(int32_t g, char *out, size_t n) {
         snprintf(out, n, "Haptic click\n%s\n%s", g_ui_state.click_feedback ? "On" : "Off",
                  caps_available(CAP_HAPTICS) ? "Motor ready" : "No haptic driver");
         break;
-    case G_BLUETOOTH:
-        snprintf(out, n, "Not implemented\nNo radio driver yet");
+    case G_BLUETOOTH: {
+        hal_bt_state_t bs = hal_bt_state();
+        uint8_t addr[6];
+        if (bs == HAL_BT_ON || bs == HAL_BT_SCANNING) {
+            if (hal_bt_local_address(addr)) {
+                snprintf(a, sizeof a, "%02X:%02X:%02X:%02X:%02X:%02X", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
+            } else {
+                snprintf(a, sizeof a, "-");
+            }
+            snprintf(out, n, "%s\n%s\nSelect to scan", bs == HAL_BT_SCANNING ? "Scanning..." : "On", a);
+        } else if (bs == HAL_BT_STARTING) {
+            snprintf(out, n, "Starting...");
+        } else {
+            capabilities_t c;
+            caps_get(&c);
+            snprintf(out, n, "Unavailable\n%s", c.brief[CAP_BLUETOOTH]);
+        }
         break;
+    }
     case G_STORAGE: {
         hal_card_info_t ci;
         if (hal_storage_ready() && hal_storage_get_info(&ci) == HAL_STORAGE_OK) {

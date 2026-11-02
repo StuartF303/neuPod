@@ -68,7 +68,7 @@ if(NOT EXISTS ${NEUPOD_LVGL_DIR}/src/lvgl.h AND NOT EXISTS ${NEUPOD_LVGL_DIR}/lv
 endif()
 file(GLOB_RECURSE NEUPOD_LVGL_SOURCES CONFIGURE_DEPENDS ${NEUPOD_LVGL_DIR}/src/*.c)
 add_library(lvgl STATIC ${NEUPOD_LVGL_SOURCES})
-target_include_directories(lvgl PUBLIC ${NEUPOD_LVGL_DIR} ${NEUPOD_APP_DIR}/ui ${NEUPOD_APP_DIR}/include)
+target_include_directories(lvgl PUBLIC ${NEUPOD_LVGL_DIR} ${NEUPOD_APP_DIR}/ui ${NEUPOD_APP_DIR}/include ${NEUPOD_APP_DIR}/os) # os: memory_budget.h
 target_compile_definitions(lvgl PUBLIC LV_CONF_INCLUDE_SIMPLE LV_LVGL_H_INCLUDE_SIMPLE)
 target_compile_features(lvgl PUBLIC c_std_11)
 

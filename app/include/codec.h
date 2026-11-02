@@ -14,7 +14,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "md5.h"
+#include "neupod_md5.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -120,6 +120,13 @@ hal_status_t hal_bt_inquiry_start(uint8_t duration_s);
 /** Stop a running inquiry (HAL_BT_EVT_SCAN_DONE follows). No-op when idle. */
 void hal_bt_inquiry_stop(void);
 
+/**
+ * Give the HAL a chance to advance. Hardware: a no-op, events arrive by themselves from the radio worker. Host
+ * simulator: moves the simulated bring-up and scan along (and delivers their events from the calling task). The runtime
+ * calls it from the UI tick and the radio boot check; it must be cheap.
+ */
+void hal_bt_poll(void);
+
 #ifdef __cplusplus
 }
 #endif

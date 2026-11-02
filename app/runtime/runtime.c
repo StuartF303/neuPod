@@ -9,6 +9,7 @@
 
 #include "audio_engine.h"
 #include "battery_store.h"
+#include "bt_service.h"
 #include "boot.h"
 #include "capabilities.h"
 #include "hal_battery.h"
@@ -257,6 +258,7 @@ void neupod_runtime_run(const neupod_runtime_config_t *cfg) {
     g_i2c_mutex = os_mutex_create();
     g_input_queue = os_queue_create(sizeof(input_event_t), 16);
     settings_service_init();
+    bt_service_init();
     storage_service_init();
     haptic_service_init();
     if (g_i2c_mutex == NULL || g_input_queue == NULL || !storage_service_ready() || !haptic_service_ready()) {

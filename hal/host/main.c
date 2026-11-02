@@ -19,10 +19,12 @@
 #include "os.h"
 #include "runtime.h"
 
-// Keys: s/w scroll, _ = Enter (Select), m = Menu. snap:NAME writes NAME.ppm.
+// Keys: s/w scroll, _ = Enter (Select), m = Menu, x = nothing (lets simulated time pass). snap:NAME writes NAME.ppm.
 #define TOUR                                                                                       \
     "snap:home _ snap:music-menu _ snap:music-empty m m s s s _ snap:extras _ snap:files _ "        \
-    "snap:files-sub m s s _ snap:files-many 260*s snap:files-many-end m m m m s _ snap:settings _ snap:about m m s s _ snap:nowplaying m"
+    "snap:files-sub m s s _ snap:files-many 260*s snap:files-many-end m m m m s _ snap:settings "                \
+    "s s s snap:settings-bt _ snap:bt-idle s s _ snap:bt-scanning x x x x x x x x x snap:bt-found s _ snap:bt-pair "     \
+    "m w w w _ snap:about m m s s _ snap:nowplaying m"
 
 static const char *g_snapshot_dir;
 static unsigned g_snapshots;
@@ -53,7 +55,7 @@ static void on_done(void *ctx) {
         fprintf(stderr, "host: FAIL audio task served only %u blocks\n", (unsigned)a.blocks);
         rc = 2;
     }
-    if (g_snapshot_dir != NULL && g_snapshots < (cfgp_tour ? 13u : 2u)) {
+    if (g_snapshot_dir != NULL && g_snapshots < (cfgp_tour ? 18u : 2u)) {
         fprintf(stderr, "host: FAIL expected splash and home snapshots, got %u\n", g_snapshots);
         rc = 3;
     }
