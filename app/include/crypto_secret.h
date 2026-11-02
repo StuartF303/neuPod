@@ -35,6 +35,9 @@ int secret_open(uint32_t aad_tag, const uint8_t *rec, size_t n, uint8_t *out, si
 typedef void (*secret_lock_fn)(void);
 void secret_set_lock(secret_lock_fn lock, secret_lock_fn unlock);
 
+/** Overwrite @p n bytes in a way the compiler will not remove (plaintext secrets on the stack). */
+void secret_wipe(void *p, size_t n);
+
 /** Tests: forget the cached key so the provider is asked again. */
 void secret_drop_cached_key(void);
 

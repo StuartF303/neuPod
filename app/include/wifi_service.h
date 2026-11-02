@@ -38,6 +38,7 @@ typedef struct {
     char ip[16];
     int rssi;
     bool ntp_synced;
+    bool save_failed;      /**< the last network could not be remembered */
     uint32_t reconnects, failures;
     uint32_t saved;
 } wifi_info_t;

@@ -75,7 +75,7 @@ TEST(test_round_trip) {
     ASSERT_EQ(0, settings_flush());
     ASSERT_FALSE(settings_dirty());
     ASSERT_EQ(0, g_lock_depth); // every lock released
-    ASSERT_EQ(-1, file_size(g_tmp)); // temp file renamed away
+    ASSERT_EQ(-1, file_size(g_tmp)); // only file A exists after the first save
     ASSERT_TRUE(file_size(g_bin) > 0);
     ASSERT_FALSE(hal_storage_get_write_enabled()); // the card is locked again
     ASSERT_FALSE(nfs_write_scope_active());
@@ -194,12 +194,12 @@ TEST(test_no_card_is_ram_only) {
 
 TEST(test_power_loss_at_every_step) {
     uint8_t v;
-    for (int step = 0; step <= 3; step++) {
+    for (int step = 0; step <= 1; step++) {
         rm_state();
         boot(true);
-        settings_set_u8(SETTING_VOLUME_ATT_DB, 30); // state A, saved properly
+        settings_set_u8(SETTING_VOLUME_ATT_DB, 30); // state A, saved properly (file A, seq 1)
         ASSERT_EQ(0, settings_flush());
-        settings_set_u8(SETTING_VOLUME_ATT_DB, 18); // state B, the save is cut short
+        settings_set_u8(SETTING_VOLUME_ATT_DB, 18); // state B: written in place over file B, cut short
         settings_test_set_power_loss_step(step);
         ASSERT_EQ(NFS_ERR_IO, settings_flush());
         ASSERT_FALSE(hal_storage_get_write_enabled()); // even an aborted save restores the lock
@@ -208,33 +208,56 @@ TEST(test_power_loss_at_every_step) {
 
         settings_load_result_t r = boot(true); // power back on
         ASSERT_TRUE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v)); // never lost entirely
-        switch (step) {
-        case 0: // half a temp file: invalid CRC, the old file is intact
-            ASSERT_EQ(SETTINGS_LOAD_OK, r);
-            ASSERT_EQ(30, v);
-            break;
-        case 1: // temp complete, old still there: the newer sequence wins
-        case 2: // old deleted, rename not done: the temp is all there is
+        if (step == 0) { // half a file B: bad CRC, file A intact
             ASSERT_EQ(SETTINGS_LOAD_RECOVERED, r);
-            ASSERT_EQ(18, v);
-            ASSERT_TRUE(settings_dirty()); // it is promoted to settings.bin by the next flush
+            ASSERT_EQ(30, v);
+            // A second cut during the rewrite of the same inactive file, after the previous cut: still the old state.
+            settings_set_u8(SETTING_VOLUME_ATT_DB, 12);
+            settings_test_set_power_loss_step(0);
+            ASSERT_EQ(NFS_ERR_IO, settings_flush());
+            settings_test_set_power_loss_step(-1);
+            ASSERT_EQ(SETTINGS_LOAD_RECOVERED, boot(true));
+            ASSERT_TRUE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
+            ASSERT_EQ(30, v);
+            // A normal save now completes, and the next boot sees it.
+            settings_set_u8(SETTING_VOLUME_ATT_DB, 12);
             ASSERT_EQ(0, settings_flush());
-            ASSERT_EQ(-1, file_size(g_tmp));
             ASSERT_EQ(SETTINGS_LOAD_OK, boot(true));
             ASSERT_TRUE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
-            ASSERT_EQ(18, v);
-            break;
-        case 3: // done, only the caller's report was lost
+            ASSERT_EQ(12, v);
+        } else { // file B complete and synced, only the report was lost: the higher sequence wins
             ASSERT_EQ(SETTINGS_LOAD_OK, r);
             ASSERT_EQ(18, v);
-            break;
         }
     }
 }
 
+TEST(test_alternation_never_touches_the_active_file) {
+    rm_state();
+    boot(true);
+    settings_set_u8(SETTING_VOLUME_ATT_DB, 1);
+    ASSERT_EQ(0, settings_flush()); // seq 1 -> A
+    settings_set_u8(SETTING_VOLUME_ATT_DB, 2);
+    ASSERT_EQ(0, settings_flush()); // seq 2 -> B
+    long a = file_size(g_bin), b = file_size(g_tmp);
+    ASSERT_TRUE(a > 0 && b > 0);
+    // Damage the NEWER file (B): the load must fall back to A (seq 1) without having been rewritten.
+    file_corrupt_byte(g_tmp, 13);
+    uint8_t v = 0;
+    ASSERT_EQ(SETTINGS_LOAD_RECOVERED, boot(true));
+    ASSERT_TRUE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
+    ASSERT_EQ(1, v);
+    // The next save goes over the damaged B, not over A.
+    settings_set_u8(SETTING_VOLUME_ATT_DB, 3);
+    ASSERT_EQ(0, settings_flush());
+    ASSERT_EQ(SETTINGS_LOAD_OK, boot(true));
+    ASSERT_TRUE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
+    ASSERT_EQ(3, v);
+}
+
 TEST(test_first_ever_save_power_loss) {
     // No previous file at all: a cut during the very first save leaves defaults, never garbage.
-    for (int step = 0; step <= 2; step++) {
+    for (int step = 0; step <= 1; step++) {
         rm_state();
         boot(true);
         settings_set_u8(SETTING_VOLUME_ATT_DB, 18);
@@ -244,14 +267,48 @@ TEST(test_first_ever_save_power_loss) {
         settings_load_result_t r = boot(true);
         uint8_t v = 0;
         if (step == 0) {
-            ASSERT_EQ(SETTINGS_LOAD_CORRUPT, r); // a torn temp file and no old file
+            ASSERT_EQ(SETTINGS_LOAD_CORRUPT, r); // a torn file and no other
             ASSERT_FALSE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
         } else {
-            ASSERT_EQ(SETTINGS_LOAD_RECOVERED, r);
+            ASSERT_EQ(SETTINGS_LOAD_OK, r);
             ASSERT_TRUE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
             ASSERT_EQ(18, v);
         }
     }
+}
+
+TEST(test_newer_version_file_is_kept) {
+    rm_state();
+    boot(true);
+    settings_set_u8(SETTING_VOLUME_ATT_DB, 5);
+    ASSERT_EQ(0, settings_flush());
+    // Pretend a newer firmware wrote file A: bump the version field and fix the CRC.
+    int fd = open(g_bin, O_RDWR);
+    ASSERT_TRUE(fd >= 0);
+    unsigned char img[512];
+    long n = pread(fd, img, sizeof img, 0);
+    ASSERT_TRUE(n > 16);
+    img[4] = 9;
+    uint32_t c = 0xFFFFFFFFu;
+    for (long i = 0; i < n - 4; i++) {
+        c ^= img[i];
+        for (int k = 0; k < 8; k++) {
+            c = (c >> 1) ^ (0xEDB88320u & (0u - (c & 1u)));
+        }
+    }
+    c = ~c;
+    for (int i = 0; i < 4; i++) {
+        img[n - 4 + i] = (unsigned char)(c >> (8 * i));
+    }
+    ASSERT_EQ(n, pwrite(fd, img, (size_t)n, 0));
+    close(fd);
+    ASSERT_EQ(SETTINGS_LOAD_CORRUPT, boot(true)); // unreadable for us: defaults
+    settings_set_u8(SETTING_VOLUME_ATT_DB, 6);
+    ASSERT_EQ(0, settings_flush());
+    char old[300];
+    snprintf(old, sizeof old, "%s/settings.old", g_dir);
+    ASSERT_TRUE(file_size(old) == n); // moved aside, not wiped
+    unlink(old);
 }
 
 TEST(test_write_scope_confines_writes) {
@@ -319,13 +376,13 @@ TEST(test_store_only_touches_its_directory) {
     for (struct dirent *e; d != NULL && (e = readdir(d)) != NULL;) {
         if (strcmp(e->d_name, ".") != 0 && strcmp(e->d_name, "..") != 0) {
             entries++;
-            ASSERT_EQ(0, strcmp(e->d_name, "settings.bin"));
+            ASSERT_TRUE(strcmp(e->d_name, "settings.a") == 0 || strcmp(e->d_name, "settings.b") == 0);
         }
     }
     if (d != NULL) {
         closedir(d);
     }
-    ASSERT_EQ(1, entries);
+    ASSERT_EQ(2, entries); // the two alternating files and nothing else
 }
 
 TEST(test_hardware_lock_state_is_restored) {
@@ -446,15 +503,17 @@ int main(void) {
     }
     setenv("NEUPOD_FS_ROOT", abs, 1);
     snprintf(g_dir, sizeof g_dir, "%s/.neupod", abs);
-    snprintf(g_bin, sizeof g_bin, "%s/settings.bin", g_dir);
-    snprintf(g_tmp, sizeof g_tmp, "%s/settings.tmp", g_dir);
+    snprintf(g_bin, sizeof g_bin, "%s/settings.a", g_dir);
+    snprintf(g_tmp, sizeof g_tmp, "%s/settings.b", g_dir);
     snprintf(g_root, sizeof g_root, "%s", abs);
 
     RUN(test_round_trip);
     RUN(test_crc_and_format_failures_give_defaults);
     RUN(test_no_card_is_ram_only);
     RUN(test_power_loss_at_every_step);
+    RUN(test_alternation_never_touches_the_active_file);
     RUN(test_first_ever_save_power_loss);
+    RUN(test_newer_version_file_is_kept);
     RUN(test_write_scope_confines_writes);
     RUN(test_store_only_touches_its_directory);
     RUN(test_hardware_lock_state_is_restored);

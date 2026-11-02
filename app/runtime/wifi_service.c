@@ -41,6 +41,7 @@ static char g_cur_ssid[HAL_WIFI_SSID_MAX + 1], g_cur_psk[HAL_WIFI_PSK_MAX + 1];
 static hal_wifi_status g_prev_state = HAL_WIFI_DOWN;
 static uint32_t g_next_auto; /* round robin over saved networks */
 static char g_bad_auth[WIFI_MAX_SAVED][HAL_WIFI_SSID_MAX + 1];
+static bool g_save_failed; /* the last 'remember this network' did not fit (surfaced in the UI) */
 static bool g_scan_active;  /* a scan is running on the radio */
 static bool g_scan_wanted;  /* a scan was requested (it may not have started yet: the task handles requests every 200 ms) */
 
@@ -204,7 +205,8 @@ bool wifi_saved_needs_password(const char *ssid) {
     return known && needs;
 }
 
-static void save_network(const char *ssid, const char *psk) {
+static bool save_network(const char *ssid, const char *psk) {
+    bool ok = true;
     int slot = slot_of(ssid);
     if (slot < 0) {
         for (uint32_t i = 0; i < WIFI_MAX_SAVED && slot < 0; i++) {
@@ -220,12 +222,13 @@ static void save_network(const char *ssid, const char *psk) {
     size_t n = strlen(ssid);
     b[0] = psk[0] != '\0';
     memcpy(b + 1, ssid, n);
-    (void)settings_put(SETTING_NET_SSID((uint32_t)slot), b, (uint32_t)n + 1u);
+    ok = settings_put(SETTING_NET_SSID((uint32_t)slot), b, (uint32_t)n + 1u);
     if (psk[0] != '\0') {
-        (void)settings_put_secret(SETTING_NET_PSK((uint32_t)slot), psk, (uint32_t)strlen(psk));
+        ok = settings_put_secret(SETTING_NET_PSK((uint32_t)slot), psk, (uint32_t)strlen(psk)) && ok;
     } else {
         settings_delete(SETTING_NET_PSK((uint32_t)slot));
     }
+    return ok;
 }
 
 /* ---- requests ---- */
@@ -368,6 +371,7 @@ static void update_info(const wifi_policy_in_t *pin, wifi_power_t pw, hal_wifi_s
         (void)hal_wifi_ssid(n.ssid);
     }
     n.ntp_synced = clock_ntp_synced();
+    n.save_failed = g_save_failed;
     n.saved = wifi_saved_count();
     lock();
     n.reconnects = g_backoff.reconnects;
@@ -487,7 +491,10 @@ void wifi_task(void *arg) {
             if (st == HAL_WIFI_UP) {
                 wifi_backoff_success(&g_backoff);
                 if (g_save_on_success && g_joining_user) {
-                    save_network(g_cur_ssid, g_cur_psk);
+                    g_save_failed = !save_network(g_cur_ssid, g_cur_psk);
+                    if (g_save_failed) {
+                        printf("wifi: could not save the network (settings full?)\n");
+                    }
                     g_save_on_success = false;
                 }
                 (void)hal_wifi_sntp_start(g_set.ntp_server, on_time);

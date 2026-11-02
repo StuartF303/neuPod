@@ -102,6 +102,9 @@ static uint32_t serialise(uint32_t seq) {
 }
 
 /* Validate an image of @p n bytes. On success fills @p items (cleared first) and @p seq. Touches no global state. */
+static bool g_newer_seen;  /* set by parse() for the file just read */
+static uint8_t g_newer_mask; /* bit 0 = file A, bit 1 = file B holds a NEWER layout: kept aside (settings.old) at the next save */
+
 static bool parse(const uint8_t *img, uint32_t n, item_t *items, uint32_t *seq) {
     if (n < HEADER_BYTES + CRC_BYTES || n > IMAGE_MAX) {
         return false;
@@ -112,8 +115,12 @@ static bool parse(const uint8_t *img, uint32_t n, item_t *items, uint32_t *seq) 
     if (get32(img + n - CRC_BYTES) != crc32(img, n - CRC_BYTES)) {
         return false;
     }
+    if (get16(img + 4) > SETTINGS_VERSION) {
+        g_newer_seen = true; /* a rollback: do not wipe the newer firmware's file, move it aside when we save */
+        return false;
+    }
     if (get16(img + 4) != SETTINGS_VERSION) {
-        return false; /* a newer or older layout: treated as unreadable (documented) */
+        return false; /* an older layout: no migration exists yet */
     }
     uint32_t count = get16(img + 6);
     if (count > SETTINGS_MAX_ITEMS) {
@@ -196,31 +203,36 @@ void settings_attach_storage(bool available) {
     unlock();
 }
 
+static int g_active = -1; /* 0 = A holds the newest valid state, 1 = B, -1 = neither; the next save goes to the other one */
+
 settings_load_result_t settings_load(void) {
     if (!g_attached) {
         return SETTINGS_LOAD_NONE;
     }
-    static item_t bin_items[SETTINGS_MAX_ITEMS], tmp_items[SETTINGS_MAX_ITEMS]; /* ~2.7 KB, kept off the task stack */
-    uint32_t bin_seq = 0, tmp_seq = 0;
-    file_state_t bin = read_file(SETTINGS_FILE, bin_items, &bin_seq);
-    file_state_t tmp = read_file(SETTINGS_TMP_FILE, tmp_items, &tmp_seq);
+    static item_t stage[SETTINGS_MAX_ITEMS], stage2[SETTINGS_MAX_ITEMS]; /* parsed off to the side: g_items is read by other tasks meanwhile */
+    uint32_t a_seq = 0, b_seq = 0;
+    bool pick_is_a = false;
+    g_newer_mask = 0;
+    g_newer_seen = false;
+    file_state_t a = read_file(SETTINGS_FILE_A, stage, &a_seq);
+    g_newer_mask |= g_newer_seen ? 1u : 0u;
+    g_newer_seen = false;
+    file_state_t b = read_file(SETTINGS_FILE_B, stage2, &b_seq);
+    g_newer_mask |= g_newer_seen ? 2u : 0u;
 
     settings_load_result_t res;
     const item_t *use = NULL;
     uint32_t use_seq = 0;
-    bool recovered = false;
-    if (bin == FILE_IOERR || tmp == FILE_IOERR) {
+    int active = -1;
+    if (a == FILE_IOERR || b == FILE_IOERR) {
         res = SETTINGS_LOAD_IO_ERROR;
-    } else if (bin == FILE_GOOD && (tmp != FILE_GOOD || (int32_t)(bin_seq - tmp_seq) >= 0)) {
-        use = bin_items;
-        use_seq = bin_seq;
-        res = SETTINGS_LOAD_OK;
-    } else if (tmp == FILE_GOOD) {
-        use = tmp_items; /* power was lost between "tmp complete" and "tmp renamed": the tmp is the newer state */
-        use_seq = tmp_seq;
-        recovered = true;
-        res = SETTINGS_LOAD_RECOVERED;
-    } else if (bin == FILE_BAD || tmp == FILE_BAD) {
+    } else if (a == FILE_GOOD || b == FILE_GOOD) {
+        pick_is_a = a == FILE_GOOD && (b != FILE_GOOD || (int32_t)(a_seq - b_seq) > 0);
+        use = pick_is_a ? stage : stage2;
+        use_seq = pick_is_a ? a_seq : b_seq;
+        active = pick_is_a ? 0 : 1;
+        res = (a == FILE_BAD || b == FILE_BAD) ? SETTINGS_LOAD_RECOVERED : SETTINGS_LOAD_OK;
+    } else if (a == FILE_BAD || b == FILE_BAD) {
         res = SETTINGS_LOAD_CORRUPT;
     } else {
         res = SETTINGS_LOAD_FRESH;
@@ -232,10 +244,9 @@ settings_load_result_t settings_load(void) {
         memcpy(g_items, use, sizeof g_items);
         g_seq = use_seq;
     }
+    g_active = active;
     g_loaded = res != SETTINGS_LOAD_IO_ERROR;
-    /* A recovered tmp must become settings.bin; a corrupt file is replaced on the next change (not rewritten blindly:
-     * with nothing changed there is nothing worth writing, and a fresh card stays untouched). */
-    g_dirty = recovered;
+    g_dirty = false;
     if (res == SETTINGS_LOAD_IO_ERROR) {
         g_attached = false; /* the card cannot even be read: RAM-only */
     }
@@ -277,8 +288,9 @@ void settings_test_set_power_loss_step(int step) { g_crash_step = step; }
 
 static bool power_lost_at(int step) { return g_crash_step == step; }
 
-/* The save proper. Runs inside the write scope with the card unlocked. */
-static nfs_err_t save_image(uint32_t n) {
+/* The save proper. Runs inside the write scope with the card unlocked. @p target = the file to overwrite (the inactive one). No rename and no
+ * delete: the other file is never touched, so there is always one complete state on the card. */
+static nfs_err_t save_image(const char *target, uint32_t n) {
     nfs_stat_t st;
     nfs_err_t e = nfs_stat(SETTINGS_DIR, &st);
     if (e == NFS_ERR_NOT_FOUND) {
@@ -289,8 +301,18 @@ static nfs_err_t save_image(uint32_t n) {
     if (e != NFS_OK) {
         return e;
     }
+    for (unsigned i = 0; i < 2 && g_newer_mask != 0; i++) { /* a newer firmware's file is in the way of our rotation: keep it */
+        if (g_newer_mask & (1u << i)) {
+            nfs_stat_t os;
+            if (nfs_stat(SETTINGS_FILE_OLD, &os) == NFS_OK) {
+                (void)nfs_unlink(SETTINGS_FILE_OLD);
+            }
+            (void)nfs_rename(i == 0 ? SETTINGS_FILE_A : SETTINGS_FILE_B, SETTINGS_FILE_OLD);
+        }
+    }
+    g_newer_mask = 0;
     nfs_file_t *f;
-    e = nfs_open(&f, SETTINGS_TMP_FILE, NFS_O_WRITE | NFS_O_CREATE | NFS_O_TRUNC);
+    e = nfs_open(&f, target, NFS_O_WRITE | NFS_O_CREATE | NFS_O_TRUNC);
     if (e != NFS_OK) {
         return e;
     }
@@ -311,22 +333,8 @@ static nfs_err_t save_image(uint32_t n) {
     if (e == NFS_OK) {
         e = ce;
     }
-    if (e != NFS_OK) {
-        return e;
-    }
-    if (power_lost_at(1)) {
-        return NFS_ERR_IO;
-    }
-    e = nfs_unlink(SETTINGS_FILE);
-    if (e != NFS_OK && e != NFS_ERR_NOT_FOUND) {
-        return e;
-    }
-    if (power_lost_at(2)) {
-        return NFS_ERR_IO;
-    }
-    e = nfs_rename(SETTINGS_TMP_FILE, SETTINGS_FILE);
-    if (e == NFS_OK && power_lost_at(3)) {
-        return NFS_ERR_IO;
+    if (e == NFS_OK && power_lost_at(1)) {
+        return NFS_ERR_IO; /* complete and synced: only the caller's report is lost */
     }
     return e;
 }
@@ -336,9 +344,11 @@ int settings_flush(void) {
     bool want = g_dirty;
     bool ok = g_attached && g_loaded;
     uint32_t n = 0, seq = 0;
+    int target = 0;
     if (want && ok) {
         seq = g_seq + 1u;
         n = serialise(seq);
+        target = g_active == 0 ? 1 : 0; /* the inactive file (A when neither is valid) */
         g_dirty = false; /* a change made while we write sets it again */
     }
     unlock();
@@ -355,7 +365,7 @@ int settings_flush(void) {
     if (e == NFS_OK) {
         bool was_enabled = hal_storage_get_write_enabled();
         hal_storage_set_write_enabled(true);
-        e = save_image(n);
+        e = save_image(target == 0 ? SETTINGS_FILE_A : SETTINGS_FILE_B, n);
         hal_storage_set_write_enabled(was_enabled);
         nfs_write_scope_leave();
     }
@@ -363,6 +373,7 @@ int settings_flush(void) {
     lock();
     if (e == NFS_OK) {
         g_seq = seq;
+        g_active = target;
         g_saves++;
         g_fail_streak = 0;
     } else {
@@ -451,28 +462,43 @@ void settings_set_u8(uint32_t tag, uint8_t v) { (void)settings_put(tag, &v, 1); 
 /* ---- Secrets ---- */
 
 bool settings_put_secret(uint32_t tag, const void *data, uint32_t len) {
-    uint8_t rec[SETTINGS_VALUE_MAX];
+    uint8_t rec[SETTINGS_VALUE_MAX], same[SETTINGS_VALUE_MAX];
     if (len == 0 || len + SECRET_OVERHEAD > sizeof rec) {
         return false;
     }
-    size_t n = secret_seal(tag, data, len, rec, sizeof rec);
-    return n != 0 && settings_put(tag, rec, (uint32_t)n);
+    bool ok;
+    uint32_t cur = settings_get_secret(tag, same, sizeof same);
+    if (cur == len && memcmp(same, data, len) == 0) {
+        ok = true; /* unchanged: a fresh nonce would make the record differ and cost an SD write for nothing */
+    } else {
+        size_t n = secret_seal(tag, data, len, rec, sizeof rec);
+        ok = n != 0 && settings_put(tag, rec, (uint32_t)n);
+    }
+    secret_wipe(same, sizeof same);
+    secret_wipe(rec, sizeof rec);
+    return ok;
 }
 
+/* Returns the bytes copied into @p buf (at most @p size), or the full plaintext length when @p buf is NULL; 0 if absent or not authentic. */
 uint32_t settings_get_secret(uint32_t tag, void *buf, uint32_t size) {
     uint8_t rec[SETTINGS_VALUE_MAX], plain[SETTINGS_VALUE_MAX];
     uint32_t n = settings_get(tag, rec, sizeof rec);
-    if (n == 0) {
-        return 0;
+    uint32_t r = 0;
+    if (n != 0 && n <= sizeof rec) {
+        int pl = secret_open(tag, rec, n, plain, sizeof plain);
+        if (pl > 0) {
+            r = (uint32_t)pl;
+            if (buf != NULL) {
+                if (r > size) {
+                    r = size;
+                }
+                memcpy(buf, plain, r);
+            }
+        }
     }
-    int pl = secret_open(tag, rec, n, plain, sizeof plain);
-    if (pl <= 0) {
-        return 0;
-    }
-    if (buf != NULL) {
-        memcpy(buf, plain, (uint32_t)pl < size ? (uint32_t)pl : size);
-    }
-    return (uint32_t)pl;
+    secret_wipe(plain, sizeof plain);
+    secret_wipe(rec, sizeof rec);
+    return r;
 }
 
 void settings_migrate_bt_secrets(void) {
@@ -487,7 +513,9 @@ void settings_migrate_bt_secrets(void) {
         }
         unlock();
         if (todo) {
-            (void)settings_put_secret(tag, plain, len); /* a sealed record is always >= SECRET_OVERHEAD + 1 bytes, so this runs once */
+            (void)settings_put_secret(tag, plain, len); /* a sealed record is always >= SECRET_OVERHEAD + 1 bytes, so this runs once.
+                                                         * Note: the old plaintext may remain in freed SD clusters (FAT does not scrub). */
+            secret_wipe(plain, sizeof plain);
         }
     }
 }
@@ -496,8 +524,7 @@ void settings_migrate_bt_secrets(void) {
 
 static int bt_get(void *ctx, uint32_t tag, uint8_t *buf, uint32_t size) {
     (void)ctx;
-    uint32_t len = settings_get_secret(tag, buf, size); /* 0 when absent or not authentic: BTstack then pairs again */
-    return (int)(buf != NULL && len > size ? size : len); /* BTstack: bytes copied, or the length for a NULL buffer */
+    return (int)settings_get_secret(tag, buf, size); /* 0 when absent or not authentic: BTstack then pairs again; else bytes copied (length for NULL) */
 }
 
 /* Writes are refused while the card's contents are still to be loaded (or it is not known yet whether there is a

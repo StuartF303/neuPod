@@ -5,7 +5,7 @@
  *
  * Keys are 32-bit tags with a short byte value: the user settings (volume, backlight, click feedback) and, through
  * settings_bt_storage(), BTstack's link keys and device database (they use the same tag/value/length model).
- * The whole store lives in RAM and is always usable. It is persisted as ONE file, /.neupod/settings.bin
+ * The whole store lives in RAM and is always usable. It is persisted as TWO alternating files, /.neupod/settings.a and settings.b
  * (magic, version, sequence, items, CRC-32), written only by settings_flush(), which only the storage task calls.
  *
  * Why the SD card and not the internal flash (BTstack's default): core 1 runs its code from the same QSPI flash
@@ -18,8 +18,9 @@
  *
  * Write safety: the card's write lock is opened ONLY inside settings_flush(), for the duration of one save, under an
  * nfs write scope that confines every mutation to /.neupod (nfs.h). The store never formats and never writes
- * anywhere else. Atomic save: full image to settings.tmp, sync, delete settings.bin, rename tmp to bin. If power is
- * lost anywhere in the sequence the next load finds a complete file: bin, or tmp (valid CRC, higher sequence).
+ * anywhere else. Crash-safe save without rename or delete: the image is written IN PLACE over the OLDER (or invalid) of the two
+ * files, then synced; the other file is never touched. Load takes the valid file with the higher sequence, so a cut at any point
+ * leaves at least the previous complete state.
  *
  * Threading: setters/getters may be called from any task (a caller-supplied lock guards the RAM image).
  * settings_load() and settings_flush() do file I/O: storage task (or the boot check) only, never core 1.
@@ -37,10 +38,11 @@ extern "C" {
 #endif
 
 #define SETTINGS_DIR "/.neupod"
-#define SETTINGS_FILE SETTINGS_DIR "/settings.bin"
-#define SETTINGS_TMP_FILE SETTINGS_DIR "/settings.tmp"
+#define SETTINGS_FILE_A SETTINGS_DIR "/settings.a"
+#define SETTINGS_FILE_B SETTINGS_DIR "/settings.b"
+#define SETTINGS_FILE_OLD SETTINGS_DIR "/settings.old" /**< a file written by a NEWER firmware, kept aside instead of being wiped */
 
-#define SETTINGS_MAX_ITEMS 24u /**< distinct tags kept (settings, Wi-Fi networks, link keys, BT device records) */
+#define SETTINGS_MAX_ITEMS 32u /**< distinct tags kept (settings, Wi-Fi networks, link keys, BT device records) */
 #define SETTINGS_VALUE_MAX 96u /**< bytes per stored value; a sealed secret holds up to 96 - 29 = 67 bytes of plaintext (Wi-Fi passwords are at most 63) */
 #define SETTINGS_VERSION 1u
 
@@ -66,8 +68,8 @@ typedef struct {
 typedef enum {
     SETTINGS_LOAD_NONE = 0,   /**< not loaded (no card, or not tried yet) */
     SETTINGS_LOAD_FRESH,      /**< no file yet: first boot or a new card; defaults */
-    SETTINGS_LOAD_OK,         /**< settings.bin valid */
-    SETTINGS_LOAD_RECOVERED,  /**< settings.tmp was newer/the only valid file (power was lost during a save) */
+    SETTINGS_LOAD_OK,         /**< a valid file was read */
+    SETTINGS_LOAD_RECOVERED,  /**< ... and the other file was damaged (a save was cut short): the valid one was used */
     SETTINGS_LOAD_CORRUPT,    /**< files exist but fail magic/version/CRC: defaults, the next save replaces them */
     SETTINGS_LOAD_IO_ERROR,   /**< could not read the card: defaults, RAM-only */
 } settings_load_result_t;
@@ -143,8 +145,8 @@ const hal_bt_storage_t *settings_bt_storage(void); /* link keys and device recor
 /* ---- test hooks ---- */
 
 /**
- * Unit tests only: stop settings_flush() as if the power failed. Steps: 0 = half of the temp file written,
- * 1 = temp file complete and closed, 2 = old file deleted (before the rename), 3 = after the rename.
+ * Unit tests only: stop settings_flush() as if the power failed. Steps: 0 = half of the inactive file written (not synced),
+ * 1 = file complete, synced and closed.
  * -1 = off. The aborted flush returns NFS_ERR_IO.
  */
 void settings_test_set_power_loss_step(int step);

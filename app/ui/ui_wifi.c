@@ -81,7 +81,7 @@ static const char *state_text(const wifi_info_t *w, const wifi_settings_t *s) {
     case HAL_WIFI_IDLE: return w->saved ? "Not connected" : "No network saved";
     case HAL_WIFI_JOINING: return "Connecting...";
     case HAL_WIFI_NO_IP: return "Getting address...";
-    case HAL_WIFI_UP: return "Connected";
+    case HAL_WIFI_UP: return w->save_failed ? "Connected (not saved)" : "Connected";
     case HAL_WIFI_FAILED: return "Could not connect";
     case HAL_WIFI_BAD_AUTH: return "Wrong password";
     }

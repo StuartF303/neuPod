@@ -19,3 +19,5 @@ int secret_open(uint32_t t, const uint8_t *r, size_t n, uint8_t *o, size_t cap) 
     memcpy(o, r + 13, n - SECRET_OVERHEAD);
     return (int)(n - SECRET_OVERHEAD);
 }
+void secret_set_lock(secret_lock_fn l, secret_lock_fn u) { (void)l; (void)u; }
+void secret_wipe(void *p, size_t n) { volatile uint8_t *v = p; while (n-- > 0) { *v++ = 0; } }

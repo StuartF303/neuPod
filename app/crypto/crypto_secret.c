@@ -121,3 +121,5 @@ int secret_open(uint32_t tag, const uint8_t *rec, size_t n, uint8_t *out, size_t
     if (g_unlock != NULL) { g_unlock(); }
     return r;
 }
+
+void secret_wipe(void *p, size_t n) { mbedtls_platform_zeroize(p, n); }
