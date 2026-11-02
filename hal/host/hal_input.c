@@ -41,6 +41,8 @@ hal_status_t hal_input_init(void) {
     return HAL_OK;
 }
 
+bool hal_input_is_simulated(void) { return true; }
+
 hal_status_t hal_input_reinit(void) { return HAL_OK; } // nothing to re-arm on the host
 
 bool hal_input_poll(hal_wheel_state *out) {

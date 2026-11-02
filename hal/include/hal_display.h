@@ -67,6 +67,13 @@ hal_status_t hal_display_fill_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t 
  */
 void hal_display_sleep(bool sleep);
 
+/**
+ * Service the display's event loop; call regularly from the task that draws. Hardware: no-op.
+ * Host: pumps the simulator window's events (and exits cleanly when it is closed) on the one
+ * thread that owns the window, which keeps SDL single-threaded.
+ */
+void hal_display_service(void);
+
 /** Backlight level, 0 (off) to 255 (full). Active-high PWM on the Phase 1 testbed. */
 void hal_display_backlight(uint8_t level);
 

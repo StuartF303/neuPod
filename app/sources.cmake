@@ -40,6 +40,32 @@ set(NEUPOD_FATFS_SOURCES
   ${NEUPOD_APP_DIR}/third_party/fatfs/ffsystem.c
   ${NEUPOD_APP_DIR}/storage/diskio.c
 )
+# Runtime (FreeRTOS tasks, LVGL UI, boot checks, audio timing stub). Needs os.h's FreeRTOS backend
+# and LVGL, so it is NOT part of NEUPOD_APP_SOURCES (the ESP-IDF skeleton keeps building app.c only).
+set(NEUPOD_RT_CORE_SOURCES               # pure logic, no OS: host-testable on their own
+  ${NEUPOD_APP_DIR}/audio/spsc_ring.c
+  ${NEUPOD_APP_DIR}/input/input_events.c
+)
+# Bare-metal audio core (core 1). Subject to the core-1 rules (cmake/check_core1_rules.cmake):
+# no RTOS, stdio, malloc or SDK blocking primitives. audio_ctl.c is the core-0 side.
+set(NEUPOD_AUDIO_CORE_SOURCES
+  ${NEUPOD_APP_DIR}/audio/audio_core.c
+  ${NEUPOD_APP_DIR}/audio/audio_shared.c
+)
+set(NEUPOD_RUNTIME_SOURCES
+  ${NEUPOD_APP_DIR}/os/os_freertos.c
+  ${NEUPOD_APP_DIR}/runtime/runtime.c
+  ${NEUPOD_APP_DIR}/runtime/boot.c
+  ${NEUPOD_APP_DIR}/runtime/capabilities.c
+  ${NEUPOD_APP_DIR}/runtime/battery_store.c
+  ${NEUPOD_APP_DIR}/runtime/panic.c
+  ${NEUPOD_APP_DIR}/audio/audio_ctl.c
+)
+set(NEUPOD_UI_SOURCES
+  ${NEUPOD_APP_DIR}/ui/ui.c
+  ${NEUPOD_APP_DIR}/ui/ui_splash.c
+  ${NEUPOD_APP_DIR}/ui/ui_home.c
+)
 set(NEUPOD_APP_SOURCES
   ${NEUPOD_CORE_SOURCES}
   ${NEUPOD_GFX_SOURCES}

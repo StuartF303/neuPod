@@ -1,12 +1,32 @@
 // SPDX-License-Identifier: MPL-2.0
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 
+#include <stdlib.h>
+#include <unistd.h>
+
+#include "hal_host.h"
 #include "hal_system.h"
 #include "host_internal.h"
 
 static struct timespec g_start;
+
+static hal_host_delay_fn g_delay_hook;
+
+void hal_host_set_delay_hook(hal_host_delay_fn fn) { g_delay_hook = fn; }
+
+hal_status_t hal_system_late_init(void) { return HAL_OK; }
+
+bool hal_panic_can_block(void) { return true; }
+
+void hal_panic(uint8_t blink_code, const char *msg) {
+    (void)blink_code;
+    ssize_t r = write(STDERR_FILENO, msg, strlen(msg));
+    (void)r;
+    abort();
+}
 
 hal_status_t hal_system_init(void) {
     clock_gettime(CLOCK_MONOTONIC, &g_start);
@@ -30,6 +50,10 @@ uint32_t hal_millis(void) {
 }
 
 void hal_delay_ms(uint32_t ms) {
+    if (g_delay_hook != NULL) {
+        g_delay_hook(ms); // inside the RTOS: sleep via the scheduler so other tasks keep running
+        return;
+    }
     // Sleep in short slices so the simulator window keeps pumping events (and a close request
     // exits promptly) even during long delays.
     uint32_t start = hal_millis();

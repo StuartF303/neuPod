@@ -21,7 +21,8 @@ Phase 1 testbed (Pico 2 W on a breadboard):
 | UART console | ✅ |
 | Display (ST7789 SPI1 + DMA, 62.5 MHz; `display_test` suite) | ✅ |
 | microSD (SDIO 4-bit, exFAT; `storage_test` suite) | ✅ |
-| Audio | ⬜ |
+| Runtime (FreeRTOS on core 0, bare-metal audio core on core 1, LVGL boot splash + home placeholder, boot self-checks) | 🟡 builds; host smoke-tested |
+| Audio (bare-metal core 1 timing stub; no I2S/DAC yet) | 🟡 |
 | I²C (MAX17048 gauge, DRV2605L haptics; `i2c_test` suite) | ✅ |
 | Click wheel (decoder ✅ tested on host; PIO receiver skeleton) | 🟡 |
 | Bluetooth A2DP | ⬜ |
@@ -55,14 +56,15 @@ See [ADR-0001](docs/adr/0001-rp2350-phase1-platform.md).
 
 ```
 neuPod/
-├── app/                 portable C: UI, library index, playback, codecs, FatFs
+├── app/                 portable C: runtime/tasks, LVGL UI, boot checks, audio engine, drivers, FatFs
 ├── hal/
 │   ├── include/         HAL interface headers (hal_display.h, hal_input.h, …)
 │   └── host/            SDL2 desktop implementation
 ├── platforms/
 │   ├── rp2350/          Pico SDK build entry + RP2350 HAL
 │   └── esp32s3/         ESP-IDF project skeleton + ESP32-S3 HAL
-├── tests/               host unit tests
+├── lib/                 submodules: SD driver, FreeRTOS-Kernel (RP2350 SMP port), LVGL
+├── tests/               host unit tests + headless runtime smoke test
 ├── tools/               PC-side utilities (C#/.NET welcome)
 ├── scripts/             build / flash / console helpers
 ├── docs/                design docs, ADRs, wiring (published to GitHub Pages)

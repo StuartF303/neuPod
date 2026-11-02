@@ -343,3 +343,5 @@ void hal_display_sleep(bool sleep) {
 void hal_display_present(void) {
     // The ST7789 has its own frame memory; nothing to flip.
 }
+
+void hal_display_service(void) {}

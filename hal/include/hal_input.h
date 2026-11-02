@@ -45,6 +45,12 @@ hal_status_t hal_input_init(void);
  */
 bool hal_input_poll(hal_wheel_state *out);
 
+/**
+ * True where the "wheel" is a simulation (host: keyboard/mouse in the simulator window), so it is
+ * always a live input source and needs no hardware check.
+ */
+bool hal_input_is_simulated(void);
+
 /** Re-send the wheel init packet (call when Hold is released). */
 hal_status_t hal_input_reinit(void);
 

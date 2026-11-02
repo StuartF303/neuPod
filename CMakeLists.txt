@@ -12,15 +12,21 @@ if(NEUPOD_PLATFORM STREQUAL "rp2350")
   set(CMAKE_C_STANDARD 11)
   set(CMAKE_CXX_STANDARD 17)
   pico_sdk_init()
+  add_compile_definitions(NEUPOD_RP2350=1)
 
+  # FreeRTOS SMP (RP2350 port) must exist before app/, which links it. Also defines the SD-card
+  # and cyw43 arch glue the runtime needs.
+  add_subdirectory(platforms/rp2350/freertos)
   add_subdirectory(app)
   add_subdirectory(platforms/rp2350)
 
 elseif(NEUPOD_PLATFORM STREQUAL "host")
   project(neupod C)
   set(CMAKE_C_STANDARD 11)
+  find_package(Threads REQUIRED)
   enable_testing()
 
+  add_subdirectory(hal/host/freertos) # FreeRTOS POSIX port, before app/ which links it
   add_subdirectory(app)
   add_subdirectory(hal/host)
   if(EXISTS ${CMAKE_SOURCE_DIR}/tests/CMakeLists.txt)

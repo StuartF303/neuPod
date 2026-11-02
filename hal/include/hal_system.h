@@ -18,6 +18,28 @@ extern "C" {
  */
 hal_status_t hal_system_init(void);
 
+/**
+ * Second-stage bring-up for parts that need the RTOS scheduler running (RP2350: the Wi-Fi/BT
+ * chip, which also carries the status LED, runs a worker task). Call once from a task pinned to
+ * core 0 after the scheduler has started, before hal_status_led(). hal_system_init() does it
+ * itself in bare-metal builds (the test executables), where this is a no-op.
+ */
+hal_status_t hal_system_late_init(void);
+
+/**
+ * True when the caller is in ordinary task context, where blocking RTOS calls still work (so the
+ * panic path may freeze the other tasks first); false inside interrupts or kernel critical sections.
+ */
+bool hal_panic_can_block(void);
+
+/**
+ * Fatal-error path, never returns: write @p msg to the debug console WITHOUT any lock, heap or
+ * scheduler help (it may run from an interrupt or with the kernel in an undefined state), then
+ * stop the audio core (RP2350), then halt forever, flashing the status LED @p blink_code times per cycle where the platform can,
+ * repeating @p msg every few seconds. Host: prints and abort()s so tests fail loudly.
+ */
+void hal_panic(uint8_t blink_code, const char *msg) __attribute__((noreturn));
+
 /** Milliseconds since hal_system_init(); wraps after ~49 days. */
 uint32_t hal_millis(void);
 

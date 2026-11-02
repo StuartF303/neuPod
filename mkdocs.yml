@@ -36,6 +36,8 @@ nav:
   - Design: design.md
   - Reference: reference.md
   - UI: ui.md
+  - Firmware:
+      - Runtime (RTOS, tasks, boot): runtime.md
   - Hardware:
       - Phase 1 wiring: wiring-phase1.md
       - Click-wheel protocol: click-wheel-protocol.md
@@ -52,3 +54,6 @@ nav:
       - ADR-0006 Storage microSD SDIO: adr/0006-storage-microsd-sdio.md
       - ADR-0007 Bluetooth audio path: adr/0007-bluetooth-audio-path.md
       - ADR-0008 Card format: adr/0008-card-format.md
+      - ADR-0009 RTOS FreeRTOS (amended): adr/0009-rtos-freertos-smp.md
+      - ADR-0010 UI toolkit LVGL: adr/0010-ui-lvgl.md
+      - ADR-0011 Bare-metal audio core: adr/0011-bare-metal-audio-core.md
