@@ -121,6 +121,11 @@ target_link_libraries(test_ui_logic neupod_rt_core)
 add_test(NAME ui_logic COMMAND test_ui_logic)
 set_source_files_properties(test_ui_logic.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
+add_executable(test_wheel_input test_wheel_input.c)
+target_link_libraries(test_wheel_input neupod_rt_core)
+add_test(NAME wheel_input COMMAND test_wheel_input)
+set_source_files_properties(test_wheel_input.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
 # Audio maths (conversion, volume, sine/tone/scale generators) and the WAV parser.
 add_executable(test_audio test_audio.c)
 target_link_libraries(test_audio neupod_rt_core m)
