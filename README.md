@@ -22,7 +22,7 @@ Phase 1 testbed (Pico 2 W on a breadboard):
 | Display (ST7789 SPI1 + DMA, 62.5 MHz; `display_test` suite) | ✅ |
 | microSD (SDIO 4-bit, exFAT; `storage_test` suite) | ✅ |
 | Audio | ⬜ |
-| I²C (fuel gauge, haptics) | ⬜ |
+| I²C (MAX17048 gauge, DRV2605L haptics; `i2c_test` suite) | ✅ |
 | Click wheel (decoder ✅ tested on host; PIO receiver skeleton) | 🟡 |
 | Bluetooth A2DP | ⬜ |
 | Wi-Fi | ⬜ |

@@ -21,6 +21,14 @@ set(NEUPOD_STORAGE_TEST_SOURCES
   ${NEUPOD_APP_DIR}/tests/storage_tests.c  # needs hal_storage + hal_console (no FatFs headers)
   ${NEUPOD_APP_DIR}/storage/nfs_path.c    # portable half of the nfs file API
 )
+# Chip drivers over hal_i2c (portable; implement hal_battery.h / hal_haptic.h).
+set(NEUPOD_DRIVER_SOURCES
+  ${NEUPOD_APP_DIR}/drivers/max17048.c
+  ${NEUPOD_APP_DIR}/drivers/drv2605l.c
+)
+set(NEUPOD_I2C_TEST_SOURCES
+  ${NEUPOD_APP_DIR}/tests/i2c_tests.c      # needs hal_i2c + hal_console (portable)
+)
 # FatFs backend of nfs.h: RP2350 only, built against the SD library's ff.h (not in neupod_app).
 set(NEUPOD_NFS_FATFS_SOURCES ${NEUPOD_APP_DIR}/storage/nfs_fatfs.c)
 set(NEUPOD_CLICKWHEEL_SOURCES

@@ -25,3 +25,17 @@ set_tests_properties(nfs PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR
 
 set_source_files_properties(test_nfs.c test_clickwheel.c test_fatfs.c test_gfx.c test_storage_decode.c
   PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+add_executable(test_i2c test_i2c.c)
+target_link_libraries(test_i2c hal_host)
+add_test(NAME i2c COMMAND test_i2c)
+set_source_files_properties(test_i2c.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+add_executable(test_max17048 test_max17048.c)
+target_link_libraries(test_max17048 neupod_drivers hal_host)
+add_test(NAME max17048 COMMAND test_max17048)
+
+add_executable(test_drv2605l test_drv2605l.c)
+target_link_libraries(test_drv2605l neupod_drivers hal_host)
+add_test(NAME drv2605l COMMAND test_drv2605l)
+set_source_files_properties(test_max17048.c test_drv2605l.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
