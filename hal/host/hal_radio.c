@@ -338,3 +338,10 @@ void hal_wifi_poll(void) {
         }
     }
 }
+
+void hal_host_wifi_drop_link(void) {
+    if (g_wstate == HAL_WIFI_UP) {
+        g_wstate = HAL_WIFI_IDLE; /* what the hardware HAL reports after the driver drops the link */
+        g_sntp_done = false;
+    }
+}

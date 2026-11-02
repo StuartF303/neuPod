@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 // Clock maths and the EU DST rule, reconnect backoff, power policy.
+#include "hal_host.h"
+#include "hal_radio.h"
+#include "hal_system.h"
 #include "sys_clock.h"
 #include "unit.h"
 #include "wifi_logic.h"
@@ -92,6 +95,31 @@ TEST(test_backoff) {
     ASSERT_TRUE(wifi_backoff_due(&b, 0xFFFFFF00u + 2000));
 }
 
+TEST(test_backoff_late_in_uptime) {
+    // After 24.8 days (0x90000000 ms) a fresh state must still be due, and a failure arms a normal 2 s wait.
+    wifi_backoff_t b;
+    wifi_backoff_init(&b);
+    ASSERT_TRUE(wifi_backoff_due(&b, 0x90000000u));
+    wifi_backoff_fail(&b, 0x90000000u);
+    ASSERT_FALSE(wifi_backoff_due(&b, 0x90000000u + 1999u));
+    ASSERT_TRUE(wifi_backoff_due(&b, 0x90000000u + 2000u));
+    wifi_backoff_success(&b);
+    ASSERT_TRUE(wifi_backoff_due(&b, 0xF0000000u)); // success clears the deadline
+}
+
+TEST(test_link_loss_is_reported) {
+    ASSERT_EQ(HAL_OK, hal_wifi_start());
+    ASSERT_EQ(HAL_OK, hal_wifi_join("HomeNet", "secret"));
+    for (int i = 0; i < 60 && hal_wifi_state() != HAL_WIFI_UP; i++) {
+        hal_wifi_poll();
+        hal_delay_ms(20);
+    }
+    ASSERT_EQ(HAL_WIFI_UP, hal_wifi_state());
+    hal_host_wifi_drop_link();
+    ASSERT_EQ(HAL_WIFI_IDLE, hal_wifi_state()); // the service sees the edge UP -> IDLE: icon, log, backoff, auto-reconnect
+    hal_wifi_stop();
+}
+
 TEST(test_power_policy) {
     wifi_policy_in_t in = {.wifi_enabled = true, .idle_off_min = 5};
     ASSERT_EQ(WIFI_PW_ON, wifi_policy_decide(&in, 1000)); // idle but within 5 minutes
@@ -114,6 +142,8 @@ int main(void) {
     RUN(test_local_time_zones);
     RUN(test_running_clock);
     RUN(test_backoff);
+    RUN(test_backoff_late_in_uptime);
+    RUN(test_link_loss_is_reported);
     RUN(test_power_policy);
     return RESULT();
 }

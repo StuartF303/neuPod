@@ -27,7 +27,8 @@ static hal_wifi_status g_result = HAL_WIFI_IDLE; /* outcome of the last attempt 
 
 /* ---- scan ---- */
 static hal_wifi_ap_t g_scan[SCAN_MAX];
-static uint32_t g_scan_n, g_scan_read;
+static uint32_t g_scan_n; /* published with release after an entry is complete; read with acquire */
+static uint32_t g_scan_read;
 static bool g_scan_running;
 
 static int scan_cb(void *env, const cyw43_ev_scan_result_t *r) {
@@ -35,7 +36,8 @@ static int scan_cb(void *env, const cyw43_ev_scan_result_t *r) {
     if (r->ssid_len == 0 || r->ssid_len > HAL_WIFI_SSID_MAX) {
         return 0; /* hidden network: found by typing its name ("Other network...") */
     }
-    for (uint32_t i = 0; i < g_scan_n; i++) { /* the same network on several access points: keep the strongest */
+    uint32_t n_now = __atomic_load_n(&g_scan_n, __ATOMIC_RELAXED); /* this callback is the only writer */
+    for (uint32_t i = 0; i < n_now; i++) { /* the same network on several access points: keep the strongest */
         if (strlen(g_scan[i].ssid) == r->ssid_len && memcmp(g_scan[i].ssid, r->ssid, r->ssid_len) == 0) {
             if (r->rssi > g_scan[i].rssi) {
                 g_scan[i].rssi = (int8_t)r->rssi;
@@ -45,16 +47,17 @@ static int scan_cb(void *env, const cyw43_ev_scan_result_t *r) {
             return 0;
         }
     }
-    if (g_scan_n >= SCAN_MAX) {
+    if (n_now >= SCAN_MAX) {
         return 0;
     }
-    hal_wifi_ap_t *a = &g_scan[g_scan_n++];
+    hal_wifi_ap_t *a = &g_scan[n_now];
     memset(a, 0, sizeof *a);
     memcpy(a->ssid, r->ssid, r->ssid_len);
     memcpy(a->bssid, r->bssid, 6);
     a->rssi = (int8_t)r->rssi;
     a->channel = (uint8_t)r->channel;
     a->sec = r->auth_mode == 0 ? HAL_WIFI_SEC_OPEN : (r->auth_mode & 4u) ? HAL_WIFI_SEC_WPA2_WPA3 : HAL_WIFI_SEC_OTHER; /* WPA3 is not distinguishable here */
+    __atomic_store_n(&g_scan_n, n_now + 1u, __ATOMIC_RELEASE); /* publish the finished entry */
     return 0;
 }
 
@@ -90,7 +93,8 @@ hal_status_t hal_wifi_scan_start(void) {
     if (g_scan_running || cyw43_wifi_scan_active(&cyw43_state)) {
         return HAL_EBUSY;
     }
-    g_scan_n = g_scan_read = 0;
+    __atomic_store_n(&g_scan_n, 0, __ATOMIC_RELEASE);
+    g_scan_read = 0;
     cyw43_wifi_scan_options_t opts = {0};
     cyw43_arch_lwip_begin();
     int rc = cyw43_wifi_scan(&cyw43_state, &opts, NULL, scan_cb);
@@ -100,7 +104,7 @@ hal_status_t hal_wifi_scan_start(void) {
 }
 
 bool hal_wifi_scan_next(hal_wifi_ap_t *out, bool *done) {
-    if (g_scan_read < g_scan_n) {
+    if (g_scan_read < __atomic_load_n(&g_scan_n, __ATOMIC_ACQUIRE)) {
         *out = g_scan[g_scan_read++];
         *done = false;
         return true;
@@ -115,6 +119,7 @@ bool hal_wifi_scan_next(hal_wifi_ap_t *out, bool *done) {
 /* ---- join ---- */
 static char g_ssid[HAL_WIFI_SSID_MAX + 1], g_psk[HAL_WIFI_PSK_MAX + 1];
 static uint8_t g_attempt;
+static bool g_saw_badauth; /* any attempt of this join reported a wrong password */
 static const uint32_t k_auth[] = {CYW43_AUTH_WPA2_AES_PSK, CYW43_AUTH_WPA3_WPA2_AES_PSK, CYW43_AUTH_WPA3_SAE_AES_PSK};
 
 static void begin_attempt(void) {
@@ -138,6 +143,7 @@ hal_status_t hal_wifi_join(const char *ssid, const char *psk) {
     snprintf(g_ssid, sizeof g_ssid, "%s", ssid);
     snprintf(g_psk, sizeof g_psk, "%s", psk != NULL ? psk : "");
     g_attempt = 0;
+    g_saw_badauth = false;
     g_joining = true;
     g_result = HAL_WIFI_JOINING;
     begin_attempt();
@@ -169,6 +175,9 @@ hal_wifi_status hal_wifi_state(void) {
     if (l == CYW43_LINK_NOIP || l == CYW43_LINK_JOIN) {
         return HAL_WIFI_NO_IP;
     }
+    if (g_result == HAL_WIFI_UP) {
+        g_result = HAL_WIFI_IDLE; /* the driver dropped the link (access point gone, kicked off): report it so reconnect can run */
+    }
     return g_result;
 }
 
@@ -181,12 +190,14 @@ void hal_wifi_poll(void) {
         g_joining = false;
         g_result = HAL_WIFI_UP;
     } else if (l == CYW43_LINK_FAIL || l == CYW43_LINK_NONET || l == CYW43_LINK_BADAUTH) {
+        g_saw_badauth = g_saw_badauth || l == CYW43_LINK_BADAUTH;
         if (l != CYW43_LINK_NONET && g_psk[0] != '\0' && g_attempt + 1u < sizeof k_auth / sizeof k_auth[0]) {
             g_attempt++; /* maybe a WPA3 network: try the next security mode */
             begin_attempt();
         } else {
             g_joining = false;
-            g_result = l == CYW43_LINK_BADAUTH ? HAL_WIFI_BAD_AUTH : HAL_WIFI_FAILED;
+            /* a wrong password in ANY of the attempts wins: the later modes fail for other reasons */
+            g_result = g_saw_badauth ? HAL_WIFI_BAD_AUTH : HAL_WIFI_FAILED;
         }
     }
 }
@@ -218,6 +229,7 @@ bool hal_wifi_ssid(char out[33]) {
 
 /* ---- SNTP ---- */
 static hal_wifi_time_fn g_time_cb;
+static char g_ntp_name[64]; /* lwIP keeps the pointer, so it must outlive the caller's string */
 static bool g_sntp_on;
 
 void neupod_sntp_set_time(uint32_t sec) { /* lwIP's SNTP_SET_SYSTEM_TIME hook, on the radio worker */
@@ -236,7 +248,8 @@ hal_status_t hal_wifi_sntp_start(const char *server, hal_wifi_time_fn cb) {
         sntp_stop();
     }
     sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    sntp_setservername(0, server); /* the name is not copied by lwIP: the caller keeps it alive (the service's static string) */
+    snprintf(g_ntp_name, sizeof g_ntp_name, "%s", server);
+    sntp_setservername(0, g_ntp_name); /* the name is not copied by lwIP: the caller keeps it alive (the service's static string) */
     sntp_init();
     cyw43_arch_lwip_end();
     g_sntp_on = true;
@@ -261,6 +274,14 @@ static volatile bool g_http_abort;
 static uint32_t g_http_total;
 static httpc_connection_t g_http_settings;
 
+static void finish_http(int e) {
+    hal_http_done_fn done = g_on_done;
+    g_on_done = NULL; /* once: a later lwIP result for the same request finds nothing to call */
+    if (done != NULL) {
+        done(g_http_ctx, e, g_http_total);
+    }
+}
+
 static err_t http_recv(void *arg, struct altcp_pcb *conn, struct pbuf *p, err_t err) {
     (void)arg;
     (void)err;
@@ -275,18 +296,21 @@ static err_t http_recv(void *arg, struct altcp_pcb *conn, struct pbuf *p, err_t 
     }
     altcp_recved(conn, p->tot_len);
     pbuf_free(p);
-    return g_http_abort ? ERR_ABRT : ERR_OK;
+    if (g_http_abort) {
+        /* Tear the connection down ourselves and report the end once. lwIP's small request state (~100 bytes) is not
+         * freed on this path (the httpc API has no public abort); that leak is accepted for a diagnostics tool. */
+        altcp_abort(conn);
+        finish_http(-1);
+        return ERR_ABRT;
+    }
+    return ERR_OK;
 }
 
 static void http_result(void *arg, httpc_result_t res, u32_t len, u32_t srv, err_t err) {
     (void)arg;
     (void)len;
     int e = g_http_abort ? -1 : res == HTTPC_RESULT_OK && srv == 200 ? 0 : res == HTTPC_RESULT_OK ? (int)srv : 1000 + (int)res + (err != 0 ? 100 : 0);
-    hal_http_done_fn done = g_on_done;
-    g_on_done = NULL;
-    if (done != NULL) {
-        done(g_http_ctx, e, g_http_total);
-    }
+    finish_http(e);
 }
 
 hal_status_t hal_wifi_http_get(const char *host, uint16_t port, const char *path, hal_http_data_fn on_data, hal_http_done_fn on_done, void *ctx) {
@@ -310,7 +334,14 @@ hal_status_t hal_wifi_http_get(const char *host, uint16_t port, const char *path
     return HAL_OK;
 }
 
-void hal_wifi_http_abort(void) { g_http_abort = true; }
+void hal_wifi_http_abort(void) {
+    /* Stop delivering data and report the end now (a stalled server may never send another byte). The connection itself ends
+     * with its next data or its timeout; its late result is ignored because g_on_done is already cleared. */
+    cyw43_arch_lwip_begin();
+    g_http_abort = true;
+    finish_http(-1);
+    cyw43_arch_lwip_end();
+}
 
 void hal_wifi_mem(hal_wifi_mem_t *o) {
     memset(o, 0, sizeof *o);

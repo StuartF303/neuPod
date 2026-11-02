@@ -75,7 +75,7 @@ void settings_service_load_now(void) {
 
 void settings_service_poll(bool quiet_now) {
     static uint32_t dirty_since, retry_at;
-    static bool pending;
+    static bool pending, retry_armed; /* a deadline of 0 would read as the future after 2^31 ms */
     if (!settings_dirty()) {
         pending = false;
         return;
@@ -85,16 +85,18 @@ void settings_service_poll(bool quiet_now) {
         pending = true;
         dirty_since = now;
     }
-    if (now - dirty_since < SAVE_DELAY_MS || (int32_t)(now - retry_at) < 0 || !quiet_now) {
+    if (now - dirty_since < SAVE_DELAY_MS || (retry_armed && (int32_t)(now - retry_at) < 0) || !quiet_now) {
         return;
     }
     int e = settings_flush();
     if (e == 0) {
         pending = false;
+        retry_armed = false;
         return;
     }
     printf("settings: save failed (%s)\n", nfs_err_str((nfs_err_t)e));
     retry_at = now + RETRY_MS;
+    retry_armed = true;
     settings_status_t st;
     settings_get_status(&st);
     if (!st.persistent) {

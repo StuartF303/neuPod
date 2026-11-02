@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <stdatomic.h>
 #include <stdlib.h>
 
 #include "capabilities.h"
@@ -32,6 +33,7 @@ static uint32_t g_gen_seen = 0xFFFFFFFFu;
 
 static wifi_backoff_t g_backoff;
 static uint32_t g_idle_since, g_online_until;
+static bool g_online_armed; /* g_online_until is only meaningful once a request set it (0 would look like the future after 2^31 ms) */
 static bool g_user_left;       /* the user disconnected: do not auto-join again until asked */
 static bool g_joining_user;    /* current attempt came from a request */
 static bool g_save_on_success;
@@ -42,7 +44,10 @@ static char g_bad_auth[WIFI_MAX_SAVED][HAL_WIFI_SSID_MAX + 1];
 static bool g_scan_active;  /* a scan is running on the radio */
 static bool g_scan_wanted;  /* a scan was requested (it may not have started yet: the task handles requests every 200 ms) */
 
-static wifi_test_t g_test;
+/* The test counters are written from the lwIP thread, which holds the radio context lock: NO mutex there (it would be an AB-BA
+ * deadlock with code that takes g_mu and then calls into the radio). Plain C11 atomics only. */
+static atomic_int g_t_state, g_t_err;
+static atomic_uint g_t_bytes, g_t_ms, g_t_kbps;
 static uint32_t g_test_t0;
 static char g_url[96] = "http://192.168.1.10:8000/test.bin";
 
@@ -76,6 +81,9 @@ static void load_settings(void) {
     }
     char u[96];
     uint32_t ul = settings_get(SETTING_TEST_URL, u, sizeof u - 1);
+    if (ul >= sizeof u) {
+        ul = 0; /* longer than we ever store: ignore */
+    }
     lock();
     g_set = s;
     if (ul > 0) {
@@ -186,11 +194,13 @@ bool wifi_saved_needs_password(const char *ssid) {
     char p[HAL_WIFI_PSK_MAX + 1];
     bool needs;
     bool known = saved_psk(ssid, p, &needs);
+    lock();
     for (uint32_t i = 0; i < WIFI_MAX_SAVED; i++) {
         if (g_bad_auth[i][0] != '\0' && strcmp(g_bad_auth[i], ssid) == 0) {
             needs = true;
         }
     }
+    unlock();
     return known && needs;
 }
 
@@ -226,7 +236,13 @@ bool wifi_scan_request(void) {
     g_scan_wanted = true;
     g_scan_active = false;
     unlock();
-    return post(&(req_t){.kind = REQ_SCAN});
+    if (!post(&(req_t){.kind = REQ_SCAN})) {
+        lock();
+        g_scan_wanted = false;
+        unlock();
+        return false;
+    }
+    return true;
 }
 bool wifi_scan_next(hal_wifi_ap_t *out, bool *done) {
     lock();
@@ -259,9 +275,11 @@ bool wifi_connect_request(const char *ssid, const char *psk, bool save) {
 void wifi_disconnect_request(void) { (void)post(&(req_t){.kind = REQ_LEAVE}); }
 bool wifi_test_start(void) { return post(&(req_t){.kind = REQ_TEST}); }
 void wifi_test_get(wifi_test_t *out) {
-    lock();
-    *out = g_test;
-    unlock();
+    out->state = atomic_load_explicit(&g_t_state, memory_order_acquire);
+    out->bytes = atomic_load(&g_t_bytes);
+    out->ms = atomic_load(&g_t_ms);
+    out->kbps = atomic_load(&g_t_kbps);
+    out->err = atomic_load(&g_t_err);
 }
 bool wifi_service_stack_up(void) { return g_stack_up; }
 
@@ -278,8 +296,8 @@ static void on_time(uint32_t unix_s) {
 }
 
 static void radio_on(void) {
-    if (hal_wifi_start() == HAL_OK) {
-        hal_wifi_sntp_stop();
+    if (hal_wifi_state() == HAL_WIFI_DOWN) {
+        (void)hal_wifi_start(); /* only when it was really off: a scan or a test must not disturb a running SNTP client */
     }
 }
 
@@ -296,19 +314,16 @@ static void start_join(const char *ssid, const char *psk, bool user, bool save) 
 static void test_data(void *ctx, const uint8_t *d, uint32_t n) {
     (void)ctx;
     (void)d;
-    lock();
-    g_test.bytes += n; /* the target is /dev/null: only count */
-    unlock();
+    atomic_fetch_add_explicit(&g_t_bytes, n, memory_order_relaxed); /* the target is /dev/null: only count */
 }
 static void test_done(void *ctx, int err, uint32_t total) {
     (void)ctx;
-    lock();
-    g_test.ms = os_tick_ms() - g_test_t0;
-    g_test.bytes = total;
-    g_test.kbps = g_test.ms != 0 ? (uint32_t)((uint64_t)total * 1000u / 1024u / g_test.ms) : 0;
-    g_test.err = err;
-    g_test.state = err == 0 ? WT_DONE : WT_FAILED;
-    unlock();
+    uint32_t ms = os_tick_ms() - g_test_t0;
+    atomic_store(&g_t_ms, ms);
+    atomic_store(&g_t_bytes, total);
+    atomic_store(&g_t_kbps, ms != 0 ? (uint32_t)((uint64_t)total * 1000u / 1024u / ms) : 0u);
+    atomic_store(&g_t_err, err);
+    atomic_store_explicit(&g_t_state, err == 0 ? WT_DONE : WT_FAILED, memory_order_release);
 }
 
 static void run_test(void) {
@@ -328,37 +343,37 @@ static void run_test(void) {
         port = (uint16_t)strtoul(rest + 1, (char **)&rest, 10);
     }
     const char *path = *rest == '/' ? rest : "/";
-    lock();
-    memset(&g_test, 0, sizeof g_test);
-    g_test.state = WT_RUNNING;
-    unlock();
+    atomic_store(&g_t_bytes, 0);
+    atomic_store(&g_t_ms, 0);
+    atomic_store(&g_t_kbps, 0);
+    atomic_store(&g_t_err, 0);
+    atomic_store(&g_t_state, WT_RUNNING);
     g_test_t0 = os_tick_ms();
     if (hal_wifi_http_get(host, port, path, test_data, test_done, NULL) != HAL_OK) {
-        lock();
-        g_test.state = WT_FAILED;
-        g_test.err = -2;
-        unlock();
+        atomic_store(&g_t_err, -2);
+        atomic_store(&g_t_state, WT_FAILED);
     }
 }
 
 static void update_info(const wifi_policy_in_t *pin, wifi_power_t pw, hal_wifi_status st) {
-    lock();
-    g_info.state = st;
-    g_info.radio_on = st != HAL_WIFI_DOWN;
-    g_info.paused_for_playback = pin->playing && !pin->during_playback;
-    g_info.rssi = st == HAL_WIFI_UP ? hal_wifi_rssi() : 0;
-    g_info.ip[0] = '\0';
-    g_info.ssid[0] = '\0';
+    /* Gather first (hal_wifi_* take the radio context lock), then lock only to copy plain data: never hold g_mu across a HAL call. */
+    wifi_info_t n;
+    memset(&n, 0, sizeof n);
+    n.state = st;
+    n.radio_on = st != HAL_WIFI_DOWN;
+    n.paused_for_playback = pw == WIFI_PW_OFF && pin->wifi_enabled && pin->playing && !pin->during_playback;
     if (st == HAL_WIFI_UP) {
-        (void)hal_wifi_ip(g_info.ip);
-        (void)hal_wifi_ssid(g_info.ssid);
+        n.rssi = hal_wifi_rssi();
+        (void)hal_wifi_ip(n.ip);
+        (void)hal_wifi_ssid(n.ssid);
     }
-    g_info.ntp_synced = clock_ntp_synced();
-    g_info.reconnects = g_backoff.reconnects;
-    g_info.failures = g_backoff.failures;
-    g_info.saved = wifi_saved_count();
+    n.ntp_synced = clock_ntp_synced();
+    n.saved = wifi_saved_count();
+    lock();
+    n.reconnects = g_backoff.reconnects;
+    n.failures = g_backoff.failures;
+    g_info = n;
     unlock();
-    (void)pw;
 }
 
 void wifi_service_init(void) {
@@ -393,14 +408,17 @@ void wifi_task(void *arg) {
         req_t r;
         while (os_queue_recv(g_q, &r, OS_NO_WAIT)) {
             g_online_until = now + ONLINE_GRACE_MS;
+            g_online_armed = true;
             g_idle_since = now;
             radio_on();
             switch (r.kind) {
             case REQ_SCAN:
-                lock();
-                g_scan_active = hal_wifi_scan_start() == HAL_OK;
-                g_scan_wanted = g_scan_active;
-                unlock();
+                {
+                    bool ok = hal_wifi_scan_start() == HAL_OK; /* HAL call outside g_mu */
+                    lock();
+                    g_scan_active = g_scan_wanted = ok;
+                    unlock();
+                }
                 break;
             case REQ_JOIN: {
                 bool needs;
@@ -410,11 +428,14 @@ void wifi_task(void *arg) {
                     snprintf(r.psk, sizeof r.psk, "%s", psk);
                 }
                 g_user_left = false;
+                lock();
+                lock();
                 for (uint32_t i = 0; i < WIFI_MAX_SAVED; i++) { /* a fresh try clears the "wrong password" mark */
                     if (strcmp(g_bad_auth[i], r.ssid) == 0) {
                         g_bad_auth[i][0] = '\0';
                     }
                 }
+                unlock();
                 hal_wifi_leave();
                 start_join(r.ssid, r.psk, true, r.save);
                 break;
@@ -429,6 +450,10 @@ void wifi_task(void *arg) {
             }
         }
 
+        if (atomic_load(&g_t_state) == WT_RUNNING && now - g_test_t0 > 60000u) {
+            hal_wifi_http_abort(); /* a stalled transfer: end it and report */
+        }
+
         /* power policy */
         player_info_t pi;
         player_get(&pi);
@@ -436,7 +461,7 @@ void wifi_task(void *arg) {
         wifi_settings_t s;
         wifi_get_settings(&s);
         hal_wifi_status st = hal_wifi_state();
-        bool want = (int32_t)(g_online_until - now) > 0 || st == HAL_WIFI_JOINING || st == HAL_WIFI_NO_IP || g_test.state == WT_RUNNING;
+        bool want = (g_online_armed && (int32_t)(g_online_until - now) > 0) || st == HAL_WIFI_JOINING || st == HAL_WIFI_NO_IP || atomic_load(&g_t_state) == WT_RUNNING;
         if (st == HAL_WIFI_UP && g_set.idle_off_min != 0 && !want) {
             /* joined and idle: the idle timer runs from the last time we needed the network */
         } else {
@@ -472,7 +497,9 @@ void wifi_task(void *arg) {
             } else if (st == HAL_WIFI_BAD_AUTH || st == HAL_WIFI_FAILED) {
                 printf("wifi: join '%s' %s\n", g_cur_ssid, st == HAL_WIFI_BAD_AUTH ? "failed: wrong password" : "failed");
                 if (st == HAL_WIFI_BAD_AUTH) {
+                    lock();
                     snprintf(g_bad_auth[g_next_auto++ % WIFI_MAX_SAVED], sizeof g_bad_auth[0], "%s", g_cur_ssid);
+                    unlock();
                 }
                 if (!g_joining_user || st != HAL_WIFI_BAD_AUTH) {
                     wifi_backoff_fail(&g_backoff, now);

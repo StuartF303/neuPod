@@ -4,6 +4,7 @@
 void wifi_backoff_init(wifi_backoff_t *b) {
     b->delay_ms = WIFI_BACKOFF_MIN_MS;
     b->retry_at = 0;
+    b->has_retry = false;
     b->failures = 0;
     b->reconnects = 0;
     b->joined_before = false;
@@ -12,6 +13,7 @@ void wifi_backoff_init(wifi_backoff_t *b) {
 void wifi_backoff_fail(wifi_backoff_t *b, uint32_t now_ms) {
     b->failures++;
     b->retry_at = now_ms + b->delay_ms;
+    b->has_retry = true;
     b->delay_ms = b->delay_ms * 2u > WIFI_BACKOFF_MAX_MS ? WIFI_BACKOFF_MAX_MS : b->delay_ms * 2u;
 }
 
@@ -20,11 +22,12 @@ void wifi_backoff_success(wifi_backoff_t *b) {
         b->reconnects++;
     }
     b->joined_before = true;
+    b->has_retry = false;
     b->delay_ms = WIFI_BACKOFF_MIN_MS;
     b->failures = 0;
 }
 
-bool wifi_backoff_due(const wifi_backoff_t *b, uint32_t now_ms) { return (int32_t)(now_ms - b->retry_at) >= 0; }
+bool wifi_backoff_due(const wifi_backoff_t *b, uint32_t now_ms) { return !b->has_retry || (int32_t)(now_ms - b->retry_at) >= 0; }
 
 wifi_power_t wifi_policy_decide(const wifi_policy_in_t *in, uint32_t now_ms) {
     if (!in->wifi_enabled) {

@@ -19,7 +19,9 @@ extern "C" {
 #define WIFI_BACKOFF_MAX_MS 120000u
 typedef struct {
     uint32_t delay_ms;   /* current wait */
-    uint32_t retry_at;   /* when the next attempt may start */
+    uint32_t retry_at;   /* when the next attempt may start (only meaningful when has_retry) */
+    bool has_retry;      /* a failure armed retry_at; without it an attempt is always due (a 0 deadline would read as 'in the
+                            future' once the millisecond counter passes 2^31, after 24.8 days) */
     uint32_t failures;   /* in a row */
     uint32_t reconnects; /* successful joins after the first */
     bool joined_before;
