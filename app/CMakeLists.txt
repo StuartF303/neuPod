@@ -51,7 +51,7 @@ set_source_files_properties(${NEUPOD_CORE_SOURCES} ${NEUPOD_GFX_SOURCES} ${NEUPO
 # --- Runtime: FreeRTOS tasks, LVGL UI, boot checks, audio timing stub ------------------------------
 # Logic with no OS dependency (ring buffer, input event decoder) in its own lib so tests link it alone.
 add_library(neupod_rt_core STATIC ${NEUPOD_RT_CORE_SOURCES})
-target_include_directories(neupod_rt_core PUBLIC ${NEUPOD_APP_DIR}/include ${NEUPOD_APP_DIR}/../hal/include)
+target_include_directories(neupod_rt_core PUBLIC ${NEUPOD_APP_DIR}/include ${NEUPOD_APP_DIR}/../hal/include PRIVATE ${NEUPOD_APP_DIR}/ui)
 target_compile_features(neupod_rt_core PUBLIC c_std_11)
 
 # LVGL v9 (submodule lib/lvgl, MIT): every .c under src/ (files for disabled features compile to

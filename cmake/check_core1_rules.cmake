@@ -8,7 +8,10 @@ set(FILES
   app/include/spsc_ring.h
   app/include/seqlock.h
   app/include/audio_engine.h
+  app/audio/audio_dsp.c
+  app/include/audio_dsp.h
   platforms/rp2350/hal/hal_audio.c
+  platforms/rp2350/hal/hal_audio_null.c
   hal/host/hal_audio.c)
 # Tokens are matched on code only (comments stripped first), at an identifier boundary on the left
 # (so "free(" does not match "spsc_ring_free(").

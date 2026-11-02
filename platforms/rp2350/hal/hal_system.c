@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include "hal_system.h"
+#include "hal_audio.h"
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
 #include "hardware/timer.h"
@@ -56,6 +57,7 @@ hal_status_t hal_system_init(void) {
     clock_configure_undivided(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
                               NEUPOD_SYS_CLOCK_KHZ * 1000u);
     stdio_init_all();
+    hal_audio_force_mute(); // the Audio Pack's amp is muted from the first moments, before core 1 exists
 #if !NEUPOD_RTOS
     return hal_system_late_init();
 #else
@@ -127,6 +129,8 @@ void hal_panic(uint8_t blink_code, const char *msg) {
     if (get_core_num() == 0) {
         multicore_reset_core1();
     }
+    // Core 1's reset does not stop the DMA and PIO it started: mute the amp and halt them (register writes only).
+    hal_audio_force_mute();
     panic_puts(msg);
     bool spin_only = kernel_context();
     (void)spin_only; // unused when the LED is a plain GPIO

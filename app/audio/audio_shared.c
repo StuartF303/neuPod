@@ -2,7 +2,7 @@
 #include "audio_shared.h"
 
 #define CMD_SLOTS 16u
-#define DATA_BYTES 4096u
+#define DATA_BYTES 32768u // 85 ms of 32-bit stereo at 48 kHz: rides out an SD hiccup
 #define EVT_SLOTS 32u
 
 static audio_cmd_t g_cmd_store[CMD_SLOTS];
@@ -16,6 +16,8 @@ spsc_ring_t g_audio_evt_isr_ring;
 spsc_ring_t g_audio_evt_loop_ring;
 seqlock_t g_audio_stats_lock;
 audio_stats_t g_audio_stats;
+volatile uint32_t g_audio_pcm_started;
+volatile uint32_t g_audio_pcm_ended;
 
 void audio_shared_init(void) {
     (void)spsc_ring_init(&g_audio_cmd_ring, g_cmd_store, sizeof(audio_cmd_t), CMD_SLOTS);

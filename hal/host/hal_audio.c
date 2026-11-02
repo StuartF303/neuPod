@@ -13,11 +13,19 @@
 #include "hal_audio.h"
 #include "hal_system.h"
 
+#ifdef NEUPOD_HOST_SDL
+#include <SDL.h>
+#include <stdlib.h>
+// Audible output on the PC (32-bit samples, as the DAC gets them). Set NEUPOD_HOST_AUDIO=0 to stay silent.
+static SDL_AudioDeviceID g_dev;
+#endif
+
 static hal_audio_block_cb g_cb;
 static uint32_t g_rate;
 static uint64_t g_t0_us;
 static volatile uint32_t g_underruns;
 static volatile bool g_open;
+static uint32_t g_actual_mhz;
 static volatile bool g_stop;
 static pthread_t g_thread;
 
@@ -67,6 +75,27 @@ hal_status_t hal_audio_open(const hal_audio_format *fmt) {
         return HAL_ENOTSUP;
     }
     g_rate = fmt->sample_rate;
+    g_actual_mhz = fmt->sample_rate * 1000u;
+#ifdef NEUPOD_HOST_SDL
+    const char *want = getenv("NEUPOD_HOST_AUDIO");
+    if ((want == NULL || want[0] != '0') && SDL_InitSubSystem(SDL_INIT_AUDIO) == 0) {
+        SDL_AudioSpec spec = {0}, got;
+        spec.freq = (int)fmt->sample_rate;
+        spec.format = AUDIO_S32SYS;
+        spec.channels = 2;
+        spec.samples = 1024;
+        g_dev = SDL_OpenAudioDevice(NULL, 0, &spec, &got, 0);
+        if (g_dev != 0 && got.format == AUDIO_S32SYS && got.channels == 2) {
+            SDL_PauseAudioDevice(g_dev, 0);
+        } else {
+            if (g_dev != 0) {
+                SDL_CloseAudioDevice(g_dev);
+                g_dev = 0;
+            }
+            // no usable device: stay on the null sink (backend name reports it)
+        }
+    }
+#endif
     g_t0_us = hal_micros();
     g_underruns = 0;
     g_stop = false;
@@ -81,10 +110,24 @@ uint32_t hal_audio_underruns(void) { return g_underruns; }
 
 void hal_audio_idle(void) { nap_us(500); }
 
-const char *hal_audio_backend_name(void) { return "null"; }
+const char *hal_audio_backend_name(void) {
+#ifdef NEUPOD_HOST_SDL
+    if (g_dev != 0) {
+        return "sdl";
+    }
+#endif
+    return "null";
+}
 
 int32_t hal_audio_write(const int32_t *samples, uint32_t frames) {
+#ifdef NEUPOD_HOST_SDL
+    // Keep the device's queue short: the timer thread and the audio device have independent clocks.
+    if (g_dev != 0 && SDL_GetQueuedAudioSize(g_dev) < 6u * HAL_AUDIO_BLOCK_FRAMES * 8u) {
+        SDL_QueueAudio(g_dev, samples, frames * 8u);
+    }
+#else
     (void)samples;
+#endif
     return (int32_t)frames;
 }
 
@@ -92,11 +135,26 @@ uint32_t hal_audio_free_frames(void) { return HAL_AUDIO_BLOCK_FRAMES; }
 
 void hal_audio_mute(bool mute) { (void)mute; }
 
+void hal_audio_force_mute(void) {}
+
+void hal_audio_get_info(hal_audio_info_t *out) {
+    out->rate_hz = g_open ? g_rate : 0;
+    out->rate_actual_mhz = g_open ? g_actual_mhz : 0;
+    out->clkdiv_x256 = 0;
+    out->muted = false;
+}
+
 void hal_audio_close(void) {
     if (!g_open) {
         return;
     }
     g_stop = true;
     pthread_join(g_thread, NULL);
+#ifdef NEUPOD_HOST_SDL
+    if (g_dev != 0) {
+        SDL_CloseAudioDevice(g_dev);
+        g_dev = 0;
+    }
+#endif
     g_open = false;
 }

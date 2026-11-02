@@ -20,7 +20,7 @@
 #define BR_WHEEL_RX "receiver error"
 #define BR_WHEEL_OFF "not connected"
 #define BR_WHEEL_NOFRAME "no frames"
-#define BR_AUDIO "no I2S driver yet"
+#define BR_AUDIO "no audio output"
 #define BR_RADIO_NONE "not implemented"
 #define BR_RADIO_CHIP "radio chip failed"
 #define BR_TIMEOUT "check timed out"

@@ -9,9 +9,25 @@
 #ifndef NEUPOD_UI_H
 #define NEUPOD_UI_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/** UI performance counters for the monitor line (see ui_internal.h for the fields). */
+typedef struct {
+    uint32_t frames;       /**< passes that rendered something since the last window reset */
+    uint32_t frame_max_us; /**< longest LVGL pass (render + blocking flush) in the window */
+    uint32_t frame_avg_us;
+    uint32_t mem_used;     /**< LVGL pool bytes in use / total / high-water since boot */
+    uint32_t mem_total;
+    uint32_t mem_max_used;
+    uint32_t mem_frag_pct;
+} ui_perf_t;
+bool ui_perf_get(ui_perf_t *out);
+void ui_perf_new_window(void);
 
 /** Task body for the UI task (display init -> splash -> boot checks -> home -> event loop). */
 void ui_task(void *arg);

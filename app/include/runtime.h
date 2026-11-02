@@ -23,6 +23,12 @@ typedef struct {
     uint32_t run_ms;
     /** Splash hold when a check failed, ms; 0 = RT_SPLASH_HOLD_MS. Tests shorten it. */
     uint32_t splash_hold_ms;
+    /**
+     * Host tour (tests): space-separated tokens, each either keys (e.g. "s", "\r") fed to the UI like a key
+     * press, or "snap:NAME" which reports screen NAME through on_screen. One token per 300 ms after the home
+     * screen is up; on_done is called when the script ends. NULL = interactive.
+     */
+    const char *ui_script;
     /** True where console keys are an input source (the UART testbed); the host uses its window. */
     bool console_keys;
     /** Called from the UI task when a named screen is fully drawn ("splash", "home"). */
@@ -37,6 +43,8 @@ void neupod_runtime_run(const neupod_runtime_config_t *cfg);
 
 /** Hooks given to neupod_runtime_run (never NULL; zeroed if none were given). */
 const neupod_runtime_config_t *rt_config(void);
+
+/* rt_haptic_click(): see haptic_service.h. */
 
 /**
  * The I2C bus has one user at a time: hold this around every battery/haptic transaction

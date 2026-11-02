@@ -53,6 +53,9 @@ uint32_t spsc_ring_write(spsc_ring_t *r, const void *src, uint32_t frames);
 /** Consumer: copy up to @p frames frames out. Returns the number read (never blocks). */
 uint32_t spsc_ring_read(spsc_ring_t *r, void *dst, uint32_t frames);
 
+/** Consumer: drop up to @p frames frames without copying. Returns the number dropped. */
+uint32_t spsc_ring_discard(spsc_ring_t *r, uint32_t frames);
+
 #ifdef __cplusplus
 }
 #endif

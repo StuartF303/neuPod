@@ -3,12 +3,31 @@
 # HAL in three layers. hal_rp2350_core holds everything that does not care about the scheduler.
 # hal_rp2350 (bare metal: the display/storage/i2c test executables) and hal_rp2350_rtos (the
 # FreeRTOS runtime) differ in hal_system.c (cyw43 arch, deferred radio bring-up) and the audio sink.
+# Audio sink: -DNEUPOD_AUDIO_SINK=i2s (default, PIO + DMA to the Pico Audio Pack) or null (discards samples
+# on a real-time clock; no pins touched).
+set(NEUPOD_AUDIO_SINK i2s CACHE STRING "Audio sink for the RP2350 build: i2s or null")
+set_property(CACHE NEUPOD_AUDIO_SINK PROPERTY STRINGS i2s null)
+if(NEUPOD_AUDIO_SINK STREQUAL "i2s")
+  set(NEUPOD_AUDIO_SINK_SRC hal/hal_audio.c)
+elseif(NEUPOD_AUDIO_SINK STREQUAL "null")
+  set(NEUPOD_AUDIO_SINK_SRC hal/hal_audio_null.c)
+else()
+  message(FATAL_ERROR "NEUPOD_AUDIO_SINK must be i2s or null (got '${NEUPOD_AUDIO_SINK}')")
+endif()
+message(STATUS "neuPod audio sink: ${NEUPOD_AUDIO_SINK}")
+
+# GP22 (Audio Pack mute / amp enable) level that means UNMUTED. TODO(hw): polarity unconfirmed.
+set(NEUPOD_AUDIO_UNMUTE_LEVEL 1 CACHE STRING "GPIO level on GP22 that unmutes the Audio Pack (0 or 1)")
+set_property(CACHE NEUPOD_AUDIO_UNMUTE_LEVEL PROPERTY STRINGS 0 1)
+add_compile_definitions(NEUPOD_AUDIO_UNMUTE_LEVEL=${NEUPOD_AUDIO_UNMUTE_LEVEL}u)
+message(STATUS "neuPod audio unmute level on GP22: ${NEUPOD_AUDIO_UNMUTE_LEVEL}")
+
 add_library(hal_rp2350_core STATIC
   hal/hal_display.c
   hal/hal_console.c
   hal/hal_input.c
   hal/hal_i2c.c
-  hal/hal_audio.c   # core-1 code: no RTOS dependency (ADR-0011), shared by both builds
+  ${NEUPOD_AUDIO_SINK_SRC}   # core-1 code: no RTOS dependency (ADR-0011), shared by both builds
   hal/hal_core.c
   ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
 )
@@ -25,9 +44,12 @@ target_link_libraries(hal_rp2350_core PUBLIC
   pico_multicore
 )
 set_source_files_properties(hal/hal_core.c hal/hal_i2c.c i2c_test_main.c ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
-  hal/hal_system.c hal/hal_display.c hal/hal_console.c hal/hal_input.c hal/hal_audio.c main.c
+  hal/hal_system.c hal/hal_display.c hal/hal_console.c hal/hal_input.c hal/hal_audio.c hal/hal_audio_null.c main.c
   display_test_main.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 pico_generate_pio_header(hal_rp2350_core ${CMAKE_CURRENT_LIST_DIR}/hal/clickwheel_rx.pio)
+if(NEUPOD_AUDIO_SINK STREQUAL "i2s")
+  pico_generate_pio_header(hal_rp2350_core ${CMAKE_CURRENT_LIST_DIR}/hal/neupod_i2s.pio)
+endif()
 
 # Bare metal: the SDK's threadsafe-background cyw43 arch (the LED lives on the CYW43439).
 add_library(hal_rp2350 STATIC hal/hal_system.c)

@@ -30,10 +30,26 @@
 #define RT_SPLASH_MIN_MS 1500u
 #define RT_SPLASH_HOLD_MS 8000u
 
+/* UI scrolling: Rockbox-style 4 wheel counts per list step, with velocity acceleration. The wheel
+ * reports counts (positions); testbed keys send +/-4 counts, i.e. one step per press. Counts seen in the
+ * last UI_ACCEL_WINDOW_MS (decaying) above a threshold multiply the step rate. */
+#define UI_COUNTS_PER_STEP 4
+#define UI_ACCEL_WINDOW_MS 150u
+#define UI_ACCEL_T1 12u /* counts in the window: 2x */
+#define UI_ACCEL_T2 24u /* 4x */
+#define UI_ACCEL_T3 40u /* 8x */
+
+/* Click feedback: ROM effect played on every list step (3 = Strong Click 30 %, deliberately gentle). */
+#define RT_HAPTIC_CLICK_EFFECT 3u
+#define RT_HAPTIC_MIN_GAP_MS 35u  /* requests closer than this are dropped */
+#define RT_HAPTIC_IDLE_MS 2000u   /* back to standby after this long without a click */
+#define RT_PRIO_HAPTIC RT_PRIO_I2C
+#define RT_STACK_HAPTIC 2048u
+
 /* Stacks, bytes. */
-#define RT_STACK_STORAGE 4096u
+#define RT_STACK_STORAGE 6144u
 #define RT_STACK_INPUT 2048u
-#define RT_STACK_UI 8192u
+#define RT_STACK_UI 12288u
 #define RT_STACK_MONITOR 3072u
 #define RT_STACK_CHECK 3072u
 #define RT_STACK_CHECK_STORAGE 5120u /* FatFs mount */

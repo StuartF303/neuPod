@@ -45,6 +45,9 @@ set(NEUPOD_FATFS_SOURCES
 set(NEUPOD_RT_CORE_SOURCES               # pure logic, no OS: host-testable on their own
   ${NEUPOD_APP_DIR}/audio/spsc_ring.c
   ${NEUPOD_APP_DIR}/input/input_events.c
+  ${NEUPOD_APP_DIR}/ui/ui_logic.c
+  ${NEUPOD_APP_DIR}/audio/audio_dsp.c
+  ${NEUPOD_APP_DIR}/audio/wav.c
 )
 # Bare-metal audio core (core 1). Subject to the core-1 rules (cmake/check_core1_rules.cmake):
 # no RTOS, stdio, malloc or SDK blocking primitives. audio_ctl.c is the core-0 side.
@@ -59,12 +62,21 @@ set(NEUPOD_RUNTIME_SOURCES
   ${NEUPOD_APP_DIR}/runtime/capabilities.c
   ${NEUPOD_APP_DIR}/runtime/battery_store.c
   ${NEUPOD_APP_DIR}/runtime/panic.c
+  ${NEUPOD_APP_DIR}/runtime/storage_service.c
+  ${NEUPOD_APP_DIR}/runtime/haptic_service.c
+  ${NEUPOD_APP_DIR}/runtime/player.c
+  ${NEUPOD_APP_DIR}/storage/nfs_path.c   # portable half of the nfs API (the backend is in the HAL libs)
   ${NEUPOD_APP_DIR}/audio/audio_ctl.c
 )
 set(NEUPOD_UI_SOURCES
   ${NEUPOD_APP_DIR}/ui/ui.c
   ${NEUPOD_APP_DIR}/ui/ui_splash.c
-  ${NEUPOD_APP_DIR}/ui/ui_home.c
+  ${NEUPOD_APP_DIR}/ui/ui_frame.c
+  ${NEUPOD_APP_DIR}/ui/ui_list.c
+  ${NEUPOD_APP_DIR}/ui/ui_screens.c
+  ${NEUPOD_APP_DIR}/ui/ui_files.c
+  ${NEUPOD_APP_DIR}/ui/ui_audio.c
+  ${NEUPOD_APP_DIR}/ui/ui_settings.c
 )
 set(NEUPOD_APP_SOURCES
   ${NEUPOD_CORE_SOURCES}

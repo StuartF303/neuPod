@@ -65,7 +65,7 @@ typedef void (*hal_audio_block_cb)(uint32_t missed);
 /** Register the block callback. Call before hal_audio_open(). */
 void hal_audio_set_block_callback(hal_audio_block_cb cb);
 
-/** Blocks the sink wanted that the callback served late, since hal_audio_open(). */
+/** Blocks the sink wanted that the callback served late (the DMA ran dry or replayed a block), since hal_audio_open(). */
 uint32_t hal_audio_underruns(void);
 
 /**
@@ -80,8 +80,26 @@ void hal_audio_idle(void);
  */
 const char *hal_audio_backend_name(void);
 
-/** Mute / unmute the output stage. */
+/**
+ * Mute / unmute the output stage. Unmuting is honoured only while a stream is running (the sink is muted
+ * from init until its first buffers are queued, and again on close). Safe from interrupt context.
+ */
 void hal_audio_mute(bool mute);
+
+/**
+ * Drive the output stage muted and stop the sink hardware, from ANY core and context, whether or not the
+ * stream is open (used at boot and by the fatal-error path after core 1 was reset). Idempotent.
+ */
+void hal_audio_force_mute(void);
+
+/** Sink facts for the statistics. All zero for the null sink. */
+typedef struct {
+    uint32_t rate_hz;          /**< requested sample rate */
+    uint32_t rate_actual_mhz;  /**< rate actually generated, in millihertz (clock divider rounding) */
+    uint32_t clkdiv_x256;      /**< sink clock divider in 1/256 units */
+    bool muted;
+} hal_audio_info_t;
+void hal_audio_get_info(hal_audio_info_t *out);
 
 /** Stop the stream and release buffers. */
 void hal_audio_close(void);

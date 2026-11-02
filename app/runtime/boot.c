@@ -6,6 +6,7 @@
 #include "boot.h"
 #include "boot_briefs.h"
 #include "capabilities.h"
+#include "audio_engine.h"
 #include "hal_audio.h"
 #include "hal_battery.h"
 #include "hal_haptic.h"
@@ -159,7 +160,9 @@ static void check_wheel(void *arg) {
     // The init packet is not implemented yet (TODO(hw)): a failure here is not fatal. What matters
     // is whether valid frames arrive.
     hal_status_t rs = hal_input_reinit();
-    for (int i = 0; i < 110; i++) {
+    // Wait until shortly before this check's own deadline (measured from boot_start, not from when this
+    // task happened to start), so "not connected" is decided here and not by the timeout.
+    while (os_tick_ms() - g_start_ms + 300u < TIMEOUT_WHEEL_MS) {
         if (rt_wheel_frames_seen() > 0) {
             caps_resolve(CAP_WHEEL, true, NULL, "frames valid (init packet: %s)", status_name(rs));
             return;
@@ -172,13 +175,24 @@ static void check_wheel(void *arg) {
 
 static void check_audio(void *arg) {
     (void)arg;
-    // Read-only: the audio core owns the sink. We only ask which backend this build has.
+    // Read-only: the audio core owns the sink. It publishes the sink's rate once the first block has been served,
+    // so a non-zero rate means the stream really runs. The DAC itself cannot be detected electrically (I2S is
+    // one-way and the Audio Pack has no readable ID), so "ok" means the I2S transmitter and its DMA run, not that a DAC answered.
     const char *backend = hal_audio_backend_name();
     if (strcmp(backend, "null") == 0) {
-        caps_resolve(CAP_AUDIO, false, BR_AUDIO, "output is the null sink (no I2S/DAC driver yet)");
-    } else {
-        caps_resolve(CAP_AUDIO, true, NULL, "%s output", backend);
+        caps_resolve(CAP_AUDIO, false, BR_AUDIO, "output is the null sink (no DAC output)");
+        return;
     }
+    for (int i = 0; i < 40; i++) {
+        audio_stats_t st;
+        if (audio_stats_get(&st) && st.sink_rate_hz != 0 && st.blocks > 2) {
+            caps_resolve(CAP_AUDIO, true, NULL, "%s stream running at %u Hz (DAC presence not detectable)", backend,
+                         (unsigned)st.sink_rate_hz);
+            return;
+        }
+        os_delay_ms(10);
+    }
+    caps_resolve(CAP_AUDIO, false, BR_AUDIO, "%s stream did not start", backend);
 }
 
 static void check_radio(void *arg) {

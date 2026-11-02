@@ -81,3 +81,13 @@ uint32_t NEUPOD_RAM_FUNC(spsc_ring_read)(spsc_ring_t *r, void *dst, uint32_t fra
     atomic_store_explicit(&r->tail, tail + frames, memory_order_release);
     return frames;
 }
+
+uint32_t NEUPOD_RAM_FUNC(spsc_ring_discard)(spsc_ring_t *r, uint32_t frames) {
+    uint32_t tail = atomic_load_explicit(&r->tail, memory_order_relaxed);
+    uint32_t avail = atomic_load_explicit(&r->head, memory_order_acquire) - tail;
+    if (frames > avail) {
+        frames = avail;
+    }
+    atomic_store_explicit(&r->tail, tail + frames, memory_order_release);
+    return frames;
+}
