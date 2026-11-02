@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- RAM budget: FreeRTOS heap 112 to 80 KB and LVGL pool 96 to 72 KB (named constants in `app/os/memory_budget.h`); static RAM 481,588 to 436,480 bytes with BTstack and the settings store included. The CYW43 worker task has 6 KB of stack. `md5.h` renamed `neupod_md5.h` (clash with BTstack's `md5.h`).
+- RAM budget: FreeRTOS heap 112 to 80 KB and LVGL pool 96 to 72 KB (named constants in `app/os/memory_budget.h`); static RAM 481,588 to 436,480 bytes with BTstack and the settings store included (476,968 with Wi-Fi, secrets and the input widgets). The CYW43 worker task has 6 KB of stack. `md5.h` renamed `neupod_md5.h` (clash with BTstack's `md5.h`).
+
+### Fixed
+- Wi-Fi review fixes: no HAL calls under the service mutex (deadlock), link loss now detected, 32-bit deadline wrap, clock without reader spin and with NTP sanity, settings saved in two alternating files (no rename/unlink) and never while audio plays, 32 settings tags, secrets wiped after use, modal lifetime fixes, CI builds with mbed TLS.
 
 ### Added
 - Wi-Fi W1 (`docs/wifi.md`): lwIP on the FreeRTOS cyw43 arch beside BTstack, scan and join (WPA2, WPA2/3, WPA3, open), DHCP, DNS, SNTP, remembered networks with

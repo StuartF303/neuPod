@@ -46,7 +46,7 @@ jobs:
       - name: Build
         run: |
           export PICO_SDK_PATH=$HOME/pico-sdk
-          scripts/build.sh rp2350 --clean
+          scripts/build.sh rp2350 --clean -- -DNEUPOD_REQUIRE_CRYPTO=ON
 
       - uses: actions/upload-artifact@v7
         with:
@@ -66,8 +66,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends cmake ninja-build build-essential libsdl2-dev
+      - name: Fetch mbed TLS (only that submodule of the Pico SDK; the secrets code and its tests need it)
+        run: |
+          git clone --depth 1 --branch "$PICO_SDK_VERSION" https://github.com/raspberrypi/pico-sdk.git ~/pico-sdk
+          git -C ~/pico-sdk submodule update --init --depth 1 lib/mbedtls
       - name: Build
-        run: scripts/build.sh host --clean
+        run: |
+          export PICO_SDK_PATH=$HOME/pico-sdk
+          scripts/build.sh host --clean -- -DNEUPOD_REQUIRE_CRYPTO=ON
       - name: Test
         run: ctest --test-dir build/host --output-on-failure
 

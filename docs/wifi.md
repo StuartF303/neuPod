@@ -8,11 +8,11 @@ keyboard in [Wheel input widgets](ui-input.md). Not on the board yet: everything
 * The CYW43 arch is now the SDK's **lwIP + FreeRTOS** variant (`pico_cyw43_arch_lwip_sys_freertos`). BTstack is unchanged and still runs on the same
   async context (the radio worker task): `cyw43_arch_init()` starts the driver, lwIP, then BTstack, in that order. IPv4 only, no sockets, **no TLS**.
 * `platforms/rp2350/lwip/lwipopts.h`: static pools only (`MEM_LIBC_MALLOC` off), `MEM_SIZE` 6000, 12 pbufs, TCP window 4 x 1460, 16 TCP segments, 4 TCP and UDP
-  control blocks. lwIP's own thread has a 4 KB stack (heap). Country code GB (channels 1 to 13).
-* **Cost** (`arm-none-eabi-size`, whole firmware): static RAM 436,480 B (end of the Bluetooth work) to 473,588 B, **+37.1 KB**, of which lwIP is about 28.9 KB
+  control blocks. lwIP callbacks (DHCP, DNS, SNTP, HTTP) run on **lwIP's own tcpip thread** (priority 3, 1024 words = 4 KB stack on the heap), not on the CYW43 worker; the SDK's FreeRTOS arch serialises the two with the async-context lock. Both, and the wifi task, appear in the monitor's per-task stack-free line, which is the number to watch. Country code GB (channels 1 to 13).
+* **Cost** (`arm-none-eabi-size`, whole firmware): static RAM 436,480 B (end of the Bluetooth work) to 476,968 B, **+40.5 KB** (after the review fixes: 32 settings tags and a second staging array, +3.4 KB), of which lwIP is about 28.9 KB
   (pbuf pool 18.4 KB, memory heap 6 KB, TCP and the rest), mbed TLS and the secrets code about 2.5 KB (arena 2 KB), larger settings tables about 2 KB, the rest the Wi-Fi service
-  and UI. Flash 1,120,532 B to 1,214,708 B, **+94 KB**: lwIP, the HTTP client, mbed TLS (AES-GCM, SHA-256, HKDF), the CYW43 Wi-Fi code, the Wi-Fi service, the UI widgets.
-  The heap is not measured on the board yet: new heap users are the lwIP thread (4 KB), the "wifi" task (3 KB), the radio worker is unchanged at 6 KB.
+  and UI. Flash 1,120,532 B to 1,214,268 B, **+94 KB**: lwIP, the HTTP client, mbed TLS (AES-GCM, SHA-256, HKDF), the CYW43 Wi-Fi code, the Wi-Fi service, the UI widgets.
+  The heap is not measured on the board yet: new heap users are the **tcpip thread (4 KB stack)**, the "wifi" task (3 KB), and sockets-less lwIP objects; the radio worker is unchanged at 6 KB (`RT_STACK_RADIO`, checked against `CYW43_TASK_STACK_SIZE` at compile time). Stack overflow checking is on (`configCHECK_FOR_STACK_OVERFLOW 2`).
   The monitor prints `heap: free= min_free=` every 10 s; compare with the Bluetooth figures.
 
 ## The Wi-Fi service (`app/runtime/wifi_service.c`)
@@ -29,6 +29,8 @@ One task, "wifi" (core 0, priority 1, 3 KB stack), owns the station side. It run
 | reconnect | after a failure or a lost link: 2, 4, 8 ... up to 120 s between attempts (`wifi_backoff_t`, host tested); a user request or a success resets it; saved networks are tried in turn |
 | power | `wifi_policy_decide()`: Wi-Fi is **off while audio plays** unless "Wi-Fi while playing" is On (default Off); the station is switched off after N idle minutes (default 10; setting); a scan, join, transfer or NTP resync counts as a need. The radio is shared with Bluetooth, and audio comes first |
 | diagnostics | UART line every 10 s: `wifi: state=up ssid=.. rssi=.. ip=.. ntp=1 saved=n reconnects=n failures=n lwip mem=used/size (max) pbuf=used/size (max) errs=n`; Extras > Network test |
+
+The radio is switched with `hal_wifi_start()` / `hal_wifi_stop()`. **`hal_wifi_stop` means "radio idle"**: the station interface is taken down (netif removed, link left) but the CYW43 chip itself stays powered, because Bluetooth runs on it; it is not a WLAN power-down and saves less current than the name suggests (measure it).
 
 Settings stored: `NPwf` (enabled, during playback, idle minutes, zone), `NPns` (NTP server), `NPtu` (test URL), `NPn0..3` (SSID records), `NPp0..3` (sealed passwords).
 
@@ -62,7 +64,9 @@ What is stored: Wi-Fi passwords and Bluetooth link keys (and any later secret). 
   **This is the only place that knows where the key comes from**: moving to OTP or a secure element means replacing that one file.
 * **Record**: version byte, 12-byte random nonce (new for every write), ciphertext, 16-byte tag; the record's settings tag is the authenticated data, so a record cannot be copied to another tag. A password of up to 63
   characters fits. Anything that does not authenticate (another neuPod, a card edited on a PC, damage) reads as **absent**: the Wi-Fi screen shows "password needed" and asks again, BTstack pairs again.
-* Existing plaintext Bluetooth link keys (from before encryption) are sealed on the first load.
+* Existing plaintext Bluetooth link keys (from before encryption) are sealed on the first load. FAT does not scrub freed clusters, so the old plaintext may remain on the card in free space; the card is not safe for that old data.
+* Plaintext copies (the sealed value's plaintext, typed passwords in the keyboard widget and its result) are wiped after use.
+* NTP answers earlier than 2025-01-01 are rejected; the clock re-anchors hourly so the 49.7-day millisecond wrap is harmless.
 
 ### What this does NOT protect (read this)
 

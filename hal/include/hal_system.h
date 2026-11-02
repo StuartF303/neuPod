@@ -64,7 +64,7 @@ void hal_status_led(bool on);
  */
 bool hal_chip_id(uint8_t id[8]);
 
-/** Fill @p buf with @p n random bytes (RP2350: the SDK's random source seeded from the ring oscillator and the ROM RNG; host: /dev/urandom). */
+/** Fill @p buf with @p n random bytes (RP2350: the SDK's get_rand_64(), which uses the chip's hardware TRNG; host: /dev/urandom). */
 void hal_random(void *buf, size_t n);
 
 /** Short platform name for logs, e.g. "rp2350", "esp32s3", "host". */

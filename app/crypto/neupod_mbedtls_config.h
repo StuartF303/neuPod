@@ -14,13 +14,9 @@ void neupod_crypto_free(void *p);
 #define MBEDTLS_AES_C
 #define MBEDTLS_GCM_C
 #define MBEDTLS_CIPHER_C
-#define MBEDTLS_CIPHER_MODE_CBC
-#define MBEDTLS_CIPHER_MODE_CTR
-#define MBEDTLS_CIPHER_PADDING_PKCS7
 #define MBEDTLS_SHA256_C
 #define MBEDTLS_MD_C
 #define MBEDTLS_HKDF_C
 #define MBEDTLS_AES_ROM_TABLES
 #define MBEDTLS_NO_PLATFORM_ENTROPY
-#define MBEDTLS_ERROR_C
 #endif
