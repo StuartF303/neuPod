@@ -26,7 +26,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI: firmware (rp2350, host, esp32s3), docs deploy, issue/PR templates,
   CODEOWNERS, Dependabot.
 
+- Display bring-up suite (`display_test`): UART menu, 8 tests (backlight, colours, sharpness,
+  geometry, image, text/Now Playing, animation fps + MB/s, sleep), verified on the Phase 1 panel.
+- `app/gfx/`: portable 2D layer, 8x8 (font8x8, public domain) and 15 px proportional (DejaVu
+  Sans-derived "neuPod 16") fonts, strip renderer with 2×10 KB double buffer.
+- HAL: `hal_display_fill_rect`, `hal_display_sleep`, MADCTL/inversion bring-up hooks;
+  `hal_console.h` single-key input.
+- Tools: `png2rgb565.py`, `gen_font.py`, `gen_test_image.py`; host `now_playing` viewer;
+  gfx unit tests.
+
 ### Changed
+- RP2350 `clk_sys` is now 125 MHz with `clk_peri` on `clk_sys`, so SPI1 runs at exactly 62.5 MHz.
+- Display: MADCTL 0x60, RGB, INVON, offsets 0/0, backlight active-high — confirmed on hardware.
 - Default branch renamed `master` → `main`.
 - `app/` is now portable; the LED blink + `neuPod alive` loop runs via the HAL on every platform.
 - Build output moved to `build/<platform>/`.

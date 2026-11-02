@@ -19,7 +19,7 @@ Phase 1 testbed (Pico 2 W on a breadboard):
 |------|:------:|
 | RP2350 build | ✅ |
 | UART console | ✅ |
-| Display (ST7789 driver + `display_test`) | 🟡 |
+| Display (ST7789 SPI1 + DMA, 62.5 MHz; `display_test` suite) | ✅ |
 | microSD | ⬜ |
 | Audio | ⬜ |
 | I²C (fuel gauge, haptics) | ⬜ |
@@ -86,7 +86,7 @@ Build, flash via a Raspberry Pi Debug Probe, and open the UART0 console (115200 
     ninja -C build/rp2350          # or: scripts/build.sh rp2350
     scripts/flash.sh
     scripts/console.sh
-    scripts/flash.sh rp2350 display_test   # ST7789 colour bars
+    scripts/flash.sh rp2350 display_test   # ST7789 interactive test menu (then scripts/console.sh)
 
 Host build and tests (SDL2 optional — `sudo apt install libsdl2-dev` for the window):
 

@@ -38,31 +38,36 @@
 #define TFT_WIDTH 320u
 #define TFT_HEIGHT 240u
 
-// SPI clock. Deliberately conservative: 20 MHz is a full frame in ~62 ms and sits well inside
-// what ST7789 parts accept, leaving margin for jumper-wire wiring on the testbed.
-// TODO(hw): raise (30-60 MHz) once signal quality on the final wiring has been checked.
-#define TFT_SPI_BAUD_HZ (20u * 1000u * 1000u)
+// SPI clock: 62.5 MHz = clk_peri / 2, the maximum the PL022 can do. This is only exact because
+// hal_system_init() runs clk_sys (and clk_peri, which follows it) at 125 MHz; at 150 MHz only
+// 75 / 37.5 MHz are reachable. A full frame (153,600 B) is ~19.7 ms (~50.8 fps) of raw SPI
+// time at this rate; measured 46 fps strip-rendered on the panel (2026-11-02). The actual rate
+// is printed (and a mismatch warned about) at init.
+#define TFT_SPI_BAUD_HZ 62500000u
 
-// TODO(hw): UNCONFIRMED. MADCTL (0x36) value for this panel's landscape orientation.
-// 0x60 = MX|MV is a placeholder; if the image is mirrored/flipped try 0xA0 (MY|MV) etc. Bit 3
-// (0x08) selects BGR colour order: if red and blue are swapped, toggle it.
+// MADCTL (0x36) for landscape 320x240: 0x60 = MX|MV, RGB order (bit 3 clear). Confirmed on the
+// panel 2026-11-02 (corner pattern and R/G/B/W/K fills correct). Still adjustable at run time
+// with hal_display_set_madctl() (display_test keys b / r).
 #define TFT_MADCTL_LANDSCAPE 0x60
 
-// TODO(hw): UNCONFIRMED. Controller RAM offsets for this panel (some ST7789 modules have
-// non-zero column/row offsets). 0 assumed for a native 320x240 module; verify on the panel.
+// Controller RAM offsets (some ST7789 modules need non-zero values). 0 confirmed on the panel
+// 2026-11-02: the display_test test 3 1-px border shows on all four edges, none wrapped.
 #define TFT_COL_OFFSET 0
 #define TFT_ROW_OFFSET 0
 
-// TODO(hw): UNCONFIRMED. Backlight polarity: assumed active-high (PWM duty = brightness).
+// Backlight polarity (confirmed): active-high, PWM duty = brightness.
 #define TFT_BACKLIGHT_ACTIVE_HIGH 1
 // Tunable: backlight PWM frequency (high enough to be flicker-free; adjust to the driver).
 #define TFT_BACKLIGHT_PWM_HZ 20000u
 
 // --- Datasheet-standard ST7789 commands -----------------------------------------------------
 #define ST7789_SWRESET 0x01
+#define ST7789_SLPIN 0x10
 #define ST7789_SLPOUT 0x11
 #define ST7789_NORON 0x13
+#define ST7789_INVOFF 0x20
 #define ST7789_INVON 0x21
+#define ST7789_DISPOFF 0x28
 #define ST7789_DISPON 0x29
 #define ST7789_CASET 0x2A
 #define ST7789_RASET 0x2B
@@ -75,8 +80,11 @@ static int g_dma_ch = -1;
 static bool g_dma_active;   // a blit was started and not yet waited for
 static bool g_ramwr_active; // RAMWR sent for the current window, CS held low
 static uint g_spi_bits;     // current SPI frame size (8 or 16)
-
-static const hal_pixel_t g_zero_row[TFT_WIDTH]; // zero-filled; used to clear the screen
+static uint8_t g_madctl = TFT_MADCTL_LANDSCAPE;
+static bool g_inversion = true; // panel needs INVON (confirmed)
+static bool g_sleeping;
+static uint64_t g_slpin_us; // time of the last SLPIN, to honour the 120 ms SLPIN -> SLPOUT gap
+static hal_pixel_t g_fill_px; // DMA source for fill_rect; must outlive the transfer
 
 void hal_display_wait(void);
 
@@ -95,8 +103,10 @@ static void spi_frame_bits(uint bits) {
 }
 
 static void write_cmd(uint8_t cmd, const uint8_t *data, size_t len) {
-    // Any command ends an open RAMWR pixel stream: finish in-flight DMA, then CS is cycled below.
+    // Any command ends an open RAMWR pixel stream: finish in-flight DMA, raise CS to close the
+    // stream, then frame the command with a fresh CS low.
     hal_display_wait();
+    cs_deselect();
     g_ramwr_active = false;
     spi_frame_bits(8);
     cs_select();
@@ -134,7 +144,9 @@ static void backlight_pwm_init(void) {
 }
 
 void hal_display_backlight(uint8_t level) {
-    uint16_t duty = TFT_BACKLIGHT_ACTIVE_HIGH ? level : (uint16_t)(255u - level);
+    // Wrap is 255, so a compare level of 256 is needed for a true 100 % duty at level 255.
+    uint16_t on = level == 255u ? 256u : level;
+    uint16_t duty = TFT_BACKLIGHT_ACTIVE_HIGH ? on : (uint16_t)(256u - on);
     pwm_set_gpio_level(TFT_PIN_BACKLIGHT, duty);
 }
 
@@ -155,7 +167,14 @@ hal_status_t hal_display_init(void) {
     backlight_pwm_init();
 
     uint actual = spi_init(TFT_SPI, TFT_SPI_BAUD_HZ);
-    printf("display: SPI1 requested %u Hz, actual %u Hz\n", (unsigned)TFT_SPI_BAUD_HZ, actual);
+    printf("display: clk_sys %u Hz, clk_peri %u Hz, SPI1 requested %u Hz, spi_init %u Hz, "
+           "spi_get_baudrate %u Hz\n",
+           (unsigned)clock_get_hz(clk_sys), (unsigned)clock_get_hz(clk_peri),
+           (unsigned)TFT_SPI_BAUD_HZ, actual, spi_get_baudrate(TFT_SPI));
+    if (actual != TFT_SPI_BAUD_HZ) {
+        printf("display: WARNING: SPI baud %u Hz != requested %u Hz (clk_peri not 125 MHz?)\n",
+               actual, (unsigned)TFT_SPI_BAUD_HZ);
+    }
     gpio_set_function(TFT_PIN_SCK, GPIO_FUNC_SPI);
     gpio_set_function(TFT_PIN_MOSI, GPIO_FUNC_SPI);
     // MISO is never read (no readback), but keeping it on SPI1 is harmless and matches the plan.
@@ -178,6 +197,9 @@ hal_status_t hal_display_init(void) {
     dma_channel_set_write_addr((uint)g_dma_ch, &spi_get_hw(TFT_SPI)->dr, false);
     g_dma_active = false;
     g_ramwr_active = false;
+    g_madctl = TFT_MADCTL_LANDSCAPE;
+    g_inversion = true;
+    g_sleeping = false;
 
     // Hardware reset. Timings are the generic ST7789 figures (reset pulse >= 10 us,
     // ~120 ms before the next command); generous here.
@@ -193,18 +215,13 @@ hal_status_t hal_display_init(void) {
     write_cmd(ST7789_SLPOUT, NULL, 0);
     sleep_ms(120);
     write_cmd1(ST7789_COLMOD, ST7789_COLMOD_RGB565);
-    write_cmd1(ST7789_MADCTL, TFT_MADCTL_LANDSCAPE);
-    // TODO(hw): UNCONFIRMED. Inversion on is typical for IPS ST7789 panels; verify colours.
-    write_cmd(ST7789_INVON, NULL, 0);
+    write_cmd1(ST7789_MADCTL, g_madctl);
+    write_cmd(ST7789_INVON, NULL, 0); // this panel needs inversion on (confirmed)
     write_cmd(ST7789_NORON, NULL, 0);
     sleep_ms(10);
 
     // Clear controller RAM before turning the panel on so there is no flash of noise.
-    hal_status_t st = hal_display_set_window(0, 0, TFT_WIDTH, TFT_HEIGHT);
-    for (uint16_t y = 0; y < TFT_HEIGHT && st == HAL_OK; y++) {
-        st = hal_display_blit(g_zero_row, TFT_WIDTH);
-    }
-    hal_display_wait();
+    hal_status_t st = hal_display_fill_rect(0, 0, TFT_WIDTH, TFT_HEIGHT, 0);
     if (st != HAL_OK) {
         return st;
     }
@@ -234,15 +251,9 @@ hal_status_t hal_display_set_window(uint16_t x, uint16_t y, uint16_t w, uint16_t
     return HAL_OK;
 }
 
-hal_status_t hal_display_blit(const hal_pixel_t *pixels, size_t count) {
-    if (pixels == NULL) {
-        return HAL_EINVAL;
-    }
-    if (count == 0) {
-        return HAL_OK;
-    }
-    hal_display_wait(); // previous blit (if any) must finish before the bus is reused
-
+// Open the RAMWR pixel stream if needed and switch the bus to 16-bit pixel frames.
+static void begin_pixel_stream(void) {
+    hal_display_wait(); // previous transfer (if any) must finish before the bus is reused
     if (!g_ramwr_active) {
         // RAMWR opens the pixel stream; CS stays low (no deselect) until the next command.
         spi_frame_bits(8);
@@ -255,10 +266,78 @@ hal_status_t hal_display_blit(const hal_pixel_t *pixels, size_t count) {
     cs_select(); // idempotent; guarantees CS is low for the pixel stream
     spi_frame_bits(16);
     gpio_put(TFT_PIN_DC, 1);
+}
 
+// Start a DMA of @p count halfwords from @p src. The channel must be idle.
+static void start_dma(const hal_pixel_t *src, size_t count, bool increment) {
+    dma_channel_config dc = dma_get_channel_config((uint)g_dma_ch);
+    channel_config_set_read_increment(&dc, increment);
+    dma_channel_set_config((uint)g_dma_ch, &dc, false);
     g_dma_active = true;
-    dma_channel_transfer_from_buffer_now((uint)g_dma_ch, pixels, (uint32_t)count);
+    dma_channel_transfer_from_buffer_now((uint)g_dma_ch, src, (uint32_t)count);
+}
+
+hal_status_t hal_display_blit(const hal_pixel_t *pixels, size_t count) {
+    if (pixels == NULL) {
+        return HAL_EINVAL;
+    }
+    if (count == 0) {
+        return HAL_OK;
+    }
+    begin_pixel_stream();
+    start_dma(pixels, count, true);
     return HAL_OK;
+}
+
+hal_status_t hal_display_fill_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
+                                   hal_pixel_t colour) {
+    hal_status_t st = hal_display_set_window(x, y, w, h); // validates, waits for idle DMA
+    if (st != HAL_OK) {
+        return st;
+    }
+    g_fill_px = colour;
+    begin_pixel_stream();
+    // Non-incrementing read from one pixel: the DMA replicates it w*h times, no buffer needed.
+    start_dma(&g_fill_px, (size_t)w * h, false);
+    hal_display_wait(); // g_fill_px is reused by the next call, so finish here
+    return HAL_OK;
+}
+
+void hal_display_set_madctl(uint8_t madctl) {
+    g_madctl = madctl;
+    write_cmd1(ST7789_MADCTL, madctl);
+}
+
+uint8_t hal_display_get_madctl(void) { return g_madctl; }
+
+void hal_display_set_inversion(bool on) {
+    g_inversion = on;
+    write_cmd(on ? ST7789_INVON : ST7789_INVOFF, NULL, 0);
+}
+
+bool hal_display_get_inversion(void) { return g_inversion; }
+
+void hal_display_sleep(bool sleep) {
+    if (sleep == g_sleeping) {
+        return;
+    }
+    if (sleep) {
+        // DISPOFF first so the panel blanks cleanly instead of showing the power-down transient.
+        write_cmd(ST7789_DISPOFF, NULL, 0);
+        write_cmd(ST7789_SLPIN, NULL, 0);
+        g_slpin_us = time_us_64();
+        sleep_ms(5); // datasheet: >= 5 ms before the next command after SLPIN
+    } else {
+        // Datasheet: >= 120 ms between SLPIN and the following SLPOUT.
+        uint64_t since = time_us_64() - g_slpin_us;
+        if (since < 120000u) {
+            sleep_us(120000u - since);
+        }
+        write_cmd(ST7789_SLPOUT, NULL, 0);
+        sleep_ms(120); // datasheet: 120 ms after SLPOUT before SLPIN / full operation
+        write_cmd(ST7789_DISPON, NULL, 0);
+    }
+    g_sleeping = sleep;
 }
 
 void hal_display_present(void) {

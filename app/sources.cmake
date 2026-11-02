@@ -6,8 +6,16 @@ set(NEUPOD_APP_DIR ${CMAKE_CURRENT_LIST_DIR})
 set(NEUPOD_CORE_SOURCES
   ${NEUPOD_APP_DIR}/app.c
 )
+set(NEUPOD_GFX_SOURCES
+  ${NEUPOD_APP_DIR}/gfx/gfx.c
+  ${NEUPOD_APP_DIR}/gfx/gfx_strip.c       # needs hal_display (gfx_sink_display)
+  ${NEUPOD_APP_DIR}/gfx/now_playing.c
+  ${NEUPOD_APP_DIR}/gfx/fonts/font8x8.c
+  ${NEUPOD_APP_DIR}/gfx/fonts/font16.c
+)
 set(NEUPOD_DEMO_SOURCES
-  ${NEUPOD_APP_DIR}/demos/display_test.c  # needs hal_display
+  ${NEUPOD_APP_DIR}/tests/display_tests.c  # needs hal_display + hal_console
+  ${NEUPOD_APP_DIR}/tests/assets/test_image.c
 )
 set(NEUPOD_CLICKWHEEL_SOURCES
   ${NEUPOD_APP_DIR}/input/clickwheel_frame.c
@@ -20,6 +28,7 @@ set(NEUPOD_FATFS_SOURCES
 )
 set(NEUPOD_APP_SOURCES
   ${NEUPOD_CORE_SOURCES}
+  ${NEUPOD_GFX_SOURCES}
   ${NEUPOD_DEMO_SOURCES}
   ${NEUPOD_CLICKWHEEL_SOURCES}
   ${NEUPOD_FATFS_SOURCES}

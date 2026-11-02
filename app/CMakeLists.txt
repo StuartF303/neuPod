@@ -17,11 +17,12 @@ target_include_directories(neupod_fatfs PUBLIC ${NEUPOD_APP_DIR}/third_party/fat
 target_compile_features(neupod_fatfs PUBLIC c_std_11)
 
 # Portable application code. Must not depend on any platform SDK.
-add_library(neupod_app STATIC ${NEUPOD_CORE_SOURCES} ${NEUPOD_DEMO_SOURCES})
+add_library(neupod_app STATIC ${NEUPOD_CORE_SOURCES} ${NEUPOD_GFX_SOURCES}
+  ${NEUPOD_DEMO_SOURCES})
 target_include_directories(neupod_app PUBLIC ${NEUPOD_APP_INCLUDE_DIRS})
 target_compile_features(neupod_app PUBLIC c_std_11)
 target_link_libraries(neupod_app PUBLIC neupod_clickwheel neupod_fatfs)
 
-set_source_files_properties(${NEUPOD_CORE_SOURCES} ${NEUPOD_DEMO_SOURCES}
+set_source_files_properties(${NEUPOD_CORE_SOURCES} ${NEUPOD_GFX_SOURCES} ${NEUPOD_DEMO_SOURCES}
   ${NEUPOD_CLICKWHEEL_SOURCES} ${NEUPOD_APP_DIR}/storage/diskio.c
   PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")

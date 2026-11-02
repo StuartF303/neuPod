@@ -9,5 +9,9 @@ target_link_libraries(test_fatfs neupod_fatfs hal_host)
 add_test(NAME fatfs COMMAND test_fatfs)
 set_tests_properties(fatfs PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
-set_source_files_properties(test_clickwheel.c test_fatfs.c
+add_executable(test_gfx test_gfx.c)
+target_link_libraries(test_gfx neupod_app hal_host) # hal_host last: gfx_strip references hal_display
+add_test(NAME gfx COMMAND test_gfx)
+
+set_source_files_properties(test_clickwheel.c test_fatfs.c test_gfx.c
   PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")

@@ -2,6 +2,7 @@
 add_library(hal_host STATIC
   hal_system.c
   hal_display.c
+  hal_console.c
   hal_input.c
   hal_storage.c
   host_window.c
@@ -28,5 +29,8 @@ endif()
 add_executable(display_test display_test_main.c)
 target_link_libraries(display_test neupod_app hal_host)
 
-set_source_files_properties(hal_system.c hal_display.c hal_input.c hal_storage.c host_window.c
-  main.c display_test_main.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+add_executable(now_playing now_playing_main.c)
+target_link_libraries(now_playing neupod_app hal_host)
+
+set_source_files_properties(hal_system.c hal_display.c hal_console.c hal_input.c hal_storage.c host_window.c
+  main.c display_test_main.c now_playing_main.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")

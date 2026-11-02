@@ -2,10 +2,22 @@
 #include <stdio.h>
 
 #include "hal_system.h"
+#include "hardware/clocks.h"
 #include "pico/cyw43_arch.h"
 #include "pico/stdlib.h"
 
+// clk_sys target. 125 MHz (not the SDK's 150 MHz default) so the display SPI, which can only run
+// at clk_peri / 2 (or slower even divisions), hits exactly 62.5 MHz; 150 MHz only gives 75/37.5.
+#define NEUPOD_SYS_CLOCK_KHZ 125000u
+
 hal_status_t hal_system_init(void) {
+    // Must come BEFORE stdio_init_all(): the UART divisor is computed from clk_peri at init.
+    set_sys_clock_khz(NEUPOD_SYS_CLOCK_KHZ, true);
+    // set_sys_clock_khz() re-sources clk_peri from the 48 MHz USB PLL (unless
+    // PICO_CLOCK_ADJUST_PERI_CLOCK_WITH_SYS_CLOCK is set); put it back on clk_sys so UART and
+    // SPI run from 125 MHz.
+    clock_configure_undivided(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
+                              NEUPOD_SYS_CLOCK_KHZ * 1000u);
     stdio_init_all();
     if (cyw43_arch_init()) {
         printf("neuPod: cyw43_arch_init failed\n");

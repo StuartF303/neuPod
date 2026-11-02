@@ -253,9 +253,9 @@ primary source for every reused-part interface on this page.
 
 **ST7789 (Adafruit 2.0" IPS, Phase 1)**
 
-- [ ] Landscape MADCTL value, RGB vs BGR order, column/row offsets, whether INVON is needed and
-  backlight polarity: **not recorded in the design doc.** Determine on the bench with the
-  `display_test` colour bars and record the values here and in `hal_display.c`.
+- [x] Confirmed on the bench 2026-11-02: MADCTL `0x60` (landscape), RGB order, offsets 0/0,
+  INVON needed, backlight active high; SPI1 at 62.5 MHz (clk_sys 125 MHz) is clean. See
+  [display tests](display-tests.md).
 
 **ESP32-S3 comparison module**
 

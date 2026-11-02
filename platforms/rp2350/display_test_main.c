@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
-// display_test: colour bars + gradient on the ST7789, then blink the status LED.
+// display_test: interactive ST7789 test menu on the UART console (see docs/display-tests.md).
 #include <stdio.h>
 
-#include "display_test.h"
+#include "display_tests.h"
 #include "hal_display.h"
 #include "hal_system.h"
 
@@ -18,14 +18,8 @@ int main(void) {
         printf("display_test: hal_display_init failed (%d)\n", (int)st);
         return -1;
     }
-    st = display_test_draw();
-    printf("display_test: draw %s (%d)\n", st == HAL_OK ? "ok" : "failed", (int)st);
     hal_display_backlight(255);
-
-    bool led = false;
-    for (;;) {
-        led = !led;
-        hal_status_led(led);
-        hal_delay_ms(500);
-    }
+    hal_status_led(true);
+    display_tests_run_menu(); // never returns
+    return 0;
 }
