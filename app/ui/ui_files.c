@@ -170,7 +170,8 @@ static bool files_button(ui_screen_t *s, uint8_t btn) {
             load(f);
         } else if (i >= 0 && (uint32_t)i < f->count && !storage_list_entries()[i].is_dir) {
             const char *name = storage_list_entries()[i].name;
-            if (has_ext(name, ".wav")) {
+            if (has_ext(name, ".wav") || has_ext(name, ".flac") || has_ext(name, ".mp3") || has_ext(name, ".m4a") ||
+                has_ext(name, ".mp4")) {
                 char full[NFS_PATH_MAX];
                 size_t pl = strlen(f->path);
                 if (pl + 1 + strlen(name) + 1 > sizeof full) {
@@ -184,13 +185,32 @@ static bool files_button(ui_screen_t *s, uint8_t btn) {
                 strcat(full, name);
                 player_play_file(full, name);
                 ui_frame_push(ui_screen_nowplaying_create());
-            } else if (has_ext(name, ".flac")) {
-                show_toast(f, "FLAC decoder not yet implemented");
             } else {
-                show_toast(f, "Not a playable file (WAV only for now)");
+                show_toast(f, "Not a playable file (WAV, FLAC, MP3, M4A)");
             }
         }
         return true;
+    }
+    if (btn == HAL_BTN_RIGHT && f->state == READY) { // Right on a .flac: check its MD5 without playing it
+        int32_t i = ui_list_selected(f->list);
+        if (i >= 0 && (uint32_t)i < f->count && !storage_list_entries()[i].is_dir &&
+            has_ext(storage_list_entries()[i].name, ".flac")) {
+            const char *name = storage_list_entries()[i].name;
+            char full[NFS_PATH_MAX];
+            size_t pl = strlen(f->path);
+            if (pl + 1 + strlen(name) + 1 > sizeof full) {
+                show_toast(f, "Path too long");
+                return true;
+            }
+            strcpy(full, f->path);
+            if (pl > 1) {
+                strcat(full, "/");
+            }
+            strcat(full, name);
+            player_verify_file(full, name);
+            ui_frame_push(ui_screen_nowplaying_create());
+            return true;
+        }
     }
     if (btn == HAL_BTN_MENU && f->depth > 0) {
         char *slash = strrchr(f->path, '/');

@@ -115,3 +115,42 @@ add_executable(test_audio test_audio.c)
 target_link_libraries(test_audio neupod_rt_core m)
 add_test(NAME audio COMMAND test_audio)
 set_source_files_properties(test_audio.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+# Codecs (FLAC / MP3 / ALAC), MP4 demuxer, tag parsers, arena, MD5 and the stream handshake, against vectors in tests/assets/audio.
+set(NEUPOD_CODEC_TEST_VENDOR
+  ${CMAKE_SOURCE_DIR}/app/audio/codec_dr.c
+  ${CMAKE_SOURCE_DIR}/app/third_party/alac/alac_dec.c
+  ${CMAKE_SOURCE_DIR}/app/third_party/alac/ag_dec.c
+  ${CMAKE_SOURCE_DIR}/app/third_party/alac/dp_dec.c
+  ${CMAKE_SOURCE_DIR}/app/third_party/alac/matrix_dec.c
+  ${CMAKE_SOURCE_DIR}/app/third_party/alac/ALACBitUtilities.c
+  ${CMAKE_SOURCE_DIR}/app/third_party/alac/EndianPortable.c)
+add_executable(test_codecs test_codecs.c ${CMAKE_SOURCE_DIR}/app/audio/codec.c ${NEUPOD_CODEC_TEST_VENDOR})
+target_include_directories(test_codecs PRIVATE ${CMAKE_SOURCE_DIR}/app/include ${CMAKE_SOURCE_DIR}/app/third_party/alac)
+target_compile_definitions(test_codecs PRIVATE NEUPOD_TEST_ASSETS="${CMAKE_SOURCE_DIR}/tests/assets/audio")
+target_link_libraries(test_codecs neupod_rt_core Threads::Threads m)
+set_source_files_properties(${NEUPOD_CODEC_TEST_VENDOR} PROPERTIES COMPILE_OPTIONS "-w")
+set_source_files_properties(test_codecs.c ${CMAKE_SOURCE_DIR}/app/audio/codec.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS};-Wno-multichar")
+add_test(NAME codecs COMMAND test_codecs)
+
+# The core-1 closure checker must be able to FAIL: a known-good and a known-bad disassembly fixture.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME core1_closure_selftest_good COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_core1_closure.py --text ${CMAKE_SOURCE_DIR}/tests/assets/closure/good.txt)
+add_test(NAME core1_closure_selftest_bad COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_core1_closure.py --text ${CMAKE_SOURCE_DIR}/tests/assets/closure/bad.txt)
+set_tests_properties(core1_closure_selftest_bad PROPERTIES WILL_FAIL TRUE)
+
+# Optional AddressSanitizer + UBSan build of the codec / parser / handshake tests: cmake -DNEUPOD_HOST_ASAN=ON
+# (runs the same hostile-input tests, which truncate and bit-flip every vector, under the sanitizers).
+option(NEUPOD_HOST_ASAN "Also build test_codecs_asan with -fsanitize=address,undefined" OFF)
+if(NEUPOD_HOST_ASAN)
+  add_executable(test_codecs_asan test_codecs.c ${CMAKE_SOURCE_DIR}/app/audio/codec.c ${NEUPOD_CODEC_TEST_VENDOR}
+    ${CMAKE_SOURCE_DIR}/app/audio/arena.c ${CMAKE_SOURCE_DIR}/app/audio/md5.c ${CMAKE_SOURCE_DIR}/app/audio/meta.c
+    ${CMAKE_SOURCE_DIR}/app/audio/mp4.c ${CMAKE_SOURCE_DIR}/app/audio/wav.c ${CMAKE_SOURCE_DIR}/app/audio/stream_io.c
+    ${CMAKE_SOURCE_DIR}/app/audio/spsc_ring.c ${CMAKE_SOURCE_DIR}/app/audio/audio_dsp.c)
+  target_include_directories(test_codecs_asan PRIVATE ${CMAKE_SOURCE_DIR}/app/include ${CMAKE_SOURCE_DIR}/app/third_party/alac)
+  target_compile_definitions(test_codecs_asan PRIVATE NEUPOD_TEST_ASSETS="${CMAKE_SOURCE_DIR}/tests/assets/audio")
+  target_compile_options(test_codecs_asan PRIVATE -fsanitize=address,undefined -fno-sanitize=signed-integer-overflow,shift -fno-omit-frame-pointer -g -Wno-multichar) # wrapping arithmetic in the vendored decoders on corrupt data is benign on ARM and would drown real findings
+  target_link_options(test_codecs_asan PRIVATE -fsanitize=address,undefined)
+  target_link_libraries(test_codecs_asan Threads::Threads m)
+  add_test(NAME codecs_asan COMMAND test_codecs_asan)
+endif()

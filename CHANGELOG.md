@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Codecs on the audio core: FLAC and MP3 (vendored `dr_flac` / `dr_mp3`, public domain / MIT-0) and ALAC (Apple's decoder core, Apache-2.0, with a C wrapper), all
+  from one 116 KB static arena (no malloc on core 1); our own MP4/M4A demuxer (also for a later AAC) and tag readers (FLAC Vorbis comments, ID3v2, MP4 `ilst`) on core 0;
+  Files plays `.wav`, `.flac`, `.mp3`, `.m4a`; Now Playing shows tags, a format badge and the length; FLAC MD5 verify mode (Right on a `.flac`); decoder CPU statistics;
+  seek handshake between the cores; `tools/check_core1_closure.py` checks the linked image's call graph after every RP2350 build; core 1 gets its own 16 KB stack.
+  Test vectors and bit-exact host tests (FLAC, ALAC), MP3 level/length checks, demuxer, tags, MD5, arena and handshake tests. See `docs/audio.md`, `LICENSE.md`.
 - I2S audio output for the Pimoroni Pico Audio Pack (PIO0 + two ping-pong DMA channels, DMA_IRQ_1 on core 1,
   32-bit slots, 44.1/48/88.2/96 kHz, GP22 mute handling incl. the fatal-error path), a null-sink build option, an
   SDL sink on the host, software volume (default -30 dB), a -20 dBFS 1 kHz test tone, an L/R channel ident, a C-major

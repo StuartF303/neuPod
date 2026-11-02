@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 // Core-0 side of the audio engine (runs in RTOS tasks; may use anything core 0 may use).
+#include <stdatomic.h>
 #include <string.h>
 
 #include "audio_shared.h"
@@ -39,9 +40,49 @@ bool audio_stats_new_window(void) { return send(AUDIO_CMD_NEW_WINDOW, 0, 0); }
 
 bool audio_set_volume(uint32_t att_db) { return send(AUDIO_CMD_VOLUME, att_db, 0); }
 bool audio_tone(uint32_t mode) { return send(AUDIO_CMD_TONE, mode, 0); }
+// Stream starts are serialised: the descriptor is one shared slot, so a new start is refused until core 1 has
+// processed the previous one (it counts every start, including failed ones, in g_audio_pcm_started).
+static uint32_t g_starts_issued;
+static bool start_allowed(void) { return g_starts_issued == g_audio_pcm_started; }
+
 bool audio_pcm_start(uint32_t rate, uint8_t channels, uint8_t bits) {
-    return send(AUDIO_CMD_PCM_START, rate, (uint32_t)channels | ((uint32_t)bits << 8));
+    if (!start_allowed() || !send(AUDIO_CMD_PCM_START, rate, (uint32_t)channels | ((uint32_t)bits << 8))) {
+        return false;
+    }
+    g_starts_issued++;
+    return true;
 }
+bool audio_stream_start(const audio_stream_desc_t *d) {
+    if (!start_allowed()) {
+        return false;
+    }
+    g_audio_stream_desc = *d;
+    if (!send(AUDIO_CMD_STREAM_START, 0, 0)) {
+        return false;
+    }
+    g_starts_issued++;
+    return true;
+}
+static uint32_t g_seek_seen;
+bool audio_seek_poll(uint64_t *offset) {
+    if (g_audio_seek_req == g_seek_seen) {
+        return false;
+    }
+    g_seek_seen = g_audio_seek_req;
+    atomic_thread_fence(memory_order_acquire); // read the offset only after seeing the request counter move
+    *offset = g_audio_seek_off;
+    return true;
+}
+void audio_seek_ack(void) {
+    atomic_thread_fence(memory_order_release); // everything core 0 did to stop writing is visible before the ack
+    g_audio_seek_ack = g_seek_seen;
+}
+bool audio_seek_done(void) {
+    bool d = g_audio_seek_done == g_seek_seen;
+    atomic_thread_fence(memory_order_acquire);
+    return d;
+}
+uint32_t audio_codec_error(void) { return g_audio_codec_error; }
 uint32_t audio_pcm_started_count(void) { return g_audio_pcm_started; }
 uint32_t audio_pcm_ended_count(void) { return g_audio_pcm_ended; }
 bool audio_pcm_end(void) { return send(AUDIO_CMD_PCM_END, 0, 0); }

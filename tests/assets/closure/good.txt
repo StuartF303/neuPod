@@ -1,0 +1,19 @@
+10000000 <audio_core_main>:
+10000000:	push	{r4, lr}
+10000002:	bl	10000020 <helper>
+10000006:	ldr	r0, [pc, #8]	@ (10000010 <audio_core_main+0x10>)
+10000008:	pop	{r4, pc}
+1000000a:	nop
+10000010:	.word	0x10000041
+
+10000020 <helper>:
+10000020:	bx	lr
+
+10000040 <via_pointer>:
+10000040:	bx	lr
+
+10000100 <unrelated_uses_malloc>:
+10000100:	bl	10000200 <malloc>
+
+10000200 <malloc>:
+10000200:	bx	lr

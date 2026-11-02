@@ -48,12 +48,29 @@ set(NEUPOD_RT_CORE_SOURCES               # pure logic, no OS: host-testable on t
   ${NEUPOD_APP_DIR}/ui/ui_logic.c
   ${NEUPOD_APP_DIR}/audio/audio_dsp.c
   ${NEUPOD_APP_DIR}/audio/wav.c
+  ${NEUPOD_APP_DIR}/audio/meta.c
+  ${NEUPOD_APP_DIR}/audio/mp4.c
+  ${NEUPOD_APP_DIR}/audio/arena.c
+  ${NEUPOD_APP_DIR}/audio/md5.c
+  ${NEUPOD_APP_DIR}/audio/stream_io.c
 )
 # Bare-metal audio core (core 1). Subject to the core-1 rules (cmake/check_core1_rules.cmake):
 # no RTOS, stdio, malloc or SDK blocking primitives. audio_ctl.c is the core-0 side.
 set(NEUPOD_AUDIO_CORE_SOURCES
   ${NEUPOD_APP_DIR}/audio/audio_core.c
   ${NEUPOD_APP_DIR}/audio/audio_shared.c
+  ${NEUPOD_APP_DIR}/audio/codec.c
+)
+# Vendored decoders: dr_flac / dr_mp3 (public domain / MIT-0) and Apple's ALAC core (Apache-2.0). Third party:
+# compiled without the project warning flags.
+set(NEUPOD_CODEC_VENDOR_SOURCES
+  ${NEUPOD_APP_DIR}/audio/codec_dr.c
+  ${NEUPOD_APP_DIR}/third_party/alac/alac_dec.c
+  ${NEUPOD_APP_DIR}/third_party/alac/ag_dec.c
+  ${NEUPOD_APP_DIR}/third_party/alac/dp_dec.c
+  ${NEUPOD_APP_DIR}/third_party/alac/matrix_dec.c
+  ${NEUPOD_APP_DIR}/third_party/alac/ALACBitUtilities.c
+  ${NEUPOD_APP_DIR}/third_party/alac/EndianPortable.c
 )
 set(NEUPOD_RUNTIME_SOURCES
   ${NEUPOD_APP_DIR}/os/os_freertos.c

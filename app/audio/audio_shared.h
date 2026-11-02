@@ -18,6 +18,7 @@ typedef enum {
     AUDIO_CMD_PCM_END,
     AUDIO_CMD_PAUSE,     /* a = 1 pause, 0 resume */
     AUDIO_CMD_STOP,
+    AUDIO_CMD_STREAM_START, /* codec stream described by g_audio_stream_desc */
 } audio_cmd_type_t;
 
 typedef struct {
@@ -37,6 +38,14 @@ extern audio_stats_t g_audio_stats;
  * new stream before g_audio_pcm_started shows its audio_pcm_start() was processed, or the setup would discard it. */
 extern volatile uint32_t g_audio_pcm_started;
 extern volatile uint32_t g_audio_pcm_ended;
+/* Description of the next codec stream, written by core 0 before AUDIO_CMD_STREAM_START (the ring's release store
+ * publishes it) and read by core 1 while handling that command. */
+extern audio_stream_desc_t g_audio_stream_desc;
+/* Seek handshake (stream_io.h) */
+extern volatile uint32_t g_audio_seek_req, g_audio_seek_ack, g_audio_seek_done;
+extern volatile uint64_t g_audio_seek_off;
+/* Core 1 -> core 0: FLAC verify progress/result, frames decoded so far in the current stream, last decode error */
+extern volatile uint32_t g_audio_verify_state, g_audio_decoded_frames, g_audio_codec_error;
 
 /** Initialise the rings (core 0, before core 1 is launched). */
 void audio_shared_init(void);

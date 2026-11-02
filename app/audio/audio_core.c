@@ -20,6 +20,8 @@
 
 #include "audio_dsp.h"
 #include "audio_shared.h"
+#include "codec.h"
+#include "stream_io.h"
 #include "hal_audio.h"
 #include "hal_system.h"
 #include "ram_func.h"
@@ -61,6 +63,12 @@ static volatile uint32_t g_flush_ack;
 static volatile uint32_t g_cur_gain;        // gain applied to the last block (0 = silent)
 static volatile uint32_t g_blocks_seen;
 static volatile uint32_t g_storm;           // latched by the interrupt; the loop stops the source and clears it
+static volatile uint32_t g_priming;         // 1 = a stream was just started: stay silent until the PCM ring holds some audio
+static volatile uint32_t g_isr_busy_us;     // total time spent in the block interrupt (wraps), for decoder CPU accounting
+static volatile uint32_t g_codec_kind;      // audio_codec_t of the current stream
+static volatile uint32_t g_codec_err;       // codec_err_t of the last failure
+static volatile uint32_t g_verify;          // audio_verify_t
+static volatile uint32_t g_dec_avg_us, g_dec_max_us, g_dec_pct_x10; // decoder load window, published by the loop
 
 // ---- Interrupt context: serve one block, keep statistics -----------------------------------------
 
@@ -97,7 +105,7 @@ static void NEUPOD_RAM_FUNC(on_block)(uint32_t missed) {
     }
 
     // Serve the block first: the bookkeeping below must never delay the sink.
-    const bool audible = g_audible_req != 0 && g_storm == 0;
+    const bool audible = g_audible_req != 0 && g_storm == 0 && g_priming == 0;
     const uint32_t from = g_cur_gain;
     const uint32_t target = audible ? g_vol_gain : 0u;
     const bool serve_ring = audible || from != 0u; // a paused, silent stream does not consume the ring
@@ -187,6 +195,13 @@ static void NEUPOD_RAM_FUNC(on_block)(uint32_t missed) {
     s->sink_rate_hz = g_sink_rate_hz;
     s->sink_rate_mhz = g_sink_rate_mhz;
     s->sink_clkdiv_x256 = g_sink_clkdiv;
+    s->codec = g_codec_kind;
+    s->codec_error = g_codec_err;
+    s->verify_state = g_verify;
+    s->decoded_frames = g_audio_decoded_frames;
+    s->dec_us_block_avg = g_dec_avg_us;
+    s->dec_us_block_max = g_dec_max_us;
+    s->dec_pct_x10 = g_dec_pct_x10;
 
     if (starved && g_eof == 0 && s->blocks - g_last_underrun_evt_block >= 172u) { // at most about one per second
         g_last_underrun_evt_block = s->blocks;
@@ -196,6 +211,7 @@ static void NEUPOD_RAM_FUNC(on_block)(uint32_t missed) {
     seqlock_write_begin(&g_audio_stats_lock);
     g_audio_stats = *s;
     seqlock_write_end(&g_audio_stats_lock);
+    g_isr_busy_us += (uint32_t)(hal_micros() - now);
 }
 
 // ---- Main loop: commands and the decoder ----------------------------------------------------------
@@ -220,6 +236,19 @@ static tonegen_t g_tg;
 static uint8_t g_pcm_ch, g_pcm_bits;
 static bool g_draining;
 static uint32_t g_drain_mark;
+
+// Codec stream state (loop only)
+static codec_t g_codec;
+static bool g_codec_pending;   // stream announced, decoder not opened yet (it blocks on data core 0 sends after the ack)
+static bool g_codec_active;
+static bool g_decoder_done;    // the decoder has produced its last frame
+static audio_stream_desc_t g_desc;
+static sio_t g_sio;
+static audio_cmd_t g_deferred; // a disruptive command that arrived while the decoder was waiting for data
+static bool g_have_deferred;
+static uint32_t g_dec_sum_us, g_dec_frames, g_dec_max_per256, g_dec_reset_seen;
+
+#define PRIME_FRAMES 1024u // about 23 ms of audio buffered before the output starts
 
 static void update_audible(void) { g_audible_req = (g_src != AUDIO_SRC_NONE && g_play) ? 1u : 0u; }
 
@@ -257,6 +286,17 @@ static void stop_source(void) {
     g_src = AUDIO_SRC_NONE;
     g_eof = 0;
     g_draining = false;
+    g_codec_pending = false;
+    if (g_codec_active) {
+        codec_close(&g_codec);
+        g_codec_active = false;
+    }
+    g_decoder_done = false;
+    g_priming = 0;
+    g_codec_kind = AUDIO_CODEC_PCM;
+    if (g_verify == AUDIO_VERIFY_RUNNING) {
+        g_verify = AUDIO_VERIFY_NONE; // abandoned
+    }
     update_audible();
 }
 
@@ -295,6 +335,83 @@ static void close_sink(void) {
     }
 }
 
+static void handle_command(const audio_cmd_t *c);
+
+// Called by the stream reader while it waits for data: keep the engine responsive. Harmless commands are done on
+// the spot; anything that would tear the stream down is parked and the read is abandoned (returns true).
+static bool poll_while_waiting(void *ctx) {
+    (void)ctx;
+    if (g_have_deferred) {
+        return true; // a parked command is still waiting for the stream to be unwound
+    }
+    audio_cmd_t cmd;
+    while (spsc_ring_read(&g_audio_cmd_ring, &cmd, 1) == 1) {
+        switch (cmd.type) {
+        case AUDIO_CMD_VOLUME:
+        case AUDIO_CMD_NEW_WINDOW:
+        case AUDIO_CMD_PAUSE:
+        case AUDIO_CMD_PCM_END:
+            handle_command(&cmd);
+            break;
+        default:
+            g_deferred = cmd;
+            g_have_deferred = true;
+            return true;
+        }
+    }
+    return g_storm != 0;
+}
+
+static void fail_stream(uint32_t err) {
+    g_codec_err = err;
+    stop_source();
+    push_event_loop(AUDIO_EVT_CMD_ERROR, 100u + err);
+}
+
+static void start_stream(const audio_stream_desc_t *d) {
+    const bool codec = d->codec != AUDIO_CODEC_PCM;
+    if (!g_stream_open || !hal_audio_rate_supported(d->rate) || d->channels < 1 || d->channels > 2 ||
+        (!codec && d->bits != 16 && d->bits != 24 && d->bits != 32)) {
+        push_event_loop(AUDIO_EVT_CMD_ERROR, AUDIO_CMD_PCM_START);
+        g_audio_pcm_started++; // the requester stops waiting; the error event says why
+        return;
+    }
+    stop_source();
+    if (d->rate != g_rate) { // re-clock the sink: no resampling (ADR-0003)
+        close_sink();
+        (void)spsc_ring_discard(&g_pcm_ring, PCM_FRAMES);
+        g_cur_gain = 0;
+        if (!open_sink(d->rate, 2, (uint8_t)d->bits)) {
+            push_event_loop(AUDIO_EVT_CMD_ERROR, AUDIO_CMD_PCM_START);
+            g_audio_pcm_started++;
+            return;
+        }
+    }
+    g_desc = *d;
+    g_pcm_ch = (uint8_t)d->channels;
+    g_pcm_bits = (uint8_t)d->bits;
+    g_eof = 0;
+    g_decoder_done = false;
+    g_codec_err = 0;
+    g_audio_decoded_frames = 0;
+    g_verify = AUDIO_VERIFY_NONE;
+    g_codec_kind = d->codec;
+    g_codec_pending = codec;
+    g_priming = 1;
+    g_src = AUDIO_SRC_PCM;
+    g_play = !(codec && d->verify);
+    update_audible();
+    if (codec) {
+        g_sio = (sio_t){.ring = &g_audio_data_ring, .eof = &g_eof, .poll = poll_while_waiting, .idle = hal_audio_idle,
+                        .seek_req = &g_audio_seek_req, .seek_off = &g_audio_seek_off, .seek_ack = &g_audio_seek_ack,
+                        .seek_done = &g_audio_seek_done, .seek_seq = g_audio_seek_req};
+        if (d->verify) {
+            g_verify = AUDIO_VERIFY_RUNNING;
+        }
+    }
+    g_audio_pcm_started++; // after this core 0 may write the first bytes of the stream
+}
+
 static void handle_command(const audio_cmd_t *c) {
     switch (c->type) {
     case AUDIO_CMD_OPEN: {
@@ -324,9 +441,7 @@ static void handle_command(const audio_cmd_t *c) {
     }
     case AUDIO_CMD_CLOSE:
         if (g_stream_open) {
-            g_play = false;
-            g_src = AUDIO_SRC_NONE;
-            update_audible();
+            stop_source();
             close_sink();
             push_event_loop(AUDIO_EVT_STREAM_CLOSED, 0);
         }
@@ -347,37 +462,24 @@ static void handle_command(const audio_cmd_t *c) {
         if (c->a != TONE_OFF) {
             tonegen_init(&g_tg, (tone_mode_t)c->a, g_rate);
             g_src = AUDIO_SRC_TONE;
+            g_priming = 1;
             g_play = true;
             update_audible();
         }
         break;
     case AUDIO_CMD_PCM_START: {
-        const uint32_t rate = c->a;
-        const uint8_t ch = (uint8_t)(c->b & 0xFFu), bits = (uint8_t)((c->b >> 8) & 0xFFu);
-        if (!g_stream_open || !hal_audio_rate_supported(rate) || (bits != 16 && bits != 24 && bits != 32) ||
-            ch < 1 || ch > 2) {
-            push_event_loop(AUDIO_EVT_CMD_ERROR, c->type);
-            g_audio_pcm_started++; // the requester stops waiting; the error event says why
-            break;
-        }
-        stop_source();
-        if (rate != g_rate) { // re-clock the sink: no resampling (ADR-0003)
-            close_sink();
-            (void)spsc_ring_discard(&g_pcm_ring, PCM_FRAMES);
-            g_cur_gain = 0;
-            if (!open_sink(rate, 2, bits)) {
-                push_event_loop(AUDIO_EVT_CMD_ERROR, c->type);
-                g_audio_pcm_started++;
-                break;
-            }
-        }
-        g_pcm_ch = ch;
-        g_pcm_bits = bits;
-        g_eof = 0;
-        g_src = AUDIO_SRC_PCM;
-        g_play = true;
-        update_audible();
-        g_audio_pcm_started++; // after this core 0 may write the first bytes of the stream
+        audio_stream_desc_t d;
+        memset(&d, 0, sizeof d);
+        d.codec = AUDIO_CODEC_PCM;
+        d.rate = c->a;
+        d.channels = c->b & 0xFFu;
+        d.bits = (c->b >> 8) & 0xFFu;
+        start_stream(&d);
+        break;
+    }
+    case AUDIO_CMD_STREAM_START: {
+        audio_stream_desc_t d = g_audio_stream_desc;
+        start_stream(&d);
         break;
     }
     case AUDIO_CMD_PCM_END:
@@ -398,6 +500,108 @@ static void handle_command(const audio_cmd_t *c) {
     }
 }
 
+static void note_decode_time(uint32_t wall_us, uint32_t isr_us, uint32_t frames) {
+    if (frames == 0) {
+        return;
+    }
+    uint32_t us = wall_us > isr_us ? wall_us - isr_us : 0u; // the block interrupt preempted us for isr_us of it
+    g_dec_sum_us += us;
+    g_dec_frames += frames;
+    uint32_t per256 = (uint32_t)((uint64_t)us * HAL_AUDIO_BLOCK_FRAMES / frames);
+    if (per256 > g_dec_max_per256) {
+        g_dec_max_per256 = per256;
+    }
+    if (g_dec_frames >= 4u * HAL_AUDIO_BLOCK_FRAMES) {
+        g_dec_avg_us = (uint32_t)((uint64_t)g_dec_sum_us * HAL_AUDIO_BLOCK_FRAMES / g_dec_frames);
+        g_dec_max_us = g_dec_max_per256;
+        uint32_t nominal = g_isr_stats.period_nominal_us;
+        g_dec_pct_x10 = nominal != 0 ? (uint32_t)((uint64_t)g_dec_avg_us * 1000u / nominal) : 0u;
+    }
+}
+
+static void check_dec_window(void) {
+    if (g_dec_reset_seen != g_window_reset_req) {
+        g_dec_reset_seen = g_window_reset_req;
+        g_dec_sum_us = g_dec_frames = g_dec_max_per256 = 0;
+    }
+}
+
+// Decode a little with the codec. Returns true if it did something.
+static bool pump_codec(void) {
+    if (g_codec_pending) {
+        codec_params_t p;
+        memset(&p, 0, sizeof p);
+        p.kind = g_desc.codec == AUDIO_CODEC_FLAC ? CODEC_FLAC : g_desc.codec == AUDIO_CODEC_MP3 ? CODEC_MP3 : CODEC_ALAC;
+        p.rate = g_desc.rate;
+        p.channels = g_desc.channels;
+        p.bits = g_desc.bits;
+        p.verify = g_desc.verify != 0;
+        p.total_frames = g_desc.total_frames;
+        p.cookie_len = g_desc.cookie_len > sizeof p.cookie ? (uint32_t)sizeof p.cookie : g_desc.cookie_len;
+        memcpy(p.cookie, g_desc.cookie, p.cookie_len);
+        codec_io_t io = {.read = sio_read, .seek = sio_seek, .aborted = sio_aborted, .ctx = &g_sio};
+        g_codec_pending = false;
+        codec_err_t e = codec_open(&g_codec, &p, &io);
+        if (g_sio.aborted) { // a command interrupted the open; it runs next
+            g_sio.aborted = false;
+            return true;
+        }
+        if (e != CODEC_OK) {
+            fail_stream((uint32_t)e);
+            return true;
+        }
+        g_codec_active = true;
+        return true;
+    }
+    if (!g_codec_active || g_decoder_done) {
+        return false;
+    }
+    const bool verify = g_verify == AUDIO_VERIFY_RUNNING;
+    if (!verify && spsc_ring_space(&g_pcm_ring) < HAL_AUDIO_BLOCK_FRAMES) {
+        return false;
+    }
+    bool worked = false;
+    for (int i = 0; i < 2; i++) { // two blocks per pass at most; commands get looked at in between
+        if (!verify && spsc_ring_space(&g_pcm_ring) < HAL_AUDIO_BLOCK_FRAMES) {
+            break;
+        }
+        const uint32_t t0 = (uint32_t)hal_micros(), isr0 = g_isr_busy_us;
+        int32_t n = codec_read(&g_codec, g_gen, HAL_AUDIO_BLOCK_FRAMES);
+        const uint32_t wall = (uint32_t)hal_micros() - t0, isr = g_isr_busy_us - isr0;
+        if (g_sio.aborted) { // the wait for data was cut short by a command; run it
+            g_sio.aborted = false;
+            return true;
+        }
+        if (n < 0) {
+            fail_stream((uint32_t)-n);
+            return true;
+        }
+        if (n == 0) { // end of the stream
+            g_decoder_done = true;
+            return true;
+        }
+        note_decode_time(wall, isr, (uint32_t)n);
+        g_audio_decoded_frames += (uint32_t)n;
+        if (!verify) {
+            (void)spsc_ring_write(&g_pcm_ring, g_gen, (uint32_t)n);
+        }
+        g_decoded_blocks++;
+        worked = true;
+    }
+    return worked;
+}
+
+// Finish a verify run: compare the MD5 and report through the end-of-stream handshake.
+static void finish_verify(void) {
+    uint8_t md5[16];
+    codec_md5_final(&g_codec, md5);
+    uint32_t any = 0;
+    for (int i = 0; i < 16; i++) {
+        any |= g_desc.md5[i];
+    }
+    g_verify = any == 0 ? AUDIO_VERIFY_NO_MD5 : memcmp(md5, g_desc.md5, 16) == 0 ? AUDIO_VERIFY_OK : AUDIO_VERIFY_MISMATCH;
+}
+
 // Produce PCM for the active source while the ring has room.
 static bool pump_source(void) {
     bool worked = false;
@@ -413,6 +617,31 @@ static bool pump_source(void) {
             (void)spsc_ring_write(&g_pcm_ring, g_gen, HAL_AUDIO_BLOCK_FRAMES);
             g_decoded_blocks++;
             worked = true;
+        }
+    } else if (g_src == AUDIO_SRC_PCM && g_desc.codec != AUDIO_CODEC_PCM) {
+        worked = pump_codec();
+        if (g_src != AUDIO_SRC_PCM) {
+            return true;
+        }
+        if (g_decoder_done) {
+            if (g_verify == AUDIO_VERIFY_RUNNING) { // no sound in verify mode: done as soon as the data is
+                finish_verify();
+                stop_source();
+                g_audio_pcm_ended++;
+                push_event_loop(AUDIO_EVT_END_OF_TRACK, 0);
+                return true;
+            }
+            if (spsc_ring_available(&g_pcm_ring) == 0) {
+                if (!g_draining) {
+                    g_draining = true;
+                    g_drain_mark = g_blocks_seen;
+                } else if (g_blocks_seen - g_drain_mark >= 3u) {
+                    stop_source();
+                    g_audio_pcm_ended++;
+                    push_event_loop(AUDIO_EVT_END_OF_TRACK, 0);
+                    worked = true;
+                }
+            }
         }
     } else if (g_src == AUDIO_SRC_PCM) {
         const uint32_t fs = (uint32_t)g_pcm_ch * g_pcm_bits / 8u;
@@ -448,6 +677,11 @@ static bool pump_source(void) {
             }
         }
     }
+    // The output starts once some audio is buffered, or the stream is already complete.
+    if (g_priming != 0 && g_src != AUDIO_SRC_NONE &&
+        (spsc_ring_available(&g_pcm_ring) >= PRIME_FRAMES || g_decoder_done || (g_eof != 0 && g_desc.codec == AUDIO_CODEC_PCM))) {
+        g_priming = 0;
+    }
     return worked;
 }
 
@@ -459,9 +693,16 @@ void audio_core_main(void) {
 
     for (;;) {
         bool worked = false;
+        check_dec_window();
 
         audio_cmd_t cmd;
-        while (spsc_ring_read(&g_audio_cmd_ring, &cmd, 1) == 1) {
+        for (;;) {
+            if (g_have_deferred) {
+                cmd = g_deferred;
+                g_have_deferred = false;
+            } else if (spsc_ring_read(&g_audio_cmd_ring, &cmd, 1) != 1) {
+                break;
+            }
             handle_command(&cmd);
             worked = true;
         }

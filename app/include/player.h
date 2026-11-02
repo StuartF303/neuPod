@@ -14,6 +14,8 @@
 #include <stdint.h>
 
 #include "audio_dsp.h"
+#include "audio_engine.h"
+#include "meta.h"
 #include "wav.h"
 
 #ifdef __cplusplus
@@ -27,6 +29,8 @@ typedef enum {
     PLAYER_PAUSED,
     PLAYER_ENDED,   /**< the file played to its end */
     PLAYER_ERROR,   /**< could not play, or playback was stopped by a fault; see msg */
+    PLAYER_VERIFYING, /**< FLAC verify run in progress (no sound) */
+    PLAYER_VERIFIED,  /**< verify finished: see verify */
 } player_state_t;
 
 typedef enum { PLAYER_SRC_NONE = 0, PLAYER_SRC_TONE, PLAYER_SRC_FILE } player_src_t;
@@ -36,7 +40,12 @@ typedef struct {
     player_src_t src;
     tone_mode_t tone;      /**< PLAYER_SRC_TONE */
     char name[64];         /**< file name or tone name */
-    char format[24];       /**< e.g. "WAV 16/44.1" */
+    audio_tags_t tags;     /**< title / artist / album / track number when the file has them */
+    bool title_is_name;    /**< tags.title is the file name (no title tag) */
+    bool estimated;        /**< total length is an estimate (MP3 without a Xing/Info frame count) */
+    uint32_t verify;       /**< audio_verify_t (verify runs) */
+    uint32_t codec;        /**< audio_codec_t */
+    char format[32];       /**< e.g. "WAV 16/44.1" */
     char msg[80];          /**< reason when state is PLAYER_ERROR */
     uint32_t rate;
     uint64_t total_frames; /**< 0 for tones */
@@ -65,8 +74,22 @@ uint32_t player_volume_step(int32_t steps);
 /** Short name for a mode, e.g. "1 kHz tone". */
 const char *player_tone_name(tone_mode_t mode);
 
+/** FLAC verify: decode the file flat out (no sound) and compare the STREAMINFO MD5. */
+void player_verify_file(const char *path, const char *name);
+/** Log (UART) what just ended: the verify verdict for verify runs. Called by the monitor on the end-of-track event. */
+void player_log_end(void);
+
 /* ---- Called by the storage task while it streams a file (not for the UI) ---- */
-void player_file_started(const wav_info_t *w);
+typedef struct {
+    char format[32];
+    uint32_t rate;
+    uint64_t total_frames;
+    audio_tags_t tags;
+    bool title_is_name, estimated, verify;
+    uint32_t codec;
+    uint8_t md5[16];
+} player_file_t;
+void player_file_started(const player_file_t *f);
 void player_file_failed(const char *msg);
 /** Count the PCM ends seen by the audio core at the moment this stream was requested. */
 uint32_t player_file_generation(void);

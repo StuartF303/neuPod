@@ -46,8 +46,30 @@ typedef struct {
     uint32_t sink_rate_hz;     /**< sample rate the sink was opened at (0 = closed) */
     uint32_t sink_rate_mhz;    /**< rate actually generated, millihertz (clock divider rounding) */
     uint32_t sink_clkdiv_x256; /**< sink clock divider, 1/256 units */
-    uint32_t pcm_frames;       /**< frames of the current WAV stream played so far */
+    uint32_t pcm_frames;       /**< frames of the current stream played so far */
+    uint32_t codec;            /**< audio_codec_t of the current stream */
+    uint32_t codec_error;      /**< codec_err_t of the last failed stream (0 = none) */
+    uint32_t verify_state;     /**< audio_verify_t */
+    uint32_t decoded_frames;   /**< frames decoded so far (verify mode progress) */
+    uint32_t dec_us_block_avg; /**< window: decoder CPU per 256 output frames, microseconds (interrupt time subtracted) */
+    uint32_t dec_us_block_max; /**< window: worst single decode call, scaled to 256 frames */
+    uint32_t dec_pct_x10;      /**< window: decoder load, tenths of a percent of one core (avg / block period) */
 } audio_stats_t;
+
+typedef enum { AUDIO_CODEC_PCM = 0, AUDIO_CODEC_FLAC, AUDIO_CODEC_MP3, AUDIO_CODEC_ALAC } audio_codec_t;
+typedef enum { AUDIO_VERIFY_NONE = 0, AUDIO_VERIFY_RUNNING, AUDIO_VERIFY_OK, AUDIO_VERIFY_MISMATCH, AUDIO_VERIFY_NO_MD5 } audio_verify_t;
+
+/** Everything the audio core needs to know about a stream before data arrives. */
+typedef struct {
+    uint32_t codec; /**< audio_codec_t */
+    uint32_t rate;
+    uint32_t channels, bits;
+    uint32_t verify;     /**< FLAC: decode flat out, no sound, and compare the MD5 */
+    uint64_t total_frames; /**< length the container announces (0 = unknown, or not trustworthy: MP3 estimates) */
+    uint8_t md5[16];     /**< FLAC STREAMINFO checksum (all zero: none recorded) */
+    uint32_t cookie_len; /**< ALAC magic cookie */
+    uint8_t cookie[64];
+} audio_stream_desc_t;
 
 typedef enum { AUDIO_SRC_NONE = 0, AUDIO_SRC_TONE, AUDIO_SRC_PCM } audio_source_t;
 
@@ -86,6 +108,18 @@ bool audio_tone(uint32_t mode);
  * begins as soon as data arrives. Then feed audio_data_write(), and call audio_pcm_end() after the last byte.
  */
 bool audio_pcm_start(uint32_t rate, uint8_t channels, uint8_t bits);
+/**
+ * Start a codec stream (FLAC / MP3: the compressed bytes in file order; ALAC: length-prefixed packets). As for
+ * audio_pcm_start(), write no data before audio_pcm_started_count() shows the request was processed.
+ */
+bool audio_stream_start(const audio_stream_desc_t *d);
+/** Seek requests from the decoder: true (once per request) with the stream byte offset wanted. */
+bool audio_seek_poll(uint64_t *offset);
+/** Core 0 has repositioned its feed to the requested offset (and writes nothing until audio_seek_done()). */
+void audio_seek_ack(void);
+/** Core 1 has flushed the ring: the feed may resume. */
+bool audio_seek_done(void);
+uint32_t audio_codec_error(void);
 /** Number of audio_pcm_start() requests core 1 has finished setting up (data may be written once this reaches your count). */
 uint32_t audio_pcm_started_count(void);
 /** Number of PCM streams that played to their end (AUDIO_EVT_END_OF_TRACK, but pollable by any task). */
