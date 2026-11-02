@@ -76,6 +76,8 @@ target_link_libraries(hal_rp2350_rtos PUBLIC
   pico_btstack_hci_transport_cyw43
   pico_btstack_run_loop_async_context
   pico_btstack_sbc_encoder
+  pico_lwip_sntp
+  pico_lwip_http
 )
 
 add_executable(neupod main.c)

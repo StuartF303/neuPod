@@ -50,6 +50,8 @@ extern void neupod_panic_assert(const char *file, int line);
 #define configASSERT(x) do { if (!(x)) neupod_panic_assert(__FILE__, __LINE__); } while (0)
 
 #include "FreeRTOSConfig_common.h"
+/* lwIP's FreeRTOS port (sys_arch.c) still uses the pre-V8 name. */
+#define portTICK_RATE_MS portTICK_PERIOD_MS
 #include "rp2040_config.h"
 
 #endif // NEUPOD_RP2350_FREERTOS_CONFIG_H
