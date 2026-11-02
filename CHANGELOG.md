@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - RAM budget: FreeRTOS heap 112 to 80 KB and LVGL pool 96 to 72 KB (named constants in `app/os/memory_budget.h`); static RAM 481,588 to 436,480 bytes with BTstack and the settings store included. The CYW43 worker task has 6 KB of stack. `md5.h` renamed `neupod_md5.h` (clash with BTstack's `md5.h`).
 
 ### Added
+- Wi-Fi W1 (`docs/wifi.md`): lwIP on the FreeRTOS cyw43 arch beside BTstack, scan and join (WPA2, WPA2/3, WPA3, open), DHCP, DNS, SNTP, remembered networks with
+  auto-reconnect and backoff, power policy (off while playing by default), Settings > Wi-Fi, a real clock on the home pane (EU summer-time rule), status-bar icon, `wifi:` monitor line, Extras > Network test.
+- Wheel input widgets (`docs/ui-input.md`): text entry with masked and search modes, number, slider (Display backlight), choice and multi-choice, date/time, letter-jump overlay; host-tested models, LVGL views, a modal API.
+- Secrets at rest: AES-256-GCM sealed Wi-Fi passwords and Bluetooth link keys, key from the chip ID through one replaceable function (protects a lost card, not a card plus board).
 - Bluetooth stage 1 (see `docs/bluetooth.md`): BTstack classic (Pico SDK 2.3.1) on core 0 over the CYW43439, HCI bring-up with the local address and HCI version on the UART,
   device discovery (name, address, Class of Device, RSSI, audio-sink flag) through `hal_bt_*` and a queue to the UI, Settings > Bluetooth screen (status, address, Scan, devices),
   Bluetooth boot check (Wi-Fi stays degraded), host simulator with unit test and tour snapshots. No pairing or A2DP yet.
