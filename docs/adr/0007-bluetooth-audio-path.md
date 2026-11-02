@@ -32,4 +32,8 @@ from the Audio Pack, both paired to the reference AirPods Pro.
 - Option B flips the processor choice (ADR-0001) to the ESP32-S3; option C is only sensible if
   the RP2350's PIO/SDIO advantages outweigh carrying two radios.
 - The policy in ADR-0003 is unaffected: Bluetooth is the one lossy path whichever option wins.
-- HFP (headset mic) and future LE Audio support depend on the same choice.
+- HFP (headset mic, neuPod as Audio Gateway) and future LE Audio support depend on the same choice.
+- Required roles (corrected 2 Nov 2026): neuPod is the **A2DP source** (the headset is the sink)
+  and the **AVRCP target** with absolute volume; an earlier draft of the requirements said
+  "A2DP sink" in error. Option A implements these in BTstack; with a QCC module the module's
+  firmware must provide them.
