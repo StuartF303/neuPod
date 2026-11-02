@@ -47,6 +47,8 @@ set(NEUPOD_RT_CORE_SOURCES               # pure logic, no OS: host-testable on t
   ${NEUPOD_APP_DIR}/input/input_events.c
   ${NEUPOD_APP_DIR}/ui/ui_logic.c
   ${NEUPOD_APP_DIR}/ui/input/wheel_input.c
+  ${NEUPOD_APP_DIR}/net/sys_clock.c
+  ${NEUPOD_APP_DIR}/net/wifi_logic.c
   ${NEUPOD_APP_DIR}/audio/audio_dsp.c
   ${NEUPOD_APP_DIR}/audio/wav.c
   ${NEUPOD_APP_DIR}/audio/meta.c

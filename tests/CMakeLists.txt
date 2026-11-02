@@ -141,6 +141,11 @@ target_link_libraries(test_wheel_input neupod_rt_core)
 add_test(NAME wheel_input COMMAND test_wheel_input)
 set_source_files_properties(test_wheel_input.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
+add_executable(test_wifi_logic test_wifi_logic.c)
+target_link_libraries(test_wifi_logic neupod_rt_core hal_host)
+add_test(NAME wifi_logic COMMAND test_wifi_logic)
+set_source_files_properties(test_wifi_logic.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
 # Audio maths (conversion, volume, sine/tone/scale generators) and the WAV parser.
 add_executable(test_audio test_audio.c)
 target_link_libraries(test_audio neupod_rt_core m)
