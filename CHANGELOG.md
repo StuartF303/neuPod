@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `storage_test` with 9 tests + cleanup key; host unit tests; `docs/storage.md`, ADR-0008.
   Verified on the bench: tests 1-7 pass on exFAT at 15.625 MHz.
 
+- I²C0 HAL (timeouts, 9-pulse bus recovery, stats, host mock bus), MAX17048 fuel-gauge driver
+  (`hal_battery.h`) and DRV2605L haptic driver (`hal_haptic.h`: ERM open/closed loop, auto-cal,
+  sequences, RTP, low-latency click with OD_CLAMP limits enforced in tests); `i2c_test` with
+  9 tests; host unit tests; `docs/i2c-peripherals.md`. Bench: both devices at 400 kHz, VCELL
+  within 0.04 % of a meter, click 84 µs call-to-GO, 60 s soak with zero errors.
+
 ### Fixed
 - Worked around a carlk3 v3.6.2 bug where 256-block SDIO reads overrun the DMA descriptor table.
 

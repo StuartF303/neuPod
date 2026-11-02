@@ -5,6 +5,8 @@ add_library(hal_rp2350 STATIC
   hal/hal_display.c
   hal/hal_console.c
   hal/hal_input.c
+  hal/hal_i2c.c
+  ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
 )
 target_include_directories(hal_rp2350 PUBLIC ${CMAKE_SOURCE_DIR}/hal/include)
 target_link_libraries(hal_rp2350 PUBLIC
@@ -16,8 +18,10 @@ target_link_libraries(hal_rp2350 PUBLIC
   hardware_pwm
   hardware_pio
   hardware_clocks
+  hardware_i2c
 )
-set_source_files_properties(hal/hal_system.c hal/hal_display.c hal/hal_console.c hal/hal_input.c main.c
+set_source_files_properties(hal/hal_i2c.c i2c_test_main.c ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
+  hal/hal_system.c hal/hal_display.c hal/hal_console.c hal/hal_input.c main.c
   display_test_main.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 pico_generate_pio_header(hal_rp2350 ${CMAKE_CURRENT_LIST_DIR}/hal/clickwheel_rx.pio)
 
@@ -36,6 +40,13 @@ target_link_libraries(display_test neupod_app hal_rp2350)
 pico_enable_stdio_uart(display_test 1)
 pico_enable_stdio_usb(display_test 0)
 pico_add_extra_outputs(display_test)
+
+# Interactive I2C test menu over UART (fuel gauge + haptic driver; flash with: scripts/flash.sh rp2350 i2c_test)
+add_executable(i2c_test i2c_test_main.c)
+target_link_libraries(i2c_test neupod_i2c_tests hal_rp2350)
+pico_enable_stdio_uart(i2c_test 1)
+pico_enable_stdio_usb(i2c_test 0)
+pico_add_extra_outputs(i2c_test)
 
 # --- microSD (SDIO over PIO) ---------------------------------------------------------------------
 # carlk3's no-OS-FatFS-SD-SDIO-SPI-RPi-Pico (Apache-2.0), a git submodule pinned to a release tag.

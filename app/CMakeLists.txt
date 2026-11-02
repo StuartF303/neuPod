@@ -30,7 +30,20 @@ target_include_directories(neupod_storage_tests PUBLIC ${NEUPOD_APP_DIR}/include
                                                        ${NEUPOD_APP_DIR}/../hal/include)
 target_compile_features(neupod_storage_tests PUBLIC c_std_11)
 
-set_source_files_properties(${NEUPOD_STORAGE_TEST_SOURCES} PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+# MAX17048 / DRV2605L drivers: need hal_i2c + hal_system only.
+add_library(neupod_drivers STATIC ${NEUPOD_DRIVER_SOURCES})
+target_include_directories(neupod_drivers PUBLIC ${NEUPOD_APP_DIR}/include
+                                                 ${NEUPOD_APP_DIR}/../hal/include)
+target_compile_features(neupod_drivers PUBLIC c_std_11)
+
+# I2C test menu (needs hal_i2c, hal_battery/haptic via neupod_drivers, hal_display, hal_console).
+add_library(neupod_i2c_tests STATIC ${NEUPOD_I2C_TEST_SOURCES})
+target_include_directories(neupod_i2c_tests PUBLIC ${NEUPOD_APP_DIR}/include
+                                                   ${NEUPOD_APP_DIR}/../hal/include)
+target_compile_features(neupod_i2c_tests PUBLIC c_std_11)
+target_link_libraries(neupod_i2c_tests PUBLIC neupod_drivers)
+
+set_source_files_properties(${NEUPOD_DRIVER_SOURCES} ${NEUPOD_I2C_TEST_SOURCES} ${NEUPOD_STORAGE_TEST_SOURCES} PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 set_source_files_properties(${NEUPOD_CORE_SOURCES} ${NEUPOD_GFX_SOURCES} ${NEUPOD_DEMO_SOURCES}
   ${NEUPOD_CLICKWHEEL_SOURCES} ${NEUPOD_APP_DIR}/storage/diskio.c
   PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
