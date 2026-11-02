@@ -10,12 +10,12 @@ table lives in `app/include/runtime_config.h`; this page explains it.
 | Core | Runs | Rules |
 | --- | --- | --- |
 | 0 | FreeRTOS (single-core kernel): UI, input, storage, monitor, CYW43 worker, boot checks | normal RTOS code |
-| 1 | the **bare-metal audio core**: a main loop (commands + decoder stub) and the sink's block-clock interrupt; no kernel | the core-1 rules below |
+| 1 | the **bare-metal audio core**: a main loop (commands + "decoder": silence, test signals, WAV conversion) and the sink's block interrupt (the I2S DMA interrupt); no kernel | the core-1 rules below |
 
 ### Core-1 rules
 
-Core 1 code (`app/audio/audio_core.c`, `audio_shared.c`, `spsc_ring.c`, the headers they use, and
-`platforms/rp2350/hal/hal_audio.c`) must not use: FreeRTOS or `os.h`; stdio (`printf`); `malloc`;
+Core 1 code (`app/audio/audio_core.c`, `audio_shared.c`, `audio_dsp.c`, `spsc_ring.c`, the headers they use, and
+`platforms/rp2350/hal/hal_audio.c` / `hal_audio_null.c`) must not use: FreeRTOS or `os.h`; stdio (`printf`); `malloc`;
 any SDK primitive the FreeRTOS interop reroutes to the kernel (mutex, semaphore, queue,
 critical section, `sleep_*`, `busy_wait_*`); `hal_delay_ms`. It talks to core 0 only through
 lock-free rings and a seqlock. Hardware registers, the 1 MHz timer reads (`time_us_64`, `hal_micros`)
@@ -34,8 +34,9 @@ printed in the audio line (`core1_stack_free=`).
 
 | From to | Mechanism |
 | --- | --- |
-| core 0 to 1: commands | ring of `audio_cmd_t` (open, close, new statistics window; volume etc. later) |
-| core 0 to 1: compressed data | byte ring, 4 KB (stub: consumed and discarded; the decoder's input later) |
+| core 0 to 1: commands | ring of `audio_cmd_t` (open, close, statistics window, volume, tone, PCM start/end, pause, stop); several core-0 tasks send, so `audio_ctl.c` serialises them with a mutex |
+| core 0 to 1: PCM data | byte ring, 32 KB, fed by the storage task while a WAV plays (the decoder's compressed input later) |
+| core 1 to 0: handshake | two counters written only by core 1: PCM streams set up / played to the end (core 0 must not write data for a new stream before the first one moves) |
 | core 1 to 0: events | two rings (one per producer: the block interrupt, the main loop): stream opened/closed, underrun (at most ~1/s), end of track, command error |
 | core 1 to 0: statistics | seqlock-published `audio_stats_t`, written only by the block interrupt |
 | inside core 1: decoder to sink | PCM ring, 2048 stereo int32 frames (8 blocks, 46 ms) |
@@ -45,13 +46,14 @@ stores only, no read-modify-write, so it is safe across the two cores).
 
 ### How audio timing works
 
-The null sink arms a 1 MHz hardware alarm from core 1; its interrupt fires every 256 frames
+With `NEUPOD_AUDIO_SINK=null` (or on the host) the sink arms a 1 MHz hardware alarm from core 1; its interrupt fires every 256 frames
 (5.8 ms at 44.1 kHz) on absolute deadlines (no drift) and runs `on_block`, which reads one block from the
-PCM ring (silence and an underrun if the decoder starved it), hands it to the sink and updates the
-statistics. The interrupt preempts the decoder stub (which busy-spends 25 % of a block period per
-block to model a codec), so block timing does not depend on decoder time. The main loop sleeps with
+PCM ring (silence and an underrun if the decoder starved it), applies the volume ramp, hands it to the sink and
+updates the statistics and the amp mute line. The interrupt preempts the decoder (`-DNEUPOD_DECODER_LOAD_PCT=25`
+makes it busy-spend 25 % of a block period per block, as the old stub did, to prove it), so block timing does not
+depend on decoder time. The main loop sleeps with
 `WFI` when idle. Nothing on core 0 can delay it: no shared lock, no kernel, no shared interrupt.
-The same structure carries over to I2S (DMA interrupt instead of the alarm).
+The I2S sink (default on the RP2350, see [Audio](audio.md)) uses the same structure with the DMA block-complete interrupt (`DMA_IRQ_1`, core 1) instead of the alarm.
 
 ## RTOS tasks (core 0)
 
@@ -60,16 +62,17 @@ Priority 7 is the highest; the kernel idle task is 0.
 | Task | Priority | Stack | Period / trigger | Budget |
 | --- | --- | --- | --- | --- |
 | kernel timer service | 6 | 1.5 KB | kernel timers | microseconds |
-| storage / prefetch (stub) | 5 | 4 KB | request queue | idle; later: library scan, track prefetch |
+| storage | 5 | 6 KB | request queue; while a WAV plays, every 1 ms | directory listings and volume space for the UI (yields every 32 entries); streams the WAV from the card in 2 KB reads into the audio data ring; later: library scan, track prefetch |
 | input | 4 | 2 KB | every 2 ms | well under 1 % (the wheel FIFO overflows after ~4.8 ms) |
 | I2C users, while on the bus | 4 (lifted) | n/a | boot checks, the 5 s gauge read | a few ms (see findings) |
 | CYW43 worker (SDK) | 3 | 4 KB | radio events | LED today, Wi-Fi / BTstack later |
-| UI (LVGL) | 2 | 8 KB | 5 to 30 ms, from LVGL's own timer | frame strip render + 24-line blocking DMA |
+| haptic (click feedback) | 4 | 2 KB | click queue (2 deep, non-blocking for the UI) | a few ms per click; back to standby after 2 s idle |
+| UI (LVGL) | 2 | 12 KB | 5 to 30 ms, from LVGL's own timer | frame strip render + 24-line blocking DMA |
 | monitor | 1 | 3 KB | 100 ms tick: heartbeat 1 s, gauge 5 s, stats 10 s | negligible |
 | boot checks (transient, 6) | 1 | 3 to 5 KB | once at boot | bounded by per-check deadlines |
 
 Heap: `heap_4`, 112 KB, holds task stacks and kernel objects; static RAM beyond that is the LVGL
-pool (64 KB), the two render buffers (30 KB) and the audio core's rings and block buffer (about 28 KB).
+pool (96 KB), the two render buffers (30 KB), the directory-listing buffer (about 19 KB) and the audio core's rings and block buffer (about 28 KB).
 The monitor prints the heap low-water mark and each task's lowest free stack every 10 s. Input is above
 the UI so wheel frames are never lost while LVGL renders; the monitor is lowest; boot-check tasks sit
 below the UI so the splash keeps animating while they run.
@@ -82,12 +85,24 @@ below the UI so the splash keeps animating while they run.
 | monitor / battery check to UI | latest value in a mutex-guarded store (`battery_store`) |
 | boot checks to UI | `capabilities_t` (mutex-guarded; first result per subsystem wins) |
 | I2C bus | one mutex (`rt_i2c_mutex`) around every battery / haptic transaction |
+| UI to haptic task | 2-deep byte queue, sent without waiting (`rt_haptic_click`) |
+| UI to player | `player.h`: a mutex-guarded state (what plays, volume) plus commands to the audio core; the storage task reports file start and errors; end of file and stream faults are read back from the audio core's counters and statistics |
+| UI to storage task | request queue (list a directory, free space); results come back on a result queue and the UI polls it. The entries live in one static buffer that the UI reads only after the result for its latest request arrived. Why a task: an SD directory scan is hundreds of sector reads and the UI task must never stall |
+
+### UI performance
+
+The monitor prints every 10 s `ui: frames=… frame_us avg/max=… lvgl_mem=used/total (max …, frag …%)`: passes of
+`lv_timer_handler` that rendered something (render plus the blocking strip flush), their average and worst time in
+the window, and LVGL pool use. Each list screen costs about 15 KB of the pool (its rows are a fixed pool of
+objects, whatever the item count), so the pool is 96 KB and the stack is limited to 8 screens. The host tour also
+prints `ui: screen '<name>' lvgl_mem=…` at every snapshot.
 
 ### What the monitor prints about audio
 
 Every 10 s:
 
 ```
+audio sink: i2s rate=44099.488 Hz (requested 44100 Hz, clkdiv=22+37/256) dma_underruns=0 muted=1 source=none audible=0 volume=-30dB pcm_frames=0
 audio: blocks=1861 underruns=0 sink_missed=0 period_us min/avg/max=5431/5804/6181 (nominal 5804) jitter_max_us=377 ring_min=768/2048 decoded=1868 data_bytes=0 events_dropped=0
 cpu%(of one core)/stack-free-min: ... (core 0 tasks only)
 ```
@@ -150,7 +165,7 @@ These led to ADR-0011; the details are kept because they are the reason for the 
 | battery | MAX17048 ACKs at 0x36, VERSION 0x001X, cell voltage 2.5 to 4.6 V | passes with a cell |
 | haptics | DRV2605L ACKs at 0x5A, device ID 7; left in **standby** | passes when fitted |
 | click wheel | receiver starts, init packet sent, a valid frame arrives | **degraded** (not wired, init packet unimplemented) |
-| audio | a hardware sink exists | **degraded** (null sink only) |
+| audio | the sink's stream runs: the audio core published its rate and served blocks (cannot detect the DAC: I2S is one-way) | passes with the I2S sink; **degraded** with the null sink |
 | Bluetooth, Wi-Fi | radio driver exists | **degraded** (not implemented) |
 
 Deadlines: storage 4 s, battery and haptics 1.5 s, wheel 1.5 s, audio 0.5 s, radio 3 s. A check that
@@ -175,7 +190,7 @@ on the wheel.
 | UART console on the testbed (`console_keys`) | `w` / `k` scroll up (counter-clockwise), `s` / `j` scroll down (+/-4 wheel positions = one list step); Enter or `e` = Select; `a` = Left; `d` = Right; `p` or Space = Play/Pause; `m` or Backspace = Menu |
 | Host simulator window | Up / Down arrows and the mouse wheel scroll; Enter = Select; Left / Right; Space or `p` = Play/Pause; Esc, Backspace or `m` = Menu |
 
-Any input event also skips the splash hold. `hal_input_reinit()` failing (the init packet is still
+Any input event also skips the splash hold. The UI screens and their keys are described in [UI](ui.md). `hal_input_reinit()` failing (the init packet is still
 `TODO(hw)`) is not fatal: the wheel check passes if valid frames arrive within about 1.1 s, otherwise it is
 degraded ("not connected").
 
@@ -211,7 +226,6 @@ degraded ("not connected").
 
 ## What is stubbed
 
-Decoder (silence; its compressed-data input is a ring that is drained and discarded), audio sink (null),
-storage/prefetch task (logs requests), home screen (placeholder), click-wheel receiver (pins
+Compressed-audio decoders (FLAC etc.: only test signals and PCM WAV exist), prefetch (logs requests), home screen (placeholder), click-wheel receiver (pins
 unconfirmed), radio. Not yet measured on hardware with this architecture: block jitter under UI load,
 the panic LED, stack margins.

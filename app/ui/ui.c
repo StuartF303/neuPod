@@ -5,11 +5,13 @@
  * checks resolved (min 1.5 s, max 5 s) -> fade to the home screen -> event loop.
  */
 #include <stdio.h>
+#include <string.h>
 
 #include "battery_store.h"
 #include "boot.h"
 #include "capabilities.h"
 #include "hal_display.h"
+#include "hal_system.h"
 #include "input_events.h"
 #include "os.h"
 #include "runtime.h"
@@ -56,11 +58,109 @@ static bool lvgl_setup(void) {
 
 static uint32_t clamp_ms(uint32_t v, uint32_t lo, uint32_t hi) { return v < lo ? lo : v > hi ? hi : v; }
 
+// ---- Perf counters (printed by the monitor): single writer (this task), plain 32-bit fields ----
+static volatile ui_perf_t g_perf;
+static volatile uint32_t g_perf_reset;
+static uint32_t g_perf_reset_seen;
+static uint64_t g_perf_sum_us;
+
+bool ui_perf_get(ui_perf_t *out) {
+    out->frames = g_perf.frames;
+    out->frame_max_us = g_perf.frame_max_us;
+    out->frame_avg_us = g_perf.frame_avg_us;
+    out->mem_used = g_perf.mem_used;
+    out->mem_total = g_perf.mem_total;
+    out->mem_max_used = g_perf.mem_max_used;
+    out->mem_frag_pct = g_perf.mem_frag_pct;
+    return true;
+}
+
+void ui_perf_new_window(void) { g_perf_reset++; }
+
+static void sample_lvgl_memory(void) {
+    lv_mem_monitor_t m;
+    lv_mem_monitor(&m);
+    g_perf.mem_total = (uint32_t)m.total_size;
+    g_perf.mem_used = (uint32_t)(m.total_size - m.free_size);
+    if (g_perf.mem_used > g_perf.mem_max_used) {
+        g_perf.mem_max_used = g_perf.mem_used;
+    }
+    g_perf.mem_frag_pct = m.frag_pct;
+}
+
 // One pass of the UI machinery; returns how long to sleep.
 static uint32_t pump(void) {
+    uint64_t t0 = hal_micros();
     uint32_t next = lv_timer_handler();
+    uint32_t dt = (uint32_t)(hal_micros() - t0);
+    if (g_perf_reset_seen != g_perf_reset) {
+        g_perf_reset_seen = g_perf_reset;
+        g_perf.frames = g_perf.frame_max_us = g_perf.frame_avg_us = 0;
+        g_perf_sum_us = 0;
+    }
+    if (dt > 500u) { // a pass that rendered something (an idle pass costs a few tens of microseconds)
+        g_perf.frames++;
+        g_perf_sum_us += dt;
+        g_perf.frame_avg_us = (uint32_t)(g_perf_sum_us / g_perf.frames);
+        if (dt > g_perf.frame_max_us) {
+            g_perf.frame_max_us = dt;
+        }
+    }
     hal_display_service();
     return clamp_ms(next, 5, 30);
+}
+
+#define SCRIPT_STEP_MS 300u
+
+// Host tour: run the next token of the script. Returns the rest of the script.
+static void screen_ready(const char *name);
+static const char *script_step(const char *p, uint32_t now, bool *done) {
+    while (*p == ' ') {
+        p++;
+    }
+    if (*p == '\0') {
+        *done = true;
+        const neupod_runtime_config_t *cfg = rt_config();
+        if (cfg->on_done != NULL) {
+            cfg->on_done(cfg->ctx);
+        }
+        return p;
+    }
+    const char *end = p;
+    while (*end != '\0' && *end != ' ') {
+        end++;
+    }
+    if (strncmp(p, "snap:", 5) == 0) {
+        char name[32];
+        size_t n = (size_t)(end - (p + 5));
+        n = n < sizeof name - 1 ? n : sizeof name - 1;
+        memcpy(name, p + 5, n);
+        name[n] = '\0';
+        screen_ready(name);
+    } else {
+        unsigned repeat = 1; /* "N*keys" repeats the keys N times in one step */
+        const char *keys = p;
+        unsigned n = 0;
+        const char *d = p;
+        while (d < end && *d >= '0' && *d <= '9') {
+            n = n * 10u + (unsigned)(*d - '0');
+            d++;
+        }
+        if (d > p && d < end && *d == '*') {
+            repeat = n;
+            keys = d + 1;
+        }
+        for (unsigned r = 0; r < repeat; r++) {
+            for (const char *k = keys; k < end; k++) {
+                input_event_t evs[2];
+                size_t cnt = input_events_from_key(*k == '_' ? '\r' : *k, evs, 2); /* "_" = Enter */
+                for (size_t i = 0; i < cnt; i++) {
+                    ui_frame_input(&evs[i], now + r * 300u); /* spaced out so acceleration stays at 1x */
+                }
+            }
+        }
+    }
+    return end;
 }
 
 // Any input event (wheel, buttons, testbed console keys, host keyboard: all arrive through the input
@@ -76,6 +176,8 @@ static bool skip_requested(void) {
 
 static void screen_ready(const char *name) {
     lv_refr_now(NULL); // make sure the screen's latest state is on the panel before anyone looks
+    sample_lvgl_memory();
+    printf("ui: screen '%s' lvgl_mem=%u/%uB depth=%d\n", name, (unsigned)g_perf.mem_used, (unsigned)g_perf.mem_total, ui_frame_depth());
     const neupod_runtime_config_t *cfg = rt_config();
     if (cfg->on_screen != NULL) {
         cfg->on_screen(name, cfg->ctx);
@@ -141,23 +243,36 @@ void ui_task(void *arg) {
     }
     screen_ready("splash"); // final state of the splash, for the host snapshot hook
 
-    // --- Transition to the placeholder home screen ---
-    lv_obj_t *home = ui_home_create(&caps);
-    lv_screen_load_anim(home, LV_SCREEN_LOAD_ANIM_FADE_IN, FADE_MS, 0, true);
+    // --- Transition to the home menu ---
+    lv_obj_t *scr = lv_obj_create(NULL);
+    ui_frame_init(scr);
+    ui_frame_push(ui_screen_home_create());
+    lv_screen_load_anim(scr, LV_SCREEN_LOAD_ANIM_FADE_IN, FADE_MS, 0, true);
     uint32_t home_at = os_tick_ms();
     bool home_reported = false;
+    const char *script = rt_config()->ui_script;
+    uint32_t script_next = home_at + FADE_MS + HOME_SNAPSHOT_AFTER_MS + 400u;
+    bool script_done = false;
+    uint32_t mem_at = 0;
 
     for (;;) {
-        hal_battery_status_t bat;
-        bool have = battery_store_get(&bat);
-        ui_home_set_battery(have, &bat);
+        uint32_t now = os_tick_ms();
         input_event_t ev;
         while (os_queue_recv(rt_input_queue(), &ev, OS_NO_WAIT)) {
-            ui_home_set_input(&ev);
+            ui_frame_input(&ev, now);
         }
-        if (!home_reported && os_tick_ms() - home_at >= FADE_MS + HOME_SNAPSHOT_AFTER_MS) {
+        if (!home_reported && now - home_at >= FADE_MS + HOME_SNAPSHOT_AFTER_MS) {
             home_reported = true;
             screen_ready("home");
+        }
+        if (script != NULL && !script_done && home_reported && (int32_t)(now - script_next) >= 0) {
+            script_next = now + SCRIPT_STEP_MS;
+            script = script_step(script, now, &script_done);
+        }
+        ui_frame_tick(now);
+        if (now - mem_at >= 1000u) {
+            mem_at = now;
+            sample_lvgl_memory();
         }
         os_delay_ms(pump());
     }

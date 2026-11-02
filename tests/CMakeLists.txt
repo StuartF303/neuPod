@@ -78,12 +78,21 @@ set_source_files_properties(test_spsc_ring.c test_input_events.c PROPERTIES COMP
 # snapshots. SDL_VIDEODRIVER=dummy keeps an SDL build from needing a display (and falls back to
 # the headless framebuffer if SDL cannot start at all).
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots)
+
+# File-browser fixture: a few real folders/files plus a folder of 300 files (more than the browser keeps).
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/assets/fsroot/ DESTINATION ${CMAKE_BINARY_DIR}/fsroot_fixture)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/fsroot_fixture/many)
+# A blank "card" so the storage boot check passes on the host (the file browser needs it).
+execute_process(COMMAND dd if=/dev/zero of=${CMAKE_BINARY_DIR}/test_disk.img bs=1024 count=2048 status=none)
+foreach(I RANGE 1 300)
+  file(WRITE ${CMAKE_BINARY_DIR}/fsroot_fixture/many/file_${I}.txt "x")
+endforeach()
 add_test(NAME runtime_smoke
-  COMMAND neupod --run-ms 8000 --splash-hold-ms 1500 --snapshots ${CMAKE_BINARY_DIR}/snapshots)
+  COMMAND neupod --run-ms 30000 --splash-hold-ms 1500 --tour --snapshots ${CMAKE_BINARY_DIR}/snapshots)
 set_tests_properties(runtime_smoke PROPERTIES
-  ENVIRONMENT "SDL_VIDEODRIVER=dummy"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_fixture;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-  TIMEOUT 60)
+  TIMEOUT 90)
 
 # The bare-metal audio core (core 1) may not use the RTOS, stdio, malloc or SDK blocking primitives.
 add_test(NAME audio_core_rules
@@ -94,3 +103,15 @@ target_link_libraries(test_boot_briefs lvgl)
 target_include_directories(test_boot_briefs PRIVATE ${CMAKE_SOURCE_DIR}/app/runtime)
 add_test(NAME boot_briefs COMMAND test_boot_briefs)
 set_source_files_properties(test_boot_briefs.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+add_executable(test_ui_logic test_ui_logic.c)
+target_include_directories(test_ui_logic PRIVATE ${CMAKE_SOURCE_DIR}/app/ui)
+target_link_libraries(test_ui_logic neupod_rt_core)
+add_test(NAME ui_logic COMMAND test_ui_logic)
+set_source_files_properties(test_ui_logic.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+# Audio maths (conversion, volume, sine/tone/scale generators) and the WAV parser.
+add_executable(test_audio test_audio.c)
+target_link_libraries(test_audio neupod_rt_core m)
+add_test(NAME audio COMMAND test_audio)
+set_source_files_properties(test_audio.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")

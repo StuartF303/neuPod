@@ -28,7 +28,7 @@ port, so there is no newer kernel to move to without porting the port.
   UI, input, storage, monitor, boot checks and the CYW43 worker. No affinity.
 - **Core 1 is a bare-metal audio core**, launched by the runtime (`multicore_launch_core1` via
   `hal_core1_launch`) before the scheduler starts. Its main loop handles commands and runs the decoder;
-  the output clock is a hardware interrupt on core 1 (null sink now; I2S PIO+DMA interrupt later) that moves
+  the output clock is a hardware interrupt on core 1 (the I2S PIO+DMA block interrupt on the RP2350, a timer-driven null sink as the fallback) that moves
   256-frame blocks from a PCM ring to the sink. The interrupt preempts the decoder, so block timing
   does not depend on decode time.
 - **Core-1 rules**: no FreeRTOS or `os.h`, no stdio, no malloc, no SDK primitive that the FreeRTOS

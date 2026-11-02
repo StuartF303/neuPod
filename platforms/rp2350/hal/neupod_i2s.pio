@@ -1,0 +1,31 @@
+;
+; neuPod I2S transmitter, 32-bit slots, stereo, master (this chip drives BCK and LRCK).
+;
+; Adapted from the Raspberry Pi pico-extras audio_i2s.pio, which is
+;   Copyright (c) 2020 Raspberry Pi (Trading) Ltd.
+;   SPDX-License-Identifier: BSD-3-Clause
+; (same two-cycles-per-bit structure and LRCK-leads-by-one-BCK trick; widened from 16 to 32-bit slots,
+; left channel first, one entry point at the start of the left slot.)
+;
+; FIFO word format (autopull at 32, shift left = MSB first): one 32-bit word per slot, left word then right word.
+; Pins: OUT base = DATA; side-set base = BCK, base+1 = LRCK (side-set bit0 = BCK, bit1 = LRCK).
+; Timing: every BCK is two PIO cycles (low half then high half); a frame is 128 PIO cycles, so the PIO clock
+; is 128 x Fs (5.6448 MHz for 44.1 kHz). Data changes while BCK is low (on its falling edge) and LRCK changes
+; at the same falling edge as the LAST bit of the previous slot, i.e. one BCK before the next MSB: standard I2S.
+;
+.program neupod_i2s
+.side_set 2
+
+.wrap_target
+public entry_point:
+    set x, 30        side 0b01      ; BCK high, LRCK low (left slot); x counts the remaining 31 loop bits
+lbit:
+    out pins, 1      side 0b00      ; data bit, BCK low
+    jmp x-- lbit     side 0b01      ; BCK high
+    out pins, 1      side 0b10      ; LSB of the left slot; LRCK goes high now, one BCK before the right MSB
+    set x, 30        side 0b11
+rbit:
+    out pins, 1      side 0b10
+    jmp x-- rbit    side 0b11
+    out pins, 1      side 0b00      ; LSB of the right slot; LRCK goes low for the next left slot
+.wrap

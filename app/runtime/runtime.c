@@ -13,6 +13,7 @@
 #include "capabilities.h"
 #include "hal_battery.h"
 #include "hal_console.h"
+#include "hal_audio.h"
 #include "hal_core.h"
 #include "hal_input.h"
 #include "hal_system.h"
@@ -20,15 +21,16 @@
 #include "neupod_version.h"
 #include "os.h"
 #include "panic.h"
+#include "player.h"
 #include "runtime.h"
 #include "runtime_config.h"
+#include "haptic_service.h"
 #include "storage_service.h"
 #include "ui.h"
 
 static neupod_runtime_config_t g_cfg;
 static os_mutex_t *g_i2c_mutex;
 static os_queue_t *g_input_queue;
-static os_queue_t *g_storage_queue;
 
 const neupod_runtime_config_t *rt_config(void) { return &g_cfg; }
 os_mutex_t *rt_i2c_mutex(void) { return g_i2c_mutex; }
@@ -78,33 +80,6 @@ static void input_task(void *arg) {
     }
 }
 
-// --- Storage task (stub) ---------------------------------------------------------------------
-
-#define PREFETCH_PATH_LEN 64u
-typedef struct {
-    char path[PREFETCH_PATH_LEN];
-} prefetch_req_t;
-
-bool storage_prefetch_request(const char *path) {
-    if (g_storage_queue == NULL || path == NULL) {
-        return false;
-    }
-    prefetch_req_t r;
-    strncpy(r.path, path, sizeof r.path - 1);
-    r.path[sizeof r.path - 1] = '\0';
-    return os_queue_send(g_storage_queue, &r, OS_NO_WAIT);
-}
-
-void storage_task(void *arg) {
-    (void)arg;
-    for (;;) {
-        prefetch_req_t r;
-        if (os_queue_recv(g_storage_queue, &r, OS_WAIT_FOREVER)) {
-            printf("storage: prefetch '%s' (stub: nothing to do yet)\n", r.path);
-        }
-    }
-}
-
 // --- Monitor task ----------------------------------------------------------------------------
 
 #define HEARTBEAT_MS 1000u
@@ -124,18 +99,35 @@ static void print_audio_stats(void) {
            (unsigned)a.period_nominal_us, (unsigned)a.jitter_max_us, (unsigned)a.ring_min_frames,
            (unsigned)a.ring_frames, (unsigned)a.decoded_blocks, (unsigned)a.data_bytes,
            (unsigned)a.events_dropped, (unsigned)hal_core1_stack_free_min());
+    static const char *const src[] = {"none", "tone", "pcm"};
+    printf("audio sink: %s rate=%u.%03u Hz (requested %u Hz, clkdiv=%u+%u/256) dma_underruns=%u muted=%u "
+           "source=%s audible=%u volume=-%udB pcm_frames=%u\n",
+           hal_audio_backend_name(), (unsigned)(a.sink_rate_mhz / 1000u), (unsigned)(a.sink_rate_mhz % 1000u),
+           (unsigned)a.sink_rate_hz, (unsigned)(a.sink_clkdiv_x256 >> 8), (unsigned)(a.sink_clkdiv_x256 & 0xFFu),
+           (unsigned)a.sink_missed, (unsigned)a.muted, a.source < 3u ? src[a.source] : "?", (unsigned)a.audible,
+           (unsigned)a.volume_att_db, (unsigned)a.pcm_frames);
     (void)audio_stats_new_window();
 }
 
 // Events from the audio core: print them (rare by construction: underruns are limited to ~1/s).
 static void drain_audio_events(void) {
     static const char *const names[] = {"?", "stream opened", "stream closed", "UNDERRUN",
-                                        "end of track", "command error"};
+                                        "end of track", "command error", "STORM (PCM data ran dry, stopped and muted)"};
     audio_event_t e;
     while (audio_event_poll(&e)) {
         printf("audio event: %s (%u)\n", e.type < sizeof names / sizeof names[0] ? names[e.type] : "?",
                (unsigned)e.value);
     }
+}
+
+static void print_ui_stats(void) {
+    ui_perf_t u;
+    if (ui_perf_get(&u)) {
+        printf("ui: frames=%u frame_us avg/max=%u/%u lvgl_mem=%u/%uB (max %uB, frag %u%%)\n", (unsigned)u.frames,
+               (unsigned)u.frame_avg_us, (unsigned)u.frame_max_us, (unsigned)u.mem_used, (unsigned)u.mem_total,
+               (unsigned)u.mem_max_used, (unsigned)u.mem_frag_pct);
+    }
+    ui_perf_new_window();
 }
 
 static void print_task_stats(void) {
@@ -200,10 +192,10 @@ static void monitor_task(void *arg) {
     for (;;) {
         os_delay_until_ms(&last, 100);
         uint32_t t = os_tick_ms() - start;
+        drain_audio_events();
         if (t >= next_beat) {
             next_beat += HEARTBEAT_MS;
             check_audio_alive();
-            drain_audio_events();
             led = !led;
             hal_status_led(led);
             printf("neuPod alive (%s, %u s)\n", hal_platform_name(), (unsigned)(t / 1000u));
@@ -215,6 +207,7 @@ static void monitor_task(void *arg) {
         if (t >= next_stats) {
             next_stats += STATS_MS;
             print_audio_stats();
+            print_ui_stats();
             print_task_stats();
         }
         if (g_cfg.run_ms != 0 && !done_called && t >= g_cfg.run_ms) {
@@ -250,8 +243,9 @@ void neupod_runtime_run(const neupod_runtime_config_t *cfg) {
     battery_store_init();
     g_i2c_mutex = os_mutex_create();
     g_input_queue = os_queue_create(sizeof(input_event_t), 16);
-    g_storage_queue = os_queue_create(sizeof(prefetch_req_t), 4);
-    if (g_i2c_mutex == NULL || g_input_queue == NULL || g_storage_queue == NULL) {
+    storage_service_init();
+    haptic_service_init();
+    if (g_i2c_mutex == NULL || g_input_queue == NULL || !storage_service_ready() || !haptic_service_ready()) {
         neupod_panic(NEUPOD_PANIC_MALLOC_FAILED, "runtime objects (i2c mutex / input / storage queues)");
     }
 
@@ -260,7 +254,9 @@ void neupod_runtime_run(const neupod_runtime_config_t *cfg) {
     if (!audio_engine_start() || !audio_open(AUDIO_SAMPLE_RATE, 2, 16)) {
         printf("neuPod: audio core did not start\n");
     }
+    player_init(); // default volume -30 dB goes to the audio core before anything can play
     must_create("storage", storage_task, RT_STACK_STORAGE, RT_PRIO_STORAGE, RT_CORE_OTHER);
+    must_create("haptic", haptic_task, RT_STACK_HAPTIC, RT_PRIO_HAPTIC, RT_CORE_OTHER);
     must_create("input", input_task, RT_STACK_INPUT, RT_PRIO_INPUT, RT_CORE_OTHER);
     must_create("ui", ui_task, RT_STACK_UI, RT_PRIO_UI, RT_CORE_OTHER);
     must_create("monitor", monitor_task, RT_STACK_MONITOR, RT_PRIO_MONITOR, RT_CORE_OTHER);

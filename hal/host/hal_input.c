@@ -9,7 +9,7 @@
 #include "hal_system.h"
 #include "host_internal.h"
 
-#define SCROLL_STEPS_PER_NOTCH 2 // wheel positions per mouse-wheel notch
+#define SCROLL_STEPS_PER_NOTCH 4 // wheel positions per mouse-wheel notch (= one UI list step)
 #define TOUCH_HOLD_MS 250u       // finger stays "on the wheel" this long after a scroll
 
 static hal_wheel_state g_sim; // buttons/position/touched as the simulated wheel would report

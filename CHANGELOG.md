@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- I2S audio output for the Pimoroni Pico Audio Pack (PIO0 + two ping-pong DMA channels, DMA_IRQ_1 on core 1,
+  32-bit slots, 44.1/48/88.2/96 kHz, GP22 mute handling incl. the fatal-error path), a null-sink build option, an
+  SDL sink on the host, software volume (default -30 dB), a -20 dBFS 1 kHz test tone, an L/R channel ident, a C-major
+  scale, and a bring-up WAV player (16/24/32-bit, mono/stereo) streaming from the card. UI: Extras > Test tone, Select
+  on a `.wav` in Files opens Now Playing (wheel = volume, Play = pause). Host unit tests for the WAV parser, sample
+  conversion, volume maths and the generators. See `docs/audio.md`.
+- Home menu UI (LVGL): screen stack with status bar, virtualised list widget with wheel acceleration,
+  Music/Extras/Now Playing/placeholder screens, read-only SD file browser (directory reads in the storage
+  task), Settings (About, Display backlight, Click feedback, Storage, Battery), haptic click feedback via
+  its own task; host `--tour` mode writes snapshots of every screen. See `docs/ui.md`, `docs/runtime.md`.
 - Runtime: single-core FreeRTOS on core 0 of the RP2350 and a bare-metal audio core on core 1 (ADR-0011),
   and the POSIX port on the host; `os.h` portable OS layer; LVGL v9 UI with a boot splash
   and placeholder home screen; concurrent read-only boot self-checks with a capabilities struct;

@@ -27,7 +27,7 @@ development.
 ## Consequences
 
 - Measured on the RP2350 build: about 0.45 MB of flash (code plus the four fonts) and 94 KB of
-  static RAM (64 KB pool + two 15 KB render buffers).
+  static RAM (stage 1: 64 KB pool + two 15 KB render buffers; stage 2 raised the pool to 96 KB for the menu screens).
 - Assertions in LVGL go to the common panic path.
 - LVGL's symbol glyphs come from Font Awesome (CC BY 4.0 / OFL): recorded in `LICENSE.md`.
 - The drawing code must never be called from another task; use the queues.
