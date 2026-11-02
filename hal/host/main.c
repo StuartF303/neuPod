@@ -33,6 +33,12 @@
     "s _ s s s snap:in-number p s _ s s s s s snap:in-slider p s _ s snap:in-choice p "              \
     "s _ _ s s _ snap:in-multi p s _ s d s snap:in-datetime p snap:in-end"
 
+// Wi-Fi: Settings > Wi-Fi, scan, pick a network, type the password on the wheel keyboard, join, NTP time on the home screen.
+#define TOUR_WIFI                                                                                  \
+    "x s s s s _ s s s s snap:settings-wifi _ snap:wifi-idle s s _ snap:wifi-scan x x x x x x "      \
+    "snap:wifi-found s s s s s _ snap:wifi-kb-empty _ s _ s s _ snap:wifi-kb p x x x x x x "          \
+    "snap:wifi-joined m m x x x snap:home-clock"
+
 static unsigned g_expect = 18;
 static const char *g_snapshot_dir;
 static unsigned g_snapshots;
@@ -84,6 +90,10 @@ int main(int argc, char **argv) {
             cfg.ui_script = TOUR_INPUT;
             cfgp_tour = true;
             g_expect = 14;
+        } else if (strcmp(argv[i], "--tour-wifi") == 0) {
+            cfg.ui_script = TOUR_WIFI;
+            cfgp_tour = true;
+            g_expect = 8;
         } else if (strcmp(argv[i], "--script") == 0 && i + 1 < argc) {
             cfg.ui_script = argv[++i]; // ad-hoc key script, same tokens as the tour
         } else if (strcmp(argv[i], "--splash-hold-ms") == 0 && i + 1 < argc) {

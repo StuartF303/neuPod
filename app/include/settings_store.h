@@ -40,7 +40,7 @@ extern "C" {
 #define SETTINGS_FILE SETTINGS_DIR "/settings.bin"
 #define SETTINGS_TMP_FILE SETTINGS_DIR "/settings.tmp"
 
-#define SETTINGS_MAX_ITEMS 20u /**< distinct tags kept (settings, Wi-Fi networks, link keys, BT device records) */
+#define SETTINGS_MAX_ITEMS 24u /**< distinct tags kept (settings, Wi-Fi networks, link keys, BT device records) */
 #define SETTINGS_VALUE_MAX 96u /**< bytes per stored value; a sealed secret holds up to 96 - 29 = 67 bytes of plaintext (Wi-Fi passwords are at most 63) */
 #define SETTINGS_VERSION 1u
 
@@ -49,6 +49,11 @@ extern "C" {
 #define SETTING_VOLUME_ATT_DB SETTINGS_TAG('N', 'P', 'v', 'o') /**< u8, attenuation in dB */
 #define SETTING_BACKLIGHT_PCT SETTINGS_TAG('N', 'P', 'b', 'l') /**< u8, 5..100 */
 #define SETTING_CLICK_FEEDBACK SETTINGS_TAG('N', 'P', 'c', 'k') /**< u8, 0 or 1 */
+#define SETTING_WIFI SETTINGS_TAG('N', 'P', 'w', 'f')            /**< 4 bytes: enabled, during playback, idle-off minutes, zone */
+#define SETTING_NTP_SERVER SETTINGS_TAG('N', 'P', 'n', 's')      /**< string */
+#define SETTING_TEST_URL SETTINGS_TAG('N', 'P', 't', 'u')        /**< string */
+#define SETTING_NET_SSID(i) SETTINGS_TAG('N', 'P', 'n', (char)('0' + (i)))  /**< flags byte (1 = has password) + SSID */
+#define SETTING_NET_PSK(i) SETTINGS_TAG('N', 'P', 'p', (char)('0' + (i)))   /**< sealed password */
 
 /** Lock callbacks around the RAM image (NULL members = no locking; unit tests). Must not be recursive. */
 typedef struct {

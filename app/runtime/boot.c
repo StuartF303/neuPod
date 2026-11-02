@@ -217,7 +217,8 @@ static void check_radio(void *arg) {
     }
     hal_status_led(true); // first LED write loads the chip firmware; do it here, not in the monitor
     hal_status_led(false);
-    caps_resolve(CAP_WIFI, false, BR_RADIO_NONE, "no Wi-Fi driver yet (Bluetooth comes first)");
+    // "ok" means the driver and lwIP are up, not that a network is joined (joining is the Wi-Fi service's business).
+    caps_resolve(CAP_WIFI, true, NULL, "driver and lwIP up (joining is separate)");
 
     st = bt_service_start(); // hci power on, BD_ADDR and HCI version go to the UART from the radio worker
     if (st != HAL_OK) {

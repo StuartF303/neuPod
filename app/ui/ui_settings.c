@@ -21,6 +21,7 @@
 #include "os.h"
 #include "storage_service.h"
 #include "ui_input.h"
+#include "wifi_service.h"
 #include "ui_internal.h"
 
 static uint32_t g_space_seq;
@@ -231,7 +232,7 @@ static ui_screen_t *make_display(void) {
 
 /* ---- the Settings screen itself ---------------------------------------------------------------------- */
 
-enum { G_ABOUT, G_DISPLAY, G_CLICK, G_BLUETOOTH, G_STORAGE, G_BATTERY, G_COUNT };
+enum { G_ABOUT, G_DISPLAY, G_CLICK, G_BLUETOOTH, G_WIFI, G_STORAGE, G_BATTERY, G_COUNT };
 
 typedef struct {
     ui_screen_t base;
@@ -242,7 +243,7 @@ typedef struct {
     char text[200];
 } settings_t;
 
-static const char *const k_group[G_COUNT] = {"About", "Display", "Click feedback", "Bluetooth", "Storage", "Battery"};
+static const char *const k_group[G_COUNT] = {"About", "Display", "Click feedback", "Bluetooth", "Wi-Fi", "Storage", "Battery"};
 
 static void settings_get(void *ctx, int32_t i, ui_list_item_t *o) {
     (void)ctx;
@@ -293,6 +294,18 @@ static void pane_text(int32_t g, char *out, size_t n) {
             capabilities_t c;
             caps_get(&c);
             snprintf(out, n, "Unavailable\n%s", c.brief[CAP_BLUETOOTH]);
+        }
+        break;
+    }
+    case G_WIFI: {
+        wifi_info_t wi;
+        wifi_get_info(&wi);
+        if (wi.state == HAL_WIFI_UP) {
+            snprintf(out, n, "%s\n%s\n%d dBm", wi.ssid, wi.ip, wi.rssi);
+        } else if (wi.saved == 0) {
+            snprintf(out, n, "No network saved\nSelect to add one");
+        } else {
+            snprintf(out, n, "%s", wi.state == HAL_WIFI_DOWN ? "Radio idle" : wi.state == HAL_WIFI_JOINING ? "Connecting..." : "Not connected");
         }
         break;
     }
@@ -355,6 +368,7 @@ static bool settings_button(ui_screen_t *b, uint8_t btn) {
         ui_feedback_step(); /* a click when switched on is the confirmation */
         return true;
     case G_BLUETOOTH: next = make_bluetooth(); break;
+    case G_WIFI: next = ui_screen_wifi_create(); break;
     case G_STORAGE: next = make_storage(); break;
     case G_BATTERY: next = make_battery(); break;
     }

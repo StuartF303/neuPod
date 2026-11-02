@@ -12,6 +12,7 @@
 #include "battery_store.h"
 #include "capabilities.h"
 #include "hal_display.h"
+#include "hal_radio.h"
 #include "haptic_service.h"
 #include "player.h"
 #include "settings_store.h"
@@ -49,6 +50,9 @@ static lv_obj_t *g_content;
 static lv_obj_t *g_title;
 static lv_obj_t *g_play;
 static lv_obj_t *g_batt;
+static lv_obj_t *g_wifi;
+static hal_wifi_status g_wifi_shown = (hal_wifi_status)99;
+static uint32_t g_wifi_col = UI_L_DIM;
 static ui_stack_t g_stack;
 static ui_accel_t g_accel;
 static int g_shown_pct = -3;
@@ -88,6 +92,8 @@ void ui_frame_init(lv_obj_t *scr) {
 
     g_play = ui_label(bar, play_glyph(), UI_L_DIM);
     lv_obj_align(g_play, LV_ALIGN_LEFT_MID, 8, 0);
+    g_wifi = ui_label(bar, "", UI_L_DIM); /* Wi-Fi state: hidden when the station is off, dim while joining, green when up */
+    lv_obj_align(g_wifi, LV_ALIGN_LEFT_MID, 30, 0);
 
     g_batt = ui_label(bar, LV_SYMBOL_BATTERY_EMPTY " --", UI_L_DIM);
     lv_obj_align(g_batt, LV_ALIGN_RIGHT_MID, -8, 0);
@@ -227,9 +233,22 @@ static void update_battery(void) {
     g_batt_col = col;
 }
 
+static void update_wifi(void) {
+    hal_wifi_status st = hal_wifi_state();
+    if (st == g_wifi_shown) {
+        return;
+    }
+    g_wifi_shown = st;
+    uint32_t col = st == HAL_WIFI_UP ? UI_L_OK : st == HAL_WIFI_FAILED || st == HAL_WIFI_BAD_AUTH ? UI_L_ERR : UI_L_DIM;
+    lv_label_set_text(g_wifi, st == HAL_WIFI_DOWN ? "" : LV_SYMBOL_WIFI);
+    ui_label_recolour(g_wifi, g_wifi_col, col);
+    g_wifi_col = col;
+}
+
 void ui_frame_tick(uint32_t now_ms) {
     (void)now_ms;
     sync_from_settings();
+    update_wifi();
     update_battery();
     ui_screen_t *top = ui_stack_top(&g_stack);
     if (top != NULL && top->on_tick != NULL) {

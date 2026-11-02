@@ -27,6 +27,7 @@
 #include "runtime.h"
 #include "runtime_config.h"
 #include "settings_service.h"
+#include "wifi_service.h"
 #include "haptic_service.h"
 #include "storage_service.h"
 #include "ui.h"
@@ -134,6 +135,19 @@ static void drain_audio_events(void) {
     }
 }
 
+static void print_wifi_stats(void) {
+    static const char *const names[] = {"down", "idle", "joining", "no-ip", "up", "failed", "bad-password"};
+    wifi_info_t w;
+    wifi_get_info(&w);
+    hal_wifi_mem_t m;
+    hal_wifi_mem(&m);
+    printf("wifi: state=%s%s ssid=%s rssi=%d ip=%s ntp=%u saved=%u reconnects=%u failures=%u lwip mem=%u/%u (max %u) pbuf=%u/%u (max %u) errs=%u\n",
+           w.state <= HAL_WIFI_BAD_AUTH ? names[w.state] : "?", w.paused_for_playback ? "(paused for playback)" : "", w.ssid[0] ? w.ssid : "-",
+           w.rssi, w.ip[0] ? w.ip : "-", (unsigned)w.ntp_synced, (unsigned)w.saved, (unsigned)w.reconnects, (unsigned)w.failures,
+           (unsigned)m.mem_used, (unsigned)m.mem_size, (unsigned)m.mem_max, (unsigned)m.pbuf_used, (unsigned)m.pbuf_size,
+           (unsigned)m.pbuf_max, (unsigned)m.errors);
+}
+
 static void print_ui_stats(void) {
     ui_perf_t u;
     if (ui_perf_get(&u)) {
@@ -222,6 +236,7 @@ static void monitor_task(void *arg) {
             next_stats += STATS_MS;
             print_audio_stats();
             print_ui_stats();
+            print_wifi_stats();
             print_task_stats();
         }
         if (g_cfg.run_ms != 0 && !done_called && t >= g_cfg.run_ms) {
@@ -259,6 +274,7 @@ void neupod_runtime_run(const neupod_runtime_config_t *cfg) {
     g_input_queue = os_queue_create(sizeof(input_event_t), 16);
     settings_service_init();
     bt_service_init();
+    wifi_service_init();
     storage_service_init();
     haptic_service_init();
     if (g_i2c_mutex == NULL || g_input_queue == NULL || !storage_service_ready() || !haptic_service_ready()) {
@@ -273,6 +289,7 @@ void neupod_runtime_run(const neupod_runtime_config_t *cfg) {
     player_init(); // default volume -30 dB goes to the audio core before anything can play
     must_create("storage", storage_task, RT_STACK_STORAGE, RT_PRIO_STORAGE, RT_CORE_OTHER);
     must_create("haptic", haptic_task, RT_STACK_HAPTIC, RT_PRIO_HAPTIC, RT_CORE_OTHER);
+    must_create("wifi", wifi_task, RT_STACK_WIFI, RT_PRIO_WIFI, RT_CORE_OTHER);
     must_create("input", input_task, RT_STACK_INPUT, RT_PRIO_INPUT, RT_CORE_OTHER);
     must_create("ui", ui_task, RT_STACK_UI, RT_PRIO_UI, RT_CORE_OTHER);
     must_create("monitor", monitor_task, RT_STACK_MONITOR, RT_PRIO_MONITOR, RT_CORE_OTHER);

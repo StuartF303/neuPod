@@ -32,4 +32,5 @@ target_compile_definitions(neupod_freertos INTERFACE
   # but cyw43_arch_init() is compiled into several of the static libraries that link neupod_freertos, and every copy must
   # agree (it decides whether cyw43_arch_init() starts BTstack). The BTstack sources themselves are linked once, in hal_rp2350_rtos.
   CYW43_ENABLE_BLUETOOTH=1
+  PICO_CYW43_ARCH_DEFAULT_COUNTRY_CODE=CYW43_COUNTRY_UK  # channels 1-13
 )

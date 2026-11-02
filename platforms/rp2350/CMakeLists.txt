@@ -46,7 +46,7 @@ target_link_libraries(hal_rp2350_core PUBLIC
   pico_unique_id
 )
 set_source_files_properties(hal/hal_core.c hal/hal_i2c.c i2c_test_main.c ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
-  hal/hal_system.c hal/hal_radio_bt.c hal/hal_display.c hal/hal_console.c hal/hal_input.c hal/hal_audio.c hal/hal_audio_null.c main.c
+  hal/hal_system.c hal/hal_radio_bt.c hal/hal_wifi.c hal/hal_display.c hal/hal_console.c hal/hal_input.c hal/hal_audio.c hal/hal_audio_null.c main.c
   display_test_main.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 pico_generate_pio_header(hal_rp2350_core ${CMAKE_CURRENT_LIST_DIR}/hal/clickwheel_rx.pio)
 if(NEUPOD_AUDIO_SINK STREQUAL "i2s")
@@ -59,7 +59,7 @@ target_link_libraries(hal_rp2350 PUBLIC hal_rp2350_core pico_cyw43_arch_none)
 
 # FreeRTOS (single-core, core 0): pico_cyw43_arch_sys_freertos (via neupod_freertos). Radio bring-up
 # waits for the scheduler (hal_system_late_init).
-add_library(hal_rp2350_rtos STATIC hal/hal_system.c hal/hal_radio_bt.c)
+add_library(hal_rp2350_rtos STATIC hal/hal_system.c hal/hal_radio_bt.c hal/hal_wifi.c)
 target_compile_definitions(hal_rp2350_rtos PRIVATE NEUPOD_RTOS=1)
 target_link_libraries(hal_rp2350_rtos PUBLIC hal_rp2350_core neupod_freertos)
 

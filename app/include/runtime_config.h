@@ -18,6 +18,7 @@
 #define RT_PRIO_RADIO 3u /* the SDK's CYW43 worker, which also runs BTstack; set via CYW43_TASK_PRIORITY on RP2350 */
 #define RT_PRIO_UI 2u
 #define RT_PRIO_MONITOR 1u
+#define RT_PRIO_WIFI 1u  /* the Wi-Fi policy task: joins, retries, NTP; the radio worker (3) does the real work */
 #define RT_PRIO_I2C 4u   /* I2C users run at input priority while on the bus: hal_i2c timeouts are
                             wall-clock (2 ms floor), and a UI frame at priority 2 outlasts that */
 #define RT_PRIO_CHECK 1u /* boot self-check tasks: transient, below the UI so the splash animates */
@@ -51,6 +52,7 @@
 #define RT_STACK_INPUT 2048u
 #define RT_STACK_UI 12288u
 #define RT_STACK_MONITOR 3072u
+#define RT_STACK_WIFI 3072u
 #define RT_STACK_CHECK 3072u
 #define RT_STACK_CHECK_STORAGE 5120u /* FatFs mount */
 #define RT_STACK_CHECK_RADIO 4096u   /* radio driver start-up and the Bluetooth hand-over (caps_resolve with a format) */

@@ -137,6 +137,8 @@ ui_screen_t *ui_screen_extras_create(void);
 ui_screen_t *ui_screen_files_create(void);
 ui_screen_t *ui_screen_settings_create(void);
 ui_screen_t *ui_screen_bluetooth_create(void); /* ui_bluetooth.c */
+ui_screen_t *ui_screen_wifi_create(void); /* ui_wifi.c */
+ui_screen_t *ui_screen_nettest_create(void); /* ui_nettest.c */
 ui_screen_t *ui_screen_inputdemo_create(void); /* input/ui_input_demo.c */
 
 /** Small helpers shared by the screens. */
