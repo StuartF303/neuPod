@@ -44,8 +44,29 @@ audio device exist (`NEUPOD_HOST_AUDIO=0` forces silence), otherwise it is the n
    buffer through `hal_audio_write`. The handler re-arms that channel's count.
 4. Ring empty: that block is silence and `underruns` counts it. If the interrupt runs so late that both buffers
    finished, `dma_underruns` (`sink_missed`) counts it and the old block is replayed once.
+   If the late interrupt finds the other buffer's channel already restarted, the finished sibling is re-armed with
+   its old block (never left at a zero count, which would end the ping-pong).
 5. 32 starved blocks in a row (186 ms) while playing: playback stops, the output is muted and the event
    `STORM` is logged.
+
+### Sink restart (re-clock on a sample-rate change)
+
+Close and `hal_audio_force_mute()` stop the sink in a fixed order, registers only and with bounded waits: mute pin;
+(close only) DMA interrupt off; clear the EN bit of **both** channels through the non-triggering `AL1_CTRL` alias
+(so the chain cannot re-trigger the sibling, RP2350-E5); abort both and wait for `CHAN_ABORT` and `BUSY` to clear;
+disable their `INTE1` bits and acknowledge `INTS1`; disable the state machine, clear its FIFOs, restart it and
+its clock divider, clear its `FDEBUG` flags. It is safe to call twice or with nothing open. Open starts from the
+same clean state (the claimed channels are quiesced, `pio_sm_init`), configures both channels, clears `INTS1` and
+the pending NVIC bit, enables the interrupt, then starts channel A and enables the state machine. Before this
+fix a rate switch could leave channel A armed and busy while the PIO requested data and nothing moved (audio
+core stalled). The `dma_underruns=2` seen once per reopen is gone too; the likely explanation is the two stale
+chained channels completing after the unwaited abort (consistent with the counter now reading 0, not proven).
+An abort that has not completed within the spin bound (about 2 ms) is counted (`g_abort_timeouts`, readable
+over SWD) and makes open return `HAL_EBUSY` rather than configure a running channel. In the late-interrupt path,
+if both channels are found idle after re-arming the sibling, the sibling is restarted (the ping-pong had stopped).
+
+**Bench, 3 Nov 2026 (Pico 2 W):** 12 ALAC 44.1 ↔ 96 kHz switches while playing, a switch from a paused 96 kHz stream
+and an ALAC 96 kHz → WAV 44.1 kHz switch: no stall, `dma_underruns=0` after every reopen (was 2 every time).
 
 ## Clocking and rate accuracy
 
