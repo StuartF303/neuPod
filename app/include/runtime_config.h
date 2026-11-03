@@ -52,7 +52,7 @@
 #define RT_STACK_INPUT 2048u
 #define RT_STACK_UI 12288u
 #define RT_STACK_MONITOR 3072u
-#define RT_WIFI_JOIN_TIMEOUT_MS 30000u /* a join (associate + DHCP) not finished by then is abandoned and retried with backoff */
+#define RT_WIFI_JOIN_TIMEOUT_MS 60000u /* a join (associate + DHCP) not finished by then is abandoned and retried with backoff */
 #define RT_STACK_WIFI 4096u /* sealing a PSK (AES-GCM, HKDF) on save left 664 B of 3 KB on the bench */
 #define RT_STACK_CHECK 3072u
 #define RT_STACK_CHECK_STORAGE 5120u /* FatFs mount */
