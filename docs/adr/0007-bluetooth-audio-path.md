@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed — decision deferred to a bench comparison
+Proposed — decision deferred to a bench comparison. Updated 3 Nov 2026: bare CYW43439 ruled out for the final board (see the update at the end).
 
 ## Context
 
@@ -37,3 +37,22 @@ from the Audio Pack, both paired to the reference AirPods Pro.
   and the **AVRCP target** with absolute volume; an earlier draft of the requirements said
   "A2DP sink" in error. Option A implements these in BTstack; with a QCC module the module's
   firmware must provide them.
+
+## Update (3 Nov 2026, design response)
+
+- **The final board will not use a bare CYW43439.** Two independent reasons: it cannot be assembled at
+  JLCPCB (≈30 pcs at LCSC, no RM2 module listed), and the BTstack / cyw43-driver grant covers Raspberry Pi
+  products (Pico W / Pico 2 W / RM2), not a bare chip on our board.
+- Remaining options, now the main open architecture decision:
+
+| | RM2 module | ESP32-WROOM-32E (original ESP32) | ESP32-S3 |
+| --- | --- | --- | --- |
+| Classic BT / A2DP source | yes (BTstack, grant covered) | yes (ESP-IDF Bluedroid, Apache-2.0) | **no** — BLE only |
+| Assembly | hand-placed | JLCPCB | JLCPCB |
+| Host MCU | RP2350B | the ESP32 itself, or as a radio beside an RP2350B | needs a QCC/BM83 A2DP module |
+
+- **Review point:** the design response lists "ESP32-S3 / ESP32-WROOM-32E (ESP-IDF BT stack)" together. The
+  S3 has no BR/EDR, so it can only be the host with an external A2DP transmitter (option B above); only the
+  original ESP32 runs A2DP on ESP-IDF.
+- Antenna: in the top plastic window of the 6G back, the only RF-transparent area (Requirements → Connectivity).
+- The testbed stays on the Pico 2 W.
