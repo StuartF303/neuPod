@@ -610,7 +610,9 @@ int32_t alac_dec_init( alac_dec_t * d, const uint8_t * cookie, uint32_t cookieSi
     if ( remaining >= 12 && c[4] == 'a' && c[5] == 'l' && c[6] == 'a' && c[7] == 'c' ) { c += 12; remaining -= 12; }
     if ( remaining < sizeof(ALACSpecificConfig) )
         return kALAC_ParamError;
-    const ALACSpecificConfig * in = (const ALACSpecificConfig *) c;
+    ALACSpecificConfig cfg_copy; // copied, not cast: the cookie may be unaligned (Cortex-M33 faults on unaligned LDM/LDRD)
+    memcpy( &cfg_copy, c, sizeof(cfg_copy) );
+    const ALACSpecificConfig * in = &cfg_copy;
     d->cfg.frameLength = Swap32BtoN( in->frameLength );
     d->cfg.compatibleVersion = in->compatibleVersion;
     d->cfg.bitDepth = in->bitDepth;
