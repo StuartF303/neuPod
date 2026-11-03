@@ -23,10 +23,10 @@
  * 32-bit target does for the same screens: Files plus Now Playing on top does not fit in 72 KB there, so the host gets 128 KB.
  * The target figure is the one that counts.
  */
-#if defined(__arm__)
-#define NEUPOD_LVGL_POOL_BYTES (72u * 1024u)
-#else
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 8 /* 64-bit host build only; any 32-bit target (ARM or RISC-V) gets 72 KB */
 #define NEUPOD_LVGL_POOL_BYTES (128u * 1024u)
+#else
+#define NEUPOD_LVGL_POOL_BYTES (72u * 1024u)
 #endif
 
 /**

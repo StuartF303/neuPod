@@ -12,8 +12,9 @@ Baseline JPEG decoder by ChaN, used for album art (`app/audio/art.c`, core 0 onl
 - **Changes from the LVGL copy:** (1) `#if LV_USE_TJPGD` guard and LVGL includes removed (`<stddef.h>` / `<stdint.h>`
   instead); (2) in `jd_mcu_output` the RGB bytes are emitted in R, G, B order again (LVGL's copy emits B, G, R, which
   made the RGB565 conversion swap red and blue) and (3) the 1/8-scale branch (one pixel per 8x8 block from the DC values)
-  is restored, LVGL's copy has none and returns an empty image at that scale. Both (2) and (3) follow R0.03's
-  published structure but were written here, not copied from ChaN's archive; `tests/test_art.c` checks the colour at every quadrant at every scale.
+  is restored, LVGL's copy has none and returns an empty image at that scale. Both (2) and (3) match the public R0.03 source as
+  redistributed in Bodmer/TJpg_Decoder (`src/tjpgd.c`, compared 3 Nov 2026; differences are comments and brace style only);
+  LVGL's B,G,R order and missing 1/8 branch are LVGL configuration choices (its BGR888 buffers, `JD_USE_SCALE 0`), not upstream bugs; `tests/test_art.c` checks the colour at every quadrant at every scale.
   `tjpgdcnf.h` is set to `JD_FORMAT 1` (RGB565), `JD_USE_SCALE 1`, `JD_FASTDECODE 1`, `JD_SZBUF 512`, `JD_TBLCLIP 1`.
 - **Why level 1:** Cortex-M33 has the barrel shifter, level 2 adds 6 KB of Huffman tables for a small gain.
 - **Limits:** baseline sequential JPEG only (grayscale, 4:4:4, 4:2:2 and 4:2:0). Progressive JPEG makes `jd_prepare`
