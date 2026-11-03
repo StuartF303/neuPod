@@ -93,8 +93,10 @@ static void log_device(const found_t *f, const char *what) {
     } else {
         snprintf(rssi, sizeof rssi, "%d", (int)f->dev.rssi);
     }
+    char name[HAL_BT_NAME_MAX + 1];
+    hal_log_text(name, sizeof name, f->dev.name); /* a remote device chooses its own name */
     printf("bt: %s %02X:%02X:%02X:%02X:%02X:%02X cod=0x%06lX rssi=%s name='%s' audio=%s\n", what, a[0], a[1], a[2], a[3], a[4], a[5],
-           (unsigned long)f->dev.cod, rssi, f->dev.name, f->dev.audio_sink ? "yes" : "no");
+           (unsigned long)f->dev.cod, rssi, name, f->dev.audio_sink ? "yes" : "no");
 }
 
 static void emit_device(const found_t *f) {
@@ -207,8 +209,10 @@ static void finish_scan(void) {
     printf("bt: scan done, %u devices\n", (unsigned)g_nfound);
     g_phase = SCAN_IDLE;
     g_name_in_flight = false;
-    set_state(HAL_BT_ON);
+    /* SCAN_DONE first: a listener that sees the state turn to ON may start the next scan at once (and flush its queue), and
+     * must not then be handed the end of the previous one. */
     emit_scan_done();
+    set_state(HAL_BT_ON);
 }
 
 /* After the inquiry: ask audio devices without a name for it, one at a time (a name request cannot overlap an inquiry). */
