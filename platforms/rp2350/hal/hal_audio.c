@@ -88,13 +88,18 @@ static void dma_stop_prepare(uint ch) {
     dma_hw->ch[ch].al1_ctrl &= ~DMA_CH0_CTRL_TRIG_EN_BITS;
 }
 
-static void dma_stop_finish(uint ch) {
+static volatile uint32_t g_abort_timeouts; // diagnostic: aborts that did not complete within the bound
+
+// Returns false if the channel was still aborting or busy when the bound ran out (counted in g_abort_timeouts).
+static bool dma_stop_finish(uint ch) {
     dma_hw->abort = 1u << ch;
     for (uint32_t n = 0; n < ABORT_SPIN_LIMIT; n++) {
         if (!(dma_hw->abort & (1u << ch)) && !(dma_hw->ch[ch].ctrl_trig & DMA_CH0_CTRL_TRIG_BUSY_BITS)) {
-            break;
+            return true;
         }
     }
+    g_abort_timeouts++;
+    return false;
 }
 
 // Stop everything that feeds the DAC and leave the state machine and both channels idle and clean. Registers
@@ -105,8 +110,8 @@ static void sink_hw_stop(int c0, int c1, int sm) {
         // Both EN bits off before either abort: a chained channel must not re-trigger its sibling.
         dma_stop_prepare((uint)c0);
         dma_stop_prepare((uint)c1);
-        dma_stop_finish((uint)c0);
-        dma_stop_finish((uint)c1);
+        (void)dma_stop_finish((uint)c0); // a timeout is counted; nothing better to do on the teardown path
+        (void)dma_stop_finish((uint)c1);
         const uint32_t m = (1u << (uint)c0) | (1u << (uint)c1);
         hw_clear_bits(&dma_hw->inte1, m);
         dma_hw->ints1 = m; // an abort can leave a completion flag behind
@@ -181,8 +186,15 @@ static void __isr __not_in_flash_func(dma_isr)(void) {
             if (n == 0 && (ints & (1u << (uint)g_ch[idx ^ 1u])) && !dma_channel_is_busy((uint)g_ch[idx ^ 1u])) {
                 // The sibling finished too and sits with a zero count; when this channel chains to it, it must
                 // replay its (stale) block rather than a zero-length transfer that would end the ping-pong.
-                dma_channel_set_read_addr((uint)g_ch[idx ^ 1u], g_dma_buf[idx ^ 1u], false);
-                dma_channel_set_trans_count((uint)g_ch[idx ^ 1u], BLOCK_WORDS, false);
+                const uint sib = (uint)g_ch[idx ^ 1u];
+                dma_channel_set_read_addr(sib, g_dma_buf[idx ^ 1u], false);
+                dma_channel_set_trans_count(sib, BLOCK_WORDS, false);
+                // Race: if this channel finished and chained into the sibling between the busy check and the
+                // writes above, the sibling ran a zero-length transfer and both are now idle. Both idle means the
+                // ping-pong has stopped, so a restart cannot double-trigger anything.
+                if (!dma_channel_is_busy((uint)g_ch[idx]) && !dma_channel_is_busy(sib)) {
+                    dma_channel_start(sib);
+                }
             }
             break;
         }
@@ -233,8 +245,14 @@ hal_status_t hal_audio_open(const hal_audio_format *fmt) {
     // The claimed channels may have been used by someone else (the SD library): start from idle.
     dma_stop_prepare((uint)c0);
     dma_stop_prepare((uint)c1);
-    dma_stop_finish((uint)c0);
-    dma_stop_finish((uint)c1);
+    const bool idle0 = dma_stop_finish((uint)c0);
+    const bool idle1 = dma_stop_finish((uint)c1);
+    if (!idle0 || !idle1) { // never configure a channel that is still running
+        dma_channel_unclaim((uint)c0);
+        dma_channel_unclaim((uint)c1);
+        pio_sm_unclaim(g_pio, (uint)sm);
+        return HAL_EBUSY;
+    }
     g_offset = pio_add_program(g_pio, &neupod_i2s_program);
     g_sm = sm;
     g_ch[0] = c0;

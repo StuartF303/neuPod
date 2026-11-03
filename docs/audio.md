@@ -59,8 +59,14 @@ its clock divider, clear its `FDEBUG` flags. It is safe to call twice or with no
 same clean state (the claimed channels are quiesced, `pio_sm_init`), configures both channels, clears `INTS1` and
 the pending NVIC bit, enables the interrupt, then starts channel A and enables the state machine. Before this
 fix a rate switch could leave channel A armed and busy while the PIO requested data and nothing moved (audio
-core stalled). The `dma_underruns=2` seen once per reopen was most likely the two stale chained channels
-completing (see CHANGELOG); confirm on the bench that it now stays 0.
+core stalled). The `dma_underruns=2` seen once per reopen is gone too; the likely explanation is the two stale
+chained channels completing after the unwaited abort (consistent with the counter now reading 0, not proven).
+An abort that has not completed within the spin bound (about 2 ms) is counted (`g_abort_timeouts`, readable
+over SWD) and makes open return `HAL_EBUSY` rather than configure a running channel. In the late-interrupt path,
+if both channels are found idle after re-arming the sibling, the sibling is restarted (the ping-pong had stopped).
+
+**Bench, 3 Nov 2026 (Pico 2 W):** 12 ALAC 44.1 ↔ 96 kHz switches while playing, a switch from a paused 96 kHz stream
+and an ALAC 96 kHz → WAV 44.1 kHz switch: no stall, `dma_underruns=0` after every reopen (was 2 every time).
 
 ## Clocking and rate accuracy
 
