@@ -59,6 +59,8 @@ void wifi_set_settings(const wifi_settings_t *in); /**< persists; takes effect w
 /** Ask for a scan (switches the radio on if needed). Results are read with wifi_scan_next(). */
 bool wifi_scan_request(void);
 bool wifi_scan_next(hal_wifi_ap_t *out, bool *done);
+/** The consumer left (a screen closed) before the scan ended: forget it. The radio finishes by itself; a new request is fine at once. */
+void wifi_scan_cancel(void);
 
 /** Join @p ssid. @p psk NULL = use the saved password of that network (or none for an open one). @p save remembers it on success. */
 bool wifi_connect_request(const char *ssid, const char *psk, bool save);

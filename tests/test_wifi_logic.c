@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 // Clock maths and the EU DST rule, reconnect backoff, power policy.
+#include <string.h>
+
 #include "hal_host.h"
 #include "hal_radio.h"
 #include "hal_system.h"
@@ -154,7 +156,39 @@ TEST(test_power_policy) {
     ASSERT_EQ(WIFI_PW_ON, wifi_policy_decide(&never, 99999999u)); // 0 = never switch off when idle
 }
 
+TEST(test_scan_security_bits) {
+    // cyw43_ll.c: 4 = RSN element, 2 = WPA element, 1 = privacy capability (set by every encrypted network).
+    ASSERT_EQ(HAL_WIFI_SEC_OPEN, wifi_sec_from_scan_bits(0));
+    ASSERT_EQ(HAL_WIFI_SEC_WPA2, wifi_sec_from_scan_bits(4 | 1)); // a plain WPA2 home router, as the driver reports it
+    ASSERT_EQ(HAL_WIFI_SEC_WPA2, wifi_sec_from_scan_bits(4 | 2 | 1)); // WPA + WPA2 mixed
+    ASSERT_EQ(HAL_WIFI_SEC_OTHER, wifi_sec_from_scan_bits(2 | 1)); // WPA1 only
+    ASSERT_EQ(HAL_WIFI_SEC_OTHER, wifi_sec_from_scan_bits(1)); // WEP
+}
+
+TEST(test_log_text) {
+    char o[16];
+    hal_log_text(o, sizeof o, "Flip 6");
+    ASSERT_EQ(0, strcmp(o, "Flip 6"));
+    hal_log_text(o, sizeof o, "a\x1b[2Jb\nc\x7f\xc3\xa9");
+    ASSERT_EQ(0, strcmp(o, "a?[2Jb?c???"));
+    hal_log_text(o, 4, "abcdefgh"); // truncates, always terminated
+    ASSERT_EQ(0, strcmp(o, "abc"));
+}
+
+TEST(test_abandoned_scan_does_not_wedge) {
+    ASSERT_EQ(HAL_OK, hal_wifi_start());
+    ASSERT_EQ(HAL_OK, hal_wifi_scan_start());
+    ASSERT_EQ(HAL_EBUSY, hal_wifi_scan_start()); // really running
+    // Nobody collects the results (the Networks screen was closed). The scan still ends by itself.
+    hal_delay_ms(3000);
+    ASSERT_EQ(HAL_OK, hal_wifi_scan_start());
+    hal_wifi_stop();
+}
+
 int main(void) {
+    RUN(test_scan_security_bits);
+    RUN(test_log_text);
+    RUN(test_abandoned_scan_does_not_wedge);
     RUN(test_calendar);
     RUN(test_eu_dst_edges);
     RUN(test_local_time_zones);

@@ -9,6 +9,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "hal_radio.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -30,6 +32,17 @@ void wifi_backoff_init(wifi_backoff_t *b);
 void wifi_backoff_fail(wifi_backoff_t *b, uint32_t now_ms);
 void wifi_backoff_success(wifi_backoff_t *b);
 bool wifi_backoff_due(const wifi_backoff_t *b, uint32_t now_ms);
+
+/* Security of a scanned network from the CYW43 driver's scan result bits (cyw43_ll.c: 4 = an RSN element, 2 = a WPA element,
+ * 1 = the privacy capability, which every encrypted network sets). The driver cannot tell WPA3 from WPA2 (both carry an RSN
+ * element), so an RSN network is reported as WPA2: the join tries WPA2, WPA2/WPA3 and WPA3-only in turn anyway. WPA1-only and WEP
+ * networks are "other" (secured, not offered a mode here). */
+static inline hal_wifi_sec_t wifi_sec_from_scan_bits(unsigned bits) {
+    if ((bits & 4u) != 0) {
+        return HAL_WIFI_SEC_WPA2;
+    }
+    return (bits & 3u) != 0 ? HAL_WIFI_SEC_OTHER : HAL_WIFI_SEC_OPEN;
+}
 
 /* Power policy. Wi-Fi is OFF while playing (unless "Wi-Fi during playback" is On) and the radio is switched off after
  * @p idle_off_min minutes without a need for it (0 = never). Inputs are sampled by the service each second. */

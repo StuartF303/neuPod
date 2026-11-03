@@ -14,6 +14,8 @@
 #ifndef NEUPOD_HAL_RADIO_H
 #define NEUPOD_HAL_RADIO_H
 
+#include <stddef.h>
+
 #include "hal_types.h"
 
 #ifdef __cplusplus
@@ -23,6 +25,19 @@ extern "C" {
 /* ---- Wi-Fi (station mode) ---------------------------------------------------------------------------------- */
 
 typedef enum { HAL_WIFI_SEC_OPEN, HAL_WIFI_SEC_WPA2, HAL_WIFI_SEC_WPA3, HAL_WIFI_SEC_WPA2_WPA3, HAL_WIFI_SEC_OTHER } hal_wifi_sec_t;
+
+/** Copy @p src to @p dst (capacity @p n) for a log line: anything that is not printable ASCII (control bytes, UTF-8 bytes, DEL)
+ * becomes '?', so a hostile network or device name cannot inject terminal escapes or fake log lines. */
+static inline void hal_log_text(char *dst, size_t n, const char *src) {
+    size_t i = 0;
+    for (; n > 0 && i + 1 < n && src[i] != '\0'; i++) {
+        unsigned char c = (unsigned char)src[i];
+        dst[i] = c >= 0x20u && c < 0x7Fu ? (char)c : '?';
+    }
+    if (n > 0) {
+        dst[i] = '\0';
+    }
+}
 
 #define HAL_WIFI_SSID_MAX 32u
 #define HAL_WIFI_PSK_MAX 63u

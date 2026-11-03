@@ -154,11 +154,11 @@ void hal_radio_a2dp_disconnect(void) {}
 #include <stdio.h>
 
 static const hal_wifi_ap_t k_aps[] = {
-    {"HomeNet", {0x10, 0x20, 0x30, 0x40, 0x50, 0x60}, -48, 6, HAL_WIFI_SEC_WPA2_WPA3},
-    {"BT-Hub-7F2K", {0x11, 0x22, 0x33, 0x44, 0x55, 0x66}, -63, 1, HAL_WIFI_SEC_WPA2_WPA3},
+    {"HomeNet", {0x10, 0x20, 0x30, 0x40, 0x50, 0x60}, -48, 6, HAL_WIFI_SEC_WPA2},
+    {"BT-Hub-7F2K", {0x11, 0x22, 0x33, 0x44, 0x55, 0x66}, -63, 1, HAL_WIFI_SEC_WPA2},
     {"Cafe Guest", {0x12, 0x22, 0x33, 0x44, 0x55, 0x77}, -71, 11, HAL_WIFI_SEC_OPEN},
     {"VM-Office", {0x13, 0x22, 0x33, 0x44, 0x55, 0x88}, -80, 3, HAL_WIFI_SEC_OTHER},
-    {"Neighbour's WiFi", {0x14, 0x22, 0x33, 0x44, 0x55, 0x99}, -88, 9, HAL_WIFI_SEC_WPA2_WPA3},
+    {"Neighbour's WiFi", {0x14, 0x22, 0x33, 0x44, 0x55, 0x99}, -88, 9, HAL_WIFI_SEC_WPA2},
 };
 #define N_APS (sizeof k_aps / sizeof k_aps[0])
 
@@ -199,6 +199,10 @@ hal_wifi_status hal_wifi_state(void) { return g_wstate; }
 hal_status_t hal_wifi_scan_start(void) {
     if (!g_wifi_on) {
         return HAL_ENODEV;
+    }
+    /* A scan whose results nobody collected still ends by itself, as on the radio. */
+    if (g_scanning && hal_millis() - g_scan_t0 > N_APS * 250u + 500u) {
+        g_scanning = false;
     }
     if (g_scanning) {
         return HAL_EBUSY;

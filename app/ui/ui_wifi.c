@@ -444,7 +444,7 @@ static void nets_tick(ui_screen_t *s) {
         bool done = false;
         while (wifi_scan_next(&ap, &done)) {
             net_t *n = add_net(w, ap.ssid);
-            if (n != NULL) {
+            if (n != NULL && (n->rssi == 0 || ap.rssi > n->rssi)) { /* one row per network name: the strongest access point */
                 n->rssi = ap.rssi;
                 n->sec = ap.sec;
             }
@@ -469,7 +469,10 @@ static void wifi_suspend(ui_screen_t *x) { ui_list_suspend(((wifi_screen_t *)x)-
 static void wifi_resume(ui_screen_t *x) { ui_list_resume(((wifi_screen_t *)x)->list); }
 
 static void nets_scroll(ui_screen_t *s, int32_t steps) { ui_list_move(((nets_screen_t *)s)->list, steps); }
-static void nets_destroy(ui_screen_t *s) { ui_list_destroy(((nets_screen_t *)s)->list); }
+static void nets_destroy(ui_screen_t *s) {
+    wifi_scan_cancel(); /* leaving mid-scan: nobody will collect the results */
+    ui_list_destroy(((nets_screen_t *)s)->list);
+}
 static void nets_suspend(ui_screen_t *x) { ui_list_suspend(((nets_screen_t *)x)->list); }
 static void nets_resume(ui_screen_t *x) { ui_list_resume(((nets_screen_t *)x)->list); }
 

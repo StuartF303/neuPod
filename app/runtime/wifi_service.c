@@ -47,6 +47,9 @@ static char g_bad_auth[WIFI_MAX_SAVED][HAL_WIFI_SSID_MAX + 1];
 static bool g_save_failed; /* the last 'remember this network' did not fit (surfaced in the UI) */
 static bool g_scan_active;  /* a scan is running on the radio */
 static uint32_t g_scan_count; /* networks reported by the scan in progress (UI task only: request and next) */
+static bool g_scan_retry;   /* the radio was still busy with an earlier scan: start this one when it is free */
+static uint32_t g_scan_retry_until;
+#define SCAN_RETRY_MS 8000u
 static bool g_scan_wanted;  /* a scan was requested (it may not have started yet: the task handles requests every 200 ms) */
 
 /* The test counters are written from the lwIP thread, which holds the radio context lock: NO mutex there (it would be an AB-BA
@@ -277,7 +280,9 @@ bool wifi_scan_next(hal_wifi_ap_t *out, bool *done) {
     bool got = hal_wifi_scan_next(out, done);
     if (got) {
         g_scan_count++;
-        printf("wifi: scan: '%s' rssi=%d sec=%s ch=%u\n", out->ssid, (int)out->rssi, sec_name(out->sec), (unsigned)out->channel);
+        char shown[HAL_WIFI_SSID_MAX + 1];
+        hal_log_text(shown, sizeof shown, out->ssid);
+        printf("wifi: scan: '%s' rssi=%d sec=%s ch=%u\n", shown, (int)out->rssi, sec_name(out->sec), (unsigned)out->channel);
     }
     if (*done) {
         printf("wifi: scan done, %u networks\n", (unsigned)g_scan_count);
@@ -287,6 +292,12 @@ bool wifi_scan_next(hal_wifi_ap_t *out, bool *done) {
     }
     return got;
 }
+void wifi_scan_cancel(void) {
+    lock();
+    g_scan_wanted = g_scan_active = g_scan_retry = false; /* the radio finishes an abandoned scan by itself; its results are dropped */
+    unlock();
+}
+
 bool wifi_connect_request(const char *ssid, const char *psk, bool save) {
     req_t r = {.kind = REQ_JOIN, .save = save, .use_saved = psk == NULL};
     snprintf(r.ssid, sizeof r.ssid, "%s", ssid);
@@ -434,6 +445,19 @@ void wifi_task(void *arg) {
         hal_wifi_poll();
         clock_tick();
 
+        /* a scan that had to wait for the radio */
+        if (g_scan_retry) {
+            hal_status_t sr = hal_wifi_scan_start();
+            lock();
+            if (sr == HAL_OK) {
+                g_scan_retry = false;
+                g_scan_active = true;
+            } else if (sr != HAL_EBUSY || (int32_t)(now - g_scan_retry_until) >= 0) {
+                g_scan_retry = g_scan_wanted = false; /* gave up: the screen sees "done" with nothing */
+            }
+            unlock();
+        }
+
         /* requests */
         req_t r;
         while (os_queue_recv(g_q, &r, OS_NO_WAIT)) {
@@ -444,9 +468,12 @@ void wifi_task(void *arg) {
             switch (r.kind) {
             case REQ_SCAN:
                 {
-                    bool ok = hal_wifi_scan_start() == HAL_OK; /* HAL call outside g_mu */
+                    hal_status_t sr = hal_wifi_scan_start(); /* HAL call outside g_mu */
                     lock();
-                    g_scan_active = g_scan_wanted = ok;
+                    g_scan_retry = sr == HAL_EBUSY; /* an earlier scan is still running (the user left and came back) */
+                    g_scan_retry_until = now + SCAN_RETRY_MS;
+                    g_scan_active = sr == HAL_OK;
+                    g_scan_wanted = sr == HAL_OK || sr == HAL_EBUSY;
                     unlock();
                 }
                 break;
@@ -526,9 +553,13 @@ void wifi_task(void *arg) {
                 (void)hal_wifi_sntp_start(g_set.ntp_server, on_time);
                 char ip[16] = "-";
                 (void)hal_wifi_ip(ip);
-                printf("wifi: joined '%s' ip=%s rssi=%d\n", g_cur_ssid, ip, hal_wifi_rssi());
+                char shown[HAL_WIFI_SSID_MAX + 1];
+                hal_log_text(shown, sizeof shown, g_cur_ssid);
+                printf("wifi: joined '%s' ip=%s rssi=%d\n", shown, ip, hal_wifi_rssi());
             } else if (st == HAL_WIFI_BAD_AUTH || st == HAL_WIFI_FAILED) {
-                printf("wifi: join '%s' %s\n", g_cur_ssid, st == HAL_WIFI_BAD_AUTH ? "failed: wrong password" : "failed");
+                char shown[HAL_WIFI_SSID_MAX + 1];
+                hal_log_text(shown, sizeof shown, g_cur_ssid);
+                printf("wifi: join '%s' %s\n", shown, st == HAL_WIFI_BAD_AUTH ? "failed: wrong password" : "failed");
                 if (st == HAL_WIFI_BAD_AUTH) {
                     lock();
                     snprintf(g_bad_auth[g_next_auto++ % WIFI_MAX_SAVED], sizeof g_bad_auth[0], "%s", g_cur_ssid);
@@ -561,7 +592,9 @@ void wifi_task(void *arg) {
                 }
                 saved_psk(ssid, psk, &needs);
                 g_next_auto = idx + 1u;
-                printf("wifi: joining saved network '%s'\n", ssid);
+                char shown[HAL_WIFI_SSID_MAX + 1];
+                hal_log_text(shown, sizeof shown, ssid);
+                printf("wifi: joining saved network '%s'\n", shown);
                 start_join(ssid, psk, false, false);
                 break;
             }

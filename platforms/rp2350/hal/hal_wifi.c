@@ -12,6 +12,7 @@
 
 #include "hal_radio.h"
 #include "hal_system.h"
+#include "wifi_logic.h"
 #include "lwip/apps/http_client.h"
 #include "lwip/apps/sntp.h"
 #include "lwip/ip4_addr.h"
@@ -36,6 +37,14 @@ static int scan_cb(void *env, const cyw43_ev_scan_result_t *r) {
     if (r->ssid_len == 0 || r->ssid_len > HAL_WIFI_SSID_MAX) {
         return 0; /* hidden network: found by typing its name ("Other network...") */
     }
+    char shown[HAL_WIFI_SSID_MAX + 1];
+    char raw[HAL_WIFI_SSID_MAX + 1];
+    memcpy(raw, r->ssid, r->ssid_len);
+    raw[r->ssid_len] = '\0';
+    hal_log_text(shown, sizeof shown, raw);
+    /* one line per access point; the list the UI sees has each network once */
+    printf("wifi: bss '%s' %02X:%02X:%02X:%02X:%02X:%02X rssi=%d ch=%u auth_bits=0x%02X\n", shown, r->bssid[0], r->bssid[1], r->bssid[2],
+           r->bssid[3], r->bssid[4], r->bssid[5], (int)r->rssi, (unsigned)r->channel, (unsigned)r->auth_mode);
     uint32_t n_now = __atomic_load_n(&g_scan_n, __ATOMIC_RELAXED); /* this callback is the only writer */
     for (uint32_t i = 0; i < n_now; i++) { /* the same network on several access points: keep the strongest */
         if (strlen(g_scan[i].ssid) == r->ssid_len && memcmp(g_scan[i].ssid, r->ssid, r->ssid_len) == 0) {
@@ -56,7 +65,7 @@ static int scan_cb(void *env, const cyw43_ev_scan_result_t *r) {
     memcpy(a->bssid, r->bssid, 6);
     a->rssi = (int8_t)r->rssi;
     a->channel = (uint8_t)r->channel;
-    a->sec = r->auth_mode == 0 ? HAL_WIFI_SEC_OPEN : (r->auth_mode & 4u) ? HAL_WIFI_SEC_WPA2_WPA3 : HAL_WIFI_SEC_OTHER; /* WPA3 is not distinguishable here */
+    a->sec = wifi_sec_from_scan_bits(r->auth_mode);
     __atomic_store_n(&g_scan_n, n_now + 1u, __ATOMIC_RELEASE); /* publish the finished entry */
     return 0;
 }
@@ -90,8 +99,13 @@ hal_status_t hal_wifi_scan_start(void) {
     if (!g_on) {
         return HAL_ENODEV;
     }
+    /* g_scan_running is otherwise only cleared by hal_wifi_scan_next(): a consumer that walked away mid-scan (left the Networks
+     * screen) would leave it set for ever. The radio is the authority. */
+    if (g_scan_running && !cyw43_wifi_scan_active(&cyw43_state)) {
+        g_scan_running = false;
+    }
     if (g_scan_running || cyw43_wifi_scan_active(&cyw43_state)) {
-        return HAL_EBUSY;
+        return HAL_EBUSY; /* a scan really is running: the caller may retry */
     }
     __atomic_store_n(&g_scan_n, 0, __ATOMIC_RELEASE);
     g_scan_read = 0;
