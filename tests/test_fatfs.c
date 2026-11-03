@@ -4,6 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "../app/storage/ff_alloc.h"
 #include "ff.h"
 #include "hal_storage.h"
 #include "unit.h"
@@ -20,6 +21,18 @@ static bool make_image(void) {
     bool ok = ftruncate(fd, IMAGE_BYTES) == 0;
     close(fd);
     return ok && setenv("NEUPOD_DISK_IMAGE", g_path, 1) == 0;
+}
+
+TEST(test_ff_alloc_cap) {
+    // FatFs asks for whole-cluster buffers and must be told NULL (not panic) when they are too big.
+    void *ok = ff_memalloc(NEUPOD_FF_ALLOC_MAX_BYTES);
+    ASSERT_TRUE(ok != NULL);
+    ff_memfree(ok);
+    ASSERT_TRUE(ff_memalloc(NEUPOD_FF_ALLOC_MAX_BYTES + 1u) == NULL);
+    ASSERT_TRUE(ff_memalloc(32u * 1024u) == NULL);
+    ASSERT_TRUE(ff_memalloc(128u * 1024u) == NULL);
+    ASSERT_TRUE(ff_memalloc(0u) == NULL);
+    ff_memfree(NULL);
 }
 
 TEST(test_fatfs_roundtrip) {
@@ -57,6 +70,7 @@ TEST(test_fatfs_roundtrip) {
 }
 
 int main(void) {
+    RUN(test_ff_alloc_cap);
     RUN(test_fatfs_roundtrip);
     return RESULT();
 }

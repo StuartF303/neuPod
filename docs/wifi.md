@@ -8,16 +8,16 @@ keyboard in [Wheel input widgets](ui-input.md). Not on the board yet: everything
 * The CYW43 arch is now the SDK's **lwIP + FreeRTOS** variant (`pico_cyw43_arch_lwip_sys_freertos`). BTstack is unchanged and still runs on the same
   async context (the radio worker task): `cyw43_arch_init()` starts the driver, lwIP, then BTstack, in that order. IPv4 only, no sockets, **no TLS**.
 * `platforms/rp2350/lwip/lwipopts.h`: static pools only (`MEM_LIBC_MALLOC` off), `MEM_SIZE` 6000, 12 pbufs, TCP window 4 x 1460, 16 TCP segments, 4 TCP and UDP
-  control blocks. lwIP callbacks (DHCP, DNS, SNTP, HTTP) run on **lwIP's own tcpip thread** (priority 3, 1024 words = 4 KB stack on the heap), not on the CYW43 worker; the SDK's FreeRTOS arch serialises the two with the async-context lock. Both, and the wifi task, appear in the monitor's per-task stack-free line, which is the number to watch. Country code GB (channels 1 to 13).
+  control blocks. lwIP callbacks (DHCP, DNS, SNTP, HTTP) run on **lwIP's own tcpip thread** (priority 3, 2 KB stack on the heap (lwIP's FreeRTOS port takes the size in bytes; 1 KB left only 312 B free after a join on the bench)), not on the CYW43 worker; the SDK's FreeRTOS arch serialises the two with the async-context lock. Both, and the wifi task, appear in the monitor's per-task stack-free line, which is the number to watch. Country code GB (channels 1 to 13).
 * **Cost** (`arm-none-eabi-size`, whole firmware): static RAM 436,480 B (end of the Bluetooth work) to 476,968 B, **+40.5 KB** (after the review fixes: 32 settings tags and a second staging array, +3.4 KB), of which lwIP is about 28.9 KB
   (pbuf pool 18.4 KB, memory heap 6 KB, TCP and the rest), mbed TLS and the secrets code about 2.5 KB (arena 2 KB), larger settings tables about 2 KB, the rest the Wi-Fi service
   and UI. Flash 1,120,532 B to 1,214,268 B, **+94 KB**: lwIP, the HTTP client, mbed TLS (AES-GCM, SHA-256, HKDF), the CYW43 Wi-Fi code, the Wi-Fi service, the UI widgets.
-  The heap is not measured on the board yet: new heap users are the **tcpip thread (4 KB stack)**, the "wifi" task (3 KB), and sockets-less lwIP objects; the radio worker is unchanged at 6 KB (`RT_STACK_RADIO`, checked against `CYW43_TASK_STACK_SIZE` at compile time). Stack overflow checking is on (`configCHECK_FOR_STACK_OVERFLOW 2`).
+  The heap is not measured on the board yet: new heap users are the **tcpip thread (2 KB stack)**, the "wifi" task (4 KB), and sockets-less lwIP objects; the radio worker is unchanged at 6 KB (`RT_STACK_RADIO`, checked against `CYW43_TASK_STACK_SIZE` at compile time). Stack overflow checking is on (`configCHECK_FOR_STACK_OVERFLOW 2`).
   The monitor prints `heap: free= min_free=` every 10 s; compare with the Bluetooth figures.
 
 ## The Wi-Fi service (`app/runtime/wifi_service.c`)
 
-One task, "wifi" (core 0, priority 1, 3 KB stack), owns the station side. It runs every 200 ms and handles requests from the UI (a queue, never blocking the UI).
+One task, "wifi" (core 0, priority 1, 4 KB stack), owns the station side. It runs every 200 ms and handles requests from the UI (a queue, never blocking the UI).
 
 | Feature | How |
 | --- | --- |
@@ -27,6 +27,7 @@ One task, "wifi" (core 0, priority 1, 3 KB stack), owns the station side. It run
 | DHCP, DNS | lwIP |
 | SNTP | lwIP's client, default `pool.ntp.org` (setting `NPns`), resynchronises about hourly; the answer sets the wall clock |
 | remembered networks | up to 4. SSID and a "has password" flag in the clear, the password **sealed** (see below). "Forget" in the network's action menu |
+| join deadline | a join still "joining" or "no address" 60 s after it started (`RT_WIFI_JOIN_TIMEOUT_MS`, `wifi_join_timed_out()` host tested, wrap-safe) is abandoned: `hal_wifi_abort_join()` leaves the network, the service logs `wifi: join 'ssid' timed out (no IP after 60 s)` and counts a real failure, so the normal backoff and auto-join retry. The state shows as failed (not "wrong password"), also for a join the user started. Found on the bench: after a reset the radio sat in "joined, no address" for over 10 minutes; on a marginal link (−80 dBm and below) DHCP OFFER/ACK frames are lost and the exchange can take 20–40 s, hence 60 s. DHCP is started once when the station interface is created (cyw43 `dhcp_start`) and lwIP restarts it on every link-up; the HAL does not restart it per join |
 | reconnect | after a failure or a lost link: 2, 4, 8 ... up to 120 s between attempts (`wifi_backoff_t`, host tested); a user request or a success resets it; saved networks are tried in turn. With nothing saved nothing is attempted: the service only looks again every 10 s, and that is not counted as a failure (`failures=` counts real join failures and lost links) |
 | power | `wifi_policy_decide()`: Wi-Fi is **off while audio plays** unless "Wi-Fi while playing" is On (default Off); the station is switched off after N idle minutes (default 10; setting); a scan, join, transfer or NTP resync counts as a need. The radio is shared with Bluetooth, and audio comes first |
 | diagnostics | UART line every 10 s: `wifi: state=up ssid=.. rssi=.. ip=.. ntp=1 saved=n reconnects=n failures=n lwip mem=used/size (max) pbuf=used/size (max) errs=n`; Extras > Network test |

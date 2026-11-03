@@ -58,9 +58,10 @@
 #define ICMP_STATS 0
 #define IGMP_STATS 0
 
-/* FreeRTOS port (lwip-contrib sys_arch): stack sizes are in words. */
+/* FreeRTOS port (lwip-contrib sys_arch): stack sizes are in BYTES (LWIP_FREERTOS_THREAD_STACKSIZE_IS_STACKWORDS is 0). */
 #define LWIP_TCPIP_CORE_LOCKING 1
-#define TCPIP_THREAD_STACKSIZE 1024
+/* 1024 left only 312 B free after a join on the bench; 2048 keeps >1 KB margin. */
+#define TCPIP_THREAD_STACKSIZE 2048
 #define TCPIP_THREAD_PRIO 3
 #define TCPIP_MBOX_SIZE 8
 #define DEFAULT_RAW_RECVMBOX_SIZE 8

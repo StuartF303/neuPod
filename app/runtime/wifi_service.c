@@ -8,6 +8,7 @@
 #include "capabilities.h"
 #include "os.h"
 #include "player.h"
+#include "runtime_config.h"
 #include "settings_store.h"
 #include "wifi_logic.h"
 #include "wifi_service.h"
@@ -43,6 +44,9 @@ static hal_wifi_status g_prev_state = HAL_WIFI_DOWN;
 static uint32_t g_next_auto; /* round robin over saved networks */
 static uint32_t g_nothing_until; /* with nothing saved: look again at this time (a plain timer, not a join failure) */
 static bool g_nothing_armed;
+static uint32_t g_join_t0;      /* when the current join started */
+static bool g_join_armed;       /* a join is in progress and the deadline applies */
+static bool g_join_timed_out;   /* the deadline fired: report it as a plain failure, not a wrong password */
 #define NOTHING_SAVED_RECHECK_MS 10000u
 static char g_bad_auth[WIFI_MAX_SAVED][HAL_WIFI_SSID_MAX + 1];
 static bool g_save_failed; /* the last 'remember this network' did not fit (surfaced in the UI) */
@@ -355,7 +359,10 @@ static void start_join(const char *ssid, const char *psk, bool user, bool save) 
     snprintf(g_cur_psk, sizeof g_cur_psk, "%s", psk);
     g_joining_user = user;
     g_save_on_success = save;
+    g_join_t0 = os_tick_ms();
+    g_join_armed = true;
     if (hal_wifi_join(ssid, psk[0] != '\0' ? psk : NULL) != HAL_OK) {
+        g_join_armed = false;
         wifi_backoff_fail(&g_backoff, os_tick_ms());
     }
 }
@@ -415,6 +422,8 @@ static void update_info(const wifi_policy_in_t *pin, wifi_power_t pw, hal_wifi_s
         n.rssi = hal_wifi_rssi();
         (void)hal_wifi_ip(n.ip);
         (void)hal_wifi_ssid(n.ssid);
+    } else if (st == HAL_WIFI_JOINING || st == HAL_WIFI_NO_IP) {
+        snprintf(n.ssid, sizeof n.ssid, "%s", g_cur_ssid); /* the network being joined (the radio only reports it once up) */
     }
     n.ntp_synced = clock_ntp_synced();
     n.save_failed = g_save_failed;
@@ -564,6 +573,19 @@ void wifi_task(void *arg) {
         }
         was_playing = playing;
 
+        /* join deadline: associated but no address (or never associated) for too long. The leave is outside g_mu. */
+        if (st != HAL_WIFI_JOINING && st != HAL_WIFI_NO_IP) {
+            g_join_armed = false;
+        } else if (g_join_armed && wifi_join_timed_out(g_join_t0, now, RT_WIFI_JOIN_TIMEOUT_MS)) {
+            char shown[HAL_WIFI_SSID_MAX + 1];
+            hal_log_text(shown, sizeof shown, g_cur_ssid);
+            printf("wifi: join '%s' timed out (no IP after %u s)\n", shown, (unsigned)(RT_WIFI_JOIN_TIMEOUT_MS / 1000u));
+            g_join_armed = false;
+            g_join_timed_out = true;
+            hal_wifi_abort_join();
+            st = hal_wifi_state();
+        }
+
         /* state edges */
         if (st != g_prev_state) {
             if (st == HAL_WIFI_UP) {
@@ -585,7 +607,10 @@ void wifi_task(void *arg) {
             } else if (st == HAL_WIFI_BAD_AUTH || st == HAL_WIFI_FAILED) {
                 char shown[HAL_WIFI_SSID_MAX + 1];
                 hal_log_text(shown, sizeof shown, g_cur_ssid);
-                printf("wifi: join '%s' %s\n", shown, st == HAL_WIFI_BAD_AUTH ? "failed: wrong password" : "failed");
+                if (!g_join_timed_out) { /* a timeout was logged where it was detected */
+                    printf("wifi: join '%s' %s\n", shown, st == HAL_WIFI_BAD_AUTH ? "failed: wrong password" : "failed");
+                }
+                g_join_timed_out = false;
                 if (st == HAL_WIFI_BAD_AUTH) {
                     lock();
                     snprintf(g_bad_auth[g_next_auto++ % WIFI_MAX_SAVED], sizeof g_bad_auth[0], "%s", g_cur_ssid);

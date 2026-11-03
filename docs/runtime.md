@@ -67,7 +67,7 @@ Priority 7 is the highest; the kernel idle task is 0.
 | input | 4 | 2 KB | every 2 ms | well under 1 % (the wheel FIFO overflows after ~4.8 ms) |
 | I2C users, while on the bus | 4 (lifted) | n/a | boot checks, the 5 s gauge read | a few ms (see findings) |
 | CYW43 worker (SDK) | 3 | 6 KB | radio events; **every BTstack callback and lwIP callback** | LED; Bluetooth (BTstack's one thread); lwIP (via the SDK's FreeRTOS arch; lwIP also has its own 4 KB tcpip thread) |
-| wifi (policy) | 1 | 3 KB | every 200 ms | requests from the UI, join/retry with backoff, power policy, SNTP, the 1 s snapshot for the UI ([Wi-Fi](wifi.md)) |
+| wifi (policy) | 1 | 4 KB | every 200 ms | requests from the UI, join/retry with backoff, power policy, SNTP, the 1 s snapshot for the UI ([Wi-Fi](wifi.md)) |
 | haptic (click feedback) | 4 | 2 KB | click queue (2 deep, non-blocking for the UI) | a few ms per click; back to standby after 2 s idle |
 | UI (LVGL) | 2 | 12 KB | 5 to 30 ms, from LVGL's own timer | frame strip render + 24-line blocking DMA |
 | monitor | 1 | 3 KB | 100 ms tick: heartbeat 1 s, gauge 5 s, stats 10 s | negligible |

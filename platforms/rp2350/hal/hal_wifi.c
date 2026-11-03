@@ -177,6 +177,13 @@ void hal_wifi_leave(void) {
     cyw43_arch_lwip_end();
 }
 
+void hal_wifi_abort_join(void) {
+    hal_wifi_leave();
+    if (g_on) {
+        g_result = HAL_WIFI_FAILED;
+    }
+}
+
 hal_wifi_status hal_wifi_state(void) {
     if (!g_on) {
         return HAL_WIFI_DOWN;

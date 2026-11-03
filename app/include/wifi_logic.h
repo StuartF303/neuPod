@@ -33,6 +33,13 @@ void wifi_backoff_fail(wifi_backoff_t *b, uint32_t now_ms);
 void wifi_backoff_success(wifi_backoff_t *b);
 bool wifi_backoff_due(const wifi_backoff_t *b, uint32_t now_ms);
 
+/* Join deadline: a join (association plus DHCP) that is still JOINING or NO_IP this long after it started is given up (the
+ * radio can sit in 'joined, no address' for ever). Wrap-safe: elapsed time is an unsigned difference. */
+static inline bool wifi_join_timed_out(uint32_t started_ms, uint32_t now_ms, uint32_t timeout_ms) {
+    uint32_t elapsed = now_ms - started_ms;
+    return elapsed < 0x80000000u && elapsed >= timeout_ms; /* a 'now' slightly before 'started' is not a timeout */
+}
+
 /* Security of a scanned network from the CYW43 driver's scan result bits (cyw43_ll.c: 4 = an RSN element, 2 = a WPA element,
  * 1 = the privacy capability, which every encrypted network sets). The driver cannot tell WPA3 from WPA2 (both carry an RSN
  * element), so an RSN network is reported as WPA2: the join tries WPA2, WPA2/WPA3 and WPA3-only in turn anyway. WPA1-only and WEP
