@@ -25,8 +25,9 @@
 #include "hal_audio.h"
 #include "hal_system.h"
 #include "ram_func.h"
+#include "../os/memory_budget.h"
 
-#define PCM_FRAMES 2048u // 8 blocks = 46 ms between decoder and sink
+#define PCM_FRAMES NEUPOD_PCM_RING_FRAMES // sized in app/os/memory_budget.h
 #define FRAME_BYTES (2u * sizeof(int32_t)) // stereo, signed 32-bit (ADR-0003)
 #define PCM_CHUNK_FRAMES 128u              // frames converted per decoder step
 #define STORM_BLOCKS 32u                   // consecutive starved blocks (186 ms) before playback is stopped and muted

@@ -20,4 +20,12 @@
 /** LVGL's built-in allocator pool (screens, widgets, styles). */
 #define NEUPOD_LVGL_POOL_BYTES (72u * 1024u)
 
+/**
+ * Audio core PCM ring, in stereo frames (8 bytes each, int32 L/R): the buffer between the decoder (core 1 loop)
+ * and the block interrupt that feeds the DAC. Its depth is the decoder's slack: a decode call longer than
+ * ring-frames / sample-rate starves the sink (2048 frames = 46 ms at 44.1 kHz). RAM cost = frames * 8 bytes
+ * (16 KB at 2048). Must be a power of two and a multiple of HAL_AUDIO_BLOCK_FRAMES (256).
+ */
+#define NEUPOD_PCM_RING_FRAMES 2048u
+
 #endif // NEUPOD_MEMORY_BUDGET_H

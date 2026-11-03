@@ -27,6 +27,7 @@
 #include "matrixlib.h"
 #include "ALACBitUtilities.h"
 #include "EndianPortable.h"
+#include "ram_func.h" // neuPod: hot paths run from RAM (see README.md)
 
 /*
 	ZeroN()
@@ -648,7 +649,7 @@ uint32_t alac_dec_out_bytes_per_frame( const alac_dec_t * d )
     return bytes * d->cfg.numChannels;
 }
 
-int32_t alac_dec_decode( alac_dec_t * d, const uint8_t * in, uint32_t inBytes, uint8_t * out, uint32_t * outFrames )
+int32_t NEUPOD_RAM_FUNC(alac_dec_decode)( alac_dec_t * d, const uint8_t * in, uint32_t inBytes, uint8_t * out, uint32_t * outFrames )
 {
     BitBuffer bits;
     BitBufferInit( &bits, (uint8_t *) in, inBytes );
