@@ -59,6 +59,8 @@ static uint32_t g_name_requests;
 static bd_addr_t g_name_pending;
 static bool g_name_in_flight;
 static bool g_skip_names; /* the scan was stopped by the user: no name requests */
+static uint32_t g_raw_results; /* inquiry results BTstack delivered this scan (before any filtering): for the log */
+static bool g_version_logged;  /* BTstack reads the controller version itself during start-up: print it once */
 
 /* Non-blocking hand-over of scan start/stop from the caller's task to the worker. */
 static btstack_context_callback_registration_t g_start_reg, g_stop_reg;
@@ -81,6 +83,18 @@ static void set_state(hal_bt_state_t s) {
         hal_bt_event_t ev = {.type = HAL_BT_EVT_STATE, .state = s};
         emit(&ev);
     }
+}
+
+static void log_device(const found_t *f, const char *what) {
+    const uint8_t *a = f->dev.addr;
+    char rssi[12];
+    if (f->dev.rssi == HAL_BT_RSSI_UNKNOWN) {
+        snprintf(rssi, sizeof rssi, "?");
+    } else {
+        snprintf(rssi, sizeof rssi, "%d", (int)f->dev.rssi);
+    }
+    printf("bt: %s %02X:%02X:%02X:%02X:%02X:%02X cod=0x%06lX rssi=%s name='%s' audio=%s\n", what, a[0], a[1], a[2], a[3], a[4], a[5],
+           (unsigned long)f->dev.cod, rssi, f->dev.name, f->dev.audio_sink ? "yes" : "no");
 }
 
 static void emit_device(const found_t *f) {
@@ -162,6 +176,7 @@ static void on_inquiry_result(const uint8_t *packet) {
     bd_addr_t a;
     gap_event_inquiry_result_get_bd_addr(packet, a);
     found_t *f = find(a);
+    bool is_new = f == NULL;
     if (f == NULL) {
         if (g_nfound >= MAX_FOUND) {
             return;
@@ -182,10 +197,14 @@ static void on_inquiry_result(const uint8_t *packet) {
         copy_name(f->dev.name, gap_event_inquiry_result_get_name(packet), gap_event_inquiry_result_get_name_len(packet));
         f->name_known = f->dev.name[0] != '\0';
     }
+    if (is_new) {
+        log_device(f, "found");
+    }
     emit_device(f);
 }
 
 static void finish_scan(void) {
+    printf("bt: scan done, %u devices\n", (unsigned)g_nfound);
     g_phase = SCAN_IDLE;
     g_name_in_flight = false;
     set_state(HAL_BT_ON);
@@ -231,12 +250,14 @@ static void on_name_complete(const uint8_t *packet) {
         const char *n = hci_event_remote_name_request_complete_get_remote_name(packet);
         copy_name(f->dev.name, (const uint8_t *)n, strnlen(n, 248));
         f->name_known = f->dev.name[0] != '\0';
+        log_device(f, "named");
         emit_device(f);
     }
     next_name_request();
 }
 
 static void on_inquiry_complete(void) {
+    printf("bt: inquiry complete (%u results delivered by BTstack, %u kept)\n", (unsigned)g_raw_results, (unsigned)g_nfound);
     if (g_phase != SCAN_INQUIRY) {
         return;
     }
@@ -258,8 +279,6 @@ static void on_working(void) {
     g_have_addr = true;
     printf("bt: HCI up, local BD_ADDR %s\n", bd_addr_to_str(g_local));
     set_state(HAL_BT_ON);
-    /* The version information is only for the log; it comes back as a command-complete event. */
-    (void)hci_send_cmd(&hci_read_local_version_information);
 }
 
 static void packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint16_t size) {
@@ -285,8 +304,17 @@ static void packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint
         }
         break;
     case GAP_EVENT_INQUIRY_RESULT:
+        g_raw_results++;
         if (g_phase == SCAN_INQUIRY) {
             on_inquiry_result(packet);
+        }
+        break;
+    case HCI_EVENT_COMMAND_STATUS:
+        /* BTstack gives no event when the controller refuses the Inquiry command: without this the scan would sit in
+         * "scanning" for ever. */
+        if (HCI_EVENT_IS_COMMAND_STATUS(packet, hci_inquiry) && hci_event_command_status_get_status(packet) != 0 && g_phase == SCAN_INQUIRY) {
+            printf("bt: inquiry refused by the controller (status 0x%02X)\n", (unsigned)hci_event_command_status_get_status(packet));
+            finish_scan();
         }
         break;
     case GAP_EVENT_INQUIRY_COMPLETE:
@@ -298,11 +326,12 @@ static void packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint
     case HCI_EVENT_COMMAND_COMPLETE:
         if (HCI_EVENT_IS_COMMAND_COMPLETE(packet, hci_read_local_version_information)) {
             const uint8_t *r = hci_event_command_complete_get_return_parameters(packet);
-            if (r[0] == 0) { /* status, hci_version, hci_revision(2), lmp_version, manufacturer(2), lmp_subversion(2) */
+            if (r[0] == 0 && !g_version_logged) { /* status, hci_version, hci_revision(2), lmp_version, manufacturer(2), lmp_subversion(2) */
                 printf("bt: BTstack %s; controller HCI version %u (Bluetooth %s) revision 0x%04X, LMP %u, "
                        "manufacturer 0x%04X, LMP subversion 0x%04X\n",
                        BTSTACK_VERSION_STRING, (unsigned)r[1], hci_version_name(r[1]), (unsigned)little_endian_read_16(r, 2),
                        (unsigned)r[4], (unsigned)little_endian_read_16(r, 5), (unsigned)little_endian_read_16(r, 7));
+                g_version_logged = true;
             }
         }
         break;
@@ -321,7 +350,9 @@ static void worker_scan_start(void *arg) {
     g_name_requests = 0;
     g_name_in_flight = false;
     g_skip_names = false;
+    g_raw_results = 0;
     g_phase = SCAN_INQUIRY;
+    printf("bt: scan start (%u s)\n", (unsigned)(((uint32_t)g_start_units * 1280u + 500u) / 1000u));
     /* hal_bt_inquiry_start() already moved the state to SCANNING (so a second start is refused at once): announce it. */
     hal_bt_event_t ev = {.type = HAL_BT_EVT_STATE, .state = HAL_BT_SCANNING};
     emit(&ev);
@@ -366,6 +397,9 @@ static uint32_t worker_init(void *param) {
             btstack_tlv_set_instance(&k_tlv, NULL);
             hci_set_link_key_db(btstack_link_key_db_tlv_get_instance(&k_tlv, NULL));
         }
+        /* Results with the signal strength and the name from the extended inquiry response. The default is the plain mode,
+         * which carries neither (so the list never had a dBm value). Sent during start-up, before the first inquiry. */
+        hci_set_inquiry_mode(INQUIRY_MODE_RSSI_AND_EIR);
         gap_set_local_name(LOCAL_NAME);
         gap_set_class_of_device(LOCAL_COD);
         gap_discoverable_control(0); /* stage 1: not discoverable, not connectable; nobody can pair with us yet */
