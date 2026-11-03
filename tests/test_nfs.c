@@ -258,6 +258,32 @@ TEST(test_dir_iteration) {
     ASSERT_TRUE(total > 0 && free_b <= total);
 }
 
+TEST(test_hidden_entries) {
+    nfs_dirent_t e;
+    memset(&e, 0, sizeof e);
+    snprintf(e.name, sizeof e.name, "System Volume Information");
+    ASSERT_FALSE(nfs_dirent_hidden(&e)); // no attribute: listed
+    e.hidden = true; // what nfs_fatfs.c sets for AM_HID / AM_SYS
+    ASSERT_TRUE(nfs_dirent_hidden(&e));
+    e.hidden = false;
+    snprintf(e.name, sizeof e.name, ".Trashes"); // the dot rule stays
+    ASSERT_TRUE(nfs_dirent_hidden(&e));
+    snprintf(e.name, sizeof e.name, "song.flac");
+    ASSERT_FALSE(nfs_dirent_hidden(&e));
+    // The host backend has no attributes: it never reports an entry as hidden.
+    ASSERT_EQ(NFS_OK, nfs_mkdir("/hid"));
+    nfs_file_t *f;
+    ASSERT_EQ(NFS_OK, nfs_open(&f, "/hid/a.txt", NFS_O_WRITE | NFS_O_CREATE));
+    nfs_close(f);
+    nfs_dir_t *d;
+    bool done = false;
+    ASSERT_EQ(NFS_OK, nfs_opendir(&d, "/hid"));
+    ASSERT_EQ(NFS_OK, nfs_readdir(d, &e, &done));
+    ASSERT_FALSE(done);
+    ASSERT_FALSE(e.hidden);
+    nfs_closedir(d);
+}
+
 int main(void) {
     if (mkdtemp(g_root) == NULL || setenv("NEUPOD_FS_ROOT", g_root, 1) != 0) {
         printf("cannot create temp root\n");
@@ -270,6 +296,7 @@ int main(void) {
     RUN(test_unlink_rename_stat);
     RUN(test_symlink_cannot_escape);
     RUN(test_dir_iteration);
+    RUN(test_hidden_entries);
     int rc = RESULT();
     char cmd[128];
     snprintf(cmd, sizeof cmd, "rm -rf %s", g_root);

@@ -69,6 +69,11 @@ typedef struct {
     bool hidden; /**< FAT "hidden" or "system" attribute (System Volume Information, $RECYCLE.BIN ...); always false on the host */
 } nfs_dirent_t;
 
+/** FAT attribute bits that make an entry hidden in the file browser: AM_HID (0x02) | AM_SYS (0x04). nfs_fatfs.c asserts the values. */
+#define NFS_FAT_HIDDEN_ATTRS 0x06u
+/** True for entries the file browser must not list: a name starting with a dot, or the FAT hidden / system attribute. */
+bool nfs_dirent_hidden(const nfs_dirent_t *e);
+
 /** Contiguous region of sectors holding a file's data (see nfs_file_extent). */
 typedef struct {
     uint32_t first_lba;
