@@ -10,11 +10,11 @@ Unmodified from upstream: `ALACBitUtilities.h`, `EndianPortable.h`, `aglib.h`, `
 Modified by neuPod: `EndianPortable.c` detects the byte order from the compiler's `__BYTE_ORDER__` (upstream knew only x86 and Win32, so on ARM the big-endian cookie fields were not swapped) and fails the build if it is unknown. `alac_dec.c` copies the cookie config with `memcpy` instead of casting a possibly unaligned pointer.
 
 Modified by neuPod (RAM placement, no functional change): `ag_dec.c` (`dyn_decomp`), `dp_dec.c` (`unpc_block`), `matrix_dec.c`
-(`unmix16/24/32`, `copyPredictorTo24/24Shift/32/32Shift`), `ALACBitUtilities.c` (`BitBufferRead/ReadSmall/ReadOne/Advance`)
+(`unmix16/20/24`, `copyPredictorTo20/24/24Shift`), `ALACBitUtilities.c` (`BitBufferRead/ReadSmall/ReadOne/Advance`)
 and `alac_dec.c` (`alac_dec_decode`, which contains the inlined `Decode`) wrap the function name in `NEUPOD_RAM_FUNC()`
 (`app/include/ram_func.h`) and include that header. On the RP2350 this places them in SRAM so the audio core does not
-stall on XIP flash cache misses; on other targets the macro is empty. Not moved: `unmix20`, `copyPredictorTo20`
-(20-bit ALAC is not produced by common encoders), init/setup helpers, `BitBufferInit/ByteAlign/Peek*`.
+stall on XIP flash cache misses; on other targets the macro is empty. Not moved: the 32-bit paths `unmix32`, `copyPredictorTo32/32Shift`
+(32-bit ALAC is rejected before decoding), init/setup helpers, `BitBufferInit/ByteAlign/Peek*`.
 
 Added by neuPod (Apache-2.0 section 4(b), modifications): `alac_dec.c/.h`, a C port of `ALACDecoder.cpp` (the class becomes a
 struct; a partial-frame sample count above `frameLength` is rejected, because the original trusted the file and could overrun its buffers; the three work buffers come from a caller-supplied allocator, so the decoder runs on the bare-metal audio core

@@ -93,7 +93,7 @@ void NEUPOD_RAM_FUNC(unmix16)( int32_t * u, int32_t * v, int16_t * out, uint32_t
 // 20-bit routines
 // - the 20 bits of data are left-justified in 3 bytes of storage but right-aligned for input/output predictor buffers
 
-void unmix20( int32_t * u, int32_t * v, uint8_t * out, uint32_t stride, int32_t numSamples, int32_t mixbits, int32_t mixres )
+void NEUPOD_RAM_FUNC(unmix20)( int32_t * u, int32_t * v, uint8_t * out, uint32_t stride, int32_t numSamples, int32_t mixbits, int32_t mixres )
 {
 	uint8_t *	op = out;
 	int32_t 		j;
@@ -255,7 +255,7 @@ void NEUPOD_RAM_FUNC(unmix24)( int32_t * u, int32_t * v, uint8_t * out, uint32_t
 // - otherwise, the calculations might overflow into the 33rd bit and be lost
 // - therefore, these routines deal with the specified "unused lower" bytes in the "shift" buffers
 
-void NEUPOD_RAM_FUNC(unmix32)( int32_t * u, int32_t * v, int32_t * out, uint32_t stride, int32_t numSamples,
+void unmix32( int32_t * u, int32_t * v, int32_t * out, uint32_t stride, int32_t numSamples,
 				int32_t mixbits, int32_t mixres, uint16_t * shiftUV, int32_t bytesShifted )
 {
 	int32_t *	op = out;
@@ -347,7 +347,7 @@ void NEUPOD_RAM_FUNC(copyPredictorTo24Shift)( int32_t * in, uint16_t * shift, ui
 	}
 }
 
-void copyPredictorTo20( int32_t * in, uint8_t * out, uint32_t stride, int32_t numSamples )
+void NEUPOD_RAM_FUNC(copyPredictorTo20)( int32_t * in, uint8_t * out, uint32_t stride, int32_t numSamples )
 {
 	uint8_t *	op = out;
 	int32_t			j;
@@ -365,7 +365,7 @@ void copyPredictorTo20( int32_t * in, uint8_t * out, uint32_t stride, int32_t nu
 	}
 }
 
-void NEUPOD_RAM_FUNC(copyPredictorTo32)( int32_t * in, int32_t * out, uint32_t stride, int32_t numSamples )
+void copyPredictorTo32( int32_t * in, int32_t * out, uint32_t stride, int32_t numSamples )
 {
 	int32_t			i, j;
 
@@ -374,7 +374,7 @@ void NEUPOD_RAM_FUNC(copyPredictorTo32)( int32_t * in, int32_t * out, uint32_t s
 		out[j] = in[i];
 }
 
-void NEUPOD_RAM_FUNC(copyPredictorTo32Shift)( int32_t * in, uint16_t * shift, int32_t * out, uint32_t stride, int32_t numSamples, int32_t bytesShifted )
+void copyPredictorTo32Shift( int32_t * in, uint16_t * shift, int32_t * out, uint32_t stride, int32_t numSamples, int32_t bytesShifted )
 {
 	int32_t *		op = out;
 	uint32_t		shiftVal = bytesShifted * 8;
