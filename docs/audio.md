@@ -227,6 +227,12 @@ ignored. The reported `total_frames` is the trimmed length. The test vectors: `t
 compares the sink's samples frame by frame with each track decoded on its own (WAV, FLAC, MP3, ALAC with an edit list; skip, stop, seek and rate
 change cases). `play_queue` covers the queue rules.
 
+**Bench, 3 Nov 2026 (Pico 2 W):** `30-signals/gapless/` (3-part FLAC then 3-part LAME MP3, one queue): five `(gapless)`
+handoffs incl. FLAC → MP3, one `END_OF_TRACK(1)` per boundary, sink never re-clocked, mute line open throughout, 0 underruns.
+Next / Previous (restart when more than 3 s in, previous track within 3 s) / Next on the last track (`queue end`) correct; a skip
+while the successor was being announced leaves later joins gapless. Gapless Off: `(auto)` joins with the ramp, setting
+persists across a reboot. 44.1 → 48 kHz in `10-matrix/`: `(auto)` with a re-clock, `dma_underruns=0`, 0 underruns.
+
 ### Memory and CPU
 
 | | Value |
