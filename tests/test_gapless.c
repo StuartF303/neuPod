@@ -34,6 +34,11 @@ static uint32_t g_change_n;
 static volatile int g_sink_opens;
 static volatile uint32_t g_sink_rate;
 static volatile uint32_t g_sink_mute_toggles;
+// Trace of every sink-side track change (for diagnosing a failure) and optional clock jitter (NEUPOD_TEST_JITTER=1).
+typedef struct { uint32_t changes, consumed, written, bound; int have; } trace_t;
+static trace_t g_trace[64];
+static int g_trace_n;
+static bool g_jitter;
 static hal_audio_block_cb g_cb;
 static pthread_t g_clock;
 static volatile bool g_clock_run;
@@ -66,6 +71,7 @@ int32_t hal_audio_write(const int32_t *s, uint32_t frames) {
     pthread_mutex_lock(&g_cap_mu);
     if (g_audio_track_changes != g_changes_seen_by_sink) { // the interrupt counted a handoff while preparing this very block
         g_changes_seen_by_sink = g_audio_track_changes;
+        if (g_trace_n < 64) g_trace[g_trace_n++] = (trace_t){g_audio_track_changes, g_pcm_consumed, g_pcm_written, g_bound_pos, g_have_bound};
         if (g_change_n < 8) g_change_at[g_change_n++] = g_cap_frames;
     }
     if (g_cap_on && g_cur_gain != 0 && g_cap_frames + frames <= CAP_MAX_FRAMES) { // audible blocks only (not priming silence)
@@ -81,6 +87,7 @@ static void *clock_thread(void *arg) {
     uint64_t period = (uint64_t)HAL_AUDIO_BLOCK_FRAMES * 1000000u / g_sink_rate, next = hal_micros() + period;
     while (g_clock_run) {
         while (g_clock_run && hal_micros() < next) usleep(200);
+        if (g_jitter && rand() % 40 == 0) usleep((useconds_t)(rand() % 12000));
         if (g_clock_run && g_cb != NULL) g_cb(0);
         next += period;
     }
@@ -155,7 +162,16 @@ static bool g_gapless = true;
 static int g_art_calls;
 static int g_announced, g_started, g_failed;
 static volatile bool g_started_reset_cap;
+static uint32_t g_seen_changes; // track changes the "player" has applied to its queue position
+// Like player_next_track(): first fold in any handoff the audio core completed, THEN look at what follows. (The first version of this
+// test advanced the position only in its own loop, so a handoff completing between that and the feed's question made the feed
+// announce the same track again: a second, real handoff. The engine was right; see NEUPOD_TEST_RACE.)
+static void sync_queue(void) {
+    uint32_t c = audio_track_change_count();
+    while (c != g_seen_changes) { g_seen_changes++; g_list_pos++; }
+}
 static bool ops_next_track(char *path, size_t n) {
+    sync_queue();
     if (!g_gapless || g_list_pos + 1 >= g_list_n) return false;
     snprintf(path, n, "%s", g_list[g_list_pos + 1]);
     return true;
@@ -324,6 +340,7 @@ static void poll_events(void) {
 static void set_list(int n, const char *const *paths) {
     g_list_n = n;
     g_list_pos = 0;
+    g_seen_changes = audio_track_change_count();
     for (int i = 0; i < n; i++) snprintf(g_list[i], sizeof g_list[i], "%s", paths[i]);
 }
 
@@ -344,12 +361,13 @@ static bool play_list(uint32_t max_ms) {
     reset_capture();
     uint32_t ended0 = audio_pcm_ended_count();
     uint32_t changes0 = audio_track_change_count();
-    uint32_t seen_ended = ended0, seen_changes = changes0;
+    uint32_t seen_ended = ended0;
+    g_seen_changes = changes0;
     track_stream_start(g_list[0], false);
     uint64_t t0 = hal_micros();
     while (hal_micros() - t0 < (uint64_t)max_ms * 1000u) {
-        uint32_t c = audio_track_change_count();
-        while (c != seen_changes) { seen_changes++; g_list_pos++; } // the player moves to the next queue entry (before the feed asks what follows)
+        sync_queue();
+        if (getenv("NEUPOD_TEST_RACE")) usleep(3000);
         track_stream_pump();
         poll_events();
         if (audio_pcm_ended_count() != seen_ended) {
@@ -649,6 +667,7 @@ TEST(an_incompatible_announcement_is_refused_by_the_core_and_the_track_ends_norm
 
 int main(void) {
     g_cap = malloc((size_t)CAP_MAX_FRAMES * 8u);
+    g_jitter = getenv("NEUPOD_TEST_JITTER") != NULL;
     meta_set_scratch(g_scratch, sizeof g_scratch);
     track_stream_init(&k_ops);
     set_path(0, "flac16_44k_st.flac");
@@ -700,6 +719,7 @@ int main(void) {
     RUN(stop_during_a_pending_next_stream_is_safe);
     RUN(seek_withdraws_an_announced_stream_and_a_new_one_can_follow);
     RUN(an_incompatible_announcement_is_refused_by_the_core_and_the_track_ends_normally);
+    if (unit_failures) for (int i = 0; i < g_trace_n; i++) printf("  trace %d: changes=%u consumed=%u written=%u bound=%u have=%d\n", i, g_trace[i].changes, g_trace[i].consumed, g_trace[i].written, g_trace[i].bound, g_trace[i].have);
     unlink(P[1]);
     unlink(P[5]);
     unlink(P[7]);
