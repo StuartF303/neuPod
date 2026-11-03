@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Auto-advance and gapless playback ([ADR-0016](docs/adr/0016-gapless-playback-and-play-queue.md)): playing a file from Files queues the rest of its folder; Now Playing Right/Left = next/previous (Previous restarts after 3 s), the status line shows "n of N", the end of the queue returns Now Playing to idle. Setting "Gapless playback" (default on): the next track is opened while the current one plays and the audio core switches decoders without closing the sink or draining the PCM ring; a different sample rate or channel count falls back to the ordinary stop/re-clock/start. Static RAM +5.8 KB.
+- Encoder delay and padding are trimmed: MP3 length now follows the LAME tag (as dr_mp3 plays it), ALAC/M4A uses the edit list or iTunSMPB; the displayed length matches.
+- Host tests `gapless` (real core-1 loop and core-0 stream controller against a fake sink: sample-exact concatenation across WAV/FLAC/MP3/ALAC, track-change timing, rate-change fallback, skip and stop during a pending handoff) and `play_queue`; trim vectors via `tools/gen_trim_vectors.py`.
+
+### Fixed
+- MP3 files without an ID3v2 tag lost their first frame (and the Xing/LAME header): the frame scan treated offset 0 as "not found".
+
 ### Documentation
 - Design response of 3 Nov 2026 folded in: ADR-0012 (final-board codec, proposed; ES8311 mono check open), ADR-0013 (BT stage 2 RAM, PSRAM on the final board), ADR-0014 (OTA with bootrom A/B + TBYB), ADR-0015 (clock plan); ADR-0007 (no bare CYW43439 on the final board) and ADR-0011 (audio isolation is a requirement) updated; Audio Pack identified as PCM5100A + PAM8908 with GP22 = XSMT active low; approved volume-restore and secrets policies recorded as not built; requirements for antenna window, SD VDD load switch, BQ25895, haptic footprints, RAM budget lines; Wi-Fi order W2 → W4 → W3; new `docs/bench.md`.
 
