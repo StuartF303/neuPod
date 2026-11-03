@@ -23,12 +23,16 @@ The wheel is not fitted (the host → wheel init packet is still unknown, see
 
 - Never `pkill -f <pattern>` from a script: the pattern matches the script's own shell. Kill by PID.
 - Headphones **off your head** for the first sound from any new audio path; start with the Pack's gain switch low.
+- When a breakout is silent, read the pin state back over SWD before metering (OpenOCD `mdw` on SIO_IN `0xd0000004` and
+  IO_BANK0 `GPIOn_STATUS` `0x40028000 + 8n`, no halt needed): it separates firmware from wiring in one step.
+- Count Pico pins from pin 1 (GP0, by the USB connector); GND pins 3/8/13/18/23/28/33/38 sit next to signal pins,
+  so an off-by-one jumper often lands on ground.
 - Record measured figures (fps, RAM, heap low-water, underruns) in the page for the feature, with the date.
 
 ## Next bench tests (agreed 3 Nov 2026)
 
-1. **Audio Pack tone test** — phones and line-out jacks ([Audio](audio.md#how-to-test-bench)). Needs the XSMT
-   sequencing change first ([Mute line](audio.md#mute-line-gp22)).
+1. **Audio Pack tone test** — 1 kHz on the phones jack **done 3 Nov 2026**; still to do: L/R ident, scale, volume steps,
+   line-out jack ([Audio](audio.md#how-to-test-bench)).
 2. **Display fps baseline** — re-run test 7 of the display test suite ([Display tests](display-tests.md)) and note the
    figure as the baseline for the UI-performance work.
 3. MP3 and ALAC playback (files in `/Music`).

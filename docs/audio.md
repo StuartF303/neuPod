@@ -72,20 +72,21 @@ Consequences:
 ## Mute line (GP22)
 
 * **GP22 drives the PCM5100A's XSMT pin (TSSOP-20 pin 17), active LOW**: low = soft-muted, high = playing
-  (design response, 3 Nov 2026, from the Pack schematic). The build default `NEUPOD_AUDIO_UNMUTE_LEVEL=1` already
-  matches; no rebuild with `=0` is needed.
+  (design response, 3 Nov 2026, from the Pack schematic; confirmed on the bench the same day). The build default
+  `NEUPOD_AUDIO_UNMUTE_LEVEL=1` is correct.
 * The DAC also **auto-mutes on a clock error**: BCK and LRCK must be running continuously, and its PLL locked,
   before XSMT goes high.
 * **Current behaviour (as built):** muted from boot (`hal_system_init`), at sink open and close, on stop, on an
   underrun storm and in the fatal-error path (`hal_panic` → `hal_audio_force_mute()`, which also aborts the DMA and
   stops the PIO). The audio core opens XSMT one block before a fade-in and closes it after two silent blocks
   (`app/audio/audio_core.c`), and `hal_audio_close()` stops the I2S clocks between streams. So XSMT toggles with every
-  start/stop, and each new stream raises XSMT within a block of starting BCK — before the DAC's PLL may have locked.
-  This is the likely cause of the silent Audio Pack on the bench.
-* **Planned change (not built):** raise XSMT **once**, after the clocks have run for a settle time (about 10 ms), and
-  leave it high; do start/stop/pause with the gain ramp only. XSMT goes low only for force-mute (panic, storm) and
-  sink close. Keep the clocks running while the sink is open.
-* If still silent after that: meter GP22 at XSMT (pin 17) and 3V3 at the Pack's 3V3 pin.
+  start/stop. The stream is opened at boot and its clocks keep running, so in practice XSMT rises long after the PLL has locked.
+* **Bench, 3 Nov 2026: works.** 1 kHz test tone heard on the "phones" jack at -30 dB. The earlier silence was wiring:
+  the GP9 (DATA) and GP22 (XSMT) jumpers were on the wrong Pico pins. Register read-back over SWD (SIO_IN / IO_BANK0
+  STATUS) showed both pins driven correctly while the Pack end read 0 V, which is how it was found.
+* **Design recommendation (optional, not built):** raise XSMT once after the clocks have settled and leave it high,
+  doing start/stop/pause with the gain ramp only; XSMT low only for force-mute (panic, storm) and sink close. Not needed
+  for function on the testbed; it reduces DAC soft-mute ramps at track boundaries.
 
 ## Volume safety
 
@@ -224,5 +225,5 @@ the arena (including the worst-case sizes) and the core 0 / core 1 stream handsh
 ## Not verified on hardware
 
 Everything in this page about the board's behaviour is from reading the datasheet-level behaviour of the RP2350 PIO and
-DMA and from the host build; none of it has been run on the Audio Pack. Specifically open: the XSMT sequencing (polarity is confirmed from the schematic, not yet heard), the
+DMA and from the host build; none of it has been run on the Audio Pack. The 1 kHz tone on the Audio Pack is verified (3 Nov 2026). Specifically open: the
 DMA interrupt timing under UI load, clock jitter, 88.2/96 kHz, SD streaming throughput at 24/32-bit, the decoders' CPU load and flash-cache behaviour on the RP2350, the 16 KB core-1 stack margin under MP3 (watch `core1_stack_free` in the `audio:` line), and the real RAM headroom (about 28 KB were left in the link).
