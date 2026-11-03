@@ -429,6 +429,7 @@ nfs_err_t nfs_readdir(nfs_dir_t *d, nfs_dirent_t *out, bool *done) {
         strncpy(out->name, de->d_name, NFS_NAME_MAX);
         out->name[NFS_NAME_MAX] = '\0';
         out->is_dir = S_ISDIR(st.st_mode);
+        out->hidden = false; /* POSIX has no such attribute: the dot rule in the file browser is all there is */
         out->size = out->is_dir ? 0 : (uint64_t)st.st_size;
         return NFS_OK;
     }

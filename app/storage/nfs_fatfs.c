@@ -469,6 +469,7 @@ nfs_err_t nfs_readdir(nfs_dir_t *d, nfs_dirent_t *out, bool *done) {
     strncpy(out->name, fno.fname, NFS_NAME_MAX);
     out->name[NFS_NAME_MAX] = '\0';
     out->is_dir = (fno.fattrib & AM_DIR) != 0;
+    out->hidden = (fno.fattrib & (AM_HID | AM_SYS)) != 0;
     out->size = out->is_dir ? 0 : fno.fsize;
     return NFS_OK;
 }

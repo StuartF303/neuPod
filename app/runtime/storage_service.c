@@ -117,8 +117,8 @@ static void list_dir(const storage_req_t *rq, storage_result_t *res) {
             if ((++scanned & 31u) == 0) {
                 os_delay_ms(1); // let the UI and input run during a big directory
             }
-            if (e.name[0] == '.' || e.is_dir != (pass == 0)) {
-                continue; // hidden entries; and the other pass's kind
+            if (e.name[0] == '.' || e.hidden || e.is_dir != (pass == 0)) {
+                continue; // hidden entries (dot names, FAT hidden / system); and the other pass's kind
             }
             if (count >= FILES_MAX_ENTRIES) {
                 truncated = true;

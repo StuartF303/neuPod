@@ -66,6 +66,7 @@ typedef struct {
     char name[NFS_NAME_MAX + 1];
     uint64_t size;
     bool is_dir;
+    bool hidden; /**< FAT "hidden" or "system" attribute (System Volume Information, $RECYCLE.BIN ...); always false on the host */
 } nfs_dirent_t;
 
 /** Contiguous region of sectors holding a file's data (see nfs_file_extent). */
