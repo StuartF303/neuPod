@@ -4,6 +4,7 @@
     python3 tools/gen_trim_vectors.py tests/assets/audio
 It re-muxes the packets of alac16_48k_mono.m4a (9600 frames) with
   alac16_48k_mono_elst.m4a  an edit list (media_time 2112, segment_duration 125 ms in a 1000 Hz movie timescale = 6000 frames), and
+  alac16_48k_mono_badelst_smpb.m4a  an edit list that does not fit AND the iTunSMPB tag below (the tag must be used), and
   alac16_48k_mono_smpb.m4a  an iTunSMPB tag (priming 0x840 = 2112, padding 0x5D0 = 1488, length 0x1770 = 6000 frames), no edit list.
 Both must decode to frames [2112, 8112) of the untrimmed file (tests/test_codecs.c)."""
 import struct, sys, os
@@ -59,7 +60,7 @@ def full(t, vf, body):
     return box(t, struct.pack(">I", vf) + body)
 
 
-def build(edit, smpb):
+def build(edit, smpb, bad_edit=False):
     chunks_ = [sizes[i:i + 4] for i in range(0, len(sizes), 4)]
     stsz = full(b"stsz", 0, struct.pack(">II", 0, len(sizes)) + b"".join(struct.pack(">I", s) for s in sizes))
     stsc = full(b"stsc", 0, struct.pack(">I", 1) + struct.pack(">III", 1, 4, 1))
@@ -76,6 +77,8 @@ def build(edit, smpb):
         mdia = box(b"mdia", mdhd + hdlr + minf)
         tkhd = full(b"tkhd", 7, b"\0" * 80)
         edts = b""
+        if bad_edit:  # an edit list that does not fit the media (1000 s): must be ignored in favour of iTunSMPB
+            edts = box(b"edts", full(b"elst", 0, struct.pack(">I", 1) + struct.pack(">IiI", 1000000, 2112, 0x10000)))
         if edit:  # one real edit: play 125 ms (movie timescale 1000) starting 2112 frames into the media
             edts = box(b"edts", full(b"elst", 0, struct.pack(">I", 1) + struct.pack(">IiI", 125, 2112, 0x10000)))
         trak = box(b"trak", tkhd + edts + mdia)
@@ -104,4 +107,5 @@ def build(edit, smpb):
 
 open(os.path.join(out, "alac16_48k_mono_elst.m4a"), "wb").write(build(True, False))
 open(os.path.join(out, "alac16_48k_mono_smpb.m4a"), "wb").write(build(False, True))
+open(os.path.join(out, "alac16_48k_mono_badelst_smpb.m4a"), "wb").write(build(False, True, True))
 print("wrote alac16_48k_mono_elst.m4a and alac16_48k_mono_smpb.m4a from", len(packets), "packets")

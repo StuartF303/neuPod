@@ -66,6 +66,7 @@ static uint32_t g_written;    // bytes of stream g_wseq written so far (what aud
 
 static void drop_next(void) {
     g_audio_next_valid = 0; // before anything reuses the slot: core 1 re-checks this when it takes the stream over
+    atomic_thread_fence(memory_order_release); // ... and the clear is visible before any later write to the slot
     g_next_seq = 0;
 }
 

@@ -276,6 +276,13 @@ static void walk(pctx_t *p, uint64_t pos, uint64_t end, int depth, uint32_t pare
     }
 }
 
+// v * mul / div without overflowing 64 bits; false if it would overflow.
+static bool scale_u64(uint64_t v, uint32_t mul, uint32_t div, uint64_t *out) {
+    if (div == 0 || (mul != 0 && v > UINT64_MAX / mul)) return false;
+    *out = v * mul / div;
+    return true;
+}
+
 meta_err_t mp4_parse(meta_read_fn rd, void *ctx, uint64_t file_size, mp4_info_t *out) {
     memset(out, 0, sizeof *out);
     pctx_t p = {.rd = rd, .ctx = ctx, .file_size = file_size, .out = out};
@@ -309,16 +316,17 @@ meta_err_t mp4_parse(meta_read_fn rd, void *ctx, uint64_t file_size, mp4_info_t 
     // Encoder priming and padding. The edit list is authoritative; iTunSMPB is the fallback. A trim that does not fit the
     // media (or is not whole-frame sane) is ignored: playing the whole track is better than cutting at nonsense.
     uint64_t media = (uint64_t)out->sample_count * out->frame_length; // upper bound of what the packets can decode to
-    if (p.elst_ok && p.timescale != 0 && p.elst_media_time >= 0) {
-        uint64_t skip = (uint64_t)p.elst_media_time * out->rate / p.timescale;
-        uint64_t len = p.elst_seg != 0 && p.movie_ts != 0 ? p.elst_seg * out->rate / p.movie_ts
-                       : out->total_frames > skip ? out->total_frames - skip : 0;
-        if (len != 0 && skip < 0x10000u && skip + len <= media) {
-            out->skip_frames = (uint32_t)skip;
-            out->total_frames = len;
-            out->trimmed = true;
-        }
-    } else if (p.itun_ok && p.itun_len != 0 && p.itun_skip + p.itun_len <= media) {
+    uint64_t skip, len;
+    if (p.elst_ok && p.timescale != 0 && p.elst_media_time >= 0 && scale_u64((uint64_t)p.elst_media_time, out->rate, p.timescale, &skip) &&
+        (p.elst_seg != 0 && p.movie_ts != 0 ? scale_u64(p.elst_seg, out->rate, p.movie_ts, &len)
+                                            : (len = out->total_frames > skip ? out->total_frames - skip : 0, true)) &&
+        len != 0 && skip < 0x10000u && skip <= media && len <= media - skip) {
+        out->skip_frames = (uint32_t)skip;
+        out->total_frames = len;
+        out->trimmed = true;
+    }
+    // iTunSMPB is the fallback when there is no edit list, or the edit list does not fit the media
+    if (!out->trimmed && p.itun_ok && p.itun_len != 0 && p.itun_skip <= media && p.itun_len <= media - p.itun_skip) {
         out->skip_frames = p.itun_skip;
         out->total_frames = p.itun_len;
         out->trimmed = true;

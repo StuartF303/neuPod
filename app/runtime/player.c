@@ -25,11 +25,19 @@ static play_queue_t g_q;      // the folder being played through (count 0: a sin
 static bool g_auto;           // the current track was started by the queue (not chosen by the user): a track that cannot be opened is skipped
 static bool g_next_valid;     // the audio core was told to continue with the next queued track by itself; its details:
 static player_file_t g_next_pf;
+// An announcement is only accepted for the offer it answers: any restart of playback (reset_info) bumps g_gen, so the answer to
+// an offer made before a skip, stop or new start is ignored instead of marking a successor that no longer exists.
+static uint32_t g_gen;
+static uint32_t g_offer_gen;
+static bool g_offered;
 
 // What to do once the lock is released (storage requests may wait on the storage queue; never hold the player lock for that).
 typedef struct {
     bool start;
     bool stop;
+    bool rollback;     // the queue position was advanced for this start: put it back if the start cannot even be requested
+    uint16_t prev_pos;
+    uint32_t gen;
     char path[PLAYER_PATH_MAX];
 } action_t;
 
@@ -78,6 +86,8 @@ static void reset_info(player_src_t src, player_state_t state, const char *name)
     g_info.vol_att_db = g_vol;
     g_error_stopped = false;
     g_next_valid = false;
+    g_offered = false;
+    g_gen++;
     snprintf(g_info.name, sizeof g_info.name, "%s", name);
     g_started_ms = os_tick_ms();
 }
@@ -90,7 +100,7 @@ static void go_idle(action_t *a) {
 }
 
 // Start queue entry g_q.pos (hard start: the audio core ramps down, re-clocks if needed, ramps up).
-static void begin_track(action_t *a, bool automatic) {
+static void begin_track(action_t *a, bool automatic, const char *why) {
     if (!pq_path(&g_q, g_q.pos, a->path, sizeof a->path)) {
         go_idle(a);
         return;
@@ -101,6 +111,8 @@ static void begin_track(action_t *a, bool automatic) {
     g_changes_seen = audio_track_change_count();
     g_auto = automatic;
     a->start = true;
+    a->gen = g_gen;
+    printf("player: track %u/%u '%s' (%s)\n", (unsigned)(g_q.pos + 1u), (unsigned)g_q.count, pq_name(&g_q, g_q.pos), why);
 }
 
 static void run_action(const action_t *a) {
@@ -109,6 +121,11 @@ static void run_action(const action_t *a) {
         (void)audio_stop();
     }
     if (a->start && !storage_play_request(a->path)) {
+        lock();
+        if (a->rollback && g_gen == a->gen && g_q.count != 0) {
+            g_q.pos = a->prev_pos; // the next press must not skip the entry that never started
+        }
+        unlock();
         player_file_failed("Storage busy, try again");
     }
 }
@@ -137,6 +154,7 @@ static void apply_next(void) {
     g_info.msg[0] = '\0';
     g_info.elapsed_s = 0;
     apply_file(&g_next_pf);
+    printf("player: track %u/%u '%s' (gapless)\n", (unsigned)(g_q.pos + 1u), (unsigned)g_q.count, g_info.name);
 }
 
 // Fold in what the audio core reports. Lock held.
@@ -162,9 +180,12 @@ static void service(action_t *a, bool have, const audio_stats_t *st) {
                audio_pcm_ended_count() != g_ended_base) {
         // The track played to its end and nothing followed in the audio core (gapless off, another sample rate, a fault-free end):
         // go on with the queue the ordinary way, or stop at its end.
+        a->prev_pos = g_q.pos;
+        a->rollback = true;
         if (g_q.count != 0 && pq_next(&g_q) == PQ_MOVED) {
-            begin_track(a, true);
+            begin_track(a, true, "auto");
         } else {
+            printf("player: queue end\n");
             go_idle(a);
         }
     } else if (g_info.src != PLAYER_SRC_NONE && (g_info.state == PLAYER_PLAYING || g_info.state == PLAYER_PAUSED) &&
@@ -176,8 +197,10 @@ static void service(action_t *a, bool have, const audio_stats_t *st) {
     } else if (g_info.src == PLAYER_SRC_FILE && g_info.state == PLAYER_ERROR && g_auto && g_q.count != 0 && pq_has_next(&g_q)) {
         // A track the queue moved on to cannot be played: skip it rather than stopping the album.
         printf("player: skipping '%s' (%s)\n", g_info.name, g_info.msg);
+        a->prev_pos = g_q.pos;
+        a->rollback = true;
         (void)pq_next(&g_q);
-        begin_track(a, true);
+        begin_track(a, true, "skip");
         a->stop = true; // the failed track may still be feeding or have left the audio core half set up
     }
 }
@@ -244,6 +267,7 @@ void player_play_file(const char *path, const char *name) {
     reset_info(PLAYER_SRC_FILE, PLAYER_OPENING, name);
     g_ended_base = audio_pcm_ended_count();
     g_changes_seen = audio_track_change_count();
+    printf("player: track 1/1 '%s' (start)\n", name);
     unlock();
     if (!storage_play_request(path)) {
         player_file_failed("Storage busy, try again");
@@ -257,7 +281,7 @@ void player_play_folder(const char *dir, const file_entry_t *entries, uint32_t c
         unlock();
         return;
     }
-    begin_track(&a, false);
+    begin_track(&a, false, "start");
     unlock();
     run_action(&a);
 }
@@ -269,9 +293,12 @@ void player_next(void) {
     lock();
     service(&a, have, &st); // a gapless handoff that just happened moves the queue first
     if (g_info.src == PLAYER_SRC_FILE && g_q.count != 0 && g_info.state != PLAYER_VERIFYING && g_info.state != PLAYER_VERIFIED) {
+        a.prev_pos = g_q.pos;
+        a.rollback = true;
         if (pq_next(&g_q) == PQ_MOVED) {
-            begin_track(&a, false);
+            begin_track(&a, false, "next");
         } else {
+            printf("player: queue end\n");
             go_idle(&a); // Next on the last track: stop, Now Playing goes idle
         }
     }
@@ -287,8 +314,10 @@ void player_prev(void) {
     service(&a, have, &st);
     if (g_info.src == PLAYER_SRC_FILE && g_q.count != 0 && g_info.state != PLAYER_VERIFYING && g_info.state != PLAYER_VERIFIED) {
         uint32_t elapsed = have && g_info.rate != 0 ? st.pcm_frames / g_info.rate : g_info.elapsed_s;
-        (void)pq_prev(&g_q, elapsed); // PQ_MOVED: the one before; PQ_RESTART: this one again from the start
-        begin_track(&a, false);
+        a.prev_pos = g_q.pos;
+        a.rollback = true;
+        pq_move_t mv = pq_prev(&g_q, elapsed); // PQ_MOVED: the one before; PQ_RESTART: this one again from the start
+        begin_track(&a, false, mv == PQ_MOVED ? "prev" : "restart");
     }
     unlock();
     run_action(&a);
@@ -303,6 +332,10 @@ bool player_next_track(char *path, size_t n) {
     bool ok = player_gapless_enabled() && g_info.src == PLAYER_SRC_FILE &&
               (g_info.state == PLAYER_PLAYING || g_info.state == PLAYER_PAUSED) && !g_next_valid && pq_has_next(&g_q) &&
               pq_path(&g_q, (uint32_t)g_q.pos + 1u, path, n);
+    if (ok) {
+        g_offered = true;
+        g_offer_gen = g_gen;
+    }
     unlock();
     run_action(&a);
     return ok;
@@ -310,7 +343,8 @@ bool player_next_track(char *path, size_t n) {
 
 void player_next_announced(const player_file_t *f) {
     lock();
-    if (g_info.src == PLAYER_SRC_FILE && pq_has_next(&g_q)) {
+    if (g_offered && g_offer_gen == g_gen && g_info.src == PLAYER_SRC_FILE && pq_has_next(&g_q)) {
+        g_offered = false;
         g_next_pf = *f;
         g_next_valid = true;
     }
@@ -403,6 +437,10 @@ void player_file_started(const player_file_t *f) {
     lock();
     if (g_info.src == PLAYER_SRC_FILE && g_info.state == PLAYER_OPENING) {
         g_info.state = f->verify ? PLAYER_VERIFYING : PLAYER_PLAYING;
+        g_next_valid = false;
+        // The audio core has flushed and restarted: handoffs counted until now (the old track's ramp-down could still have crossed a
+        // boundary) are not ours.
+        g_changes_seen = audio_track_change_count();
         apply_file(f);
     }
     unlock();

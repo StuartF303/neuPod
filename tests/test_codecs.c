@@ -619,6 +619,20 @@ static void alac_trim_case(const char *name, const char *what) {
 }
 TEST(alac_edit_list_trims_priming_and_padding) { alac_trim_case("alac16_48k_mono_elst.m4a", "edit list"); }
 TEST(alac_itunsmpb_trims_priming_and_padding) { alac_trim_case("alac16_48k_mono_smpb.m4a", "iTunSMPB tag"); }
+TEST(alac_edit_list_that_does_not_fit_falls_back_to_itunsmpb) {
+    alac_trim_case("alac16_48k_mono_badelst_smpb.m4a", "iTunSMPB tag after a misfit edit list");
+}
+TEST(alac_itunsmpb_with_a_huge_length_cannot_wrap_the_fit_check) {
+    blob_t t = load("alac16_48k_mono_smpb.m4a");
+    uint8_t *e = memmem(t.d, t.n, "0000000000001770", 16);
+    ASSERT_TRUE(e != NULL);
+    memcpy(e, "FFFFFFFFFFFFF000", 16); // skip 2112 + this length wraps 64 bits to a small number
+    mp4_info_t mi;
+    ASSERT_EQ(META_OK, mp4_parse(mem_rd, &t, t.n, &mi));
+    ASSERT_TRUE(!mi.trimmed);
+    ASSERT_EQ(9600, mi.total_frames);
+    free(t.d);
+}
 TEST(alac_nonsense_edit_list_is_ignored) {
     // An edit list that does not fit the media is ignored (whole track plays).
     blob_t t = load("alac16_48k_mono_elst.m4a");
@@ -1144,6 +1158,8 @@ int main(void) {
     RUN(alac_16_48k_mono_bit_exact);
     RUN(alac_edit_list_trims_priming_and_padding);
     RUN(alac_itunsmpb_trims_priming_and_padding);
+    RUN(alac_edit_list_that_does_not_fit_falls_back_to_itunsmpb);
+    RUN(alac_itunsmpb_with_a_huge_length_cannot_wrap_the_fit_check);
     RUN(alac_nonsense_edit_list_is_ignored);
     RUN(mp4_aac_is_recognised_and_garbage_rejected);
     RUN(mp4_iterator_sample_table_maths);

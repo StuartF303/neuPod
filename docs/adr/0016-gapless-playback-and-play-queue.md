@@ -31,10 +31,21 @@ now one file played, core 1 drained and ramped down, and the next start flushed 
 
 ## Consequences
 
-* Static RAM +5.8 KB (bss 476,232 to 482,028 bytes): queue 3.6 KB, second stream context 1.2 KB, slots 0.3 KB, boundary and misc 0.6 KB.
+* Static RAM +6.4 KB measured on the final build against origin/main (`arm-none-eabi-objdump -h`: .bss 0x75c18 to 0x77518 = +6,400 B,
+  .data +152 B): queue 3.6 KB, second track context with both paths 1.7 KB, slots 0.3 KB, boundary ring and bookkeeping the rest.
   No extra codec memory: the arena is reused by the successor's decoder after the old one has finished.
 * The successor's header is parsed from the card while the current track plays (one 2 KB-buffered pass, with the data ring full).
 * Only one handoff can be pending: tracks shorter than about 0.3 s cannot chain gaplessly (they still play, with the ordinary start).
 * A decoder that needs more than the whole file before it opens (a file smaller than the 24 KB read chunk of the MP3 decoder) cannot
   be a gapless successor of another track earlier than its end is published: such a file simply falls back to the ordinary start.
 * Core-1 additions are small (switch, boundary list); core-1 closure checks pass.
+
+## Known limits
+
+* If the block interrupt stalls for more than 100 ms (FLUSH_TIMEOUT_US) during a flush, the loop proceeds and boundaries still queued
+  may be dropped: a gapless track change would then not be reported (the next hard start re-synchronises). Not seen on the bench.
+* A folder with more than 128 playable files, or more than 3 KB of names, queues a window around the chosen track; the album then ends
+  at the window's end without saying so. A later UI hint ("queue limited") would be the remedy.
+* The art service restarts its decode when a gapless handoff changes the album mid-decode (a job generation is re-checked after every
+  yield); a same-album handoff costs nothing.
+* The player logs one line per track change on the UART (`player: track 3/6 'name' (start|next|prev|restart|gapless|auto|skip)`, `player: queue end`).

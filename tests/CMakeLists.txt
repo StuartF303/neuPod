@@ -245,3 +245,16 @@ add_executable(test_play_queue test_play_queue.c)
 target_link_libraries(test_play_queue neupod_rt_core)
 add_test(NAME play_queue COMMAND test_play_queue)
 set_source_files_properties(test_play_queue.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+# art_service retargeted by a track change in the middle of a decode (gapless handoff): the old picture must not be published.
+add_executable(test_art_service test_art_service.c ${CMAKE_SOURCE_DIR}/app/runtime/art_service.c)
+target_compile_definitions(test_art_service PRIVATE NEUPOD_ART_ASSETS="${CMAKE_SOURCE_DIR}/tests/assets/art")
+target_link_libraries(test_art_service neupod_rt_core neupod_storage_tests hal_host)
+set_source_files_properties(test_art_service.c PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra")
+add_test(NAME art_service COMMAND test_art_service)
+
+# Player queue / gapless announcement bookkeeping against fakes of the audio core, storage and settings.
+add_executable(test_player test_player.c ${CMAKE_SOURCE_DIR}/app/runtime/player.c)
+target_link_libraries(test_player neupod_rt_core)
+set_source_files_properties(test_player.c PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra")
+add_test(NAME player COMMAND test_player)
