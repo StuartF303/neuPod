@@ -18,6 +18,7 @@ static uint32_t g_started_ms;
 static uint32_t g_ended_base; // audio_pcm_ended_count() when the current file was requested
 static bool g_vol_touched;    // the volume was changed since boot (a late settings load must not override the user)
 static bool g_error_stopped;  // storage_stop_request() already sent for the current error
+static char g_path[PLAYER_PATH_MAX]; // the file last played or verified: Play on "Finished" starts it again
 
 static const char *codec_error_text(uint32_t e) {
     switch (e) {
@@ -120,6 +121,7 @@ void player_tone_toggle(tone_mode_t mode) {
 
 void player_play_file(const char *path, const char *name) {
     lock();
+    snprintf(g_path, sizeof g_path, "%s", path);
     reset_info(PLAYER_SRC_FILE, PLAYER_OPENING, name);
     g_ended_base = audio_pcm_ended_count();
     unlock();
@@ -130,6 +132,7 @@ void player_play_file(const char *path, const char *name) {
 
 void player_verify_file(const char *path, const char *name) {
     lock();
+    snprintf(g_path, sizeof g_path, "%s", path);
     reset_info(PLAYER_SRC_FILE, PLAYER_OPENING, name);
     g_ended_base = audio_pcm_ended_count();
     unlock();
@@ -155,6 +158,14 @@ void player_pause_toggle(void) {
     } else if (g_info.state == PLAYER_PAUSED) {
         g_info.state = PLAYER_PLAYING;
         (void)audio_pause(false);
+    } else if (g_info.src == PLAYER_SRC_FILE && (g_info.state == PLAYER_ENDED || g_info.state == PLAYER_VERIFIED) && g_path[0] != '\0') {
+        // Finished (or a completed MD5 check): play the same file again from the start, with sound.
+        char path[PLAYER_PATH_MAX], name[sizeof g_info.name];
+        snprintf(path, sizeof path, "%s", g_path);
+        snprintf(name, sizeof name, "%s", g_info.name);
+        unlock();
+        player_play_file(path, name);
+        return;
     }
     unlock();
 }
