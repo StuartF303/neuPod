@@ -78,20 +78,60 @@ hal_status_t hal_audio_init(void) {
     return HAL_OK;
 }
 
-void hal_audio_force_mute(void) {
+// Longest we wait for a DMA abort to retire (register reads only, no timer: core 0's fatal path calls this too).
+// An abort normally clears within a few bus cycles; this bound is about a millisecond at 150 MHz.
+#define ABORT_SPIN_LIMIT 50000u
+
+// Bring a channel to a known idle state: EN off first (without triggering: AL1_CTRL is the non-trigger alias),
+// so neither an abort nor a chain from the sibling can start it again (RP2350-E5), then abort and wait.
+static void dma_stop_prepare(uint ch) {
+    dma_hw->ch[ch].al1_ctrl &= ~DMA_CH0_CTRL_TRIG_EN_BITS;
+}
+
+static void dma_stop_finish(uint ch) {
+    dma_hw->abort = 1u << ch;
+    for (uint32_t n = 0; n < ABORT_SPIN_LIMIT; n++) {
+        if (!(dma_hw->abort & (1u << ch)) && !(dma_hw->ch[ch].ctrl_trig & DMA_CH0_CTRL_TRIG_BUSY_BITS)) {
+            break;
+        }
+    }
+}
+
+// Stop everything that feeds the DAC and leave the state machine and both channels idle and clean. Registers
+// only, bounded, idempotent, harmless when nothing is open. The caller has muted the pin and (on core 1) made
+// sure the DMA interrupt cannot run.
+static void sink_hw_stop(int c0, int c1, int sm) {
+    if (c0 >= 0 && c1 >= 0) {
+        // Both EN bits off before either abort: a chained channel must not re-trigger its sibling.
+        dma_stop_prepare((uint)c0);
+        dma_stop_prepare((uint)c1);
+        dma_stop_finish((uint)c0);
+        dma_stop_finish((uint)c1);
+        const uint32_t m = (1u << (uint)c0) | (1u << (uint)c1);
+        hw_clear_bits(&dma_hw->inte1, m);
+        dma_hw->ints1 = m; // an abort can leave a completion flag behind
+    }
+    if (sm >= 0) {
+        pio_sm_set_enabled(g_pio, (uint)sm, false);
+        pio_sm_clear_fifos(g_pio, (uint)sm);
+        pio_sm_restart(g_pio, (uint)sm);
+        pio_sm_clkdiv_restart(g_pio, (uint)sm);
+        g_pio->fdebug = 0x01010101u << (uint)sm; // stale TXSTALL / TXOVER / RXSTALL / RXUNDER flags
+    }
+}
+
+static void mute_pin_force(void) {
     // Pin first: the output stage must be muted before anything else is touched.
     gpio_init(NEUPOD_AUDIO_MUTE_PIN);
     mute_pin_set(true);
     gpio_set_dir(NEUPOD_AUDIO_MUTE_PIN, GPIO_OUT);
     g_muted = true;
+}
+
+void hal_audio_force_mute(void) {
+    mute_pin_force();
     // If a stream was running (and core 1 has been reset under it) stop the hardware that feeds the DAC.
-    int c0 = g_ch[0], c1 = g_ch[1], sm = g_sm;
-    if (c0 >= 0 && c1 >= 0) {
-        dma_hw->abort = (1u << c0) | (1u << c1);
-    }
-    if (sm >= 0) {
-        pio_sm_set_enabled(g_pio, (uint)sm, false);
-    }
+    sink_hw_stop(g_ch[0], g_ch[1], g_sm);
 }
 
 bool hal_audio_rate_supported(uint32_t sample_rate) {
@@ -138,6 +178,12 @@ static void __isr __not_in_flash_func(dma_isr)(void) {
         }
         if (dma_channel_is_busy((uint)g_ch[idx])) {
             g_late++; // already restarted with the stale block; leave it, it will interrupt again
+            if (n == 0 && (ints & (1u << (uint)g_ch[idx ^ 1u])) && !dma_channel_is_busy((uint)g_ch[idx ^ 1u])) {
+                // The sibling finished too and sits with a zero count; when this channel chains to it, it must
+                // replay its (stale) block rather than a zero-length transfer that would end the ping-pong.
+                dma_channel_set_read_addr((uint)g_ch[idx ^ 1u], g_dma_buf[idx ^ 1u], false);
+                dma_channel_set_trans_count((uint)g_ch[idx ^ 1u], BLOCK_WORDS, false);
+            }
             break;
         }
         refill(idx, missed);
@@ -158,7 +204,7 @@ hal_status_t hal_audio_open(const hal_audio_format *fmt) {
     if (!hal_audio_rate_supported(fmt->sample_rate) || fmt->channels < 1 || fmt->channels > 2) {
         return HAL_ENOTSUP;
     }
-    hal_audio_force_mute();
+    mute_pin_force(); // nothing is claimed here: g_ch / g_sm are -1 after a close
 
     // Clock: PIO clock = 128 x Fs (two cycles per BCK, 64 BCK per frame); divider in 1/256 steps.
     const uint32_t sys = clock_get_hz(clk_sys);
@@ -184,6 +230,11 @@ hal_status_t hal_audio_open(const hal_audio_format *fmt) {
         pio_sm_unclaim(g_pio, (uint)sm);
         return HAL_EBUSY;
     }
+    // The claimed channels may have been used by someone else (the SD library): start from idle.
+    dma_stop_prepare((uint)c0);
+    dma_stop_prepare((uint)c1);
+    dma_stop_finish((uint)c0);
+    dma_stop_finish((uint)c1);
     g_offset = pio_add_program(g_pio, &neupod_i2s_program);
     g_sm = sm;
     g_ch[0] = c0;
@@ -210,7 +261,8 @@ hal_status_t hal_audio_open(const hal_audio_format *fmt) {
     pio_gpio_init(g_pio, PIN_LRCK);
     pio_sm_set_consecutive_pindirs(g_pio, (uint)sm, PIN_DATA, 1, true);
     pio_sm_set_consecutive_pindirs(g_pio, (uint)sm, PIN_BCK, 2, true);
-    pio_sm_init(g_pio, (uint)sm, g_offset, &pc); // leaves the state machine disabled, pc at entry_point
+    pio_sm_init(g_pio, (uint)sm, g_offset, &pc); // disabled, FIFOs cleared, restarted, pc at entry_point
+    g_pio->fdebug = 0x01010101u << (uint)sm;
 
     for (uint b = 0; b < 2; b++) {
         dma_channel_config dc = dma_channel_get_default_config((uint)g_ch[b]);
@@ -222,10 +274,12 @@ hal_status_t hal_audio_open(const hal_audio_format *fmt) {
         channel_config_set_chain_to(&dc, (uint)g_ch[b ^ 1u]);
         channel_config_set_high_priority(&dc, true); // win bus arbitration against the display DMA
         dma_channel_configure((uint)g_ch[b], &dc, &g_pio->txf[sm], g_dma_buf[b], BLOCK_WORDS, false);
-        dma_channel_set_irq1_enabled((uint)g_ch[b], true);
     }
+    // No stale completion flag (or pending NVIC bit) may survive into the new stream.
     dma_hw->ints1 = (1u << (uint)c0) | (1u << (uint)c1);
+    hw_set_bits(&dma_hw->inte1, (1u << (uint)c0) | (1u << (uint)c1));
     irq_set_exclusive_handler(DMA_IRQ_1, dma_isr); // enabled on THIS core (the audio core)
+    irq_clear(DMA_IRQ_1);
     irq_set_enabled(DMA_IRQ_1, true);
 
     g_open = true;
@@ -238,14 +292,13 @@ void hal_audio_close(void) {
     if (!g_open) {
         return;
     }
-    hal_audio_force_mute();
-    irq_set_enabled(DMA_IRQ_1, false);
+    mute_pin_force();
+    irq_set_enabled(DMA_IRQ_1, false); // before the channels stop: no ISR may refill or re-arm them now
     g_open = false;
     int c0 = g_ch[0], c1 = g_ch[1], sm = g_sm;
-    dma_channel_set_irq1_enabled((uint)c0, false);
-    dma_channel_set_irq1_enabled((uint)c1, false);
+    sink_hw_stop(c0, c1, sm);
+    irq_clear(DMA_IRQ_1);
     irq_remove_handler(DMA_IRQ_1, dma_isr);
-    dma_hw->ints1 = (1u << (uint)c0) | (1u << (uint)c1);
     g_ch[0] = g_ch[1] = -1;
     g_sm = -1;
     dma_channel_unclaim((uint)c0);
