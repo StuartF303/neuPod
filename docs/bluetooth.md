@@ -68,13 +68,34 @@ settings: no file yet (defaults) (0 items, seq 0)      (or: loaded (n items, seq
 ## Discovery
 
 `hal_bt_inquiry_start(10)` runs a general inquiry for 10 s (8 units of 1.28 s). Each result carries the address, the Class of
-Device, the signal strength (RSSI, if the controller reports it) and the name when it was in the extended inquiry response.
+Device, the signal strength (RSSI) and the name when it was in the extended inquiry response. The inquiry mode is set to "RSSI and
+extended inquiry response" (`hci_set_inquiry_mode(INQUIRY_MODE_RSSI_AND_EIR)` before power-on); BTstack's default is the plain mode,
+which carries neither. If the controller refuses the Inquiry command (BTstack gives no event for that) the scan ends at once with
+`bt: inquiry refused by the controller (status 0x..)`.
 **Audio sinks** are devices whose Class of Device major class is *Audio/Video* (bits 12..8 = 4: headsets, speakers, car kits).
 After the inquiry the radio asks for the names of audio devices that had none, one at a time (at most 6; a name request cannot
 overlap an inquiry). Up to 12 devices are kept per scan. Stopping a scan skips the name requests.
 
-The Settings > Bluetooth screen ([UI](ui.md)) lists everything it found: audio devices with a speaker symbol first (after the scan
-ends), then others greyed out, with the signal on the right. Selecting a device shows "Pairing: not yet": pairing is stage 2.
+Settings > Bluetooth ([UI](ui.md)) shows the status, the address and a **Scan for devices** row. Select opens the **Devices** screen,
+which starts the scan as it opens and lists everything found as it arrives: audio devices with a speaker symbol first (after the scan
+ends), then others greyed out, with the signal on the right. Its first row is `Stop scanning` / `Scan again`. Selecting a device shows
+"Pairing: not yet": pairing is stage 2. Menu goes back and stops the scan.
+
+A device only answers an inquiry while it is **discoverable**: headphones in pairing mode, or a phone sitting on its Bluetooth
+settings page. Headphones that are connected to something else, or a phone with the screen off, do not appear.
+
+Console lines (UART), for testing without seeing the panel:
+
+```
+bt: scan start (10 s)
+bt: found 5C:xx:xx:xx:xx:xx cod=0x240404 rssi=-52 name='...' audio=yes
+bt: named 5C:xx:xx:xx:xx:xx cod=0x240404 rssi=-52 name='AirPods' audio=yes     (name arrived from a name request)
+bt: inquiry complete (3 results delivered by BTstack, 3 kept)
+bt: scan done, 3 devices
+```
+
+"Delivered by BTstack" counts every result before the 12-device limit; if it is 0 the controller heard nothing, if it is more than
+"kept" the limit was hit.
 
 ## Why the SD card holds the pairing data (and never the internal flash)
 
@@ -178,7 +199,7 @@ grant for use with its chips).
 1. Flash `neupod.elf` with the Pico 2 W, open the UART. Watch for the three `bt:` lines above after the splash, `boot: bluetooth ok` and `boot: wifi DEGRADED`.
    The splash should show Bluetooth solid and Wi-Fi with a cross (that is intended in stage 1).
 2. Audio must be unaffected: play a file while the radio comes up; the `audio:` line must keep `underruns=0` and the `core1_stack_free=` value must not drop.
-3. Settings > Bluetooth: Status "On", the same address as the UART, **Scan for devices** with a headset in pairing mode (AirPods Pro 3: case open, button held until the light flashes white): it
+3. Settings > Bluetooth: Status "On", the same address as the UART, **Scan for devices** (opens Devices and scans at once) with a headset in pairing mode (AirPods Pro 3: case open, button held until the light flashes white): it
    appears with a speaker symbol, a name after a few seconds and a signal value; other devices around you are greyed out. Select on it shows "Pairing: not yet". Menu leaves and stops the scan.
 4. Change the backlight and Click feedback, switch the board off and on: both should come back. Change the volume to a quiet level and check it returns; set it loud and
    check it comes back at -30 dB. A `/.neupod/settings.a` (and later `.b`) should be on the card; no other file or folder on the card may have changed.

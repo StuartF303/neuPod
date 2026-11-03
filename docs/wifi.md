@@ -21,12 +21,12 @@ One task, "wifi" (core 0, priority 1, 3 KB stack), owns the station side. It run
 
 | Feature | How |
 | --- | --- |
-| scan | `hal_wifi_scan_*`: SSID, RSSI, channel, security. The driver's scan cannot tell WPA3 from WPA2 (both carry an RSN element), so secured networks show "WPA2/3"; hidden networks do not appear and are added with "Other network..." |
+| scan | `hal_wifi_scan_*`: SSID, RSSI, channel, security; one UART line per network (`wifi: scan: 'ssid' rssi=-48 sec=WPA2/3 ch=6`, never any password) and `wifi: scan done, N networks`. The driver's scan cannot tell WPA3 from WPA2 (both carry an RSN element), so secured networks show "WPA2/3"; hidden networks do not appear and are added with "Other network..." |
 | join | WPA2-PSK, WPA2/WPA3 mixed and WPA3-SAE, open networks. The cyw43 driver supports all three; a join tries WPA2, then mixed, then WPA3-only, moving on when an attempt fails. Wrong password is reported as such and is not retried in a loop |
 | DHCP, DNS | lwIP |
 | SNTP | lwIP's client, default `pool.ntp.org` (setting `NPns`), resynchronises about hourly; the answer sets the wall clock |
 | remembered networks | up to 4. SSID and a "has password" flag in the clear, the password **sealed** (see below). "Forget" in the network's action menu |
-| reconnect | after a failure or a lost link: 2, 4, 8 ... up to 120 s between attempts (`wifi_backoff_t`, host tested); a user request or a success resets it; saved networks are tried in turn |
+| reconnect | after a failure or a lost link: 2, 4, 8 ... up to 120 s between attempts (`wifi_backoff_t`, host tested); a user request or a success resets it; saved networks are tried in turn. With nothing saved nothing is attempted: the service only looks again every 10 s, and that is not counted as a failure (`failures=` counts real join failures and lost links) |
 | power | `wifi_policy_decide()`: Wi-Fi is **off while audio plays** unless "Wi-Fi while playing" is On (default Off); the station is switched off after N idle minutes (default 10; setting); a scan, join, transfer or NTP resync counts as a need. The radio is shared with Bluetooth, and audio comes first |
 | diagnostics | UART line every 10 s: `wifi: state=up ssid=.. rssi=.. ip=.. ntp=1 saved=n reconnects=n failures=n lwip mem=used/size (max) pbuf=used/size (max) errs=n`; Extras > Network test |
 
@@ -94,7 +94,7 @@ an SD scratch file under `/.neupod/tmp` through the scoped write window (needs a
 ## What to check on the board
 
 1. Boot: `boot: wifi ok : driver and lwIP up`, `bt:` lines as before, Bluetooth still ok. Splash with both radios solid.
-2. Settings > Wi-Fi > Scan: your networks appear with signal; Select your home network, type the password with the wheel (Select types, Menu deletes, the last key `show` unmasks, Play joins). The status
+2. Settings > Wi-Fi > Scan for networks (opens the Networks screen and scans at once): your networks appear with signal; Select your home network, type the password with the wheel (Select types, Menu deletes, the last key `show` unmasks, Play joins). The status
    shows the address and the signal; `wifi: joined ...` on the UART.
 3. NTP: the home screen shows the time (and the right zone, BST in summer) a few seconds after joining. Reboot: it is `--:--` until the network is back.
 4. Power cycle: it reconnects by itself; the password is not asked again. Move the card to another board (or edit the file): "password needed".
