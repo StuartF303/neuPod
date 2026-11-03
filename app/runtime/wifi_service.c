@@ -415,6 +415,8 @@ static void update_info(const wifi_policy_in_t *pin, wifi_power_t pw, hal_wifi_s
         n.rssi = hal_wifi_rssi();
         (void)hal_wifi_ip(n.ip);
         (void)hal_wifi_ssid(n.ssid);
+    } else if (st == HAL_WIFI_JOINING || st == HAL_WIFI_NO_IP) {
+        snprintf(n.ssid, sizeof n.ssid, "%s", g_cur_ssid); /* the network being joined (the radio only reports it once up) */
     }
     n.ntp_synced = clock_ntp_synced();
     n.save_failed = g_save_failed;

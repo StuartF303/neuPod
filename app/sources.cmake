@@ -37,7 +37,7 @@ set(NEUPOD_CLICKWHEEL_SOURCES
 set(NEUPOD_FATFS_SOURCES
   ${NEUPOD_APP_DIR}/third_party/fatfs/ff.c
   ${NEUPOD_APP_DIR}/third_party/fatfs/ffunicode.c
-  ${NEUPOD_APP_DIR}/third_party/fatfs/ffsystem.c
+  ${NEUPOD_APP_DIR}/storage/ff_alloc.c   # replaces ffsystem.c: capped, never-panicking ff_memalloc
   ${NEUPOD_APP_DIR}/storage/diskio.c
 )
 # Runtime (FreeRTOS tasks, LVGL UI, boot checks, audio timing stub). Needs os.h's FreeRTOS backend

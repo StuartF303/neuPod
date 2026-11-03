@@ -138,6 +138,12 @@ endif()
 add_subdirectory(${NEUPOD_SD_LIB_DIR}/src ${CMAKE_BINARY_DIR}/sd_lib)
 target_include_directories(no-OS-FatFS-SD-SDIO-SPI-RPi-Pico BEFORE INTERFACE
   ${CMAKE_CURRENT_LIST_DIR}/ffconf)
+# Swap the library's ffsystem.c (malloc via the panicking SDK wrapper, whole-cluster requests) for
+# app/storage/ff_alloc.c; the library's source list is edited here so lib/ stays untouched.
+get_target_property(NEUPOD_SD_SOURCES no-OS-FatFS-SD-SDIO-SPI-RPi-Pico INTERFACE_SOURCES)
+list(FILTER NEUPOD_SD_SOURCES EXCLUDE REGEX "/ffsystem\\.c$")
+list(APPEND NEUPOD_SD_SOURCES ${CMAKE_SOURCE_DIR}/app/storage/ff_alloc.c)
+set_property(TARGET no-OS-FatFS-SD-SDIO-SPI-RPi-Pico PROPERTY INTERFACE_SOURCES ${NEUPOD_SD_SOURCES})
 
 function(neupod_add_storage_lib name)
   add_library(${name} STATIC
