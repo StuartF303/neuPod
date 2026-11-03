@@ -63,7 +63,7 @@ Priority 7 is the highest; the kernel idle task is 0.
 | Task | Priority | Stack | Period / trigger | Budget |
 | --- | --- | --- | --- | --- |
 | kernel timer service | 6 | 1.5 KB | kernel timers | microseconds |
-| storage | 5 | 8 KB | request queue; while a file streams, every 1 ms; otherwise every 500 ms | directory listings and volume space for the UI (yields every 32 entries); streams the file from the card in 2 KB reads into the audio data ring; loads the settings store after the card mounts and saves it about 1.5 s after a change ([Bluetooth](bluetooth.md)); later: library scan, track prefetch |
+| storage | 5 | 8 KB | request queue; while a file streams, every 1 ms; otherwise every 500 ms | directory listings and volume space for the UI (yields every 32 entries); streams the file from the card in 2 KB reads into the audio data ring; decodes the album art of the playing track in slices (2 ms of work, 1 ms sleep, audio top-ups between, aborts on any request; [UI](ui.md#now-playing-art)); loads the settings store after the card mounts and saves it about 1.5 s after a change ([Bluetooth](bluetooth.md)); later: library scan, track prefetch |
 | input | 4 | 2 KB | every 2 ms | well under 1 % (the wheel FIFO overflows after ~4.8 ms) |
 | I2C users, while on the bus | 4 (lifted) | n/a | boot checks, the 5 s gauge read | a few ms (see findings) |
 | CYW43 worker (SDK) | 3 | 6 KB | radio events; **every BTstack callback and lwIP callback** | LED; Bluetooth (BTstack's one thread); lwIP (via the SDK's FreeRTOS arch; lwIP also has its own 4 KB tcpip thread) |
@@ -74,7 +74,7 @@ Priority 7 is the highest; the kernel idle task is 0.
 | boot checks (transient, 6) | 1 | 3 to 5 KB | once at boot | bounded by per-check deadlines |
 
 Core 1 has its own 16 KB stack array and a 116 KB codec arena (both static RAM). Heap: `heap_4`, 80 KB (`NEUPOD_RTOS_HEAP_BYTES`, `app/os/memory_budget.h`), holds task stacks and kernel objects; static RAM beyond that is the LVGL
-pool (72 KB, `NEUPOD_LVGL_POOL_BYTES`), the BTstack pools (about 7 KB), the settings store (about 5 KB), the two render buffers (30 KB), the directory-listing buffer (about 19 KB) and the audio core's rings and block buffer (about 28 KB).
+pool (72 KB, `NEUPOD_LVGL_POOL_BYTES`), the BTstack pools (about 7 KB), the settings store (about 5 KB), the two render buffers (30 KB), the album-art thumbnail (8 KB, `app/runtime/art_service.c`), the directory-listing buffer (about 19 KB) and the audio core's rings and block buffer (about 28 KB).
 The monitor prints the heap low-water mark and each task's lowest free stack every 10 s. Input is above
 the UI so wheel frames are never lost while LVGL renders; the monitor is lowest; boot-check tasks sit
 below the UI so the splash keeps animating while they run.

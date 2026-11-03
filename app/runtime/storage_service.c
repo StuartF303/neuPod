@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "nfs.h"
+#include "art_service.h"
 #include "audio_engine.h"
 #include "os.h"
 #include "player.h"
@@ -384,6 +385,9 @@ static void stream_start(const char *path, bool verify) {
     g_stream.ended_base = audio_pcm_ended_count();
     g_stream.active = true;
     player_file_started(&pf);
+    if (!verify) {
+        art_service_track(path, &pf.tags); // queues the album art; it is decoded later, between audio top-ups (art_yield)
+    }
 }
 
 static void stream_finish(void) {
@@ -549,6 +553,25 @@ static void settings_poll(void) {
     settings_service_poll(settings_quiet_now());
 }
 
+// Called by the art decoder many times per picture. Keeps the audio ring topped up, gives the other tasks a millisecond after
+// every ART_SLICE_MS of work (this task outranks input and the UI), and stops the decode when a request is waiting.
+#define ART_SLICE_MS 2u
+static bool art_yield(void *ctx) {
+    static uint32_t slice_start;
+    (void)ctx;
+    if (os_queue_pending(g_req_q)) {
+        return false;
+    }
+    stream_pump();
+    uint32_t now = os_tick_ms();
+    if (now - slice_start >= ART_SLICE_MS) {
+        os_delay_ms(1);
+        settings_poll();
+        slice_start = os_tick_ms();
+    }
+    return true;
+}
+
 void storage_task(void *arg) {
     (void)arg;
     for (;;) {
@@ -558,6 +581,9 @@ void storage_task(void *arg) {
         if (!os_queue_recv(g_req_q, &rq, g_stream.active ? 1u : SETTINGS_POLL_MS)) {
             stream_pump();
             settings_poll();
+            if (art_service_pending()) {
+                art_service_run(art_yield, NULL); // only when idle; it gives way to any request that arrives
+            }
             continue;
         }
         storage_result_t res = {0};

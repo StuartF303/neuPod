@@ -20,9 +20,24 @@ extern "C" {
 
 typedef wav_read_fn meta_read_fn;
 
+/** What an embedded picture is, from its first bytes (not from the tag's mime string, which is often wrong). */
+typedef enum { ART_NONE = 0, ART_JPEG, ART_PNG, ART_OTHER } art_kind_t;
+
+/**
+ * Where an embedded picture sits in the file (MP3 ID3v2 APIC/PIC, FLAC PICTURE block, MP4 covr). The parsers only record
+ * the position: the bytes are never read here (a picture can be megabytes), apart from the first 4 to tell JPEG from PNG.
+ */
+typedef struct {
+    uint64_t offset; /**< file offset of the first image byte */
+    uint32_t length; /**< image bytes */
+    uint8_t kind;    /**< art_kind_t; ART_NONE = no usable picture */
+    uint8_t type;    /**< ID3 / FLAC picture type (3 = front cover); 3 for MP4 covr */
+} art_ref_t;
+
 typedef struct {
     char title[64], artist[64], album[64]; /**< UTF-8, cut at a character boundary; empty if absent */
     uint16_t track;                        /**< 0 = unknown */
+    art_ref_t art;                         /**< best embedded picture: a JPEG over a PNG, a front cover over other types */
 } audio_tags_t;
 
 typedef enum {
@@ -123,6 +138,10 @@ void mp4_iter_init(mp4_iter_t *it, const mp4_info_t *info);
 bool mp4_iter_next(mp4_iter_t *it, meta_read_fn rd, void *ctx, uint64_t *offset, uint32_t *size);
 
 /* ---- shared helpers ---- */
+/** Classify the image at @p offset (reads 4 bytes): FF D8 FF = JPEG, 89 'PNG' = PNG, else OTHER; NONE if @p length < 4 or unreadable. */
+art_kind_t meta_art_sniff(meta_read_fn rd, void *ctx, uint64_t offset, uint32_t length);
+/** Keep @p cand in @p best if it is better: JPEG beats PNG beats other, then a front cover (type 3) beats other types; ties keep the first. */
+void meta_art_offer(art_ref_t *best, const art_ref_t *cand);
 /** Copy @p n bytes of ISO-8859-1 / UTF-8 / UTF-16 text (ID3 encoding 0..3) to UTF-8 in @p dst (cap bytes incl. NUL). */
 void meta_text_to_utf8(char *dst, size_t cap, const uint8_t *src, size_t n, int id3_encoding);
 

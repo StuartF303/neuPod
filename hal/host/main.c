@@ -39,6 +39,11 @@
     "snap:wifi-found s _ snap:wifi-kb-empty _ s _ s s _ snap:wifi-kb p x x x x x x "          \
     "snap:wifi-joined m m m x x x snap:home-clock"
 
+// Album art: Extras > Files > three albums (a Cover.JPG beside the track; a JPEG inside the track; a PNG inside it plus a progressive cover.jpg beside it).
+#define TOUR_ART                                                                                   \
+    "x s s s _ _ _ s _ x x x x x x x x snap:art-cover m m s _ _ x x x x x x x x snap:art-embedded "  \
+    "m m s _ s _ x x x x x x x x snap:art-none m"
+
 static unsigned g_expect = 18;
 static const char *g_snapshot_dir;
 static unsigned g_snapshots;
@@ -94,6 +99,10 @@ int main(int argc, char **argv) {
             cfg.ui_script = TOUR_WIFI;
             cfgp_tour = true;
             g_expect = 8;
+        } else if (strcmp(argv[i], "--tour-art") == 0) {
+            cfg.ui_script = TOUR_ART;
+            cfgp_tour = true;
+            g_expect = 3;
         } else if (strcmp(argv[i], "--script") == 0 && i + 1 < argc) {
             cfg.ui_script = argv[++i]; // ad-hoc key script, same tokens as the tour
         } else if (strcmp(argv[i], "--splash-hold-ms") == 0 && i + 1 < argc) {
@@ -101,7 +110,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--snapshots") == 0 && i + 1 < argc) {
             g_snapshot_dir = argv[++i];
         } else {
-            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour] [--script KEYS] [--snapshots DIR]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-art] [--script KEYS] [--snapshots DIR]\n", argv[0]);
             return 64;
         }
     }

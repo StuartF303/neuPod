@@ -136,6 +136,25 @@ static uint16_t track_from(const char *s) {
     return (uint16_t)v;
 }
 
+// ---- embedded pictures (position only; see art_ref_t) ------------------------------------------------------
+
+art_kind_t meta_art_sniff(meta_read_fn rd, void *ctx, uint64_t offset, uint32_t length) {
+    uint8_t m[4];
+    if (length < 4 || rd(ctx, offset, m, 4) != 4) return ART_NONE;
+    if (m[0] == 0xFF && m[1] == 0xD8 && m[2] == 0xFF) return ART_JPEG;
+    if (m[0] == 0x89 && m[1] == 'P' && m[2] == 'N' && m[3] == 'G') return ART_PNG;
+    return ART_OTHER;
+}
+
+static int art_score(const art_ref_t *a) {
+    if (a->kind == ART_NONE) return 0;
+    return (a->kind == ART_JPEG ? 4 : a->kind == ART_PNG ? 2 : 1) + (a->type == 3 ? 1 : 0);
+}
+
+void meta_art_offer(art_ref_t *best, const art_ref_t *cand) {
+    if (art_score(cand) > art_score(best)) *best = *cand;
+}
+
 // ---- FLAC ------------------------------------------------------------------------------------------------
 
 static void vorbis_comments(const uint8_t *b, uint32_t n, audio_tags_t *t) {
@@ -169,6 +188,25 @@ static void vorbis_comments(const uint8_t *b, uint32_t n, audio_tags_t *t) {
         }
         p += len;
     }
+}
+
+// FLAC PICTURE block: type, mime, description, width, height, depth, colours, length, data (all 32-bit big-endian counts).
+static void flac_picture(meta_read_fn rd, void *ctx, uint64_t body, uint32_t len, audio_tags_t *t) {
+    uint8_t h[8];
+    if (len < 32 || rd(ctx, body, h, 8) != 8) return;
+    uint32_t ptype = be32(h), mlen = be32(h + 4);
+    uint64_t at = 8 + (uint64_t)mlen; // the mime string is skipped: the image's own first bytes say what it is
+    uint8_t w[4];
+    if (at + 4 > len || rd(ctx, body + at, w, 4) != 4) return;
+    at += 4 + (uint64_t)be32(w); // description
+    uint8_t f[20];
+    if (at + 20 > len || rd(ctx, body + at, f, 20) != 20) return;
+    uint32_t dlen = be32(f + 16);
+    at += 20;
+    if (dlen > len - at) return;
+    art_ref_t c = {.offset = body + at, .length = dlen, .type = (uint8_t)(ptype > 255 ? 0 : ptype)};
+    c.kind = (uint8_t)meta_art_sniff(rd, ctx, c.offset, dlen);
+    meta_art_offer(&t->art, &c);
 }
 
 static uint64_t id3v2_size(meta_read_fn rd, void *ctx, uint8_t hdr[10]) {
@@ -205,6 +243,8 @@ meta_err_t flac_parse(meta_read_fn rd, void *ctx, uint64_t file_size, flac_info_
             out->total_frames = ((uint64_t)(si[13] & 0xFu) << 32) | be32(si + 14);
             memcpy(out->md5, si + 18, 16);
             have_si = true;
+        } else if (type == 6) {
+            flac_picture(rd, ctx, body, len, &out->tags);
         } else if (type == 4 && g_scratch != NULL && len <= g_scratch_n) {
             if (rd(ctx, body, g_scratch, len) == (int32_t)len) vorbis_comments(g_scratch, len, &out->tags);
         }
@@ -259,6 +299,34 @@ static void id3_text_frame(const char *id, const uint8_t *d, uint32_t n, audio_t
     }
 }
 
+// APIC (v2.3/2.4: encoding, mime\0, type, description, data) or PIC (v2.2: encoding, 3-byte format, type, description, data).
+// Frames that are compressed, encrypted or unsynchronised cannot be streamed from the file and are ignored.
+static void id3_picture(meta_read_fn rd, void *ctx, uint64_t at, uint32_t sz, uint32_t ver, audio_tags_t *t) {
+    uint8_t b[160]; // mime and description only; a longer description makes the picture unusable
+    uint32_t n = sz < sizeof b ? sz : (uint32_t)sizeof b;
+    if (n < 6 || rd(ctx, at, b, n) != (int32_t)n) return;
+    uint32_t enc = b[0], i = 1;
+    if (ver == 2) {
+        i = 4;
+    } else {
+        while (i < n && b[i] != 0) i++; // mime type
+        i++;
+    }
+    if (i >= n) return;
+    uint8_t ptype = b[i++];
+    if (enc == 1 || enc == 2) { // UTF-16 description: ends at an aligned 00 00
+        while (i + 1 < n && (b[i] != 0 || b[i + 1] != 0)) i += 2;
+        i += 2;
+    } else {
+        while (i < n && b[i] != 0) i++;
+        i++;
+    }
+    if (i >= n || i >= sz) return; // description longer than what was read: not a normal picture
+    art_ref_t c = {.offset = at + i, .length = sz - i, .type = ptype};
+    c.kind = (uint8_t)meta_art_sniff(rd, ctx, c.offset, c.length);
+    meta_art_offer(&t->art, &c);
+}
+
 static void id3v2_tags(meta_read_fn rd, void *ctx, const uint8_t h[10], uint64_t total, audio_tags_t *t) {
     uint32_t ver = h[3];
     if (ver < 2 || ver > 4) return;
@@ -279,6 +347,16 @@ static void id3v2_tags(meta_read_fn rd, void *ctx, const uint8_t h[10], uint64_t
                       : ver == 4 ? (((fh[4] & 0x7Fu) << 21) | ((fh[5] & 0x7Fu) << 14) | ((fh[6] & 0x7Fu) << 7) | (fh[7] & 0x7Fu))
                                  : be32(fh + 4);
         if (pos + hlen + sz > end) return;
+        if ((ver == 2 ? !strcmp(id, "PIC") : !strcmp(id, "APIC")) && !(h[5] & 0x80)) {
+            uint32_t skip = 0;
+            bool usable = true;
+            if (ver == 3) usable = (fh[9] & 0xE0) == 0; // compression, encryption, grouping
+            if (ver == 4) {
+                usable = (fh[9] & 0x4E) == 0; // grouping, compression, encryption, unsynchronisation
+                if (fh[9] & 0x01) skip = 4;   // data length indicator
+            }
+            if (usable && sz > skip) id3_picture(rd, ctx, pos + hlen + skip, sz - skip, ver, t);
+        }
         if (id[0] == 'T' && sz > 1 && sz <= 400) {
             uint8_t d[400];
             uint32_t skip = ver == 4 && (fh[9] & 0x01) ? 4u : 0u; // v2.4 data length indicator

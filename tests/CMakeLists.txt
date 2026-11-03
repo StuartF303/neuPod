@@ -128,6 +128,28 @@ set_tests_properties(wifi_tour PROPERTIES
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   TIMEOUT 120)
 
+# Album art tour: Now Playing with a cover file (Cover.JPG: upper-case on purpose), with a JPEG inside the FLAC, and with art it cannot
+# show (PNG inside, progressive cover.jpg beside). art_snapshot checks the pixels of the art box in the snapshots.
+set(ART_FS ${CMAKE_BINARY_DIR}/fsroot_art)
+file(MAKE_DIRECTORY "${ART_FS}/Album A" "${ART_FS}/Album B" "${ART_FS}/Album C")
+file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/flac16_44k_st.flac "${ART_FS}/Album A/track.flac")
+file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/art/q420_600x600.jpg "${ART_FS}/Album A/Cover.JPG")
+file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/art/flac_with_jpeg.flac "${ART_FS}/Album B/track.flac")
+file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/art/flac_with_png.flac "${ART_FS}/Album C/track.flac")
+file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/art/qprog_300x300.jpg "${ART_FS}/Album C/cover.jpg")
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_art)
+add_test(NAME art_tour
+  COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --tour-art --snapshots ${CMAKE_BINARY_DIR}/snapshots_art)
+set_tests_properties(art_tour PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_FS_ROOT=${ART_FS};NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  FIXTURES_SETUP art_snapshots
+  TIMEOUT 120)
+add_executable(test_art_snapshot test_art_snapshot.c)
+set_source_files_properties(test_art_snapshot.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+add_test(NAME art_snapshot COMMAND test_art_snapshot ${CMAKE_BINARY_DIR}/snapshots_art)
+set_tests_properties(art_snapshot PROPERTIES FIXTURES_REQUIRED art_snapshots)
+
 # The bare-metal audio core (core 1) may not use the RTOS, stdio, malloc or SDK blocking primitives.
 add_test(NAME audio_core_rules
   COMMAND ${CMAKE_COMMAND} -DSRC_DIR=${CMAKE_SOURCE_DIR} -P ${CMAKE_SOURCE_DIR}/cmake/check_core1_rules.cmake)
@@ -176,6 +198,13 @@ target_link_libraries(test_codecs neupod_rt_core Threads::Threads m)
 set_source_files_properties(${NEUPOD_CODEC_TEST_VENDOR} PROPERTIES COMPILE_OPTIONS "-w")
 set_source_files_properties(test_codecs.c ${CMAKE_SOURCE_DIR}/app/audio/codec.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS};-Wno-multichar")
 add_test(NAME codecs COMMAND test_codecs)
+
+# Album art: the streamed JPEG decoder, source order and the picture-position parsing of the tag readers.
+add_executable(test_art test_art.c)
+target_compile_definitions(test_art PRIVATE NEUPOD_ART_ASSETS="${CMAKE_SOURCE_DIR}/tests/assets/art")
+target_link_libraries(test_art neupod_rt_core)
+set_source_files_properties(test_art.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+add_test(NAME art COMMAND test_art)
 
 # The core-1 closure checker must be able to FAIL: a known-good and a known-bad disassembly fixture.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)

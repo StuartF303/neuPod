@@ -129,6 +129,8 @@ bool os_queue_recv(os_queue_t *q, void *item, uint32_t timeout_ms) {
     return xQueueReceive((QueueHandle_t)q, item, to_ticks(timeout_ms)) == pdPASS;
 }
 
+bool os_queue_pending(os_queue_t *q) { return uxQueueMessagesWaiting((QueueHandle_t)q) != 0; }
+
 os_mutex_t *os_mutex_create(void) { return (os_mutex_t *)xSemaphoreCreateMutex(); }
 
 bool os_mutex_lock(os_mutex_t *m, uint32_t timeout_ms) {

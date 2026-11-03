@@ -30,3 +30,24 @@ core 1 → core 0 PCM ring ([Bluetooth](../bluetooth.md#stage-2-design-notes-not
   a redraw glitch.
 - **RAM budget (testbed):** +32 KB stage 2; −(116 KB − measured max) arena; −one LVGL draw buffer while
   asleep. To be filled with linked figures when built.
+
+## Amendment 3 Nov 2026: album art on the testbed (JPEG only)
+
+The owner decided to have album art now, on the Pico 2 W, instead of waiting for the PSRAM board. This amends the last
+bullet of the decision above ("Artwork decode ... PSRAM-only"); the original text is left as it was.
+
+- **Scope:** baseline JPEG only, **streamed** from the card (embedded picture in MP3 / FLAC / MP4, then `cover.jpg`, `folder.jpg`,
+  `front.jpg` in the track's folder). PNG and progressive JPEG show the note placeholder until the PSRAM board. The whole
+  picture is never in RAM: the decoder works one MCU row at a time and only a 64 x 64 thumbnail is kept.
+- **Where it runs:** core 0 only, in the storage task (FatFs is not re-entrant, so the storage task stays its only user), between
+  audio top-ups; it sleeps 1 ms after every 2 ms of work (the storage task outranks the input and UI tasks) and gives way at once
+  to any queued request. Core 1 and its closure are untouched.
+- **Stays PSRAM-only:** the HTTP client, AAC, and PNG art.
+- **RAM budget line (testbed):** static **+8,552 bytes** (8,192 thumbnail + 360 state; RP2350 `.bss` 476,232 to 484,784) and **+17.4 KB
+  of flash** (decoder and glue; `.text` 1,221,776 to 1,239,184). Transient, from the FreeRTOS heap for the length of one decode and
+  freed after: 4,096 (decoder tables) + a strip of 1 to 4 KB + 0.5 KB, at most about 8.6 KB, or the picture is skipped
+  (placeholder) if the heap cannot give it. The static cost comes out of the roughly 27 KB that were free before, which leaves
+  about 18 KB; stage 2's 32 KB above is still funded by the arena sizing and the LVGL buffer release, not by this.
+- **Consequences:** `art_service` must not be called from core 1 or hold the storage task for more than a few milliseconds without
+  yielding; the 64 x 64 thumbnail is shown 1.75 times larger by LVGL (soft edges, accepted); the thumbnail buffer is a candidate
+  to be reclaimed (or to become a bigger PSRAM-backed image) when the PSRAM board arrives.
