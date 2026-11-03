@@ -34,12 +34,21 @@
                     (((int64_t)x >> 8) & 0x00000000ff000000LL) | (((int64_t)x >> 24) & 0x0000000000ff0000LL) | \
                     (((int64_t)x >> 40) & 0x000000000000ff00LL) | (((int64_t)x >> 56) & 0x00000000000000ffLL)))
 
-#if defined(__i386__)
+/* neuPod: upstream only recognised x86 and Win32, so on ARM (RP2350, ESP32) the macro was undefined, the
+   BtoN swaps compiled to no-ops and every big-endian ALAC cookie field was misread. Use the compiler's
+   byte-order macros first, and refuse to build if the order is unknown. */
+#if defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+#define TARGET_RT_LITTLE_ENDIAN 1
+#elif defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+#define TARGET_RT_LITTLE_ENDIAN 0
+#elif defined(__i386__)
 #define TARGET_RT_LITTLE_ENDIAN 1
 #elif defined(__x86_64__)
 #define TARGET_RT_LITTLE_ENDIAN 1
 #elif defined (TARGET_OS_WIN32)
 #define TARGET_RT_LITTLE_ENDIAN 1
+#else
+#error "EndianPortable.c: unknown byte order"
 #endif
 
 uint16_t Swap16NtoB(uint16_t inUInt16)

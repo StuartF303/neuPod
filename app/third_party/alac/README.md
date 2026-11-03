@@ -5,8 +5,10 @@ From https://github.com/macosforge/alac, pinned commit `c38887c5c5e64a4b31108733
 Licence: Apache License 2.0, Copyright (c) 2011 Apple Inc. (`LICENSE`, `APPLE_LICENSE.txt`). The repository has no NOTICE
 file. Every vendored file keeps Apple's licence header.
 
-Unmodified from upstream: `ag_dec.c`, `dp_dec.c`, `matrix_dec.c`, `ALACBitUtilities.c/.h`, `EndianPortable.c/.h`,
+Unmodified from upstream: `ag_dec.c`, `dp_dec.c`, `matrix_dec.c`, `ALACBitUtilities.c/.h`, `EndianPortable.h`,
 `aglib.h`, `dplib.h`, `matrixlib.h`, `ALACAudioTypes.h`.
+
+Modified by neuPod: `EndianPortable.c` detects the byte order from the compiler's `__BYTE_ORDER__` (upstream knew only x86 and Win32, so on ARM the big-endian cookie fields were not swapped) and fails the build if it is unknown.
 
 Added by neuPod (Apache-2.0 section 4(b), modifications): `alac_dec.c/.h`, a C port of `ALACDecoder.cpp` (the class becomes a
 struct; a partial-frame sample count above `frameLength` is rejected, because the original trusted the file and could overrun its buffers; the three work buffers come from a caller-supplied allocator, so the decoder runs on the bare-metal audio core
