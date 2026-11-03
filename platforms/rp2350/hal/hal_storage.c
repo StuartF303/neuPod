@@ -242,17 +242,21 @@ static uint32_t actual_clock_hz(uint32_t requested_hz) {
 
 // A card that was in the middle of a transfer when the core was reset (a debugger reset after flashing) can sit in a data
 // state and ignore the identification commands until it is power cycled. Without control of the card's power the best that
-// can be done is what the specification allows in any state: a few STOP_TRANSMISSION (CMD12) commands, which end an open
-// read or write-multiple and give the card well over 74 clocks with CMD high, then a pause so it can finish programming.
-// CMD12 carries no data and is harmless to a card that is idle (it answers "illegal command"); nothing is written.
-// Needs the bus set up by a first failed identification (the pins and the PIO are then already configured).
+// can be done is what the specification allows in any state: STOP_TRANSMISSION (CMD12), which ends an open read or
+// write-multiple. It is sent four times with its response read (R1/R1b, so the card's reply is clocked out before the next
+// command and the host never drives CMD while the card answers), 5 ms apart, at the identification clock; then the card gets
+// 50 ms to finish programming. CMD12 carries no data and is harmless to an idle card (it answers "illegal command" or says
+// nothing); nothing is written. A missing card costs the 10 ms response timeout per command. The extra clocks this gives
+// are the command and response frames themselves; the library's own CMD0 sequence follows. Needs the bus set up by a first
+// failed identification (the pins and the PIO are then already configured).
 static void card_unwedge(void) {
     for (int i = 0; i < 4; i++) {
+        uint32_t r1 = 0;
         sd_lock(g_sd);
         if (i == 0) {
             (void)rp2040_sdio_init(g_sd, clk_div_for(400u * 1000u)); // the identification clock
         }
-        (void)rp2040_sdio_command_R1(g_sd, 12, 0, NULL);
+        (void)rp2040_sdio_command_R1(g_sd, 12, 0, &r1);
         sd_unlock(g_sd);
         sleep_ms(5);
     }
