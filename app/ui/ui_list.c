@@ -153,6 +153,8 @@ static void build(ui_list_t *l) {
     for (int i = 0; i < POOL; i++) {
         row_t *r = &l->row[i];
         r->idx = -1;
+        r->sel = false;
+        r->bar = false; /* a rebuild after suspend() has new objects: no bar style on them yet */
         r->obj = lv_obj_create(l->box);
         lv_obj_remove_style_all(r->obj);
         lv_obj_set_size(r->obj, l->w, UI_ROW_H);
