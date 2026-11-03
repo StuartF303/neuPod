@@ -70,3 +70,42 @@ nfs_err_t nfs_path_normalize(const char *in, char *out, size_t cap) {
     out[len] = '\0';
     return NFS_OK;
 }
+
+// --- Write scope (see nfs.h) -----------------------------------------------------------------
+
+static char g_scope[NFS_PATH_MAX];
+static bool g_scope_active;
+
+nfs_err_t nfs_write_scope_enter(const char *dir) {
+    char norm[NFS_PATH_MAX];
+    nfs_err_t e = nfs_path_normalize(dir, norm, sizeof norm);
+    if (e != NFS_OK) {
+        return e;
+    }
+    if (strcmp(norm, "/") == 0 || g_scope_active) {
+        return NFS_ERR_INVALID; // the whole volume is not a scope; scopes do not nest
+    }
+    memcpy(g_scope, norm, strlen(norm) + 1);
+    g_scope_active = true;
+    return NFS_OK;
+}
+
+void nfs_write_scope_leave(void) {
+    g_scope_active = false;
+    g_scope[0] = '\0';
+}
+
+bool nfs_write_scope_active(void) { return g_scope_active; }
+
+bool nfs_write_scope_allows(const char *path) {
+    if (!g_scope_active) {
+        return true;
+    }
+    char norm[NFS_PATH_MAX];
+    if (path == NULL || nfs_path_normalize(path, norm, sizeof norm) != NFS_OK) {
+        return false;
+    }
+    size_t n = strlen(g_scope);
+    // Component-wise: "/.neupod2" is not inside "/.neupod".
+    return strncmp(norm, g_scope, n) == 0 && (norm[n] == '\0' || norm[n] == '/');
+}

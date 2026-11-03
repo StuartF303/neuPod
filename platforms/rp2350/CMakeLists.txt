@@ -44,7 +44,7 @@ target_link_libraries(hal_rp2350_core PUBLIC
   pico_multicore
 )
 set_source_files_properties(hal/hal_core.c hal/hal_i2c.c i2c_test_main.c ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
-  hal/hal_system.c hal/hal_display.c hal/hal_console.c hal/hal_input.c hal/hal_audio.c hal/hal_audio_null.c main.c
+  hal/hal_system.c hal/hal_radio_bt.c hal/hal_display.c hal/hal_console.c hal/hal_input.c hal/hal_audio.c hal/hal_audio_null.c main.c
   display_test_main.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 pico_generate_pio_header(hal_rp2350_core ${CMAKE_CURRENT_LIST_DIR}/hal/clickwheel_rx.pio)
 if(NEUPOD_AUDIO_SINK STREQUAL "i2s")
@@ -57,9 +57,24 @@ target_link_libraries(hal_rp2350 PUBLIC hal_rp2350_core pico_cyw43_arch_none)
 
 # FreeRTOS (single-core, core 0): pico_cyw43_arch_sys_freertos (via neupod_freertos). Radio bring-up
 # waits for the scheduler (hal_system_late_init).
-add_library(hal_rp2350_rtos STATIC hal/hal_system.c)
+add_library(hal_rp2350_rtos STATIC hal/hal_system.c hal/hal_radio_bt.c)
 target_compile_definitions(hal_rp2350_rtos PRIVATE NEUPOD_RTOS=1)
 target_link_libraries(hal_rp2350_rtos PUBLIC hal_rp2350_core neupod_freertos)
+
+# Bluetooth classic: BTstack from the Pico SDK (lib/btstack, v1.6.2) on the CYW43 async context. Deliberately NOT
+# pico_btstack_cyw43 (it pulls pico_btstack_flash_bank / pico_flash: run-time flash writes, which stall core 1, see
+# docs/bluetooth.md); hal_radio_bt.c supplies btstack_cyw43_init() with the SD-backed settings store instead.
+# pico_btstack_sbc_encoder is linked now to prove it builds; nothing references it until stage 2, so it adds no flash.
+if(NOT TARGET pico_btstack_classic)
+  message(FATAL_ERROR "BTstack is missing from the Pico SDK. Run: git -C $ENV{PICO_SDK_PATH} submodule update --init lib/btstack")
+endif()
+target_include_directories(hal_rp2350_rtos PUBLIC ${CMAKE_CURRENT_LIST_DIR}/btstack)
+target_link_libraries(hal_rp2350_rtos PUBLIC
+  pico_btstack_classic
+  pico_btstack_hci_transport_cyw43
+  pico_btstack_run_loop_async_context
+  pico_btstack_sbc_encoder
+)
 
 add_executable(neupod main.c)
 target_link_libraries(neupod neupod_runtime neupod_drivers hal_rp2350_rtos hal_rp2350_storage_rtos)

@@ -30,8 +30,9 @@
 #define configSUPPORT_PICO_SYNC_INTEROP 1
 #define configSUPPORT_PICO_TIME_INTEROP 1
 
-/* Heap: heap_4, one static array in .bss. Budget in docs/runtime.md. */
-#define configTOTAL_HEAP_SIZE (112 * 1024)
+/* Heap: heap_4, one static array in .bss. Budget in docs/runtime.md; the size is a named constant. */
+#include "memory_budget.h"
+#define configTOTAL_HEAP_SIZE NEUPOD_RTOS_HEAP_BYTES
 
 /* Run-time-stats clock: the free-running 1 MHz hardware timer (app/os/os_freertos.c). */
 #define configTICK_TYPE_WIDTH_IN_BITS TICK_TYPE_WIDTH_32_BITS

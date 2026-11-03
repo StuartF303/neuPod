@@ -82,8 +82,14 @@ set(NEUPOD_RUNTIME_SOURCES
   ${NEUPOD_APP_DIR}/runtime/storage_service.c
   ${NEUPOD_APP_DIR}/runtime/haptic_service.c
   ${NEUPOD_APP_DIR}/runtime/player.c
+  ${NEUPOD_APP_DIR}/runtime/settings_service.c
+  ${NEUPOD_APP_DIR}/runtime/bt_service.c
   ${NEUPOD_APP_DIR}/storage/nfs_path.c   # portable half of the nfs API (the backend is in the HAL libs)
   ${NEUPOD_APP_DIR}/audio/audio_ctl.c
+)
+# Settings store on the SD card (portable; needs the nfs API and hal_storage's write lock).
+set(NEUPOD_SETTINGS_SOURCES
+  ${NEUPOD_APP_DIR}/settings/settings_store.c
 )
 set(NEUPOD_UI_SOURCES
   ${NEUPOD_APP_DIR}/ui/ui.c
@@ -94,6 +100,7 @@ set(NEUPOD_UI_SOURCES
   ${NEUPOD_APP_DIR}/ui/ui_files.c
   ${NEUPOD_APP_DIR}/ui/ui_audio.c
   ${NEUPOD_APP_DIR}/ui/ui_settings.c
+  ${NEUPOD_APP_DIR}/ui/ui_bluetooth.c
 )
 set(NEUPOD_APP_SOURCES
   ${NEUPOD_CORE_SOURCES}

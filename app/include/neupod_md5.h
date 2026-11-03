@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-/** @file md5.h  MD5 (RFC 1321) for the FLAC verify mode: the STREAMINFO checksum is an MD5 of the decoded samples. Not for security. */
+/** @file neupod_md5.h  MD5 (RFC 1321) for the FLAC verify mode: the STREAMINFO checksum is an MD5 of the decoded samples. Not for security. */
 #ifndef NEUPOD_MD5_H
 #define NEUPOD_MD5_H
 

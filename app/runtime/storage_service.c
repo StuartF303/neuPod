@@ -7,11 +7,12 @@
 #include "audio_engine.h"
 #include "os.h"
 #include "player.h"
+#include "settings_service.h"
 #include "storage_service.h"
 #include "meta.h"
 #include "wav.h"
 
-typedef enum { REQ_LIST, REQ_SPACE, REQ_PREFETCH, REQ_PLAY, REQ_STOP, REQ_VERIFY } req_kind_t;
+typedef enum { REQ_LIST, REQ_SPACE, REQ_PREFETCH, REQ_PLAY, REQ_STOP, REQ_VERIFY, REQ_SETTINGS_LOAD } req_kind_t;
 
 typedef struct {
     req_kind_t kind;
@@ -36,11 +37,12 @@ static bool post(req_kind_t kind, const char *path, uint32_t seq) {
         strncpy(r.path, path, sizeof r.path - 1);
     }
     // Transport requests may wait briefly for a slot (a directory listing can be queued ahead of them).
-    uint32_t wait = (kind == REQ_PLAY || kind == REQ_STOP || kind == REQ_VERIFY) ? 50u : OS_NO_WAIT;
+    uint32_t wait = (kind == REQ_PLAY || kind == REQ_STOP || kind == REQ_VERIFY || kind == REQ_SETTINGS_LOAD) ? 50u : OS_NO_WAIT;
     return g_req_q != NULL && os_queue_send(g_req_q, &r, wait);
 }
 bool storage_play_request(const char *path) { return path != NULL && post(REQ_PLAY, path, 0); }
 bool storage_stop_request(void) { return post(REQ_STOP, NULL, 0); }
+bool storage_settings_load_request(void) { return post(REQ_SETTINGS_LOAD, NULL, 0); }
 bool storage_verify_request(const char *path) { return path != NULL && post(REQ_VERIFY, path, 0); }
 
 bool storage_list_request(const char *path, uint32_t seq) { return post(REQ_LIST, path, seq); }
@@ -521,13 +523,30 @@ static void stream_pump(void) {
     g_stream.cur_left -= (uint32_t)got;
 }
 
+#define SETTINGS_POLL_MS 500u
+// A save is a few KB of SD writes: while a file streams, do it only when the audio data ring is at least half full, so
+// the card is never busy when the audio core is about to run dry (the ring is 32 KB: half is 93 ms of 16-bit/44.1 kHz).
+#define SETTINGS_SAVE_MAX_RING_SPACE (16u * 1024u)
+
+static void settings_poll(void) {
+    static uint32_t last_ms;
+    uint32_t now = os_tick_ms();
+    if (now - last_ms < SETTINGS_POLL_MS / 2u) {
+        return; // while streaming this runs every millisecond: look at most every 250 ms
+    }
+    last_ms = now;
+    settings_service_poll(!g_stream.active || audio_data_space() <= SETTINGS_SAVE_MAX_RING_SPACE);
+}
+
 void storage_task(void *arg) {
     (void)arg;
     for (;;) {
         storage_req_t rq;
         // While a file streams, wake every millisecond to keep the audio data ring full.
-        if (!os_queue_recv(g_req_q, &rq, g_stream.active ? 1u : OS_WAIT_FOREVER)) {
+        // Idle: wake twice a second so a pending settings save is not forgotten (nothing else wakes this task).
+        if (!os_queue_recv(g_req_q, &rq, g_stream.active ? 1u : SETTINGS_POLL_MS)) {
             stream_pump();
+            settings_poll();
             continue;
         }
         storage_result_t res = {0};
@@ -540,6 +559,9 @@ void storage_task(void *arg) {
             continue;
         case REQ_STOP:
             stream_close();
+            continue;
+        case REQ_SETTINGS_LOAD:
+            settings_service_load_now();
             continue;
         case REQ_LIST:
             list_dir(&rq, &res);

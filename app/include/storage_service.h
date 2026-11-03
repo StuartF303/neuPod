@@ -72,6 +72,9 @@ bool storage_verify_request(const char *path);
 /** Stop feeding the current file stream (the caller stops the audio core itself). */
 bool storage_stop_request(void);
 
+/** Ask the storage task to load the settings store from the card (settings_service_load_now). */
+bool storage_settings_load_request(void);
+
 /**
  * Ask the storage task to prefetch @p path (stub: logged). Copied; truncated to 63 characters.
  */

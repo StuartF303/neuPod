@@ -8,6 +8,7 @@ add_library(hal_host STATIC
   hal_i2c.c
   hal_audio.c
   hal_core.c
+  hal_radio.c
   nfs_posix.c
   ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c
   ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
@@ -51,6 +52,6 @@ add_executable(now_playing now_playing_main.c)
 target_link_libraries(now_playing neupod_app hal_host)
 
 set_source_files_properties(hal_i2c.c i2c_test_main.c ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
-  hal_system.c hal_display.c hal_console.c hal_input.c hal_storage.c hal_audio.c hal_core.c nfs_posix.c host_window.c
+  hal_system.c hal_display.c hal_console.c hal_input.c hal_storage.c hal_audio.c hal_core.c hal_radio.c nfs_posix.c host_window.c
   ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c
   main.c display_test_main.c now_playing_main.c storage_test_main.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")

@@ -55,6 +55,9 @@ static nfs_err_t prepare(const char *path, char *out) {
     return nfs_path_normalize(path, out, NFS_PATH_MAX);
 }
 
+// Mutating calls: refused outside an active write scope (nfs.h). The hardware lock still applies on top.
+static nfs_err_t gate(const char *normalised) { return nfs_write_scope_allows(normalised) ? NFS_OK : NFS_ERR_IO; }
+
 static struct nfs_file *alloc_file(void) {
     for (size_t i = 0; i < NFS_MAX_OPEN_FILES; i++) {
         if (!g_files[i].used) {
@@ -96,6 +99,9 @@ nfs_err_t nfs_open(nfs_file_t **out, const char *path, unsigned flags) {
     if (out == NULL || (!rd && !wr) || (!wr && (flags & (NFS_O_CREATE | NFS_O_TRUNC | NFS_O_APPEND))) ||
         ((flags & NFS_O_EXCL) && !(flags & NFS_O_CREATE))) {
         return NFS_ERR_INVALID;
+    }
+    if (wr && (e = gate(p)) != NFS_OK) {
+        return e;
     }
     FILINFO fno;
     FRESULT fr = f_stat(p, &fno);
@@ -342,6 +348,9 @@ nfs_err_t nfs_mkdir(const char *path) {
     if (strcmp(p, "/") == 0) {
         return NFS_ERR_EXISTS;
     }
+    if ((e = gate(p)) != NFS_OK) {
+        return e;
+    }
     return map_fr(f_mkdir(p));
 }
 
@@ -353,6 +362,9 @@ nfs_err_t nfs_unlink(const char *path) {
     }
     if (strcmp(p, "/") == 0) {
         return NFS_ERR_INVALID;
+    }
+    if ((e = gate(p)) != NFS_OK) {
+        return e;
     }
     FILINFO fno;
     if (f_stat(p, &fno) == FR_OK && (fno.fattrib & AM_DIR)) {
@@ -380,6 +392,9 @@ nfs_err_t nfs_rename(const char *from, const char *to) {
     }
     if (strcmp(a, "/") == 0 || strcmp(b, "/") == 0) {
         return NFS_ERR_INVALID;
+    }
+    if ((e = gate(a)) != NFS_OK || (e = gate(b)) != NFS_OK) {
+        return e;
     }
     return map_fr(f_rename(a, b));
 }

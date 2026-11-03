@@ -15,7 +15,7 @@
 /* Priorities (higher runs first; 0 is the kernel idle task; the timer service task is 6). */
 #define RT_PRIO_STORAGE 5u
 #define RT_PRIO_INPUT 4u
-#define RT_PRIO_RADIO 3u /* the SDK's CYW43 worker; set via CYW43_TASK_PRIORITY on RP2350 */
+#define RT_PRIO_RADIO 3u /* the SDK's CYW43 worker, which also runs BTstack; set via CYW43_TASK_PRIORITY on RP2350 */
 #define RT_PRIO_UI 2u
 #define RT_PRIO_MONITOR 1u
 #define RT_PRIO_I2C 4u   /* I2C users run at input priority while on the bus: hal_i2c timeouts are
@@ -53,5 +53,7 @@
 #define RT_STACK_MONITOR 3072u
 #define RT_STACK_CHECK 3072u
 #define RT_STACK_CHECK_STORAGE 5120u /* FatFs mount */
+#define RT_STACK_CHECK_RADIO 4096u   /* radio driver start-up and the Bluetooth hand-over (caps_resolve with a format) */
+#define RT_STACK_RADIO 6144u         /* the SDK's CYW43 worker task, which is also BTstack's thread (CYW43_TASK_STACK_SIZE is in words: 1536) */
 
 #endif // NEUPOD_RUNTIME_CONFIG_H

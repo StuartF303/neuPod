@@ -131,6 +131,21 @@ nfs_err_t nfs_closedir(nfs_dir_t *d);
 /** Total and free bytes of the volume. Slow on a big FAT32 volume (scans the FAT). */
 nfs_err_t nfs_space(uint64_t *total, uint64_t *free_bytes);
 
+/*
+ * WRITE SCOPE. While a scope is active, every mutating call (open for write/create/truncate, mkdir, unlink,
+ * rename: both paths) whose path is not @p dir itself or below it fails with NFS_ERR_IO, whatever the hardware
+ * write lock says. It narrows an unlock: the one caller that must write (app/settings, /.neupod) enters a scope,
+ * then unlocks the card (hal_storage_set_write_enabled) for the duration and restores the lock afterwards.
+ * The scope does not stop FatFs updating the FAT and the directory entries that belong to the files inside it
+ * (those sectors are shared), and it does not cover raw hal_storage_write(); nothing else in the firmware calls that.
+ * Not recursive; one scope at a time; the storage task is the only caller (no locking here).
+ */
+nfs_err_t nfs_write_scope_enter(const char *dir);
+void nfs_write_scope_leave(void);
+bool nfs_write_scope_active(void);
+/** True if no scope is active, or the (normalised, absolute) @p path is the scope directory or below it. */
+bool nfs_write_scope_allows(const char *path);
+
 #ifdef __cplusplus
 }
 #endif

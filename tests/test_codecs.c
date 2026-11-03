@@ -16,7 +16,7 @@
 #include "codec_dr_config.h"
 #include "../app/third_party/dr_libs/dr_flac.h"
 #include "../app/third_party/dr_libs/dr_mp3.h"
-#include "md5.h"
+#include "neupod_md5.h"
 #include "meta.h"
 #include "stream_io.h"
 #include "unit.h"

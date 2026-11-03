@@ -39,6 +39,7 @@ nav:
   - Firmware:
       - Runtime (RTOS, tasks, boot): runtime.md
       - Audio (I2S, tones, WAV): audio.md
+      - Bluetooth (BTstack, settings store): bluetooth.md
   - Hardware:
       - Phase 1 wiring: wiring-phase1.md
       - Click-wheel protocol: click-wheel-protocol.md
