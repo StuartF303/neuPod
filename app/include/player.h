@@ -33,6 +33,8 @@ typedef enum {
     PLAYER_VERIFIED,  /**< verify finished: see verify */
 } player_state_t;
 
+#define PLAYER_PATH_MAX 256u /**< longest file path remembered (same as NFS_PATH_MAX) */
+
 typedef enum { PLAYER_SRC_NONE = 0, PLAYER_SRC_TONE, PLAYER_SRC_FILE } player_src_t;
 
 typedef struct {
@@ -64,7 +66,7 @@ void player_get(player_info_t *out);
 void player_tone_toggle(tone_mode_t mode);
 /** Play the WAV at @p path (display name @p name). Result arrives through player_get(). */
 void player_play_file(const char *path, const char *name);
-/** Pause <-> resume. No-op when nothing plays. */
+/** Pause <-> resume. On a finished track (or a completed MD5 check) it plays the same file again from the start. Otherwise no-op. */
 void player_pause_toggle(void);
 void player_stop(void);
 

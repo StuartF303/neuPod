@@ -46,6 +46,9 @@ set(NEUPOD_RT_CORE_SOURCES               # pure logic, no OS: host-testable on t
   ${NEUPOD_APP_DIR}/audio/spsc_ring.c
   ${NEUPOD_APP_DIR}/input/input_events.c
   ${NEUPOD_APP_DIR}/ui/ui_logic.c
+  ${NEUPOD_APP_DIR}/ui/input/wheel_input.c
+  ${NEUPOD_APP_DIR}/net/sys_clock.c
+  ${NEUPOD_APP_DIR}/net/wifi_logic.c
   ${NEUPOD_APP_DIR}/audio/audio_dsp.c
   ${NEUPOD_APP_DIR}/audio/wav.c
   ${NEUPOD_APP_DIR}/audio/meta.c
@@ -84,6 +87,7 @@ set(NEUPOD_RUNTIME_SOURCES
   ${NEUPOD_APP_DIR}/runtime/player.c
   ${NEUPOD_APP_DIR}/runtime/settings_service.c
   ${NEUPOD_APP_DIR}/runtime/bt_service.c
+  ${NEUPOD_APP_DIR}/runtime/wifi_service.c
   ${NEUPOD_APP_DIR}/storage/nfs_path.c   # portable half of the nfs API (the backend is in the HAL libs)
   ${NEUPOD_APP_DIR}/audio/audio_ctl.c
 )
@@ -101,6 +105,10 @@ set(NEUPOD_UI_SOURCES
   ${NEUPOD_APP_DIR}/ui/ui_audio.c
   ${NEUPOD_APP_DIR}/ui/ui_settings.c
   ${NEUPOD_APP_DIR}/ui/ui_bluetooth.c
+  ${NEUPOD_APP_DIR}/ui/ui_wifi.c
+  ${NEUPOD_APP_DIR}/ui/ui_nettest.c
+  ${NEUPOD_APP_DIR}/ui/input/ui_input.c
+  ${NEUPOD_APP_DIR}/ui/input/ui_input_demo.c
 )
 set(NEUPOD_APP_SOURCES
   ${NEUPOD_CORE_SOURCES}

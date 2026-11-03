@@ -452,6 +452,8 @@ nfs_err_t nfs_opendir(nfs_dir_t **out, const char *path) {
     return NFS_ERR_TOO_MANY;
 }
 
+_Static_assert(NFS_FAT_HIDDEN_ATTRS == (AM_HID | AM_SYS), "nfs.h and FatFs disagree about the hidden attributes");
+
 nfs_err_t nfs_readdir(nfs_dir_t *d, nfs_dirent_t *out, bool *done) {
     if (d == NULL || !d->used || out == NULL || done == NULL) {
         return NFS_ERR_INVALID;
@@ -469,6 +471,7 @@ nfs_err_t nfs_readdir(nfs_dir_t *d, nfs_dirent_t *out, bool *done) {
     strncpy(out->name, fno.fname, NFS_NAME_MAX);
     out->name[NFS_NAME_MAX] = '\0';
     out->is_dir = (fno.fattrib & AM_DIR) != 0;
+    out->hidden = (fno.fattrib & NFS_FAT_HIDDEN_ATTRS) != 0;
     out->size = out->is_dir ? 0 : fno.fsize;
     return NFS_OK;
 }

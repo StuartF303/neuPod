@@ -5,7 +5,7 @@
  *
  * Keys are 32-bit tags with a short byte value: the user settings (volume, backlight, click feedback) and, through
  * settings_bt_storage(), BTstack's link keys and device database (they use the same tag/value/length model).
- * The whole store lives in RAM and is always usable. It is persisted as ONE file, /.neupod/settings.bin
+ * The whole store lives in RAM and is always usable. It is persisted as TWO alternating files, /.neupod/settings.a and settings.b
  * (magic, version, sequence, items, CRC-32), written only by settings_flush(), which only the storage task calls.
  *
  * Why the SD card and not the internal flash (BTstack's default): core 1 runs its code from the same QSPI flash
@@ -18,8 +18,9 @@
  *
  * Write safety: the card's write lock is opened ONLY inside settings_flush(), for the duration of one save, under an
  * nfs write scope that confines every mutation to /.neupod (nfs.h). The store never formats and never writes
- * anywhere else. Atomic save: full image to settings.tmp, sync, delete settings.bin, rename tmp to bin. If power is
- * lost anywhere in the sequence the next load finds a complete file: bin, or tmp (valid CRC, higher sequence).
+ * anywhere else. Crash-safe save without rename or delete: the image is written IN PLACE over the OLDER (or invalid) of the two
+ * files, then synced; the other file is never touched. Load takes the valid file with the higher sequence, so a cut at any point
+ * leaves at least the previous complete state.
  *
  * Threading: setters/getters may be called from any task (a caller-supplied lock guards the RAM image).
  * settings_load() and settings_flush() do file I/O: storage task (or the boot check) only, never core 1.
@@ -37,11 +38,12 @@ extern "C" {
 #endif
 
 #define SETTINGS_DIR "/.neupod"
-#define SETTINGS_FILE SETTINGS_DIR "/settings.bin"
-#define SETTINGS_TMP_FILE SETTINGS_DIR "/settings.tmp"
+#define SETTINGS_FILE_A SETTINGS_DIR "/settings.a"
+#define SETTINGS_FILE_B SETTINGS_DIR "/settings.b"
+#define SETTINGS_FILE_OLD SETTINGS_DIR "/settings.old" /**< a file written by a NEWER firmware, kept aside instead of being wiped */
 
-#define SETTINGS_MAX_ITEMS 24u /**< distinct tags kept (3 settings + link keys + BT device records) */
-#define SETTINGS_VALUE_MAX 48u /**< bytes per value (a BTstack link key record is 27) */
+#define SETTINGS_MAX_ITEMS 32u /**< distinct tags kept (settings, Wi-Fi networks, link keys, BT device records) */
+#define SETTINGS_VALUE_MAX 96u /**< bytes per stored value; a sealed secret holds up to 96 - 29 = 67 bytes of plaintext (Wi-Fi passwords are at most 63) */
 #define SETTINGS_VERSION 1u
 
 /** Tags of the user settings, four ASCII characters like BTstack's own ('NPxx'; BTstack uses 'BTL?' / 'BTD?'). */
@@ -49,6 +51,11 @@ extern "C" {
 #define SETTING_VOLUME_ATT_DB SETTINGS_TAG('N', 'P', 'v', 'o') /**< u8, attenuation in dB */
 #define SETTING_BACKLIGHT_PCT SETTINGS_TAG('N', 'P', 'b', 'l') /**< u8, 5..100 */
 #define SETTING_CLICK_FEEDBACK SETTINGS_TAG('N', 'P', 'c', 'k') /**< u8, 0 or 1 */
+#define SETTING_WIFI SETTINGS_TAG('N', 'P', 'w', 'f')            /**< 4 bytes: enabled, during playback, idle-off minutes, zone */
+#define SETTING_NTP_SERVER SETTINGS_TAG('N', 'P', 'n', 's')      /**< string */
+#define SETTING_TEST_URL SETTINGS_TAG('N', 'P', 't', 'u')        /**< string */
+#define SETTING_NET_SSID(i) SETTINGS_TAG('N', 'P', 'n', (char)('0' + (i)))  /**< flags byte (1 = has password) + SSID */
+#define SETTING_NET_PSK(i) SETTINGS_TAG('N', 'P', 'p', (char)('0' + (i)))   /**< sealed password */
 
 /** Lock callbacks around the RAM image (NULL members = no locking; unit tests). Must not be recursive. */
 typedef struct {
@@ -61,8 +68,8 @@ typedef struct {
 typedef enum {
     SETTINGS_LOAD_NONE = 0,   /**< not loaded (no card, or not tried yet) */
     SETTINGS_LOAD_FRESH,      /**< no file yet: first boot or a new card; defaults */
-    SETTINGS_LOAD_OK,         /**< settings.bin valid */
-    SETTINGS_LOAD_RECOVERED,  /**< settings.tmp was newer/the only valid file (power was lost during a save) */
+    SETTINGS_LOAD_OK,         /**< a valid file was read */
+    SETTINGS_LOAD_RECOVERED,  /**< ... and the other file was damaged (a save was cut short): the valid one was used */
     SETTINGS_LOAD_CORRUPT,    /**< files exist but fail magic/version/CRC: defaults, the next save replaces them */
     SETTINGS_LOAD_IO_ERROR,   /**< could not read the card: defaults, RAM-only */
 } settings_load_result_t;
@@ -117,6 +124,15 @@ void settings_delete(uint32_t tag);
 bool settings_get_u8(uint32_t tag, uint8_t *out);
 void settings_set_u8(uint32_t tag, uint8_t v);
 
+/* ---- Secrets (crypto_secret.h): AES-256-GCM sealed, bound to the chip ---- */
+
+/** Store @p len secret bytes (<= SETTINGS_VALUE_MAX - SECRET_OVERHEAD) sealed under @p tag. false if too long, or no key. */
+bool settings_put_secret(uint32_t tag, const void *data, uint32_t len);
+/** Read a secret: its length, or 0 if absent OR it does not authenticate (another board, edited card): ask the user again. */
+uint32_t settings_get_secret(uint32_t tag, void *buf, uint32_t size);
+/** Seal any plaintext BTstack record (tags 'BT..' shorter than a sealed record) written before secrets were encrypted. */
+void settings_migrate_bt_secrets(void);
+
 /* ---- BTstack ---- */
 
 /**
@@ -124,13 +140,13 @@ void settings_set_u8(uint32_t tag, uint8_t v);
  * While the card's contents are still to be loaded (or it is not yet known whether there is a card) writes are refused,
  * since the load would drop them; with no card they work for the session (RAM-only).
  */
-const hal_bt_storage_t *settings_bt_storage(void);
+const hal_bt_storage_t *settings_bt_storage(void); /* link keys and device records are stored SEALED (settings_put_secret) */
 
 /* ---- test hooks ---- */
 
 /**
- * Unit tests only: stop settings_flush() as if the power failed. Steps: 0 = half of the temp file written,
- * 1 = temp file complete and closed, 2 = old file deleted (before the rename), 3 = after the rename.
+ * Unit tests only: stop settings_flush() as if the power failed. Steps: 0 = half of the inactive file written (not synced),
+ * 1 = file complete, synced and closed.
  * -1 = off. The aborted flush returns NFS_ERR_IO.
  */
 void settings_test_set_power_loss_step(int step);

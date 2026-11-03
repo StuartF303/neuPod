@@ -21,6 +21,12 @@ extern "C" {
 typedef void (*hal_host_delay_fn)(uint32_t ms);
 void hal_host_set_delay_hook(hal_host_delay_fn fn);
 
+/** Tests: change the simulated chip ID that hal_chip_id() reports (a card moved to another board). */
+void hal_host_set_chip_id(const uint8_t id[8]);
+
+/** Tests: the simulated access point goes away (link loss): hal_wifi_state() then reports HAL_WIFI_IDLE. */
+void hal_host_wifi_drop_link(void);
+
 /** Write the panel's current contents to @p path as a binary PPM (P6). False on I/O error. */
 bool hal_host_display_dump_ppm(const char *path);
 

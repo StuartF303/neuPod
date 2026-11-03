@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 #include <stdio.h>
+#include <string.h>
 
 #include "hal_system.h"
 #include "hal_audio.h"
@@ -9,7 +10,9 @@
 #include "hardware/uart.h"
 #include "pico/multicore.h"
 #include "pico/cyw43_arch.h"
+#include "pico/rand.h"
 #include "pico/stdlib.h"
+#include "pico/unique_id.h"
 
 #ifndef NEUPOD_RTOS
 #define NEUPOD_RTOS 0
@@ -167,6 +170,24 @@ void hal_panic(uint8_t blink_code, const char *msg) {
         if (cycle % 3 == 2) {
             panic_puts(msg);
         }
+    }
+}
+
+bool hal_chip_id(uint8_t id[8]) {
+    pico_unique_board_id_t b; // captured by a constructor before main (OTP chip ID through the boot ROM on RP2350)
+    pico_get_unique_board_id(&b);
+    memcpy(id, b.id, 8);
+    return true;
+}
+
+void hal_random(void *buf, size_t n) {
+    uint8_t *p = buf;
+    while (n > 0) {
+        uint64_t r = get_rand_64();
+        size_t k = n < 8 ? n : 8;
+        memcpy(p, &r, k);
+        p += k;
+        n -= k;
     }
 }
 

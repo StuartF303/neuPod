@@ -66,7 +66,8 @@ Priority 7 is the highest; the kernel idle task is 0.
 | storage | 5 | 8 KB | request queue; while a file streams, every 1 ms; otherwise every 500 ms | directory listings and volume space for the UI (yields every 32 entries); streams the file from the card in 2 KB reads into the audio data ring; loads the settings store after the card mounts and saves it about 1.5 s after a change ([Bluetooth](bluetooth.md)); later: library scan, track prefetch |
 | input | 4 | 2 KB | every 2 ms | well under 1 % (the wheel FIFO overflows after ~4.8 ms) |
 | I2C users, while on the bus | 4 (lifted) | n/a | boot checks, the 5 s gauge read | a few ms (see findings) |
-| CYW43 worker (SDK) | 3 | 6 KB | radio events; **every BTstack callback** | LED; Bluetooth (BTstack's one thread: HCI, scan, events posted to the UI queue); Wi-Fi later |
+| CYW43 worker (SDK) | 3 | 6 KB | radio events; **every BTstack callback and lwIP callback** | LED; Bluetooth (BTstack's one thread); lwIP (via the SDK's FreeRTOS arch; lwIP also has its own 4 KB tcpip thread) |
+| wifi (policy) | 1 | 3 KB | every 200 ms | requests from the UI, join/retry with backoff, power policy, SNTP, the 1 s snapshot for the UI ([Wi-Fi](wifi.md)) |
 | haptic (click feedback) | 4 | 2 KB | click queue (2 deep, non-blocking for the UI) | a few ms per click; back to standby after 2 s idle |
 | UI (LVGL) | 2 | 12 KB | 5 to 30 ms, from LVGL's own timer | frame strip render + 24-line blocking DMA |
 | monitor | 1 | 3 KB | 100 ms tick: heartbeat 1 s, gauge 5 s, stats 10 s | negligible |
@@ -170,7 +171,7 @@ These led to ADR-0011; the details are kept because they are the reason for the 
 | click wheel | receiver starts, init packet sent, a valid frame arrives | **degraded** (not wired, init packet unimplemented) |
 | audio | the sink's stream runs: the audio core published its rate and served blocks (cannot detect the DAC: I2S is one-way) | passes with the I2S sink; **degraded** with the null sink |
 | Bluetooth | the radio driver is up and BTstack's HCI reaches the working state (local address read) | passes on the Pico 2 W (stage 1; not yet seen on the board) |
-| Wi-Fi | radio driver exists | **degraded** (not implemented) |
+| Wi-Fi | radio driver and lwIP are up (not: joined a network) | passes on the Pico 2 W (W1; not yet seen on the board) |
 
 Deadlines: storage 4 s, battery and haptics 1.5 s, wheel 1.5 s, audio 0.5 s, radio 4.8 s (the radio check keeps waiting up to 12 s, so a slow Bluetooth start still upgrades its result). A check that
 misses its deadline is marked degraded and its later result is ignored (except that radio upgrade). I2C runs at 400 kHz.
@@ -231,5 +232,5 @@ degraded ("not connected").
 ## What is stubbed
 
 AAC decoder (FLAC, MP3, ALAC and WAV play), prefetch (logs requests), home screen (placeholder), click-wheel receiver (pins
-unconfirmed), Wi-Fi, Bluetooth pairing and A2DP (stage 2, [Bluetooth](bluetooth.md)). Not yet measured on hardware with this architecture: block jitter under UI load,
+unconfirmed), Bluetooth pairing and A2DP (stage 2, [Bluetooth](bluetooth.md)). Not yet measured on hardware with this architecture: block jitter under UI load,
 the panic LED, stack margins.

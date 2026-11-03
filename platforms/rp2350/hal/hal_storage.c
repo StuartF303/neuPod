@@ -240,6 +240,29 @@ static uint32_t actual_clock_hz(uint32_t requested_hz) {
                       ((float)SDIO_PIO_CYCLES_PER_CLK * clk_div_for(requested_hz)));
 }
 
+// A card that was in the middle of a transfer when the core was reset (a debugger reset after flashing) can sit in a data
+// state and ignore the identification commands until it is power cycled. Without control of the card's power the best that
+// can be done is what the specification allows in any state: STOP_TRANSMISSION (CMD12), which ends an open read or
+// write-multiple. It is sent four times with its response read (R1/R1b, so the card's reply is clocked out before the next
+// command and the host never drives CMD while the card answers), 5 ms apart, at the identification clock; then the card gets
+// 50 ms to finish programming. CMD12 carries no data and is harmless to an idle card (it answers "illegal command" or says
+// nothing); nothing is written. A missing card costs the 10 ms response timeout per command. The extra clocks this gives
+// are the command and response frames themselves; the library's own CMD0 sequence follows. Needs the bus set up by a first
+// failed identification (the pins and the PIO are then already configured).
+static void card_unwedge(void) {
+    for (int i = 0; i < 4; i++) {
+        uint32_t r1 = 0;
+        sd_lock(g_sd);
+        if (i == 0) {
+            (void)rp2040_sdio_init(g_sd, clk_div_for(400u * 1000u)); // the identification clock
+        }
+        (void)rp2040_sdio_command_R1(g_sd, 12, 0, &r1);
+        sd_unlock(g_sd);
+        sleep_ms(5);
+    }
+    sleep_ms(50);
+}
+
 hal_storage_status_t hal_storage_init(void) {
     hal_storage_status_t st = ensure_driver();
     if (st != HAL_STORAGE_OK) {
@@ -247,7 +270,6 @@ hal_storage_status_t hal_storage_init(void) {
     }
     hal_storage_unmount();
     install_write_guard(g_sd); // cheap and idempotent; never lose the guard across re-inits
-    bool recovering = g_info.sectors != 0; // a card worked earlier in this run
     if (initialised()) {
         // A card that was in use: let it finish whatever it was doing, and drop back to the
         // default clock while it is still in its current mode, BEFORE resetting it. (A card left in
@@ -259,11 +281,13 @@ hal_storage_status_t hal_storage_init(void) {
     // Always back to the default data clock: a fresh card is in default speed, and recovery or
     // cleanup after a clock sweep must never run at a sweep clock.
     g_sd->sdio_if_p->baud_rate = NEUPOD_SDIO_BAUD_HZ;
-    // Several attempts only when recovering a card that worked a moment ago; a missing card
-    // should still fail within about a second.
-    for (int attempt = 0; attempt < (recovering ? 3 : 1); attempt++) {
+    // Three attempts (a card that worked a moment ago, or one left mid-transfer by a reset); a missing card still fails
+    // within about a second (each command times out after 10 ms).
+    for (int attempt = 0; attempt < 3; attempt++) {
         if (attempt > 0) {
-            sleep_ms(100);
+            printf("storage: card did not identify, wake-up attempt %d\n", attempt);
+            card_unwedge();
+            sleep_ms(50);
         }
         if (initialised()) {
             g_sd->deinit(g_sd); // forces a fresh identification below

@@ -20,6 +20,8 @@
 #include "nfs.h"
 #include "os.h"
 #include "storage_service.h"
+#include "ui_input.h"
+#include "wifi_service.h"
 #include "ui_internal.h"
 
 static uint32_t g_space_seq;
@@ -204,71 +206,33 @@ static ui_screen_t *make_storage(void) { return info_create("Storage", INFO_STOR
 static ui_screen_t *make_battery(void) { return info_create("Battery", INFO_BATTERY); }
 static ui_screen_t *make_bluetooth(void) { return ui_screen_bluetooth_create(); }
 
-/* ---- Display: backlight --------------------------------------------------------------------------- */
+/* ---- Display: backlight (a slider modal with live preview, docs/ui-input.md) ---- */
 
-typedef struct {
-    ui_screen_t base;
-    ui_list_t *list;
-    bool editing;
-} display_t;
-
-static void display_get(void *ctx, int32_t i, ui_list_item_t *o) {
-    const display_t *d = ctx;
-    (void)i;
-    snprintf(o->label, sizeof o->label, "Backlight");
-    if (d->editing) {
-        snprintf(o->detail, sizeof o->detail, "< %u %% >", (unsigned)g_ui_state.backlight_pct);
-    } else {
-        snprintf(o->detail, sizeof o->detail, "%u %%", (unsigned)g_ui_state.backlight_pct);
-    }
+static void backlight_change(void *ctx, const wi_value_t *v) {
+    (void)ctx;
+    g_ui_state.backlight_pct = (uint8_t)v->number;
+    ui_apply_backlight(); /* live; a cancel arrives here as the initial value */
 }
 
-static void display_scroll(ui_screen_t *s, int32_t steps) {
-    display_t *d = (display_t *)s;
-    if (!d->editing) {
-        return;
+static void backlight_done(void *ctx, bool ok, const wi_value_t *v) {
+    (void)ctx;
+    if (ok) {
+        g_ui_state.backlight_pct = (uint8_t)v->number;
+        ui_apply_backlight();
+        ui_state_persist();
     }
-    int32_t v = (int32_t)g_ui_state.backlight_pct + steps * 5;
-    g_ui_state.backlight_pct = (uint8_t)(v < 5 ? 5 : v > 100 ? 100 : v); /* never fully dark: you could not find the way back */
-    ui_apply_backlight();
-    ui_state_persist();
-    ui_list_refresh(d->list);
 }
-
-static bool display_button(ui_screen_t *s, uint8_t btn) {
-    display_t *d = (display_t *)s;
-    if (btn == HAL_BTN_SELECT) {
-        d->editing = !d->editing; /* Select: start/stop adjusting with the wheel */
-        ui_list_refresh(d->list);
-        return true;
-    }
-    if (btn == HAL_BTN_MENU && d->editing) {
-        d->editing = false;
-        ui_list_refresh(d->list);
-        return true;
-    }
-    return false;
-}
-
-static void display_destroy(ui_screen_t *s) { ui_list_destroy(((display_t *)s)->list); }
 
 static ui_screen_t *make_display(void) {
-    display_t *d = (display_t *)ui_screen_new(sizeof *d, "Display");
-    if (d == NULL) {
-        return NULL;
-    }
-    d->base.on_scroll = display_scroll;
-    d->base.on_button = display_button;
-    d->base.destroy = display_destroy;
-    d->list = ui_list_create(d->base.root, UI_W, &(ui_list_model_t){.count = 1, .ctx = d, .get = display_get});
-    lv_obj_t *hint = ui_label(d->base.root, "Select, then scroll to adjust", UI_L_FAINT);
-    lv_obj_align(hint, LV_ALIGN_TOP_MID, 0, 40);
-    return &d->base;
+    /* never fully dark: you could not find the way back */
+    ui_input_open(&(wi_request_t){.kind = WI_K_SLIDER, .title = "Backlight", .done = backlight_done, .change = backlight_change,
+                                  .value = g_ui_state.backlight_pct, .min = 5, .max = 100, .step = 5, .unit = "%"});
+    return NULL; /* the modal pushed itself */
 }
 
 /* ---- the Settings screen itself ---------------------------------------------------------------------- */
 
-enum { G_ABOUT, G_DISPLAY, G_CLICK, G_BLUETOOTH, G_STORAGE, G_BATTERY, G_COUNT };
+enum { G_ABOUT, G_DISPLAY, G_CLICK, G_BLUETOOTH, G_WIFI, G_STORAGE, G_BATTERY, G_COUNT };
 
 typedef struct {
     ui_screen_t base;
@@ -279,7 +243,7 @@ typedef struct {
     char text[200];
 } settings_t;
 
-static const char *const k_group[G_COUNT] = {"About", "Display", "Click feedback", "Bluetooth", "Storage", "Battery"};
+static const char *const k_group[G_COUNT] = {"About", "Display", "Click feedback", "Bluetooth", "Wi-Fi", "Storage", "Battery"};
 
 static void settings_get(void *ctx, int32_t i, ui_list_item_t *o) {
     (void)ctx;
@@ -330,6 +294,18 @@ static void pane_text(int32_t g, char *out, size_t n) {
             capabilities_t c;
             caps_get(&c);
             snprintf(out, n, "Unavailable\n%s", c.brief[CAP_BLUETOOTH]);
+        }
+        break;
+    }
+    case G_WIFI: {
+        wifi_info_t wi;
+        wifi_get_info(&wi);
+        if (wi.state == HAL_WIFI_UP) {
+            snprintf(out, n, "%s\n%s\n%d dBm", wi.ssid, wi.ip, wi.rssi);
+        } else if (wi.saved == 0) {
+            snprintf(out, n, "No network saved\nSelect to add one");
+        } else {
+            snprintf(out, n, "%s", wi.state == HAL_WIFI_DOWN ? "Radio idle" : wi.state == HAL_WIFI_JOINING ? "Connecting..." : "Not connected");
         }
         break;
     }
@@ -392,6 +368,7 @@ static bool settings_button(ui_screen_t *b, uint8_t btn) {
         ui_feedback_step(); /* a click when switched on is the confirmation */
         return true;
     case G_BLUETOOTH: next = make_bluetooth(); break;
+    case G_WIFI: next = ui_screen_wifi_create(); break;
     case G_STORAGE: next = make_storage(); break;
     case G_BATTERY: next = make_battery(); break;
     }
@@ -411,6 +388,9 @@ static void settings_tick(ui_screen_t *b) {
 
 static void settings_destroy(ui_screen_t *b) { ui_list_destroy(((settings_t *)b)->list); }
 
+static void list_suspend(ui_screen_t *x) { ui_list_suspend(((settings_t *)x)->list); }
+static void list_resume(ui_screen_t *x) { ui_list_resume(((settings_t *)x)->list); }
+
 ui_screen_t *ui_screen_settings_create(void) {
     settings_t *s = (settings_t *)ui_screen_new(sizeof *s, "Settings");
     if (s == NULL) {
@@ -420,6 +400,8 @@ ui_screen_t *ui_screen_settings_create(void) {
     s->base.on_button = settings_button;
     s->base.on_tick = settings_tick;
     s->base.destroy = settings_destroy;
+    s->base.suspend = list_suspend;
+    s->base.resume = list_resume;
     s->shown_sel = -1;
     s->list = ui_list_create(s->base.root, 170, &(ui_list_model_t){.count = G_COUNT, .ctx = s, .get = settings_get});
 

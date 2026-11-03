@@ -21,6 +21,7 @@
 #include "runtime.h"
 #include "runtime_config.h"
 #include "settings_service.h"
+#include "settings_store.h"
 
 #define I2C_BUS_HZ 400000u
 #define I2C_LOCK_MS 500u
@@ -217,8 +218,18 @@ static void check_radio(void *arg) {
     }
     hal_status_led(true); // first LED write loads the chip firmware; do it here, not in the monitor
     hal_status_led(false);
-    caps_resolve(CAP_WIFI, false, BR_RADIO_NONE, "no Wi-Fi driver yet (Bluetooth comes first)");
+    // "ok" means the driver and lwIP are up, not that a network is joined (joining is the Wi-Fi service's business).
+    caps_resolve(CAP_WIFI, true, NULL, "driver and lwIP up (joining is separate)");
 
+    // Do not bring Bluetooth up before the settings store has loaded (link keys live there): wait briefly for the first load.
+    while (os_tick_ms() - g_start_ms < 3500u) {
+        capabilities_t c;
+        caps_get(&c);
+        if (settings_generation() != 0 || c.state[CAP_STORAGE] == CAP_DEGRADED) {
+            break; // loaded, or there is no card to wait for
+        }
+        os_delay_ms(20);
+    }
     st = bt_service_start(); // hci power on, BD_ADDR and HCI version go to the UART from the radio worker
     if (st != HAL_OK) {
         caps_resolve(CAP_BLUETOOTH, false, BR_BT_START, "Bluetooth start failed: %s", status_name(st));

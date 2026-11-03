@@ -68,13 +68,34 @@ settings: no file yet (defaults) (0 items, seq 0)      (or: loaded (n items, seq
 ## Discovery
 
 `hal_bt_inquiry_start(10)` runs a general inquiry for 10 s (8 units of 1.28 s). Each result carries the address, the Class of
-Device, the signal strength (RSSI, if the controller reports it) and the name when it was in the extended inquiry response.
+Device, the signal strength (RSSI) and the name when it was in the extended inquiry response. The inquiry mode is set to "RSSI and
+extended inquiry response" (`hci_set_inquiry_mode(INQUIRY_MODE_RSSI_AND_EIR)` before power-on); BTstack's default is the plain mode,
+which carries neither. If the controller refuses the Inquiry command (BTstack gives no event for that) the scan ends at once with
+`bt: inquiry refused by the controller (status 0x..)`.
 **Audio sinks** are devices whose Class of Device major class is *Audio/Video* (bits 12..8 = 4: headsets, speakers, car kits).
 After the inquiry the radio asks for the names of audio devices that had none, one at a time (at most 6; a name request cannot
 overlap an inquiry). Up to 12 devices are kept per scan. Stopping a scan skips the name requests.
 
-The Settings > Bluetooth screen ([UI](ui.md)) lists everything it found: audio devices with a speaker symbol first (after the scan
-ends), then others greyed out, with the signal on the right. Selecting a device shows "Pairing: not yet": pairing is stage 2.
+Settings > Bluetooth ([UI](ui.md)) shows the status, the address and a **Scan for devices** row. Select opens the **Devices** screen,
+which starts the scan as it opens and lists everything found as it arrives: audio devices with a speaker symbol first (after the scan
+ends), then others greyed out, with the signal on the right. Its first row is `Stop scanning` / `Scan again`. Selecting a device shows
+"Pairing: not yet": pairing is stage 2. Menu goes back and stops the scan.
+
+A device only answers an inquiry while it is **discoverable**: headphones in pairing mode, or a phone sitting on its Bluetooth
+settings page. Headphones that are connected to something else, or a phone with the screen off, do not appear.
+
+Console lines (UART), for testing without seeing the panel:
+
+```
+bt: scan start (10 s)
+bt: found 5C:xx:xx:xx:xx:xx cod=0x240404 rssi=-52 name='...' audio=yes
+bt: named 5C:xx:xx:xx:xx:xx cod=0x240404 rssi=-52 name='AirPods' audio=yes     (name arrived from a name request)
+bt: inquiry complete (3 results delivered by BTstack, 3 kept)
+bt: scan done, 3 devices
+```
+
+"Delivered by BTstack" counts every result before the 12-device limit; if it is 0 the controller heard nothing, if it is more than
+"kept" the limit was hit.
 
 ## Why the SD card holds the pairing data (and never the internal flash)
 
@@ -90,11 +111,11 @@ Link keys and the device database are stored in the **settings store** instead, 
 | | |
 | --- | --- |
 | API | `app/include/settings_store.h`, `app/settings/settings_store.c`; RTOS glue `app/runtime/settings_service.c` |
-| Content | tag (32-bit) to value (up to 48 bytes), 24 tags: volume (`NPvo`), backlight (`NPbl`), click feedback (`NPck`), BTstack link keys (`BTL?`, 27 bytes each, up to 8) and later device records. The same tag/value/length model as BTstack's TLV, so `hal_bt_storage_t` (in `hal_radio.h`) maps one to one onto `btstack_tlv_t` |
-| File | `/.neupod/settings.bin`: magic `NPST`, version (1), count, sequence number, items, CRC-32. Little endian. About 1.3 KB at most |
+| Content | tag (32-bit) to value (up to 96 bytes), 24 tags: volume (`NPvo`), backlight (`NPbl`), click feedback (`NPck`), Wi-Fi settings and networks ([Wi-Fi](wifi.md)), BTstack link keys (`BTL?`, 27 bytes plaintext, stored sealed since the secrets work, up to 8) and later device records. The same tag/value/length model as BTstack's TLV, so `hal_bt_storage_t` (in `hal_radio.h`) maps one to one onto `btstack_tlv_t` |
+| File | two alternating files `/.neupod/settings.a` and `settings.b`: magic `NPST`, version (1), count, sequence number, items, CRC-32. Little endian. About 3.2 KB at most (32 tags x 96 bytes) |
 | Reading | `settings_load()` on the storage task right after the card mounted. A file that fails magic, version or CRC gives **defaults** (reported on the UART, replaced by the next save). A newer or older layout is treated the same way |
-| Atomic save | image to `settings.tmp`, sync, delete `settings.bin`, rename the temp file to `settings.bin` (FatFs cannot rename over an existing file). Load takes the file with the highest valid sequence: `settings.bin`, or `settings.tmp` if power was lost between its completion and its rename (then the temp file is promoted by the next save). A half-written temp file fails its CRC and the old file is used. Host tests cut the power at every step |
-| Who writes | only the **storage task** (`settings_service_poll`: it wakes every 500 ms when idle and looks at the store at most every 250 ms, also while streaming). The first unsaved change is written about 1.5 s later, so a burst of wheel clicks is one write; a failed save is retried after 5 s. While a file streams, the save waits until the audio data ring is at least half full (the card is not busy when the audio core is about to run dry). Core 1 never touches it |
+| Crash-safe save | **no rename and no delete.** The image is written in place over the OLDER (or invalid) of the two files and synced; the other file is never touched. Load takes the valid file with the higher sequence (wrap-safe), so a power cut at any point leaves at least the previous complete state; a torn file just fails its CRC. A file with a NEWER layout version is moved aside as `settings.old` at the next save instead of being wiped (firmware rollback). Host tests cut the power during the write, again during a rewrite after a cut, and on the very first save |
+| Who writes | only the **storage task** (`settings_service_poll`: it wakes every 500 ms when idle and looks at the store at most every 250 ms). The first unsaved change is written about 1.5 s later, so a burst of wheel clicks is one write; a failed save is retried after 5 s. **No save while audio is playing** (an SD card can stall for far longer than the audio ring lasts): changes wait for pause, stop, the end of the track or an idle moment, then are written. The cost is that a volume change made during a long track is lost if the power fails before the next pause. While paused the ring is full and nothing consumes it, so a write cannot hurt. Core 1 never touches it |
 | No card / degraded | the store is **RAM-only**: every setter and the BTstack storage still work for the session, nothing is written, the UART says so. After 3 failed saves in a row the store stops trying (RAM-only) until restart. Failure stance: fail **safe for the card** (no write is attempted when the card or its mount is not healthy) and fail **open for the features** (settings and pairing keep working in RAM) |
 | Reads before the load | BTstack writes are refused until the store knows whether there is a card and has loaded it (the load would otherwise throw them away). With no card at all they are accepted for the session |
 
@@ -131,7 +152,7 @@ The static RAM ("bss", every figure from `arm-none-eabi-size` on the linked `neu
 | FreeRTOS heap (`NEUPOD_RTOS_HEAP_BYTES`) | 112 KB | **80 KB** |
 | LVGL pool (`NEUPOD_LVGL_POOL_BYTES`) | 96 KB | **72 KB** (the host tour still passes) |
 | codec arena | 116 KB | 116 KB |
-| settings store (items, parse buffers) | 0 | about 5.3 KB |
+| settings store (items, parse buffers) | 0 | about 5.3 KB at the end of stage 1 (now about 12.7 KB: see [Wi-Fi](wifi.md)) |
 | BTstack (HCI buffers, pools) and the Bluetooth HAL | 0 | about 6.6 KB |
 | **bss total** | **481,588 B** | **436,480 B** (45,108 B freed) |
 | flash image (`text`) | 1,060,732 B | 1,120,532 B (+59,800 B: BTstack classic, transport, settings, UI) |
@@ -153,6 +174,8 @@ BTstack licence, before anything is sold or distributed. The cyw43-driver has th
 grant for use with its chips).
 
 ## Stage 2 design notes (not built)
+
+* **Verify while Wi-Fi toggles:** the Wi-Fi service switches the station on and off (playback pause, idle timeout) on the same radio worker that runs BTstack. Before relying on it, check on the board that an A2DP stream stays stable (no dropouts, no HCI resets) when Wi-Fi comes and goes, and with "Wi-Fi while playing" On.
 
 * **Pairing and saved device**: SSP "just works", discoverable only while the Pair action runs; link keys through the TLV store above; one remembered
   headset to begin with.
@@ -176,9 +199,9 @@ grant for use with its chips).
 1. Flash `neupod.elf` with the Pico 2 W, open the UART. Watch for the three `bt:` lines above after the splash, `boot: bluetooth ok` and `boot: wifi DEGRADED`.
    The splash should show Bluetooth solid and Wi-Fi with a cross (that is intended in stage 1).
 2. Audio must be unaffected: play a file while the radio comes up; the `audio:` line must keep `underruns=0` and the `core1_stack_free=` value must not drop.
-3. Settings > Bluetooth: Status "On", the same address as the UART, **Scan for devices** with a headset in pairing mode (AirPods Pro 3: case open, button held until the light flashes white): it
+3. Settings > Bluetooth: Status "On", the same address as the UART, **Scan for devices** (opens Devices and scans at once) with a headset in pairing mode (AirPods Pro 3: case open, button held until the light flashes white): it
    appears with a speaker symbol, a name after a few seconds and a signal value; other devices around you are greyed out. Select on it shows "Pairing: not yet". Menu leaves and stops the scan.
 4. Change the backlight and Click feedback, switch the board off and on: both should come back. Change the volume to a quiet level and check it returns; set it loud and
-   check it comes back at -30 dB. A `/.neupod/settings.bin` (about 100 bytes) should be on the card; no other file or folder on the card may have changed.
+   check it comes back at -30 dB. A `/.neupod/settings.a` (and later `.b`) should be on the card; no other file or folder on the card may have changed.
 5. Boot once without a card: the UART shows `settings: no usable card ...` and the screens still work.
 6. Read the monitor's `heap: free=... min_free=...` and `lvgl_mem=.../...` lines (and `chk_radio` / the worker's stack figure) after using every menu and one scan, and keep the minimums.

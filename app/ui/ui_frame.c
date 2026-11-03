@@ -12,6 +12,7 @@
 #include "battery_store.h"
 #include "capabilities.h"
 #include "hal_display.h"
+#include "hal_radio.h"
 #include "haptic_service.h"
 #include "player.h"
 #include "settings_store.h"
@@ -49,6 +50,9 @@ static lv_obj_t *g_content;
 static lv_obj_t *g_title;
 static lv_obj_t *g_play;
 static lv_obj_t *g_batt;
+static lv_obj_t *g_wifi;
+static hal_wifi_status g_wifi_shown = (hal_wifi_status)99;
+static uint32_t g_wifi_col = UI_L_DIM;
 static ui_stack_t g_stack;
 static ui_accel_t g_accel;
 static int g_shown_pct = -3;
@@ -88,6 +92,8 @@ void ui_frame_init(lv_obj_t *scr) {
 
     g_play = ui_label(bar, play_glyph(), UI_L_DIM);
     lv_obj_align(g_play, LV_ALIGN_LEFT_MID, 8, 0);
+    g_wifi = ui_label(bar, "", UI_L_DIM); /* Wi-Fi state: hidden when the station is off, dim while joining, green when up */
+    lv_obj_align(g_wifi, LV_ALIGN_LEFT_MID, 30, 0);
 
     g_batt = ui_label(bar, LV_SYMBOL_BATTERY_EMPTY " --", UI_L_DIM);
     lv_obj_align(g_batt, LV_ALIGN_RIGHT_MID, -8, 0);
@@ -118,6 +124,24 @@ ui_screen_t *ui_screen_new(size_t size, const char *title) {
     return s;
 }
 
+void ui_frame_suspend_top(void) {
+    ui_screen_t *t = ui_stack_top(&g_stack);
+    if (t != NULL && !t->suspended && t->suspend != NULL) {
+        t->suspend(t);
+        t->suspended = true;
+    }
+}
+
+void ui_frame_resume_top(void) {
+    ui_screen_t *t = ui_stack_top(&g_stack);
+    if (t != NULL && t->suspended && t->resume != NULL) {
+        t->resume(t);
+    }
+    if (t != NULL) {
+        t->suspended = false;
+    }
+}
+
 void ui_frame_push(ui_screen_t *s) {
     if (s == NULL) {
         return;
@@ -133,9 +157,14 @@ void ui_frame_push(ui_screen_t *s) {
     }
     if (cur != NULL) {
         lv_obj_set_hidden(cur->root, true);
+        if (!cur->suspended && cur->suspend != NULL) {
+            cur->suspend(cur);
+            cur->suspended = true;
+        }
     }
     lv_obj_set_hidden(s->root, false);
     set_title(s->title);
+    ui_log_screen(s->title, "push", NULL);
 }
 
 void ui_frame_pop(void) {
@@ -143,17 +172,29 @@ void ui_frame_pop(void) {
         return; // the home screen never goes away
     }
     ui_screen_t *s = ui_stack_pop(&g_stack);
+    char popped[48]; /* the title may point into the screen being freed */
+    snprintf(popped, sizeof popped, "%s", s->title != NULL ? s->title : "");
     if (s->destroy != NULL) {
         s->destroy(s);
     }
     lv_obj_delete(s->root);
     lv_free(s);
     ui_screen_t *now = ui_stack_top(&g_stack);
+    if (now->suspended && now->resume != NULL) {
+        now->resume(now);
+    }
+    now->suspended = false;
     lv_obj_set_hidden(now->root, false);
     set_title(now->title);
+    ui_log_screen(popped, "pop", now->title);
 }
 
 int ui_frame_depth(void) { return g_stack.depth; }
+
+const char *ui_frame_top_title(void) {
+    ui_screen_t *t = ui_stack_top(&g_stack);
+    return t != NULL && t->title != NULL ? t->title : "";
+}
 
 void ui_frame_input(const input_event_t *ev, uint32_t now_ms) {
     ui_screen_t *top = ui_stack_top(&g_stack);
@@ -211,9 +252,22 @@ static void update_battery(void) {
     g_batt_col = col;
 }
 
+static void update_wifi(void) {
+    hal_wifi_status st = hal_wifi_state();
+    if (st == g_wifi_shown) {
+        return;
+    }
+    g_wifi_shown = st;
+    uint32_t col = st == HAL_WIFI_UP ? UI_L_OK : st == HAL_WIFI_FAILED || st == HAL_WIFI_BAD_AUTH ? UI_L_ERR : UI_L_DIM;
+    lv_label_set_text(g_wifi, st == HAL_WIFI_DOWN ? "" : LV_SYMBOL_WIFI);
+    ui_label_recolour(g_wifi, g_wifi_col, col);
+    g_wifi_col = col;
+}
+
 void ui_frame_tick(uint32_t now_ms) {
     (void)now_ms;
     sync_from_settings();
+    update_wifi();
     update_battery();
     ui_screen_t *top = ui_stack_top(&g_stack);
     if (top != NULL && top->on_tick != NULL) {

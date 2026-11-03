@@ -28,6 +28,13 @@ target_link_libraries(test_bt_sim hal_host)
 add_test(NAME bt_sim COMMAND test_bt_sim)
 set_source_files_properties(test_bt_sim.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
+if(NEUPOD_HAVE_MBEDTLS)
+  add_executable(test_secret test_secret.c)
+  target_link_libraries(test_secret neupod_settings hal_host)
+  add_test(NAME secret COMMAND test_secret)
+  set_source_files_properties(test_secret.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+endif()
+
 add_executable(test_settings test_settings.c)
 target_link_libraries(test_settings neupod_settings hal_host) # hal_host last: nfs and hal_storage
 add_test(NAME settings COMMAND test_settings)
@@ -105,6 +112,22 @@ set_tests_properties(runtime_smoke PROPERTIES
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   TIMEOUT 120)
 
+add_test(NAME input_tour
+  COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --tour-input --snapshots ${CMAKE_BINARY_DIR}/snapshots_input)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_input)
+set_tests_properties(input_tour PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_fixture;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  TIMEOUT 120)
+
+add_test(NAME wifi_tour
+  COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --tour-wifi --snapshots ${CMAKE_BINARY_DIR}/snapshots_wifi)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_wifi)
+set_tests_properties(wifi_tour PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_wifi;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  TIMEOUT 120)
+
 # The bare-metal audio core (core 1) may not use the RTOS, stdio, malloc or SDK blocking primitives.
 add_test(NAME audio_core_rules
   COMMAND ${CMAKE_COMMAND} -DSRC_DIR=${CMAKE_SOURCE_DIR} -P ${CMAKE_SOURCE_DIR}/cmake/check_core1_rules.cmake)
@@ -120,6 +143,16 @@ target_include_directories(test_ui_logic PRIVATE ${CMAKE_SOURCE_DIR}/app/ui)
 target_link_libraries(test_ui_logic neupod_rt_core)
 add_test(NAME ui_logic COMMAND test_ui_logic)
 set_source_files_properties(test_ui_logic.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+add_executable(test_wheel_input test_wheel_input.c)
+target_link_libraries(test_wheel_input neupod_rt_core)
+add_test(NAME wheel_input COMMAND test_wheel_input)
+set_source_files_properties(test_wheel_input.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+add_executable(test_wifi_logic test_wifi_logic.c)
+target_link_libraries(test_wifi_logic neupod_rt_core hal_host)
+add_test(NAME wifi_logic COMMAND test_wifi_logic)
+set_source_files_properties(test_wifi_logic.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
 # Audio maths (conversion, volume, sine/tone/scale generators) and the WAV parser.
 add_executable(test_audio test_audio.c)

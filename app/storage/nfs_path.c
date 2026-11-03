@@ -109,3 +109,5 @@ bool nfs_write_scope_allows(const char *path) {
     // Component-wise: "/.neupod2" is not inside "/.neupod".
     return strncmp(norm, g_scope, n) == 0 && (norm[n] == '\0' || norm[n] == '/');
 }
+
+bool nfs_dirent_hidden(const nfs_dirent_t *e) { return e->name[0] == '.' || e->hidden; }

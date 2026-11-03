@@ -10,6 +10,7 @@
 #include "hal_system.h"
 #include "input_events.h"
 #include "os.h"
+#include "sys_clock.h"
 #include "ui_internal.h"
 
 /* ---- generic menu screen: a list of entries, Select pushes the entry's screen ----------------------- */
@@ -182,7 +183,7 @@ ui_screen_t *ui_screen_music_create(void) {
 
 /* ---- Extras ---------------------------------------------------------------------------------------- */
 
-static const menu_entry_t k_extras[] = {{"Files", ui_screen_files_create}, {"Test tone", ui_screen_testtone_create}};
+static const menu_entry_t k_extras[] = {{"Files", ui_screen_files_create}, {"Test tone", ui_screen_testtone_create}, {"Input widgets", ui_screen_inputdemo_create}, {"Network test", ui_screen_nettest_create}};
 
 ui_screen_t *ui_screen_extras_create(void) {
     menu_screen_t *m = menu_new("Extras", k_extras, (int32_t)(sizeof k_extras / sizeof k_extras[0]), UI_W);
@@ -212,7 +213,15 @@ static void home_tick(ui_screen_t *s) {
     last_ms = now;
     uint32_t sec = now / 1000u;
     char buf[40];
-    snprintf(buf, sizeof buf, "Up %u:%02u:%02u", (unsigned)(sec / 3600u), (unsigned)(sec / 60u % 60u), (unsigned)(sec % 60u));
+    clock_tm_t lt;
+    if (clock_local_now(&lt)) { // a real clock once NTP (or a manual set) has told us the time
+        static const char *const wd[7] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+        static const char *const mn[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+        snprintf(buf, sizeof buf, "%02d:%02d  %s %d %s", (int)lt.h, (int)lt.mi, wd[lt.wday % 7], (int)lt.d, mn[(lt.mo + 11) % 12]);
+    } else {
+        snprintf(buf, sizeof buf, "--:--");
+    }
+    (void)sec;
     if (strcmp(lv_label_get_text(m->uptime), buf) != 0) {
         lv_label_set_text(m->uptime, buf);
     }

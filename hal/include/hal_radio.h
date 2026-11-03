@@ -14,30 +14,89 @@
 #ifndef NEUPOD_HAL_RADIO_H
 #define NEUPOD_HAL_RADIO_H
 
+#include <stddef.h>
+
 #include "hal_types.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/* ---- Wi-Fi (station mode) ---------------------------------------------------------------------------------- */
+
+typedef enum { HAL_WIFI_SEC_OPEN, HAL_WIFI_SEC_WPA2, HAL_WIFI_SEC_WPA3, HAL_WIFI_SEC_WPA2_WPA3, HAL_WIFI_SEC_OTHER } hal_wifi_sec_t;
+
+/** Copy @p src to @p dst (capacity @p n) for a log line: anything that is not printable ASCII (control bytes, UTF-8 bytes, DEL)
+ * becomes '?', so a hostile network or device name cannot inject terminal escapes or fake log lines. */
+static inline void hal_log_text(char *dst, size_t n, const char *src) {
+    size_t i = 0;
+    for (; n > 0 && i + 1 < n && src[i] != '\0'; i++) {
+        unsigned char c = (unsigned char)src[i];
+        dst[i] = c >= 0x20u && c < 0x7Fu ? (char)c : '?';
+    }
+    if (n > 0) {
+        dst[i] = '\0';
+    }
+}
+
+#define HAL_WIFI_SSID_MAX 32u
+#define HAL_WIFI_PSK_MAX 63u
+
+typedef struct {
+    char ssid[HAL_WIFI_SSID_MAX + 1];
+    uint8_t bssid[6];
+    int8_t rssi;
+    uint8_t channel;
+    hal_wifi_sec_t sec;
+} hal_wifi_ap_t;
+
 typedef enum {
-    HAL_WIFI_DOWN = 0,
-    HAL_WIFI_CONNECTING,
-    HAL_WIFI_UP,
-    HAL_WIFI_FAILED,
+    HAL_WIFI_DOWN = 0, /**< radio / station mode off */
+    HAL_WIFI_IDLE,     /**< on, not joined */
+    HAL_WIFI_JOINING,
+    HAL_WIFI_NO_IP,    /**< joined, waiting for DHCP */
+    HAL_WIFI_UP,       /**< joined with an address */
+    HAL_WIFI_FAILED,   /**< the last join failed (network not found, link error) */
+    HAL_WIFI_BAD_AUTH, /**< wrong password */
 } hal_wifi_status;
 
-/** Power up the radio(s). */
-hal_status_t hal_radio_init(void);
+/** Start the station interface (radio driver must be up). Cheap if already on. */
+hal_status_t hal_wifi_start(void);
+/** Leave any network and switch the station interface off (radio idle). */
+void hal_wifi_stop(void);
+hal_wifi_status hal_wifi_state(void);
 
-/** Start a station-mode connection; poll hal_radio_wifi_status() for the result. */
-hal_status_t hal_radio_wifi_connect(const char *ssid, const char *psk);
+/** Start a scan; results are fetched with hal_wifi_scan_next() until it returns false and *done is set. */
+hal_status_t hal_wifi_scan_start(void);
+bool hal_wifi_scan_next(hal_wifi_ap_t *out, bool *done);
 
-/** Current Wi-Fi link state. */
-hal_wifi_status hal_radio_wifi_status(void);
+/** Begin joining (WPA2/WPA3 personal, or open when @p psk is NULL or empty); poll hal_wifi_state(). */
+hal_status_t hal_wifi_join(const char *ssid, const char *psk);
+void hal_wifi_leave(void);
 
-/** Disconnect and power down Wi-Fi. */
-void hal_radio_wifi_disconnect(void);
+int hal_wifi_rssi(void);                 /**< dBm of the current link, 0 if unknown */
+bool hal_wifi_ip(char out[16]);          /**< dotted address when UP */
+bool hal_wifi_ssid(char out[33]);        /**< the joined network */
+
+/** SNTP: ask @p server for the time (repeats about hourly); @p cb gets the Unix time on every answer. Runs on the network thread. */
+typedef void (*hal_wifi_time_fn)(uint32_t unix_s);
+hal_status_t hal_wifi_sntp_start(const char *server, hal_wifi_time_fn cb);
+void hal_wifi_sntp_stop(void);
+
+/**
+ * HTTP/1.1 GET without TLS: @p on_data receives the body in pieces on the network thread (must not block; copy and return);
+ * @p on_done gets the outcome (0 = ok, else an error number) and the total body bytes. Diagnostics (throughput test).
+ */
+typedef void (*hal_http_data_fn)(void *ctx, const uint8_t *data, uint32_t len);
+typedef void (*hal_http_done_fn)(void *ctx, int err, uint32_t total);
+hal_status_t hal_wifi_http_get(const char *host, uint16_t port, const char *path, hal_http_data_fn on_data, hal_http_done_fn on_done, void *ctx);
+void hal_wifi_http_abort(void);
+
+/** lwIP memory and pbuf high-water marks for the monitor line: used/max of the heap, the pbuf pool, and total lwIP memp errors. */
+typedef struct { uint32_t mem_used, mem_max, mem_size, pbuf_used, pbuf_max, pbuf_size, errors; } hal_wifi_mem_t;
+void hal_wifi_mem(hal_wifi_mem_t *out);
+/** Call about every 200 ms: hardware: steps a join through the security modes (WPA2, WPA2/3, WPA3); host simulator: advances scans, joins and time. */
+void hal_wifi_poll(void);
 
 /**
  * Connect to an A2DP sink by Bluetooth address (6 bytes, MSB first).

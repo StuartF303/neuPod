@@ -71,4 +71,24 @@ void hal_delay_ms(uint32_t ms) {
 
 void hal_status_led(bool on) { (void)on; }
 
+static uint8_t g_chip_id[8] = {0x4E, 0x45, 0x55, 0x50, 0x4F, 0x44, 0x48, 0x31}; // a fixed host test ID ("NEUPODH1")
+
+bool hal_chip_id(uint8_t id[8]) {
+    memcpy(id, g_chip_id, 8);
+    return true;
+}
+
+void hal_host_set_chip_id(const uint8_t id[8]) { memcpy(g_chip_id, id, 8); }
+
+void hal_random(void *buf, size_t n) {
+    FILE *f = fopen("/dev/urandom", "rb");
+    size_t got = f != NULL ? fread(buf, 1, n, f) : 0;
+    if (f != NULL) {
+        fclose(f);
+    }
+    for (uint8_t *p = buf; got < n; got++) { // no /dev/urandom: not secure, host only
+        p[got] = (uint8_t)rand();
+    }
+}
+
 const char *hal_platform_name(void) { return "host"; }

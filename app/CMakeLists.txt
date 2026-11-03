@@ -30,11 +30,44 @@ target_include_directories(neupod_storage_tests PUBLIC ${NEUPOD_APP_DIR}/include
                                                        ${NEUPOD_APP_DIR}/../hal/include)
 target_compile_features(neupod_storage_tests PUBLIC c_std_11)
 
+# Secrets at rest (crypto_secret.h): AES-256-GCM + HKDF-SHA256 from the Pico SDK's mbed TLS (Apache-2.0 option of its dual licence).
+# Only seven library files are compiled, with our own tiny config (app/crypto/neupod_mbedtls_config.h). On the host the SDK
+# may be absent (CI host job): then a clearly named stub is built and the crypto tests are skipped.
+if(DEFINED PICO_SDK_PATH)
+  set(NEUPOD_MBEDTLS_DIR ${PICO_SDK_PATH}/lib/mbedtls)
+else()
+  set(NEUPOD_MBEDTLS_DIR $ENV{PICO_SDK_PATH}/lib/mbedtls)
+endif()
+if(EXISTS ${NEUPOD_MBEDTLS_DIR}/library/gcm.c)
+  set(NEUPOD_HAVE_MBEDTLS ON PARENT_SCOPE)
+  set(NEUPOD_HAVE_MBEDTLS ON)
+  set(NEUPOD_MBEDTLS_FILES aes gcm cipher cipher_wrap sha256 md hkdf platform platform_util constant_time error)
+  set(NEUPOD_MBEDTLS_SRC "")
+  foreach(F ${NEUPOD_MBEDTLS_FILES})
+    list(APPEND NEUPOD_MBEDTLS_SRC ${NEUPOD_MBEDTLS_DIR}/library/${F}.c)
+  endforeach()
+  add_library(neupod_mbedtls STATIC ${NEUPOD_MBEDTLS_SRC})
+  target_include_directories(neupod_mbedtls PUBLIC ${NEUPOD_MBEDTLS_DIR}/include)
+  target_include_directories(neupod_mbedtls PRIVATE ${NEUPOD_MBEDTLS_DIR}/library)
+  target_compile_definitions(neupod_mbedtls PUBLIC MBEDTLS_CONFIG_FILE="${NEUPOD_APP_DIR}/crypto/neupod_mbedtls_config.h")
+  target_compile_options(neupod_mbedtls PRIVATE -w)
+  add_library(neupod_crypto STATIC ${NEUPOD_APP_DIR}/crypto/crypto_secret.c ${NEUPOD_APP_DIR}/crypto/key_provider_chipid.c)
+  target_include_directories(neupod_crypto PUBLIC ${NEUPOD_APP_DIR}/include ${NEUPOD_APP_DIR}/../hal/include)
+  target_link_libraries(neupod_crypto PUBLIC neupod_mbedtls)
+  set_source_files_properties(${NEUPOD_APP_DIR}/crypto/crypto_secret.c ${NEUPOD_APP_DIR}/crypto/key_provider_chipid.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+elseif(NEUPOD_REQUIRE_CRYPTO)
+  message(FATAL_ERROR "mbed TLS not found at ${NEUPOD_MBEDTLS_DIR} and NEUPOD_REQUIRE_CRYPTO=ON (CI sets it): set PICO_SDK_PATH to a Pico SDK with lib/mbedtls")
+else()
+  message(WARNING "mbed TLS not found at ${NEUPOD_MBEDTLS_DIR} (set PICO_SDK_PATH): building the crypto STUB; secrets are NOT encrypted in this build")
+  add_library(neupod_crypto STATIC ${NEUPOD_APP_DIR}/crypto/crypto_stub.c)
+  target_include_directories(neupod_crypto PUBLIC ${NEUPOD_APP_DIR}/include ${NEUPOD_APP_DIR}/../hal/include)
+endif()
+
 # Settings store: key/value on the SD card (settings_store.h). Uses nfs (neupod_storage_tests holds nfs_path.c) and hal_storage.
 add_library(neupod_settings STATIC ${NEUPOD_SETTINGS_SOURCES})
 target_include_directories(neupod_settings PUBLIC ${NEUPOD_APP_DIR}/include ${NEUPOD_APP_DIR}/../hal/include)
 target_compile_features(neupod_settings PUBLIC c_std_11)
-target_link_libraries(neupod_settings PUBLIC neupod_storage_tests)
+target_link_libraries(neupod_settings PUBLIC neupod_storage_tests neupod_crypto)
 
 # MAX17048 / DRV2605L drivers: need hal_i2c + hal_system only.
 add_library(neupod_drivers STATIC ${NEUPOD_DRIVER_SOURCES})

@@ -173,6 +173,7 @@ Observations and open items:
 
 | Symptom | Likely cause / action |
 |---------|-----------------------|
+| Card ignores the first identification after a debugger reset | A reset mid-transfer can leave the card in a data state; a power cycle always fixes it. `hal_storage_init()` makes up to three attempts; before the 2nd and 3rd it sends four CMD12 (stop transmission: no data, harmless to an idle card, ends an open read or write-multiple) at the 400 kHz identification clock, reads each response, waits 50 ms and logs `storage: card did not identify, wake-up attempt N`. Nothing is written. A missing card still fails in well under a second (about 0.65 s in all, 0.5 s more than with a single attempt); it is called once at boot, never in a loop |
 | Test 1: NO_CARD or init timeout | Card not fully inserted, 3.3 V missing, CLK/CMD/DAT wiring (GP2-GP7), no pull-up on CMD, card not powered |
 | CRC errors, or tests pass at 12.5 MHz but fail higher | Clock too fast for the wiring: lower the clock, shorten wires, check pull-ups on CMD and DAT0-3 |
 | Test 2: NO_FILESYSTEM | No FAT/exFAT volume (blank card, unusual partition layout), or the file system configuration is wrong (sector size not 512, exFAT disabled) |

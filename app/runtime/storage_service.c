@@ -8,6 +8,7 @@
 #include "os.h"
 #include "player.h"
 #include "settings_service.h"
+#include "settings_store.h"
 #include "storage_service.h"
 #include "meta.h"
 #include "wav.h"
@@ -116,8 +117,8 @@ static void list_dir(const storage_req_t *rq, storage_result_t *res) {
             if ((++scanned & 31u) == 0) {
                 os_delay_ms(1); // let the UI and input run during a big directory
             }
-            if (e.name[0] == '.' || e.is_dir != (pass == 0)) {
-                continue; // hidden entries; and the other pass's kind
+            if (nfs_dirent_hidden(&e) || e.is_dir != (pass == 0)) {
+                continue; // hidden entries (dot names, FAT hidden / system); and the other pass's kind
             }
             if (count >= FILES_MAX_ENTRIES) {
                 truncated = true;
@@ -524,9 +525,15 @@ static void stream_pump(void) {
 }
 
 #define SETTINGS_POLL_MS 500u
-// A save is a few KB of SD writes: while a file streams, do it only when the audio data ring is at least half full, so
-// the card is never busy when the audio core is about to run dry (the ring is 32 KB: half is 93 ms of 16-bit/44.1 kHz).
-#define SETTINGS_SAVE_MAX_RING_SPACE (16u * 1024u)
+// A settings save is SD writes (a FAT update and two data sectors: typically a few ms, but an SD card may stall far longer). It must
+// never starve the audio ring, so it is NOT done while audio plays: changes wait for pause, stop, the end of the track or an idle
+// moment, and are then written at once (the 1.5 s debounce still applies). The cost: a volume change made during a long track is
+// lost if the power fails before the next pause/stop. While paused the ring is full and nothing is consuming it, so the write cannot hurt.
+static bool settings_quiet_now(void) {
+    player_info_t pi;
+    player_get(&pi);
+    return pi.state != PLAYER_PLAYING && pi.state != PLAYER_OPENING && pi.state != PLAYER_VERIFYING;
+}
 
 static void settings_poll(void) {
     static uint32_t last_ms;
@@ -535,7 +542,11 @@ static void settings_poll(void) {
         return; // while streaming this runs every millisecond: look at most every 250 ms
     }
     last_ms = now;
-    settings_service_poll(!g_stream.active || audio_data_space() <= SETTINGS_SAVE_MAX_RING_SPACE);
+    if (!settings_dirty()) {
+        settings_service_poll(true); // keeps the service's bookkeeping current; nothing to write
+        return;
+    }
+    settings_service_poll(settings_quiet_now());
 }
 
 void storage_task(void *arg) {

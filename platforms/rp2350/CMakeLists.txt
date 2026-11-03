@@ -42,9 +42,11 @@ target_link_libraries(hal_rp2350_core PUBLIC
   hardware_clocks
   hardware_i2c
   pico_multicore
+  pico_rand
+  pico_unique_id
 )
 set_source_files_properties(hal/hal_core.c hal/hal_i2c.c i2c_test_main.c ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
-  hal/hal_system.c hal/hal_radio_bt.c hal/hal_display.c hal/hal_console.c hal/hal_input.c hal/hal_audio.c hal/hal_audio_null.c main.c
+  hal/hal_system.c hal/hal_radio_bt.c hal/hal_wifi.c hal/hal_display.c hal/hal_console.c hal/hal_input.c hal/hal_audio.c hal/hal_audio_null.c main.c
   display_test_main.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 pico_generate_pio_header(hal_rp2350_core ${CMAKE_CURRENT_LIST_DIR}/hal/clickwheel_rx.pio)
 if(NEUPOD_AUDIO_SINK STREQUAL "i2s")
@@ -57,7 +59,7 @@ target_link_libraries(hal_rp2350 PUBLIC hal_rp2350_core pico_cyw43_arch_none)
 
 # FreeRTOS (single-core, core 0): pico_cyw43_arch_sys_freertos (via neupod_freertos). Radio bring-up
 # waits for the scheduler (hal_system_late_init).
-add_library(hal_rp2350_rtos STATIC hal/hal_system.c hal/hal_radio_bt.c)
+add_library(hal_rp2350_rtos STATIC hal/hal_system.c hal/hal_radio_bt.c hal/hal_wifi.c)
 target_compile_definitions(hal_rp2350_rtos PRIVATE NEUPOD_RTOS=1)
 target_link_libraries(hal_rp2350_rtos PUBLIC hal_rp2350_core neupod_freertos)
 
@@ -74,6 +76,8 @@ target_link_libraries(hal_rp2350_rtos PUBLIC
   pico_btstack_hci_transport_cyw43
   pico_btstack_run_loop_async_context
   pico_btstack_sbc_encoder
+  pico_lwip_sntp
+  pico_lwip_http
 )
 
 add_executable(neupod main.c)
@@ -168,3 +172,6 @@ target_compile_definitions(storage_test PRIVATE PICO_STACK_SIZE=0x1000)
 pico_enable_stdio_uart(storage_test 1)
 pico_enable_stdio_usb(storage_test 0)
 pico_add_extra_outputs(storage_test)
+
+# The crypto library needs hal_chip_id() / hal_random().
+target_link_libraries(neupod_crypto PUBLIC hal_rp2350_rtos)
