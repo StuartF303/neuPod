@@ -49,7 +49,24 @@ static bool read_box(pctx_t *p, uint64_t pos, uint64_t limit, box_t *b) {
     return true;
 }
 
+// covr: one or more 'data' boxes, each an image (type code 13 = JPEG, 14 = PNG); position only, never read (see art_ref_t).
+static void covr_item(pctx_t *p, const box_t *it) {
+    uint64_t pos = it->body;
+    box_t d;
+    for (int guard = 0; guard < 8 && read_box(p, pos, it->end, &d); guard++) {
+        pos = d.end;
+        if (d.type != FOURCC('d', 'a', 't', 'a') || d.end - d.body <= 8 || d.end - d.body - 8 > 0xFFFFFFFFu) continue;
+        art_ref_t c = {.offset = d.body + 8, .length = (uint32_t)(d.end - d.body - 8), .type = 3};
+        c.kind = (uint8_t)meta_art_sniff(p->rd, p->ctx, c.offset, c.length);
+        meta_art_offer(&p->out->tags.art, &c);
+    }
+}
+
 static void ilst_item(pctx_t *p, const box_t *it) {
+    if (it->type == FOURCC('c', 'o', 'v', 'r')) {
+        covr_item(p, it);
+        return;
+    }
     box_t d;
     if (!read_box(p, it->body, it->end, &d) || d.type != FOURCC('d', 'a', 't', 'a') || d.end - d.body < 8) return;
     uint32_t n = (uint32_t)(d.end - d.body - 8);

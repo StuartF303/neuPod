@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "art_service.h"
 #include "os.h"
 #include "player.h"
 #include "ui_internal.h"
@@ -158,6 +159,10 @@ ui_screen_t *ui_screen_testtone_create(void) {
 typedef struct {
     ui_screen_t base;
     lv_obj_t *title, *artist, *album, *badge, *state, *elapsed, *remain, *icon, *vol, *prog_fill, *vol_fill;
+    lv_obj_t *art_img, *art_note; /* album art (hidden unless the decoder has a picture) and the note shown otherwise */
+    lv_image_dsc_t art_dsc;       /* points at the art service's thumbnail; nothing is copied */
+    uint32_t art_gen;
+    bool art_shown;
     player_info_t info;
     uint32_t last_ms;
     bool have;
@@ -166,6 +171,39 @@ typedef struct {
 
 static void mmss(char *out, size_t n, const char *prefix, uint32_t s) {
     snprintf(out, n, "%s%u:%02u", prefix, (unsigned)(s / 60u), (unsigned)(s % 60u));
+}
+
+/* Show the thumbnail while the art service has one for the playing track, the note otherwise. The 64 px thumbnail is scaled up by LVGL to
+ * fit the 112 px box (aspect kept, the rest of the box stays the dark background). The ack tells the decoder that this screen no longer
+ * points at the old pixels, so it may overwrite them. */
+static void np_art(np_t *p, const player_info_t *n) {
+    art_view_t v;
+    art_view_get(&v);
+    bool live = n->src == PLAYER_SRC_FILE && (n->state == PLAYER_PLAYING || n->state == PLAYER_PAUSED || n->state == PLAYER_ENDED);
+    if (live && v.state == ART_VIEW_READY && v.w != 0 && v.h != 0) {
+        if (!p->art_shown || p->art_gen != v.gen) {
+            memset(&p->art_dsc, 0, sizeof p->art_dsc);
+            p->art_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
+            p->art_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
+            p->art_dsc.header.w = v.w;
+            p->art_dsc.header.h = v.h;
+            p->art_dsc.header.stride = (uint32_t)v.w * 2u;
+            p->art_dsc.data_size = (uint32_t)v.w * v.h * 2u;
+            p->art_dsc.data = (const uint8_t *)v.px;
+            lv_image_set_src(p->art_img, &p->art_dsc);
+            lv_obj_set_size(p->art_img, 112, 112);
+            lv_obj_invalidate(p->art_img);
+            lv_obj_set_hidden(p->art_img, false);
+            lv_obj_set_hidden(p->art_note, true);
+            p->art_gen = v.gen;
+            p->art_shown = true;
+        }
+    } else if (p->art_shown) {
+        lv_obj_set_hidden(p->art_img, true);
+        lv_obj_set_hidden(p->art_note, false);
+        p->art_shown = false;
+    }
+    art_view_ack(v.gen);
 }
 
 static void np_update(np_t *p) {
@@ -206,6 +244,7 @@ static void np_update(np_t *p) {
     case PLAYER_VERIFYING: st = "Verifying MD5 (no sound)..."; break;
     case PLAYER_VERIFIED: st = n.verify < 5 ? verdict[n.verify] : ""; break;
     }
+    np_art(p, &n);
     set_text(p->state, st);
     lv_obj_set_style_text_color(p->state, lv_color_hex(n.state == PLAYER_ERROR || (n.state == PLAYER_VERIFIED && n.verify == AUDIO_VERIFY_MISMATCH) ? UI_L_ERR : n.state == PLAYER_VERIFIED && n.verify == AUDIO_VERIFY_OK ? UI_L_OK : UI_L_DIM), 0);
     set_text(p->icon, n.state == PLAYER_PLAYING ? LV_SYMBOL_PLAY : n.state == PLAYER_PAUSED ? LV_SYMBOL_PAUSE : "");
@@ -282,7 +321,17 @@ ui_screen_t *ui_screen_nowplaying_create(void) {
         return NULL;
     }
     lv_obj_t *r = p->base.root;
-    ui_artwork(r, 14, 14, 112);
+    lv_obj_t *art = ui_artwork(r, 14, 14, 112);
+    lv_obj_clean(art); /* the ring of the shared placeholder is replaced by a note */
+    p->art_img = lv_image_create(art);
+    lv_obj_set_size(p->art_img, 112, 112);
+    lv_image_set_inner_align(p->art_img, LV_IMAGE_ALIGN_CONTAIN);
+    lv_obj_center(p->art_img);
+    lv_obj_set_hidden(p->art_img, true);
+    p->art_note = ui_label(art, LV_SYMBOL_AUDIO, 0xFFFFFF);
+    lv_obj_set_style_text_font(p->art_note, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_opa(p->art_note, LV_OPA_50, 0);
+    lv_obj_center(p->art_note);
     p->title = ui_label(r, "", UI_L_TEXT);
     lv_obj_set_style_text_font(p->title, &lv_font_montserrat_20, 0);
     lv_obj_set_size(p->title, 166, 26);

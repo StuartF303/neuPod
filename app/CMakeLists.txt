@@ -90,7 +90,7 @@ set_source_files_properties(${NEUPOD_CORE_SOURCES} ${NEUPOD_GFX_SOURCES} ${NEUPO
 # --- Runtime: FreeRTOS tasks, LVGL UI, boot checks, audio timing stub ------------------------------
 # Logic with no OS dependency (ring buffer, input event decoder) in its own lib so tests link it alone.
 add_library(neupod_rt_core STATIC ${NEUPOD_RT_CORE_SOURCES})
-target_include_directories(neupod_rt_core PUBLIC ${NEUPOD_APP_DIR}/include ${NEUPOD_APP_DIR}/../hal/include PRIVATE ${NEUPOD_APP_DIR}/ui)
+target_include_directories(neupod_rt_core PUBLIC ${NEUPOD_APP_DIR}/include ${NEUPOD_APP_DIR}/../hal/include PRIVATE ${NEUPOD_APP_DIR}/ui ${NEUPOD_APP_DIR}/third_party/tjpgd)
 target_compile_features(neupod_rt_core PUBLIC c_std_11)
 
 # LVGL v9 (submodule lib/lvgl, MIT): every .c under src/ (files for disabled features compile to
@@ -124,5 +124,6 @@ target_compile_features(neupod_runtime PUBLIC c_std_11)
 target_link_libraries(neupod_runtime PUBLIC neupod_rt_core neupod_drivers neupod_settings neupod_freertos lvgl)
 set_source_files_properties(${NEUPOD_RT_CORE_SOURCES} ${NEUPOD_RUNTIME_SOURCES} ${NEUPOD_AUDIO_CORE_SOURCES} ${NEUPOD_UI_SOURCES}
   PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+set_source_files_properties(${NEUPOD_APP_DIR}/third_party/tjpgd/tjpgd.c PROPERTIES COMPILE_OPTIONS "-w")
 # codec.c sees the ALAC headers, whose FourCC enum constants are multi-character literals.
 set_source_files_properties(${NEUPOD_APP_DIR}/audio/codec.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS};-Wno-multichar")

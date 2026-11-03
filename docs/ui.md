@@ -37,7 +37,7 @@ Click-wheel vocabulary used below: **Menu** (top button, goes back), **Select** 
 
 ![Now playing](assets/ui/now-playing.svg)
 
-- Shows artwork, title, artist, album, the format badge (e.g. FLAC 24/96, wired, bit-perfect)
+- Shows artwork (see [Now Playing art](#now-playing-art)), title, artist, album, the format badge (e.g. FLAC 24/96, wired, bit-perfect)
   and the progress bar with elapsed and remaining time.
 - Scroll adjusts **volume** by default; a first **Select** switches the scroll to **seek** (bar
   highlights), a second Select returns to volume. Pressing Select again shows rating / shuffle /
@@ -94,6 +94,31 @@ when many counts arrive within 150 ms; the constants `UI_COUNTS_PER_STEP`, `UI_A
 | Extras, Files | **Read-only** browser of the card: folders first then files, alphabetical, hidden entries skipped (a name starting with a dot, or the FAT hidden / system attribute: `System Volume Information`, `$RECYCLE.BIN`; the host build has no such attribute, so only the dot rule applies there), size on the right, a chevron on folders. Select opens a folder, Menu goes up (at the root it leaves). **Select on a `.wav`, `.flac`, `.mp3` or `.m4a` (ALAC) plays it** and opens Now Playing; **Right on a `.flac` verifies its MD5 without sound** (see [Audio](audio.md)). Other files show `Not a playable file` for 3 s; an AAC `.m4a` opens Now Playing with `AAC not supported yet`. At most 256 entries per folder are kept (`... more (first 256 shown)` row after them); names longer than 63 bytes are cut at a character boundary. Directory reads run in the storage task, so the screen shows `Loading...` and keeps responding; without a working card it says why (`Storage unavailable: no card`). |
 | Settings | Two panes (groups left, live summary right). **About**: version, build hash, platform, uptime, heap free, audio blocks / underruns / jitter, core 1 stack, and the result of every boot check. **Display**: Select, then scroll adjusts the backlight in 5 % steps (never below 5 %); saved on the card. **Click feedback**: Select toggles On/Off (default On; needs the haptic driver); saved on the card. **Bluetooth**: status (Off / Starting / On / Scanning / Unavailable with the reason), the local address and **Scan for devices**, which opens the **Devices** screen: it starts a scan as it opens and fills in live; its first row is Stop scanning / Scan again, then the devices found: audio devices (speaker symbol) first with their signal in dBm, others greyed out, up to 12; Select on a device shows "Pairing: not yet" (pairing is stage 2, [Bluetooth](bluetooth.md)); Menu goes back and stops the scan. The right-hand pane shows state and address. **Wi-Fi**: on/off, status (name, address, signal), **Scan for networks** (opens the **Networks** screen: it scans as it opens; first row Scan again, then the networks found and the remembered ones, a name with `*` is remembered; each name once, with its strongest access point; Select on one starts the join flow, Menu goes back), Other network..., time zone, the time (set by hand if there is no network), Wi-Fi while playing; see [Wi-Fi](wifi.md). **Storage**: card type, size, filesystem, mode, free space (computed by the storage task, `computing...` until done). **Battery**: voltage, charge, rate, state, alerts, gauge status; live, once a second. |
 
+### Now Playing art
+
+The 112 x 112 box at the top left of Now Playing shows the album art of the track that is playing (the layout is unchanged: title, artist and album to its right,
+progress below, all at 320 x 240).
+
+| State | What the box shows |
+| --- | --- |
+| Track just started, art being found or decoded | The dark box with a note glyph (the audio always starts first; art never delays it) |
+| JPEG found | The picture, kept in proportion and centred, with the dark box as letterbox bars |
+| No art, PNG, progressive JPEG, damaged JPEG, picture too large (over 5120 px) | The note glyph |
+| Nothing playing, a test tone, an error, or still opening | The note glyph |
+
+Where the picture comes from, in order: the picture inside the file (MP3 ID3v2 `APIC` / `PIC`, FLAC `PICTURE`, MP4 `covr`; a JPEG is preferred to a PNG, a front cover
+to other types), then `cover.jpg`, `folder.jpg`, `front.jpg` in the track's folder (any letter case; that order). An embedded PNG is skipped without being read, and the
+folder is then tried. A JPEG that is embedded but progressive or damaged also falls back to the folder files. PNG and progressive JPEG need the PSRAM board
+([ADR-0013](adr/0013-bluetooth-ram-psram.md), amendment of 3 Nov 2026).
+
+How it works: after the track has started, the storage task (core 0, the only user of the card) decodes the JPEG with TJpgDec straight from the card in 512-byte reads, shrunk by the
+decoder to 1/1, 1/2, 1/4 or 1/8 (the largest shrink that keeps the long side at 64 pixels or more), one MCU row at a time, and averages it into one **64 x 64 RGB565 thumbnail (8 KB of static RAM)**; the
+whole picture is never in RAM. LVGL shows the thumbnail scaled to fit the box (1.75 times for a full-size thumbnail; soft edges are the price of the RAM). While it decodes, the task keeps the audio data ring topped up, sleeps 1 ms
+after every 2 ms of work (so input and UI keep running, the storage task outranks them) and stops as soon as another request is queued (it restarts afterwards). The result is
+kept for the album: a track whose folder, album tag and embedded picture size match the last one shows it at once, without decoding again. A big picture takes
+roughly a second or two on the bench (the card read dominates); the `art:` line on the UART gives source, size, scale and time. Decoder working memory (about 8.6 KB at most) comes from the
+heap for the length of one decode; if it is not available the note stays. Colour order: the thumbnail is native-order RGB565 like LVGL's draw buffers (the display driver swaps for the panel).
+
 **Click feedback.** Every list step asks the haptic task for a click (ROM effect 3, a gentle click). The request is
 a non-blocking queue write: the UI never waits on the I2C bus, requests closer than 35 ms are dropped, and the
 driver goes back to standby after 2 s without a click or at any error.
@@ -106,7 +131,8 @@ Left/Right, Space/`p` Play/Pause. The wheel, when it works, sends the same event
 
 **Host tour.** `neupod --tour --snapshots DIR` walks through the screens by script and writes `home`, `music-menu`,
 `music-empty`, `extras`, `files`, `files-sub`, `files-many`, `files-many-end`, `settings`, `settings-bt`, `bt-idle`, `bt-scanning` and `bt-found` (the Devices screen), `bt-pair`, `about`, `nowplaying`
-(PPM) into `DIR`; `ctest` runs it as `runtime_smoke` against a small fixture card (`build/host/fsroot_fixture`,
+(PPM) into `DIR`; `neupod --tour-art --snapshots DIR` plays three one-track albums (cover file, JPEG inside the FLAC, PNG inside plus a progressive cover) and writes `art-cover`, `art-embedded`, `art-none` (ctest `art_tour`, checked by `art_snapshot`).
+`ctest` runs it as `runtime_smoke` against a small fixture card (`build/host/fsroot_fixture`,
 `NEUPOD_FS_ROOT`) and writes `build/host/snapshots/`.
 
 ## Not yet drawn

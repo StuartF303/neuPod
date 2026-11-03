@@ -18,8 +18,16 @@
 /** FreeRTOS heap_4 (task stacks, queues, mutexes, the CYW43 worker task). */
 #define NEUPOD_RTOS_HEAP_BYTES (80u * 1024u)
 
-/** LVGL's built-in allocator pool (screens, widgets, styles). */
+/**
+ * LVGL's built-in allocator pool (screens, widgets, styles). The host build (64-bit pointers) needs about 1.6 times what the
+ * 32-bit target does for the same screens: Files plus Now Playing on top does not fit in 72 KB there, so the host gets 128 KB.
+ * The target figure is the one that counts.
+ */
+#if defined(__arm__)
 #define NEUPOD_LVGL_POOL_BYTES (72u * 1024u)
+#else
+#define NEUPOD_LVGL_POOL_BYTES (128u * 1024u)
+#endif
 
 /**
  * Audio core PCM ring, in stereo frames (8 bytes each, int32 L/R): the buffer between the decoder (core 1 loop)

@@ -106,6 +106,8 @@ os_queue_t *os_queue_create(size_t item_size, size_t length);
 bool os_queue_send(os_queue_t *q, const void *item, uint32_t timeout_ms);
 /** True if an item was received into @p item within @p timeout_ms. */
 bool os_queue_recv(os_queue_t *q, void *item, uint32_t timeout_ms);
+/** True if at least one item is waiting (does not remove it). */
+bool os_queue_pending(os_queue_t *q);
 
 /* ---- Mutex (non-recursive, priority inheritance) ------------------------------------------ */
 
