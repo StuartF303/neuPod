@@ -29,6 +29,7 @@
 
 #include "dplib.h"
 #include <string.h>
+#include "ram_func.h" // neuPod: hot paths run from RAM (see README.md)
 
 #if __GNUC__
 #define ALWAYS_INLINE		__attribute__((always_inline))
@@ -52,7 +53,7 @@ static inline int32_t ALWAYS_INLINE sign_of_int( int32_t i )
     return negishift | (i >> 31);
 }
 
-void unpc_block( int32_t * pc1, int32_t * out, int32_t num, int16_t * coefs, int32_t numactive, uint32_t chanbits, uint32_t denshift )
+void NEUPOD_RAM_FUNC(unpc_block)( int32_t * pc1, int32_t * out, int32_t num, int16_t * coefs, int32_t numactive, uint32_t chanbits, uint32_t denshift )
 {
 	register int16_t	a0, a1, a2, a3;
 	register int32_t	b0, b1, b2, b3;

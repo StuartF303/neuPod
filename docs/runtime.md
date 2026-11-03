@@ -40,7 +40,7 @@ printed in the audio line (`core1_stack_free=`).
 | core 1 to 0: handshake | two counters written only by core 1: PCM streams set up / played to the end (core 0 must not write data for a new stream before the first one moves) |
 | core 1 to 0: events | two rings (one per producer: the block interrupt, the main loop): stream opened/closed, underrun (at most ~1/s), end of track, command error |
 | core 1 to 0: statistics | seqlock-published `audio_stats_t`, written only by the block interrupt |
-| inside core 1: decoder to sink | PCM ring, 2048 stereo int32 frames (8 blocks, 46 ms) |
+| inside core 1: decoder to sink | PCM ring, 4096 stereo int32 frames (16 blocks, 93 ms at 44.1 kHz) |
 
 Every ring has exactly one producer and one consumer (`spsc_ring.h`: acquire/release loads and
 stores only, no read-modify-write, so it is safe across the two cores).
@@ -107,7 +107,7 @@ Every 10 s:
 
 ```
 audio sink: i2s rate=44099.488 Hz (requested 44100 Hz, clkdiv=22+37/256) dma_underruns=0 muted=1 source=none audible=0 volume=-30dB pcm_frames=0
-audio: blocks=1861 underruns=0 sink_missed=0 period_us min/avg/max=5431/5804/6181 (nominal 5804) jitter_max_us=377 ring_min=768/2048 decoded=1868 data_bytes=0 events_dropped=0
+audio: blocks=1861 underruns=0 sink_missed=0 period_us min/avg/max=5431/5804/6181 (nominal 5804) jitter_max_us=377 ring_min=1792/4096 decoded=1868 data_bytes=0 events_dropped=0
 cpu%(of one core)/stack-free-min: ... (core 0 tasks only)
 ```
 

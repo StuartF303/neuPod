@@ -25,8 +25,9 @@
 #include "hal_audio.h"
 #include "hal_system.h"
 #include "ram_func.h"
+#include "../os/memory_budget.h"
 
-#define PCM_FRAMES 2048u // 8 blocks = 46 ms between decoder and sink
+#define PCM_FRAMES NEUPOD_PCM_RING_FRAMES // sized in app/os/memory_budget.h
 #define FRAME_BYTES (2u * sizeof(int32_t)) // stereo, signed 32-bit (ADR-0003)
 #define PCM_CHUNK_FRAMES 128u              // frames converted per decoder step
 #define STORM_BLOCKS 32u                   // consecutive starved blocks (186 ms) before playback is stopped and muted
@@ -248,7 +249,7 @@ static audio_cmd_t g_deferred; // a disruptive command that arrived while the de
 static bool g_have_deferred;
 static uint32_t g_dec_sum_us, g_dec_frames, g_dec_max_per256, g_dec_reset_seen;
 
-#define PRIME_FRAMES 1024u // about 23 ms of audio buffered before the output starts
+#define PRIME_FRAMES 1024u // audio buffered before the output starts: 23 ms at 44.1 kHz, 11 ms at 96 kHz
 
 static void update_audible(void) { g_audible_req = (g_src != AUDIO_SRC_NONE && g_play) ? 1u : 0u; }
 

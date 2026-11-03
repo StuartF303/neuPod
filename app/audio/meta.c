@@ -14,6 +14,7 @@ const char *meta_err_str(meta_err_t e) {
     case META_E_FORMAT: return "Unrecognised or damaged file";
     case META_E_CHANNELS: return "More than 2 channels is not supported yet";
     case META_E_RATE: return "Unsupported sample rate (44.1/48/88.2/96 kHz only)";
+    case META_E_ALAC32: return "32-bit ALAC not supported";
     case META_E_BITS: return "Unsupported bit depth";
     case META_E_BLOCKSIZE: return "FLAC block size too large for the decoder";
     case META_E_AAC: return "AAC not supported yet";

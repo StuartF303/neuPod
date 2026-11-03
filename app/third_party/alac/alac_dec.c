@@ -27,6 +27,7 @@
 #include "matrixlib.h"
 #include "ALACBitUtilities.h"
 #include "EndianPortable.h"
+#include "ram_func.h" // neuPod: hot paths run from RAM (see README.md)
 
 /*
 	ZeroN()
@@ -628,7 +629,7 @@ int32_t alac_dec_init( alac_dec_t * d, const uint8_t * cookie, uint32_t cookieSi
         return kALAC_ParamError;
     if ( d->cfg.frameLength == 0 || d->cfg.frameLength > 16384 || d->cfg.numChannels < 1 || d->cfg.numChannels > 2 )
         return kALAC_ParamError;
-    if ( d->cfg.bitDepth != 16 && d->cfg.bitDepth != 20 && d->cfg.bitDepth != 24 && d->cfg.bitDepth != 32 )
+    if ( d->cfg.bitDepth != 16 && d->cfg.bitDepth != 20 && d->cfg.bitDepth != 24 )
         return kALAC_ParamError;
     d->mixU = (int32_t *) alloc( d->cfg.frameLength * sizeof(int32_t) );
     d->mixV = (int32_t *) alloc( d->cfg.frameLength * sizeof(int32_t) );
@@ -648,7 +649,7 @@ uint32_t alac_dec_out_bytes_per_frame( const alac_dec_t * d )
     return bytes * d->cfg.numChannels;
 }
 
-int32_t alac_dec_decode( alac_dec_t * d, const uint8_t * in, uint32_t inBytes, uint8_t * out, uint32_t * outFrames )
+int32_t NEUPOD_RAM_FUNC(alac_dec_decode)( alac_dec_t * d, const uint8_t * in, uint32_t inBytes, uint8_t * out, uint32_t * outFrames )
 {
     BitBuffer bits;
     BitBufferInit( &bits, (uint8_t *) in, inBytes );

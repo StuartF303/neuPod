@@ -26,6 +26,7 @@
 
 #include <stdio.h>
 #include "ALACBitUtilities.h"
+#include "ram_func.h" // neuPod: hot paths run from RAM (see README.md)
 
 // BitBufferInit
 //
@@ -39,7 +40,7 @@ void BitBufferInit( BitBuffer * bits, uint8_t * buffer, uint32_t byteSize )
 
 // BitBufferRead
 //
-uint32_t BitBufferRead( BitBuffer * bits, uint8_t numBits )
+uint32_t NEUPOD_RAM_FUNC(BitBufferRead)( BitBuffer * bits, uint8_t numBits )
 {
 	uint32_t		returnBits;
 	
@@ -64,7 +65,7 @@ uint32_t BitBufferRead( BitBuffer * bits, uint8_t numBits )
 // BitBufferReadSmall
 //
 // Reads up to 8 bits
-uint8_t BitBufferReadSmall( BitBuffer * bits, uint8_t numBits )
+uint8_t NEUPOD_RAM_FUNC(BitBufferReadSmall)( BitBuffer * bits, uint8_t numBits )
 {
 	uint16_t		returnBits;
 	
@@ -88,7 +89,7 @@ uint8_t BitBufferReadSmall( BitBuffer * bits, uint8_t numBits )
 // BitBufferReadOne
 //
 // Reads one byte
-uint8_t BitBufferReadOne( BitBuffer * bits )
+uint8_t NEUPOD_RAM_FUNC(BitBufferReadOne)( BitBuffer * bits )
 {
 	uint8_t		returnBits;
 
@@ -159,7 +160,7 @@ void BitBufferByteAlign( BitBuffer * bits, int32_t addZeros )
 
 // BitBufferAdvance
 //
-void BitBufferAdvance( BitBuffer * bits, uint32_t numBits )
+void NEUPOD_RAM_FUNC(BitBufferAdvance)( BitBuffer * bits, uint32_t numBits )
 {
 	if ( numBits )
 	{

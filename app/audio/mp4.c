@@ -197,7 +197,8 @@ meta_err_t mp4_parse(meta_read_fn rd, void *ctx, uint64_t file_size, mp4_info_t 
     out->rate = be32(out->cookie + 20);
     if (out->channels < 1 || out->channels > 2) return META_E_CHANNELS;
     if (out->rate != 44100u && out->rate != 48000u && out->rate != 88200u && out->rate != 96000u) return META_E_RATE;
-    if (out->bits != 16 && out->bits != 20 && out->bits != 24 && out->bits != 32) return META_E_BITS;
+    if (out->bits == 32) return META_E_ALAC32; // 4096-frame 32-bit stereo would need ~115 KB of arena
+    if (out->bits != 16 && out->bits != 20 && out->bits != 24) return META_E_BITS;
     if (out->frame_length == 0 || out->frame_length > 16384) return META_E_FORMAT;
     out->file_size = file_size;
     out->max_packet = out->frame_length * out->channels * ((out->bits + 7u) / 8u) + 64u; // what the decoder's frame buffer holds

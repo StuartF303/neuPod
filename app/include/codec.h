@@ -20,8 +20,10 @@
 extern "C" {
 #endif
 
-/** Arena size: the largest of FLAC (8192-sample blocks, stereo), MP3 and ALAC (4096 frames, 32-bit stereo). */
-#define CODEC_ARENA_BYTES (116u * 1024u)
+/** Arena size: the largest of FLAC (8192-sample blocks, stereo), MP3 and ALAC (4096 frames, 24-bit stereo; 32-bit ALAC
+ *  is rejected). The binding case is ALAC 24-bit (measured high water 98,456 B) plus a 2 KB margin, rounded up to 1 KB.
+ *  tests/test_codecs.c arena_worst_cases_fit checks it. */
+#define CODEC_ARENA_BYTES (99u * 1024u)
 
 typedef enum { CODEC_NONE = 0, CODEC_FLAC, CODEC_MP3, CODEC_ALAC } codec_kind_t;
 
