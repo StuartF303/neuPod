@@ -21,7 +21,8 @@ One task, "wifi" (core 0, priority 1, 3 KB stack), owns the station side. It run
 
 | Feature | How |
 | --- | --- |
-| scan | `hal_wifi_scan_*`: SSID, RSSI, channel, security; one UART line per network (`wifi: scan: 'ssid' rssi=-48 sec=WPA2/3 ch=6`, never any password) and `wifi: scan done, N networks`. The driver's scan cannot tell WPA3 from WPA2 (both carry an RSN element), so secured networks show "WPA2/3"; hidden networks do not appear and are added with "Other network..." |
+| scan | `hal_wifi_scan_*`: SSID, RSSI, channel, security; one UART line per access point from the radio (`wifi: bss 'ssid' aa:bb:.. rssi=-48 ch=6 auth_bits=0x05`), one per network after merging (`wifi: scan: 'ssid' rssi=-48 sec=WPA2 ch=6`, strongest access point wins; never any password) and `wifi: scan done, N networks`. Names in log lines are printable ASCII only (anything else shows as `?`). The driver reports only three bits (4 = RSN element, 2 = WPA element, 1 = privacy) and cannot tell WPA3 from WPA2 (both carry an RSN element), so an RSN network shows "WPA2" (the join still tries WPA2, WPA2/WPA3 and WPA3-only in turn), WPA1-only and WEP show "secured" (`wifi_sec_from_scan_bits`, host tested);
+ a scan that the user walked away from (Menu on Networks) is finished by the radio by itself, and a new scan waits up to 8 s for the radio to be free instead of showing an empty list; hidden networks do not appear and are added with "Other network..." |
 | join | WPA2-PSK, WPA2/WPA3 mixed and WPA3-SAE, open networks. The cyw43 driver supports all three; a join tries WPA2, then mixed, then WPA3-only, moving on when an attempt fails. Wrong password is reported as such and is not retried in a loop |
 | DHCP, DNS | lwIP |
 | SNTP | lwIP's client, default `pool.ntp.org` (setting `NPns`), resynchronises about hourly; the answer sets the wall clock |
