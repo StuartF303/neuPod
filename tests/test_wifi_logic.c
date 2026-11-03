@@ -90,6 +90,19 @@ TEST(test_clock_wrap_and_sanity) {
     ASSERT_TRUE(clock_ntp_plausible(2100000000u));
 }
 
+TEST(test_join_timeout) {
+    ASSERT_FALSE(wifi_join_timed_out(1000u, 1000u, 30000u));
+    ASSERT_FALSE(wifi_join_timed_out(1000u, 30999u, 30000u));
+    ASSERT_TRUE(wifi_join_timed_out(1000u, 31000u, 30000u));
+    ASSERT_TRUE(wifi_join_timed_out(1000u, 90000u, 30000u));
+    ASSERT_FALSE(wifi_join_timed_out(1000u, 500u, 30000u)); // a clock slightly behind the start is not a timeout
+    // the millisecond counter wraps: started 10 s before the wrap
+    uint32_t t0 = 0xFFFFFFFFu - 9999u;
+    ASSERT_FALSE(wifi_join_timed_out(t0, t0 + 29999u, 30000u));
+    ASSERT_TRUE(wifi_join_timed_out(t0, t0 + 30000u, 30000u));
+    ASSERT_TRUE(wifi_join_timed_out(t0, 20000u, 30000u)); // 20 s after the wrap, 30 s elapsed
+}
+
 TEST(test_backoff) {
     wifi_backoff_t b;
     wifi_backoff_init(&b);
@@ -194,6 +207,7 @@ int main(void) {
     RUN(test_local_time_zones);
     RUN(test_running_clock);
     RUN(test_clock_wrap_and_sanity);
+    RUN(test_join_timeout);
     RUN(test_backoff);
     RUN(test_backoff_late_in_uptime);
     RUN(test_link_loss_is_reported);

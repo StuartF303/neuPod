@@ -73,6 +73,8 @@ bool hal_wifi_scan_next(hal_wifi_ap_t *out, bool *done);
 /** Begin joining (WPA2/WPA3 personal, or open when @p psk is NULL or empty); poll hal_wifi_state(). */
 hal_status_t hal_wifi_join(const char *ssid, const char *psk);
 void hal_wifi_leave(void);
+/** Give up a join that never finished: leave the network and report HAL_WIFI_FAILED (not IDLE) until the next join. */
+void hal_wifi_abort_join(void);
 
 int hal_wifi_rssi(void);                 /**< dBm of the current link, 0 if unknown */
 bool hal_wifi_ip(char out[16]);          /**< dotted address when UP */

@@ -260,6 +260,13 @@ void hal_wifi_leave(void) {
     }
 }
 
+void hal_wifi_abort_join(void) {
+    hal_wifi_leave();
+    if (g_wifi_on) {
+        g_wstate = HAL_WIFI_FAILED;
+    }
+}
+
 int hal_wifi_rssi(void) { return g_wstate == HAL_WIFI_UP ? -55 : 0; }
 
 bool hal_wifi_ip(char out[16]) {
