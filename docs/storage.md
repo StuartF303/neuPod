@@ -66,9 +66,16 @@ From `wiring-phase1.md` (3.3 V, DAT0-DAT3 must be consecutive GPIOs, CLK is DAT0
 - **Stack:** the main stack is 4 KB for the storage test (the most core 0's scratch RAM bank can
   hold); the lowest free stack seen is printed after each test.
 
+## Rules carried into the final board (3 Nov 2026)
+
+* SD clock from **integer dividers only**.
+* Multi-block reads capped at **128 blocks** (`NEUPOD_SDIO_MAX_READ_BLOCKS`, `platforms/rp2350/hal/hal_storage.c`): in v3.6.2 a 256-block read
+  writes the DMA list terminator one entry past `dma_blocks[]`. To be reported upstream to carlk3 (`no-OS-FatFS-SD-SDIO-SPI-RPi-Pico`).
+* A **GPIO-controlled load switch on card VDD** is a final-board requirement, so a card wedged mid-transfer can be power-cycled.
+
 ## Memory allocation policy
 
-The newlib heap is only about 33 KB (static RAM fills the rest) and the Pico SDK's `malloc` wrapper **panics** on failure instead of returning NULL. FatFs with `FF_USE_LFN 3` allocates scratch buffers as large as a cluster (`dir_clear`, up to 32 KB; 128 KB clusters on large exFAT cards) and relies on NULL to halve the request, so the first `mkdir` on the bench ended in "Out of memory".
+The newlib heap is only about 33 KB (static RAM fills the rest) and the Pico SDK's `malloc` wrapper **panics** on failure instead of returning NULL (to be replaced by a wrapper that returns NULL and logs, per the design response of 3 Nov 2026; not built). FatFs with `FF_USE_LFN 3` allocates scratch buffers as large as a cluster (`dir_clear`, up to 32 KB; 128 KB clusters on large exFAT cards) and relies on NULL to halve the request, so the first `mkdir` on the bench ended in "Out of memory".
 
 `app/storage/ff_alloc.c` therefore replaces the library's `ffsystem.c` (the RP2350 build removes it from the library's source list in `platforms/rp2350/CMakeLists.txt`; `lib/` is untouched, the host build uses the same file). `ff_memalloc` returns NULL for anything above `NEUPOD_FF_ALLOC_MAX_BYTES` (4 KB, `app/storage/ff_alloc.h`) and otherwise calls the real, non-panicking `malloc`, so FatFs falls back to a 4 KB buffer or its window buffer. Mutex functions are not provided: `FF_FS_REENTRANT` is 0 and the build fails if it is turned on. Host test: `tests/test_fatfs.c`.
 

@@ -14,7 +14,12 @@ resampling; the sink is re-clocked per file instead.
 | I2S LRCK | GP11 | PIO0 side-set bit 1 (BCK and LRCK must be consecutive) |
 | Mute / amp enable | GP22 | plain GPIO, driven by core 1 (and by core 0 at boot and in the fatal-error path) |
 
-No MCLK: the DAC derives its clock from BCK.
+The Audio Pack is a TI **PCM5100A** DAC with a **PAM8908** headphone amp behind the "phones" jack (low/high gain
+switch); "line out" is the DAC output directly. Try both jacks.
+
+No MCLK: the PCM5100A runs its internal PLL from BCK, which must be 32, 48 or 64 × fs with a 50 % LRCK. Our 32-bit
+slots give 64 fs. SCK is tied low on the Pack; the format pin is hardwired to standard I2S (one-BCK delay), which is
+what `neupod_i2s.pio` produces.
 
 ## Resource allocation
 
@@ -66,24 +71,29 @@ Consequences:
 
 ## Mute line (GP22)
 
-* **Polarity is unconfirmed.** Neither `~/pico/pico-extras` (`pico_audio_i2s`) nor `~/pico/pico-playground`
-  drives it; there is no board file for the Audio Pack in either tree (searched the whole of both for
-  "Pimoroni", "audio pack" and the pin). `docs/design.md` assumes "high = amp enabled" pending Pimoroni's pinout.
-* The code therefore keeps a single build constant, `NEUPOD_AUDIO_UNMUTE_LEVEL` (default 1; `TODO(hw)` in
-  `hal_audio.c`), and the muted level is its opposite. If the assumption is wrong the Pack stays silent during
-  playback (never loud by accident); rebuild with `-DNEUPOD_AUDIO_UNMUTE_LEVEL=0` to flip.
-* Muted: from the first moments after boot (`hal_system_init`), at sink init and open, when no source is playing or
-  paused, after a fade-out, on stop, on an underrun storm, on close and in the fatal-error path (core 0's
-  `hal_panic` resets core 1, then calls `hal_audio_force_mute()`, which also aborts the DMA and stops the PIO, because
-  resetting a core does not stop them).
-* Unmuted: only while a source is audible, one block before the fade-in starts. The HAL ignores an unmute while the
-  stream is not open. When idle the I2S clocks keep running with digital silence but the amp is muted.
+* **GP22 drives the PCM5100A's XSMT pin (TSSOP-20 pin 17), active LOW**: low = soft-muted, high = playing
+  (design response, 3 Nov 2026, from the Pack schematic; confirmed on the bench the same day). The build default
+  `NEUPOD_AUDIO_UNMUTE_LEVEL=1` is correct.
+* The DAC also **auto-mutes on a clock error**: BCK and LRCK must be running continuously, and its PLL locked,
+  before XSMT goes high.
+* **Current behaviour (as built):** muted from boot (`hal_system_init`), at sink open and close, on stop, on an
+  underrun storm and in the fatal-error path (`hal_panic` → `hal_audio_force_mute()`, which also aborts the DMA and
+  stops the PIO). The audio core opens XSMT one block before a fade-in and closes it after two silent blocks
+  (`app/audio/audio_core.c`), and `hal_audio_close()` stops the I2S clocks between streams. So XSMT toggles with every
+  start/stop. The stream is opened at boot and its clocks keep running, so in practice XSMT rises long after the PLL has locked.
+* **Bench, 3 Nov 2026: works.** 1 kHz test tone heard on the "line out" jack (DAC direct, no PAM8908) at -30 dB. The earlier silence was wiring:
+  the GP9 (DATA) and GP22 (XSMT) jumpers were on the wrong Pico pins. Register read-back over SWD (SIO_IN / IO_BANK0
+  STATUS) showed both pins driven correctly while the Pack end read 0 V, which is how it was found.
+* **Design recommendation (optional, not built):** raise XSMT once after the clocks have settled and leave it high,
+  doing start/stop/pause with the gain ramp only; XSMT low only for force-mute (panic, storm) and sink close. Not needed
+  for function on the testbed; it reduces DAC soft-mute ramps at track boundaries.
 
 ## Volume safety
 
 * Volume is **attenuation in whole dB**, applied in the 32-bit domain. Start-up level is **-30 dB** and is
   sent to the audio core before anything can play; the audio core also boots at -30 dB by itself. The volume is saved on the card
   (settings store, [Bluetooth](bluetooth.md)) and restored at boot, but **never louder than -30 dB**: a saved louder level comes back as -30 dB.
+  Approved replacement (not built): see [Volume restore policy](bluetooth.md#volume-restore-policy).
 * The UI steps 2 dB per wheel click. The engine never applies gain above 0 dB, and a build-time hard cap
   (`NEUPOD_AUDIO_VOLUME_CAP_DB`, default 0, meaning full scale allowed) sets the loudest level; raise it for a
   headphone-safe build. At 80 dB or more the output is silent.
@@ -204,8 +214,8 @@ the arena (including the worst-case sizes) and the core 0 / core 1 stream handsh
    if the PIO and DMA stream started (the DAC cannot be detected: I2S is one-way).
 2. UART keys: `w`/`s` scroll, `e` select, `m` back, `a`/`d` left/right (volume on the Test tone screen), `p` play/pause.
 3. Home: `s` x3 to Extras, `e`; `s` to Test tone, `e`. Select (`e`) on **1 kHz tone**. You should hear a quiet tone;
-   `d` raises the volume 1 step = 2 dB. If nothing is audible, the mute polarity may be inverted: rebuild with
-   `-DNEUPOD_AUDIO_UNMUTE_LEVEL=0`.
+   `d` raises the volume 1 step = 2 dB. Try the "phones" jack (gain switch low first) and the "line out" jack. If nothing is
+   audible see [Mute line](#mute-line-gp22) — the polarity is confirmed, so do not flip `NEUPOD_AUDIO_UNMUTE_LEVEL`.
 4. `e` again stops it. Try **L/R ident** (left ear first), then **Scale**.
 5. Files: Extras > Files, a folder with a `.wav`, `.flac`, `.mp3` or `.m4a`, Select. Now Playing opens with the tags and format badge; the wheel (`w`/`s`) is volume; `p` pauses; `m` goes back
    while it keeps playing. `d` (Right) on a `.flac` runs the MD5 verify instead of playing. An `.m4a` with AAC says "AAC not supported yet".
@@ -215,5 +225,5 @@ the arena (including the worst-case sizes) and the core 0 / core 1 stream handsh
 ## Not verified on hardware
 
 Everything in this page about the board's behaviour is from reading the datasheet-level behaviour of the RP2350 PIO and
-DMA and from the host build; none of it has been run on the Audio Pack. Specifically open: the mute polarity, the
+DMA and from the host build; none of it has been run on the Audio Pack. The 1 kHz tone on the Audio Pack is verified (3 Nov 2026). Specifically open: the
 DMA interrupt timing under UI load, clock jitter, 88.2/96 kHz, SD streaming throughput at 24/32-bit, the decoders' CPU load and flash-cache behaviour on the RP2350, the 16 KB core-1 stack margin under MP3 (watch `core1_stack_free` in the `audio:` line), and the real RAM headroom (about 28 KB were left in the link).

@@ -57,3 +57,9 @@ port, so there is no newer kernel to move to without porting the port.
 - The panic LED limitation of ADR-0009 stays; so does the host-timing caveat.
 - If a future kernel release fixes the RP2350 SMP port, moving the decoder back into an RTOS task is possible
   but not needed: the rings and the interrupt-driven sink already isolate it.
+
+## Update (3 Nov 2026)
+
+Audio isolation is now a **requirement**, not only an implementation choice: a dedicated core for audio,
+bare metal, with lock-free rings as the only link to the rest. Any SoC candidate for the final board must
+have a spare core for it (ESP32 / ESP32-S3 qualify: core 1 for audio, core 0 FreeRTOS).

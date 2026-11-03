@@ -68,6 +68,11 @@ These are Rockbox's UI tuning values, not protocol requirements.
 
 ## Open questions
 
+**Host → wheel init packet: not documented anywhere in the open.** Plan (3 Nov 2026): capture all four wheel lines
+on the donor iPod with the logic analyser from power-on (Rockbox boot). That shows which side drives SDI/SDO, the
+clock source during the init packet, and its timing. Until then the UI is driven from the UART keys.
+
+
 - Mapping of the four lines to GP19/26/27/28 (see [Phase 1 wiring](wiring-phase1.md)); measure
   with a logic analyser on the donor's stock board.
 - Identity and function of the fourth line.

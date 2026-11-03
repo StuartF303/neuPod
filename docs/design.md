@@ -24,13 +24,13 @@ Build the firmware and the replacement logic board in two phases:
 
 | Block | Phase 1 (bench) | Final board |
 | --- | --- | --- |
-| Compute | Pico 2 W (RP2350A, 26 GPIO, 4 MB flash, no PSRAM) | RP2350B + 8 MB PSRAM + 16 MB flash |
-| Radio | CYW43439 on Pico 2 W via internal SPI (uses GP23/24/25/29 — not available to us) | CYW43439 or ESP32 co-processor — decision pending A2DP test |
+| Compute | Pico 2 W (RP2350A, 26 GPIO, 4 MB flash, no PSRAM) | RP2350B + 8 MB APS6404L PSRAM (QSPI CS1) + 16 MB W25Q128 flash |
+| Radio | CYW43439 on Pico 2 W via internal SPI (uses GP23/24/25/29 — not available to us) | Not a bare CYW43439; RM2 module or ESP32 — open ([ADR-0007](adr/0007-bluetooth-audio-path.md)) |
 | Display | Adafruit 2.0" 320×240 IPS TFT (ST7789) on SPI1, landscape — see [wiring](wiring-phase1.md) | ER-TFT024IPS-3 (or RM690B0 AMOLED), 8080-16 via PIO if pins allow |
 | Storage | microSD, SDIO 4-bit via PIO on GP2–7 ([ADR-0006](adr/0006-storage-microsd-sdio.md); SPI mode is the fallback) | SDIO 4-bit |
-| Audio | Pimoroni Pico Audio Pack (I²S on GP9–11, mute/amp enable GP22) | CS43131 I²S + I²C |
+| Audio | Pimoroni Pico Audio Pack: PCM5100A + PAM8908 (I²S on GP9–11, GP22 = XSMT, active low) | ES8311 / ES8388 / PCM5102A, MCLK provided ([ADR-0012](adr/0012-audio-codec-final-board.md)) |
 | Input | Donor click wheel via FPC breakout; hold switch from headphone flex | Same |
-| Power | USB from the Pico, LiPo SHIM for battery tests | BQ25895 + BQ27441, USB-C |
+| Power | USB from the Pico, Micro-Lipo (MCP73831) + MAX17048 for battery tests | BQ25895 (0x6A) + fuel gauge, USB-C; SD VDD load switch |
 | USB | Pico's native USB (TinyUSB: MSC + CDC) | Native USB on USB-C |
 
 ## Compute options
@@ -41,7 +41,7 @@ Available: GP0–GP22 and GP26–GP28 = **26 GPIO** (GP23/24/25/29 are consumed 
 | --- | --- | --- | --- |
 | LCD (SPI, 4-wire) | SCK, MOSI, CS, DC, RST, backlight PWM | 6 | MISO omitted; ~19 fps full-frame at 62.5 MHz SPI, partial updates for UI. 8-bit 8080 (12–13 pins) does **not** fit on the 2 W alongside everything else |
 | microSD (SDIO 4-bit, PIO) | CLK, CMD, D0–D3 | 6 | Fallback: SPI mode on SPI0 with its own CS = 4 pins (D1/D2 become CD/unused) |
-| I²S audio | BCLK, LRCLK, DOUT | 3 | PIO I²S; PCM5102A needs no MCLK. CS43131 later may want MCLK (+1) |
+| I²S audio | BCLK, LRCLK, DOUT | 3 | PIO I²S; the PCM5100A needs no MCLK. Final board adds MCLK from `clk_gpout` (+1) |
 | I²C (shared bus) | SDA, SCL | 2 | DAC control, fuel gauge, charger, haptic driver, future touch |
 | Click wheel | Serial data, clock, enable/power, (optional extra) | 3–4 | Pinout and protocol to be confirmed from Rockbox `s5l8702/ipod6g` wheel driver and a logic-analyser capture of the stock board |
 | Headphone/hold flex | Hold switch, headphone detect | 2 | Remote/accessory lines (2) left unconnected in Phase 1 |
@@ -112,7 +112,7 @@ final-board candidates (EastRising ER-TFT024IPS-3 and the 2.4" RM690B0 AMOLED) a
 
 ### Stock audio codec (reference for the DAC choice)
 
-Stock part is a Cirrus CS42L55 at I²C address 0x94 (8-bit), I²S from the SoC, reset on GPIO 3.3, master clock from the SoC (`CLKCON3`), analogue rail "Vcodec" 1.8 V from PMU LDO3 (2.4 V when recording). Our CS43131 is the DAC-only successor: same vendor, I²C + I²S, integrated headphone driver, so the headphone-jack wiring carries over unchanged.
+Stock part is a Cirrus CS42L55 at I²C address 0x94 (8-bit), I²S from the SoC, reset on GPIO 3.3, master clock from the SoC (`CLKCON3`), analogue rail "Vcodec" 1.8 V from PMU LDO3 (2.4 V when recording). The CS43131 (its DAC-only successor) was the original plan; it is dropped for stock reasons, see [ADR-0012](adr/0012-audio-codec-final-board.md).
 
 The audio quality policy, the Bluetooth codec table and the recording requirement are in
 [Requirements → Audio](requirements.md#audio) and [ADR-0003](adr/0003-audio-quality-policy.md).

@@ -141,7 +141,14 @@ paths are compile-time constants. The scope is not recursive and is meant for on
 
 The saved volume is restored at boot after the load, **but never louder than the power-on default** (-30 dB, `player_restore_volume`, headphone safety,
 see [Audio](audio.md)), and only if the user has not changed the volume yet in this session. A saved quiet level (for example -40 dB) comes back; a saved
-loud level (for example -10 dB) comes back as -30 dB. This is a deliberate choice for the owner to confirm; the constant is `PLAYER_RESTORE_MIN_ATT_DB`.
+loud level (for example -10 dB) comes back as -30 dB. The constant is `PLAYER_RESTORE_MIN_ATT_DB`.
+
+**Approved replacement (design response, 3 Nov 2026; not built):** honour the saved level, except cap at -30 dB when
+
+* the output path differs from the one the level was saved for (Bluetooth ↔ wired ↔ line/optical), or
+* a headphone insertion is detected at boot and the saved path was line-out.
+
+The output path is stored alongside the level in the settings store.
 
 ## Memory budget (RP2350, main SRAM 512 KB)
 
@@ -174,6 +181,11 @@ BTstack licence, before anything is sold or distributed. The cyw43-driver has th
 grant for use with its chips).
 
 ## Stage 2 design notes (not built)
+
+* **Priority and RAM ([ADR-0013](adr/0013-bluetooth-ram-psram.md)):** stage 2 follows the Audio Pack tone test and MP3/ALAC playback. 32 KB is approved
+  for the SBC encoder and the PCM ring on core 0, funded by sizing the codec arena to the measured max(FLAC, MP3, ALAC) (never below FLAC 24/96)
+  and by releasing LVGL's second render buffer while the display sleeps.
+* **Final board radio:** not a bare CYW43439 (assembly and licence, [ADR-0007](adr/0007-bluetooth-audio-path.md)); the stage 2 code stays behind `hal_bt_*`.
 
 * **Verify while Wi-Fi toggles:** the Wi-Fi service switches the station on and off (playback pause, idle timeout) on the same radio worker that runs BTstack. Before relying on it, check on the board that an A2DP stream stays stable (no dropouts, no HCI resets) when Wi-Fi comes and goes, and with "Wi-Fi while playing" On.
 

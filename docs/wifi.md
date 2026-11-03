@@ -75,8 +75,10 @@ What is stored: Wi-Fi passwords and Bluetooth link keys (and any later secret). 
 The RP2350 has **no EEPROM and no battery-backed NVRAM**, and this firmware has no secure boot. The chip ID is **not secret**: it can be read with a debugger, and boards often show it as the USB serial number. So the
 encryption protects a **lost or copied microSD card on its own**; it does **not** protect against someone who has the card **and** the board (they can derive the same key). SSIDs are stored in the clear on purpose.
 
-Possible later hardening (each needs a separate, explicit decision; some are irreversible and nothing here touches OTP): a random 256-bit key written into a read-locked **RP2350 OTP page** together with
-secure boot; or a secure element (ATECC608 or SE050 class) on the final board; an ESP32-S3 variant would use eFuse keys with HMAC and encrypted NVS. All of them replace `key_provider_get()` only.
+**Production policy (design response, 3 Nov 2026; not built):** on the RP2350 a random 256-bit key is written **once** to OTP at provisioning, using
+the OTP key page and page lock; the chip-ID HKDF above stays only as the pre-provisioning fallback. No secure element. An ESP32 / ESP32-S3 board uses an eFuse key
+and flash encryption under the same policy. Secure boot is a separate, later decision. All of this replaces `key_provider_get()` only. Writing OTP is
+irreversible: the provisioning step needs its own review before it runs on any board.
 
 ## Throughput test
 
@@ -86,12 +88,14 @@ an SD scratch file under `/.neupod/tmp` through the scoped write window (needs a
 
 ## Staged plan
 
+Order (design response, 3 Nov 2026): **W2 → W4 → W3**. Library sync is why Wi-Fi exists, then OTA, then podcasts.
+
 | Stage | Content |
 | --- | --- |
-| W1 (this) | lwIP, the Wi-Fi service, join/scan/forget with the wheel keyboard, SNTP and the clock, sealed secrets, diagnostics |
-| W2 | device HTTP API and a C# companion app for syncing music and podcasts (no TLS on the device: podcasts through the companion) |
-| W3 | polish: roaming, AP list caching, captive portal detection, Wi-Fi during playback measurements, SD-file throughput test |
-| W4 | over-the-air updates (needs a dual-image layout and signing; core 1 and flash rules apply) |
+| W1 (done) | lwIP, the Wi-Fi service, join/scan/forget with the wheel keyboard, SNTP and the clock, sealed secrets, diagnostics |
+| W2 (next) | device HTTP API and a C# companion app for library sync (no TLS on the device) |
+| W4 | over-the-air updates: bootrom A/B partitions with TBYB, image staged on SD, flashed only with playback stopped and core 1 parked in SRAM ([ADR-0014](adr/0014-ota-ab-partitions.md)) |
+| W3 | podcasts through the companion; polish: roaming, AP list caching, captive portal detection, Wi-Fi during playback measurements, SD-file throughput test |
 
 ## What to check on the board
 
