@@ -40,9 +40,13 @@ static bool g_save_on_success;
 static char g_cur_ssid[HAL_WIFI_SSID_MAX + 1], g_cur_psk[HAL_WIFI_PSK_MAX + 1];
 static hal_wifi_status g_prev_state = HAL_WIFI_DOWN;
 static uint32_t g_next_auto; /* round robin over saved networks */
+static uint32_t g_nothing_until; /* with nothing saved: look again at this time (a plain timer, not a join failure) */
+static bool g_nothing_armed;
+#define NOTHING_SAVED_RECHECK_MS 10000u
 static char g_bad_auth[WIFI_MAX_SAVED][HAL_WIFI_SSID_MAX + 1];
 static bool g_save_failed; /* the last 'remember this network' did not fit (surfaced in the UI) */
 static bool g_scan_active;  /* a scan is running on the radio */
+static uint32_t g_scan_count; /* networks reported by the scan in progress (UI task only: request and next) */
 static bool g_scan_wanted;  /* a scan was requested (it may not have started yet: the task handles requests every 200 ms) */
 
 /* The test counters are written from the lwIP thread, which holds the radio context lock: NO mutex there (it would be an AB-BA
@@ -234,7 +238,18 @@ static bool save_network(const char *ssid, const char *psk) {
 /* ---- requests ---- */
 static bool post(const req_t *r) { return g_q != NULL && os_queue_send(g_q, r, OS_NO_WAIT); }
 
+static const char *sec_name(hal_wifi_sec_t s) {
+    switch (s) {
+    case HAL_WIFI_SEC_OPEN: return "open";
+    case HAL_WIFI_SEC_WPA2: return "WPA2";
+    case HAL_WIFI_SEC_WPA3: return "WPA3";
+    case HAL_WIFI_SEC_WPA2_WPA3: return "WPA2/3";
+    default: return "other";
+    }
+}
+
 bool wifi_scan_request(void) {
+    g_scan_count = 0;
     lock();
     g_scan_wanted = true;
     g_scan_active = false;
@@ -260,7 +275,12 @@ bool wifi_scan_next(hal_wifi_ap_t *out, bool *done) {
         return false;
     }
     bool got = hal_wifi_scan_next(out, done);
+    if (got) {
+        g_scan_count++;
+        printf("wifi: scan: '%s' rssi=%d sec=%s ch=%u\n", out->ssid, (int)out->rssi, sec_name(out->sec), (unsigned)out->channel);
+    }
     if (*done) {
+        printf("wifi: scan done, %u networks\n", (unsigned)g_scan_count);
         lock();
         g_scan_wanted = g_scan_active = false;
         unlock();
@@ -495,6 +515,7 @@ void wifi_task(void *arg) {
         if (st != g_prev_state) {
             if (st == HAL_WIFI_UP) {
                 wifi_backoff_success(&g_backoff);
+                g_nothing_armed = false;
                 if (g_save_on_success && g_joining_user) {
                     g_save_failed = !save_network(g_cur_ssid, g_cur_psk);
                     if (g_save_failed) {
@@ -527,8 +548,10 @@ void wifi_task(void *arg) {
         /* scan finished? */
         /* auto-connect to a saved network */
         if (s.enabled && !g_user_left && st != HAL_WIFI_DOWN && (st == HAL_WIFI_IDLE || st == HAL_WIFI_FAILED || st == HAL_WIFI_BAD_AUTH) &&
-            wifi_backoff_due(&g_backoff, now) && !(playing && !s.during_playback)) {
+            wifi_backoff_due(&g_backoff, now) && !(playing && !s.during_playback) &&
+            !(g_nothing_armed && (int32_t)(now - g_nothing_until) < 0)) {
             uint32_t n = wifi_saved_count();
+            g_nothing_armed = false;
             for (uint32_t k = 0; k < n; k++) {
                 char ssid[HAL_WIFI_SSID_MAX + 1], psk[HAL_WIFI_PSK_MAX + 1];
                 bool has, needs;
@@ -542,8 +565,9 @@ void wifi_task(void *arg) {
                 start_join(ssid, psk, false, false);
                 break;
             }
-            if (n == 0) {
-                wifi_backoff_fail(&g_backoff, now); /* nothing saved: look again later */
+            if (n == 0) { /* nothing saved: look again later. Nothing was attempted, so it is not a join failure. */
+                g_nothing_until = now + NOTHING_SAVED_RECHECK_MS;
+                g_nothing_armed = true;
             }
         }
 
