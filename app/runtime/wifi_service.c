@@ -22,6 +22,7 @@ typedef struct {
     char ssid[HAL_WIFI_SSID_MAX + 1];
     char psk[HAL_WIFI_PSK_MAX + 1];
     bool use_saved;
+    uint32_t gen; /* REQ_SCAN: the scan generation it was made for (see g_scan_gen) */
 } req_t;
 
 static os_queue_t *g_q;
@@ -47,6 +48,11 @@ static char g_bad_auth[WIFI_MAX_SAVED][HAL_WIFI_SSID_MAX + 1];
 static bool g_save_failed; /* the last 'remember this network' did not fit (surfaced in the UI) */
 static bool g_scan_active;  /* a scan is running on the radio */
 static uint32_t g_scan_count; /* networks reported by the scan in progress (UI task only: request and next) */
+/* Scan generation (under g_mu): bumped by every scan request and every cancel. A queued request or a pending retry whose
+ * generation is no longer current belongs to a screen that has gone away and is dropped, so a closed Networks screen can never
+ * leave a scan running for nobody that a later screen would then read half way through (the radio's result buffer is reset
+ * by each start, and is only read while g_scan_active is set for the current generation). */
+static uint32_t g_scan_gen;
 static bool g_scan_retry;   /* the radio was still busy with an earlier scan: start this one when it is free */
 static uint32_t g_scan_retry_until;
 #define SCAN_RETRY_MS 8000u
@@ -254,12 +260,15 @@ static const char *sec_name(hal_wifi_sec_t s) {
 bool wifi_scan_request(void) {
     g_scan_count = 0;
     lock();
+    uint32_t gen = ++g_scan_gen;
     g_scan_wanted = true;
-    g_scan_active = false;
+    g_scan_active = g_scan_retry = false;
     unlock();
-    if (!post(&(req_t){.kind = REQ_SCAN})) {
+    if (!post(&(req_t){.kind = REQ_SCAN, .gen = gen})) {
         lock();
-        g_scan_wanted = false;
+        if (g_scan_gen == gen) {
+            g_scan_wanted = false;
+        }
         unlock();
         return false;
     }
@@ -287,13 +296,14 @@ bool wifi_scan_next(hal_wifi_ap_t *out, bool *done) {
     if (*done) {
         printf("wifi: scan done, %u networks\n", (unsigned)g_scan_count);
         lock();
-        g_scan_wanted = g_scan_active = false;
+        g_scan_wanted = g_scan_active = g_scan_retry = false;
         unlock();
     }
     return got;
 }
 void wifi_scan_cancel(void) {
     lock();
+    g_scan_gen++; /* a request still in the queue, or in the middle of starting, is now stale */
     g_scan_wanted = g_scan_active = g_scan_retry = false; /* the radio finishes an abandoned scan by itself; its results are dropped */
     unlock();
 }
@@ -446,10 +456,16 @@ void wifi_task(void *arg) {
         clock_tick();
 
         /* a scan that had to wait for the radio */
-        if (g_scan_retry) {
+        lock();
+        bool retry = g_scan_retry;
+        uint32_t retry_gen = g_scan_gen;
+        unlock();
+        if (retry) {
             hal_status_t sr = hal_wifi_scan_start();
             lock();
-            if (sr == HAL_OK) {
+            if (retry_gen != g_scan_gen) {
+                /* cancelled or replaced while starting: nobody waits for this one */
+            } else if (sr == HAL_OK) {
                 g_scan_retry = false;
                 g_scan_active = true;
             } else if (sr != HAL_EBUSY || (int32_t)(now - g_scan_retry_until) >= 0) {
@@ -468,8 +484,18 @@ void wifi_task(void *arg) {
             switch (r.kind) {
             case REQ_SCAN:
                 {
+                    lock();
+                    bool current = r.gen == g_scan_gen;
+                    unlock();
+                    if (!current) {
+                        break; /* the screen that asked has gone */
+                    }
                     hal_status_t sr = hal_wifi_scan_start(); /* HAL call outside g_mu */
                     lock();
+                    if (r.gen != g_scan_gen) {
+                        unlock();
+                        break; /* cancelled while it started: the radio scans for nobody and stops by itself */
+                    }
                     g_scan_retry = sr == HAL_EBUSY; /* an earlier scan is still running (the user left and came back) */
                     g_scan_retry_until = now + SCAN_RETRY_MS;
                     g_scan_active = sr == HAL_OK;

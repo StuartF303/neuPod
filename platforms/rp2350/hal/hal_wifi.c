@@ -42,7 +42,7 @@ static int scan_cb(void *env, const cyw43_ev_scan_result_t *r) {
     memcpy(raw, r->ssid, r->ssid_len);
     raw[r->ssid_len] = '\0';
     hal_log_text(shown, sizeof shown, raw);
-    /* one line per access point; the list the UI sees has each network once */
+    /* One line per access point. A debug aid: it runs in the radio's async context (the worker task), so keep it short. */
     printf("wifi: bss '%s' %02X:%02X:%02X:%02X:%02X:%02X rssi=%d ch=%u auth_bits=0x%02X\n", shown, r->bssid[0], r->bssid[1], r->bssid[2],
            r->bssid[3], r->bssid[4], r->bssid[5], (int)r->rssi, (unsigned)r->channel, (unsigned)r->auth_mode);
     uint32_t n_now = __atomic_load_n(&g_scan_n, __ATOMIC_RELAXED); /* this callback is the only writer */
@@ -108,7 +108,7 @@ hal_status_t hal_wifi_scan_start(void) {
         return HAL_EBUSY; /* a scan really is running: the caller may retry */
     }
     __atomic_store_n(&g_scan_n, 0, __ATOMIC_RELEASE);
-    g_scan_read = 0;
+    __atomic_store_n(&g_scan_read, 0, __ATOMIC_RELAXED); /* the service only reads results while a scan it started is active */
     cyw43_wifi_scan_options_t opts = {0};
     cyw43_arch_lwip_begin();
     int rc = cyw43_wifi_scan(&cyw43_state, &opts, NULL, scan_cb);
@@ -118,8 +118,10 @@ hal_status_t hal_wifi_scan_start(void) {
 }
 
 bool hal_wifi_scan_next(hal_wifi_ap_t *out, bool *done) {
-    if (g_scan_read < __atomic_load_n(&g_scan_n, __ATOMIC_ACQUIRE)) {
-        *out = g_scan[g_scan_read++];
+    uint32_t rd = __atomic_load_n(&g_scan_read, __ATOMIC_RELAXED);
+    if (rd < __atomic_load_n(&g_scan_n, __ATOMIC_ACQUIRE)) {
+        *out = g_scan[rd];
+        __atomic_store_n(&g_scan_read, rd + 1u, __ATOMIC_RELAXED);
         *done = false;
         return true;
     }

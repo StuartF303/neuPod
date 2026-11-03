@@ -141,8 +141,10 @@ static void print_wifi_stats(void) {
     wifi_get_info(&w);
     hal_wifi_mem_t m;
     hal_wifi_mem(&m);
+    char ssid[HAL_WIFI_SSID_MAX + 1];
+    hal_log_text(ssid, sizeof ssid, w.ssid);
     printf("wifi: state=%s%s ssid=%s rssi=%d ip=%s ntp=%u saved=%u reconnects=%u failures=%u lwip mem=%u/%u (max %u) pbuf=%u/%u (max %u) errs=%u\n",
-           w.state <= HAL_WIFI_BAD_AUTH ? names[w.state] : "?", w.paused_for_playback ? "(paused for playback)" : "", w.ssid[0] ? w.ssid : "-",
+           w.state <= HAL_WIFI_BAD_AUTH ? names[w.state] : "?", w.paused_for_playback ? "(paused for playback)" : "", ssid[0] ? ssid : "-",
            w.rssi, w.ip[0] ? w.ip : "-", (unsigned)w.ntp_synced, (unsigned)w.saved, (unsigned)w.reconnects, (unsigned)w.failures,
            (unsigned)m.mem_used, (unsigned)m.mem_size, (unsigned)m.mem_max, (unsigned)m.pbuf_used, (unsigned)m.pbuf_size,
            (unsigned)m.pbuf_max, (unsigned)m.errors);
