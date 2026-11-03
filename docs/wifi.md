@@ -12,12 +12,12 @@ keyboard in [Wheel input widgets](ui-input.md). Not on the board yet: everything
 * **Cost** (`arm-none-eabi-size`, whole firmware): static RAM 436,480 B (end of the Bluetooth work) to 476,968 B, **+40.5 KB** (after the review fixes: 32 settings tags and a second staging array, +3.4 KB), of which lwIP is about 28.9 KB
   (pbuf pool 18.4 KB, memory heap 6 KB, TCP and the rest), mbed TLS and the secrets code about 2.5 KB (arena 2 KB), larger settings tables about 2 KB, the rest the Wi-Fi service
   and UI. Flash 1,120,532 B to 1,214,268 B, **+94 KB**: lwIP, the HTTP client, mbed TLS (AES-GCM, SHA-256, HKDF), the CYW43 Wi-Fi code, the Wi-Fi service, the UI widgets.
-  The heap is not measured on the board yet: new heap users are the **tcpip thread (2 KB stack)**, the "wifi" task (3 KB), and sockets-less lwIP objects; the radio worker is unchanged at 6 KB (`RT_STACK_RADIO`, checked against `CYW43_TASK_STACK_SIZE` at compile time). Stack overflow checking is on (`configCHECK_FOR_STACK_OVERFLOW 2`).
+  The heap is not measured on the board yet: new heap users are the **tcpip thread (2 KB stack)**, the "wifi" task (4 KB), and sockets-less lwIP objects; the radio worker is unchanged at 6 KB (`RT_STACK_RADIO`, checked against `CYW43_TASK_STACK_SIZE` at compile time). Stack overflow checking is on (`configCHECK_FOR_STACK_OVERFLOW 2`).
   The monitor prints `heap: free= min_free=` every 10 s; compare with the Bluetooth figures.
 
 ## The Wi-Fi service (`app/runtime/wifi_service.c`)
 
-One task, "wifi" (core 0, priority 1, 3 KB stack), owns the station side. It runs every 200 ms and handles requests from the UI (a queue, never blocking the UI).
+One task, "wifi" (core 0, priority 1, 4 KB stack), owns the station side. It runs every 200 ms and handles requests from the UI (a queue, never blocking the UI).
 
 | Feature | How |
 | --- | --- |

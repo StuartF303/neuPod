@@ -52,7 +52,7 @@
 #define RT_STACK_INPUT 2048u
 #define RT_STACK_UI 12288u
 #define RT_STACK_MONITOR 3072u
-#define RT_STACK_WIFI 3072u
+#define RT_STACK_WIFI 4096u /* sealing a PSK (AES-GCM, HKDF) on save left 664 B of 3 KB on the bench */
 #define RT_STACK_CHECK 3072u
 #define RT_STACK_CHECK_STORAGE 5120u /* FatFs mount */
 #define RT_STACK_CHECK_RADIO 4096u   /* radio driver start-up and the Bluetooth hand-over (caps_resolve with a format) */
