@@ -10,6 +10,7 @@
 #include <time.h>
 
 #include "alac_dec.h"
+#include "EndianPortable.h"
 #include "arena.h"
 #include "audio_dsp.h"
 #include "codec.h"
@@ -491,6 +492,16 @@ static void alac_case(const char *base, bool tags) {
     free(stream);
     free(f.d);
 }
+TEST(alac_endian_swaps_big_endian_fields) {
+    /* Regression: on ARM the swaps once compiled to no-ops and every ALAC cookie was misread. */
+    const uint8_t b32[4] = {0x00, 0x00, 0x10, 0x00}, b16[2] = {0x00, 0xFF};
+    uint32_t v32;
+    uint16_t v16;
+    memcpy(&v32, b32, 4);
+    memcpy(&v16, b16, 2);
+    ASSERT_EQ(4096u, Swap32BtoN(v32));
+    ASSERT_EQ(255u, Swap16BtoN(v16));
+}
 TEST(alac_16_44k_stereo_bit_exact_with_tags) { alac_case("alac16_44k_st", true); }
 TEST(alac_24_48k_stereo_bit_exact_co64) { alac_case("alac24_48k_st", false); }
 TEST(alac_16_48k_mono_bit_exact) { alac_case("alac16_48k_mono", false); }
@@ -968,6 +979,7 @@ int main(void) {
     RUN(flac_vorbis_comments);
     RUN(mp3_decode_length_and_level);
     RUN(mp3_id3v2_tags);
+    RUN(alac_endian_swaps_big_endian_fields);
     RUN(alac_16_44k_stereo_bit_exact_with_tags);
     RUN(alac_24_48k_stereo_bit_exact_co64);
     RUN(alac_16_48k_mono_bit_exact);
