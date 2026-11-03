@@ -28,7 +28,7 @@ what `neupod_i2s.pio` produces.
 | PIO0, 1 state machine, 8 instructions | I2S transmitter (`platforms/rp2350/hal/neupod_i2s.pio`) | claimed with `pio_claim_unused_sm`, program added and removed at open/close. pio1 = SD (carlk3), pio2 = CYW43 + click wheel |
 | 2 DMA channels (claimed dynamically) | ping-pong, chained A to B to A, 512 words each (256 stereo frames) | high bus priority; read pointer wraps inside its 2 KB buffer (ring), so a late restart replays the old block instead of reading past the buffer |
 | `DMA_IRQ_1`, enabled on **core 1** | block-complete interrupt, refills the finished buffer | `DMA_IRQ_0` stays with the SD library on core 0 |
-| 2 x 2 KB DMA buffers, 16 KB PCM ring, 32 KB data ring | RAM | ring sizes are in `audio_core.c` and `audio_shared.c` |
+| 2 x 2 KB DMA buffers, 32 KB PCM ring, 32 KB data ring | RAM | PCM ring size is `NEUPOD_PCM_RING_FRAMES` in `app/os/memory_budget.h`; data ring in `audio_shared.c` |
 | Hot path in RAM | `dma_isr`, `on_block`, `audio_apply_gain`, the ring functions, `hal_audio_write`, `hal_audio_mute` | `NEUPOD_RAM_FUNC` / `__not_in_flash_func` |
 
 The sink is chosen at build time: `scripts/build.sh rp2350 -- -DNEUPOD_AUDIO_SINK=i2s` (default) or `null`
@@ -130,7 +130,7 @@ raises an end-of-track event after the last sample has played, then the output r
 | --- | --- | --- | --- | --- |
 | FLAC (16/20/24/32-bit, mono/stereo, 44.1/48/88.2/96 kHz) | `dr_flac` (single header, `app/third_party/dr_libs/`) | public domain / MIT-0 | **core 1** | exact: the sample is shifted left-justified into 32 bits |
 | MP3 (MPEG-1/2 Layer III, 44.1/48 kHz) | `dr_mp3` (contains minimp3) | public domain / MIT-0 (minimp3 CC0) | core 1 | float, rounded to nearest and clipped to 32 bits |
-| ALAC in `.m4a` (16/20/24/32-bit, mono/stereo, 44.1 to 96 kHz) | Apple's ALAC decoder core (`app/third_party/alac/`) with a C wrapper (`alac_dec.c`) | Apache-2.0 (see the repository's `LICENSE.md`: no NOTICE file upstream; the C port is marked as modified) | core 1 | exact |
+| ALAC in `.m4a` (16/20/24-bit; 32-bit rejected, mono/stereo, 44.1 to 96 kHz) | Apple's ALAC decoder core (`app/third_party/alac/`) with a C wrapper (`alac_dec.c`) | Apache-2.0 (see the repository's `LICENSE.md`: no NOTICE file upstream; the C port is marked as modified) | core 1 | exact |
 | AAC in `.m4a` | none yet | n/a | n/a | the player says "AAC not supported yet" |
 | WAV | our own parser (`wav.c`), raw PCM passthrough | MPL-2.0 | conversion on core 1 | exact |
 
@@ -166,15 +166,19 @@ More than 2 channels are rejected with a message, as are unsupported rates ("Uns
 
 | | Value |
 | --- | --- |
-| Arena | 116 KB (118,784 bytes). Measured high water: FLAC 4096-sample blocks 35 KB; MP3 68 KB; ALAC 16-bit 82 KB, 24-bit 98 KB. Computed worst cases: FLAC at the 8192-sample limit (4096 for 32-bit FLAC, which dr_flac stores at 8 bytes a sample) 72 KB, ALAC 32-bit stereo 4096 frames 115 KB |
-| Limits that follow | FLAC blocks above 8192 samples (4096 for 32-bit FLAC) are rejected ("FLAC block size too large"); the synthesised header declares exactly that limit, so the decoder's sample buffer is allocated once at full size and a larger frame fails instead of growing the arena; ALAC packets of at most 16384 frames are accepted by the parser but only 4096-frame packets are guaranteed to fit |
-| Data ring | 32 KB, 32-bit stereo 48 kHz is 85 ms; PCM ring 16 KB |
+| Arena | 99 KB (101,376 bytes, `CODEC_ARENA_BYTES`). Measured high water: FLAC 4096-sample blocks 35 KB; MP3 57 to 68 KB; ALAC 16-bit 82,072 B, 24-bit 98,456 B. Computed worst cases (`arena_worst_cases_fit`): FLAC at the 8192-sample limit (4096 for 32-bit FLAC, which dr_flac stores at 8 bytes a sample) 72,128 B, MP3 56,984 B, ALAC 24-bit stereo 4096 frames 98,472 B. ALAC 24-bit is the binding case; the arena is that plus a 2 KB margin, rounded up to 1 KB |
+| Limits that follow | FLAC blocks above 8192 samples (4096 for 32-bit FLAC) are rejected ("FLAC block size too large"); the synthesised header declares exactly that limit, so the decoder's sample buffer is allocated once at full size and a larger frame fails instead of growing the arena; ALAC packets of at most 16384 frames are accepted by the parser but only 4096-frame packets are guaranteed to fit; **32-bit ALAC is rejected** on core 0 ("32-bit ALAC not supported") and again in `alac_dec_init` on core 1, because 4096-frame 32-bit stereo needs about 115 KB of arena |
+| Data ring | 32 KB, 32-bit stereo 48 kHz is 85 ms |
+| PCM ring | `NEUPOD_PCM_RING_FRAMES` = 4096 frames, 32 KB (`app/os/memory_budget.h`): 93 ms at 44.1 kHz, 43 ms at 96 kHz. The earlier 2048 frames (46 ms / 21 ms) underran 66 times in 30 s on ALAC 16/44.1 and about 2600 times on ALAC 24/96 |
+| RAM budget | Arena 116 to 99 KB (-17 KB) funds the PCM ring 16 to 32 KB (+16 KB): net -1 KB. The ALAC hot paths in SRAM cost about 6.5 KB of `.data` (see below) |
+| Hot paths in SRAM | ALAC `alac_dec_decode`, `dyn_decomp`, `unpc_block`, `unmix16/24/32`, `copyPredictorTo24/32` (+Shift) and the BitBuffer readers run from RAM via `NEUPOD_RAM_FUNC` (`app/third_party/alac/README.md`) |
+| **Measured** RP2350 load of core 1 (bench, ALAC code in SRAM, ring 2048) | ALAC 16/44.1: 30.2 % load, worst packet decode 27.9 ms (38.4 % and 57 ms with the code in flash), 0 underruns; ALAC 24/96: 71.7 % load, worst packet 30 ms; MP3 worst 37 ms. With the 4096-frame ring the ALAC 24/96 underruns are expected to go away: a 30 ms decode fits inside 43 ms (to be confirmed on the bench) |
 | Host decode speed (i7-12700T, `-O2`, the test vectors, MD5 hashing included) | FLAC 16/44.1: 547x real time; FLAC 24/96: 409x; MP3: 720x; ALAC 16/44.1: 322x; ALAC 24/48: 286x (`NEUPOD_BENCH=1 test_codecs`) |
 | **Estimated** RP2350 load of core 1 (not measured) | FLAC 16/44.1 about 10 to 20 %, FLAC 24/96 about 15 to 35 %, MP3 about 10 to 25 %, ALAC 16/44.1 about 20 to 35 %, ALAC 24/48 about 25 to 40 %. Basis: about 2x the x86 cycles per sample at 125 MHz, before flash cache misses (the decoder code runs from flash). The vectors are noisy, so real music should be cheaper. Measure with the line below |
 
 The monitor prints, every 10 s, `audio decoder: codec=... decode_us_per_256_frames avg/max=.../... load=..% of a core ... arena_high_water=...`. The
 figure is the time the decoder spent per 256 output frames with the block interrupt's own time subtracted, its worst single call, and the average as a share of
-the 5.8 ms block period (at 44.1 kHz). If the load approaches 70 % the next step is to run the decoder hot loops from RAM.
+the 5.8 ms block period (at 44.1 kHz). The ALAC hot loops already run from RAM.
 
 ### Metadata
 

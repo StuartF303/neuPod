@@ -629,7 +629,7 @@ int32_t alac_dec_init( alac_dec_t * d, const uint8_t * cookie, uint32_t cookieSi
         return kALAC_ParamError;
     if ( d->cfg.frameLength == 0 || d->cfg.frameLength > 16384 || d->cfg.numChannels < 1 || d->cfg.numChannels > 2 )
         return kALAC_ParamError;
-    if ( d->cfg.bitDepth != 16 && d->cfg.bitDepth != 20 && d->cfg.bitDepth != 24 && d->cfg.bitDepth != 32 )
+    if ( d->cfg.bitDepth != 16 && d->cfg.bitDepth != 20 && d->cfg.bitDepth != 24 )
         return kALAC_ParamError;
     d->mixU = (int32_t *) alloc( d->cfg.frameLength * sizeof(int32_t) );
     d->mixV = (int32_t *) alloc( d->cfg.frameLength * sizeof(int32_t) );

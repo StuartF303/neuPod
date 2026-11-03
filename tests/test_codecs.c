@@ -189,16 +189,21 @@ TEST(arena_semantics) {
 
 TEST(arena_worst_cases_fit) {
     const size_t hdr = 8;
-    // FLAC: struct + largest block (8192 samples, stereo, int32) + seek table slack
+    // FLAC at the 8192-sample limit: struct + largest block (stereo, int32) + seek table slack
     size_t flac = sizeof(drflac) + (size_t)META_FLAC_MAX_BLOCK * 2 * 4 + 4096 + 4 * hdr;
     // MP3: struct + input buffer
     size_t mp3 = sizeof(drmp3) + DRMP3_DATA_CHUNK_SIZE + 4 * hdr;
-    // ALAC 32-bit stereo, 4096-frame packets: state + 3 buffers + compressed packet + packed output
-    size_t alac = sizeof(alac_dec_t) + 3 * (size_t)4096 * 4 + (4096 * 2 * 4 + 64) + 4096 * 8 + 8 * hdr;
-    printf("  worst-case arena use: flac %zu, mp3 %zu, alac32 %zu of %u bytes\n", flac, mp3, alac, CODEC_ARENA_BYTES);
+    // ALAC 24-bit stereo (32-bit is rejected), 4096-frame packets: state + 3 work buffers + compressed packet + packed output
+    size_t alac = sizeof(alac_dec_t) + 3 * (size_t)4096 * 4 + (4096 * 2 * 3 + 64) + 4096 * 2 * 3 + 6 * hdr;
+    size_t worst = flac > mp3 ? flac : mp3;
+    if (alac > worst) worst = alac;
+    printf("  worst-case arena use: flac %zu, mp3 %zu, alac24 %zu of %u bytes\n", flac, mp3, alac, CODEC_ARENA_BYTES);
     ASSERT_TRUE(flac <= CODEC_ARENA_BYTES);
     ASSERT_TRUE(mp3 <= CODEC_ARENA_BYTES);
     ASSERT_TRUE(alac <= CODEC_ARENA_BYTES);
+    ASSERT_TRUE(alac == worst); // ALAC 24-bit is the binding case
+    ASSERT_TRUE(worst + 2048 <= CODEC_ARENA_BYTES); // stated margin
+    ASSERT_TRUE(worst + 2048 + 1024 > CODEC_ARENA_BYTES); // and no more than rounding to 1 KB
 }
 
 /* ---- FLAC ---- */
@@ -851,6 +856,33 @@ TEST(damaged_flac_is_not_reported_as_finished_or_md5_ok) {
     free(f.d);
 }
 
+TEST(alac_32_bit_is_rejected_by_parser_and_codec) {
+    blob_t f = load("alac16_44k_st.m4a");
+    mp4_info_t mi;
+    ASSERT_EQ(META_OK, mp4_parse(mem_rd, &f, f.n, &mi));
+    uint8_t cookie[sizeof mi.cookie];
+    memcpy(cookie, mi.cookie, sizeof cookie);
+    // patch bitDepth (cookie byte 5) to 32 in the file image
+    size_t at = 0;
+    for (; at + mi.cookie_len <= f.n; at++) {
+        if (memcmp(f.d + at, cookie, mi.cookie_len) == 0) break;
+    }
+    ASSERT_TRUE(at + mi.cookie_len <= f.n);
+    f.d[at + 5] = 32;
+    mp4_info_t m32;
+    ASSERT_EQ(META_E_ALAC32, mp4_parse(mem_rd, &f, f.n, &m32));
+    ASSERT_EQ(0, strcmp(meta_err_str(META_E_ALAC32), "32-bit ALAC not supported"));
+    // core 1 refuses it too, even if core 0 let it through
+    codec_params_t p = {.kind = CODEC_ALAC, .rate = mi.rate, .channels = mi.channels, .bits = 32, .cookie_len = mi.cookie_len};
+    memcpy(p.cookie, cookie, mi.cookie_len);
+    p.cookie[5] = 32;
+    mio_t m = {f.d, f.n, 0};
+    codec_io_t io = {mio_read, mio_seek, NULL, &m};
+    codec_t c;
+    ASSERT_EQ(CODEC_ERR_FORMAT, codec_open(&c, &p, &io));
+    free(f.d);
+}
+
 TEST(alac_partial_frame_count_beyond_frame_length_is_rejected) {
     blob_t f = load("alac16_44k_st.m4a");
     mp4_info_t mi;
@@ -993,6 +1025,7 @@ int main(void) {
     RUN(id3_oversized_latin1_track_does_not_overrun);
     RUN(mp4_giant_and_looping_boxes_are_bounded);
     RUN(alac_partial_frame_count_beyond_frame_length_is_rejected);
+    RUN(alac_32_bit_is_rejected_by_parser_and_codec);
     RUN(damaged_flac_is_not_reported_as_finished_or_md5_ok);
     RUN(hostile_flac_truncated_and_flipped);
     RUN(hostile_mp3_truncated_and_flipped);

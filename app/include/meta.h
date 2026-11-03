@@ -36,6 +36,7 @@ typedef enum {
     META_E_AAC,         /**< MP4 audio that is AAC: not supported yet */
     META_E_CODEC,       /**< MP4 audio in another codec */
     META_E_NO_AUDIO,
+    META_E_ALAC32,      /**< ALAC at 32 bits: its buffers do not fit the codec arena */
 } meta_err_t;
 
 const char *meta_err_str(meta_err_t e);
