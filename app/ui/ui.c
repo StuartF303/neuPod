@@ -184,6 +184,16 @@ static void screen_ready(const char *name) {
     }
 }
 
+// Every push and pop goes through here (the bench has no wheel and no view of the panel: the UART tells where we are).
+void ui_log_screen(const char *title, const char *what, const char *now_top) {
+    sample_lvgl_memory();
+    printf("ui: screen '%s' %s", title, what);
+    if (now_top != NULL) {
+        printf(" -> '%s'", now_top);
+    }
+    printf(" depth=%d lvgl_mem=%u/%uB\n", ui_frame_depth(), (unsigned)g_perf.mem_used, (unsigned)g_perf.mem_total);
+}
+
 void ui_task(void *arg) {
     (void)arg;
     // Display first: the splash must be the first thing the user sees.

@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
 /*
- * Settings > Wi-Fi (docs/wifi.md): status, switches, scan, networks (scanned and remembered), "Other network..." for hidden SSIDs,
- * time zone and a manual clock. Passwords are typed with the wheel text widget (ui_input.h). Chained modals (SSID, then
- * security, then password) are sequenced from this screen's tick, because a modal closes AFTER its callback returns.
+ * Settings > Wi-Fi (docs/wifi.md): status, switches, "Scan for networks" (opens the Networks screen), "Other network..." for
+ * hidden SSIDs, time zone and a manual clock. The Networks screen scans when it opens and lists the networks found and the
+ * remembered ones; Select on one starts the join flow. Passwords are typed with the wheel text widget (ui_input.h). Chained
+ * modals (SSID, then security, then password) are sequenced from the tick of the screen that opened them, because a modal
+ * closes AFTER its callback returns.
  */
 #include <stdio.h>
 #include <string.h>
@@ -22,6 +24,8 @@
 #define ROW_TIME 5
 #define ROW_PLAYBACK 6
 #define ROWS_FIXED 7
+#define NROW_SCAN 0 /* Networks screen: "Scan again" / "Scanning...", then the networks */
+#define NROWS_FIXED 1
 #define NET_MAX 20u
 
 typedef struct {
@@ -36,11 +40,18 @@ typedef enum { NEXT_NONE, NEXT_ASK_SEC, NEXT_ASK_PW, NEXT_CONNECT_NEW, NEXT_ACTI
 typedef struct {
     ui_screen_t base;
     ui_list_t *list;
+    uint32_t last_ms;
+} wifi_screen_t;
+
+typedef struct {
+    ui_screen_t base;
+    ui_list_t *list;
     net_t net[NET_MAX];
     uint32_t nnet;
     bool scanning;
+    bool started;      /* the scan was requested from this screen */
     uint32_t last_ms;
-} wifi_screen_t;
+} nets_screen_t;
 
 /* The connect flow lives outside the screen object: modals are pushed above it. */
 static struct {
@@ -55,9 +66,6 @@ static struct {
 static const char *const k_sec_items[] = {"Open (no password)", "Password (WPA2 / WPA3)"};
 static const char *const k_net_actions[] = {"Connect", "Forget this network"};
 static const char *const k_cur_actions[] = {"Disconnect", "Forget this network"};
-static const char *const k_onoff[] = {"Off", "On"};
-
-static bool g_pending_scan_open; /* the screen was just built */
 
 static const char *sec_text(hal_wifi_sec_t s) {
     switch (s) {
@@ -88,7 +96,7 @@ static const char *state_text(const wifi_info_t *w, const wifi_settings_t *s) {
     return "?";
 }
 
-static net_t *find_net(wifi_screen_t *w, const char *ssid) {
+static net_t *find_net(nets_screen_t *w, const char *ssid) {
     for (uint32_t i = 0; i < w->nnet; i++) {
         if (strcmp(w->net[i].ssid, ssid) == 0) {
             return &w->net[i];
@@ -97,7 +105,7 @@ static net_t *find_net(wifi_screen_t *w, const char *ssid) {
     return NULL;
 }
 
-static net_t *add_net(wifi_screen_t *w, const char *ssid) {
+static net_t *add_net(nets_screen_t *w, const char *ssid) {
     net_t *n = find_net(w, ssid);
     if (n == NULL && w->nnet < NET_MAX) {
         n = &w->net[w->nnet++];
@@ -107,7 +115,7 @@ static net_t *add_net(wifi_screen_t *w, const char *ssid) {
     return n;
 }
 
-static void rebuild_saved(wifi_screen_t *w) {
+static void rebuild_saved(nets_screen_t *w) {
     for (uint32_t i = 0; i < w->nnet; i++) {
         w->net[i].saved = false;
     }
@@ -121,10 +129,8 @@ static void rebuild_saved(wifi_screen_t *w) {
     }
 }
 
-static int32_t count(const wifi_screen_t *w) { return ROWS_FIXED + (int32_t)(w->nnet == 0 ? 1 : w->nnet); }
-
 static void wifi_get(void *ctx, int32_t i, ui_list_item_t *o) {
-    const wifi_screen_t *w = ctx;
+    (void)ctx;
     wifi_info_t info;
     wifi_settings_t s;
     wifi_get_info(&info);
@@ -144,8 +150,9 @@ static void wifi_get(void *ctx, int32_t i, ui_list_item_t *o) {
         o->dim = !s.enabled;
         return;
     case ROW_SCAN:
-        snprintf(o->label, sizeof o->label, "%s", w->scanning ? "Scanning..." : "Scan for networks");
+        snprintf(o->label, sizeof o->label, "Scan for networks");
         o->dim = !s.enabled;
+        o->chevron = true;
         return;
     case ROW_OTHER:
         snprintf(o->label, sizeof o->label, "Other network...");
@@ -171,12 +178,37 @@ static void wifi_get(void *ctx, int32_t i, ui_list_item_t *o) {
         return;
     default: break;
     }
-    if (w->nnet == 0) {
-        o->dim = true;
-        snprintf(o->label, sizeof o->label, "%s", w->scanning ? "Searching..." : "No networks: scan, or add one");
+}
+
+static int32_t nets_count(const nets_screen_t *w) { return NROWS_FIXED + (int32_t)(w->nnet == 0 ? 1 : w->nnet); }
+
+/* Ask for a scan; the table restarts with just the remembered networks. */
+static void nets_scan_begin(nets_screen_t *w) {
+    if (wifi_scan_request()) {
+        w->scanning = true;
+        w->started = true;
+        w->nnet = 0;
+        rebuild_saved(w);
+    }
+}
+
+static void nets_get(void *ctx, int32_t i, ui_list_item_t *o) {
+    const nets_screen_t *w = ctx;
+    wifi_info_t info;
+    wifi_settings_t s;
+    wifi_get_info(&info);
+    wifi_get_settings(&s);
+    if (i == NROW_SCAN) {
+        snprintf(o->label, sizeof o->label, "%s", w->scanning ? "Scanning..." : "Scan again");
+        o->dim = !s.enabled;
         return;
     }
-    const net_t *n = &w->net[i - ROWS_FIXED];
+    if (w->nnet == 0) {
+        o->dim = true;
+        snprintf(o->label, sizeof o->label, "%s", !s.enabled ? "Wi-Fi is off" : w->scanning ? "Searching..." : "No networks: scan again, or add one");
+        return;
+    }
+    const net_t *n = &w->net[i - NROWS_FIXED];
     bool cur = info.state == HAL_WIFI_UP && strcmp(info.ssid, n->ssid) == 0;
     snprintf(o->label, sizeof o->label, "%s%s", cur ? LV_SYMBOL_OK " " : n->saved ? "* " : "", n->ssid);
     if (n->needs_pw) {
@@ -231,7 +263,8 @@ static void ask_password(const char *ssid) {
     ui_input_open(&(wi_request_t){.kind = WI_K_TEXT, .title = "Password", .max_chars = HAL_WIFI_PSK_MAX, .max_bytes = HAL_WIFI_PSK_MAX, .masked = true, .done = on_text_done});
 }
 
-static void tick_flow(wifi_screen_t *w) {
+/* @p w: the Networks screen, if that is the one running the flow (a forgotten network is dropped from its table). */
+static void tick_flow(nets_screen_t *w) {
     if (ui_input_active()) {
         return;
     }
@@ -266,7 +299,7 @@ static void tick_flow(wifi_screen_t *w) {
                     break;
                 }
             }
-            net_t *n = find_net(w, g_flow.target);
+            net_t *n = w != NULL ? find_net(w, g_flow.target) : NULL;
             if (n != NULL) {
                 n->saved = false;
                 n->needs_pw = false;
@@ -326,10 +359,8 @@ static bool wifi_button(ui_screen_t *s, uint8_t btn) {
         wifi_set_settings(&set);
         return true;
     case ROW_SCAN:
-        if (set.enabled && !w->scanning && wifi_scan_request()) {
-            w->scanning = true;
-            w->nnet = 0;
-            rebuild_saved(w);
+        if (set.enabled) {
+            ui_frame_push(ui_screen_wifi_networks_create());
         }
         return true;
     case ROW_OTHER:
@@ -352,10 +383,28 @@ static bool wifi_button(ui_screen_t *s, uint8_t btn) {
     }
     default: break;
     }
-    if (w->nnet == 0 || sel < ROWS_FIXED) {
+    return true;
+}
+
+static bool nets_button(ui_screen_t *s, uint8_t btn) {
+    nets_screen_t *w = (nets_screen_t *)s;
+    if (btn != HAL_BTN_SELECT) {
+        return false;
+    }
+    int32_t sel = ui_list_selected(w->list);
+    wifi_settings_t set;
+    wifi_get_settings(&set);
+    if (sel == NROW_SCAN) {
+        if (set.enabled && !w->scanning) {
+            nets_scan_begin(w);
+            ui_list_set_count(w->list, nets_count(w));
+        }
         return true;
     }
-    const net_t *n = &w->net[sel - ROWS_FIXED];
+    if (w->nnet == 0 || sel < NROWS_FIXED) {
+        return true;
+    }
+    const net_t *n = &w->net[sel - NROWS_FIXED];
     snprintf(g_flow.target, sizeof g_flow.target, "%s", n->ssid);
     wifi_info_t info;
     wifi_get_info(&info);
@@ -373,7 +422,22 @@ static bool wifi_button(ui_screen_t *s, uint8_t btn) {
 
 static void wifi_tick(ui_screen_t *s) {
     wifi_screen_t *w = (wifi_screen_t *)s;
+    tick_flow(NULL);
+    uint32_t now = os_tick_ms();
+    if (now - w->last_ms >= 1000u) {
+        w->last_ms = now;
+        ui_list_refresh(w->list);
+    }
+}
+
+static void nets_tick(ui_screen_t *s) {
+    nets_screen_t *w = (nets_screen_t *)s;
     tick_flow(w);
+    wifi_settings_t set;
+    wifi_get_settings(&set);
+    if (!w->started && set.enabled) {
+        nets_scan_begin(w); /* a scan on open; if the request queue is full, try again on the next pass */
+    }
     bool changed = false;
     if (w->scanning) {
         hal_wifi_ap_t ap;
@@ -395,14 +459,19 @@ static void wifi_tick(ui_screen_t *s) {
     if (changed || now - w->last_ms >= 1000u) {
         w->last_ms = now;
         rebuild_saved(w);
-        ui_list_set_count(w->list, count(w));
+        ui_list_set_count(w->list, nets_count(w));
     }
 }
 
 static void wifi_scroll(ui_screen_t *s, int32_t steps) { ui_list_move(((wifi_screen_t *)s)->list, steps); }
 static void wifi_destroy(ui_screen_t *s) { ui_list_destroy(((wifi_screen_t *)s)->list); }
-static void list_suspend(ui_screen_t *x) { ui_list_suspend(((wifi_screen_t *)x)->list); }
-static void list_resume(ui_screen_t *x) { ui_list_resume(((wifi_screen_t *)x)->list); }
+static void wifi_suspend(ui_screen_t *x) { ui_list_suspend(((wifi_screen_t *)x)->list); }
+static void wifi_resume(ui_screen_t *x) { ui_list_resume(((wifi_screen_t *)x)->list); }
+
+static void nets_scroll(ui_screen_t *s, int32_t steps) { ui_list_move(((nets_screen_t *)s)->list, steps); }
+static void nets_destroy(ui_screen_t *s) { ui_list_destroy(((nets_screen_t *)s)->list); }
+static void nets_suspend(ui_screen_t *x) { ui_list_suspend(((nets_screen_t *)x)->list); }
+static void nets_resume(ui_screen_t *x) { ui_list_resume(((nets_screen_t *)x)->list); }
 
 ui_screen_t *ui_screen_wifi_create(void) {
     wifi_screen_t *w = (wifi_screen_t *)ui_screen_new(sizeof *w, "Wi-Fi");
@@ -413,12 +482,25 @@ ui_screen_t *ui_screen_wifi_create(void) {
     w->base.on_button = wifi_button;
     w->base.on_tick = wifi_tick;
     w->base.destroy = wifi_destroy;
-    w->base.suspend = list_suspend;
-    w->base.resume = list_resume;
+    w->base.suspend = wifi_suspend;
+    w->base.resume = wifi_resume;
     memset(&g_flow, 0, sizeof g_flow);
-    g_pending_scan_open = false;
+    w->list = ui_list_create(w->base.root, UI_W, &(ui_list_model_t){.count = ROWS_FIXED, .ctx = w, .get = wifi_get});
+    return &w->base;
+}
+
+ui_screen_t *ui_screen_wifi_networks_create(void) {
+    nets_screen_t *w = (nets_screen_t *)ui_screen_new(sizeof *w, "Networks");
+    if (w == NULL) {
+        return NULL;
+    }
+    w->base.on_scroll = nets_scroll;
+    w->base.on_button = nets_button;
+    w->base.on_tick = nets_tick;
+    w->base.destroy = nets_destroy;
+    w->base.suspend = nets_suspend;
+    w->base.resume = nets_resume;
     rebuild_saved(w);
-    w->list = ui_list_create(w->base.root, UI_W, &(ui_list_model_t){.count = count(w), .ctx = w, .get = wifi_get});
-    (void)k_onoff;
+    w->list = ui_list_create(w->base.root, UI_W, &(ui_list_model_t){.count = nets_count(w), .ctx = w, .get = nets_get});
     return &w->base;
 }

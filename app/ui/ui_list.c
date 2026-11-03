@@ -5,6 +5,7 @@
  * the list itself scrolls smoothly (one short animation) when the selection leaves the window, as on the
  * classic click-wheel menus. Selection clamps at both ends (no wrap).
  */
+#include <stdio.h>
 #include <string.h>
 
 #include "ui_internal.h"
@@ -231,6 +232,12 @@ bool ui_list_move(ui_list_t *l, int32_t steps) {
     restyle_selected(l, old);
     scroll_to_window(l, true);
     ui_feedback_step();
+    if (l->model.get != NULL && l->nav.sel >= 0 && l->nav.sel < l->model.count) { /* one line per step, for blind bench navigation */
+        ui_list_item_t it;
+        memset(&it, 0, sizeof it);
+        l->model.get(l->model.ctx, l->nav.sel, &it);
+        printf("ui: sel %s %d '%s'\n", ui_frame_top_title(), (int)l->nav.sel, it.label);
+    }
     return true;
 }
 

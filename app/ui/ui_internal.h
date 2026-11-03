@@ -94,6 +94,10 @@ void ui_frame_tick(uint32_t now_ms);
 /** A selection moved: play the click feedback (if enabled and available). */
 void ui_feedback_step(void);
 int ui_frame_depth(void);
+/** Title of the screen on top (the one that gets the input), "" if none. */
+const char *ui_frame_top_title(void);
+/** Console line for a screen push / pop (ui.c): "ui: screen 'T' push|pop ..."; @p now_top is the screen revealed by a pop. */
+void ui_log_screen(const char *title, const char *what, const char *now_top);
 
 /* ---- List widget (ui_list.c) ---------------------------------------------------------------------- */
 
@@ -139,7 +143,9 @@ ui_screen_t *ui_screen_extras_create(void);
 ui_screen_t *ui_screen_files_create(void);
 ui_screen_t *ui_screen_settings_create(void);
 ui_screen_t *ui_screen_bluetooth_create(void); /* ui_bluetooth.c */
+ui_screen_t *ui_screen_bt_devices_create(void); /* ui_bluetooth.c: starts a scan when it opens */
 ui_screen_t *ui_screen_wifi_create(void); /* ui_wifi.c */
+ui_screen_t *ui_screen_wifi_networks_create(void); /* ui_wifi.c: starts a scan when it opens */
 ui_screen_t *ui_screen_nettest_create(void); /* ui_nettest.c */
 ui_screen_t *ui_screen_inputdemo_create(void); /* input/ui_input_demo.c */
 

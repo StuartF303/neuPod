@@ -164,6 +164,7 @@ void ui_frame_push(ui_screen_t *s) {
     }
     lv_obj_set_hidden(s->root, false);
     set_title(s->title);
+    ui_log_screen(s->title, "push", NULL);
 }
 
 void ui_frame_pop(void) {
@@ -171,6 +172,8 @@ void ui_frame_pop(void) {
         return; // the home screen never goes away
     }
     ui_screen_t *s = ui_stack_pop(&g_stack);
+    char popped[48]; /* the title may point into the screen being freed */
+    snprintf(popped, sizeof popped, "%s", s->title != NULL ? s->title : "");
     if (s->destroy != NULL) {
         s->destroy(s);
     }
@@ -183,9 +186,15 @@ void ui_frame_pop(void) {
     now->suspended = false;
     lv_obj_set_hidden(now->root, false);
     set_title(now->title);
+    ui_log_screen(popped, "pop", now->title);
 }
 
 int ui_frame_depth(void) { return g_stack.depth; }
+
+const char *ui_frame_top_title(void) {
+    ui_screen_t *t = ui_stack_top(&g_stack);
+    return t != NULL && t->title != NULL ? t->title : "";
+}
 
 void ui_frame_input(const input_event_t *ev, uint32_t now_ms) {
     ui_screen_t *top = ui_stack_top(&g_stack);

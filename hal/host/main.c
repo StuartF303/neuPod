@@ -24,7 +24,7 @@
     "snap:home _ snap:music-menu _ snap:music-empty m m s s s _ snap:extras _ snap:files _ "        \
     "snap:files-sub m s s _ snap:files-many 260*s snap:files-many-end m m m m s _ snap:settings "                \
     "s s s snap:settings-bt _ snap:bt-idle s s _ snap:bt-scanning x x x x x x x x x snap:bt-found s _ snap:bt-pair "     \
-    "m w w w _ snap:about m m s s _ snap:nowplaying m"
+    "m m w w w _ snap:about m m s s _ snap:nowplaying m"
 
 // Wheel input widgets (Extras > Input widgets): text, password with show, live search, number, slider, choice, multi choice, date/time.
 #define TOUR_INPUT                                                                                 \
@@ -33,11 +33,11 @@
     "s _ s s s snap:in-number p s _ s s s s s snap:in-slider p s _ s snap:in-choice p "              \
     "s _ _ s s _ snap:in-multi p s _ s d s snap:in-datetime p snap:in-end"
 
-// Wi-Fi: Settings > Wi-Fi, scan, pick a network, type the password on the wheel keyboard, join, NTP time on the home screen.
+// Wi-Fi: Settings > Wi-Fi > Scan (Networks screen), pick a network, type the password on the wheel keyboard, join, NTP time on the home screen.
 #define TOUR_WIFI                                                                                  \
     "x s s s s _ s s s s snap:settings-wifi _ snap:wifi-idle s s _ snap:wifi-scan x x x x x x "      \
-    "snap:wifi-found s s s s s _ snap:wifi-kb-empty _ s _ s s _ snap:wifi-kb p x x x x x x "          \
-    "snap:wifi-joined m m x x x snap:home-clock"
+    "snap:wifi-found s _ snap:wifi-kb-empty _ s _ s s _ snap:wifi-kb p x x x x x x "          \
+    "snap:wifi-joined m m m x x x snap:home-clock"
 
 static unsigned g_expect = 18;
 static const char *g_snapshot_dir;
