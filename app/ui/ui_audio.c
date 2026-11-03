@@ -45,7 +45,7 @@ static lv_obj_t *bar_new(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int3
 /* ---- Test tone -------------------------------------------------------------------------------------- */
 
 static const tone_mode_t k_modes[3] = {TONE_1K, TONE_IDENT, TONE_SCALE};
-static const char *const k_mode_label[3] = {"1 kHz tone", "L/R ident (1 s left, 1 s right)", "Scale (C4 up to C5 and back)"};
+static const char *const k_mode_label[3] = {"1 kHz tone", "L/R ident (low left, high right)", "Scale (C4 up to C5 and back)"};
 
 typedef struct {
     ui_screen_t base;
