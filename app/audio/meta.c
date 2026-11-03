@@ -385,7 +385,8 @@ meta_err_t mp3_parse(meta_read_fn rd, void *ctx, uint64_t file_size, mp3_info_t 
     uint8_t buf[512];
     mp3_hdr_t h = {0};
     uint64_t pos = start, found = 0;
-    for (uint64_t scanned = 0; scanned < 65536 && !found; scanned += 256) { // find a header confirmed by the one after it
+    bool have = false; // (not "found != 0": a file with no ID3v2 tag has its first frame, and the Xing/LAME header, at offset 0)
+    for (uint64_t scanned = 0; scanned < 65536 && !have; scanned += 256) { // find a header confirmed by the one after it
         int32_t n = rd(ctx, pos, buf, sizeof buf);
         if (n < 4) break;
         for (int32_t i = 0; i + 4 <= n && i < 256; i++) {
@@ -398,32 +399,48 @@ meta_err_t mp3_parse(meta_read_fn rd, void *ctx, uint64_t file_size, mp3_info_t 
             }
             h = c;
             found = pos + (uint64_t)i;
+            have = true;
             break;
         }
         pos += 256;
     }
-    if (!found) return META_E_FORMAT;
+    if (!have) return META_E_FORMAT;
     if (!rate_ok(h.rate) || h.rate > 48000u) return META_E_RATE;
     out->audio_offset = found;
     out->rate = h.rate;
     out->channels = h.channels;
     out->bitrate_kbps = h.kbps;
-    uint8_t fr[64] = {0};
+    uint8_t fr[192] = {0}; // header, side info, Xing/Info fields (up to a 100-byte TOC) and the LAME tag
     uint32_t side = h.version == 3 ? (h.channels == 1 ? 17u : 32u) : (h.channels == 1 ? 9u : 17u);
     uint64_t frames = 0;
-    if (rd(ctx, found, fr, 64) == 64) {
-        if (!(fr[1] & 1)) side += 2; // protection bit clear: a 2-byte CRC follows the header
-    }
-    if (4 + side + 12 <= 64) {
+    uint32_t delay = 0, padding = 0; // as dr_mp3 counts them (encoder delay + 529 decoder delay; padding - 529), see below
+    int32_t got = rd(ctx, found, fr, sizeof fr);
+    if (got < 16) got = 0;
+    if (got != 0 && !(fr[1] & 1)) side += 2; // protection bit clear: a 2-byte CRC follows the header
+    if (got != 0 && 4 + side + 12 <= (uint32_t)got) {
         const uint8_t *x = fr + 4 + side;
         if ((!memcmp(x, "Xing", 4) || !memcmp(x, "Info", 4)) && (x[7] & 1)) {
+            uint32_t flags = x[7];
             frames = be32(x + 8);
             out->vbr = !memcmp(x, "Xing", 4);
+            // The LAME tag follows the optional fields; it carries the encoder delay and end padding (12 bits each).
+            uint32_t off = 4 + side + 8 + 4 + ((flags & 2u) ? 4u : 0u) + ((flags & 4u) ? 100u : 0u) + ((flags & 8u) ? 4u : 0u);
+            uint32_t fb = h.frame_bytes < (uint32_t)got ? h.frame_bytes : (uint32_t)got;
+            if (off + 24 <= fb && fr[off] != 0) {
+                uint32_t d = ((uint32_t)fr[off + 21] << 4) | (fr[off + 22] >> 4);
+                uint32_t pd = (((uint32_t)fr[off + 22] & 0xFu) << 8) | fr[off + 23];
+                out->lame_delay = d;
+                out->lame_padding = pd;
+                delay = d + 528u + 1u;
+                padding = pd > 529u ? pd - 529u : 0u; // dr_mp3 ignores a padding below its own decoder delay
+            }
         }
     }
     uint64_t audio_bytes = file_size > found ? file_size - found : 0;
     if (frames != 0) {
-        out->total_frames = frames * h.spf;
+        // The length the decoder will deliver: dr_mp3 itself drops delay + padding (do not trim again in the codec layer).
+        uint64_t raw = frames * h.spf;
+        out->total_frames = raw > (uint64_t)delay + padding ? raw - delay - padding : raw;
         uint64_t secs = out->total_frames / h.rate;
         if (out->vbr && secs != 0) out->bitrate_kbps = (uint32_t)(audio_bytes * 8u / 1000u / secs);
     } else {

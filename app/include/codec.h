@@ -49,6 +49,8 @@ typedef struct {
     uint32_t channels, bits; /**< bits: source bit depth (FLAC/ALAC); ignored for MP3 */
     bool verify;             /**< FLAC: MD5 of the decoded samples */
     uint64_t total_frames;   /**< length announced by the container (0 = unknown): ending short is then a decode error */
+    uint32_t skip_frames;    /**< frames to drop from the start of the decoder's output (ALAC priming). MP3: leave 0, dr_mp3 trims LAME delay/padding itself */
+    bool trim_exact;         /**< total_frames is the exact output length after skip_frames: end the stream there */
     uint8_t cookie[64];      /**< ALAC magic cookie */
     uint32_t cookie_len;
 } codec_params_t;
@@ -60,7 +62,9 @@ struct codec {
     uint32_t channels;  /**< native channels (1 or 2) */
     uint32_t bits;
     bool verify;
-    uint64_t total_frames, frames_out;
+    uint64_t total_frames, frames_out; /**< frames_out counts frames delivered (after the start trim) */
+    uint32_t skip_left;
+    uint64_t limit;     /**< stop after this many delivered frames (0 = none) */
     md5_t md5;
     void *impl;         /**< drflac* / drmp3* (arena) */
     /* ALAC */

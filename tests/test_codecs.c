@@ -2,6 +2,7 @@
 // Host tests for the codecs: FLAC bit-exactness (vs libFLAC's STREAMINFO MD5 and an independent MD5 of the source),
 // MP3 sanity, ALAC bit-exactness (Apple's reference encoder), the MP4 demuxer, tag parsers, MD5, the arena, and the
 // core0/core1 stream handshake. Vectors: tests/assets/audio (see tools/gen_audio_vectors.py, tools/gen_alac_vectors.py).
+#define _GNU_SOURCE
 #include <math.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -374,8 +375,11 @@ TEST(mp3_decode_length_and_level) {
     ASSERT_EQ(44100, mi.rate);
     ASSERT_EQ(2, mi.channels);
     ASSERT_TRUE(mi.bitrate_kbps >= 32 && mi.bitrate_kbps <= 320);
-    // This encoder wrote no Xing/Info frame (a VBR stream), so the length is only a size-based estimate and says so.
-    ASSERT_TRUE(mi.estimated && mi.total_frames > 0);
+    // The encoder (LAME) wrote a Xing frame with its delay and padding: the length is exact (frame count minus delay and padding).
+    ASSERT_TRUE(!mi.estimated && mi.vbr);
+    ASSERT_EQ(frames, mi.total_frames);
+    ASSERT_EQ(576, mi.lame_delay);
+    ASSERT_EQ(1404, mi.lame_padding);
     codec_params_t cp = {.kind = CODEC_MP3, .rate = mi.rate, .channels = mi.channels, .bits = 32};
     static int32_t keepbuf[60000 * 2];
     int32_t *keep = keepbuf;
@@ -384,7 +388,7 @@ TEST(mp3_decode_length_and_level) {
     uint32_t got = decode_all(&cp, f.d + mi.audio_offset, f.n - mi.audio_offset, md5, &secs, &keep, 60000);
     printf("  mp3: %u frames (source %u) in %.1f ms (%.0fx real time); arena high water %zu B\n", got, frames, secs * 1e3,
            (double)got / mi.rate / secs, codec_arena_high_water());
-    ASSERT_TRUE(got > frames - 3000 && got < frames + 3000); // encoder delay / padding
+    ASSERT_EQ(frames, got); // the decoder drops the encoder delay and padding itself: exactly the source length
     double sl = 0, sr = 0;
     uint32_t a = 4000, b = got - 4000, cnt = 0;
     for (uint32_t i = a; i < b; i++, cnt++) {
@@ -441,6 +445,53 @@ TEST(mp3_id3v2_tags) {
     ASSERT_EQ(0, strcmp(mi.tags.album, "Alb\xC3\xBCm"));
     ASSERT_EQ(9, mi.tags.track);
     free(buf);
+    free(f.d);
+}
+
+// LAME tag: encoder delay and padding. dr_mp3 trims them while decoding; the length mp3_parse reports must equal what comes out
+// (never trim twice, never disagree), whatever the tag says.
+static uint32_t mp3_decode_count(const blob_t *f, const mp3_info_t *mi) {
+    codec_params_t cp = {.kind = CODEC_MP3, .rate = mi->rate, .channels = mi->channels, .bits = 32};
+    uint8_t md5[16];
+    return decode_all(&cp, f->d + mi->audio_offset, f->n - mi->audio_offset, md5, NULL, NULL, 0);
+}
+TEST(mp3_lame_delay_and_padding_agree_with_the_decoder) {
+    blob_t f = load("mp3_44k_st.mp3");
+    ASSERT_TRUE(f.n > 400);
+    // the LAME tag sits behind the Xing header: 4 (frame header) + 32 (side info) + 8 + 4 + 4 + 100 + 4 = 156; delay and padding at +21
+    ASSERT_EQ(0, memcmp(f.d + 156, "LAME", 4));
+    static const struct { uint32_t delay, pad; } cases[] = {{576, 1404}, {700, 1000}, {0, 0}, {1105, 100}, {2000, 2000}};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        f.d[156 + 21] = (uint8_t)(cases[i].delay >> 4);
+        f.d[156 + 22] = (uint8_t)(((cases[i].delay & 0xF) << 4) | (cases[i].pad >> 8));
+        f.d[156 + 23] = (uint8_t)cases[i].pad;
+        mp3_info_t mi;
+        ASSERT_EQ(META_OK, mp3_parse(mem_rd, &f, f.n, &mi));
+        ASSERT_EQ(cases[i].delay, mi.lame_delay);
+        ASSERT_EQ(cases[i].pad, mi.lame_padding);
+        uint32_t got = mp3_decode_count(&f, &mi);
+        printf("  delay %u padding %u: parse says %u frames, decoder delivers %u\n", (unsigned)cases[i].delay, (unsigned)cases[i].pad,
+               (unsigned)mi.total_frames, (unsigned)got);
+        ASSERT_EQ(got, mi.total_frames);
+        if (cases[i].pad >= 529) {
+            ASSERT_EQ(40u * 1152u - cases[i].delay - cases[i].pad, got);
+        }
+    }
+    // no LAME tag (first byte of the version string zero): the whole frame count, nothing trimmed
+    f.d[156] = 0;
+    mp3_info_t mi;
+    ASSERT_EQ(META_OK, mp3_parse(mem_rd, &f, f.n, &mi));
+    ASSERT_EQ(0, mi.lame_delay);
+    ASSERT_EQ(40u * 1152u, mi.total_frames);
+    ASSERT_EQ(mi.total_frames, mp3_decode_count(&f, &mi));
+    free(f.d);
+}
+TEST(mp3_without_id3_tag_keeps_its_first_frame) {
+    // Regression: a file with no ID3v2 tag has the Xing/LAME frame at offset 0, which the frame scan used to skip.
+    blob_t f = load("mp3_44k_st.mp3");
+    mp3_info_t mi;
+    ASSERT_EQ(META_OK, mp3_parse(mem_rd, &f, f.n, &mi));
+    ASSERT_EQ(0, mi.audio_offset);
     free(f.d);
 }
 
@@ -510,6 +561,80 @@ TEST(alac_endian_swaps_big_endian_fields) {
 TEST(alac_16_44k_stereo_bit_exact_with_tags) { alac_case("alac16_44k_st", true); }
 TEST(alac_24_48k_stereo_bit_exact_co64) { alac_case("alac24_48k_st", false); }
 TEST(alac_16_48k_mono_bit_exact) { alac_case("alac16_48k_mono", false); }
+
+// Encoder priming and padding: the edit list (preferred) or iTunSMPB. Both vectors play frames [2112, 8112) of the 9600-frame source.
+static uint8_t *alac_stream_of(const blob_t *f, const mp4_info_t *mi, size_t *sn) {
+    uint8_t *stream = malloc(f->n + 4 * (size_t)mi->sample_count);
+    mp4_iter_t it;
+    mp4_iter_init(&it, mi);
+    uint64_t off;
+    uint32_t sz;
+    *sn = 0;
+    while (mp4_iter_next(&it, mem_rd, (void *)f, &off, &sz)) {
+        put_be32(stream + *sn, sz);
+        memcpy(stream + *sn + 4, f->d + off, sz);
+        *sn += 4 + sz;
+    }
+    return stream;
+}
+static void alac_trim_case(const char *name, const char *what) {
+    blob_t full = load("alac16_48k_mono.m4a");
+    mp4_info_t fm;
+    ASSERT_EQ(META_OK, mp4_parse(mem_rd, &full, full.n, &fm));
+    ASSERT_TRUE(!fm.trimmed && fm.skip_frames == 0 && fm.total_frames == 9600);
+    size_t fsn;
+    uint8_t *fstream = alac_stream_of(&full, &fm, &fsn);
+    codec_params_t fp = {.kind = CODEC_ALAC, .rate = fm.rate, .channels = fm.channels, .bits = fm.bits, .cookie_len = fm.cookie_len};
+    memcpy(fp.cookie, fm.cookie, fm.cookie_len);
+    static int32_t ref[9600 * 2];
+    int32_t *keep = ref;
+    uint8_t md5[16];
+    ASSERT_EQ(9600, decode_all(&fp, fstream, fsn, md5, NULL, &keep, 9600));
+
+    blob_t t = load(name);
+    ASSERT_TRUE(t.n > 0);
+    mp4_info_t mi;
+    ASSERT_EQ(META_OK, mp4_parse(mem_rd, &t, t.n, &mi));
+    printf("  %s: priming %u, length %u (from the %s)\n", name, (unsigned)mi.skip_frames, (unsigned)mi.total_frames, what);
+    ASSERT_TRUE(mi.trimmed);
+    ASSERT_EQ(2112, mi.skip_frames);
+    ASSERT_EQ(6000, mi.total_frames);
+    size_t sn;
+    uint8_t *stream = alac_stream_of(&t, &mi, &sn);
+    codec_params_t p = {.kind = CODEC_ALAC, .rate = mi.rate, .channels = mi.channels, .bits = mi.bits, .cookie_len = mi.cookie_len,
+                        .total_frames = mi.total_frames, .skip_frames = mi.skip_frames, .trim_exact = true};
+    memcpy(p.cookie, mi.cookie, mi.cookie_len);
+    static int32_t got[9600 * 2];
+    keep = got;
+    ASSERT_EQ(6000, decode_all(&p, stream, sn, md5, NULL, &keep, 9600));
+    ASSERT_EQ(0, memcmp(got, ref + 2112 * 2, 6000u * 2u * sizeof(int32_t)));
+    // without the trim flag the decoder delivers everything (the container length alone does not cut)
+    p.trim_exact = false;
+    p.skip_frames = 0;
+    ASSERT_EQ(9600, decode_all(&p, stream, sn, md5, NULL, NULL, 0));
+    free(stream);
+    free(t.d);
+    free(fstream);
+    free(full.d);
+}
+TEST(alac_edit_list_trims_priming_and_padding) { alac_trim_case("alac16_48k_mono_elst.m4a", "edit list"); }
+TEST(alac_itunsmpb_trims_priming_and_padding) { alac_trim_case("alac16_48k_mono_smpb.m4a", "iTunSMPB tag"); }
+TEST(alac_nonsense_edit_list_is_ignored) {
+    // An edit list that does not fit the media is ignored (whole track plays).
+    blob_t t = load("alac16_48k_mono_elst.m4a");
+    mp4_info_t mi;
+    ASSERT_EQ(META_OK, mp4_parse(mem_rd, &t, t.n, &mi));
+    ASSERT_EQ(2112, mi.skip_frames);
+    // find the 'elst' box and give it a segment longer than the media: ignored, the whole track plays
+    uint8_t *e = memmem(t.d, t.n, "elst", 4);
+    ASSERT_TRUE(e != NULL);
+    put_be32(e + 4 + 4 + 4, 1000000); // segment_duration 1000 s
+    ASSERT_EQ(META_OK, mp4_parse(mem_rd, &t, t.n, &mi));
+    ASSERT_TRUE(!mi.trimmed);
+    ASSERT_EQ(0, mi.skip_frames);
+    ASSERT_EQ(9600, mi.total_frames);
+    free(t.d);
+}
 
 static size_t mkbox(uint8_t *p, const char *t, const uint8_t *body, size_t n) {
     put_be32(p, (uint32_t)(8 + n));
@@ -1011,10 +1136,15 @@ int main(void) {
     RUN(flac_vorbis_comments);
     RUN(mp3_decode_length_and_level);
     RUN(mp3_id3v2_tags);
+    RUN(mp3_lame_delay_and_padding_agree_with_the_decoder);
+    RUN(mp3_without_id3_tag_keeps_its_first_frame);
     RUN(alac_endian_swaps_big_endian_fields);
     RUN(alac_16_44k_stereo_bit_exact_with_tags);
     RUN(alac_24_48k_stereo_bit_exact_co64);
     RUN(alac_16_48k_mono_bit_exact);
+    RUN(alac_edit_list_trims_priming_and_padding);
+    RUN(alac_itunsmpb_trims_priming_and_padding);
+    RUN(alac_nonsense_edit_list_is_ignored);
     RUN(mp4_aac_is_recognised_and_garbage_rejected);
     RUN(mp4_iterator_sample_table_maths);
     RUN(stream_io_reads_whole_stream_to_eof);
