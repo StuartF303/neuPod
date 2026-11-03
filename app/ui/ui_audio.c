@@ -245,6 +245,11 @@ static void np_update(np_t *p) {
     case PLAYER_VERIFIED: st = n.verify < 5 ? verdict[n.verify] : ""; break;
     }
     np_art(p, &n);
+    char stq[128];
+    if (n.queue_len > 1 && n.src == PLAYER_SRC_FILE && (n.state == PLAYER_PLAYING || n.state == PLAYER_PAUSED || n.state == PLAYER_OPENING)) {
+        snprintf(stq, sizeof stq, "%s - %u of %u", st, (unsigned)n.queue_pos, (unsigned)n.queue_len); /* queue position on the status line */
+        st = stq;
+    }
     set_text(p->state, st);
     lv_obj_set_style_text_color(p->state, lv_color_hex(n.state == PLAYER_ERROR || (n.state == PLAYER_VERIFIED && n.verify == AUDIO_VERIFY_MISMATCH) ? UI_L_ERR : n.state == PLAYER_VERIFIED && n.verify == AUDIO_VERIFY_OK ? UI_L_OK : UI_L_DIM), 0);
     set_text(p->icon, n.state == PLAYER_PLAYING ? LV_SYMBOL_PLAY : n.state == PLAYER_PAUSED ? LV_SYMBOL_PAUSE : "");
@@ -306,9 +311,17 @@ static void np_scroll(ui_screen_t *s, int32_t steps) {
 }
 
 static bool np_button(ui_screen_t *s, uint8_t btn) {
-    (void)s;
     if (btn == HAL_BTN_SELECT || btn == HAL_BTN_PLAY) {
         player_pause_toggle();
+        np_update((np_t *)s);
+        return true;
+    }
+    if (btn == HAL_BTN_RIGHT || btn == HAL_BTN_LEFT) { /* next / previous track of the queue (Previous restarts after 3 s) */
+        if (btn == HAL_BTN_RIGHT) {
+            player_next();
+        } else {
+            player_prev();
+        }
         np_update((np_t *)s);
         return true;
     }
