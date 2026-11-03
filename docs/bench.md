@@ -31,8 +31,8 @@ The wheel is not fitted (the host → wheel init packet is still unknown, see
 
 ## Next bench tests (agreed 3 Nov 2026)
 
-1. **Audio Pack tone test** — 1 kHz on the phones jack **done 3 Nov 2026**; still to do: L/R ident, scale, volume steps,
-   line-out jack ([Audio](audio.md#how-to-test-bench)).
+1. **Audio Pack tone test** — 1 kHz on the **line-out** jack **done 3 Nov 2026**; still to do: L/R ident, scale, volume steps,
+   phones jack (PAM8908 amp, gain switch) ([Audio](audio.md#how-to-test-bench)).
 2. **Display fps baseline** — re-run test 7 of the display test suite ([Display tests](display-tests.md)) and note the
    figure as the baseline for the UI-performance work.
 3. MP3 and ALAC playback (files in `/Music`).

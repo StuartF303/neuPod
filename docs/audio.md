@@ -81,7 +81,7 @@ Consequences:
   stops the PIO). The audio core opens XSMT one block before a fade-in and closes it after two silent blocks
   (`app/audio/audio_core.c`), and `hal_audio_close()` stops the I2S clocks between streams. So XSMT toggles with every
   start/stop. The stream is opened at boot and its clocks keep running, so in practice XSMT rises long after the PLL has locked.
-* **Bench, 3 Nov 2026: works.** 1 kHz test tone heard on the "phones" jack at -30 dB. The earlier silence was wiring:
+* **Bench, 3 Nov 2026: works.** 1 kHz test tone heard on the "line out" jack (DAC direct, no PAM8908) at -30 dB. The earlier silence was wiring:
   the GP9 (DATA) and GP22 (XSMT) jumpers were on the wrong Pico pins. Register read-back over SWD (SIO_IN / IO_BANK0
   STATUS) showed both pins driven correctly while the Pack end read 0 V, which is how it was found.
 * **Design recommendation (optional, not built):** raise XSMT once after the clocks have settled and leave it high,
