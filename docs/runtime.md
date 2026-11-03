@@ -35,7 +35,8 @@ printed in the audio line (`core1_stack_free=`).
 | From to | Mechanism |
 | --- | --- |
 | core 0 to 1: commands | ring of `audio_cmd_t` (open, close, statistics window, volume, tone, PCM start/end, pause, stop); several core-0 tasks send, so `audio_ctl.c` serialises them with a mutex |
-| core 0 to 1: PCM data | byte ring, 32 KB, fed by the storage task while a WAV plays (the decoder's compressed input later) |
+| core 0 to 1: stream data | byte ring, 32 KB, fed by the storage task while a file plays: raw WAV bytes, compressed FLAC / MP3 bytes, or length-prefixed ALAC packets |
+| core 1 to 0: seek request | request counter plus byte offset, acknowledged by core 0, flush acknowledged by core 1 (`stream_io.h`) |
 | core 1 to 0: handshake | two counters written only by core 1: PCM streams set up / played to the end (core 0 must not write data for a new stream before the first one moves) |
 | core 1 to 0: events | two rings (one per producer: the block interrupt, the main loop): stream opened/closed, underrun (at most ~1/s), end of track, command error |
 | core 1 to 0: statistics | seqlock-published `audio_stats_t`, written only by the block interrupt |
@@ -62,7 +63,7 @@ Priority 7 is the highest; the kernel idle task is 0.
 | Task | Priority | Stack | Period / trigger | Budget |
 | --- | --- | --- | --- | --- |
 | kernel timer service | 6 | 1.5 KB | kernel timers | microseconds |
-| storage | 5 | 6 KB | request queue; while a WAV plays, every 1 ms | directory listings and volume space for the UI (yields every 32 entries); streams the WAV from the card in 2 KB reads into the audio data ring; later: library scan, track prefetch |
+| storage | 5 | 8 KB | request queue; while a WAV plays, every 1 ms | directory listings and volume space for the UI (yields every 32 entries); streams the WAV from the card in 2 KB reads into the audio data ring; later: library scan, track prefetch |
 | input | 4 | 2 KB | every 2 ms | well under 1 % (the wheel FIFO overflows after ~4.8 ms) |
 | I2C users, while on the bus | 4 (lifted) | n/a | boot checks, the 5 s gauge read | a few ms (see findings) |
 | CYW43 worker (SDK) | 3 | 4 KB | radio events | LED today, Wi-Fi / BTstack later |
@@ -71,7 +72,7 @@ Priority 7 is the highest; the kernel idle task is 0.
 | monitor | 1 | 3 KB | 100 ms tick: heartbeat 1 s, gauge 5 s, stats 10 s | negligible |
 | boot checks (transient, 6) | 1 | 3 to 5 KB | once at boot | bounded by per-check deadlines |
 
-Heap: `heap_4`, 112 KB, holds task stacks and kernel objects; static RAM beyond that is the LVGL
+Core 1 has its own 16 KB stack array and a 116 KB codec arena (both static RAM). Heap: `heap_4`, 112 KB, holds task stacks and kernel objects; static RAM beyond that is the LVGL
 pool (96 KB), the two render buffers (30 KB), the directory-listing buffer (about 19 KB) and the audio core's rings and block buffer (about 28 KB).
 The monitor prints the heap low-water mark and each task's lowest free stack every 10 s. Input is above
 the UI so wheel frames are never lost while LVGL renders; the monitor is lowest; boot-check tasks sit
@@ -226,6 +227,6 @@ degraded ("not connected").
 
 ## What is stubbed
 
-Compressed-audio decoders (FLAC etc.: only test signals and PCM WAV exist), prefetch (logs requests), home screen (placeholder), click-wheel receiver (pins
+AAC decoder (FLAC, MP3, ALAC and WAV play), prefetch (logs requests), home screen (placeholder), click-wheel receiver (pins
 unconfirmed), radio. Not yet measured on hardware with this architecture: block jitter under UI load,
 the panic LED, stack margins.

@@ -21,6 +21,7 @@
 #include "neupod_version.h"
 #include "os.h"
 #include "panic.h"
+#include "codec.h"
 #include "player.h"
 #include "runtime.h"
 #include "runtime_config.h"
@@ -106,6 +107,14 @@ static void print_audio_stats(void) {
            (unsigned)a.sink_rate_hz, (unsigned)(a.sink_clkdiv_x256 >> 8), (unsigned)(a.sink_clkdiv_x256 & 0xFFu),
            (unsigned)a.sink_missed, (unsigned)a.muted, a.source < 3u ? src[a.source] : "?", (unsigned)a.audible,
            (unsigned)a.volume_att_db, (unsigned)a.pcm_frames);
+    static const char *const codecs[] = {"pcm", "flac", "mp3", "alac"};
+    static const char *const verdict[] = {"-", "running", "MD5 OK", "MD5 MISMATCH", "no MD5 in file"};
+    printf("audio decoder: codec=%s decode_us_per_256_frames avg/max=%u/%u load=%u.%u%% of a core, decoded=%u frames "
+           "verify=%s codec_error=%u arena_high_water=%uB/%uB\n",
+           a.codec < 4u ? codecs[a.codec] : "?", (unsigned)a.dec_us_block_avg, (unsigned)a.dec_us_block_max,
+           (unsigned)(a.dec_pct_x10 / 10u), (unsigned)(a.dec_pct_x10 % 10u), (unsigned)a.decoded_frames,
+           a.verify_state < 5u ? verdict[a.verify_state] : "?", (unsigned)a.codec_error,
+           (unsigned)codec_arena_high_water(), (unsigned)CODEC_ARENA_BYTES);
     (void)audio_stats_new_window();
 }
 
@@ -117,6 +126,9 @@ static void drain_audio_events(void) {
     while (audio_event_poll(&e)) {
         printf("audio event: %s (%u)\n", e.type < sizeof names / sizeof names[0] ? names[e.type] : "?",
                (unsigned)e.value);
+        if (e.type == AUDIO_EVT_END_OF_TRACK) {
+            player_log_end();
+        }
     }
 }
 

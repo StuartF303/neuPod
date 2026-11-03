@@ -18,6 +18,10 @@ seqlock_t g_audio_stats_lock;
 audio_stats_t g_audio_stats;
 volatile uint32_t g_audio_pcm_started;
 volatile uint32_t g_audio_pcm_ended;
+audio_stream_desc_t g_audio_stream_desc;
+volatile uint32_t g_audio_seek_req, g_audio_seek_ack, g_audio_seek_done;
+volatile uint64_t g_audio_seek_off;
+volatile uint32_t g_audio_verify_state, g_audio_decoded_frames, g_audio_codec_error;
 
 void audio_shared_init(void) {
     (void)spsc_ring_init(&g_audio_cmd_ring, g_cmd_store, sizeof(audio_cmd_t), CMD_SLOTS);

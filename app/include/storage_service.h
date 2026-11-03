@@ -62,11 +62,13 @@ bool storage_result_poll(storage_result_t *out);
 const file_entry_t *storage_list_entries(void);
 
 /**
- * Ask the storage task to play the WAV at @p path: it reads the header, starts the audio core's PCM stream
+ * Ask the storage task to play the WAV / FLAC / MP3 / M4A (ALAC) file at @p path: it reads the header, starts the audio core's PCM stream
  * and keeps feeding the data ring from the card until the end of the file. Progress and errors are reported
  * through player_get() (player.h). A new request replaces the stream in progress.
  */
 bool storage_play_request(const char *path);
+/** Like storage_play_request for a .flac, but decode flat out without sound and compare the STREAMINFO MD5 (player_get shows the result). */
+bool storage_verify_request(const char *path);
 /** Stop feeding the current file stream (the caller stops the audio core itself). */
 bool storage_stop_request(void);
 

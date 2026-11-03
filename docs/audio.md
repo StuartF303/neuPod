@@ -1,4 +1,4 @@
-# Audio output (I2S, test tone, scale, WAV)
+# Audio output (I2S, test signals, WAV, FLAC, MP3, ALAC)
 
 Phase 1 sound comes out of the Pimoroni Pico Audio Pack ("the Audio Pack DAC") over I2S, driven by the PIO and
 DMA from the bare-metal audio core ([ADR-0011](adr/0011-bare-metal-audio-core.md), [Runtime](runtime.md)).
@@ -112,7 +112,89 @@ A different sample rate re-clocks the sink (close and reopen, a few ms) with no 
 sink's current rate (44.1 kHz after boot, or the last file's rate).
 The storage task reads the card in 2 KB steps into a 32 KB ring (85 ms at 32-bit stereo 48 kHz). End of file
 raises an end-of-track event after the last sample has played, then the output ramps down and mutes.
-FLAC is not implemented: the Files browser lists `.flac` files and says so.
+
+## Codecs: FLAC, MP3, ALAC (and WAV)
+
+| Format | Decoder | Licence | Runs on | Output |
+| --- | --- | --- | --- | --- |
+| FLAC (16/20/24/32-bit, mono/stereo, 44.1/48/88.2/96 kHz) | `dr_flac` (single header, `app/third_party/dr_libs/`) | public domain / MIT-0 | **core 1** | exact: the sample is shifted left-justified into 32 bits |
+| MP3 (MPEG-1/2 Layer III, 44.1/48 kHz) | `dr_mp3` (contains minimp3) | public domain / MIT-0 (minimp3 CC0) | core 1 | float, rounded to nearest and clipped to 32 bits |
+| ALAC in `.m4a` (16/20/24/32-bit, mono/stereo, 44.1 to 96 kHz) | Apple's ALAC decoder core (`app/third_party/alac/`) with a C wrapper (`alac_dec.c`) | Apache-2.0 (see the repository's `LICENSE.md`: no NOTICE file upstream; the C port is marked as modified) | core 1 | exact |
+| AAC in `.m4a` | none yet | n/a | n/a | the player says "AAC not supported yet" |
+| WAV | our own parser (`wav.c`), raw PCM passthrough | MPL-2.0 | conversion on core 1 | exact |
+
+`dr_wav` is vendored with the others as requested but is not compiled: the WAV path has no codec in it, only a header parser that
+we already have and test, so `dr_wav` would add code without adding capability.
+More than 2 channels are rejected with a message, as are unsupported rates ("Unsupported sample rate"); mono is played on both sides.
+
+### Where things run
+
+* **Core 0 (storage task)** reads the file, parses the header and tags, and streams bytes through the 32 KB data ring:
+    * FLAC: a synthesised 42-byte header (`fLaC` + one STREAMINFO block) followed by the audio frames, so the decoder never has to
+      stream through the file's pictures and comments. Tags (Vorbis comments) are read here.
+    * MP3: the compressed bytes from the first frame header on (ID3v2 skipped and parsed here; duration from the Xing/Info frame count,
+      otherwise estimated from the file size, which can be far off for VBR files that lack one; shown with a `~`).
+    * M4A: the container is demuxed here (it needs random access to `moov`): `app/audio/mp4.c` reads `stsd` (the ALAC magic cookie), `stsz`, `stsc`,
+      `stco`/`co64`, `mdhd` and the `ilst` tags, and sends each packet with a 4-byte big-endian length in front. The demuxer is codec independent so
+      AAC can use it later.
+* **Core 1** decodes. The main loop calls the decoder for up to two 256-frame blocks per pass while the PCM ring has room; the block interrupt is
+  unchanged and still preempts it. Everything the decoders allocate comes from one static **arena of 116 KB** (`codec.h`), reset at every new stream:
+  `malloc` is never called (the vendored allocation macros point at the arena), asserts are compiled out, and there is no stdio.
+  `tools/check_core1_closure.py` (Python is required by the RP2350 build; ctest also runs the checker against a known-good and a known-bad fixture, so it is proven able to fail) runs after every RP2350 build and fails it if anything reachable from the audio core's entry points
+  could reach the RTOS, stdio, the heap, blocking SDK calls or the panic path (it walks the call graph of the linked image, following branches and every function address found in literal pools; a function whose address is only ever computed would be missed, see the limits in the script's header); the
+  `audio_core_rules` token scan still covers our own sources. Core 1's stack is now a 16 KB array of our own (minimp3 alone keeps about 10 KB of scratch on the stack).
+* Waiting for data: the decoder's read callback blocks until the bytes are there (core 0 refills at about 2 MB/s). While it waits it keeps handling
+  commands: volume, pause and the end-of-stream marker immediately; anything that tears the stream down (stop, a new track, a tone) is parked, the read is abandoned and the command runs
+  next, so nothing can deadlock. 32 starved blocks in a row still stops and mutes the output.
+* The first block of audio is not played until about 23 ms are buffered (and a stream is complete if it is shorter), so a slow start is silence rather than an underrun.
+* **Seeking** (not exposed in the UI yet): forward seeks inside the decoder (including dr_flac's own) discard bytes; an absolute seek backwards sends core 0 a
+  request (byte offset), core 0 repositions the file and acknowledges, core 1 then empties the data ring and acknowledges back, and only then does core 0 write again
+  (`stream_io.h`; unit-tested with a real second thread).
+
+### Memory and CPU
+
+| | Value |
+| --- | --- |
+| Arena | 116 KB (118,784 bytes). Measured high water: FLAC 4096-sample blocks 35 KB; MP3 68 KB; ALAC 16-bit 82 KB, 24-bit 98 KB. Computed worst cases: FLAC at the 8192-sample limit (4096 for 32-bit FLAC, which dr_flac stores at 8 bytes a sample) 72 KB, ALAC 32-bit stereo 4096 frames 115 KB |
+| Limits that follow | FLAC blocks above 8192 samples (4096 for 32-bit FLAC) are rejected ("FLAC block size too large"); the synthesised header declares exactly that limit, so the decoder's sample buffer is allocated once at full size and a larger frame fails instead of growing the arena; ALAC packets of at most 16384 frames are accepted by the parser but only 4096-frame packets are guaranteed to fit |
+| Data ring | 32 KB, 32-bit stereo 48 kHz is 85 ms; PCM ring 16 KB |
+| Host decode speed (i7-12700T, `-O2`, the test vectors, MD5 hashing included) | FLAC 16/44.1: 547x real time; FLAC 24/96: 409x; MP3: 720x; ALAC 16/44.1: 322x; ALAC 24/48: 286x (`NEUPOD_BENCH=1 test_codecs`) |
+| **Estimated** RP2350 load of core 1 (not measured) | FLAC 16/44.1 about 10 to 20 %, FLAC 24/96 about 15 to 35 %, MP3 about 10 to 25 %, ALAC 16/44.1 about 20 to 35 %, ALAC 24/48 about 25 to 40 %. Basis: about 2x the x86 cycles per sample at 125 MHz, before flash cache misses (the decoder code runs from flash). The vectors are noisy, so real music should be cheaper. Measure with the line below |
+
+The monitor prints, every 10 s, `audio decoder: codec=... decode_us_per_256_frames avg/max=.../... load=..% of a core ... arena_high_water=...`. The
+figure is the time the decoder spent per 256 output frames with the block interrupt's own time subtracted, its worst single call, and the average as a share of
+the 5.8 ms block period (at 44.1 kHz). If the load approaches 70 % the next step is to run the decoder hot loops from RAM.
+
+### Metadata
+
+FLAC Vorbis comments (TITLE, ARTIST, ALBUM, TRACKNUMBER), ID3v2.2/2.3/2.4 text frames (TIT2, TPE1, TALB, TRCK; ISO-8859-1, UTF-16 and UTF-8), and MP4 `ilst`
+(`©nam`, `©ART`, `©alb`, `trkn`) are parsed on core 0 and shown on Now Playing with the format badge (`FLAC 24/96`, `MP3 320k` or `MP3 VBR ~192k`, `ALAC 16/44.1`) and the
+elapsed and remaining time. The screen font has no accented letters, so those show as an empty box. Embedded art is not read yet.
+
+### FLAC verify mode (check without listening)
+
+In Extras > Files, press **Right** on a `.flac` (Select plays it). The decoder runs flat out with no sound, hashes every decoded sample the way FLAC defines its checksum
+(each sample as `ceil(bits/8)` little-endian bytes, channels interleaved) and compares it with the MD5 in the file's STREAMINFO at the end of the file.
+Now Playing shows `MD5 OK`, `MD5 MISMATCH` or `No MD5 stored in this file`, and the UART prints `verify: '<name>' MD5 OK`. A mismatch means the data from the card or the decoder is wrong, so it tests the whole path
+from the card to the decoder. (An MD5 of all zeros means the encoder did not compute one.)
+
+### Robustness
+
+Files are untrusted input. The header parsers bound every length and walk (box sizes are compared without wrapping, a box budget of 20,000, vendor and
+comment lengths checked, text conversion never writes past its buffer); ALAC rejects a partial-frame sample count above its frame length (the original
+decoder trusted it); an MP4 packet outside the file or larger than the decoder's frame buffer ends the stream; a decode that ends short of the
+announced length is an error ("File is truncated or damaged"), so a damaged FLAC can never report `MD5 OK` or `Finished`; and a codec error makes core 0 stop reading the card.
+Once a command has interrupted the decoder's wait, every further read fails until the engine has handled it. Core 1's stack has a hardware limit
+(MSPLIM) 256 bytes above its bottom, so an overflow faults instead of corrupting RAM. The tests truncate every vector at each early byte and at 40 further
+points and flip random bits (fixed seed) in all of FLAC, MP3 and M4A; `-DNEUPOD_HOST_ASAN=ON` adds `test_codecs_asan`, the same tests under AddressSanitizer
+and UBSan (signed-overflow and shift reports are switched off: the vendored decoders wrap on corrupt data, which is harmless on ARM).
+
+### Test vectors
+
+`tests/assets/audio/` holds small FLAC, MP3 and M4A files with the MD5 of their source samples, made by `tools/gen_audio_vectors.py` (libsndfile via `uv run --no-project --with soundfile --with numpy`) and
+`tools/gen_alac_vectors.py` (Apple's reference ALAC encoder built from `tests/tools/alac_encoder/` with `g++`, plus a hand-written MP4 muxer). `ctest` decodes every vector and compares it bit for bit (FLAC 16-bit 44.1 kHz,
+24-bit 96 kHz and 48 kHz, mono; ALAC 16-bit, 24-bit with `co64`, mono), checks the MP3's length and level, the demuxer's sample-table maths, the tag parsers, MD5 against the RFC 1321 vectors,
+the arena (including the worst-case sizes) and the core 0 / core 1 stream handshake.
 
 ## How to test (bench)
 
@@ -124,8 +206,8 @@ FLAC is not implemented: the Files browser lists `.flac` files and says so.
    `d` raises the volume 1 step = 2 dB. If nothing is audible, the mute polarity may be inverted: rebuild with
    `-DNEUPOD_AUDIO_UNMUTE_LEVEL=0`.
 4. `e` again stops it. Try **L/R ident** (left ear first), then **Scale**.
-5. WAV: Extras > Files, a folder with a `.wav`, Select. Now Playing opens; the wheel (`w`/`s`) is volume; `p` pauses; `m` goes back
-   while it keeps playing. `.flac` shows "FLAC decoder not yet implemented".
+5. Files: Extras > Files, a folder with a `.wav`, `.flac`, `.mp3` or `.m4a`, Select. Now Playing opens with the tags and format badge; the wheel (`w`/`s`) is volume; `p` pauses; `m` goes back
+   while it keeps playing. `d` (Right) on a `.flac` runs the MD5 verify instead of playing. An `.m4a` with AAC says "AAC not supported yet".
 6. The UART prints every 10 s the `audio:` line (underruns must stay 0) and the `audio sink:` line
    (actual rate, divider, `dma_underruns`, mute state, source, volume).
 
@@ -133,4 +215,4 @@ FLAC is not implemented: the Files browser lists `.flac` files and says so.
 
 Everything in this page about the board's behaviour is from reading the datasheet-level behaviour of the RP2350 PIO and
 DMA and from the host build; none of it has been run on the Audio Pack. Specifically open: the mute polarity, the
-DMA interrupt timing under UI load, clock jitter, 88.2/96 kHz, SD streaming throughput at 24/32-bit.
+DMA interrupt timing under UI load, clock jitter, 88.2/96 kHz, SD streaming throughput at 24/32-bit, the decoders' CPU load and flash-cache behaviour on the RP2350, the 16 KB core-1 stack margin under MP3 (watch `core1_stack_free` in the `audio:` line), and the real RAM headroom (about 28 KB were left in the link).

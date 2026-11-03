@@ -15,6 +15,18 @@ static player_info_t g_info;
 static uint32_t g_vol = AUDIO_VOL_DEFAULT_ATT_DB;
 static uint32_t g_started_ms;
 static uint32_t g_ended_base; // audio_pcm_ended_count() when the current file was requested
+static bool g_error_stopped;  // storage_stop_request() already sent for the current error
+
+static const char *codec_error_text(uint32_t e) {
+    switch (e) {
+    case 1: return "Decoder could not open this file";
+    case 2: return "Not enough memory to decode this file";
+    case 3: return "File does not match its header";
+    case 4: return "Decoding error (damaged data)";
+    case 5: return "File is truncated or damaged";
+    default: return "Decoder error";
+    }
+}
 
 static void lock(void) { (void)os_mutex_lock(g_mu, OS_WAIT_FOREVER); }
 static void unlock(void) { os_mutex_unlock(g_mu); }
@@ -36,26 +48,45 @@ const char *player_tone_name(tone_mode_t mode) {
 }
 
 void player_get(player_info_t *out) {
+    bool stop_feed = false;
     audio_stats_t st;
     bool have = audio_stats_get(&st);
     lock();
     uint32_t now = os_tick_ms();
-    if (g_info.src == PLAYER_SRC_FILE && (g_info.state == PLAYER_PLAYING || g_info.state == PLAYER_PAUSED) &&
+    if (g_info.src == PLAYER_SRC_FILE && g_info.state == PLAYER_VERIFYING && have) {
+        g_info.verify = st.verify_state;
+        if (audio_pcm_ended_count() != g_ended_base && st.verify_state != AUDIO_VERIFY_RUNNING) {
+            g_info.state = PLAYER_VERIFIED;
+        }
+        if (st.source == AUDIO_SRC_NONE && st.codec_error != 0 && now - g_started_ms > STARTUP_GRACE_MS) {
+            g_info.state = PLAYER_ERROR;
+            snprintf(g_info.msg, sizeof g_info.msg, "%s", codec_error_text(st.codec_error));
+        }
+    } else if (g_info.src == PLAYER_SRC_FILE && (g_info.state == PLAYER_PLAYING || g_info.state == PLAYER_PAUSED) &&
         audio_pcm_ended_count() != g_ended_base) {
         g_info.state = PLAYER_ENDED;
     } else if (g_info.src != PLAYER_SRC_NONE && (g_info.state == PLAYER_PLAYING || g_info.state == PLAYER_PAUSED) &&
                have && st.source == AUDIO_SRC_NONE && now - g_started_ms > STARTUP_GRACE_MS) {
         // The audio core dropped the source by itself: PCM data starved for too long (it muted the output).
         g_info.state = PLAYER_ERROR;
-        snprintf(g_info.msg, sizeof g_info.msg, "Stopped: audio data ran dry");
+        snprintf(g_info.msg, sizeof g_info.msg, "%s",
+                 st.codec_error != 0 ? codec_error_text(st.codec_error) : "Stopped: audio data ran dry");
     }
     g_info.vol_att_db = g_vol;
     if (have) {
-        g_info.elapsed_s = g_info.rate != 0 && g_info.src == PLAYER_SRC_FILE ? st.pcm_frames / g_info.rate : 0;
+        uint32_t frames = g_info.state == PLAYER_VERIFYING || g_info.state == PLAYER_VERIFIED ? st.decoded_frames : st.pcm_frames;
+        g_info.elapsed_s = g_info.rate != 0 && g_info.src == PLAYER_SRC_FILE ? frames / g_info.rate : 0;
         g_info.muted = st.muted != 0;
+    }
+    stop_feed = g_info.state == PLAYER_ERROR && g_info.src == PLAYER_SRC_FILE && !g_error_stopped;
+    if (stop_feed) {
+        g_error_stopped = true;
     }
     *out = g_info;
     unlock();
+    if (stop_feed) {
+        storage_stop_request(); // the audio core stopped the stream: stop reading the card for it too
+    }
 }
 
 static void reset_info(player_src_t src, player_state_t state, const char *name) {
@@ -63,6 +94,7 @@ static void reset_info(player_src_t src, player_state_t state, const char *name)
     g_info.src = src;
     g_info.state = state;
     g_info.vol_att_db = g_vol;
+    g_error_stopped = false;
     snprintf(g_info.name, sizeof g_info.name, "%s", name);
     g_started_ms = os_tick_ms();
 }
@@ -91,6 +123,25 @@ void player_play_file(const char *path, const char *name) {
     unlock();
     if (!storage_play_request(path)) {
         player_file_failed("Storage busy, try again");
+    }
+}
+
+void player_verify_file(const char *path, const char *name) {
+    lock();
+    reset_info(PLAYER_SRC_FILE, PLAYER_OPENING, name);
+    g_ended_base = audio_pcm_ended_count();
+    unlock();
+    if (!storage_verify_request(path)) {
+        player_file_failed("Storage busy, try again");
+    }
+}
+
+void player_log_end(void) {
+    player_info_t i;
+    player_get(&i);
+    if (i.src == PLAYER_SRC_FILE && (i.state == PLAYER_VERIFIED || i.verify >= AUDIO_VERIFY_OK)) {
+        static const char *const v[] = {"?", "running", "MD5 OK", "MD5 MISMATCH", "no MD5 stored in the file"};
+        printf("verify: '%s' %s (%u frames decoded)\n", i.name, i.verify < 5 ? v[i.verify] : "?", (unsigned)(i.total_frames));
     }
 }
 
@@ -127,22 +178,17 @@ uint32_t player_volume_step(int32_t steps) {
     return v;
 }
 
-void player_file_started(const wav_info_t *w) {
+void player_file_started(const player_file_t *f) {
     lock();
     if (g_info.src == PLAYER_SRC_FILE && g_info.state == PLAYER_OPENING) {
-        g_info.state = PLAYER_PLAYING;
-        g_info.rate = w->rate;
-        g_info.total_frames = w->frames;
-        unsigned khz10 = w->rate / 100u; // 441 -> 44.1
-        if (khz10 % 10u == 0) {
-            snprintf(g_info.format, sizeof g_info.format, "WAV %u/%u", (unsigned)w->bits, khz10 / 10u);
-        } else {
-            snprintf(g_info.format, sizeof g_info.format, "WAV %u/%u.%u", (unsigned)w->bits, khz10 / 10u, khz10 % 10u);
-        }
-        if (w->channels == 1) {
-            size_t n = strlen(g_info.format);
-            snprintf(g_info.format + n, sizeof g_info.format - n, " mono");
-        }
+        g_info.state = f->verify ? PLAYER_VERIFYING : PLAYER_PLAYING;
+        g_info.rate = f->rate;
+        g_info.total_frames = f->total_frames;
+        g_info.tags = f->tags;
+        g_info.title_is_name = f->title_is_name;
+        g_info.estimated = f->estimated;
+        g_info.codec = f->codec;
+        snprintf(g_info.format, sizeof g_info.format, "%s", f->format);
         g_started_ms = os_tick_ms();
     }
     unlock();

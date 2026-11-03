@@ -75,7 +75,9 @@ add_custom_target(neupod_version
   BYPRODUCTS ${NEUPOD_GEN_DIR}/neupod_version.h
   COMMENT "Generating neupod_version.h")
 
-add_library(neupod_runtime STATIC ${NEUPOD_RUNTIME_SOURCES} ${NEUPOD_AUDIO_CORE_SOURCES} ${NEUPOD_UI_SOURCES})
+add_library(neupod_runtime STATIC ${NEUPOD_RUNTIME_SOURCES} ${NEUPOD_AUDIO_CORE_SOURCES} ${NEUPOD_CODEC_VENDOR_SOURCES} ${NEUPOD_UI_SOURCES})
+target_include_directories(neupod_runtime PRIVATE ${NEUPOD_APP_DIR}/third_party/alac)
+set_source_files_properties(${NEUPOD_CODEC_VENDOR_SOURCES} PROPERTIES COMPILE_OPTIONS "-w")
 add_dependencies(neupod_runtime neupod_version)
 target_include_directories(neupod_runtime PUBLIC ${NEUPOD_APP_DIR}/include ${NEUPOD_APP_DIR}/../hal/include
                                           PRIVATE ${NEUPOD_GEN_DIR})
@@ -83,3 +85,5 @@ target_compile_features(neupod_runtime PUBLIC c_std_11)
 target_link_libraries(neupod_runtime PUBLIC neupod_rt_core neupod_drivers neupod_freertos lvgl)
 set_source_files_properties(${NEUPOD_RT_CORE_SOURCES} ${NEUPOD_RUNTIME_SOURCES} ${NEUPOD_AUDIO_CORE_SOURCES} ${NEUPOD_UI_SOURCES}
   PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+# codec.c sees the ALAC headers, whose FourCC enum constants are multi-character literals.
+set_source_files_properties(${NEUPOD_APP_DIR}/audio/codec.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS};-Wno-multichar")

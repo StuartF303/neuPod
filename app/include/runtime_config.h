@@ -47,7 +47,7 @@
 #define RT_STACK_HAPTIC 2048u
 
 /* Stacks, bytes. */
-#define RT_STACK_STORAGE 6144u
+#define RT_STACK_STORAGE 8192u /* file headers and tags are parsed here (about 1 KB of locals), on top of FatFs */
 #define RT_STACK_INPUT 2048u
 #define RT_STACK_UI 12288u
 #define RT_STACK_MONITOR 3072u

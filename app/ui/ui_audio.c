@@ -157,7 +157,7 @@ ui_screen_t *ui_screen_testtone_create(void) {
 
 typedef struct {
     ui_screen_t base;
-    lv_obj_t *title, *badge, *state, *elapsed, *remain, *icon, *vol, *prog_fill, *vol_fill;
+    lv_obj_t *title, *artist, *album, *badge, *state, *elapsed, *remain, *icon, *vol, *prog_fill, *vol_fill;
     player_info_t info;
     uint32_t last_ms;
     bool have;
@@ -173,10 +173,29 @@ static void np_update(np_t *p) {
     player_get(&n);
     p->info = n;
     char b[96];
-    const char *title = n.src == PLAYER_SRC_NONE ? "Nothing playing" : n.name;
+    const char *title = n.src == PLAYER_SRC_NONE ? "Nothing playing" : n.src == PLAYER_SRC_FILE ? n.tags.title : n.name;
+    if (n.src == PLAYER_SRC_FILE && n.tags.title[0] == '\0') {
+        title = n.name;
+    }
     set_text(p->title, title);
+    set_text(p->artist, n.src == PLAYER_SRC_FILE ? n.tags.artist : "");
+    if (n.src == PLAYER_SRC_FILE && n.tags.album[0] != '\0') {
+        if (n.tags.track != 0) {
+            snprintf(b, sizeof b, "%s  #%u", n.tags.album, (unsigned)n.tags.track);
+        } else {
+            snprintf(b, sizeof b, "%s", n.tags.album);
+        }
+        set_text(p->album, b);
+    } else if (n.src == PLAYER_SRC_FILE && n.tags.track != 0) {
+        snprintf(b, sizeof b, "Track %u", (unsigned)n.tags.track);
+        set_text(p->album, b);
+    } else {
+        set_text(p->album, "");
+    }
     set_text(p->badge, n.src == PLAYER_SRC_FILE ? n.format : n.src == PLAYER_SRC_TONE ? "TEST SIGNAL" : "");
-    const char *st = "Choose a .wav in Extras > Files, or a test tone";
+    const char *st = "Choose a file in Extras > Files, or a test tone";
+    static const char *const verdict[] = {"", "Verifying", "MD5 OK: decoded audio matches the file", "MD5 MISMATCH: decoded audio differs",
+                                          "No MD5 stored in this file"};
     switch (n.state) {
     case PLAYER_IDLE: break;
     case PLAYER_OPENING: st = "Opening..."; break;
@@ -184,20 +203,22 @@ static void np_update(np_t *p) {
     case PLAYER_PAUSED: st = "Paused"; break;
     case PLAYER_ENDED: st = "Finished"; break;
     case PLAYER_ERROR: st = n.msg; break;
+    case PLAYER_VERIFYING: st = "Verifying MD5 (no sound)..."; break;
+    case PLAYER_VERIFIED: st = n.verify < 5 ? verdict[n.verify] : ""; break;
     }
     set_text(p->state, st);
-    lv_obj_set_style_text_color(p->state, lv_color_hex(n.state == PLAYER_ERROR ? UI_L_ERR : UI_L_DIM), 0);
+    lv_obj_set_style_text_color(p->state, lv_color_hex(n.state == PLAYER_ERROR || (n.state == PLAYER_VERIFIED && n.verify == AUDIO_VERIFY_MISMATCH) ? UI_L_ERR : n.state == PLAYER_VERIFIED && n.verify == AUDIO_VERIFY_OK ? UI_L_OK : UI_L_DIM), 0);
     set_text(p->icon, n.state == PLAYER_PLAYING ? LV_SYMBOL_PLAY : n.state == PLAYER_PAUSED ? LV_SYMBOL_PAUSE : "");
     uint32_t el = n.state == PLAYER_ENDED && n.rate != 0 ? (uint32_t)(n.total_frames / n.rate) : n.elapsed_s;
     int32_t pw = 0;
     if (n.src == PLAYER_SRC_FILE && n.rate != 0 && n.total_frames != 0 &&
-        (n.state == PLAYER_PLAYING || n.state == PLAYER_PAUSED || n.state == PLAYER_ENDED)) {
+        (n.state == PLAYER_PLAYING || n.state == PLAYER_PAUSED || n.state == PLAYER_ENDED || n.state == PLAYER_VERIFYING || n.state == PLAYER_VERIFIED)) {
         uint32_t total = (uint32_t)(n.total_frames / n.rate);
         mmss(b, sizeof b, "", el);
         set_text(p->elapsed, b);
-        mmss(b, sizeof b, "-", total > el ? total - el : 0);
+        mmss(b, sizeof b, n.estimated ? "-~" : "-", total > el ? total - el : 0);
         set_text(p->remain, b);
-        pw = (int32_t)((uint64_t)NP_BAR_W * (n.state == PLAYER_ENDED ? n.total_frames : (uint64_t)el * n.rate) / n.total_frames);
+        pw = (int32_t)((uint64_t)NP_BAR_W * (n.state == PLAYER_ENDED || n.state == PLAYER_VERIFIED ? n.total_frames : (uint64_t)el * n.rate) / n.total_frames);
         if (pw > NP_BAR_W) {
             pw = NP_BAR_W;
         }
@@ -266,13 +287,21 @@ ui_screen_t *ui_screen_nowplaying_create(void) {
     lv_obj_set_style_text_font(p->title, &lv_font_montserrat_20, 0);
     lv_obj_set_size(p->title, 166, 26);
     lv_label_set_long_mode(p->title, LV_LABEL_LONG_DOT);
-    lv_obj_set_pos(p->title, 140, 22);
+    lv_obj_set_pos(p->title, 140, 12);
+    p->artist = ui_label(r, "", UI_L_TEXT);
+    lv_obj_set_size(p->artist, 166, 18);
+    lv_label_set_long_mode(p->artist, LV_LABEL_LONG_DOT);
+    lv_obj_set_pos(p->artist, 140, 42);
+    p->album = ui_label(r, "", UI_L_DIM);
+    lv_obj_set_size(p->album, 166, 18);
+    lv_label_set_long_mode(p->album, LV_LABEL_LONG_DOT);
+    lv_obj_set_pos(p->album, 140, 62);
     p->badge = ui_label(r, "", UI_L_SEL_BOT);
-    lv_obj_set_pos(p->badge, 140, 56);
+    lv_obj_set_pos(p->badge, 140, 84);
     p->state = ui_label(r, "", UI_L_DIM);
-    lv_obj_set_size(p->state, 166, 60);
+    lv_obj_set_size(p->state, 166, 44);
     lv_label_set_long_mode(p->state, LV_LABEL_LONG_WRAP);
-    lv_obj_set_pos(p->state, 140, 80);
+    lv_obj_set_pos(p->state, 140, 104);
 
     bar_new(r, 14, 142, NP_BAR_W, 10, 0xE6E6E2);
     p->prog_fill = bar_new(r, 14, 142, 1, 10, UI_L_SEL_BOT);

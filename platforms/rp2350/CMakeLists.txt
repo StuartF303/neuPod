@@ -70,6 +70,14 @@ pico_enable_stdio_usb(neupod 0)
 
 pico_add_extra_outputs(neupod)
 
+# Core-1 rules on the linked image (ADR-0011): nothing reachable from the audio core may touch the RTOS, stdio, the heap
+# or the panic path. The vendored decoders make a source scan inadequate, so this walks the call graph of the ELF.
+# Python is required: the check is part of the build, a missing interpreter must not silently skip it.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_custom_command(TARGET neupod POST_BUILD
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_core1_closure.py ${CMAKE_OBJDUMP} $<TARGET_FILE:neupod>
+  COMMENT "Checking the audio core's call closure (core-1 rules)")
+
 # Interactive display test menu over UART for the ST7789 (flash with: scripts/flash.sh rp2350 display_test)
 add_executable(display_test display_test_main.c)
 target_link_libraries(display_test neupod_app hal_rp2350)
