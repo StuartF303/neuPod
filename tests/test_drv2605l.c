@@ -8,6 +8,7 @@
 #include "hal_haptic.h"
 #include "hal_i2c.h"
 #include "hal_i2c_mock.h"
+#include "hal_system.h"
 
 static int s_fail;
 #define CHECK(c)                                                                  \
@@ -26,6 +27,13 @@ static bool s_inject_on_go, s_inject_on_c3;
 static int s_viol;                      // safety invariant violations seen at write time
 static unsigned s_max_rated, s_max_od;  // largest values ever written, per actuator in use
 static unsigned s_max_od_lra, s_max_od_ol;
+
+static unsigned s_delay_calls;
+static uint8_t s_last_cal_mode;
+static void count_delay(uint32_t ms) {
+    s_delay_calls++;
+    hal_delay_ms(ms);
+}
 
 static void on_w(void *ctx, uint8_t reg, uint8_t v) {
     (void)ctx;
@@ -67,6 +75,7 @@ static void on_w(void *ctx, uint8_t reg, uint8_t v) {
         }
     } else if (reg == DRV_REG_GO && (v & 1)) {
         s_go_writes++;
+        s_last_cal_mode = regs[DRV_REG_MODE] & 7u;
         if ((regs[DRV_REG_MODE] & 7) == DRV_MODE_AUTOCAL && !s_cal_hang) {
             regs[DRV_REG_GO] = 0;
             regs[DRV_REG_A_CAL_COMP] = s_cal_comp_result;
@@ -93,7 +102,22 @@ int main(void) {
     CHECK(drv2605l_erm_od_clamp_mv(182, 0x13, 1, 1) == 3580);
     // the next code up would exceed 3.6 V: 183 * 21.64 mV * 4500/4950 = 3600.1 mV
     CHECK(183u * 21640u * 4500u > 3600000u * 4950u);
-    CHECK(drv2605l_lra_od_clamp_reg(3600) == 169);
+    CHECK(drv2605l_lra_od_clamp_reg(3600) == 169 && drv2605l_lra_od_clamp_reg(2800) == 131);
+    CHECK(132u * 21220u > 2800000u);                       // 132 would exceed 2.8 V
+    // LRA Eq. 5: V_rms = 20.58 mV x RV / sqrt(1 - (4 x tSAMPLE + 300 us) x f). Expected values are the formula in
+    // floating point, floor(V x sqrt(1 - x) / 20.58 mV), worked out offline.
+    CHECK(drv2605l_lra_rated_reg(2000, 235, 3) == 78);     // the LD0832AA: 2 V rms, 235 Hz, tSAMPLE 300 us
+    CHECK(drv2605l_lra_rated_reg(2000, 200, 3) == 81);
+    CHECK(drv2605l_lra_rated_reg(1800, 170, 3) == 75);
+    CHECK(drv2605l_lra_rated_reg(3000, 235, 3) == 117);
+    CHECK(drv2605l_lra_rated_reg(2000, 300, 3) == 72);
+    CHECK(drv2605l_lra_rated_reg(2000, 235, 0) == 86 && drv2605l_lra_rated_reg(2000, 235, 1) == 83 &&
+          drv2605l_lra_rated_reg(2000, 235, 2) == 80);
+    CHECK(drv2605l_lra_rated_reg(2000, 667, 3) == 0);      // 1500 us x 667 Hz > 1: no real root
+    CHECK(drv2605l_lra_rated_reg(60000, 100, 3) == 255);   // clamped
+    CHECK(drv2605l_lra_drive_time_reg(235) == 16 && drv2605l_lra_drive_time_us(16) == 2100);
+    CHECK(drv2605l_lra_drive_time_reg(200) == 20 && drv2605l_lra_drive_time_us(20) == 2500); // datasheet: 200 Hz -> 2.5 ms
+    CHECK(drv2605l_lra_drive_time_reg(1000) == 0 && drv2605l_lra_drive_time_reg(50) == 31 && drv2605l_lra_drive_time_reg(0) == 0x13);
     CHECK(drv2605l_erm_ol_od_clamp_reg(3600) == 166 && drv2605l_erm_ol_od_clamp_mv(166) == 3584);
     CHECK(167u * 21590u > 3600000u);                       // 167 would exceed 3.6 V
     CHECK(drv2605l_erm_ol_od_clamp_reg(100000) == 255);
@@ -223,8 +247,65 @@ int main(void) {
     // LRA path: library 6, LRA bit set, calibration cleared
     CHECK(hal_haptic_set_actuator(HAL_HAPTIC_LRA) == HAL_OK);
     CHECK(regs[DRV_REG_LIBRARY] == 6 && (regs[DRV_REG_FEEDBACK] & DRV_FB_LRA));
-    CHECK(regs[DRV_REG_OD_CLAMP] == 169);
+    // LD0832AA defaults: RATED 78, OD 131, DRIVE_TIME 16 (CONTROL1 0x90), closed loop (CONTROL3 bit 5 and bit 0 clear)
+    CHECK(regs[DRV_REG_RATED] == 78 && regs[DRV_REG_OD_CLAMP] == 131 && regs[DRV_REG_CONTROL1] == 0x90);
+    CHECK(regs[DRV_REG_FEEDBACK] == 0xAA);                 // LRA, brake 2, loop gain 2, bemf gain 2
+    CHECK(regs[DRV_REG_CONTROL2] == 0xF5 && regs[DRV_REG_CONTROL3] == 0x80 && regs[DRV_REG_CONTROL4] == 0x30);
+    CHECK(regs[DRV_REG_SEQ1] == 4 && regs[DRV_REG_SEQ1 + 1] == 0);   // the click effect loaded earlier is still in slot 1
+    CHECK(s_viol == 0);
+
+    // LRA auto-calibration: mode 7, GO, polled through the installed delay, results stored
+    s_delay_calls = 0;
+    drv2605l_set_delay_fn(count_delay);
+    s_cal_comp_result = 0x21;
+    CHECK(hal_haptic_calibrate(&cal) == HAL_OK && cal.valid && !cal.diag_failed && cal.a_cal_comp == 0x21);
+    CHECK(s_delay_calls >= 1 && s_last_cal_mode == DRV_MODE_AUTOCAL);
+    CHECK(regs[DRV_REG_FEEDBACK] & DRV_FB_LRA);
+    hal_haptic_get_calibration(&stored);
+    CHECK(stored.valid && stored.a_cal_comp == 0x21 && stored.a_cal_bemf == 0x7B && stored.bemf_gain == 1);
+    CHECK(hal_haptic_init() == HAL_OK && regs[DRV_REG_A_CAL_COMP] == 0x21 && regs[DRV_REG_FEEDBACK] == 0xA9);
+    // a failed diagnosis keeps the stored values and restores them on the chip
+    s_cal_fail = true;
+    s_cal_comp_result = 0x66;
+    CHECK(hal_haptic_calibrate(&cal) == HAL_OK && cal.diag_failed && !cal.valid);
+    hal_haptic_get_calibration(&stored);
+    CHECK(stored.valid && stored.a_cal_comp == 0x21 && regs[DRV_REG_A_CAL_COMP] == 0x21);
+    s_cal_fail = false;
+    s_cal_hang = true;
+    drv2605l_set_cal_timeout_ms(50);
+    CHECK(hal_haptic_calibrate(&cal) == HAL_ETIMEOUT && regs[DRV_REG_GO] == 0 && regs[DRV_REG_A_CAL_COMP] == 0x21);
+    s_cal_hang = false;
+    drv2605l_set_cal_timeout_ms(0);
+    drv2605l_set_delay_fn(NULL);
+    s_cal_comp_result = 0x0D;
+
+    // parameters: validated, and a change drops the calibration (it belongs to the old values)
+    hal_haptic_lra_params_t lp = HAL_HAPTIC_LRA_LD0832AA, lq;
+    hal_haptic_get_lra_params(&lq);
+    CHECK(lq.rated_mv_rms == 2000 && lq.peak_mv == 2800 && lq.freq_hz == 235);
+    CHECK(hal_haptic_set_lra_params(&lp) == HAL_OK);       // unchanged: calibration kept
+    hal_haptic_get_calibration(&stored);
+    CHECK(stored.valid);
+    lq = lp;
+    lq.freq_hz = 20;
+    CHECK(hal_haptic_set_lra_params(&lq) == HAL_EINVAL);
+    lq = lp;
+    lq.peak_mv = 3700;
+    CHECK(hal_haptic_set_lra_params(&lq) == HAL_EINVAL);
+    lq = lp;
+    lq.rated_mv_rms = 2900;                                // rated above the peak ceiling
+    CHECK(hal_haptic_set_lra_params(&lq) == HAL_EINVAL);
+    CHECK(hal_haptic_set_lra_params(NULL) == HAL_EINVAL);
+    lq = (hal_haptic_lra_params_t){1800, 2500, 200};
+    CHECK(hal_haptic_set_lra_params(&lq) == HAL_OK);
+    CHECK(regs[DRV_REG_RATED] == 73 && regs[DRV_REG_OD_CLAMP] == 117 && regs[DRV_REG_CONTROL1] == 0x94);
+    hal_haptic_get_calibration(&stored);
+    CHECK(!stored.valid);
+    CHECK(hal_haptic_set_lra_params(&lp) == HAL_OK && regs[DRV_REG_RATED] == 78);
+
+    // ERM <-> LRA: the type bit, library and calibration follow the actuator
     CHECK(hal_haptic_set_actuator(HAL_HAPTIC_ERM) == HAL_OK && regs[DRV_REG_LIBRARY] == 2);
+    CHECK(!(regs[DRV_REG_FEEDBACK] & DRV_FB_LRA));
 
     // ERM open loop (the build default): bit set, clamp 166, calibration not applicable
     CHECK(hal_haptic_set_erm_loop(HAL_HAPTIC_LOOP_OPEN) == HAL_OK);
@@ -247,7 +328,7 @@ int main(void) {
     // safety invariants across everything above: init, calibrations, failures, actuator switches
     CHECK(s_max_rated <= 141);
     CHECK(s_max_od <= 182 && s_max_od_ol == 166);
-    CHECK(s_max_od_lra <= 169);
+    CHECK(s_max_od_lra <= 131);                            // LRA peak never above the 2.8 V parameter
     CHECK(s_viol == 0);
 
     printf(s_fail ? "test_drv2605l: %d FAILED\n" : "test_drv2605l: ok\n", s_fail);

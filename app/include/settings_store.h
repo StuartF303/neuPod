@@ -50,8 +50,10 @@ extern "C" {
 #define SETTINGS_TAG(a, b, c, d) (((uint32_t)(a) << 24) | ((uint32_t)(b) << 16) | ((uint32_t)(c) << 8) | (uint32_t)(d))
 #define SETTING_VOLUME_ATT_DB SETTINGS_TAG('N', 'P', 'v', 'o') /**< u8, attenuation in dB */
 #define SETTING_BACKLIGHT_PCT SETTINGS_TAG('N', 'P', 'b', 'l') /**< u8, 5..100 */
-#define SETTING_CLICK_FEEDBACK SETTINGS_TAG('N', 'P', 'c', 'k') /**< u8, 0 or 1 */
+#define SETTING_CLICK_FEEDBACK SETTINGS_TAG('N', 'P', 'c', 'k') /**< u8, click_mode_t: 0 off, 1 haptic (the old "on"), 2 piezo, 3 both */
 #define SETTING_GAPLESS SETTINGS_TAG('N', 'P', 'g', 'p')       /**< u8, 0 or 1; absent = on */
+#define SETTING_HAPTIC_ACTUATOR SETTINGS_TAG('N', 'P', 'h', 'a') /**< u8, 0 = ERM, 1 = LRA; absent = the build default */
+#define SETTING_HAPTIC_CAL SETTINGS_TAG('N', 'P', 'h', 'c')      /**< 11 bytes, haptic_logic.h: DRV2605L auto-calibration for one actuator */
 #define SETTING_SHUFFLE SETTINGS_TAG('N', 'P', 's', 'h')       /**< u8, pq_shuffle_t: 0 off, 1 songs; absent = off */
 #define SETTING_REPEAT SETTINGS_TAG('N', 'P', 'r', 'p')        /**< u8, pq_repeat_t: 0 off, 1 one, 2 all; absent = off */
 #define SETTING_WIFI SETTINGS_TAG('N', 'P', 'w', 'f')            /**< 4 bytes: enabled, during playback, idle-off minutes, zone */
