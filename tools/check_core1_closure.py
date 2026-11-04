@@ -34,6 +34,8 @@ FORBIDDEN = re.compile(
     r"__wrap_malloc|__wrap_calloc|__wrap_realloc|__wrap_free)$")
 
 # Edges that exist in the object code but are not taken on our paths, each with the reason. (caller -> callee regex)
+# Matching is by function NAME in the linked ELF: a static helper elsewhere with the same name would be merged with the
+# SDK one and covered by the same entry.
 IGNORED_EDGES = [
     (r"^(hw_claim_unused_from_range|hw_claim_or_assert|hw_claim_lock)$", r"^panic$",
      "SDK claim helpers panic only when called with required=true; hal_audio.c claims with required=false and checks the result"),
