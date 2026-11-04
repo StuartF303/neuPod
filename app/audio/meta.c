@@ -518,18 +518,19 @@ bool flac_seek_point(meta_read_fn rd, void *ctx, uint64_t file_size, uint64_t ta
 }
 
 bool mp3_seek_point(meta_read_fn rd, void *ctx, uint64_t file_size, uint64_t audio_offset, uint64_t total_frames, uint64_t frame,
-                    uint64_t *file_offset) {
+                    uint64_t *file_offset, uint64_t *landed_frame) {
     if (total_frames == 0 || frame >= total_frames || file_size <= audio_offset) return false;
     uint64_t bytes = file_size - audio_offset, rel = bytes * frame / total_frames; // proportional: exact for constant bit rate
     uint8_t fr[192] = {0};
     mp3_hdr_t h;
+    const uint8_t *toc_tab = NULL;
     int32_t got = rd(ctx, audio_offset, fr, sizeof fr);
     if (got >= 16 && mp3_header(fr, &h)) {
         uint32_t side = h.version == 3 ? (h.channels == 1 ? 17u : 32u) : (h.channels == 1 ? 9u : 17u);
         if (!(fr[1] & 1)) side += 2;
         const uint8_t *x = fr + 4 + side;
         if (4 + side + 8 + 4 + 4 + 100 <= (uint32_t)got && !memcmp(x, "Xing", 4) && (x[7] & 4u)) {
-            const uint8_t *toc = x + 8 + ((x[7] & 1u) ? 4 : 0) + ((x[7] & 2u) ? 4 : 0);
+            const uint8_t *toc = toc_tab = x + 8 + ((x[7] & 1u) ? 4 : 0) + ((x[7] & 2u) ? 4 : 0);
             uint64_t scaled = frame * 25600u / total_frames; // percent in 1/256
             uint32_t i = (uint32_t)(scaled >> 8), f = (uint32_t)(scaled & 255u);
             if (i > 99u) i = 99u, f = 0;
@@ -549,6 +550,18 @@ bool mp3_seek_point(meta_read_fn rd, void *ctx, uint64_t file_size, uint64_t aud
             mp3_hdr_t c2;
             if (rd(ctx, pos + (uint64_t)i + c.frame_bytes, nx, 4) != 4 || !mp3_header(nx, &c2) || c2.rate != c.rate) continue;
             *file_offset = pos + (uint64_t)i;
+            uint64_t back = *file_offset - audio_offset, landed;
+            if (toc_tab != NULL) { // inverse of the table: the percent whose byte position brackets the offset
+                uint64_t f = back * 65536u / bytes;
+                uint32_t t = 0;
+                while (t < 99u && (uint64_t)toc_tab[t + 1u] * 256u <= f) t++;
+                uint64_t lo = (uint64_t)toc_tab[t] * 256u, hi = (t < 99u ? (uint64_t)toc_tab[t + 1u] : 256u) * 256u;
+                uint64_t frac = hi > lo && f > lo ? (f - lo) * 256u / (hi - lo) : 0;
+                landed = ((uint64_t)t * 256u + frac) * total_frames / 25600u;
+            } else {
+                landed = back * total_frames / bytes;
+            }
+            *landed_frame = landed < total_frames ? landed : total_frames - 1u;
             return true;
         }
     }

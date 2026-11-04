@@ -226,7 +226,10 @@ ignored. The reported `total_frames` is the trimmed length. The test vectors: `t
 
 **Host tests.** `gapless` runs the real core-1 loop and the real core-0 stream controller against a fake sink with a real-time block clock and
 compares the sink's samples frame by frame with each track decoded on its own (WAV, FLAC, MP3, ALAC with an edit list; skip, stop, seek and rate
-change cases). `play_queue` covers the queue rules.
+change cases). `play_queue` covers the queue rules (including shuffle permutations, repeat, wrap re-shuffle) and `player` the mid-play toggles.
+
+Shuffle and repeat (Settings > Shuffle / Repeat, saved; Now Playing shows small shuffle/loop icons, loop with a 1 for repeat-one): see the
+amendment in ADR-0016. UART reasons added: `repeat`, `wrap` (and `gapless repeat`, `gapless wrap`).
 
 **Bench, 3 Nov 2026 (Pico 2 W):** `30-signals/gapless/` (3-part FLAC then 3-part LAME MP3, one queue): five `(gapless)`
 handoffs incl. FLAC → MP3, one `END_OF_TRACK(1)` per boundary, sink never re-clocked, mute line open throughout, 0 underruns.
@@ -237,18 +240,21 @@ persists across a reboot. 44.1 → 48 kHz in `10-matrix/`: `(auto)` with a re-cl
 ### Resume (last track and position)
 
 The player (core 0) remembers the folder track that was playing and where (`app/runtime/resume.c`, two settings items `NPr0`/`NPr1`: track path,
-queue index, file size, position in PCM frames, playing or paused). It is stored when the user pauses or resumes, when a track starts (also a gapless
-one), on Stop (the place is kept), and every 30 s while playing (`RESUME_PERIOD_MS`, marked in RAM only; an unchanged position does not even dirty the store). The end of
-the album clears it. These calls only change the RAM image; the SD write is the settings store's own save on the storage task (write lock opened only
-inside that save, nothing on core 1). The rule "no SD writes while audio plays" stands: **periodic saves are marked every 30 s but only reach the card at pause,
-stop, track end of a non-gapless join or idle**, because the write runs on the storage task that also refills the audio data ring, so a card that stalls
-for 100-250 ms for one write would underrun a high-rate stream (at 24-bit/96 kHz the rings hold only about 85-130 ms). An opt-in exception exists
-(`RESUME_WRITE_WHILE_PLAYING 1` in `storage_service.c`, default 0, unbenched): it writes during playback only when the data ring plus the PCM ring hold at least
-300 ms of audio (judged pessimistically as 32-bit stereo, so it rarely opens), times each such write, and turns itself off for the boot if one takes over 50 ms. There is no orderly-shutdown hook in the firmware yet (no power-off path), so a power cut loses at most the last 30 s;
-pausing before switching off stores the exact place.
+folder entry index, 64-bit file size, position in PCM frames, playing or paused; the entry, not the shuffle slot, is saved). It is stored when the user pauses or resumes, when a
+track starts (also a gapless or repeat one) and on Stop (the place is kept). Under repeat-all or repeat-one the album never ends, so the record is never cleared; without
+repeat the end of the album clears it. These calls only change the RAM image (serialised by a small mutex, as the UI and the storage task both call them); the SD write is the settings
+store's own save on the storage task (write lock opened only inside that save, nothing on core 1).
+
+**There is no periodic update by default.** The rule "no SD writes while audio plays" stands, and a mid-track update could only be written during playback: the
+write runs on the storage task that also refills the audio data ring, so a card that stalls for 100-250 ms for one write would underrun a high-rate stream (at
+24-bit/96 kHz the rings hold only about 85-130 ms). So **a power cut mid-track resumes at the last pause, resume, Stop or track start**, not at the exact second.
+An opt-in build exception exists (`RESUME_WRITE_WHILE_PLAYING 1`, `resume.h`; default 0, unbenched): it adds a 30 s update (`RESUME_PERIOD_MS`) and writes it during
+playback only when the data ring plus the PCM ring hold at least 300 ms of audio (judged pessimistically as 32-bit stereo, so it rarely opens), times each such
+write, and turns itself off for the boot if one takes over 50 ms. There is no orderly-shutdown hook in the firmware yet (no power-off path); pausing before
+switching off stores the exact place.
 
 At boot, right after the settings load, the storage task lists the saved folder (only if the UI has not listed anything yet: the listing buffer is
-shared), `resume_plan()` decides, and the player opens the track **paused** at the saved frame (nothing is played until the user presses play):
+shared), `resume_plan()` decides, and the player opens the track (in a queue built with the saved shuffle and repeat modes: under shuffle the order is new, the track is the saved one) **paused** at the saved frame (nothing is played until the user presses play):
 the file is there with the same size: that frame; same name but another size: the same track from the beginning; the file is gone: the playable
 entry at the saved queue position, from its beginning; the folder cannot be read, or holds nothing playable, or the track cannot be opened: the record is discarded.
 
@@ -257,9 +263,9 @@ entry at the saved queue position, from its beginning; the folder cannot be read
 | Codec | Start position |
 | --- | --- |
 | WAV | exact frame (the byte) |
-| ALAC (M4A) | exact frame: the packet is found with the sample tables and the decoder drops the frames before the target; trimming (edit list, `iTunSMPB`) stays exact |
+| ALAC (M4A) | exact frame: the packet is found with the sample tables (`mp4_iter_seek`: the stsc runs and one chunk, not every packet before it) and the decoder drops the frames before the target; trimming (edit list, `iTunSMPB`) stays exact |
 | FLAC | exact frame **if the file has a SEEKTABLE** (nearest earlier seek point, the decoder drops the rest); without one the track starts at the beginning (position 0) |
-| MP3 | nearest frame: from the Xing table of contents (VBR) or the byte proportion (CBR, within a frame; VBR roughly 1%). The first granule after the jump may be silent (bit reservoir) and the LAME end padding is no longer trimmed |
+| MP3 | nearest frame: from the Xing table of contents (VBR) or the byte proportion (CBR, within a frame; VBR roughly 1%). The position that is then shown and saved is computed back from where the frame header really landed, so errors do not add up over repeated resumes. The first granule after the jump may be silent (bit reservoir) and the LAME end padding is no longer trimmed |
 
 `tools/gen_seek_vector.py` makes the FLAC vector with a seek table for the tests (`tests/test_gapless.c`, through the real core-1 loop).
 

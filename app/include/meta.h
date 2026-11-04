@@ -151,10 +151,15 @@ bool flac_seek_point(meta_read_fn rd, void *ctx, uint64_t file_size, uint64_t ta
 /**
  * MP3: file offset of an MPEG frame header near @p frame (of @p total_frames, as mp3_info_t reports them): from the Xing table of contents when the
  * file has one (VBR), else proportionally to the bytes (exact for CBR). The offset is validated as a frame header confirmed by the one after it.
- * Approximate: nearest frame for CBR, roughly 1% of the track for VBR. False if none was found (start at the beginning).
+ * @p landed_frame is the frame the landed offset corresponds to (computed back from the offset, through the TOC when it was used), so a
+ * position saved after playing from there does not inherit the error. Approximate: nearest frame for CBR, roughly 1% of the track for VBR.
+ * False if none was found (start at the beginning).
  */
 bool mp3_seek_point(meta_read_fn rd, void *ctx, uint64_t file_size, uint64_t audio_offset, uint64_t total_frames, uint64_t frame,
-                    uint64_t *file_offset);
+                    uint64_t *file_offset, uint64_t *landed_frame);
+/** (mp4_iter_init() first.) Position the iterator on packet @p k (the next mp4_iter_next() returns it) without reading the earlier packets one by one: the stsc runs and the
+ *  one chunk's offset and sizes are read, O(runs + packets in a chunk). False if @p k is out of range or the tables are inconsistent. */
+bool mp4_iter_seek(mp4_iter_t *it, meta_read_fn rd, void *ctx, uint32_t k);
 
 /* ---- shared helpers ---- */
 /** Classify the image at @p offset (reads 4 bytes): FF D8 FF = JPEG, 89 'PNG' = PNG, else OTHER; NONE if @p length < 4 or unreadable. */

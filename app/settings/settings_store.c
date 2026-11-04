@@ -105,6 +105,7 @@ static uint32_t serialise(uint32_t seq) {
 static bool g_newer_seen;  /* set by parse() for the file just read */
 static uint8_t g_newer_mask; /* bit 0 = file A, bit 1 = file B holds a NEWER layout: kept aside (settings.old) at the next save */
 
+/* @p items NULL: validate only (nothing is stored). */
 static bool parse(const uint8_t *img, uint32_t n, item_t *items, uint32_t *seq) {
     if (n < HEADER_BYTES + CRC_BYTES || n > IMAGE_MAX) {
         return false;
@@ -119,14 +120,16 @@ static bool parse(const uint8_t *img, uint32_t n, item_t *items, uint32_t *seq) 
         g_newer_seen = true; /* a rollback: do not wipe the newer firmware's file, move it aside when we save */
         return false;
     }
-    if (get16(img + 4) != SETTINGS_VERSION) {
+    if (get16(img + 4) != SETTINGS_VERSION && get16(img + 4) != SETTINGS_VERSION_V1) {
         return false; /* an older layout: no migration exists yet */
     }
     uint32_t count = get16(img + 6);
     if (count > SETTINGS_MAX_ITEMS) {
         return false;
     }
-    memset(items, 0, sizeof(item_t) * SETTINGS_MAX_ITEMS);
+    if (items != NULL) {
+        memset(items, 0, sizeof(item_t) * SETTINGS_MAX_ITEMS);
+    }
     const uint8_t *p = img + HEADER_BYTES;
     const uint8_t *end = img + n - CRC_BYTES;
     for (uint32_t i = 0; i < count; i++) {
@@ -137,9 +140,11 @@ static bool parse(const uint8_t *img, uint32_t n, item_t *items, uint32_t *seq) 
         if (len == 0 || len > SETTINGS_VALUE_MAX || (uint32_t)(end - p) < ITEM_OVERHEAD + len) {
             return false;
         }
-        items[i].tag = get32(p);
-        items[i].len = (uint8_t)len;
-        memcpy(items[i].val, p + ITEM_OVERHEAD, len);
+        if (items != NULL) {
+            items[i].tag = get32(p);
+            items[i].len = (uint8_t)len;
+            memcpy(items[i].val, p + ITEM_OVERHEAD, len);
+        }
         p += ITEM_OVERHEAD + len;
     }
     *seq = get32(img + 8);
@@ -150,8 +155,11 @@ static bool parse(const uint8_t *img, uint32_t n, item_t *items, uint32_t *seq) 
 
 typedef enum { FILE_MISSING, FILE_BAD, FILE_GOOD, FILE_IOERR } file_state_t;
 
-/* Read and validate one file into @p items. */
-static file_state_t read_file(const char *path, item_t *items, uint32_t *seq) {
+static bool g_test_fail_commit; /* test hook: the next committing read fails to parse */
+
+/* Read and validate one file. @p commit false: validate only (CRC, structure, sequence). true: parse it into g_items under the lock
+ * (g_items is read by other tasks, so it is only touched inside the lock; the parse is CPU only). */
+static file_state_t read_file(const char *path, bool commit, uint32_t *seq) {
     nfs_file_t *f;
     nfs_err_t e = nfs_open(&f, path, NFS_O_READ);
     if (e == NFS_ERR_NOT_FOUND) {
@@ -170,8 +178,20 @@ static file_state_t read_file(const char *path, item_t *items, uint32_t *seq) {
         e = nfs_read(f, g_image, (size_t)size, &got);
         if (e != NFS_OK) {
             st = FILE_IOERR;
-        } else if (got == size && parse(g_image, (uint32_t)size, items, seq)) {
-            st = FILE_GOOD;
+        } else if (got == size) {
+            bool ok;
+            if (commit) {
+                lock();
+                ok = !g_test_fail_commit && parse(g_image, (uint32_t)size, g_items, seq);
+                if (!ok) {
+                    memset(g_items, 0, sizeof g_items);
+                }
+                g_test_fail_commit = false;
+                unlock();
+            } else {
+                ok = parse(g_image, (uint32_t)size, NULL, seq);
+            }
+            st = ok ? FILE_GOOD : FILE_BAD;
         }
     }
     (void)nfs_close(f);
@@ -209,29 +229,33 @@ settings_load_result_t settings_load(void) {
     if (!g_attached) {
         return SETTINGS_LOAD_NONE;
     }
-    static item_t stage[SETTINGS_MAX_ITEMS], stage2[SETTINGS_MAX_ITEMS]; /* parsed off to the side: g_items is read by other tasks meanwhile */
     uint32_t a_seq = 0, b_seq = 0;
     bool pick_is_a = false;
     g_newer_mask = 0;
     g_newer_seen = false;
-    file_state_t a = read_file(SETTINGS_FILE_A, stage, &a_seq);
+    file_state_t a = read_file(SETTINGS_FILE_A, false, &a_seq);
     g_newer_mask |= g_newer_seen ? 1u : 0u;
     g_newer_seen = false;
-    file_state_t b = read_file(SETTINGS_FILE_B, stage2, &b_seq);
+    file_state_t b = read_file(SETTINGS_FILE_B, false, &b_seq);
     g_newer_mask |= g_newer_seen ? 2u : 0u;
 
     settings_load_result_t res;
-    const item_t *use = NULL;
-    uint32_t use_seq = 0;
     int active = -1;
+    uint32_t use_seq = 0;
     if (a == FILE_IOERR || b == FILE_IOERR) {
         res = SETTINGS_LOAD_IO_ERROR;
     } else if (a == FILE_GOOD || b == FILE_GOOD) {
         pick_is_a = a == FILE_GOOD && (b != FILE_GOOD || (int32_t)(a_seq - b_seq) > 0);
-        use = pick_is_a ? stage : stage2;
-        use_seq = pick_is_a ? a_seq : b_seq;
-        active = pick_is_a ? 0 : 1;
         res = (a == FILE_BAD || b == FILE_BAD) ? SETTINGS_LOAD_RECOVERED : SETTINGS_LOAD_OK;
+        /* The winner is read again, this time into g_items (no second copy of the store in RAM). If that fails, fall back to the other. */
+        file_state_t got = read_file(pick_is_a ? SETTINGS_FILE_A : SETTINGS_FILE_B, true, &use_seq);
+        active = pick_is_a ? 0 : 1;
+        if (got != FILE_GOOD) {
+            bool other_good = pick_is_a ? b == FILE_GOOD : a == FILE_GOOD;
+            got = other_good ? read_file(pick_is_a ? SETTINGS_FILE_B : SETTINGS_FILE_A, true, &use_seq) : FILE_BAD;
+            active = got == FILE_GOOD ? (pick_is_a ? 1 : 0) : -1;
+            res = got == FILE_GOOD ? SETTINGS_LOAD_RECOVERED : got == FILE_IOERR ? SETTINGS_LOAD_IO_ERROR : SETTINGS_LOAD_CORRUPT;
+        }
     } else if (a == FILE_BAD || b == FILE_BAD) {
         res = SETTINGS_LOAD_CORRUPT;
     } else {
@@ -239,9 +263,9 @@ settings_load_result_t settings_load(void) {
     }
 
     lock();
-    memset(g_items, 0, sizeof g_items);
-    if (use != NULL) {
-        memcpy(g_items, use, sizeof g_items);
+    if (active < 0) {
+        memset(g_items, 0, sizeof g_items);
+    } else {
         g_seq = use_seq;
     }
     g_active = active;
@@ -285,6 +309,7 @@ void settings_get_status(settings_status_t *out) {
 /* ---- public: save ---- */
 
 void settings_test_set_power_loss_step(int step) { g_crash_step = step; }
+void settings_test_fail_next_reread(void) { g_test_fail_commit = true; }
 
 static bool power_lost_at(int step) { return g_crash_step == step; }
 

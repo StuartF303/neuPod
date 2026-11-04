@@ -92,8 +92,53 @@ open/closed loop, `e` / `l` select ERM / LRA.
 rated, 3.3 V supply; DIAG_RESULT failed after 1844 ms) and the motor buzzed instead of clicking. By user
 decision the ERM now runs open loop, which is also how Adafruit's own library drives this motor. Closed
 loop stays available (`o` key or build flag) for later experiments. The LRA path (library 6, LRA bit) is
-supported but its rated voltage needs the resonance frequency (datasheet Eq. 5), so it uses the chip
-default unless `NEUPOD_HAPTIC_LRA_RATED_REG` is given.
+selectable at run time (Settings > Haptics > Actuator) and described below.
+
+### LRA: LEADER LD0832AA
+
+Target actuator for the final board: 8 mm coin LRA, rated 2.0 V rms, resonance about 235 Hz (build defaults in
+`HAL_HAPTIC_LRA_LD0832AA`, `hal_haptic_lra_params_t`; override at run time with `hal_haptic_set_lra_params()`).
+**Not confirmed from the LCSC datasheet (C2682305):** the datasheet could not be fetched from the build host, so
+2.0 V rms and 235 Hz are the figures from the brief. Everything below is computed from those two numbers, so a
+different actuator only needs different parameters. The peak ceiling (2.8 V, 2 V x sqrt(2) floored) is a design
+choice, not a datasheet figure.
+
+| Value | Formula (datasheet SLOS854D) | Result |
+|---|---|---|
+| LIBRARY | LRA library | 6 |
+| FEEDBACK | N_ERM_LRA = 1, brake factor 2, loop gain 2, BEMF gain 2 (calibration overwrites the gain) | 0xAA |
+| RATED_VOLTAGE | Eq. 5: V rms = 20.58 mV x RV / sqrt(1 - (4 x tSAMPLE + 300 us) x f), tSAMPLE = 300 us, so RV = floor(2000 x sqrt(1 - 1500 us x 235) / 20.58) | 78 (0x4E) |
+| OD_CLAMP | Eq. 9: V peak = 21.22 mV x OD, so OD = floor(2800 / 21.22) | 131 (0x83) = 2.78 V |
+| CONTROL1 | STARTUP_BOOST + DRIVE_TIME = (half period - 0.5 ms) / 0.1 ms; half period 2.128 ms | 0x90 (2.1 ms) |
+| CONTROL2 | SAMPLE_TIME 3, BLANKING 1, IDISS 1 (datasheet defaults) | 0xF5 |
+| CONTROL3 | ERM_OPEN_LOOP and LRA_OPEN_LOOP cleared (closed loop, auto-resonance), RTP signed | 0x80 |
+| CONTROL4 | AUTO_CAL_TIME = 3 | 0x30 |
+
+Click effect on an LRA: library 6 effect 4, Sharp Click 100 % (ERM keeps effect 3).
+
+### Calibration and persistence
+
+`hal_haptic_calibrate()` follows datasheet 8.5.6: MODE = 7, write the inputs above, GO, poll GO every 10 ms
+(through the delay hook, `drv2605l_set_delay_fn`; the firmware installs the scheduler delay so other tasks run),
+read STATUS DIAG_RESULT (1 = failed), then A_CAL_COMP, A_CAL_BEMF and BEMF_GAIN. A failure or timeout rebuilds the
+chip from reset with the previous good values.
+
+The haptic task (core 0) owns this. The results are stored in the settings store (`NPhc`, 9 bytes: version,
+actuator, comp, bemf, gain, rated mV, peak mV, resonance Hz; version 2, 11 bytes) and re-applied on every boot, so the motor spins for the
+calibration once per actuator. It runs automatically when an LRA is selected (or built in) and no matching record
+exists, once the settings are known (the card's values have loaded, or there is no working card; a boot without a card cannot store it, so it repeats each boot). If the record cannot be stored (store full) the row shows Failed and a console line says so, and on demand
+from Settings > Haptics > Calibrate. Changing the actuator type, or the rated voltage, peak voltage or resonance (OD_CLAMP is a calibration input), makes the stored
+record not match, so it recalibrates (as does an old version 1 record, which had no peak); switching back and forth between types re-runs it for each. The task holds the
+I2C bus (the gauge read waits) for about a second but sleeps between polls, never blocking the UI. Clicks during it:
+`rt_haptic_click()` drops the request while the state is RUNNING (nothing is queued), and the task drains its queue when
+a calibration starts and again when it ends, which also discards a click that raced past the check. If the automatic attempt fails it is not retried until the next boot or a manual Calibrate.
+
+### Click setting and rate limit
+
+Settings > Click: Piezo / Haptic / Both / Off (`NPck` 2 / 1 / 3 / 0). There is no piezo driver yet
+(`NEUPOD_PIEZO_FITTED` is 0), so the menu cycles Haptic / Off only; a Piezo or Both value already stored is accepted but
+silent (`rt_piezo_click()` is a stub). Haptic clicks go through a 2-deep queue and a
+35 ms gate (`haptic_gate_pass`): a fast wheel spin drops requests instead of queueing them.
 
 ### Bring-up order (motor safety)
 

@@ -224,6 +224,11 @@ static void resume_boot(void) {
     if (!resume_load(&r)) {
         return;
     }
+    player_info_t pi;
+    player_get(&pi);
+    if (pi.state != PLAYER_IDLE) {
+        return; // something already plays: leave the record alone
+    }
     if (!resume_split(r.path, dir, sizeof dir, &name)) {
         resume_clear();
         return;
@@ -247,7 +252,11 @@ static void resume_boot(void) {
     } else if (plan == RESUME_PLAN_GONE) {
         printf("resume: '%s' is gone, offering '%s' from its beginning\n", name, g_entries[idx].name);
     }
-    if (plan == RESUME_PLAN_NOTHING || !player_resume_folder(dir, g_entries, res.count, idx, frame)) {
+    player_resume_t pr = plan == RESUME_PLAN_NOTHING ? PLAYER_RESUME_INVALID : player_resume_folder(dir, g_entries, res.count, idx, frame);
+    if (pr == PLAYER_RESUME_BUSY) {
+        return; // the user started something first: keep the record, it is not the user's loss
+    }
+    if (pr != PLAYER_RESUME_OK) {
         printf("resume: nothing playable to resume, discarded\n");
         resume_clear();
         return;
@@ -265,7 +274,6 @@ static void resume_boot(void) {
 // Only with RESUME_WRITE_WHILE_PLAYING 1, and then only when the data ring plus the PCM ring hold RESUME_MIN_BUFFERED_MS of audio, judged
 // pessimistically (resume_buffered_ms: 32-bit stereo for the data ring, the PCM ring's low-water mark). Every such write is timed; one that
 // takes longer than RESUME_SLOW_WRITE_MS switches the exception off for the rest of the boot.
-#define RESUME_WRITE_WHILE_PLAYING 0
 #define RESUME_SLOW_WRITE_MS 50u
 static bool g_wwp_off;       /* a write while playing was slow: not again this boot */
 static bool g_wwp_attempt;   /* the last quiet verdict relied on the exception */

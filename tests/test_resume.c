@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "hal_storage.h"
+#include "meta.h"
 #include "nfs.h"
 #include "resume.h"
 #include "settings_store.h"
@@ -27,7 +28,7 @@ static resume_state_t sample(const char *path, uint32_t frame) {
     snprintf(s.path, sizeof s.path, "%s", path);
     s.index = 7;
     s.frame = frame;
-    s.size = 123456789u;
+    s.size = 0x123456789ull; // beyond 4 GiB
     s.playing = true;
     return s;
 }
@@ -46,7 +47,7 @@ TEST(save_flush_reboot_load_round_trip) {
     ASSERT_EQ(0, strcmp(out.path, s.path));
     ASSERT_EQ(7, out.index);
     ASSERT_EQ(44100u * 61u, out.frame);
-    ASSERT_EQ(123456789u, out.size);
+    ASSERT_EQ(0x123456789ull, out.size);
     ASSERT_TRUE(out.playing);
     s.playing = false;
     ASSERT_TRUE(resume_save(&s, RESUME_EVENT, 2000));
@@ -219,6 +220,105 @@ TEST(resume_yields_when_the_store_is_nearly_full) {
     ASSERT_TRUE(resume_save(&s, RESUME_EVENT, 3)); // updating an existing record needs no new slot
 }
 
+// ---- MP3 seek landing: a synthetic VBR file (Xing table of contents) with frames of different sizes ----
+typedef struct { uint8_t *d; size_t n; } mem_t;
+static int32_t mem_rd(void *c, uint64_t off, void *dst, uint32_t n) {
+    const mem_t *m = c;
+    if (off >= m->n) return 0;
+    size_t k = off + n > m->n ? m->n - (size_t)off : n;
+    memcpy(dst, m->d + off, k);
+    return (int32_t)k;
+}
+
+TEST(mp3_seek_lands_where_it_says_cbr_and_vbr_with_toc) {
+    // MPEG-1 layer 3, 44.1 kHz stereo, no CRC: header FF FB <bitrate idx><44.1k> 00; frame bytes = 144000*kbps/44100
+    static const uint8_t bi[4] = {0x90, 0xB0, 0xD0, 0xE0}; // 128, 160, 224, 256 kbps
+    static const uint32_t kb[4] = {128, 160, 224, 256};
+    enum { FRAMES = 2000 };
+    static uint8_t buf[2000 * 836 + 4096];
+    static uint32_t start[FRAMES + 1];
+    for (int vbr = 0; vbr < 2; vbr++) {
+        size_t pos = 0;
+        // frame 0: the Xing (VBR) or Info (CBR) frame, 128 kbps = 417 bytes (the table of contents needs room)
+        memset(buf, 0, sizeof buf);
+        buf[0] = 0xFF; buf[1] = 0xFB; buf[2] = 0x90; buf[3] = 0x00;
+        pos = 417;
+        for (int f = 0; f < FRAMES; f++) {
+            int k = vbr ? (f / 7 + f * 3) % 4 : 0;
+            start[f] = (uint32_t)pos;
+            uint32_t len = 144000u * kb[k] / 44100u;
+            buf[pos] = 0xFF; buf[pos + 1] = 0xFB; buf[pos + 2] = bi[k]; buf[pos + 3] = 0x00;
+            pos += len;
+        }
+        start[FRAMES] = (uint32_t)pos;
+        uint32_t audio = (uint32_t)pos - 417u; // bytes after the Xing frame... the table is relative to the audio from the Xing frame on
+        uint8_t *x = buf + 4 + 32;
+        memcpy(x, vbr ? "Xing" : "Info", 4);
+        x[7] = 1 | 2 | 4; // frames, bytes, TOC
+        x[8] = FRAMES >> 24; x[9] = FRAMES >> 16; x[10] = FRAMES >> 8; x[11] = FRAMES;
+        uint32_t tb = (uint32_t)pos;
+        x[12] = tb >> 24; x[13] = tb >> 16; x[14] = tb >> 8; x[15] = tb;
+        for (int p = 0; p < 100; p++) { // byte position (of the whole file from the Xing frame) at p percent, in 1/256 of the file
+            uint32_t fr = (uint32_t)((uint64_t)p * FRAMES / 100);
+            x[16 + p] = (uint8_t)((uint64_t)start[fr] * 256u / tb);
+        }
+        (void)audio;
+        mem_t m = {buf, pos};
+        uint64_t worst = 0;
+        for (uint64_t want = 50; want < FRAMES * 1152ull - 2000; want += 24137) {
+            uint64_t at = 0, landed = 0;
+            ASSERT_TRUE(mp3_seek_point(mem_rd, &m, pos, 0, (uint64_t)FRAMES * 1152u, want, &at, &landed));
+            ASSERT_TRUE(buf[at] == 0xFF && (buf[at + 1] & 0xE0) == 0xE0);
+            // the true frame of the landed offset
+            uint32_t tf = 0;
+            while (tf + 1 < FRAMES && start[tf + 1] <= at) tf++;
+            uint64_t truth = (uint64_t)tf * 1152u;
+            uint64_t err = truth > landed ? truth - landed : landed - truth;
+            if (err > worst) worst = err;
+        }
+        // CBR: a frame or so; VBR with the table: the reported frame is within 1.5% of the track of the real one
+        printf("  mp3 %s: worst landed-frame error %llu frames (track %u)\n", vbr ? "VBR" : "CBR", (unsigned long long)worst, FRAMES * 1152u);
+        ASSERT_TRUE(worst <= (vbr ? (uint64_t)FRAMES * 1152u * 15u / 1000u : 2u * 1152u));
+    }
+}
+
+TEST(alac_seek_matches_walking_the_packets) {
+    static const char *const files[] = {"alac16_44k_st.m4a", "alac16_48k_mono.m4a", "alac24_48k_st.m4a"};
+    for (unsigned fi = 0; fi < sizeof files / sizeof files[0]; fi++) {
+        char path[600];
+        snprintf(path, sizeof path, "%s/%s", NEUPOD_TEST_ASSETS, files[fi]);
+        FILE *f = fopen(path, "rb");
+        ASSERT_TRUE(f != NULL);
+        if (f == NULL) continue;
+        static uint8_t buf[200000];
+        size_t n = fread(buf, 1, sizeof buf, f);
+        fclose(f);
+        mem_t m = {buf, n};
+        mp4_info_t info;
+        ASSERT_EQ(META_OK, mp4_parse(mem_rd, &m, n, &info));
+        ASSERT_TRUE(info.sample_count > 2);
+        for (uint32_t k = 0; k < info.sample_count; k++) {
+            mp4_iter_t a, b;
+            mp4_iter_init(&a, &info);
+            uint64_t oa = 0, ob = 0;
+            uint32_t sa = 0, sb = 0;
+            for (uint32_t i = 0; i <= k; i++) ASSERT_TRUE(mp4_iter_next(&a, mem_rd, &m, &oa, &sa));
+            mp4_iter_init(&b, &info);
+            ASSERT_TRUE(mp4_iter_seek(&b, mem_rd, &m, k));
+            ASSERT_TRUE(mp4_iter_next(&b, mem_rd, &m, &ob, &sb));
+            ASSERT_TRUE(oa == ob && sa == sb);
+            if (k + 1 < info.sample_count) { // and the one after it (the chunk boundary logic)
+                ASSERT_TRUE(mp4_iter_next(&a, mem_rd, &m, &oa, &sa));
+                ASSERT_TRUE(mp4_iter_next(&b, mem_rd, &m, &ob, &sb));
+                ASSERT_TRUE(oa == ob && sa == sb);
+            }
+        }
+        mp4_iter_t z;
+        mp4_iter_init(&z, &info);
+        ASSERT_FALSE(mp4_iter_seek(&z, mem_rd, &m, info.sample_count));
+    }
+}
+
 TEST(write_while_playing_gate_math) {
     // 32768 bytes of 32-bit stereo at 48 kHz = 4096 frames = 85 ms; the PCM ring adds its low-water mark
     ASSERT_EQ(85, resume_buffered_ms(48000, 32768, 8, 0));
@@ -250,6 +350,8 @@ int main(void) {
     RUN(plan_for_a_missing_or_changed_file);
     RUN(a_torn_pair_does_not_load);
     RUN(resume_yields_when_the_store_is_nearly_full);
+    RUN(mp3_seek_lands_where_it_says_cbr_and_vbr_with_toc);
+    RUN(alac_seek_matches_walking_the_packets);
     RUN(write_while_playing_gate_math);
     char cmd[300];
     snprintf(cmd, sizeof cmd, "rm -rf '%s'", abs);

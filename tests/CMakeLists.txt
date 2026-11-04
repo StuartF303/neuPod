@@ -43,6 +43,7 @@ set_source_files_properties(test_settings.c PROPERTIES COMPILE_OPTIONS "${NEUPOD
 
 # Resume record over the real settings store: round trip through the store's write path, rate limiting, missing / changed file decisions.
 add_executable(test_resume test_resume.c ${CMAKE_SOURCE_DIR}/app/runtime/resume.c)
+target_compile_definitions(test_resume PRIVATE NEUPOD_TEST_ASSETS="${CMAKE_SOURCE_DIR}/tests/assets/audio")
 target_link_libraries(test_resume neupod_settings neupod_rt_core hal_host)
 add_test(NAME resume COMMAND test_resume)
 set_tests_properties(resume PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
@@ -262,6 +263,12 @@ add_test(NAME art_service COMMAND test_art_service)
 
 # Player queue / gapless announcement bookkeeping against fakes of the audio core, storage and settings.
 add_executable(test_player test_player.c ${CMAKE_SOURCE_DIR}/app/runtime/player.c)
+target_compile_definitions(test_player PRIVATE RESUME_WRITE_WHILE_PLAYING=1) # the periodic path is compiled out in the product build; test it here
 target_link_libraries(test_player neupod_rt_core)
 set_source_files_properties(test_player.c PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra")
 add_test(NAME player COMMAND test_player)
+
+add_executable(test_haptic_logic test_haptic_logic.c)
+target_link_libraries(test_haptic_logic neupod_rt_core)
+add_test(NAME haptic_logic COMMAND test_haptic_logic)
+set_source_files_properties(test_haptic_logic.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")

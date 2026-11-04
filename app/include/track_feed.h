@@ -82,7 +82,7 @@ track_feed_status_t track_feed_step(track_feed_t *t, uint8_t *buf);
  *   WAV and ALAC: the frame exactly (WAV: the byte; ALAC: the packet, the decoder drops the frames before the target);
  *   FLAC: the frame exactly when the file has a seek table (decoder drops the frames after the nearest earlier point), else 0;
  *   MP3: the nearest frame header found from the Xing table or the byte proportion: about one frame (CBR) to about 1% of the track (VBR);
- *        the returned value is the requested frame, the real position can differ by that much.
+ *        the returned value is the frame the landed offset corresponds to (so it can differ from the request by that much).
  */
 uint64_t track_feed_seek(track_feed_t *t, track_info_t *info, uint64_t frame);
 

@@ -277,6 +277,53 @@ TEST(test_first_ever_save_power_loss) {
     }
 }
 
+TEST(test_winner_failing_its_reread_falls_back_to_the_other_file) {
+    rm_state();
+    boot(true);
+    settings_set_u8(SETTING_VOLUME_ATT_DB, 10);
+    ASSERT_EQ(0, settings_flush()); // file A, seq 1
+    settings_set_u8(SETTING_VOLUME_ATT_DB, 20);
+    ASSERT_EQ(0, settings_flush()); // file B, seq 2: the winner
+    ASSERT_EQ(SETTINGS_LOAD_OK, boot(true));
+    uint8_t v = 0;
+    ASSERT_TRUE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
+    ASSERT_EQ(20, v);
+    settings_test_fail_next_reread(); // the winner validated, but cannot be read the second time (card fault)
+    ASSERT_EQ(SETTINGS_LOAD_RECOVERED, boot(true));
+    ASSERT_TRUE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
+    ASSERT_EQ(10, v);                  // the older complete state, not a half-filled store
+    settings_status_t st;
+    settings_get_status(&st);
+    ASSERT_EQ(1, st.seq);
+    ASSERT_EQ(1, st.items);
+    // with no other good file the failure gives defaults, not garbage
+    unlink(g_tmp);
+    settings_test_fail_next_reread();
+    ASSERT_EQ(SETTINGS_LOAD_CORRUPT, boot(true));
+    ASSERT_FALSE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
+    // a version-1 file (the layout before the item limit was raised) is still read
+    rm_state();
+    boot(true);
+    settings_set_u8(SETTING_VOLUME_ATT_DB, 33);
+    ASSERT_EQ(0, settings_flush());
+    int fd = open(g_bin, O_RDWR);
+    unsigned char img[512];
+    long n = pread(fd, img, sizeof img, 0);
+    img[4] = 1;
+    uint32_t c = 0xFFFFFFFFu;
+    for (long i = 0; i < n - 4; i++) {
+        c ^= img[i];
+        for (int k = 0; k < 8; k++) c = (c >> 1) ^ (0xEDB88320u & (0u - (c & 1u)));
+    }
+    c = ~c;
+    for (int i = 0; i < 4; i++) img[n - 4 + i] = (unsigned char)(c >> (8 * i));
+    ASSERT_EQ(n, pwrite(fd, img, (size_t)n, 0));
+    close(fd);
+    ASSERT_EQ(SETTINGS_LOAD_OK, boot(true));
+    ASSERT_TRUE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
+    ASSERT_EQ(33, v);
+}
+
 TEST(test_newer_version_file_is_kept) {
     rm_state();
     boot(true);
@@ -513,6 +560,7 @@ int main(void) {
     RUN(test_power_loss_at_every_step);
     RUN(test_alternation_never_touches_the_active_file);
     RUN(test_first_ever_save_power_loss);
+    RUN(test_winner_failing_its_reread_falls_back_to_the_other_file);
     RUN(test_newer_version_file_is_kept);
     RUN(test_write_scope_confines_writes);
     RUN(test_store_only_touches_its_directory);

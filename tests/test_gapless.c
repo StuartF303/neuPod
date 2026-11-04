@@ -740,7 +740,7 @@ TEST(resume_mp3_starts_near_the_frame_and_plays_to_the_end) {
     const ref_t *r = ref_of(P[1]);
     (void)r;
     ASSERT_TRUE(play_from(mp3, 22050));
-    ASSERT_EQ(22050, g_started_frame);        // reported as asked; the real position is the nearest frame header
+    ASSERT_TRUE(g_started_frame > 22050 - 1200 && g_started_frame < 22050 + 1200); // the frame the landed header corresponds to (CBR: about one frame)
     ASSERT_EQ(0, g_failed);
     pthread_mutex_lock(&g_cap_mu);
     uint32_t got = g_cap_frames;
@@ -754,8 +754,9 @@ TEST(resume_mp3_starts_near_the_frame_and_plays_to_the_end) {
     size_t n = f ? fread(buf, 1, sizeof buf, f) : 0;
     if (f) fclose(f);
     mio_t m = {buf, n, 0};
-    uint64_t at = 0;
-    ASSERT_TRUE(mp3_seek_point(whole_rd, &m, n, 0, 44100, 22050, &at));
+    uint64_t at = 0, landed = 0;
+    ASSERT_TRUE(mp3_seek_point(whole_rd, &m, n, 0, 44100, 22050, &at, &landed));
+    ASSERT_TRUE(landed == g_started_frame);
     ASSERT_TRUE(at > 0 && at < n);
     ASSERT_TRUE(buf[at] == 0xFF && (buf[at + 1] & 0xE0) == 0xE0);
 }

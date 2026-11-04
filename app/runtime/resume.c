@@ -7,8 +7,8 @@
 #include "play_queue.h"
 #include "settings_store.h"
 
-#define HDR_BYTES 14u /* ver, flags, index(2), frame(4), size(4), path length, path check */
-#define VER 1u
+#define HDR_BYTES 18u /* ver, flags, index(2), frame(4), size(8), path length, path check */
+#define VER 2u /* 1: 32-bit size; such records are ignored */
 #define FIRST_PART (SETTINGS_VALUE_MAX - HDR_BYTES) /* path bytes that fit the header item */
 #define SECOND_PART (SETTINGS_VALUE_MAX - 1u)       /* second item: check byte + the rest of the path */
 #define SLOTS_KEPT_FREE 4u                          /* resume never takes the store's last free slots (Wi-Fi, Bluetooth need them) */
@@ -24,6 +24,18 @@ static uint8_t path_check(const char *p, size_t n) {
 
 static uint32_t g_last_ms;
 static bool g_have_last;
+static void (*g_lock)(void), (*g_unlock)(void);
+
+void resume_set_lock(void (*lock)(void), void (*unlock)(void)) {
+    g_lock = lock;
+    g_unlock = unlock;
+}
+static void lock(void) {
+    if (g_lock != NULL) g_lock();
+}
+static void unlock(void) {
+    if (g_unlock != NULL) g_unlock();
+}
 
 static void put32(uint8_t *p, uint32_t v) {
     p[0] = (uint8_t)v;
@@ -33,17 +45,31 @@ static void put32(uint8_t *p, uint32_t v) {
 }
 static uint32_t get32(const uint8_t *p) { return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24); }
 
-void resume_clear(void) {
+static void clear_locked(void) {
     settings_delete(SETTING_RESUME0);
     settings_delete(SETTING_RESUME1);
 }
 
-bool resume_periodic_due(uint32_t now_ms) { return !g_have_last || now_ms - g_last_ms >= RESUME_PERIOD_MS; }
+void resume_clear(void) {
+    lock();
+    clear_locked();
+    unlock();
+}
 
+bool resume_periodic_due(uint32_t now_ms) { /* (reads two words the saver writes; a stale answer only delays or repeats one periodic update) */ return !g_have_last || now_ms - g_last_ms >= RESUME_PERIOD_MS; }
+
+static bool save_locked(const resume_state_t *s, resume_why_t why, uint32_t now_ms);
 bool resume_save(const resume_state_t *s, resume_why_t why, uint32_t now_ms) {
+    lock();
+    bool r = save_locked(s, why, now_ms);
+    unlock();
+    return r;
+}
+
+static bool save_locked(const resume_state_t *s, resume_why_t why, uint32_t now_ms) {
     size_t n = strnlen(s->path, RESUME_PATH_MAX);
     if (n == 0 || n > RESUME_PATH_MAX_STORED || s->path[0] != '/') {
-        resume_clear();
+        clear_locked();
         return false;
     }
     if (why == RESUME_PERIODIC && !resume_periodic_due(now_ms)) {
@@ -55,9 +81,10 @@ bool resume_save(const resume_state_t *s, resume_why_t why, uint32_t now_ms) {
     h[2] = (uint8_t)s->index;
     h[3] = (uint8_t)(s->index >> 8);
     put32(h + 4, s->frame);
-    put32(h + 8, s->size);
-    h[12] = (uint8_t)n;
-    h[13] = path_check(s->path, n);
+    put32(h + 8, (uint32_t)s->size);
+    put32(h + 12, (uint32_t)(s->size >> 32));
+    h[16] = (uint8_t)n;
+    h[17] = path_check(s->path, n);
     uint32_t first = n < FIRST_PART ? (uint32_t)n : FIRST_PART;
     memcpy(h + HDR_BYTES, s->path, first);
     // Yield to Wi-Fi / Bluetooth: take new slots only while at least SLOTS_KEPT_FREE would stay free.
@@ -70,14 +97,14 @@ bool resume_save(const resume_state_t *s, resume_why_t why, uint32_t now_ms) {
     bool ok = settings_put(SETTING_RESUME0, h, HDR_BYTES + first);
     if (n > FIRST_PART) {
         uint8_t h2[SETTINGS_VALUE_MAX];
-        h2[0] = h[13];
+        h2[0] = h[17];
         memcpy(h2 + 1, s->path + FIRST_PART, n - FIRST_PART);
         ok = settings_put(SETTING_RESUME1, h2, (uint32_t)(n - FIRST_PART) + 1u) && ok;
     } else {
         settings_delete(SETTING_RESUME1);
     }
     if (!ok) {
-        resume_clear(); // store full: better no record than half of one
+        clear_locked(); // store full: better no record than half of one
         return false;
     }
     g_last_ms = now_ms;
@@ -91,7 +118,7 @@ bool resume_load(resume_state_t *out) {
     if (len <= HDR_BYTES || len > sizeof h || h[0] != VER) {
         return false;
     }
-    uint32_t n = h[12];
+    uint32_t n = h[16];
     uint32_t first = len - HDR_BYTES;
     if (n == 0 || n > RESUME_PATH_MAX_STORED || first != (n < FIRST_PART ? n : FIRST_PART)) {
         return false;
@@ -101,19 +128,19 @@ bool resume_load(resume_state_t *out) {
     if (n > FIRST_PART) {
         uint8_t h2[SETTINGS_VALUE_MAX];
         uint32_t l2 = settings_get(SETTING_RESUME1, h2, sizeof h2);
-        if (l2 != n - FIRST_PART + 1u || h2[0] != h[13]) {
+        if (l2 != n - FIRST_PART + 1u || h2[0] != h[17]) {
             return false;
         }
         memcpy(out->path + FIRST_PART, h2 + 1, n - FIRST_PART);
     }
     out->path[n] = '\0';
-    if (out->path[0] != '/' || strlen(out->path) != n || path_check(out->path, n) != h[13]) {
+    if (out->path[0] != '/' || strlen(out->path) != n || path_check(out->path, n) != h[17]) {
         return false;
     }
     out->playing = (h[1] & 1u) != 0;
     out->index = (uint16_t)(h[2] | ((uint32_t)h[3] << 8));
     out->frame = get32(h + 4);
-    out->size = get32(h + 8);
+    out->size = (uint64_t)get32(h + 8) | ((uint64_t)get32(h + 12) << 32);
     return true;
 }
 

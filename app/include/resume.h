@@ -24,14 +24,22 @@ extern "C" {
 #endif
 
 #define RESUME_PATH_MAX 256u         /**< buffer size for a path (same as PLAYER_PATH_MAX / NFS_PATH_MAX) */
-#define RESUME_PATH_MAX_STORED 177u  /**< longest path that fits the two items */
-#define RESUME_PERIOD_MS 30000u      /**< periodic update while playing */
+#define RESUME_PATH_MAX_STORED 173u  /**< longest path that fits the two items */
+#define RESUME_PERIOD_MS 30000u      /**< periodic update while playing (only when RESUME_WRITE_WHILE_PLAYING) */
+/**
+ * 0 (default): the position is stored only at pause, resume, Stop and track start, and reaches the card at the next quiet moment (the player
+ * never writes the card while audio plays). A power cut mid-track therefore resumes at the last of those. 1: also a periodic update every
+ * RESUME_PERIOD_MS, written during playback when enough audio is buffered (storage_service.c; unbenched). Change here, rebuild.
+ */
+#ifndef RESUME_WRITE_WHILE_PLAYING
+#define RESUME_WRITE_WHILE_PLAYING 0
+#endif
 
 typedef struct {
     char path[RESUME_PATH_MAX]; /**< full path of the current track, e.g. "/Music/Album/03 Song.flac" */
     uint16_t index;             /**< 0-based position in the folder queue when saved (fallback if the file is gone) */
     uint32_t frame;             /**< playback position in PCM frames of the track */
-    uint32_t size;              /**< file size in bytes when saved: a different size means the file was replaced */
+    uint64_t size;              /**< file size in bytes when saved (0 = unknown): a different size means the file was replaced */
     bool playing;               /**< was playing (true) or paused; boot restores paused either way */
 } resume_state_t;
 
@@ -44,6 +52,8 @@ bool resume_periodic_due(uint32_t now_ms);
  * False also if the path is empty, not absolute or too long (the old record is cleared then).
  */
 bool resume_save(const resume_state_t *s, resume_why_t why, uint32_t now_ms);
+/** Serialise resume_save / resume_clear (called from the UI and the storage task). Optional; before the scheduler starts. */
+void resume_set_lock(void (*lock)(void), void (*unlock)(void));
 /** Forget the saved context (queue ended, folder gone). */
 void resume_clear(void);
 /** Read the saved context. False if there is none or it does not validate. */

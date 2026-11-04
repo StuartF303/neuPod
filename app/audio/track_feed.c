@@ -194,10 +194,11 @@ uint64_t track_feed_seek(track_feed_t *t, track_info_t *pf, uint64_t frame) {
         d->skip_frames = (uint32_t)(frame - sample);
         d->total_frames -= frame;
     } else if (d->codec == AUDIO_CODEC_MP3) {
-        uint64_t at;
-        if (!mp3_seek_point(t->rd, t->rctx, pf->file_size, t->base, pf->total_frames, frame, &at) || at >= t->base + t->data_len) {
+        uint64_t at, landed;
+        if (!mp3_seek_point(t->rd, t->rctx, pf->file_size, t->base, pf->total_frames, frame, &at, &landed) || at >= t->base + t->data_len) {
             return 0;
         }
+        frame = landed; // where the frame header really is, so the saved position does not drift from resume to resume
         t->data_len -= at - t->base; // no Xing/LAME frame any more: the decoder does not trim, it plays what follows
         t->base = at;
     } else if (d->codec == AUDIO_CODEC_ALAC) {
@@ -207,13 +208,9 @@ uint64_t track_feed_seek(track_feed_t *t, track_info_t *pf, uint64_t frame) {
         if (k >= m->sample_count) {
             return 0;
         }
-        for (uint64_t i = 0; i < k; i++) {
-            uint64_t o;
-            uint32_t sz;
-            if (!mp4_iter_next(&t->it, t->rd, t->rctx, &o, &sz)) {
-                mp4_iter_init(&t->it, &t->mp4);
-                return 0;
-            }
+        if (!mp4_iter_seek(&t->it, t->rd, t->rctx, (uint32_t)k)) {
+            mp4_iter_init(&t->it, &t->mp4);
+            return 0;
         }
         d->skip_frames = (uint32_t)(raw - k * m->frame_length);
         d->total_frames = d->total_frames > frame ? d->total_frames - frame : 0;
