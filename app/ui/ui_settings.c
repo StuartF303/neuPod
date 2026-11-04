@@ -321,7 +321,7 @@ typedef struct {
     char text[200];
 } settings_t;
 
-static const char *const k_group[G_COUNT] = {"About", "Display", "Click", "Haptics", "Gapless playback", "Shuffle", "Repeat", "Resume on power-up", "Bluetooth", "Wi-Fi", "Storage", "Battery"};
+static const char *const k_group[G_COUNT] = {"About", "Display", "Click", "Haptics", "Gapless playback", "Shuffle", "Repeat", "Resume playing", "Bluetooth", "Wi-Fi", "Storage", "Battery"};
 
 static const char *shuffle_text(void) { return player_shuffle() == PQ_SHUFFLE_SONGS ? "Songs" : "Off"; }
 static const char *repeat_text(void) {

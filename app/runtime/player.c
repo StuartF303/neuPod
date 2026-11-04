@@ -145,6 +145,7 @@ static void reset_info(player_src_t src, player_state_t state, const char *name)
     g_base_frames = 0;
     g_file_size = 0;
     g_resume_boot = false;
+    g_resume_play = false;
     g_gen++;
     snprintf(g_info.name, sizeof g_info.name, "%s", name);
     g_started_ms = os_tick_ms();

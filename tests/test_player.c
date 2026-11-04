@@ -364,6 +364,44 @@ TEST(boot_resume_plays_only_with_the_setting_on_and_a_record_that_was_playing) {
     player_stop();
 }
 
+// A boot resume that is replaced or cancelled while still opening must not make a later failure "quiet": that failure is an ordinary error.
+static void expect_ordinary_error_after_failure(void) {
+    int clears = g_rs_clears;
+    player_file_failed("Cannot open file");
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(PLAYER_ERROR, i.state);
+    ASSERT_EQ(clears, g_rs_clears);
+}
+
+TEST(a_replaced_autoplay_resume_leaves_no_quiet_failure_behind) {
+    player_stop();
+    ASSERT_EQ(PLAYER_RESUME_OK, player_resume_folder("/Album", g_dir, 4, 0, 1000, true));
+    player_next();
+    expect_ordinary_error_after_failure();
+
+    player_stop();
+    ASSERT_EQ(PLAYER_RESUME_OK, player_resume_folder("/Album", g_dir, 4, 0, 1000, true));
+    player_play_folder("/Album", g_dir, 4, 1);
+    expect_ordinary_error_after_failure();
+
+    player_stop();
+    ASSERT_EQ(PLAYER_RESUME_OK, player_resume_folder("/Album", g_dir, 4, 0, 1000, true));
+    player_stop();
+    start_album(0);                               // a new ordinary start after the Stop
+    expect_ordinary_error_after_failure();
+    player_stop();
+}
+
+TEST(a_failure_after_an_autoplay_resume_started_is_an_ordinary_error) {
+    player_stop();
+    ASSERT_EQ(PLAYER_RESUME_OK, player_resume_folder("/Album", g_dir, 4, 0, 1000, true));
+    player_file_t f = file("r");
+    player_file_started(&f);
+    expect_ordinary_error_after_failure();
+    player_stop();
+}
+
 TEST(an_autoplay_resume_that_cannot_start_is_still_dropped_quietly) {
     player_stop();
     int clears = g_rs_clears;
@@ -536,6 +574,11 @@ int main(void) {
     RUN(shuffled_player_saves_the_folder_entry_and_resumes_into_a_shuffled_queue);
     RUN(repeat_all_never_clears_the_record_at_the_album_end);
     RUN(a_resume_that_cannot_start_is_dropped_quietly);
+    RUN(resume_autoplay_setting_defaults_off_and_round_trips);
+    RUN(boot_resume_plays_only_with_the_setting_on_and_a_record_that_was_playing);
+    RUN(an_autoplay_resume_that_cannot_start_is_still_dropped_quietly);
+    RUN(a_replaced_autoplay_resume_leaves_no_quiet_failure_behind);
+    RUN(a_failure_after_an_autoplay_resume_started_is_an_ordinary_error);
     RUN(late_announcement_after_a_skip_is_ignored_and_gapless_continues);
     RUN(handoff_counted_during_the_ramp_down_of_a_skip_does_not_advance_the_queue);
     RUN(failed_start_request_rolls_the_queue_position_back);
