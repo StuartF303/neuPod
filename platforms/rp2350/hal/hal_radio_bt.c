@@ -15,7 +15,7 @@
  * settings store through hal_bt_storage_t.
  *
  * Pairing and the connection (stage 2a). Pair: discoverable + connectable + bondable ON, gap_dedicated_bonding() (outgoing ACL,
- * SSP "just works", link key into the SD-card TLV store), the ACL is kept (hci_dedicated_bonding_defer_disconnect) and an SDP
+ * SSP "just works", link key into the SD-card TLV store), the ACL is kept (ENABLE_EXPLICIT_DEDICATED_BONDING_DISCONNECT: BTstack neither disconnects after a good bonding nor waits for a disconnect to report it) and an SDP
  * query for an A2DP sink (0x110B) runs on it; then all three go OFF again. Connect (a device paired before): the SDP query first
  * (it creates the ACL), then gap_request_security_level(LEVEL_2) to authenticate with the stored key; never discoverable,
  * connectable or bondable, so a headset that lost its key cannot silently start a new pairing. Every step runs on the worker;
@@ -712,10 +712,6 @@ static void link_packet(uint8_t *packet) {
         }
         if (hci_event_connection_complete_get_status(packet) == 0) {
             g_acl = hci_event_connection_complete_get_connection_handle(packet);
-            if (g_lphase == LP_BONDING) {
-                /* keep the ACL after the bonding: the SDP query runs on it */
-                (void)hci_dedicated_bonding_defer_disconnect(g_acl, true);
-            }
         }
         break;
     }
@@ -750,17 +746,25 @@ static void link_packet(uint8_t *packet) {
         uint8_t why = hci_event_disconnection_complete_get_reason(packet);
         g_acl = HCI_CON_HANDLE_INVALID;
         if (g_lphase == LP_UP) {
-            /* Ended by us (stage 2a: nothing keeps an idle link, so BTstack closes it a few seconds after the SDP query) or by the other side. */
+            /* Stage 2a has no profile open, so an idle link is closed: by us (BTstack's idle timeout, local host) or by the headset (0x13,
+             * remote user terminated: a headset with nothing to do hangs up after a second or two). Neither is a failure. Anything else
+             * (supervision timeout 0x08, ...) is a lost link. */
             g_lphase = LP_IDLE;
-            if (why == ERROR_CODE_CONNECTION_TERMINATED_BY_LOCAL_HOST) {
+            if (why == ERROR_CODE_CONNECTION_TERMINATED_BY_LOCAL_HOST || why == ERROR_CODE_REMOTE_USER_TERMINATED_CONNECTION) {
                 set_link(HAL_BT_LINK_DISCONNECTED, HAL_BT_FAIL_NONE);
             } else {
                 printf("bt: link lost 0x%02X\n", (unsigned)why);
                 set_link(HAL_BT_LINK_FAILED, HAL_BT_FAIL_LINK_LOST);
             }
-        } else if (g_lphase == LP_AUTH) {
-            link_end(HAL_BT_LINK_FAILED, HAL_BT_FAIL_AUTH);
-        } /* during bonding / SDP the result event follows; the attempt timer is the backstop */
+        } else if (g_lphase != LP_IDLE && why != ERROR_CODE_CONNECTION_TERMINATED_BY_LOCAL_HOST) {
+            /* The link dropped during set-up (bonding, SDP, authentication) from the other side or by timeout: end the attempt now, so the
+             * Pair window does not stay open until the timer. (A disconnect BTstack itself sends after a failed bonding is local: the
+             * bonding result, with the real reason, follows it.) The phase is cleared first: there is no connection left to cancel. */
+            bool authenticating = g_lphase == LP_AUTH;
+            g_lphase = LP_IDLE;
+            printf("bt: link dropped in set-up 0x%02X\n", (unsigned)why);
+            link_end(HAL_BT_LINK_FAILED, authenticating ? HAL_BT_FAIL_AUTH : fail_from_status(why));
+        }
         break;
     }
     default:

@@ -131,13 +131,13 @@ the scan if needed and starts the Pair action; the row shows busy dots, then "Pa
 **Failure stance.** Fail closed for the radio: connectable and bondable go off on every way out of a Pair (success, failure, timeout, cancel, leaving the screen, the stack going down), and the 30 s timer is the backstop. Never discoverable. A saved device is written only on success.
 Fail open for the features: with no card the saved headset and the keys live in RAM for the session (as the store always does).
 
-**Known limit of 2a.** Nothing holds the link open (the A2DP signalling channel arrives in 2b), so BTstack closes an idle link a few seconds after the SDP query. No keep-alive is added. The HAL still reports CONNECTED while the link is up, but the UI words it **"Paired, no audio yet"**
+**Known limit of 2a.** Nothing holds the link open (the A2DP signalling channel arrives in 2b), so the link closes by itself shortly after the SDP query: by BTstack's idle timeout, or by the headset itself (reason 0x13, remote user terminated, seen on the bench after 1 to 2 s with a Sony WI-C200). Both are reported as DISCONNECTED, not as failures; only abnormal endings (supervision timeout and the like) are `LINK_LOST`. No keep-alive is added. The HAL still reports CONNECTED while the link is up, but the UI words it **"Paired, no audio yet"**
 rather than "Connected", so the later idle close ("Not connected", reported as DISCONNECTED, not as a failure) does not contradict it. A stage 2b connection keeps the link up.
 
-**Teardown.** Cancelling a connection that is still being created retries `hci_create_connection_cancel` every 200 ms (at most 10 times) when the controller cannot take a command yet. Every Pair / Connect has an attempt number: a disconnect request or an SDP
+**Teardown.** If the link drops during bonding, SDP or authentication from the other side (or by timeout), the attempt ends at once as FAILED, so the Pair window closes without waiting for the timer. Cancelling a connection that is still being created retries `hci_create_connection_cancel` every 200 ms (at most 10 times) when the controller cannot take a command yet. Every Pair / Connect has an attempt number: a disconnect request or an SDP
 result that belongs to an earlier attempt cannot end the next one (a query still running from a cancelled attempt makes the next one wait for the SDP client). When BTstack reports the stack OFF, a link or attempt in progress becomes FAILED (`INTERNAL`) and everything is reset.
 
-**Pairing order.** Pair uses `gap_dedicated_bonding` and keeps the link (`hci_dedicated_bonding_defer_disconnect`) for the SDP query; that call deletes any old key for the address first, which is what a re-pair wants. Connect cannot use it for that very reason.
+**Pairing order.** Pair uses `gap_dedicated_bonding` and keeps the link for the SDP query: `btstack_config.h` defines `ENABLE_EXPLICIT_DEDICATED_BONDING_DISCONNECT`, so BTstack reports a good bonding at once and does not disconnect (a failed bonding still disconnects). Without that define the result is only reported after a disconnect, and every Pair timed out (found on the bench). `gap_dedicated_bonding` deletes any old key for the address first, which is what a re-pair wants; Connect cannot use it for that very reason. On real hardware the bonding result arrives before the link-key notification: neither the stray-key filter nor the candidate logic depends on the order (the Pair is still in progress when the key arrives, and a headset is only remembered after the SDP check).
 
 **Console lines:** `bt: pair 28:CD:..`, `bt: paired with ..`, `bt: connected to .. 'name' (A2DP sink found)`, `bt: link to .. failed: <reason>`, `bt: connect ..`, `bt: forgot ..`, `bt: link lost (reason 0x..)`.
 
@@ -227,7 +227,7 @@ the number to check on the board (earlier bench figures: heap minimum free about
 
 | | main | stage 2a | delta |
 | --- | --- | --- | --- |
-| flash image (`text`) | 1,263,280 B | 1,285,648 B | **+22,368 B** (SDP client and L2CAP now linked and used, the pairing state machine, the saved-headset module, the UI rows) |
+| flash image (`text`) | 1,263,280 B | 1,285,888 B | **+22,608 B** (SDP client and L2CAP now linked and used, the pairing state machine, the saved-headset module, the UI rows) |
 | `data` | 0 | 0 | 0 |
 | static RAM (`bss`) | 488,896 B | 489,340 B | **+444 B** (L2CAP and SDP client state, the link state machine, the saved-device candidate and the four-deep key-deletion queue) |
 | free SRAM (`__HeapLimit - __end__`) | 15,320 B | 14,876 B | **-444 B** |

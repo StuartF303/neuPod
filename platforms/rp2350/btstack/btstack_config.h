@@ -13,6 +13,11 @@
 #define ENABLE_LOG_ERROR
 #define ENABLE_PRINTF_HEXDUMP
 
+// Dedicated bonding (a Pair) keeps its ACL link and reports a good result at once. Without this define BTstack reports GAP_EVENT_DEDICATED_BONDING_COMPLETED only
+// AFTER it has disconnected, and our SDP check for an A2DP sink needs the link: found on the bench, every Pair then timed out although the bonding itself
+// had succeeded. A failed bonding still disconnects.
+#define ENABLE_EXPLICIT_DEDICATED_BONDING_DISCONNECT
+
 // L2CAP enhanced retransmission is only needed by OBEX/cover art, which we do not use.
 
 // Packet buffers. HCI_OUTGOING_PRE_BUFFER_SIZE and the chunk alignment are required by the CYW43 HCI transport

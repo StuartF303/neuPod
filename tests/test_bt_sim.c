@@ -246,6 +246,33 @@ TEST(test_link_loss_is_a_failure_with_its_reason) {
     ASSERT_EQ(3, g_nseq);
 }
 
+TEST(test_the_headset_hanging_up_is_not_a_failure_when_connected_but_ends_a_setup) {
+    // connected, nothing open: the headset hangs up (0x13 on the board): DISCONNECTED, no failure
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, pair_to_end(A_AIRPODS, "AirPods Pro 3"));
+    hal_host_bt_remote_hangup();
+    ASSERT_EQ(HAL_BT_LINK_DISCONNECTED, hal_bt_link_state());
+    ASSERT_EQ(HAL_BT_FAIL_NONE, hal_bt_link_reason());
+    ASSERT_EQ(HAL_BT_LINK_DISCONNECTED, g_last_link);
+    // a link that dies abnormally is still a failure
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, pair_to_end(A_AIRPODS, "AirPods Pro 3"));
+    hal_host_bt_drop_link();
+    ASSERT_EQ(HAL_BT_FAIL_LINK_LOST, hal_bt_link_reason());
+    // dropped during a Pair: the attempt ends at once and the Pair window closes (no waiting for the 30 s timer)
+    hal_bt_device_t d = dev_of(A_XM5, "WH-1000XM5");
+    ASSERT_EQ(HAL_OK, hal_bt_pair(&d));
+    ASSERT_TRUE(hal_bt_accepting());
+    hal_bt_poll();
+    hal_host_bt_remote_hangup();
+    ASSERT_EQ(HAL_BT_LINK_FAILED, hal_bt_link_state());
+    ASSERT_EQ(HAL_BT_FAIL_BUSY, hal_bt_link_reason());
+    ASSERT_FALSE(hal_bt_accepting());
+    hal_bt_forget(A_XM5);
+    ASSERT_EQ(HAL_OK, hal_bt_connect(A_AIRPODS)); // dropped during a Connect
+    hal_host_bt_remote_hangup();
+    ASSERT_EQ(HAL_BT_FAIL_NOT_FOUND, hal_bt_link_reason());
+    ASSERT_EQ(HAL_BT_LINK_FAILED, hal_bt_link_state());
+}
+
 TEST(test_bad_requests_and_scan_exclusion) {
     hal_bt_device_t d = dev_of(A_AIRPODS, "x");
     ASSERT_EQ(HAL_EINVAL, hal_bt_pair(NULL));
@@ -270,6 +297,7 @@ int main(void) {
     RUN(test_cancel_is_not_a_failure);
     RUN(test_connect_needs_the_key_and_forget_removes_it);
     RUN(test_link_loss_is_a_failure_with_its_reason);
+    RUN(test_the_headset_hanging_up_is_not_a_failure_when_connected_but_ends_a_setup);
     RUN(test_bad_requests_and_scan_exclusion);
     return RESULT();
 }

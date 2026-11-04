@@ -353,6 +353,16 @@ void hal_host_bt_drop_link(void) {
     }
 }
 
+void hal_host_bt_remote_hangup(void) {
+    if (g_link == HAL_BT_LINK_CONNECTED) {
+        emit_link(HAL_BT_LINK_DISCONNECTED, HAL_BT_FAIL_NONE);
+    } else if (g_link == HAL_BT_LINK_PAIRING) {
+        emit_link(HAL_BT_LINK_FAILED, HAL_BT_FAIL_BUSY);
+    } else if (g_link == HAL_BT_LINK_CONNECTING) {
+        emit_link(HAL_BT_LINK_FAILED, HAL_BT_FAIL_NOT_FOUND);
+    }
+}
+
 static void link_poll(void) {
     uint32_t dt = hal_millis() - g_link_t0;
     if (g_link == HAL_BT_LINK_PAIRING && dt >= SIM_PAIR_MS) {
