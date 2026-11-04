@@ -188,6 +188,20 @@ static pq_move_t wrap(play_queue_t *q, uint16_t forced) {
     return PQ_WRAPPED;
 }
 
+void pq_snapshot(const play_queue_t *q, pq_snapshot_t *s) {
+    memcpy(s->order, q->order, q->count * sizeof q->order[0]);
+    s->pos = q->pos;
+    s->wrap_first = q->wrap_first;
+    s->rng = q->rng;
+}
+
+void pq_restore(play_queue_t *q, const pq_snapshot_t *s) {
+    memcpy(q->order, s->order, q->count * sizeof q->order[0]);
+    q->pos = s->pos;
+    q->wrap_first = s->wrap_first;
+    q->rng = s->rng;
+}
+
 pq_move_t pq_next(play_queue_t *q) {
     if (pq_has_next(q)) {
         q->pos++;

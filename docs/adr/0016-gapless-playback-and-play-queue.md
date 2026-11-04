@@ -63,6 +63,6 @@ now one file played, core 1 drained and ramped down, and the next start flushed 
   announced handoff and the later move agree.
 * The gapless descriptor handoff is unchanged. If a mode changes after the next track was announced to the audio core, the player records
   the announced queue entry and, when the handoff happens, pulls exactly that entry in as the next track (`pq_commit`) rather than trusting
-  the new order. A failed start request after a wrap puts back the slot, not the old order (minor: the retry shows the new round's track).
+  the new order. A failed start request after a move puts the queue back exactly as it was (a stack snapshot of the order, taken only when shuffle is on).
 * Cost: `.bss` +268 B (one queue instance), flash about +3 KB. The main menu's "Shuffle Songs" stays a placeholder (needs the library).
 

@@ -371,6 +371,28 @@ TEST(a_committed_entry_wins_over_a_changed_plan) {
     ASSERT_EQ(0, q.pos);
 }
 
+TEST(snapshot_restores_order_position_and_seed_after_a_wrap) {
+    many();
+    static play_queue_t q;
+    pq_clear(&q);
+    pq_seed(&q, 21);
+    pq_set_shuffle(&q, PQ_SHUFFLE_SONGS);
+    pq_set_repeat(&q, PQ_REPEAT_ALL);
+    ASSERT_TRUE(pq_build(&q, "/a", g_many, 40, 0));
+    q.pos = 39;
+    static pq_snapshot_t s;
+    static uint16_t order[40];
+    memcpy(order, q.order, sizeof order);
+    uint16_t cur = pq_entry(&q, q.pos);
+    pq_snapshot(&q, &s);
+    ASSERT_EQ(PQ_WRAPPED, pq_next(&q));
+    ASSERT_TRUE(memcmp(order, q.order, sizeof order) != 0);
+    pq_restore(&q, &s);
+    ASSERT_EQ(0, memcmp(order, q.order, sizeof order));
+    ASSERT_EQ(39, q.pos);
+    ASSERT_EQ(cur, pq_entry(&q, q.pos));
+}
+
 int main(void) {
     RUN(audio_names_are_recognised_case_insensitively);
     RUN(queue_is_the_folder_in_files_order_from_the_chosen_track);
@@ -387,6 +409,7 @@ int main(void) {
     RUN(repeat_one_loops_automatic_advances_but_next_still_moves_on);
     RUN(repeat_all_wraps_to_the_first_track);
     RUN(repeat_all_with_shuffle_reshuffles_and_never_opens_with_the_last_track);
+    RUN(snapshot_restores_order_position_and_seed_after_a_wrap);
     RUN(a_committed_entry_wins_over_a_changed_plan);
     return RESULT();
 }

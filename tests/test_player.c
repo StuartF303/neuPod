@@ -207,6 +207,35 @@ TEST(shuffle_toggled_mid_play_keeps_the_track_and_the_handoff_already_announced)
     ASSERT_EQ(3, pos());                          // folder order again, same track
 }
 
+TEST(failed_start_after_a_shuffled_wrap_restores_the_whole_queue) {
+    g_play_ok = true;
+    player_set_repeat(PQ_REPEAT_ALL);
+    player_set_shuffle(PQ_SHUFFLE_SONGS);
+    player_play_folder("/Album", g_dir, 4, 2);
+    player_file_t f = file("t");
+    player_file_started(&f);
+    char slot3[300];
+    for (int i = 0; i < 3; i++) { // to the last slot
+        snprintf(slot3, sizeof slot3, "%s", g_last_path); // ends as the path of slot 3 (index 2 of the walk)
+        player_next();
+        player_file_started(&f);
+    }
+    ASSERT_EQ(4, pos());
+    player_info_t b;
+    player_get(&b);
+    g_play_ok = false;
+    player_next();                  // wraps and re-shuffles, then the start request fails
+    player_info_t a;
+    player_get(&a);
+    ASSERT_EQ(4, pos());
+    (void)a; (void)b;
+    g_play_ok = true;
+    player_prev();                  // no elapsed time known after the failure: goes back one slot, which must be the old slot 3
+    ASSERT_EQ(0, strcmp(g_last_path, slot3));
+    player_set_repeat(PQ_REPEAT_OFF);
+    player_set_shuffle(PQ_SHUFFLE_OFF);
+}
+
 int main(void) {
     player_init();
     RUN(late_announcement_after_a_skip_is_ignored_and_gapless_continues);
@@ -215,6 +244,7 @@ int main(void) {
     RUN(setting_off_offers_nothing);
     RUN(repeat_one_replays_the_track_at_its_end_and_offers_it_gaplessly);
     RUN(repeat_all_wraps_instead_of_ending);
+    RUN(failed_start_after_a_shuffled_wrap_restores_the_whole_queue);
     RUN(shuffle_toggled_mid_play_keeps_the_track_and_the_handoff_already_announced);
     return RESULT();
 }

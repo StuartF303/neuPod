@@ -37,6 +37,8 @@ static bool g_offered;
 typedef struct {
     bool start;
     bool stop;
+    bool snap;         // snap holds the queue as it was before a move that may have re-shuffled it (repeat-all wrap)
+    pq_snapshot_t snap_q;
     bool rollback;     // the queue position was advanced for this start: put it back if the start cannot even be requested
     uint16_t prev_pos;
     uint32_t gen;
@@ -153,7 +155,11 @@ static void run_action(const action_t *a) {
     if (a->start && !storage_play_request(a->path)) {
         lock();
         if (a->rollback && g_gen == a->gen && g_q.count != 0) {
-            g_q.pos = a->prev_pos; // the next press must not skip the entry that never started
+            if (a->snap) {
+                pq_restore(&g_q, &a->snap_q); // a wrap re-shuffled the order: put the whole queue back
+            } else {
+                g_q.pos = a->prev_pos; // the next press must not skip the entry that never started
+            }
         }
         unlock();
         player_file_failed("Storage busy, try again");
@@ -216,6 +222,10 @@ static void service(action_t *a, bool have, const audio_stats_t *st) {
         // go on with the queue the ordinary way, or stop at its end.
         a->prev_pos = g_q.pos;
         a->rollback = true;
+        if (g_q.shuffle) {
+            pq_snapshot(&g_q, &a->snap_q);
+            a->snap = true;
+        }
         pq_move_t mv = g_q.count != 0 ? pq_auto_next(&g_q) : PQ_END;
         if (mv != PQ_END) {
             begin_track(a, true, mv == PQ_RESTART ? "repeat" : mv == PQ_WRAPPED ? "wrap" : "auto");
@@ -335,6 +345,10 @@ void player_next(void) {
     if (g_info.src == PLAYER_SRC_FILE && g_q.count != 0 && g_info.state != PLAYER_VERIFYING && g_info.state != PLAYER_VERIFIED) {
         a.prev_pos = g_q.pos;
         a.rollback = true;
+        if (g_q.shuffle) {
+            pq_snapshot(&g_q, &a.snap_q);
+            a.snap = true;
+        }
         pq_move_t mv = pq_next(&g_q);
         if (mv != PQ_END) {
             begin_track(&a, false, mv == PQ_WRAPPED ? "wrap" : "next");

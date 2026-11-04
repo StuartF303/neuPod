@@ -79,6 +79,15 @@ uint16_t pq_entry(const play_queue_t *q, uint32_t i);
 /** Full path of entry @p e (folder order, not play order). */
 bool pq_entry_path(const play_queue_t *q, uint16_t e, char *out, size_t n);
 
+/** Everything a move can change besides the track names: used to put the queue back exactly as it was. */
+typedef struct {
+    uint16_t order[PLAY_QUEUE_MAX_TRACKS];
+    uint16_t pos, wrap_first;
+    uint32_t rng;
+} pq_snapshot_t;
+void pq_snapshot(const play_queue_t *q, pq_snapshot_t *s);
+void pq_restore(play_queue_t *q, const pq_snapshot_t *s);
+
 /** A press of Next: PQ_MOVED, PQ_WRAPPED (repeat-all at the last slot) or PQ_END (last slot, no repeat-all; position unchanged). */
 pq_move_t pq_next(play_queue_t *q);
 /** The track ended by itself: as pq_next(), except repeat-one answers PQ_RESTART (same track again). */
