@@ -161,6 +161,8 @@ const hal_bt_storage_t *settings_bt_storage(void); /* link keys and device recor
 void settings_test_set_power_loss_step(int step);
 /** Unit tests only: make the next re-read of the winning file during settings_load() fail, to exercise the fall back to the other file. */
 void settings_test_fail_next_reread(void);
+/** Unit tests only: as above, but the re-read fails with an I/O error. */
+void settings_test_ioerr_next_reread(void);
 
 #ifdef __cplusplus
 }

@@ -155,7 +155,7 @@ static bool parse(const uint8_t *img, uint32_t n, item_t *items, uint32_t *seq) 
 
 typedef enum { FILE_MISSING, FILE_BAD, FILE_GOOD, FILE_IOERR } file_state_t;
 
-static bool g_test_fail_commit; /* test hook: the next committing read fails to parse */
+static int g_test_fault; /* test hook: the next committing read fails: 1 = does not parse, 2 = I/O error */
 
 /* Read and validate one file. @p commit false: validate only (CRC, structure, sequence). true: parse it into g_items under the lock
  * (g_items is read by other tasks, so it is only touched inside the lock; the parse is CPU only). */
@@ -179,19 +179,22 @@ static file_state_t read_file(const char *path, bool commit, uint32_t *seq) {
         if (e != NFS_OK) {
             st = FILE_IOERR;
         } else if (got == size) {
-            bool ok;
+            int fault = commit ? g_test_fault : 0;
             if (commit) {
-                lock();
-                ok = !g_test_fail_commit && parse(g_image, (uint32_t)size, g_items, seq);
-                if (!ok) {
-                    memset(g_items, 0, sizeof g_items);
-                }
-                g_test_fail_commit = false;
-                unlock();
-            } else {
-                ok = parse(g_image, (uint32_t)size, NULL, seq);
+                g_test_fault = 0;
             }
-            st = ok ? FILE_GOOD : FILE_BAD;
+            if (fault == 2) {
+                st = FILE_IOERR;
+            } else {
+                /* Validate first, outside the lock: g_items is only touched by a parse that is known to succeed, so readers never see a half-filled store. */
+                bool ok = fault != 1 && parse(g_image, (uint32_t)size, NULL, seq);
+                if (ok && commit) {
+                    lock();
+                    ok = parse(g_image, (uint32_t)size, g_items, seq);
+                    unlock();
+                }
+                st = ok ? FILE_GOOD : FILE_BAD;
+            }
         }
     }
     (void)nfs_close(f);
@@ -252,9 +255,11 @@ settings_load_result_t settings_load(void) {
         active = pick_is_a ? 0 : 1;
         if (got != FILE_GOOD) {
             bool other_good = pick_is_a ? b == FILE_GOOD : a == FILE_GOOD;
-            got = other_good ? read_file(pick_is_a ? SETTINGS_FILE_B : SETTINGS_FILE_A, true, &use_seq) : FILE_BAD;
+            got = other_good ? read_file(pick_is_a ? SETTINGS_FILE_B : SETTINGS_FILE_A, true, &use_seq) : FILE_IOERR;
             active = got == FILE_GOOD ? (pick_is_a ? 1 : 0) : -1;
-            res = got == FILE_GOOD ? SETTINGS_LOAD_RECOVERED : got == FILE_IOERR ? SETTINGS_LOAD_IO_ERROR : SETTINGS_LOAD_CORRUPT;
+            /* A file that validated a moment ago but cannot be read now is a card fault, not "no settings": report it as an I/O error so the
+             * store goes RAM-only and never writes defaults over what may be the only good copy (Wi-Fi secrets, Bluetooth keys). */
+            res = got == FILE_GOOD ? SETTINGS_LOAD_RECOVERED : SETTINGS_LOAD_IO_ERROR;
         }
     } else if (a == FILE_BAD || b == FILE_BAD) {
         res = SETTINGS_LOAD_CORRUPT;
@@ -309,7 +314,8 @@ void settings_get_status(settings_status_t *out) {
 /* ---- public: save ---- */
 
 void settings_test_set_power_loss_step(int step) { g_crash_step = step; }
-void settings_test_fail_next_reread(void) { g_test_fail_commit = true; }
+void settings_test_fail_next_reread(void) { g_test_fault = 1; }
+void settings_test_ioerr_next_reread(void) { g_test_fault = 2; }
 
 static bool power_lost_at(int step) { return g_crash_step == step; }
 

@@ -321,9 +321,9 @@ TEST(alac_seek_matches_walking_the_packets) {
 
 TEST(write_while_playing_gate_math) {
     // 32768 bytes of 32-bit stereo at 48 kHz = 4096 frames = 85 ms; the PCM ring adds its low-water mark
-    ASSERT_EQ(85, resume_buffered_ms(48000, 32768, 8, 0));
-    ASSERT_EQ(85 + 93, resume_buffered_ms(44100, 32768, 8, 0) + 8 - 0 + 0 > 0 ? 85 + 93 : 0); /* placeholder of the formula below */
-    ASSERT_EQ(185, resume_buffered_ms(44100, 32768, 8, 4096 - 0) - 0 + 0 > 0 ? 185 : 0);
+    ASSERT_EQ(85, resume_buffered_ms(48000, 32768, 8, 0));            // 4096 frames / 48 kHz
+    ASSERT_EQ(92, resume_buffered_ms(44100, 32768, 8, 0));            // 4096 / 44.1 kHz
+    ASSERT_EQ(185, resume_buffered_ms(44100, 32768, 8, 4096));        // plus a full PCM ring
     ASSERT_EQ(0, resume_buffered_ms(0, 32768, 8, 100));
     ASSERT_EQ(0, resume_buffered_ms(48000, 32768, 0, 100));
     ASSERT_FALSE(resume_write_while_playing_ok(resume_buffered_ms(96000, 32768, 8, 4096))); // 24/96: 42 + 42 ms
