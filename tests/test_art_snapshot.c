@@ -2,6 +2,8 @@
 // Reads the PPM snapshots written by `neupod --tour-art` (ctest art_tour) and checks the Now Playing art box:
 //   art-cover     600x600 Cover.JPG beside the track  -> the four colour quadrants, filling the 112 px box
 //   art-embedded  500x333 JPEG inside the FLAC        -> the quadrants, letterboxed (dark bars above and below)
+//   art-home      Home while the embedded-art album is paused -> the same quadrants in the 96 px box of the right pane, and the
+//                 title text (no "Nothing playing" placeholder ring) under it
 //   art-none      PNG inside + progressive cover.jpg  -> the note placeholder, no picture colours
 #include <stdbool.h>
 #include <stdint.h>
@@ -93,6 +95,31 @@ TEST(test_none_shows_placeholder) {
     free(p.px);
 }
 
+// Home right pane: the list is 160 px wide, the pane starts below the 24 px status bar, the 96 px art box is at (32, 32) in it.
+#define HX (160 + 32)
+#define HY (24 + 32)
+
+TEST(test_home_pane_shows_art_and_title) {
+    ppm_t p;
+    ASSERT_TRUE(load_ppm(g_dir, "art-home", &p));
+    if (p.px == NULL) return;
+    // 500 x 333 scaled to 96 x 64: rows 16..79 of the box carry the picture
+    ASSERT_TRUE(dist(&p, HX + 24, HY + 16 + 16, 220, 40, 40) < 48);
+    ASSERT_TRUE(dist(&p, HX + 72, HY + 16 + 16, 40, 200, 60) < 48);
+    ASSERT_TRUE(dist(&p, HX + 24, HY + 16 + 48, 50, 60, 220) < 48);
+    ASSERT_TRUE(dist(&p, HX + 72, HY + 16 + 48, 230, 210, 40) < 48);
+    // the title line (y = 140 in the pane) has dark text pixels on the light pane background
+    int dark = 0;
+    for (int y = 24 + 140; y < 24 + 160; y++) {
+        for (int x = 160; x < 320; x++) {
+            const uint8_t *q = p.px + ((size_t)y * (size_t)p.w + (size_t)x) * 3u;
+            if (q[0] < 100 && q[1] < 100 && q[2] < 100) dark++;
+        }
+    }
+    ASSERT_TRUE(dark > 40);
+    free(p.px);
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         fprintf(stderr, "usage: %s SNAPSHOT_DIR\n", argv[0]);
@@ -102,5 +129,6 @@ int main(int argc, char **argv) {
     RUN(test_cover_quadrants);
     RUN(test_embedded_letterboxed);
     RUN(test_none_shows_placeholder);
-    RESULT();
+    RUN(test_home_pane_shows_art_and_title);
+    return RESULT();
 }

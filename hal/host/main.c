@@ -39,10 +39,13 @@
     "snap:wifi-found s _ snap:wifi-kb-empty _ s _ s s _ snap:wifi-kb p x x x x x x "          \
     "snap:wifi-joined m m m x x x snap:home-clock"
 
-// Album art: Extras > Files > three albums (a Cover.JPG beside the track; a JPEG inside the track; a PNG inside it plus a progressive cover.jpg beside it).
+// Album art: Extras > Files > three albums, with a trip back to Home while the embedded-art album is paused (a Cover.JPG beside the track; a
+// JPEG inside the track; a PNG inside it plus a progressive cover.jpg beside it). The test tracks last 0.3 s: Settings > Repeat is set to
+// One first (a track that ended would drop Now Playing to idle before the snapshot), each track is paused so the art service stops
+// re-decoding on every loop, and Repeat goes back to Off at the end.
 #define TOUR_ART                                                                                   \
-    "x s s s _ _ _ s _ x x x x x x x x snap:art-cover m m s _ _ x x x x x x x x snap:art-embedded "  \
-    "m m s _ s _ x x x x x x x x snap:art-none m"
+    "x s s s s _ s s s s s s _ m w _ _ _ s _ x x _ x x x x x x snap:art-cover m m s _ _ x x _ x x x x x x snap:art-embedded "  \
+    "m m m m x x snap:art-home _ _ s s _ s _ x x _ x x x x x x snap:art-none m m m m s _ s s s s s s _ _ x x"
 
 static unsigned g_expect = 18;
 static const char *g_snapshot_dir;
@@ -102,7 +105,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--tour-art") == 0) {
             cfg.ui_script = TOUR_ART;
             cfgp_tour = true;
-            g_expect = 3;
+            g_expect = 4;
         } else if (strcmp(argv[i], "--script") == 0 && i + 1 < argc) {
             cfg.ui_script = argv[++i]; // ad-hoc key script, same tokens as the tour
         } else if (strcmp(argv[i], "--splash-hold-ms") == 0 && i + 1 < argc) {
