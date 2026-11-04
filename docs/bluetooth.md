@@ -111,7 +111,7 @@ Link keys and the device database are stored in the **settings store** instead, 
 | | |
 | --- | --- |
 | API | `app/include/settings_store.h`, `app/settings/settings_store.c`; RTOS glue `app/runtime/settings_service.c` |
-| Content | tag (32-bit) to value (up to 96 bytes), 24 tags: volume (`NPvo`), backlight (`NPbl`), click feedback (`NPck`), Wi-Fi settings and networks ([Wi-Fi](wifi.md)), BTstack link keys (`BTL?`, 27 bytes plaintext, stored sealed since the secrets work, up to 8) and later device records. The same tag/value/length model as BTstack's TLV, so `hal_bt_storage_t` (in `hal_radio.h`) maps one to one onto `btstack_tlv_t` |
+| Content | tag (32-bit) to value (up to 96 bytes), 24 tags: volume (`NPvo`), backlight (`NPbl`), click feedback (`NPck`), output path of the saved volume (`NPvp`), the resume record (`NPr0`/`NPr1`, [Audio](audio.md#resume-last-track-and-position)), Wi-Fi settings and networks ([Wi-Fi](wifi.md)), BTstack link keys (`BTL?`, 27 bytes plaintext, stored sealed since the secrets work, up to 8) and later device records. The same tag/value/length model as BTstack's TLV, so `hal_bt_storage_t` (in `hal_radio.h`) maps one to one onto `btstack_tlv_t` |
 | File | two alternating files `/.neupod/settings.a` and `settings.b`: magic `NPST`, version (1), count, sequence number, items, CRC-32. Little endian. About 3.2 KB at most (32 tags x 96 bytes) |
 | Reading | `settings_load()` on the storage task right after the card mounted. A file that fails magic, version or CRC gives **defaults** (reported on the UART, replaced by the next save). A newer or older layout is treated the same way |
 | Crash-safe save | **no rename and no delete.** The image is written in place over the OLDER (or invalid) of the two files and synced; the other file is never touched. Load takes the valid file with the higher sequence (wrap-safe), so a power cut at any point leaves at least the previous complete state; a torn file just fails its CRC. A file with a NEWER layout version is moved aside as `settings.old` at the next save instead of being wiped (firmware rollback). Host tests cut the power during the write, again during a rewrite after a cut, and on the very first save |
@@ -143,12 +143,16 @@ The saved volume is restored at boot after the load, **but never louder than the
 see [Audio](audio.md)), and only if the user has not changed the volume yet in this session. A saved quiet level (for example -40 dB) comes back; a saved
 loud level (for example -10 dB) comes back as -30 dB. The constant is `PLAYER_RESTORE_MIN_ATT_DB`.
 
-**Approved replacement (design response, 3 Nov 2026; not built):** honour the saved level, except cap at -30 dB when
+**Replacement (design response, 3 Nov 2026; built in `player_volume_restore_att()`):** honour the saved level, except cap at -30 dB when
 
 * the output path differs from the one the level was saved for (Bluetooth ↔ wired ↔ line/optical), or
 * a headphone insertion is detected at boot and the saved path was line-out.
 
-The output path is stored alongside the level in the settings store.
+The output path is stored alongside the level in the settings store (`NPvp`, an `output_path_t`: wired, line, optical, Bluetooth). Conservative readings
+taken where the text is silent: a level saved without a path (older firmware) or a restore when the current path is unknown is capped; line-out and optical
+count as different paths (any change of path is a change); a level already quieter than -30 dB is never touched. **Nothing in the firmware reports the output
+path yet** (no Bluetooth audio routing, no jack detect), so until a source calls `player_set_output_path()` / `player_set_headphones_at_boot()` every restore
+is capped at -30 dB, exactly as before; the policy, the stored path and the tests are in place.
 
 ## Memory budget (RP2350, main SRAM 512 KB)
 

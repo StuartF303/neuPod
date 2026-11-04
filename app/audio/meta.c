@@ -474,3 +474,83 @@ uint32_t flac_make_header(const flac_info_t *f, uint8_t o[FLAC_SYNTH_HEADER_BYTE
     memcpy(si + 18, f->md5, 16);
     return FLAC_SYNTH_HEADER_BYTES;
 }
+
+// ---- Resume seeking ----------------------------------------------------------------------------------------
+
+bool flac_seek_point(meta_read_fn rd, void *ctx, uint64_t file_size, uint64_t target, uint64_t *sample, uint64_t *offset) {
+    uint8_t h10[10];
+    uint64_t pos = id3v2_size(rd, ctx, h10);
+    uint8_t b[4];
+    if (rd(ctx, pos, b, 4) != 4 || memcmp(b, "fLaC", 4) != 0) return false;
+    pos += 4;
+    for (int guard = 0; guard < 256; guard++) {
+        uint8_t bh[4];
+        if (rd(ctx, pos, bh, 4) != 4) return false;
+        bool last = (bh[0] & 0x80) != 0;
+        uint32_t len = ((uint32_t)bh[1] << 16) | ((uint32_t)bh[2] << 8) | bh[3];
+        uint64_t body = pos + 4;
+        if ((bh[0] & 0x7Fu) == 3) { // SEEKTABLE: 18-byte points (sample, byte offset, frames in the block), ascending
+            uint64_t best_s = 0, best_o = 0;
+            uint8_t pts[18 * 8];
+            for (uint32_t at = 0; at + 18u <= len; at += (uint32_t)sizeof pts) {
+                uint32_t want = len - at < sizeof pts ? len - at : (uint32_t)sizeof pts;
+                want -= want % 18u;
+                if (want == 0 || rd(ctx, body + at, pts, want) != (int32_t)want) break;
+                for (uint32_t i = 0; i < want; i += 18u) {
+                    uint64_t s = ((uint64_t)be32(pts + i) << 32) | be32(pts + i + 4);
+                    uint64_t o = ((uint64_t)be32(pts + i + 8) << 32) | be32(pts + i + 12);
+                    if (s == UINT64_MAX || s > target) continue; // placeholder, or past the target
+                    if (s >= best_s) {
+                        best_s = s;
+                        best_o = o;
+                    }
+                }
+            }
+            if (best_s == 0) return false; // only the very start: nothing gained
+            *sample = best_s;
+            *offset = best_o;
+            return true;
+        }
+        pos = body + len;
+        if (last || pos >= file_size) break;
+    }
+    return false;
+}
+
+bool mp3_seek_point(meta_read_fn rd, void *ctx, uint64_t file_size, uint64_t audio_offset, uint64_t total_frames, uint64_t frame,
+                    uint64_t *file_offset) {
+    if (total_frames == 0 || frame >= total_frames || file_size <= audio_offset) return false;
+    uint64_t bytes = file_size - audio_offset, rel = bytes * frame / total_frames; // proportional: exact for constant bit rate
+    uint8_t fr[192] = {0};
+    mp3_hdr_t h;
+    int32_t got = rd(ctx, audio_offset, fr, sizeof fr);
+    if (got >= 16 && mp3_header(fr, &h)) {
+        uint32_t side = h.version == 3 ? (h.channels == 1 ? 17u : 32u) : (h.channels == 1 ? 9u : 17u);
+        if (!(fr[1] & 1)) side += 2;
+        const uint8_t *x = fr + 4 + side;
+        if (4 + side + 8 + 4 + 4 + 100 <= (uint32_t)got && !memcmp(x, "Xing", 4) && (x[7] & 4u)) {
+            const uint8_t *toc = x + 8 + ((x[7] & 1u) ? 4 : 0) + ((x[7] & 2u) ? 4 : 0);
+            uint64_t scaled = frame * 25600u / total_frames; // percent in 1/256
+            uint32_t i = (uint32_t)(scaled >> 8), f = (uint32_t)(scaled & 255u);
+            if (i > 99u) i = 99u, f = 0;
+            uint32_t a = toc[i], b = i < 99u ? toc[i + 1u] : 256u;
+            rel = bytes * ((uint64_t)a * 256u + (uint64_t)(b > a ? b - a : 0u) * f) / 65536u;
+        }
+    }
+    uint8_t buf[512];
+    uint64_t pos = audio_offset + rel;
+    for (uint32_t scanned = 0; scanned < 8192u; scanned += 256u, pos += 256u) {
+        int32_t n = rd(ctx, pos, buf, sizeof buf);
+        if (n < 4) break;
+        for (int32_t i = 0; i + 4 <= n && i < 256; i++) {
+            mp3_hdr_t c;
+            if (!mp3_header(buf + i, &c) || pos + (uint64_t)i <= audio_offset) continue; // (not the Xing frame itself)
+            uint8_t nx[4];
+            mp3_hdr_t c2;
+            if (rd(ctx, pos + (uint64_t)i + c.frame_bytes, nx, 4) != 4 || !mp3_header(nx, &c2) || c2.rate != c.rate) continue;
+            *file_offset = pos + (uint64_t)i;
+            return true;
+        }
+    }
+    return false;
+}

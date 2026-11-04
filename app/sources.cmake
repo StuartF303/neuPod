@@ -89,6 +89,7 @@ set(NEUPOD_RUNTIME_SOURCES
   ${NEUPOD_APP_DIR}/runtime/art_service.c
   ${NEUPOD_APP_DIR}/runtime/haptic_service.c
   ${NEUPOD_APP_DIR}/runtime/player.c
+  ${NEUPOD_APP_DIR}/runtime/resume.c
   ${NEUPOD_APP_DIR}/runtime/settings_service.c
   ${NEUPOD_APP_DIR}/runtime/bt_service.c
   ${NEUPOD_APP_DIR}/runtime/wifi_service.c

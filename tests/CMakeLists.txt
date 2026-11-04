@@ -41,6 +41,13 @@ add_test(NAME settings COMMAND test_settings)
 set_tests_properties(settings PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_source_files_properties(test_settings.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
+# Resume record over the real settings store: round trip through the store's write path, rate limiting, missing / changed file decisions.
+add_executable(test_resume test_resume.c ${CMAKE_SOURCE_DIR}/app/runtime/resume.c)
+target_link_libraries(test_resume neupod_settings neupod_rt_core hal_host)
+add_test(NAME resume COMMAND test_resume)
+set_tests_properties(resume PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_source_files_properties(test_resume.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
 set_source_files_properties(test_nfs.c test_clickwheel.c test_fatfs.c test_gfx.c test_storage_decode.c
   PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 

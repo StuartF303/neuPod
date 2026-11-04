@@ -91,12 +91,36 @@ void player_stop(void);
 uint32_t player_volume_step(int32_t steps);
 
 /**
- * Apply a volume saved in the settings store (attenuation in dB) at boot. Ignored if the user already changed the volume
- * this session, and clamped to be at most as loud as the power-on default (AUDIO_VOL_DEFAULT_ATT_DB): a saved loud setting
- * never comes back at full blast after a power cycle (headphone safety).
+ * Apply a volume saved in the settings store (attenuation in dB) at boot, by player_volume_restore_att() with the output path saved beside
+ * it. Ignored if the user already changed the volume this session.
  */
 void player_restore_volume(uint32_t att_db);
 #define PLAYER_RESTORE_MIN_ATT_DB AUDIO_VOL_DEFAULT_ATT_DB
+
+/**
+ * Where the sound goes. A volume is saved together with the path it was set for (SETTING_VOLUME_PATH) and only comes back as loud as it was
+ * when the path is the same (docs/bluetooth.md, "Volume restore policy"). Line-out and optical are separate values here on purpose: any
+ * difference counts as a change of path. Nothing in the firmware detects the path yet (no Bluetooth audio routing, no jack detect): until a
+ * source calls player_set_output_path() it stays OUT_PATH_UNKNOWN and every restore is capped, as before.
+ */
+typedef enum { OUT_PATH_UNKNOWN = 0, OUT_PATH_WIRED, OUT_PATH_LINE, OUT_PATH_OPTICAL, OUT_PATH_BT } output_path_t;
+/** The output path now in use (call when it changes, and before the settings load at boot if it is known then). */
+void player_set_output_path(output_path_t path);
+/** A headphone insertion was detected at boot (before the settings load). Caps a volume that was saved for line-out. */
+void player_set_headphones_at_boot(bool inserted);
+/**
+ * The restore policy as a pure function: attenuation to apply for a volume saved as @p saved_att on @p saved_path, now on @p cur_path.
+ * The saved level is honoured, except it is raised to PLAYER_RESTORE_MIN_ATT_DB (-30 dB) when the path is unknown on either side or differs
+ * from the saved one, or when headphones were inserted at boot and the saved path was line-out. A level quieter than -30 dB is never changed.
+ */
+uint32_t player_volume_restore_att(uint32_t saved_att, output_path_t saved_path, output_path_t cur_path, bool headphones_at_boot);
+
+/**
+ * Resume at boot (storage task, once the settings are loaded and the saved folder was listed): queue the folder @p entries of @p dir with the
+ * entry at @p index current, and start it PAUSED at PCM frame @p frame (the exactness depends on the codec: track_feed.h). False (nothing
+ * started) if the player is not idle or the entry is not playable.
+ */
+bool player_resume_folder(const char *dir, const file_entry_t *entries, uint32_t count, uint32_t index, uint32_t frame);
 
 /** Short name for a mode, e.g. "1 kHz tone". */
 const char *player_tone_name(tone_mode_t mode);
@@ -115,6 +139,8 @@ typedef struct {
     bool title_is_name, estimated, verify;
     uint32_t codec;
     uint8_t md5[16];
+    uint64_t file_size;
+    uint64_t start_frame; /**< the stream starts at this frame of the track (resume), 0 normally */
 } player_file_t;
 void player_file_started(const player_file_t *f);
 void player_file_failed(const char *msg);

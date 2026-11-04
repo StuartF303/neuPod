@@ -113,8 +113,9 @@ Consequences:
 
 * Volume is **attenuation in whole dB**, applied in the 32-bit domain. Start-up level is **-30 dB** and is
   sent to the audio core before anything can play; the audio core also boots at -30 dB by itself. The volume is saved on the card
-  (settings store, [Bluetooth](bluetooth.md)) and restored at boot, but **never louder than -30 dB**: a saved louder level comes back as -30 dB.
-  Approved replacement (not built): see [Volume restore policy](bluetooth.md#volume-restore-policy).
+  (settings store, [Bluetooth](bluetooth.md)) together with the output path, and restored at boot by the
+  [Volume restore policy](bluetooth.md#volume-restore-policy): the saved level on the same known path, otherwise capped at -30 dB. Nothing
+  reports the output path yet, so today every restore is capped at -30 dB, as before.
 * The UI steps 2 dB per wheel click. The engine never applies gain above 0 dB, and a build-time hard cap
   (`NEUPOD_AUDIO_VOLUME_CAP_DB`, default 0, meaning full scale allowed) sets the loudest level; raise it for a
   headphone-safe build. At 80 dB or more the output is silent.
@@ -232,6 +233,33 @@ handoffs incl. FLAC → MP3, one `END_OF_TRACK(1)` per boundary, sink never re-c
 Next / Previous (restart when more than 3 s in, previous track within 3 s) / Next on the last track (`queue end`) correct; a skip
 while the successor was being announced leaves later joins gapless. Gapless Off: `(auto)` joins with the ramp, setting
 persists across a reboot. 44.1 → 48 kHz in `10-matrix/`: `(auto)` with a re-clock, `dma_underruns=0`, 0 underruns.
+
+### Resume (last track and position)
+
+The player (core 0) remembers the folder track that was playing and where (`app/runtime/resume.c`, two settings items `NPr0`/`NPr1`: track path,
+queue index, file size, position in PCM frames, playing or paused). It is stored when the user pauses or resumes, when a track starts (also a gapless
+one), on Stop (the place is kept), and every 30 s while playing (`RESUME_PERIOD_MS`; an unchanged position does not even dirty the store). The end of
+the album clears it. These calls only change the RAM image; the SD write is the settings store's own save on the storage task (write lock opened only
+inside that save, nothing on core 1). The strict rule "no SD writes while audio plays" has one exception: a pending save is written during playback
+when the audio data ring is full to within one chunk (`RESUME_WRITE_WHILE_PLAYING` in `storage_service.c`; **not yet benched on a slow card**, set it to 0 to
+write only on pause, stop and idle). There is no orderly-shutdown hook in the firmware yet (no power-off path), so a power cut loses at most the last 30 s;
+pausing before switching off stores the exact place.
+
+At boot, right after the settings load, the storage task lists the saved folder (only if the UI has not listed anything yet: the listing buffer is
+shared), `resume_plan()` decides, and the player opens the track **paused** at the saved frame (nothing is played until the user presses play):
+the file is there with the same size: that frame; same name but another size: the same track from the beginning; the file is gone: the playable
+entry at the saved queue position, from its beginning; the folder cannot be read, or holds nothing playable, or the track cannot be opened: the record is discarded.
+
+**Seeking to a frame** (`track_feed_seek()`, core 0 only; the one core-1 change is that the FLAC decoder honours `skip_frames`):
+
+| Codec | Start position |
+| --- | --- |
+| WAV | exact frame (the byte) |
+| ALAC (M4A) | exact frame: the packet is found with the sample tables and the decoder drops the frames before the target; trimming (edit list, `iTunSMPB`) stays exact |
+| FLAC | exact frame **if the file has a SEEKTABLE** (nearest earlier seek point, the decoder drops the rest); without one the track starts at the beginning (position 0) |
+| MP3 | nearest frame: from the Xing table of contents (VBR) or the byte proportion (CBR, within a frame; VBR roughly 1%). The first granule after the jump may be silent (bit reservoir) and the LAME end padding is no longer trimmed |
+
+`tools/gen_seek_vector.py` makes the FLAC vector with a seek table for the tests (`tests/test_gapless.c`, through the real core-1 loop).
 
 ### Memory and CPU
 

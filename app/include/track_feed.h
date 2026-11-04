@@ -37,6 +37,8 @@ typedef struct {
     bool verify;
     uint32_t codec;
     uint8_t md5[16];
+    uint64_t file_size;
+    uint64_t start_frame;  /**< where the stream starts, in frames of the track (0 unless track_feed_seek() moved it) */
 } track_info_t;
 
 typedef enum { TRACK_FEED_BYTES, TRACK_FEED_M4A } track_feed_kind_t;
@@ -71,6 +73,18 @@ typedef enum { TRACK_FEED_MORE, TRACK_FEED_DONE, TRACK_FEED_ERROR } track_feed_s
  * calls audio_stream_end(). @p buf is TRACK_FEED_CHUNK bytes of scratch.
  */
 track_feed_status_t track_feed_step(track_feed_t *t, uint8_t *buf);
+
+/**
+ * Resume: start the feed at PCM frame @p frame of the track instead of the beginning (call right after track_feed_open, before anything is
+ * fed; @p info is the one track_feed_open filled and is adjusted: desc.skip_frames / desc.total_frames, start_frame). Returns the frame the
+ * stream really starts at (also stored in info->start_frame), 0 when it starts at the beginning (frame 0, a verify run, a position past the
+ * end, or the file offers nothing to seek with). How exact it is, per codec:
+ *   WAV and ALAC: the frame exactly (WAV: the byte; ALAC: the packet, the decoder drops the frames before the target);
+ *   FLAC: the frame exactly when the file has a seek table (decoder drops the frames after the nearest earlier point), else 0;
+ *   MP3: the nearest frame header found from the Xing table or the byte proportion: about one frame (CBR) to about 1% of the track (VBR);
+ *        the returned value is the requested frame, the real position can differ by that much.
+ */
+uint64_t track_feed_seek(track_feed_t *t, track_info_t *info, uint64_t frame);
 
 /** The track_feed_t was copied to another address (the successor becoming the current track): re-point its internal references. */
 void track_feed_relocated(track_feed_t *t);

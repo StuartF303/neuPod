@@ -52,6 +52,9 @@ extern "C" {
 #define SETTING_BACKLIGHT_PCT SETTINGS_TAG('N', 'P', 'b', 'l') /**< u8, 5..100 */
 #define SETTING_CLICK_FEEDBACK SETTINGS_TAG('N', 'P', 'c', 'k') /**< u8, 0 or 1 */
 #define SETTING_GAPLESS SETTINGS_TAG('N', 'P', 'g', 'p')       /**< u8, 0 or 1; absent = on */
+#define SETTING_VOLUME_PATH SETTINGS_TAG('N', 'P', 'v', 'p')   /**< u8, output_path_t the volume was saved for (player.h); absent = unknown */
+#define SETTING_RESUME0 SETTINGS_TAG('N', 'P', 'r', '0')       /**< resume record header + start of the track path (resume.h) */
+#define SETTING_RESUME1 SETTINGS_TAG('N', 'P', 'r', '1')       /**< rest of the track path */
 #define SETTING_WIFI SETTINGS_TAG('N', 'P', 'w', 'f')            /**< 4 bytes: enabled, during playback, idle-off minutes, zone */
 #define SETTING_NTP_SERVER SETTINGS_TAG('N', 'P', 'n', 's')      /**< string */
 #define SETTING_TEST_URL SETTINGS_TAG('N', 'P', 't', 'u')        /**< string */
