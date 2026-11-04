@@ -389,7 +389,7 @@ static void pane_text(int32_t g, char *out, size_t n) {
                  player_repeat() == PQ_REPEAT_ONE ? "Current track loops" : player_repeat() == PQ_REPEAT_ALL ? "Folder starts over at the end" : "Stops at the end of the folder");
         break;
     case G_RESUME:
-        snprintf(out, n, "Resume playing\n%s\n%s", player_resume_autoplay() ? "On" : "Off",
+        snprintf(out, n, "At power-up\n%s\n%s", player_resume_autoplay() ? "On" : "Off",
                  player_resume_autoplay() ? "Plays on power-up if it was playing" : "Power-up leaves the track paused");
         break;
     case G_BLUETOOTH: {
