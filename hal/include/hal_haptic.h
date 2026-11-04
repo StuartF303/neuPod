@@ -8,7 +8,8 @@
  *
  * Actuator: build-time default NEUPOD_HAPTIC_ACTUATOR (HAL_HAPTIC_ERM unless overridden with
  * -DNEUPOD_HAPTIC_ACTUATOR=HAL_HAPTIC_LRA), changeable at run time with hal_haptic_set_actuator().
- * ERM is configured closed-loop with ROM library 2 (TS2200 "B"); LRA uses library 6.
+ * ERM uses ROM library 2 (TS2200 "B"), open loop by default; LRA uses library 6, closed loop (auto-resonance),
+ * with RATED_VOLTAGE / OD_CLAMP / DRIVE_TIME computed from hal_haptic_lra_params_t.
  */
 #ifndef NEUPOD_HAL_HAPTIC_H
 #define NEUPOD_HAL_HAPTIC_H
@@ -20,6 +21,19 @@ extern "C" {
 #endif
 
 typedef enum { HAL_HAPTIC_ERM = 0, HAL_HAPTIC_LRA = 1 } hal_haptic_actuator_t;
+
+/**
+ * LRA actuator parameters (the inputs to the datasheet equations): rated voltage in mV RMS (Eq. 5 -> RATED_VOLTAGE),
+ * the largest peak voltage allowed in mV (Eq. 9 -> OD_CLAMP) and the resonant frequency in Hz (DRIVE_TIME, Eq. 5).
+ */
+typedef struct {
+    uint16_t rated_mv_rms;
+    uint16_t peak_mv;
+    uint16_t freq_hz;
+} hal_haptic_lra_params_t;
+
+/** LEADER LD0832AA (8 mm coin LRA): 2 V rms rated, 235 Hz; the peak ceiling is 2 V x sqrt(2), floored to 2.8 V. */
+#define HAL_HAPTIC_LRA_LD0832AA {2000u, 2800u, 235u}
 
 /** ERM drive mode: open loop (OD_CLAMP is the full-scale voltage) or closed loop (needs auto-cal). */
 typedef enum { HAL_HAPTIC_LOOP_OPEN = 0, HAL_HAPTIC_LOOP_CLOSED = 1 } hal_haptic_loop_t;
@@ -79,6 +93,14 @@ hal_status_t hal_haptic_init(void);
  */
 hal_status_t hal_haptic_set_actuator(hal_haptic_actuator_t act);
 hal_haptic_actuator_t hal_haptic_get_actuator(void);
+
+/**
+ * Set the LRA parameters used by the next init (re-initialises if already initialised and the actuator is an LRA).
+ * HAL_EINVAL (nothing changed) unless 500 <= rated <= peak <= 3600 mV and 50 <= freq <= 500 Hz. Stored calibration
+ * belongs to the old parameters, so it is cleared when they change.
+ */
+hal_status_t hal_haptic_set_lra_params(const hal_haptic_lra_params_t *p);
+void hal_haptic_get_lra_params(hal_haptic_lra_params_t *out);
 
 /**
  * Select ERM open/closed loop at run time (re-initialises if already initialised). OPEN: CONTROL3

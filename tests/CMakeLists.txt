@@ -41,6 +41,14 @@ add_test(NAME settings COMMAND test_settings)
 set_tests_properties(settings PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_source_files_properties(test_settings.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
+# Resume record over the real settings store: round trip through the store's write path, rate limiting, missing / changed file decisions.
+add_executable(test_resume test_resume.c ${CMAKE_SOURCE_DIR}/app/runtime/resume.c)
+target_compile_definitions(test_resume PRIVATE NEUPOD_TEST_ASSETS="${CMAKE_SOURCE_DIR}/tests/assets/audio")
+target_link_libraries(test_resume neupod_settings neupod_rt_core hal_host)
+add_test(NAME resume COMMAND test_resume)
+set_tests_properties(resume PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_source_files_properties(test_resume.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
 set_source_files_properties(test_nfs.c test_clickwheel.c test_fatfs.c test_gfx.c test_storage_decode.c
   PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
@@ -211,6 +219,10 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME core1_closure_selftest_good COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_core1_closure.py --text ${CMAKE_SOURCE_DIR}/tests/assets/closure/good.txt)
 add_test(NAME core1_closure_selftest_bad COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_core1_closure.py --text ${CMAKE_SOURCE_DIR}/tests/assets/closure/bad.txt)
 set_tests_properties(core1_closure_selftest_bad PROPERTIES WILL_FAIL TRUE)
+# Debug-only SDK assert() edges are accepted only from the listed SDK callers; assert() in our own code still fails.
+add_test(NAME core1_closure_selftest_sdk_assert_ok COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_core1_closure.py --text ${CMAKE_SOURCE_DIR}/tests/assets/closure/good_sdk_assert.txt)
+add_test(NAME core1_closure_selftest_own_assert_fails COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_core1_closure.py --text ${CMAKE_SOURCE_DIR}/tests/assets/closure/bad_own_assert.txt)
+set_tests_properties(core1_closure_selftest_own_assert_fails PROPERTIES WILL_FAIL TRUE)
 
 # Optional AddressSanitizer + UBSan build of the codec / parser / handshake tests: cmake -DNEUPOD_HOST_ASAN=ON
 # (runs the same hostile-input tests, which truncate and bit-flip every vector, under the sanitizers).
@@ -255,6 +267,12 @@ add_test(NAME art_service COMMAND test_art_service)
 
 # Player queue / gapless announcement bookkeeping against fakes of the audio core, storage and settings.
 add_executable(test_player test_player.c ${CMAKE_SOURCE_DIR}/app/runtime/player.c)
+target_compile_definitions(test_player PRIVATE RESUME_WRITE_WHILE_PLAYING=1) # the periodic path is compiled out in the product build; test it here
 target_link_libraries(test_player neupod_rt_core)
 set_source_files_properties(test_player.c PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra")
 add_test(NAME player COMMAND test_player)
+
+add_executable(test_haptic_logic test_haptic_logic.c)
+target_link_libraries(test_haptic_logic neupod_rt_core)
+add_test(NAME haptic_logic COMMAND test_haptic_logic)
+set_source_files_properties(test_haptic_logic.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")

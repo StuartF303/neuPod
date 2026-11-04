@@ -75,7 +75,7 @@ Priority 7 is the highest; the kernel idle task is 0.
 | boot checks (transient, 6) | 1 | 3 to 5 KB | once at boot | bounded by per-check deadlines |
 
 Core 1 has its own 16 KB stack array and a 116 KB codec arena (both static RAM). Heap: `heap_4`, 80 KB (`NEUPOD_RTOS_HEAP_BYTES`, `app/os/memory_budget.h`), holds task stacks and kernel objects; static RAM beyond that is the LVGL
-pool (72 KB, `NEUPOD_LVGL_POOL_BYTES`), the BTstack pools (about 7 KB), the settings store (about 5 KB), the two render buffers (30 KB), the album-art thumbnail (8 KB, `app/runtime/art_service.c`), the directory-listing buffer (about 19 KB) and the audio core's rings and block buffer (about 28 KB), the play queue (3.6 KB) and two track contexts for the stream controller (2.8 KB).
+pool (72 KB, `NEUPOD_LVGL_POOL_BYTES`), the BTstack pools (about 7 KB), the settings store (about 5 KB), the two render buffers (30 KB), the album-art thumbnail (8 KB, `app/runtime/art_service.c`), the directory-listing buffer (about 19 KB) and the audio core's rings and block buffer (about 28 KB), the play queue (about 3.9 KB, plus a 264 B rollback snapshot) and two track contexts for the stream controller (2.8 KB).
 The monitor prints the heap low-water mark and each task's lowest free stack every 10 s. Input is above
 the UI so wheel frames are never lost while LVGL renders; the monitor is lowest; boot-check tasks sit
 below the UI so the splash keeps animating while they run.

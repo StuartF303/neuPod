@@ -11,6 +11,7 @@
 
 #include "hal_radio.h"
 #include "os.h"
+#include "runtime_config.h"
 #include "sys_clock.h"
 #include "ui_input.h"
 #include "ui_internal.h"
@@ -129,6 +130,37 @@ static void rebuild_saved(nets_screen_t *w) {
     }
 }
 
+/* A join the user started from the Networks list: its row shows the busy dots until the station is up, the join fails,
+ * or UI_BUSY_TIMEOUT_MS passes. g_busy_ssid is empty when nothing is pending. */
+#define BUSY_GRACE_MS 1500u /* a FAILED/BAD_AUTH seen this soon after the request is the previous attempt's, not ours */
+static char g_busy_ssid[HAL_WIFI_SSID_MAX + 1];
+static uint32_t g_busy_since;
+
+static void busy_join_begin(nets_screen_t *w, const char *ssid) { /* w: the Networks screen, if one is showing the row */
+    snprintf(g_busy_ssid, sizeof g_busy_ssid, "%s", ssid);
+    g_busy_since = os_tick_ms();
+    if (w != NULL) {
+        ui_list_refresh(w->list);
+    }
+}
+
+/* True if the busy state changed (finished or timed out). */
+static bool busy_join_poll(void) {
+    if (g_busy_ssid[0] == '\0') {
+        return false;
+    }
+    wifi_info_t info;
+    wifi_get_info(&info);
+    uint32_t el = os_tick_ms() - g_busy_since;
+    bool up = info.state == HAL_WIFI_UP && strcmp(info.ssid, g_busy_ssid) == 0;
+    bool failed = (info.state == HAL_WIFI_FAILED || info.state == HAL_WIFI_BAD_AUTH) && el >= BUSY_GRACE_MS;
+    if (up || failed || el >= UI_BUSY_TIMEOUT_MS) {
+        g_busy_ssid[0] = '\0';
+        return true;
+    }
+    return false;
+}
+
 static void wifi_get(void *ctx, int32_t i, ui_list_item_t *o) {
     (void)ctx;
     wifi_info_t info;
@@ -143,9 +175,11 @@ static void wifi_get(void *ctx, int32_t i, ui_list_item_t *o) {
     case ROW_STATUS:
         snprintf(o->label, sizeof o->label, "%s", info.state == HAL_WIFI_UP ? info.ssid : "Status");
         if (info.state == HAL_WIFI_UP) {
-            snprintf(o->detail, sizeof o->detail, "%s  %d dBm", info.ip, info.rssi);
+            snprintf(o->detail, sizeof o->detail, "%s", info.ip);
+            o->bars = (uint8_t)ui_wifi_bars();
         } else {
             snprintf(o->detail, sizeof o->detail, "%s", state_text(&info, &s));
+            o->busy = info.state == HAL_WIFI_JOINING || info.state == HAL_WIFI_NO_IP;
         }
         o->dim = !s.enabled;
         return;
@@ -201,6 +235,7 @@ static void nets_get(void *ctx, int32_t i, ui_list_item_t *o) {
     if (i == NROW_SCAN) {
         snprintf(o->label, sizeof o->label, "%s", w->scanning ? "Scanning..." : "Scan again");
         o->dim = !s.enabled;
+        o->busy = w->scanning;
         return;
     }
     if (w->nnet == 0) {
@@ -214,11 +249,13 @@ static void nets_get(void *ctx, int32_t i, ui_list_item_t *o) {
     if (n->needs_pw) {
         snprintf(o->detail, sizeof o->detail, "password needed");
     } else if (n->rssi != 0) {
-        snprintf(o->detail, sizeof o->detail, "%s %d dBm", sec_text(n->sec), (int)n->rssi);
+        snprintf(o->detail, sizeof o->detail, "%s", sec_text(n->sec));
+        o->bars = (uint8_t)ui_signal_bars(n->rssi, &k_ui_signal_wifi, 0, 0);
     } else {
         snprintf(o->detail, sizeof o->detail, "saved");
     }
     o->dim = n->rssi == 0 && !n->saved;
+    o->busy = g_busy_ssid[0] != '\0' && strcmp(g_busy_ssid, n->ssid) == 0;
 }
 
 /* ---- modal results: recorded, acted on from the tick ---- */
@@ -280,7 +317,9 @@ static void tick_flow(nets_screen_t *w) {
         break;
     case NEXT_CONNECT_NEW:
         g_flow.next = NEXT_NONE;
-        (void)wifi_connect_request(g_flow.target, g_flow.psk, true);
+        if (wifi_connect_request(g_flow.target, g_flow.psk, true)) {
+            busy_join_begin(w, g_flow.target);
+        }
         memset(g_flow.psk, 0, sizeof g_flow.psk); /* do not keep the password around in RAM */
         break;
     case NEXT_ACTION: {
@@ -307,7 +346,9 @@ static void tick_flow(nets_screen_t *w) {
         } else if (cur) {
             wifi_disconnect_request();
         } else {
-            (void)wifi_connect_request(g_flow.target, NULL, false);
+            if (wifi_connect_request(g_flow.target, NULL, false)) {
+                busy_join_begin(w, g_flow.target);
+            }
         }
         break;
     }
@@ -413,7 +454,9 @@ static bool nets_button(ui_screen_t *s, uint8_t btn) {
         ui_input_open(&(wi_request_t){.kind = WI_K_PICKER, .title = n->ssid, .items = cur ? k_cur_actions : k_net_actions, .count = 2,
                                       .done = on_action_done});
     } else if (n->sec == HAL_WIFI_SEC_OPEN) {
-        (void)wifi_connect_request(n->ssid, "", true);
+        if (wifi_connect_request(n->ssid, "", true)) {
+            busy_join_begin(w, n->ssid);
+        }
     } else {
         ask_password(n->ssid); /* a new secured network, or a saved one whose password must be typed again */
     }
@@ -433,12 +476,13 @@ static void wifi_tick(ui_screen_t *s) {
 static void nets_tick(ui_screen_t *s) {
     nets_screen_t *w = (nets_screen_t *)s;
     tick_flow(w);
+    bool busy_changed = busy_join_poll();
     wifi_settings_t set;
     wifi_get_settings(&set);
     if (!w->started && set.enabled) {
         nets_scan_begin(w); /* a scan on open; if the request queue is full, try again on the next pass */
     }
-    bool changed = false;
+    bool changed = busy_changed;
     if (w->scanning) {
         hal_wifi_ap_t ap;
         bool done = false;
@@ -501,6 +545,7 @@ ui_screen_t *ui_screen_wifi_networks_create(void) {
     w->base.on_button = nets_button;
     w->base.on_tick = nets_tick;
     w->base.destroy = nets_destroy;
+    g_busy_ssid[0] = '\0';
     w->base.suspend = nets_suspend;
     w->base.resume = nets_resume;
     rebuild_saved(w);

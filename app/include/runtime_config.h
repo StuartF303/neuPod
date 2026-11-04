@@ -40,9 +40,26 @@
 #define UI_ACCEL_T2 24u /* 4x */
 #define UI_ACCEL_T3 40u /* 8x */
 
+/* Signal meter (ui_signal_bars): 4 bars at or above the first threshold, 3 above the second, 2 above the third, else 1.
+ * 4 and 3 bars are drawn green, 2 yellow, 1 red. Bluetooth inquiry RSSI reads weaker than Wi-Fi at the same distance
+ * and quality, so its thresholds sit 5 dB stronger. The status-bar icon changes bars only after the signal has moved
+ * UI_SIG_HYST_DB past a threshold, so it does not flicker around one. */
+#define UI_SIG_WIFI_4_DBM (-60)
+#define UI_SIG_WIFI_3_DBM (-70)
+#define UI_SIG_WIFI_2_DBM (-80)
+#define UI_SIG_BT_4_DBM (-55)
+#define UI_SIG_BT_3_DBM (-65)
+#define UI_SIG_BT_2_DBM (-75)
+#define UI_SIG_HYST_DB 3
+/* Busy indicator (ui_list item .busy): animation frame period, and how long a row action may stay busy before the screen gives up. */
+#define UI_BUSY_FRAME_MS 140u
+#define UI_BUSY_TIMEOUT_MS RT_WIFI_JOIN_TIMEOUT_MS
+
 /* Click feedback: ROM effect played on every list step (3 = Strong Click 30 %, deliberately gentle). */
-#define RT_HAPTIC_CLICK_EFFECT 3u
+#define RT_HAPTIC_CLICK_EFFECT 3u     /* ERM library B: Strong Click 30 % */
+#define RT_HAPTIC_CLICK_EFFECT_LRA 4u /* LRA library 6: Sharp Click 100 % */
 #define RT_HAPTIC_MIN_GAP_MS 35u  /* requests closer than this are dropped */
+#define RT_HAPTIC_CAL_LOCK_MS 500u /* wait for the I2C bus before a ~1 s calibration */
 #define RT_HAPTIC_IDLE_MS 2000u   /* back to standby after this long without a click */
 #define RT_PRIO_HAPTIC RT_PRIO_I2C
 #define RT_STACK_HAPTIC 2048u

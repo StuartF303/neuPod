@@ -45,7 +45,7 @@ static lv_obj_t *bar_new(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int3
 /* ---- Test tone -------------------------------------------------------------------------------------- */
 
 static const tone_mode_t k_modes[3] = {TONE_1K, TONE_IDENT, TONE_SCALE};
-static const char *const k_mode_label[3] = {"1 kHz tone", "L/R ident (1 s left, 1 s right)", "Scale (C4 up to C5 and back)"};
+static const char *const k_mode_label[3] = {"1 kHz tone", "L/R ident (low left, high right)", "Scale (C4 up to C5 and back)"};
 
 typedef struct {
     ui_screen_t base;
@@ -158,7 +158,7 @@ ui_screen_t *ui_screen_testtone_create(void) {
 
 typedef struct {
     ui_screen_t base;
-    lv_obj_t *title, *artist, *album, *badge, *state, *elapsed, *remain, *icon, *vol, *prog_fill, *vol_fill;
+    lv_obj_t *title, *artist, *album, *badge, *state, *elapsed, *remain, *icon, *vol, *prog_fill, *vol_fill, *modes;
     lv_obj_t *art_img, *art_note; /* album art (hidden unless the decoder has a picture) and the note shown otherwise */
     lv_image_dsc_t art_dsc;       /* points at the art service's thumbnail; nothing is copied */
     uint32_t art_gen;
@@ -251,6 +251,10 @@ static void np_update(np_t *p) {
         st = stq;
     }
     set_text(p->state, st);
+    /* shuffle / repeat indicators: only while a queue is playing; repeat-one carries a 1 */
+    snprintf(b, sizeof b, "%s%s%s%s", n.shuffle ? LV_SYMBOL_SHUFFLE : "", n.shuffle && n.repeat ? " " : "",
+             n.repeat ? LV_SYMBOL_LOOP : "", n.repeat == PQ_REPEAT_ONE ? "1" : "");
+    set_text(p->modes, b);
     lv_obj_set_style_text_color(p->state, lv_color_hex(n.state == PLAYER_ERROR || (n.state == PLAYER_VERIFIED && n.verify == AUDIO_VERIFY_MISMATCH) ? UI_L_ERR : n.state == PLAYER_VERIFIED && n.verify == AUDIO_VERIFY_OK ? UI_L_OK : UI_L_DIM), 0);
     set_text(p->icon, n.state == PLAYER_PLAYING ? LV_SYMBOL_PLAY : n.state == PLAYER_PAUSED ? LV_SYMBOL_PAUSE : "");
     uint32_t el = n.state == PLAYER_ENDED && n.rate != 0 ? (uint32_t)(n.total_frames / n.rate) : n.elapsed_s;
@@ -375,6 +379,8 @@ ui_screen_t *ui_screen_nowplaying_create(void) {
     p->icon = ui_label(r, "", UI_L_FAINT);
     lv_obj_align(p->icon, LV_ALIGN_TOP_MID, 0, 158);
 
+    p->modes = ui_label(r, "", UI_L_FAINT);
+    lv_obj_align(p->modes, LV_ALIGN_TOP_MID, 46, 158);
     p->vol = ui_label(r, "", UI_L_TEXT);
     lv_obj_set_pos(p->vol, 14, 184);
     bar_new(r, NP_VOL_X, 190, NP_VOL_W, 6, 0xE6E6E2);

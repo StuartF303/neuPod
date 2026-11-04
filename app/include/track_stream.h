@@ -46,6 +46,8 @@ typedef struct {
 void track_stream_init(const track_stream_ops_t *ops);
 /** Replace what plays with @p path (hard start). @p verify: FLAC MD5 check without sound. Reports through ops->started / ops->failed. */
 void track_stream_start(const char *path, bool verify);
+/** As track_stream_start(), beginning at PCM frame @p frame of the track (resume; track_feed_seek() says how exact that is). ops->started reports the real start in info->start_frame. */
+void track_stream_start_at(const char *path, bool verify, uint64_t frame);
 /** Stop feeding (the caller stops the audio core itself); cancels an announced successor. */
 void track_stream_stop(void);
 /** One feeding step; call every millisecond while active. */

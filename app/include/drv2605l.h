@@ -45,6 +45,7 @@
 #define DRV_FB_LRA 0x80u
 #define DRV_FB_BEMF_GAIN_MASK 0x03u
 #define DRV_CTRL3_ERM_OPEN_LOOP 0x20u
+#define DRV_CTRL3_LRA_OPEN_LOOP 0x01u
 
 #define DRV_LIB_ERM_B 2u
 #define DRV_LIB_LRA 6u
@@ -90,11 +91,32 @@ uint32_t drv2605l_erm_od_clamp_mv(uint8_t reg, uint8_t drive_time_reg, uint8_t b
                                   uint8_t idiss_sel);
 
 /**
+ * Eq. 5 inverted: V_rms = 20.58 mV x RV / sqrt(1 - (4 x tSAMPLE + 300 us) x f_LRA), so
+ * RV = floor(V_rms x sqrt(1 - (4 x tSAMPLE + 300 us) x f_LRA) / 20.58 mV). @p sample_sel is SAMPLE_TIME[1:0]
+ * (150/200/250/300 us). Integer maths; the floor keeps the real RMS at or below @p rms_mv. Clamped to 255;
+ * 0 if the frequency is so high the square root has no real value.
+ */
+uint8_t drv2605l_lra_rated_reg(uint32_t rms_mv, uint32_t freq_hz, uint8_t sample_sel);
+/** LRA DRIVE_TIME[4:0] for CONTROL1: half the resonant period, (t - 0.5 ms) / 0.1 ms rounded, clamped 0..31. */
+uint8_t drv2605l_lra_drive_time_reg(uint32_t freq_hz);
+/** LRA drive time in us for a DRIVE_TIME[4:0] value: 500 + 100 x reg. */
+uint32_t drv2605l_lra_drive_time_us(uint8_t drive_time_reg);
+
+/** CONTROL2 SAMPLE_TIME[1:0] field value used for the LRA (3 = 300 us, "valid for most actuators"). */
+#define DRV_LRA_SAMPLE_SEL 3u
+
+/**
  * Pack sequencer entries for registers 0x04..0x0B. Entry = effect id 1..123, or a wait
  * (bit 7 set, delay 10 ms * (entry & 0x7F), 1..127). Unused slots are 0 (terminator).
  * HAL_EINVAL for count 0 or > 8, id 0/124..127, or a zero-length wait.
  */
 hal_status_t drv2605l_pack_sequence(const uint8_t *entries, size_t count, uint8_t out[8]);
+
+/**
+ * Delay used while polling and waiting for reset (default hal_delay_ms). The firmware installs a scheduler-aware
+ * delay so a ~1 s calibration never blocks other tasks; NULL restores the default.
+ */
+void drv2605l_set_delay_fn(void (*fn)(uint32_t ms));
 
 /** Test hook: calibration GO-poll timeout (default 2000 ms; datasheet maximum cal time is 1200 ms). */
 void drv2605l_set_cal_timeout_ms(uint32_t ms);

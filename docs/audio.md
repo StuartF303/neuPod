@@ -113,8 +113,9 @@ Consequences:
 
 * Volume is **attenuation in whole dB**, applied in the 32-bit domain. Start-up level is **-30 dB** and is
   sent to the audio core before anything can play; the audio core also boots at -30 dB by itself. The volume is saved on the card
-  (settings store, [Bluetooth](bluetooth.md)) and restored at boot, but **never louder than -30 dB**: a saved louder level comes back as -30 dB.
-  Approved replacement (not built): see [Volume restore policy](bluetooth.md#volume-restore-policy).
+  (settings store, [Bluetooth](bluetooth.md)) together with the output path, and restored at boot by the
+  [Volume restore policy](bluetooth.md#volume-restore-policy): the saved level on the same known path, otherwise capped at -30 dB. Nothing
+  reports the output path yet, so today every restore is capped at -30 dB, as before.
 * The UI steps 2 dB per wheel click. The engine never applies gain above 0 dB, and a build-time hard cap
   (`NEUPOD_AUDIO_VOLUME_CAP_DB`, default 0, meaning full scale allowed) sets the loudest level; raise it for a
   headphone-safe build. At 80 dB or more the output is silent.
@@ -136,7 +137,7 @@ The Audio Pack DAC takes 32-bit slots; how many of the bits it uses is the DAC's
 | Source | What | Notes |
 | --- | --- | --- |
 | 1 kHz tone | sine, -20 dBFS peak, both channels | phase accumulator, 1024-point table with linear interpolation (worst error about -104 dBFS) |
-| L/R ident | the same tone, 1 s left only, then 1 s right only, repeating | switches at a zero crossing; if you hear it in the wrong ear the channel order is swapped (slot order is left first) |
+| L/R ident | 400 Hz on the left only for 1 s, then 1600 Hz on the right only for 1 s, repeating (low = left, high = right) | switches at a zero crossing; if you hear it in the wrong ear the channel order is swapped (slot order is left first) |
 | Scale | C4 D4 E4 F4 G4 A4 B4 C5, then B4 down to C4, 300 ms per note, 10 ms raised-cosine attack and release, 600 ms rest, loops until stopped | equal temperament, A4 = 440 Hz; frequencies rounded to a millihertz, phase step exact to 2^-32 |
 | WAV | integer PCM 16/24/32-bit, mono or stereo, 44.1/48/88.2/96 kHz | RIFF parser walks the chunks (LIST and other chunks before `data`, odd sizes, extensible PCM); float, 8-bit, other rates and RF64 are rejected with a message |
 
@@ -225,13 +226,53 @@ ignored. The reported `total_frames` is the trimmed length. The test vectors: `t
 
 **Host tests.** `gapless` runs the real core-1 loop and the real core-0 stream controller against a fake sink with a real-time block clock and
 compares the sink's samples frame by frame with each track decoded on its own (WAV, FLAC, MP3, ALAC with an edit list; skip, stop, seek and rate
-change cases). `play_queue` covers the queue rules.
+change cases). `play_queue` covers the queue rules (including shuffle permutations, repeat, wrap re-shuffle) and `player` the mid-play toggles.
+
+Shuffle and repeat (Settings > Shuffle / Repeat, saved; Now Playing shows small shuffle/loop icons, loop with a 1 for repeat-one): see the
+amendment in ADR-0016. UART reasons added: `repeat`, `wrap` (and `gapless repeat`, `gapless wrap`).
 
 **Bench, 3 Nov 2026 (Pico 2 W):** `30-signals/gapless/` (3-part FLAC then 3-part LAME MP3, one queue): five `(gapless)`
 handoffs incl. FLAC → MP3, one `END_OF_TRACK(1)` per boundary, sink never re-clocked, mute line open throughout, 0 underruns.
 Next / Previous (restart when more than 3 s in, previous track within 3 s) / Next on the last track (`queue end`) correct; a skip
 while the successor was being announced leaves later joins gapless. Gapless Off: `(auto)` joins with the ramp, setting
 persists across a reboot. 44.1 → 48 kHz in `10-matrix/`: `(auto)` with a re-clock, `dma_underruns=0`, 0 underruns.
+
+### Resume (last track and position)
+
+The player (core 0) remembers the folder track that was playing and where (`app/runtime/resume.c`, two settings items `NPr0`/`NPr1`: track path,
+folder entry index, 64-bit file size, position in PCM frames, playing or paused; the entry, not the shuffle slot, is saved). It is stored when the user pauses or resumes, when a
+track starts (also a gapless or repeat one) and on Stop (the place is kept). Under repeat-all or repeat-one the album never ends, so the record is never cleared; without
+repeat the end of the album clears it. These calls only change the RAM image (serialised by a small mutex, as the UI and the storage task both call them); the SD write is the settings
+store's own save on the storage task (write lock opened only inside that save, nothing on core 1).
+
+**There is no periodic update by default.** The rule "no SD writes while audio plays" stands, and a mid-track update could only be written during playback: the
+write runs on the storage task that also refills the audio data ring, so a card that stalls for 100-250 ms for one write would underrun a high-rate stream (at
+24-bit/96 kHz the rings hold only about 85-130 ms). So **a power cut mid-track resumes at the last pause, resume, Stop or track start**, not at the exact second.
+An opt-in build exception exists (`RESUME_WRITE_WHILE_PLAYING 1`, `resume.h`; default 0, unbenched): it adds a 30 s update (`RESUME_PERIOD_MS`) and writes it during
+playback only when the data ring plus the PCM ring hold at least 300 ms of audio (judged pessimistically as 32-bit stereo, so it rarely opens), times each such
+write, and turns itself off for the boot if one takes over 50 ms. There is no orderly-shutdown hook in the firmware yet (no power-off path); pausing before
+switching off stores the exact place.
+
+At boot, right after the settings load, the storage task lists the saved folder (only if the UI has not listed anything yet: the listing buffer is
+shared), `resume_plan()` decides, and the player opens the track (in a queue built with the saved shuffle and repeat modes: under shuffle the order is new, the track is the saved one) **paused** at the saved frame (nothing is played until the user presses play):
+the file is there with the same size: that frame; same name but another size: the same track from the beginning; the file is gone: the playable
+entry at the saved queue position, from its beginning; the folder cannot be read, or holds nothing playable, or the track cannot be opened: the record is discarded.
+
+**Resume playing on power-up** (Settings, `NPra`, u8, default Off; `player_resume_autoplay()`): Off keeps the behaviour above (always paused). On: the same restore, but when the saved record says it was
+playing (`resume_state_t.playing`) the track starts playing instead of being paused (`player_resume_folder(..., play)`); a record that says paused or stopped still restores paused. The setting is read
+after the settings load and the volume restore (same task, in that order), so auto-play uses the restored volume, including the -30 dB cap for an unknown or different output path. A track that cannot be
+opened is dropped quietly in both modes.
+
+**Seeking to a frame** (`track_feed_seek()`, core 0 only; the one core-1 change is that the FLAC decoder honours `skip_frames`):
+
+| Codec | Start position |
+| --- | --- |
+| WAV | exact frame (the byte) |
+| ALAC (M4A) | exact frame: the packet is found with the sample tables (`mp4_iter_seek`: the stsc runs and one chunk, not every packet before it) and the decoder drops the frames before the target; trimming (edit list, `iTunSMPB`) stays exact |
+| FLAC | exact frame **if the file has a SEEKTABLE** (nearest earlier seek point, the decoder drops the rest); without one the track starts at the beginning (position 0) |
+| MP3 | nearest frame: from the Xing table of contents (VBR) or the byte proportion (CBR, within a frame; VBR roughly 1%). The position that is then shown and saved is computed back from where the frame header really landed, so errors do not add up over repeated resumes. The first granule after the jump may be silent (bit reservoir) and the LAME end padding is no longer trimmed |
+
+`tools/gen_seek_vector.py` makes the FLAC vector with a seek table for the tests (`tests/test_gapless.c`, through the real core-1 loop).
 
 ### Memory and CPU
 

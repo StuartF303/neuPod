@@ -7,7 +7,9 @@
 #include "art_service.h"
 #include "audio_engine.h"
 #include "os.h"
+#include "play_queue.h"
 #include "player.h"
+#include "resume.h"
 #include "settings_service.h"
 #include "settings_store.h"
 #include "storage_service.h"
@@ -20,7 +22,7 @@ typedef enum { REQ_LIST, REQ_SPACE, REQ_PREFETCH, REQ_PLAY, REQ_STOP, REQ_VERIFY
 
 typedef struct {
     req_kind_t kind;
-    uint32_t seq;
+    uint32_t seq; /* list/space: the caller's sequence number. REQ_PLAY: the start frame (resume), 0 = from the beginning */
     char path[NFS_PATH_MAX];
 } storage_req_t;
 
@@ -45,6 +47,7 @@ static bool post(req_kind_t kind, const char *path, uint32_t seq) {
     return g_req_q != NULL && os_queue_send(g_req_q, &r, wait);
 }
 bool storage_play_request(const char *path) { return path != NULL && post(REQ_PLAY, path, 0); }
+bool storage_play_request_at(const char *path, uint32_t frame) { return path != NULL && post(REQ_PLAY, path, frame); }
 bool storage_stop_request(void) { return post(REQ_STOP, NULL, 0); }
 bool storage_settings_load_request(void) { return post(REQ_SETTINGS_LOAD, NULL, 0); }
 bool storage_verify_request(const char *path) { return path != NULL && post(REQ_VERIFY, path, 0); }
@@ -95,6 +98,8 @@ static void copy_name(char *dst, const char *src) {
     memcpy(dst, src, n);
     dst[n] = '\0';
 }
+
+static bool g_ui_listed; /* the UI has asked for a listing: g_entries may be on screen, the boot resume must not reuse it */
 
 static void list_dir(const storage_req_t *rq, storage_result_t *res) {
     res->kind = STORAGE_RES_LIST;
@@ -182,6 +187,8 @@ static void to_player_file(const track_info_t *i, player_file_t *pf) {
     pf->verify = i->verify;
     pf->codec = i->codec;
     memcpy(pf->md5, i->md5, 16);
+    pf->file_size = i->file_size;
+    pf->start_frame = i->start_frame;
 }
 
 static void ts_started(const char *path, const track_info_t *i) {
@@ -208,14 +215,82 @@ static const track_stream_ops_t k_stream_ops = {.open = ts_open, .close = ts_clo
                                                 .next_announced = ts_next_announced, .started = ts_started, .track_changed = ts_track_changed,
                                                 .failed = player_file_failed, .now_ms = ts_now, .delay_ms = os_delay_ms};
 
+// Boot resume (resume.h): runs on this task right after the settings load. Lists the saved folder (into g_entries, so only while the UI has
+// not listed anything yet), checks the file against what was saved and hands the folder to the player, paused (or playing: setting "Resume playing on power-up" on and the record was playing).
+static void resume_boot(void) {
+    resume_state_t r;
+    char dir[NFS_PATH_MAX];
+    const char *name;
+    if (!resume_load(&r)) {
+        return;
+    }
+    player_info_t pi;
+    player_get(&pi);
+    if (pi.state != PLAYER_IDLE) {
+        return; // something already plays: leave the record alone
+    }
+    if (!resume_split(r.path, dir, sizeof dir, &name)) {
+        resume_clear();
+        return;
+    }
+    if (g_ui_listed) {
+        return; // the user is already browsing: leave the record for the next boot
+    }
+    storage_req_t rq = {.kind = REQ_LIST};
+    snprintf(rq.path, sizeof rq.path, "%s", dir);
+    storage_result_t res = {0};
+    list_dir(&rq, &res);
+    if (res.err != 0) {
+        printf("resume: folder '%s' not readable (%s), discarded\n", dir, nfs_err_str((nfs_err_t)res.err));
+        resume_clear();
+        return;
+    }
+    uint32_t idx = 0, frame = 0;
+    resume_plan_t plan = resume_plan(&r, name, g_entries, res.count, &idx, &frame);
+    if (plan == RESUME_PLAN_CHANGED) {
+        printf("resume: '%s' changed size, starting it from the beginning\n", name);
+    } else if (plan == RESUME_PLAN_GONE) {
+        printf("resume: '%s' is gone, offering '%s' from its beginning\n", name, g_entries[idx].name);
+    }
+    bool play = player_resume_autoplay() && r.playing;
+    player_resume_t pr = plan == RESUME_PLAN_NOTHING ? PLAYER_RESUME_INVALID : player_resume_folder(dir, g_entries, res.count, idx, frame, play);
+    if (pr == PLAYER_RESUME_BUSY) {
+        return; // the user started something first: keep the record, it is not the user's loss
+    }
+    if (pr != PLAYER_RESUME_OK) {
+        printf("resume: nothing playable to resume, discarded\n");
+        resume_clear();
+        return;
+    }
+    printf("resume: '%s' %s at frame %u\n", g_entries[idx].name, play ? "playing" : "paused", (unsigned)frame);
+}
+
 #define SETTINGS_POLL_MS 500u
 // A settings save is SD writes (a FAT update and two data sectors: typically a few ms, but an SD card may stall far longer). It must
 // never starve the audio ring, so it is NOT done while audio plays: changes wait for pause, stop, the end of the track or an idle
 // moment, and are then written at once (the 1.5 s debounce still applies). The cost: a volume change made during a long track is
 // lost if the power fails before the next pause/stop. While paused the ring is full and nothing is consuming it, so the write cannot hurt.
+// Optional exception, OFF by default: write a pending save (the resume position) while playing. The write runs on this task, which also
+// refills the audio data ring, so the refill stalls for the whole write (about 8-14 sector writes; an SD card can take 100-250 ms for one).
+// Only with RESUME_WRITE_WHILE_PLAYING 1, and then only when the data ring plus the PCM ring hold RESUME_MIN_BUFFERED_MS of audio, judged
+// pessimistically (resume_buffered_ms: 32-bit stereo for the data ring, the PCM ring's low-water mark). Every such write is timed; one that
+// takes longer than RESUME_SLOW_WRITE_MS switches the exception off for the rest of the boot.
+#define RESUME_SLOW_WRITE_MS 50u
+static bool g_wwp_off;       /* a write while playing was slow: not again this boot */
+static bool g_wwp_attempt;   /* the last quiet verdict relied on the exception */
+
 static bool settings_quiet_now(void) {
     player_info_t pi;
     player_get(&pi);
+    g_wwp_attempt = false;
+    if (RESUME_WRITE_WHILE_PLAYING && !g_wwp_off && pi.state == PLAYER_PLAYING && pi.rate != 0) {
+        audio_stats_t st;
+        if (audio_stats_get(&st) &&
+            resume_write_while_playing_ok(resume_buffered_ms(pi.rate, AUDIO_DATA_RING_BYTES - audio_data_space(), 8u, st.ring_min_frames))) {
+            g_wwp_attempt = true;
+            return true;
+        }
+    }
     return pi.state != PLAYER_PLAYING && pi.state != PLAYER_OPENING && pi.state != PLAYER_VERIFYING;
 }
 
@@ -230,7 +305,16 @@ static void settings_poll(void) {
         settings_service_poll(true); // keeps the service's bookkeeping current; nothing to write
         return;
     }
-    settings_service_poll(settings_quiet_now());
+    bool quiet = settings_quiet_now();
+    settings_status_t before, after;
+    settings_get_status(&before);
+    uint32_t t0 = os_tick_ms();
+    settings_service_poll(quiet);
+    settings_get_status(&after);
+    if (g_wwp_attempt && after.saves != before.saves && os_tick_ms() - t0 > RESUME_SLOW_WRITE_MS) {
+        g_wwp_off = true;
+        printf("settings: a save during playback took %u ms, no more saves during playback this boot\n", (unsigned)(os_tick_ms() - t0));
+    }
 }
 
 // Called by the art decoder many times per picture. Keeps the audio ring topped up, gives the other tasks a millisecond after
@@ -270,7 +354,7 @@ void storage_task(void *arg) {
         storage_result_t res = {0};
         switch (rq.kind) {
         case REQ_PLAY:
-            track_stream_start(rq.path, false);
+            track_stream_start_at(rq.path, false, rq.seq);
             continue;
         case REQ_VERIFY:
             track_stream_start(rq.path, true);
@@ -280,8 +364,10 @@ void storage_task(void *arg) {
             continue;
         case REQ_SETTINGS_LOAD:
             settings_service_load_now();
+            resume_boot();
             continue;
         case REQ_LIST:
+            g_ui_listed = true;
             list_dir(&rq, &res);
             break;
         case REQ_SPACE:

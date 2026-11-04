@@ -111,8 +111,8 @@ Link keys and the device database are stored in the **settings store** instead, 
 | | |
 | --- | --- |
 | API | `app/include/settings_store.h`, `app/settings/settings_store.c`; RTOS glue `app/runtime/settings_service.c` |
-| Content | tag (32-bit) to value (up to 96 bytes), 24 tags: volume (`NPvo`), backlight (`NPbl`), click feedback (`NPck`), Wi-Fi settings and networks ([Wi-Fi](wifi.md)), BTstack link keys (`BTL?`, 27 bytes plaintext, stored sealed since the secrets work, up to 8) and later device records. The same tag/value/length model as BTstack's TLV, so `hal_bt_storage_t` (in `hal_radio.h`) maps one to one onto `btstack_tlv_t` |
-| File | two alternating files `/.neupod/settings.a` and `settings.b`: magic `NPST`, version (1), count, sequence number, items, CRC-32. Little endian. About 3.2 KB at most (32 tags x 96 bytes) |
+| Content | tag (32-bit) to value (up to 96 bytes), up to 48 tags (`SETTINGS_MAX_ITEMS`; worst case about 38): volume (`NPvo`), backlight (`NPbl`), output path of the saved volume (`NPvp`), the resume record (`NPr0`/`NPr1`, [Audio](audio.md#resume-last-track-and-position)), shuffle and repeat (`NPsh`/`NPrp`), click mode (`NPck`: 0 off, 1 haptic, 2 piezo, 3 both), haptic actuator (`NPha`) and calibration (`NPhc`), Wi-Fi settings and networks ([Wi-Fi](wifi.md)), BTstack link keys (`BTL?`, 27 bytes plaintext, stored sealed since the secrets work, up to 8) and later device records. The same tag/value/length model as BTstack's TLV, so `hal_bt_storage_t` (in `hal_radio.h`) maps one to one onto `btstack_tlv_t` |
+| File | two alternating files `/.neupod/settings.a` and `settings.b`: magic `NPST`, version (2; version-1 files, same layout and at most 32 items, are still read), count, sequence number, items, CRC-32. Little endian. About 4.9 KB at most (48 tags x 101 bytes). Firmware older than the version-2 store does not read these files: it sets them aside as "newer" and starts from defaults (it never overwrites them), so a rollback loses the settings but not the file |
 | Reading | `settings_load()` on the storage task right after the card mounted. A file that fails magic, version or CRC gives **defaults** (reported on the UART, replaced by the next save). A newer or older layout is treated the same way |
 | Crash-safe save | **no rename and no delete.** The image is written in place over the OLDER (or invalid) of the two files and synced; the other file is never touched. Load takes the valid file with the higher sequence (wrap-safe), so a power cut at any point leaves at least the previous complete state; a torn file just fails its CRC. A file with a NEWER layout version is moved aside as `settings.old` at the next save instead of being wiped (firmware rollback). Host tests cut the power during the write, again during a rewrite after a cut, and on the very first save |
 | Who writes | only the **storage task** (`settings_service_poll`: it wakes every 500 ms when idle and looks at the store at most every 250 ms). The first unsaved change is written about 1.5 s later, so a burst of wheel clicks is one write; a failed save is retried after 5 s. **No save while audio is playing** (an SD card can stall for far longer than the audio ring lasts): changes wait for pause, stop, the end of the track or an idle moment, then are written. The cost is that a volume change made during a long track is lost if the power fails before the next pause. While paused the ring is full and nothing consumes it, so a write cannot hurt. Core 1 never touches it |
@@ -143,12 +143,16 @@ The saved volume is restored at boot after the load, **but never louder than the
 see [Audio](audio.md)), and only if the user has not changed the volume yet in this session. A saved quiet level (for example -40 dB) comes back; a saved
 loud level (for example -10 dB) comes back as -30 dB. The constant is `PLAYER_RESTORE_MIN_ATT_DB`.
 
-**Approved replacement (design response, 3 Nov 2026; not built):** honour the saved level, except cap at -30 dB when
+**Replacement (design response, 3 Nov 2026; built in `player_volume_restore_att()`):** honour the saved level, except cap at -30 dB when
 
 * the output path differs from the one the level was saved for (Bluetooth ↔ wired ↔ line/optical), or
 * a headphone insertion is detected at boot and the saved path was line-out.
 
-The output path is stored alongside the level in the settings store.
+The output path is stored alongside the level in the settings store (`NPvp`, an `output_path_t`: wired, line, optical, Bluetooth). Conservative readings
+taken where the text is silent: a level saved without a path (older firmware) or a restore when the current path is unknown is capped; line-out and optical
+count as different paths (any change of path is a change); a level already quieter than -30 dB is never touched. **Nothing in the firmware reports the output
+path yet** (no Bluetooth audio routing, no jack detect), so until a source calls `player_set_output_path()` / `player_set_headphones_at_boot()` every restore
+is capped at -30 dB, exactly as before; the policy, the stored path and the tests are in place.
 
 ## Memory budget (RP2350, main SRAM 512 KB)
 
@@ -159,7 +163,7 @@ The static RAM ("bss", every figure from `arm-none-eabi-size` on the linked `neu
 | FreeRTOS heap (`NEUPOD_RTOS_HEAP_BYTES`) | 112 KB | **80 KB** |
 | LVGL pool (`NEUPOD_LVGL_POOL_BYTES`) | 96 KB | **72 KB** (the host tour still passes) |
 | codec arena | 116 KB | 116 KB |
-| settings store (items, parse buffers) | 0 | about 5.3 KB at the end of stage 1 (now about 12.7 KB: see [Wi-Fi](wifi.md)) |
+| settings store (items, parse buffers) | 0 | about 5.3 KB at the end of stage 1; 12.7 KB with Wi-Fi ([Wi-Fi](wifi.md)) and 32 items; **about 9.9 KB now with 48 items** (items 5.0 KB + one 4.9 KB image buffer: the load validates the two files in the buffer and parses the winner straight into the items, so there are no staging copies) |
 | BTstack (HCI buffers, pools) and the Bluetooth HAL | 0 | about 6.6 KB |
 | **bss total** | **481,588 B** | **436,480 B** (45,108 B freed) |
 | flash image (`text`) | 1,060,732 B | 1,120,532 B (+59,800 B: BTstack classic, transport, settings, UI) |

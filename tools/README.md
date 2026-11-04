@@ -2,6 +2,10 @@
 
 Small Python helpers (Pillow only, no numpy). Run from the repo root.
 
+## Audio test vectors
+
+`gen_seek_vector.py tests/assets/audio` adds a SEEKTABLE to `flac16_44k_st.flac` (`flac16_44k_st_seek.flac`, for the resume-seek tests); see also `gen_trim_vectors.py`.
+
 ## Display assets and fonts
 
 | Script | Purpose |

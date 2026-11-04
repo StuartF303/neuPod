@@ -59,6 +59,7 @@ set(NEUPOD_RT_CORE_SOURCES               # pure logic, no OS: host-testable on t
   ${NEUPOD_APP_DIR}/audio/art.c          # album art: source order + streamed JPEG thumbnail (core 0 only)
   ${NEUPOD_APP_DIR}/third_party/tjpgd/tjpgd.c  # ChaN's TJpgDec; third party, compiled without warning flags (app/CMakeLists.txt)
   ${NEUPOD_APP_DIR}/runtime/play_queue.c
+  ${NEUPOD_APP_DIR}/runtime/haptic_logic.c
 )
 # Bare-metal audio core (core 1). Subject to the core-1 rules (cmake/check_core1_rules.cmake):
 # no RTOS, stdio, malloc or SDK blocking primitives. audio_ctl.c is the core-0 side.
@@ -89,6 +90,7 @@ set(NEUPOD_RUNTIME_SOURCES
   ${NEUPOD_APP_DIR}/runtime/art_service.c
   ${NEUPOD_APP_DIR}/runtime/haptic_service.c
   ${NEUPOD_APP_DIR}/runtime/player.c
+  ${NEUPOD_APP_DIR}/runtime/resume.c
   ${NEUPOD_APP_DIR}/runtime/settings_service.c
   ${NEUPOD_APP_DIR}/runtime/bt_service.c
   ${NEUPOD_APP_DIR}/runtime/wifi_service.c

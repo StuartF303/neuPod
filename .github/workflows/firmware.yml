@@ -56,6 +56,13 @@ jobs:
             build/rp2350/platforms/rp2350/*.elf
           if-no-files-found: error
 
+      # Debug leaves assert() enabled in the SDK; the core-1 closure check (a post-build step) must hold there too.
+      # Same script and flags as the Release build; after the upload so the artifact stays the Release image.
+      - name: Build (Debug, core-1 closure check)
+        run: |
+          export PICO_SDK_PATH=$HOME/pico-sdk
+          scripts/build.sh rp2350 --clean -- -DNEUPOD_REQUIRE_CRYPTO=ON -DCMAKE_BUILD_TYPE=Debug
+
   host:
     runs-on: ubuntu-24.04
     steps:

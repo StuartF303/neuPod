@@ -396,3 +396,42 @@ bool mp4_iter_next(mp4_iter_t *it, meta_read_fn rd, void *ctx, uint64_t *offset,
     it->sample++;
     return true;
 }
+
+bool mp4_iter_seek(mp4_iter_t *it, meta_read_fn rd, void *ctx, uint32_t k) {
+    const mp4_info_t *m = it->info;
+    if (k >= m->sample_count || m->stsc_count == 0) return false;
+    uint64_t before = 0; // samples in the runs passed so far
+    for (uint32_t r = 0; r < m->stsc_count; r++) {
+        uint8_t e[20];
+        uint32_t want = r + 1u < m->stsc_count ? 20u : 8u;
+        if (rd(ctx, m->stsc_off + (uint64_t)r * 12u, e, want) != (int32_t)want) return false;
+        uint32_t first = be32(e), spc = be32(e + 4);
+        uint32_t next_first = r + 1u < m->stsc_count ? be32(e + 12) : m->stco_count + 1u;
+        if (spc == 0 || next_first < first) return false;
+        uint64_t in_run = (uint64_t)(next_first - first) * spc;
+        if (before + in_run <= k) {
+            before += in_run;
+            continue;
+        }
+        uint32_t chunk = first - 1u + (uint32_t)((k - before) / spc), within = (uint32_t)((k - before) % spc);
+        if (chunk >= m->stco_count) return false;
+        uint8_t o[8];
+        uint32_t w = m->co64 ? 8u : 4u;
+        if (rd(ctx, m->stco_off + (uint64_t)chunk * w, o, w) != (int32_t)w) return false;
+        mp4_iter_init(it, m);
+        it->run = r;
+        it->chunk = chunk;
+        it->chunk_samples = spc;
+        it->pos = m->co64 ? be64(o) : be32(o);
+        it->sample = k - within; // sizes of the packets in front of k inside this chunk move the position on
+        for (uint32_t i = 0; i < within; i++) {
+            uint32_t sz;
+            if (!sample_size(it, rd, ctx, it->sample, &sz)) return false;
+            it->pos += sz;
+            it->sample++;
+        }
+        it->in_chunk = within;
+        return true;
+    }
+    return false;
+}

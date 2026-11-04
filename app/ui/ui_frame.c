@@ -13,18 +13,21 @@
 #include "capabilities.h"
 #include "hal_display.h"
 #include "hal_radio.h"
+#include "haptic_logic.h"
 #include "haptic_service.h"
 #include "player.h"
+#include "runtime_config.h"
 #include "settings_store.h"
 #include "ui_internal.h"
+#include "wifi_service.h"
 
-ui_state_t g_ui_state = {.click_feedback = true, .backlight_pct = 100};
+ui_state_t g_ui_state = {.click_mode = CLICK_HAPTIC, .backlight_pct = 100};
 
 void ui_apply_backlight(void) { hal_display_backlight((uint8_t)((g_ui_state.backlight_pct * 255u + 50u) / 100u)); }
 
 void ui_state_persist(void) {
     settings_set_u8(SETTING_BACKLIGHT_PCT, g_ui_state.backlight_pct);
-    settings_set_u8(SETTING_CLICK_FEEDBACK, g_ui_state.click_feedback ? 1u : 0u);
+    settings_set_u8(SETTING_CLICK_FEEDBACK, (uint8_t)g_ui_state.click_mode);
 }
 
 // The settings store is loaded from the card some time after boot (storage task): when its contents are replaced, take
@@ -41,8 +44,9 @@ static void sync_from_settings(void) {
         g_ui_state.backlight_pct = v;
         ui_apply_backlight();
     }
-    if (settings_get_u8(SETTING_CLICK_FEEDBACK, &v) && v <= 1) {
-        g_ui_state.click_feedback = v != 0;
+    click_mode_t m;
+    if (settings_get_u8(SETTING_CLICK_FEEDBACK, &v) && click_mode_from_stored(v, &m)) {
+        g_ui_state.click_mode = m; /* an old stored 0 / 1 is Off / Haptic, as before */
     }
 }
 
@@ -252,21 +256,48 @@ static void update_battery(void) {
     g_batt_col = col;
 }
 
+static int g_wifi_bars; /* bars last shown for the joined network (0 = not joined), with hysteresis */
+
+int ui_wifi_bars(void) { return g_wifi_bars; }
+
 static void update_wifi(void) {
     hal_wifi_status st = hal_wifi_state();
-    if (st == g_wifi_shown) {
+    int bars = 0;
+    if (st == HAL_WIFI_UP) {
+        wifi_info_t wi;
+        wifi_get_info(&wi);
+        bars = ui_signal_bars(wi.rssi, &k_ui_signal_wifi, g_wifi_bars, UI_SIG_HYST_DB);
+    }
+    if (st == g_wifi_shown && bars == g_wifi_bars) {
         return;
     }
     g_wifi_shown = st;
-    uint32_t col = st == HAL_WIFI_UP ? UI_L_OK : st == HAL_WIFI_FAILED || st == HAL_WIFI_BAD_AUTH ? UI_L_ERR : UI_L_DIM;
+    g_wifi_bars = bars;
+    int cls = ui_signal_class(bars);
+    uint32_t col = st == HAL_WIFI_UP ? (bars == 0 ? UI_L_OK : cls == 3 ? UI_L_OK : cls == 2 ? UI_L_WARN : UI_L_ERR) : st == HAL_WIFI_FAILED || st == HAL_WIFI_BAD_AUTH ? UI_L_ERR : UI_L_DIM;
     lv_label_set_text(g_wifi, st == HAL_WIFI_DOWN ? "" : LV_SYMBOL_WIFI);
     ui_label_recolour(g_wifi, g_wifi_col, col);
     g_wifi_col = col;
 }
 
+// The haptic task applies the stored actuator and calibration once the settings are known: when they are (re)loaded,
+// and once more when the boot checks have all resolved (a boot with no card never loads them, but storage is then settled).
+static void kick_haptics(void) {
+    static uint32_t kicked_key = UINT32_MAX;
+    if (!caps_available(CAP_HAPTICS)) {
+        return;
+    }
+    uint32_t key = settings_generation() * 2u + (caps_all_resolved() ? 1u : 0u);
+    if (key != kicked_key) {
+        kicked_key = key;
+        rt_haptic_settings_loaded();
+    }
+}
+
 void ui_frame_tick(uint32_t now_ms) {
     (void)now_ms;
     sync_from_settings();
+    kick_haptics();
     update_wifi();
     update_battery();
     ui_screen_t *top = ui_stack_top(&g_stack);
@@ -276,8 +307,11 @@ void ui_frame_tick(uint32_t now_ms) {
 }
 
 void ui_feedback_step(void) {
-    if (g_ui_state.click_feedback && caps_available(CAP_HAPTICS)) {
+    if (click_mode_uses_haptic(g_ui_state.click_mode) && caps_available(CAP_HAPTICS)) {
         rt_haptic_click();
+    }
+    if (click_mode_uses_piezo(g_ui_state.click_mode)) {
+        rt_piezo_click();
     }
 }
 
