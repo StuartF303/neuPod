@@ -43,6 +43,20 @@ static void stale_push(const uint8_t addr[6]) {
     UNLOCK();
 }
 
+/* Caller holds the lock. A Pair for this address makes any queued delete of it wrong: it would drop the new attempt and the new key. */
+static void stale_remove(const uint8_t addr[6]) {
+    uint32_t w = g_stale_tail;
+    for (uint32_t i = g_stale_tail; i != g_stale_head; i++) {
+        if (memcmp(g_stale[i % STALE_MAX], addr, 6) != 0) {
+            if (w != i) {
+                memcpy(g_stale[w % STALE_MAX], g_stale[i % STALE_MAX], 6);
+            }
+            w++;
+        }
+    }
+    g_stale_head = w;
+}
+
 static bool addr_empty(const uint8_t a[6]) {
     static const uint8_t zero[6];
     return memcmp(a, zero, 6) == 0;
@@ -116,6 +130,7 @@ bool bt_saved_pair_begin(const hal_bt_device_t *dev) {
         UNLOCK();
         return false; /* a Pair is in flight: do not replace its candidate before the HAL has even accepted this one */
     }
+    stale_remove(dev->addr);
     g_pending = *dev;
     g_pending_after = hal_bt_link_attempt();
     g_have_pending = true;
@@ -124,7 +139,19 @@ bool bt_saved_pair_begin(const hal_bt_device_t *dev) {
     return true;
 }
 
-bt_saved_notice_t bt_saved_notice(void) { return g_notice; }
+bt_saved_notice_t bt_saved_notice(void) {
+    /* "Not saved" is only true while the store is not writable: a card that became writable has the record by the next flush. */
+    if (g_notice == BT_SAVED_NOTICE_NOT_SAVED && store_writable()) {
+        return BT_SAVED_NOTICE_NONE;
+    }
+    return g_notice;
+}
+
+void bt_saved_connect_begin(void) {
+    if (g_notice == BT_SAVED_NOTICE_NOT_SAVED) {
+        g_notice = BT_SAVED_NOTICE_NONE;
+    }
+}
 
 void bt_saved_pair_abort(void) { g_have_pending = false; }
 
@@ -168,7 +195,9 @@ void bt_saved_on_event(const hal_bt_event_t *ev) {
             } else {
                 /* Re-pairing the remembered headset: BTstack deletes its old key when the bonding starts, so after a failure or a cancel the
                  * record would name a headset without a key. Forget the record too. */
-                bt_saved_clear();
+                /* Straight from the store, even when it is not writable: BTstack deleted the key in RAM too, so the record must go with it
+                 * (on a read-only card both come back at the next boot, consistent). */
+                settings_delete(SETTING_BT_DEVICE);
             }
             g_have_pending = false;
         }
@@ -199,7 +228,11 @@ void bt_saved_drop_stale(void) {
 }
 
 hal_status_t bt_saved_delete_key(const uint8_t addr[6]) {
-    static bool logged;
+    if (!store_writable()) {
+        /* The delete could only reach RAM; the card keeps the key. Do not touch the radio either (it would drop a live link to this
+         * address): not done, the caller keeps it queued. */
+        return HAL_EBUSY;
+    }
     hal_status_t st = hal_bt_forget(addr);
     if (st == HAL_ENODEV) {
         /* The stack is not up (it never started, or failed): BTstack reads its keys from the store on demand, so deleting the record there is
@@ -207,22 +240,23 @@ hal_status_t bt_saved_delete_key(const uint8_t addr[6]) {
         hal_bt_storage_delete_key(settings_bt_storage(), addr);
         st = HAL_OK;
     }
-    if (st == HAL_OK && !store_writable()) {
-        /* The delete only reached RAM; the card still holds the key. Not done: keep it queued and try again once the card is writable. */
-        if (!logged) {
-            printf("bt: key delete not persisted (store not writable), kept queued\n");
-            logged = true;
-        }
-        return HAL_EBUSY;
-    }
-    if (st == HAL_OK) {
-        logged = false;
-    }
     return st; /* HAL_EBUSY: ask again */
 }
 
 void bt_saved_drain_stale(void) {
+    static bool waiting;
     uint8_t a[6];
+    if (!store_writable()) {
+        if (!waiting && bt_saved_peek_stale(a)) {
+            printf("bt: key delete waits (store not writable)\n");
+            waiting = true;
+        }
+        return; /* nothing can be made durable: no per-tick work */
+    }
+    if (waiting) {
+        printf("bt: store writable, draining queued key deletes\n");
+        waiting = false;
+    }
     while (bt_saved_peek_stale(a)) {
         if (bt_saved_delete_key(a) != HAL_OK) {
             break; /* the radio's request slots are full: the address stays queued and the next tick tries again */

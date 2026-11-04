@@ -484,6 +484,40 @@ TEST(test_pair_begin_refuses_while_a_candidate_is_live) {
     bt_saved_pair_abort();
 }
 
+// Forget on an unwritable store must not keep hitting the radio: a Pair of the same address afterwards survives the ticks, and a queued
+// delete of another address goes through exactly once when the card becomes writable.
+TEST(test_unwritable_forget_does_not_kill_a_later_pair) {
+    fresh_card();
+    settings_init(NULL);
+    settings_attach_storage(false);
+    hal_bt_device_t d = dev_of(A_AIRPODS, "AirPods Pro 3", 0x240404), got;
+    ASSERT_TRUE(bt_saved_put(&d));
+    bt_saved_queue_delete(A_AIRPODS); // what bt_service_forget does when the store is not writable
+    bt_saved_queue_delete(A_XM5);     // another address waiting too
+    for (int i = 0; i < 5; i++) {
+        do_tick();
+    }
+    ASSERT_EQ(HAL_OK, do_pair(&d)); // Pair the same headset again: its queue entry goes
+    for (int t = 0; t < 3000; t += 20) {
+        do_tick(); // every UI frame
+        hal_delay_ms(20);
+        if (hal_bt_link_state() == HAL_BT_LINK_CONNECTED) {
+            break;
+        }
+    }
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, hal_bt_link_state());
+    ASSERT_TRUE(key_present(A_AIRPODS));
+    ASSERT_TRUE(bt_saved_get(&got));
+    uint8_t a[6];
+    ASSERT_TRUE(bt_saved_peek_stale(a));
+    ASSERT_TRUE(memcmp(a, A_XM5, 6) == 0); // only the other address is still queued
+    fresh_store(); // the card becomes writable (a new store: A's key is gone with it, the point here is XM5)
+    do_tick();
+    ASSERT_FALSE(bt_saved_peek_stale(a)); // drained, once (the simulator knows no key for it, so there is nothing more to check)
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, hal_bt_link_state()); // and the live link to the other headset was not touched
+    hal_bt_disconnect();
+}
+
 int main(void) {
     if (mkdtemp(g_tpl) == NULL) {
         perror("mkdtemp");
@@ -506,6 +540,7 @@ int main(void) {
     RUN(test_an_event_of_an_older_attempt_is_ignored);
     RUN(test_pair_and_forget_with_a_store_that_is_not_writable);
     RUN(test_pair_begin_refuses_while_a_candidate_is_live);
+    RUN(test_unwritable_forget_does_not_kill_a_later_pair);
     char cmd[300];
     snprintf(cmd, sizeof cmd, "rm -rf '%s'", abs);
     int rc = system(cmd);

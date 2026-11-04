@@ -72,6 +72,7 @@ hal_status_t bt_service_connect(void) {
     if (!bt_saved_get(&d)) {
         return HAL_ENODEV; /* nothing remembered */
     }
+    bt_saved_connect_begin();
     return hal_bt_connect(d.addr); /* coexistence policy point, as in bt_service_pair() */
 }
 

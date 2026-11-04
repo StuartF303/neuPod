@@ -73,6 +73,8 @@ void bt_saved_drain_stale(void);
 typedef enum { BT_SAVED_NOTICE_NONE = 0, BT_SAVED_NOTICE_FULL /**< the settings store is full: "Can't save: settings full" */,
                          BT_SAVED_NOTICE_NOT_SAVED /**< remembered in RAM only (card read-only / absent): gone after a reboot */ } bt_saved_notice_t;
 bt_saved_notice_t bt_saved_notice(void);
+/** A Connect is starting: a "not saved" notice from an earlier Pair no longer applies. */
+void bt_saved_connect_begin(void);
 
 #ifdef __cplusplus
 }
