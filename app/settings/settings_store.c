@@ -259,7 +259,9 @@ settings_load_result_t settings_load(void) {
             active = got == FILE_GOOD ? (pick_is_a ? 1 : 0) : -1;
             /* A file that validated a moment ago but cannot be read now is a card fault, not "no settings": report it as an I/O error so the
              * store goes RAM-only and never writes defaults over what may be the only good copy (Wi-Fi secrets, Bluetooth keys). */
-            res = got == FILE_GOOD ? SETTINGS_LOAD_RECOVERED : SETTINGS_LOAD_IO_ERROR;
+            res = SETTINGS_LOAD_IO_ERROR;
+            /* The older file's contents are used so the device works, but the store stays RAM-only for this boot: the file that could not be
+             * read may be the newer, intact one, and no save may touch either file. The next boot tries again. */
         }
     } else if (a == FILE_BAD || b == FILE_BAD) {
         res = SETTINGS_LOAD_CORRUPT;
@@ -274,7 +276,7 @@ settings_load_result_t settings_load(void) {
         g_seq = use_seq;
     }
     g_active = active;
-    g_loaded = res != SETTINGS_LOAD_IO_ERROR;
+    g_loaded = res != SETTINGS_LOAD_IO_ERROR || active >= 0; /* (IO_ERROR with items: loaded from the older file, read-only) */
     g_dirty = false;
     if (res == SETTINGS_LOAD_IO_ERROR) {
         g_attached = false; /* the card cannot even be read: RAM-only */

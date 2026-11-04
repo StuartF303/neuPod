@@ -80,7 +80,7 @@ typedef enum {
     SETTINGS_LOAD_OK,         /**< a valid file was read */
     SETTINGS_LOAD_RECOVERED,  /**< ... and the other file was damaged (a save was cut short): the valid one was used */
     SETTINGS_LOAD_CORRUPT,    /**< files exist but fail magic/version/CRC: defaults, the next save replaces them */
-    SETTINGS_LOAD_IO_ERROR,   /**< could not read the card: defaults, RAM-only */
+    SETTINGS_LOAD_IO_ERROR,   /**< could not read the card (or a validated file on the second read): RAM-only for this boot, no save touches the card; defaults, or the older file's contents when the newer one failed its re-read */
 } settings_load_result_t;
 
 typedef struct {

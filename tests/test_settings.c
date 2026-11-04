@@ -289,7 +289,7 @@ TEST(test_winner_failing_its_reread_falls_back_to_the_other_file) {
     ASSERT_TRUE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
     ASSERT_EQ(20, v);
     settings_test_fail_next_reread(); // the winner validated, but cannot be read the second time (card fault)
-    ASSERT_EQ(SETTINGS_LOAD_RECOVERED, boot(true));
+    ASSERT_EQ(SETTINGS_LOAD_IO_ERROR, boot(true));
     ASSERT_TRUE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
     ASSERT_EQ(10, v);                  // the older complete state, not a half-filled store
     settings_status_t st;
@@ -353,19 +353,29 @@ TEST(test_io_error_on_the_winner_reread_goes_ram_only_and_never_writes) {
     ASSERT_TRUE(settings_flush() != 0); // refuses to write
     ASSERT_EQ(ha, file_hash(g_bin));    // the only good copy is byte-identical
     ASSERT_EQ(-1, file_size(g_tmp));    // and no second file appeared
-    // with both files good the same fault falls back, and a fault on both reads is an I/O error too
+    // both files good, the newer one cannot be re-read: the older contents are used, but nothing may be written to either file
     boot(true);
     settings_set_u8(SETTING_VOLUME_ATT_DB, 11);
-    ASSERT_EQ(0, settings_flush());     // B
-    long hb = file_hash(g_tmp);
+    ASSERT_EQ(0, settings_flush());     // B (newer)
+    settings_set_u8(SETTING_VOLUME_ATT_DB, 12);
+    ASSERT_EQ(0, settings_flush());     // A (newest now); B holds 11
+    long ha2 = file_hash(g_bin), hb2 = file_hash(g_tmp);
     settings_init(&k_lock);
     settings_attach_storage(true);
-    settings_test_ioerr_next_reread();
-    ASSERT_EQ(SETTINGS_LOAD_RECOVERED, settings_load());
+    settings_test_ioerr_next_reread();  // A wins, fails its re-read; B (11) is used
+    ASSERT_EQ(SETTINGS_LOAD_IO_ERROR, settings_load());
     uint8_t v = 0;
     ASSERT_TRUE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
-    ASSERT_EQ(10, v);
-    ASSERT_EQ(hb, file_hash(g_tmp));
+    ASSERT_EQ(11, v);                   // the device works with the older state
+    settings_get_status(&st);
+    ASSERT_FALSE(st.persistent);
+    settings_set_u8(SETTING_VOLUME_ATT_DB, 50);
+    ASSERT_FALSE(settings_dirty());
+    ASSERT_TRUE(settings_flush() != 0);
+    ASSERT_EQ(ha2, file_hash(g_bin));   // both files byte-identical
+    ASSERT_EQ(hb2, file_hash(g_tmp));
+    ASSERT_TRUE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
+    ASSERT_EQ(50, v);                   // RAM still works
 }
 
 TEST(test_newer_version_file_is_kept) {
