@@ -1,6 +1,6 @@
 # ADR-0017: Music library index
 
-Status: **proposed** (design note, 4 Nov 2026; decisions D1–D6 below are open)
+Status: **accepted** (design note 4 Nov 2026; decisions D1–D6 taken 4 Nov 2026, see Decisions)
 
 ## Context
 
@@ -29,7 +29,7 @@ little-endian, with fixed-size records, and each one starts with `magic, version
 | --- | --- | --- |
 | `manifest.bin` | 1 | generation, the card fingerprint (D3), counts, CRC of each file, letter-jump tables. **Written last.** A build without a valid manifest doesn't exist |
 | `dirs.bin` + `names.str` | 8 B | directory table (parent, name offset), so a path costs a dir id plus a file name rather than the full string |
-| `tracks.bin` | 32 B | dir id, name offset, title offset, artist / album / genre ids, track, disc, year, duration (s), format/rate/bits code, file size, mtime |
+| `tracks.bin` | 32 B | dir id, name offset, title offset, artist / album / genre ids, track, disc, year, duration (s), format/rate/bits code, playable code (0 = playable, else the reason: D6), file size, mtime |
 | `strings.str` | var | deduplicated UTF-8 string pool (titles, artist, album and genre names) |
 | `artists.bin`, `albums.bin`, `genres.bin` | 16 B | sorted: name offset, an 8-byte folded sort-key prefix, first child, child count |
 | `by_album.u32`, `by_title.u32`, `genre_artists.u32` | 4 B | track or artist ids in display order: album = (disc, track, title); Songs = title |
@@ -96,16 +96,33 @@ permutation over [0, count) instead: a 4-round Feistel network on the next power
 range (cycle-walking). That's O(1) RAM, reproducible from a seed saved with resume, and visits every song exactly once.
 The `feat/shuffle-repeat` index-array shuffle stays for folder queues of up to 128 tracks.
 
-## Decisions needed
+## Decisions
 
-| # | Question | Options | Recommendation |
+Taken 4 Nov 2026.
+
+| # | Question | Decision | Rejected |
 | --- | --- | --- | --- |
-| D1 | Who builds the index | (a) the device only; (b) the device, plus an optional PC tool (Python) that writes the same format while the card is in the PC | **(a) now**, (b) later if first scans of large libraries are too slow. The device is the source of truth either way, and still validates the manifest |
-| D2 | When the scanner runs | (a) only when nothing is playing, with a progress screen ("Updating library… 1,234 / 5,000"), cancelled by Play, resumed later; (b) in the background during playback (needs its own ~32 KB of RAM and competes for the card) | **(a)**. It needs no RAM and can't put playback at risk; (b) becomes realistic once PSRAM is fitted |
-| D3 | How changes are noticed at boot | (a) full walk every boot (always correct, tens of seconds at 100k); (b) fingerprint: volume serial number plus free-cluster count (changes on almost any write), and walk only if it differs; (c) manual "Update library" only | **(b) plus a manual Settings > Update library** that forces a walk. A false "unchanged" needs an exactly zero-size-change write, which a card in a PC almost never produces |
-| D4 | Artists list | (a) album artists, with compilations under their own menu (iPod); (b) every track artist | **(a)** |
-| D5 | Missing album tag | (a) folder name; (b) "Unknown Album" | **(a)**: libraries organised by folder still browse sensibly |
-| D6 | Files the device can't play (AAC, more than 2 channels, 32-bit ALAC, bad headers) | (a) leave them out of the library, show them in Files, and give a count with reasons in Settings > About; (b) list them greyed out | **(a)** |
+| D1 | Who builds the index | **The device only.** The device is the source of truth and validates the manifest. A PC tool writing the same format stays possible later if first scans of large libraries prove too slow | A device plus PC tool now (two implementations of tags, collation and "playable" that would drift) |
+| D2 | When the scanner runs | **Only when nothing is playing**, with a progress screen ("Updating library… 1,234 / 5,000"), cancelled by Play and resumed later. It borrows the codec arena, so it needs no RAM of its own and cannot cause underruns. Revisit once PSRAM is fitted | In the background during playback (~32 KB more RAM, competes with the stream pump for the card) |
+| D3 | How changes are noticed at boot | **Fingerprint** (volume serial number plus free-cluster count; walk only if it differs) **plus a manual Settings > Update library** that forces a walk. A miss needs a write that changes no cluster count (for example an in-place retag inside the tag padding) | A full walk every boot (tens of seconds at 100k); manual only |
+| D4 | Artists list | **Album artists**, falling back to the track artist; compilations (`TCMP` / `cpil`, or album artist "Various Artists") under their own **Compilations** menu, as on the iPod | Every track artist |
+| D5 | Missing album tag | **The folder name** as the album, so libraries organised by folder still browse sensibly | "Unknown Album" |
+| D6 | Files the device can't play (AAC, more than 2 channels, 32-bit ALAC, bad headers) | **Listed, greyed out.** See the D6 notes below | Leaving them out, with a count in About |
+
+### D6 notes
+
+* The scanner indexes every audio file it recognises by extension or header and stores a **playable code** in the track
+  record (0 = playable; otherwise codec unsupported, too many channels, unsupported bit depth, damaged header). Their
+  tags are parsed as normal, so they sort, group and count like any other track.
+* Rows for them are drawn greyed out. Select shows the reason ("Can't play: AAC") instead of opening the track.
+* Queues skip them: auto-advance and Next / Previous move to the next playable record in the order table, and Shuffle
+  Songs steps the Feistel permutation on past them, just as it already cycle-walks past ids out of range (one 32 B record
+  read per skipped id, through the page cache). Every skip loop is bounded by the queue length, so a queue with no playable
+  record stops with "Nothing playable here".
+* Counts (Artists > *n* songs, About) show playable and total ("1,204 songs, 37 can't play").
+* The manifest records a **decoder-set version** (bumped by firmware that adds a codec or lifts a limit). On a mismatch the
+  next idle scan re-checks only the records with a non-zero playable code, so new codec support un-greys tracks without a
+  full rebuild.
 
 ## Consequences
 

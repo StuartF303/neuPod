@@ -20,6 +20,6 @@ Format: [Michael Nygard](https://cognitect.com/blog/2011/11/15/documenting-archi
 | [0014](0014-ota-ab-partitions.md) | OTA with bootrom A/B partitions and TBYB | Accepted |
 | [0015](0015-clock-plan.md) | Clock plan | Accepted |
 | [0016](0016-gapless-playback-and-play-queue.md) | Gapless playback and the play queue | Accepted |
-| [0017](0017-music-library-index.md) | Music library index | Proposed |
+| [0017](0017-music-library-index.md) | Music library index | Accepted |
 
 Every feature ADR carries a **RAM budget** line in its Consequences (from 3 Nov 2026).
