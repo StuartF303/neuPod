@@ -260,15 +260,27 @@ static void resume_boot(void) {
 // never starve the audio ring, so it is NOT done while audio plays: changes wait for pause, stop, the end of the track or an idle
 // moment, and are then written at once (the 1.5 s debounce still applies). The cost: a volume change made during a long track is
 // lost if the power fails before the next pause/stop. While paused the ring is full and nothing is consuming it, so the write cannot hurt.
-// One exception, for the resume position (resume.h): the periodic update while playing is written when the data ring is full to within one
-// chunk (so the card has the ring's worth of audio, about 85 ms of 32-bit stereo and more for compressed files, to ride out the write).
-// Not yet benched on a slow card; RESUME_WRITE_WHILE_PLAYING 0 restores the strict rule.
-#define RESUME_WRITE_WHILE_PLAYING 1
+// Optional exception, OFF by default: write a pending save (the resume position) while playing. The write runs on this task, which also
+// refills the audio data ring, so the refill stalls for the whole write (about 8-14 sector writes; an SD card can take 100-250 ms for one).
+// Only with RESUME_WRITE_WHILE_PLAYING 1, and then only when the data ring plus the PCM ring hold RESUME_MIN_BUFFERED_MS of audio, judged
+// pessimistically (resume_buffered_ms: 32-bit stereo for the data ring, the PCM ring's low-water mark). Every such write is timed; one that
+// takes longer than RESUME_SLOW_WRITE_MS switches the exception off for the rest of the boot.
+#define RESUME_WRITE_WHILE_PLAYING 0
+#define RESUME_SLOW_WRITE_MS 50u
+static bool g_wwp_off;       /* a write while playing was slow: not again this boot */
+static bool g_wwp_attempt;   /* the last quiet verdict relied on the exception */
+
 static bool settings_quiet_now(void) {
     player_info_t pi;
     player_get(&pi);
-    if (RESUME_WRITE_WHILE_PLAYING && pi.state == PLAYER_PLAYING && audio_data_space() < TRACK_FEED_CHUNK) {
-        return true;
+    g_wwp_attempt = false;
+    if (RESUME_WRITE_WHILE_PLAYING && !g_wwp_off && pi.state == PLAYER_PLAYING && pi.rate != 0) {
+        audio_stats_t st;
+        if (audio_stats_get(&st) &&
+            resume_write_while_playing_ok(resume_buffered_ms(pi.rate, AUDIO_DATA_RING_BYTES - audio_data_space(), 8u, st.ring_min_frames))) {
+            g_wwp_attempt = true;
+            return true;
+        }
     }
     return pi.state != PLAYER_PLAYING && pi.state != PLAYER_OPENING && pi.state != PLAYER_VERIFYING;
 }
@@ -284,7 +296,16 @@ static void settings_poll(void) {
         settings_service_poll(true); // keeps the service's bookkeeping current; nothing to write
         return;
     }
-    settings_service_poll(settings_quiet_now());
+    bool quiet = settings_quiet_now();
+    settings_status_t before, after;
+    settings_get_status(&before);
+    uint32_t t0 = os_tick_ms();
+    settings_service_poll(quiet);
+    settings_get_status(&after);
+    if (g_wwp_attempt && after.saves != before.saves && os_tick_ms() - t0 > RESUME_SLOW_WRITE_MS) {
+        g_wwp_off = true;
+        printf("settings: a save during playback took %u ms, no more saves during playback this boot\n", (unsigned)(os_tick_ms() - t0));
+    }
 }
 
 // Called by the art decoder many times per picture. Keeps the audio ring topped up, gives the other tasks a millisecond after

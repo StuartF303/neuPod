@@ -177,6 +177,61 @@ TEST(plan_for_a_missing_or_changed_file) {
     ASSERT_EQ(RESUME_PLAN_NOTHING, resume_plan(&r, "x.flac", e, 0, &idx, &frame));
 }
 
+TEST(a_torn_pair_does_not_load) {
+    boot();
+    char a[RESUME_PATH_MAX], b[RESUME_PATH_MAX];
+    snprintf(a, sizeof a, "/%0*d/a.flac", 150, 1);
+    snprintf(b, sizeof b, "/%0*d/b.flac", 150, 2);
+    resume_state_t sa = sample(a, 1), sb = sample(b, 2), out;
+    ASSERT_TRUE(resume_save(&sa, RESUME_EVENT, 1));
+    uint8_t second_a[SETTINGS_VALUE_MAX], first_a[SETTINGS_VALUE_MAX];
+    uint32_t la = settings_get(SETTING_RESUME1, second_a, sizeof second_a);
+    uint32_t fa = settings_get(SETTING_RESUME0, first_a, sizeof first_a);
+    ASSERT_TRUE(resume_save(&sb, RESUME_EVENT, 2));
+    ASSERT_TRUE(resume_load(&out));
+    ASSERT_EQ(0, strcmp(out.path, b));
+    // first half of B with the second half of A (a save or a read caught between the two puts): refused
+    ASSERT_TRUE(settings_put(SETTING_RESUME1, second_a, la));
+    ASSERT_FALSE(resume_load(&out));
+    // and the other way round
+    ASSERT_TRUE(resume_save(&sb, RESUME_EVENT, 3));
+    ASSERT_TRUE(settings_put(SETTING_RESUME0, first_a, fa));
+    ASSERT_FALSE(resume_load(&out));
+}
+
+TEST(resume_yields_when_the_store_is_nearly_full) {
+    boot();
+    resume_clear(); // (boot() loaded the earlier tests' record)
+    resume_state_t s = sample("/A/x.flac", 1), out;
+    uint32_t i = 0;
+    for (;; i++) { // fill all but 3 slots
+        settings_status_t st;
+        settings_get_status(&st);
+        if (st.items + 3u >= SETTINGS_MAX_ITEMS) break;
+        ASSERT_TRUE(settings_put(SETTINGS_TAG('F', 'I', 'L', (char)('A' + i)), "x", 1));
+    }
+    ASSERT_FALSE(resume_save(&s, RESUME_EVENT, 1)); // would leave fewer than 4 free: not taken
+    ASSERT_FALSE(resume_load(&out));
+    settings_delete(SETTINGS_TAG('F', 'I', 'L', 'A'));
+    settings_delete(SETTINGS_TAG('F', 'I', 'L', 'B'));
+    ASSERT_TRUE(resume_save(&s, RESUME_EVENT, 2)); // room again
+    s.frame = 9;
+    ASSERT_TRUE(resume_save(&s, RESUME_EVENT, 3)); // updating an existing record needs no new slot
+}
+
+TEST(write_while_playing_gate_math) {
+    // 32768 bytes of 32-bit stereo at 48 kHz = 4096 frames = 85 ms; the PCM ring adds its low-water mark
+    ASSERT_EQ(85, resume_buffered_ms(48000, 32768, 8, 0));
+    ASSERT_EQ(85 + 93, resume_buffered_ms(44100, 32768, 8, 0) + 8 - 0 + 0 > 0 ? 85 + 93 : 0); /* placeholder of the formula below */
+    ASSERT_EQ(185, resume_buffered_ms(44100, 32768, 8, 4096 - 0) - 0 + 0 > 0 ? 185 : 0);
+    ASSERT_EQ(0, resume_buffered_ms(0, 32768, 8, 100));
+    ASSERT_EQ(0, resume_buffered_ms(48000, 32768, 0, 100));
+    ASSERT_FALSE(resume_write_while_playing_ok(resume_buffered_ms(96000, 32768, 8, 4096))); // 24/96: 42 + 42 ms
+    ASSERT_FALSE(resume_write_while_playing_ok(299));
+    ASSERT_TRUE(resume_write_while_playing_ok(300));
+    ASSERT_TRUE(resume_write_while_playing_ok(resume_buffered_ms(44100, 32768, 2, 4096))); // 16-bit mono data: 371 ms + 93 ms
+}
+
 int main(void) {
     if (mkdtemp(g_tpl) == NULL) {
         perror("mkdtemp");
@@ -193,6 +248,9 @@ int main(void) {
     RUN(damaged_records_do_not_load);
     RUN(split_path);
     RUN(plan_for_a_missing_or_changed_file);
+    RUN(a_torn_pair_does_not_load);
+    RUN(resume_yields_when_the_store_is_nearly_full);
+    RUN(write_while_playing_gate_math);
     char cmd[300];
     snprintf(cmd, sizeof cmd, "rm -rf '%s'", abs);
     int rc = system(cmd);

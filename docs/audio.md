@@ -238,11 +238,13 @@ persists across a reboot. 44.1 → 48 kHz in `10-matrix/`: `(auto)` with a re-cl
 
 The player (core 0) remembers the folder track that was playing and where (`app/runtime/resume.c`, two settings items `NPr0`/`NPr1`: track path,
 queue index, file size, position in PCM frames, playing or paused). It is stored when the user pauses or resumes, when a track starts (also a gapless
-one), on Stop (the place is kept), and every 30 s while playing (`RESUME_PERIOD_MS`; an unchanged position does not even dirty the store). The end of
+one), on Stop (the place is kept), and every 30 s while playing (`RESUME_PERIOD_MS`, marked in RAM only; an unchanged position does not even dirty the store). The end of
 the album clears it. These calls only change the RAM image; the SD write is the settings store's own save on the storage task (write lock opened only
-inside that save, nothing on core 1). The strict rule "no SD writes while audio plays" has one exception: a pending save is written during playback
-when the audio data ring is full to within one chunk (`RESUME_WRITE_WHILE_PLAYING` in `storage_service.c`; **not yet benched on a slow card**, set it to 0 to
-write only on pause, stop and idle). There is no orderly-shutdown hook in the firmware yet (no power-off path), so a power cut loses at most the last 30 s;
+inside that save, nothing on core 1). The rule "no SD writes while audio plays" stands: **periodic saves are marked every 30 s but only reach the card at pause,
+stop, track end of a non-gapless join or idle**, because the write runs on the storage task that also refills the audio data ring, so a card that stalls
+for 100-250 ms for one write would underrun a high-rate stream (at 24-bit/96 kHz the rings hold only about 85-130 ms). An opt-in exception exists
+(`RESUME_WRITE_WHILE_PLAYING 1` in `storage_service.c`, default 0, unbenched): it writes during playback only when the data ring plus the PCM ring hold at least
+300 ms of audio (judged pessimistically as 32-bit stereo, so it rarely opens), times each such write, and turns itself off for the boot if one takes over 50 ms. There is no orderly-shutdown hook in the firmware yet (no power-off path), so a power cut loses at most the last 30 s;
 pausing before switching off stores the exact place.
 
 At boot, right after the settings load, the storage task lists the saved folder (only if the UI has not listed anything yet: the listing buffer is

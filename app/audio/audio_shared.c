@@ -2,7 +2,7 @@
 #include "audio_shared.h"
 
 #define CMD_SLOTS 16u
-#define DATA_BYTES 32768u // 85 ms of 32-bit stereo at 48 kHz: rides out an SD hiccup
+#define DATA_BYTES AUDIO_DATA_RING_BYTES
 #define EVT_SLOTS 32u
 
 static audio_cmd_t g_cmd_store[CMD_SLOTS];

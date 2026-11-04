@@ -7,9 +7,20 @@
 #include "play_queue.h"
 #include "settings_store.h"
 
-#define HDR_BYTES 13u
+#define HDR_BYTES 14u /* ver, flags, index(2), frame(4), size(4), path length, path check */
 #define VER 1u
 #define FIRST_PART (SETTINGS_VALUE_MAX - HDR_BYTES) /* path bytes that fit the header item */
+#define SECOND_PART (SETTINGS_VALUE_MAX - 1u)       /* second item: check byte + the rest of the path */
+#define SLOTS_KEPT_FREE 4u                          /* resume never takes the store's last free slots (Wi-Fi, Bluetooth need them) */
+
+/* Both halves carry a check of the whole path: two separate puts can be seen (or saved) half way, and a mixed pair must not load. */
+static uint8_t path_check(const char *p, size_t n) {
+    uint8_t c = (uint8_t)(n * 31u + 7u);
+    for (size_t i = 0; i < n; i++) {
+        c = (uint8_t)((c << 1 | c >> 7) ^ (uint8_t)p[i]);
+    }
+    return c;
+}
 
 static uint32_t g_last_ms;
 static bool g_have_last;
@@ -46,11 +57,22 @@ bool resume_save(const resume_state_t *s, resume_why_t why, uint32_t now_ms) {
     put32(h + 4, s->frame);
     put32(h + 8, s->size);
     h[12] = (uint8_t)n;
+    h[13] = path_check(s->path, n);
     uint32_t first = n < FIRST_PART ? (uint32_t)n : FIRST_PART;
     memcpy(h + HDR_BYTES, s->path, first);
+    // Yield to Wi-Fi / Bluetooth: take new slots only while at least SLOTS_KEPT_FREE would stay free.
+    uint32_t need = (settings_get(SETTING_RESUME0, NULL, 0) == 0) + (n > FIRST_PART && settings_get(SETTING_RESUME1, NULL, 0) == 0);
+    settings_status_t st;
+    settings_get_status(&st);
+    if (need != 0 && st.items + need + SLOTS_KEPT_FREE > SETTINGS_MAX_ITEMS) {
+        return false;
+    }
     bool ok = settings_put(SETTING_RESUME0, h, HDR_BYTES + first);
     if (n > FIRST_PART) {
-        ok = settings_put(SETTING_RESUME1, s->path + FIRST_PART, (uint32_t)(n - FIRST_PART)) && ok;
+        uint8_t h2[SETTINGS_VALUE_MAX];
+        h2[0] = h[13];
+        memcpy(h2 + 1, s->path + FIRST_PART, n - FIRST_PART);
+        ok = settings_put(SETTING_RESUME1, h2, (uint32_t)(n - FIRST_PART) + 1u) && ok;
     } else {
         settings_delete(SETTING_RESUME1);
     }
@@ -77,13 +99,15 @@ bool resume_load(resume_state_t *out) {
     memset(out, 0, sizeof *out);
     memcpy(out->path, h + HDR_BYTES, first);
     if (n > FIRST_PART) {
-        uint32_t l2 = settings_get(SETTING_RESUME1, out->path + FIRST_PART, sizeof out->path - FIRST_PART - 1u);
-        if (l2 != n - FIRST_PART) {
+        uint8_t h2[SETTINGS_VALUE_MAX];
+        uint32_t l2 = settings_get(SETTING_RESUME1, h2, sizeof h2);
+        if (l2 != n - FIRST_PART + 1u || h2[0] != h[13]) {
             return false;
         }
+        memcpy(out->path + FIRST_PART, h2 + 1, n - FIRST_PART);
     }
     out->path[n] = '\0';
-    if (out->path[0] != '/' || strlen(out->path) != n) {
+    if (out->path[0] != '/' || strlen(out->path) != n || path_check(out->path, n) != h[13]) {
         return false;
     }
     out->playing = (h[1] & 1u) != 0;
@@ -141,3 +165,13 @@ resume_plan_t resume_plan(const resume_state_t *r, const char *name, const file_
     *frame = 0;
     return RESUME_PLAN_GONE;
 }
+
+uint32_t resume_buffered_ms(uint32_t rate, uint32_t data_bytes, uint32_t bytes_per_frame, uint32_t pcm_frames) {
+    if (rate == 0 || bytes_per_frame == 0) {
+        return 0;
+    }
+    uint64_t frames = (uint64_t)data_bytes / bytes_per_frame + pcm_frames;
+    return (uint32_t)(frames * 1000u / rate);
+}
+
+bool resume_write_while_playing_ok(uint32_t buffered_ms) { return buffered_ms >= RESUME_MIN_BUFFERED_MS; }

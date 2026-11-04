@@ -42,7 +42,7 @@ extern "C" {
 #define SETTINGS_FILE_B SETTINGS_DIR "/settings.b"
 #define SETTINGS_FILE_OLD SETTINGS_DIR "/settings.old" /**< a file written by a NEWER firmware, kept aside instead of being wiped */
 
-#define SETTINGS_MAX_ITEMS 32u /**< distinct tags kept (settings, Wi-Fi networks, link keys, BT device records) */
+#define SETTINGS_MAX_ITEMS 48u /**< distinct tags kept (settings, Wi-Fi networks, link keys, BT device records): worst case about 38 */
 #define SETTINGS_VALUE_MAX 96u /**< bytes per stored value; a sealed secret holds up to 96 - 29 = 67 bytes of plaintext (Wi-Fi passwords are at most 63) */
 #define SETTINGS_VERSION 1u
 

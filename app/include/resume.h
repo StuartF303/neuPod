@@ -24,7 +24,7 @@ extern "C" {
 #endif
 
 #define RESUME_PATH_MAX 256u         /**< buffer size for a path (same as PLAYER_PATH_MAX / NFS_PATH_MAX) */
-#define RESUME_PATH_MAX_STORED 179u  /**< longest path that fits the two items */
+#define RESUME_PATH_MAX_STORED 177u  /**< longest path that fits the two items */
 #define RESUME_PERIOD_MS 30000u      /**< periodic update while playing */
 
 typedef struct {
@@ -50,6 +50,11 @@ void resume_clear(void);
 bool resume_load(resume_state_t *out);
 /** Split @p path at its last '/': folder into @p dir ("/" for the root) and the file name returned through @p name. False if it does not fit. */
 bool resume_split(const char *path, char *dir, size_t dir_n, const char **name);
+
+#define RESUME_MIN_BUFFERED_MS 300u /**< audio that must be buffered before a save may run during playback (when enabled at all) */
+/** Milliseconds of audio held by the data ring (@p data_bytes, assumed @p bytes_per_frame each when decoded: pass 8 = 32-bit stereo when unsure) plus @p pcm_frames. */
+uint32_t resume_buffered_ms(uint32_t rate, uint32_t data_bytes, uint32_t bytes_per_frame, uint32_t pcm_frames);
+bool resume_write_while_playing_ok(uint32_t buffered_ms);
 
 typedef enum {
     RESUME_PLAN_EXACT,   /**< the saved file is there, same size: resume at the saved frame */
