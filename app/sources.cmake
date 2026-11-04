@@ -93,6 +93,7 @@ set(NEUPOD_RUNTIME_SOURCES
   ${NEUPOD_APP_DIR}/runtime/resume.c
   ${NEUPOD_APP_DIR}/runtime/settings_service.c
   ${NEUPOD_APP_DIR}/runtime/bt_service.c
+  ${NEUPOD_APP_DIR}/runtime/bt_saved.c
   ${NEUPOD_APP_DIR}/runtime/wifi_service.c
   ${NEUPOD_APP_DIR}/storage/nfs_path.c   # portable half of the nfs API (the backend is in the HAL libs)
   ${NEUPOD_APP_DIR}/audio/audio_ctl.c

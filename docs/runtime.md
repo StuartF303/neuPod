@@ -90,7 +90,7 @@ below the UI so the splash keeps animating while they run.
 | I2C bus | one mutex (`rt_i2c_mutex`) around every battery / haptic transaction |
 | UI to haptic task | 2-deep byte queue, sent without waiting (`rt_haptic_click`) |
 | UI to player | `player.h`: a mutex-guarded state (what plays, volume) plus commands to the audio core; the storage task reports file start and errors; end of file and stream faults are read back from the audio core's counters and statistics |
-| radio worker to UI | `hal_bt_event_fn` callback turned into a 16-deep queue of `hal_bt_event_t` by `bt_service.c` (state, device found/named, scan done); non-blocking send, dropped if the UI lags |
+| radio worker to UI | `hal_bt_event_fn` callback turned into a 16-deep queue of `hal_bt_event_t` by `bt_service.c` (state, device found/named, scan done); non-blocking send, dropped if the UI lags. Link events (pairing, connection state) are not queued: the callback hands them to `bt_saved_on_event` (RAM-only settings write) and screens read `hal_bt_link_state()` |
 | anyone to settings store | `settings_store.h`: RAM image behind a mutex; only the storage task reads or writes the card file |
 | UI to storage task | request queue (list a directory, free space, settings load); results come back on a result queue and the UI polls it. The entries live in one static buffer that the UI reads only after the result for its latest request arrived. Why a task: an SD directory scan is hundreds of sector reads and the UI task must never stall |
 

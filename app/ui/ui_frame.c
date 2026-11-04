@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "battery_store.h"
+#include "bt_service.h"
 #include "capabilities.h"
 #include "hal_display.h"
 #include "hal_radio.h"
@@ -300,6 +301,7 @@ void ui_frame_tick(uint32_t now_ms) {
     kick_haptics();
     update_wifi();
     update_battery();
+    bt_service_tick(); /* the radio simulator on the host; stale pairing keys; cheap */
     ui_screen_t *top = ui_stack_top(&g_stack);
     if (top != NULL && top->on_tick != NULL) {
         top->on_tick(top);

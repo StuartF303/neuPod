@@ -49,6 +49,13 @@ add_test(NAME resume COMMAND test_resume)
 set_tests_properties(resume PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_source_files_properties(test_resume.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
+# The remembered Bluetooth headset over the real settings store and the host Bluetooth simulator.
+add_executable(test_bt_saved test_bt_saved.c ${CMAKE_SOURCE_DIR}/app/runtime/bt_saved.c)
+target_link_libraries(test_bt_saved neupod_settings hal_host)
+add_test(NAME bt_saved COMMAND test_bt_saved)
+set_tests_properties(bt_saved PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_source_files_properties(test_bt_saved.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
 set_source_files_properties(test_nfs.c test_clickwheel.c test_fatfs.c test_gfx.c test_storage_decode.c
   PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
@@ -133,6 +140,17 @@ add_test(NAME wifi_tour
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_wifi)
 set_tests_properties(wifi_tour PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_wifi;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  TIMEOUT 120)
+
+# Bluetooth pairing tour (stage 2a): pair, remembered-headset rows and pane, Disconnect, Forget, a refused pairing; snapshots bt-pairing,
+# bt-paired, bt-saved, settings-bt-saved, bt-disconnected, bt-forget-asks, bt-forgotten, bt-failed. The run fails if the script does not
+# reach its last snapshot (the tour expects its 13 files).
+add_test(NAME bt_tour
+  COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --tour-bt --snapshots ${CMAKE_BINARY_DIR}/snapshots_bt)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_bt)
+set_tests_properties(bt_tour PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_bt;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   TIMEOUT 120)
 

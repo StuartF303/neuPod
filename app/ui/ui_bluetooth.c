@@ -1,16 +1,20 @@
 // SPDX-License-Identifier: MPL-2.0
 /*
- * Settings > Bluetooth (docs/ui.md, docs/bluetooth.md): the radio's status, the local address and a "Scan for devices" row
- * that opens the Devices screen. That screen starts a scan when it opens and lists the devices as they are found (audio
- * devices marked with a speaker symbol, signal strength on the right). Stage 1: discovery only, selecting a device says
- * pairing is not available yet.
+ * Settings > Bluetooth (docs/ui.md, docs/bluetooth.md): the radio's status, the local address, a "Scan for devices" row
+ * that opens the Devices screen and, once a headset is remembered (bt_saved.h), three rows for it: its name with the link state,
+ * Connect / Disconnect / Cancel, and Forget (asks twice). The Devices screen starts a scan when it opens and lists the devices
+ * as they are found (audio devices marked with a speaker symbol, signal strength on the right); Select on an audio device
+ * stops the scan, starts the Pair action (bt_service_pair) and shows a busy indicator on that row until the link is CONNECTED
+ * (the device is then remembered) or FAILED (the row says why).
  *
- * Data flow: bt_service.c queues the radio's events (state, device found / named, scan done); the Devices screen polls the
- * queue on every UI pass and keeps its own table. It starts and stops a scan, both non-blocking; leaving the screen stops it.
+ * Data flow: bt_service.c queues the radio's scan events (state, device found / named, scan done); the Devices screen polls the
+ * queue on every UI pass and keeps its own table. Link changes are not queued: the screens read hal_bt_link_state() on their
+ * tick. Starting and stopping a scan or a link are non-blocking; leaving the Devices screen stops the scan and cancels a Pair.
  */
 #include <stdio.h>
 #include <string.h>
 
+#include "bt_saved.h"
 #include "bt_service.h"
 #include "capabilities.h"
 #include "hal_radio.h"
@@ -19,6 +23,7 @@
 
 #define BT_UI_MAX 12u        /* devices shown (the radio keeps the same number) */
 #define MSG_MS 3000u         /* how long a transient message replaces the status */
+#define FORGET_ARM_MS 4000u  /* Forget asks for a second Select within this time */
 
 static void fmt_addr(const uint8_t a[6], char *out, size_t n) {
     snprintf(out, n, "%02X:%02X:%02X:%02X:%02X:%02X", a[0], a[1], a[2], a[3], a[4], a[5]);
@@ -38,12 +43,64 @@ static const char *state_text(hal_bt_state_t s) {
     return "?";
 }
 
-/* ---- Settings > Bluetooth: status, address, the way into the scan ---- */
+static bool link_busy(hal_bt_link_state_t l) { return l == HAL_BT_LINK_PAIRING || l == HAL_BT_LINK_CONNECTING; }
+
+static const char *fail_text(hal_bt_fail_t r) {
+    switch (r) {
+    case HAL_BT_FAIL_NOT_FOUND: return "not found";
+    case HAL_BT_FAIL_AUTH: return "pairing refused";
+    case HAL_BT_FAIL_NO_SINK: return "not a headset";
+    case HAL_BT_FAIL_TIMEOUT: return "timed out";
+    case HAL_BT_FAIL_LINK_LOST: return "link lost";
+    case HAL_BT_FAIL_INTERNAL: return "radio busy";
+    case HAL_BT_FAIL_NONE: break;
+    }
+    return "error";
+}
+
+/* Does the link (its current attempt, or the last one that failed) concern the device with address @p addr? */
+static bool link_is_for(const uint8_t addr[6]) {
+    hal_bt_device_t peer;
+    return hal_bt_link_state() != HAL_BT_LINK_DISCONNECTED && hal_bt_link_device(&peer) && memcmp(peer.addr, addr, 6) == 0;
+}
+
+/* The link state as one phrase for that device; "Not connected" when the link is about something else. */
+static void link_text_for(const uint8_t addr[6], char *out, size_t n) {
+    hal_bt_link_state_t l = hal_bt_link_state();
+    if (!link_is_for(addr)) {
+        snprintf(out, n, "Not connected");
+        return;
+    }
+    switch (l) {
+    case HAL_BT_LINK_PAIRING: snprintf(out, n, "Pairing..."); break;
+    case HAL_BT_LINK_CONNECTING: snprintf(out, n, "Connecting..."); break;
+    case HAL_BT_LINK_CONNECTED: snprintf(out, n, "Connected"); break;
+    case HAL_BT_LINK_FAILED: snprintf(out, n, "Failed: %s", fail_text(hal_bt_link_reason())); break;
+    case HAL_BT_LINK_DISCONNECTED: snprintf(out, n, "Not connected"); break;
+    }
+}
+
+void ui_bt_headset_text(char *out, size_t n) {
+    hal_bt_device_t sv;
+    if (!bt_saved_get(&sv)) {
+        out[0] = '\0';
+        return;
+    }
+    char st[32];
+    link_text_for(sv.addr, st, sizeof st);
+    snprintf(out, n, "%s\n%s", sv.name[0] != '\0' ? sv.name : "Headset", st);
+}
+
+/* ---- Settings > Bluetooth: status, address, the way into the scan, the remembered headset ---- */
 
 #define ROW_STATUS 0
 #define ROW_ADDRESS 1
 #define ROW_SCAN 2
-#define ROWS_BT 3
+#define ROWS_BT 3          /* ... plus these three while a headset is remembered: */
+#define ROW_DEVICE 3       /* its name, with the link state on the right */
+#define ROW_ACTION 4       /* Connect / Disconnect / Cancel */
+#define ROW_FORGET 5
+#define ROWS_BT_SAVED 6
 
 typedef struct {
     ui_screen_t base;
@@ -51,7 +108,17 @@ typedef struct {
     hal_bt_state_t shown;    /* what the rows were last built for */
     bool have_local;
     uint8_t local[6];
+    bool have_saved;
+    hal_bt_device_t saved;
+    uint32_t sig;            /* link state / reason / which device, as last shown */
+    uint32_t forget_until;   /* ms; 0 = not asked yet */
 } bt_screen_t;
+
+static uint32_t link_sig(const uint8_t saved_addr[6]) {
+    return (uint32_t)hal_bt_link_state() | (uint32_t)hal_bt_link_reason() << 4 | (link_is_for(saved_addr) ? 1u << 8 : 0u);
+}
+
+static int32_t bt_rows(const bt_screen_t *b) { return b->have_saved ? ROWS_BT_SAVED : ROWS_BT; }
 
 static void bt_get(void *ctx, int32_t idx, ui_list_item_t *o) {
     const bt_screen_t *b = ctx;
@@ -70,19 +137,64 @@ static void bt_get(void *ctx, int32_t idx, ui_list_item_t *o) {
             snprintf(o->detail, sizeof o->detail, "-");
         }
         return;
-    default:
+    case ROW_SCAN:
         snprintf(o->label, sizeof o->label, "Scan for devices");
         o->dim = !radio_usable(st);
         o->chevron = true;
+        return;
+    case ROW_DEVICE: {
+        hal_bt_link_state_t l = hal_bt_link_state();
+        snprintf(o->label, sizeof o->label, "%s%s", b->saved.audio_sink ? LV_SYMBOL_AUDIO " " : "",
+                 b->saved.name[0] != '\0' ? b->saved.name : "Headset");
+        link_text_for(b->saved.addr, o->detail, sizeof o->detail);
+        o->busy = link_busy(l) && link_is_for(b->saved.addr);
+        return;
+    }
+    case ROW_ACTION: {
+        hal_bt_link_state_t l = hal_bt_link_state();
+        bool mine = link_is_for(b->saved.addr) && l != HAL_BT_LINK_FAILED;
+        if (mine && link_busy(l)) {
+            snprintf(o->label, sizeof o->label, "Cancel");
+        } else if (mine && l == HAL_BT_LINK_CONNECTED) {
+            snprintf(o->label, sizeof o->label, "Disconnect");
+        } else {
+            snprintf(o->label, sizeof o->label, "Connect");
+            o->dim = st != HAL_BT_ON || link_busy(l) || l == HAL_BT_LINK_CONNECTED; /* not while scanning, or while another link exists */
+        }
+        return;
+    }
+    default:
+        snprintf(o->label, sizeof o->label, "Forget");
+        if (b->forget_until != 0) {
+            snprintf(o->detail, sizeof o->detail, "Select again");
+        }
         return;
     }
 }
 
 static void bt_tick(ui_screen_t *s) {
     bt_screen_t *b = (bt_screen_t *)s;
-    bt_service_tick();
     hal_bt_state_t st = hal_bt_state();
     bool changed = false;
+    bool rows_changed = false;
+    hal_bt_device_t sv;
+    bool have = bt_saved_get(&sv);
+    if (have != b->have_saved || (have && memcmp(&sv, &b->saved, sizeof sv) != 0)) {
+        b->have_saved = have;
+        if (have) {
+            b->saved = sv;
+        }
+        rows_changed = true;
+    }
+    uint32_t sig = link_sig(b->saved.addr);
+    if (sig != b->sig) {
+        b->sig = sig;
+        changed = true;
+    }
+    if (b->forget_until != 0 && (int32_t)(os_tick_ms() - b->forget_until) >= 0) {
+        b->forget_until = 0;
+        changed = true;
+    }
     if (st != b->shown) {
         b->shown = st;
         changed = true;
@@ -91,7 +203,13 @@ static void bt_tick(ui_screen_t *s) {
         b->have_local = true;
         changed = true;
     }
-    if (changed) {
+    if (rows_changed) {
+        b->forget_until = 0;
+        ui_list_set_count(b->list, bt_rows(b));
+        if (ui_list_selected(b->list) >= bt_rows(b)) {
+            ui_list_set_selected(b->list, bt_rows(b) - 1);
+        }
+    } else if (changed) {
         ui_list_refresh(b->list);
     }
 }
@@ -103,8 +221,30 @@ static bool bt_button(ui_screen_t *s, uint8_t btn) {
     if (btn != HAL_BTN_SELECT) {
         return false;
     }
-    if (ui_list_selected(b->list) == ROW_SCAN && radio_usable(hal_bt_state())) {
+    int32_t sel = ui_list_selected(b->list);
+    if (sel != ROW_FORGET && b->forget_until != 0) {
+        b->forget_until = 0; /* moved on: the confirmation lapses */
+        ui_list_refresh(b->list);
+    }
+    if (sel == ROW_SCAN && radio_usable(hal_bt_state())) {
         ui_frame_push(ui_screen_bt_devices_create());
+    } else if (sel == ROW_ACTION && b->have_saved) {
+        hal_bt_link_state_t l = hal_bt_link_state();
+        bool mine = link_is_for(b->saved.addr) && l != HAL_BT_LINK_FAILED;
+        if (mine && (link_busy(l) || l == HAL_BT_LINK_CONNECTED)) {
+            bt_service_disconnect();
+        } else if (hal_bt_state() == HAL_BT_ON && !link_busy(l) && l != HAL_BT_LINK_CONNECTED) {
+            (void)bt_service_connect();
+        }
+        ui_list_refresh(b->list);
+    } else if (sel == ROW_FORGET && b->have_saved) {
+        if (b->forget_until == 0) {
+            b->forget_until = os_tick_ms() + FORGET_ARM_MS;
+        } else {
+            b->forget_until = 0;
+            bt_service_forget();
+        }
+        ui_list_refresh(b->list);
     }
     return true;
 }
@@ -126,7 +266,9 @@ ui_screen_t *ui_screen_bluetooth_create(void) {
     b->base.resume = bt_resume;
     b->shown = hal_bt_state();
     b->have_local = radio_usable(b->shown) && hal_bt_local_address(b->local);
-    b->list = ui_list_create(b->base.root, UI_W, &(ui_list_model_t){.count = ROWS_BT, .ctx = b, .get = bt_get});
+    b->have_saved = bt_saved_get(&b->saved);
+    b->sig = link_sig(b->saved.addr);
+    b->list = ui_list_create(b->base.root, UI_W, &(ui_list_model_t){.count = bt_rows(b), .ctx = b, .get = bt_get});
     return &b->base;
 }
 
@@ -145,7 +287,16 @@ typedef struct {
     bool gave_up;            /* the radio is not usable: stop trying to start */
     hal_bt_state_t shown;
     uint32_t msg_until;      /* ms; 0 = none */
+    char msg[24];            /* the transient message while msg_until is set */
+    bool pair_wanted;        /* Select on a device while the scan was still running: pair as soon as it has stopped */
+    hal_bt_device_t pair_dev;
+    uint32_t sig;            /* link state / reason, as last shown */
 } dev_screen_t;
+
+static void dev_say(dev_screen_t *d, const char *text) {
+    snprintf(d->msg, sizeof d->msg, "%s", text);
+    d->msg_until = os_tick_ms() + MSG_MS;
+}
 
 static int32_t dev_rows(const dev_screen_t *d) { return DROWS_FIXED + (d->ndev > 0 ? d->ndev : 1); }
 
@@ -153,9 +304,14 @@ static void dev_get(void *ctx, int32_t idx, ui_list_item_t *o) {
     const dev_screen_t *d = ctx;
     hal_bt_state_t st = hal_bt_state();
     if (idx == DROW_SCAN) {
+        hal_bt_link_state_t l = hal_bt_link_state();
+        if (link_busy(l)) {
+            snprintf(o->label, sizeof o->label, "%s", l == HAL_BT_LINK_PAIRING ? "Cancel pairing" : "Cancel");
+            return;
+        }
         snprintf(o->label, sizeof o->label, "%s", st == HAL_BT_SCANNING ? "Stop scanning" : "Scan again");
         if (d->msg_until != 0) {
-            snprintf(o->detail, sizeof o->detail, "Pairing: not yet");
+            snprintf(o->detail, sizeof o->detail, "%s", d->msg);
         } else if (st == HAL_BT_SCANNING) {
             snprintf(o->detail, sizeof o->detail, "%d found", (int)d->ndev);
         }
@@ -183,7 +339,13 @@ static void dev_get(void *ctx, int32_t idx, ui_list_item_t *o) {
     fmt_addr(v->addr, addr, sizeof addr);
     snprintf(o->label, sizeof o->label, "%s%s", v->audio_sink ? LV_SYMBOL_AUDIO " " : "", v->name[0] != '\0' ? v->name : addr);
     o->dim = !v->audio_sink; /* not a headset or speaker: shown, but not what we are looking for */
-    if (v->rssi != HAL_BT_RSSI_UNKNOWN) {
+    if (link_is_for(v->addr)) {
+        /* the device the link is about: its state replaces the signal meter (busy dots while it works) */
+        hal_bt_link_state_t l = hal_bt_link_state();
+        link_text_for(v->addr, o->detail, sizeof o->detail);
+        o->busy = link_busy(l);
+        o->dim = false;
+    } else if (v->rssi != HAL_BT_RSSI_UNKNOWN) {
         o->bars = (uint8_t)ui_signal_bars(v->rssi, &k_ui_signal_bt, 0, 0);
     }
 }
@@ -246,9 +408,20 @@ static void dev_scan_begin(dev_screen_t *d) {
 
 static void dev_tick(ui_screen_t *s) {
     dev_screen_t *d = (dev_screen_t *)s;
-    bt_service_tick();
     hal_bt_state_t st = hal_bt_state();
     bool changed = false;
+    if (d->pair_wanted && st == HAL_BT_ON) { /* the scan Select asked to stop has stopped: pair now */
+        d->pair_wanted = false;
+        if (bt_service_pair(&d->pair_dev) != HAL_OK) {
+            dev_say(d, "Cannot pair now");
+        }
+        changed = true;
+    }
+    uint32_t sig = (uint32_t)hal_bt_link_state() | (uint32_t)hal_bt_link_reason() << 4;
+    if (sig != d->sig) {
+        d->sig = sig;
+        changed = true;
+    }
     if (!d->started && !d->gave_up) {
         if (st == HAL_BT_ON) {
             dev_scan_begin(d);
@@ -301,15 +474,35 @@ static bool dev_button(ui_screen_t *s, uint8_t btn) {
     }
     int32_t sel = ui_list_selected(d->list);
     hal_bt_state_t st = hal_bt_state();
+    hal_bt_link_state_t l = hal_bt_link_state();
     if (sel == DROW_SCAN) {
-        if (st == HAL_BT_SCANNING) {
+        if (link_busy(l)) {
+            bt_service_disconnect(); /* "Cancel pairing" */
+        } else if (st == HAL_BT_SCANNING) {
+            d->pair_wanted = false;
             hal_bt_inquiry_stop();
         } else if (st == HAL_BT_ON) {
             dev_scan_begin(d);
             ui_list_set_count(d->list, dev_rows(d));
         }
-    } else if (d->ndev > 0) {
-        d->msg_until = os_tick_ms() + MSG_MS; /* selecting a device does nothing yet */
+        ui_list_refresh(d->list);
+    } else if (d->ndev > 0 && sel - DROWS_FIXED < d->ndev) {
+        const hal_bt_device_t *v = &d->dev[sel - DROWS_FIXED];
+        if (!v->audio_sink) {
+            dev_say(d, "Not an audio device");
+        } else if (link_busy(l)) {
+            dev_say(d, "Busy");
+        } else if (l == HAL_BT_LINK_CONNECTED) {
+            dev_say(d, "Disconnect first"); /* one headset at a time */
+        } else if (st == HAL_BT_SCANNING) {
+            d->pair_dev = *v; /* a scan and a link set-up cannot overlap: stop the scan, pair when it has */
+            d->pair_wanted = true;
+            hal_bt_inquiry_stop();
+        } else if (st == HAL_BT_ON) {
+            if (bt_service_pair(v) != HAL_OK) {
+                dev_say(d, "Cannot pair now");
+            }
+        }
         ui_list_refresh(d->list);
     }
     return true;
@@ -318,6 +511,9 @@ static bool dev_button(ui_screen_t *s, uint8_t btn) {
 static void dev_destroy(ui_screen_t *s) {
     if (hal_bt_state() == HAL_BT_SCANNING) {
         hal_bt_inquiry_stop(); /* do not leave the radio scanning for nobody */
+    }
+    if (hal_bt_link_state() == HAL_BT_LINK_PAIRING) {
+        bt_service_disconnect(); /* nor discoverable and pairing for nobody */
     }
     ui_list_destroy(((dev_screen_t *)s)->list);
 }

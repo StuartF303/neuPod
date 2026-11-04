@@ -27,6 +27,9 @@ void hal_host_set_chip_id(const uint8_t id[8]);
 /** Tests: the simulated access point goes away (link loss): hal_wifi_state() then reports HAL_WIFI_IDLE. */
 void hal_host_wifi_drop_link(void);
 
+/** Tests: the simulated Bluetooth headset goes away: a CONNECTED link turns FAILED with HAL_BT_FAIL_LINK_LOST. */
+void hal_host_bt_drop_link(void);
+
 /** Write the panel's current contents to @p path as a binary PPM (P6). False on I/O error. */
 bool hal_host_display_dump_ppm(const char *path);
 

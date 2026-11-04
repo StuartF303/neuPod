@@ -23,6 +23,15 @@
                             wall-clock (2 ms floor), and a UI frame at priority 2 outlasts that */
 #define RT_PRIO_CHECK 1u /* boot self-check tasks: transient, below the UI so the splash animates */
 
+/* Wi-Fi and Bluetooth together. 1 = allowed (Stuart's decision for stage 2, PROVISIONAL: to be confirmed or reversed by the bench test on the
+ * shared CYW43439, docs/bluetooth.md "Wi-Fi alongside Bluetooth"); Wi-Fi then follows its own "Wi-Fi while playing" setting.
+ * This is the single policy point: a future interlock (pause Wi-Fi while a Bluetooth link is up or pairing, or refuse a Pair while
+ * Wi-Fi is joining) hangs off this macro, at bt_service_pair() / bt_service_connect() on the Bluetooth side and wifi_service on the
+ * Wi-Fi side. No interlock exists: with 1 nothing is checked anywhere. */
+#ifndef NEUPOD_BT_WIFI_COEX_ALLOW
+#define NEUPOD_BT_WIFI_COEX_ALLOW 1
+#endif
+
 /* Every RTOS task runs on core 0 (the only core the kernel owns). */
 #define RT_CORE_OTHER OS_CORE_0
 

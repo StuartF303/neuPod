@@ -7,7 +7,7 @@ Accepted (design response, 3 Nov 2026).
 ## Context
 
 Bluetooth is the primary output path. Stage 2 (A2DP source, AVRCP target) needs an SBC encoder and a
-core 1 → core 0 PCM ring ([Bluetooth](../bluetooth.md#stage-2-design-notes-not-built)). The Pico 2 W has
+core 1 → core 0 PCM ring ([Bluetooth](../bluetooth.md#stage-2-design-notes-2a-built-2b-and-2c-not-built)). The Pico 2 W has
 520 KB SRAM and no PSRAM; after Wi-Fi W1 the static RAM is about 477 KB, so there is no free 32 KB.
 
 ## Decision
@@ -51,3 +51,20 @@ bullet of the decision above ("Artwork decode ... PSRAM-only"); the original tex
 - **Consequences:** `art_service` must not be called from core 1 or hold the storage task for more than a few milliseconds without
   yielding; the 64 x 64 thumbnail is shown 1.75 times larger by LVGL (soft edges, accepted); the thumbnail buffer is a candidate
   to be reclaimed (or to become a bigger PSRAM-backed image) when the PSRAM board arrives.
+
+## Amendment 4 Nov 2026: the Bluetooth PCM ring reuses the I2S ring storage (funding change)
+
+This amends **Funded by** and the **RAM budget** line of the decision above; the original text is left as it was. It was agreed with the owner while
+planning stage 2a ([Bluetooth](../bluetooth.md)).
+
+- **What changed.** The two funding sources no longer exist. The codec arena was sized down in #17 and that saving was spent there, and free static
+  SRAM on the testbed is now about **15.5 KB** (15,320 B measured on `main` at 4944981, `__HeapLimit - __end__`; 14,960 B with stage 2a). A new 32 KB budget cannot be found.
+- **New decision.** The **core 1 to core 0 Bluetooth PCM ring uses the same 32 KB storage as the I2S PCM ring** (`NEUPOD_PCM_RING_FRAMES` = 4096 frames, 32 KB). The two outputs are exclusive (audio goes to
+  I2S **or** to Bluetooth, never both), so one set of bytes serves whichever sink is active; the ring is emptied and its counters reset when the output path changes. This adds **no new static RAM**.
+  The 32 KB of the decision above is therefore **withdrawn** as new memory. What stage 2b still needs of its own (the SBC encoder state and its working buffers) is small, is **measured when 2b is built**, and comes out of the free SRAM.
+- **Decimation on core 1.** Hi-res audio is decimated on core 1 by a 2:1 or 4:1 half-band FIR to 44.1 / 48 kHz, with 24 to 16 bit TPDF dither, before the samples enter the ring (SBC carries 16 bit at up to 48 kHz).
+  Core 1 keeps the ADR-0011 rules (no RTOS, no heap, closure-checked); the FIR's state and coefficients are measured with the closure check in 2b.
+- **Wi-Fi during A2DP is allowed.** Provisional, like the Wi-Fi-with-Bluetooth rule of stage 2a: one policy macro (`NEUPOD_BT_WIFI_COEX_ALLOW`), no interlock; bench testing may reverse it.
+- **Consequences.** (1) The LVGL render-buffer release while the display sleeps is **no longer needed** for funding; it stays a possible later saving, not a dependency of stage 2. (2) Changing the output path at run time needs a quiet ring
+  (stopped or paused, as the audio engine already does to change sink or rate). (3) A Bluetooth link that drops mid-track must pause or switch the output back to I2S before the ring is handed over.
+  (4) The closure check has to cover the new ring state when 2b adds it.
