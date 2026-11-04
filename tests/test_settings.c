@@ -277,6 +277,107 @@ TEST(test_first_ever_save_power_loss) {
     }
 }
 
+TEST(test_winner_failing_its_reread_falls_back_to_the_other_file) {
+    rm_state();
+    boot(true);
+    settings_set_u8(SETTING_VOLUME_ATT_DB, 10);
+    ASSERT_EQ(0, settings_flush()); // file A, seq 1
+    settings_set_u8(SETTING_VOLUME_ATT_DB, 20);
+    ASSERT_EQ(0, settings_flush()); // file B, seq 2: the winner
+    ASSERT_EQ(SETTINGS_LOAD_OK, boot(true));
+    uint8_t v = 0;
+    ASSERT_TRUE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
+    ASSERT_EQ(20, v);
+    settings_test_fail_next_reread(); // the winner validated, but cannot be read the second time (card fault)
+    ASSERT_EQ(SETTINGS_LOAD_IO_ERROR, boot(true));
+    ASSERT_TRUE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
+    ASSERT_EQ(10, v);                  // the older complete state, not a half-filled store
+    settings_status_t st;
+    settings_get_status(&st);
+    ASSERT_EQ(1, st.seq);
+    ASSERT_EQ(1, st.items);
+    // with no other good file the failure is a card fault (I/O error, RAM-only), not "no settings"
+    unlink(g_tmp);
+    settings_test_fail_next_reread();
+    ASSERT_EQ(SETTINGS_LOAD_IO_ERROR, boot(true));
+    ASSERT_FALSE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
+    // a version-1 file (the layout before the item limit was raised) is still read
+    rm_state();
+    boot(true);
+    settings_set_u8(SETTING_VOLUME_ATT_DB, 33);
+    ASSERT_EQ(0, settings_flush());
+    int fd = open(g_bin, O_RDWR);
+    unsigned char img[512];
+    long n = pread(fd, img, sizeof img, 0);
+    img[4] = 1;
+    uint32_t c = 0xFFFFFFFFu;
+    for (long i = 0; i < n - 4; i++) {
+        c ^= img[i];
+        for (int k = 0; k < 8; k++) c = (c >> 1) ^ (0xEDB88320u & (0u - (c & 1u)));
+    }
+    c = ~c;
+    for (int i = 0; i < 4; i++) img[n - 4 + i] = (unsigned char)(c >> (8 * i));
+    ASSERT_EQ(n, pwrite(fd, img, (size_t)n, 0));
+    close(fd);
+    ASSERT_EQ(SETTINGS_LOAD_OK, boot(true));
+    ASSERT_TRUE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
+    ASSERT_EQ(33, v);
+}
+
+static long file_hash(const char *path) {
+    FILE *f = fopen(path, "rb");
+    long h = 17;
+    int c;
+    while (f != NULL && (c = fgetc(f)) != EOF) h = h * 31 + c;
+    if (f != NULL) fclose(f);
+    return f == NULL ? -1 : h;
+}
+
+TEST(test_io_error_on_the_winner_reread_goes_ram_only_and_never_writes) {
+    rm_state();
+    boot(true);
+    settings_set_u8(SETTING_VOLUME_ATT_DB, 10);
+    ASSERT_EQ(0, settings_flush()); // file A
+    unlink(g_tmp);                  // only one good copy on the card
+    long ha = file_hash(g_bin);
+    ASSERT_TRUE(ha != -1);
+    settings_init(&k_lock);
+    settings_attach_storage(true);
+    settings_test_ioerr_next_reread(); // it validated, then the card failed on the second read
+    ASSERT_EQ(SETTINGS_LOAD_IO_ERROR, settings_load());
+    settings_status_t st;
+    settings_get_status(&st);
+    ASSERT_FALSE(st.persistent);       // RAM-only
+    settings_set_u8(SETTING_VOLUME_ATT_DB, 99);
+    ASSERT_FALSE(settings_dirty());
+    ASSERT_TRUE(settings_flush() != 0); // refuses to write
+    ASSERT_EQ(ha, file_hash(g_bin));    // the only good copy is byte-identical
+    ASSERT_EQ(-1, file_size(g_tmp));    // and no second file appeared
+    // both files good, the newer one cannot be re-read: the older contents are used, but nothing may be written to either file
+    boot(true);
+    settings_set_u8(SETTING_VOLUME_ATT_DB, 11);
+    ASSERT_EQ(0, settings_flush());     // B (newer)
+    settings_set_u8(SETTING_VOLUME_ATT_DB, 12);
+    ASSERT_EQ(0, settings_flush());     // A (newest now); B holds 11
+    long ha2 = file_hash(g_bin), hb2 = file_hash(g_tmp);
+    settings_init(&k_lock);
+    settings_attach_storage(true);
+    settings_test_ioerr_next_reread();  // A wins, fails its re-read; B (11) is used
+    ASSERT_EQ(SETTINGS_LOAD_IO_ERROR, settings_load());
+    uint8_t v = 0;
+    ASSERT_TRUE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
+    ASSERT_EQ(11, v);                   // the device works with the older state
+    settings_get_status(&st);
+    ASSERT_FALSE(st.persistent);
+    settings_set_u8(SETTING_VOLUME_ATT_DB, 50);
+    ASSERT_FALSE(settings_dirty());
+    ASSERT_TRUE(settings_flush() != 0);
+    ASSERT_EQ(ha2, file_hash(g_bin));   // both files byte-identical
+    ASSERT_EQ(hb2, file_hash(g_tmp));
+    ASSERT_TRUE(settings_get_u8(SETTING_VOLUME_ATT_DB, &v));
+    ASSERT_EQ(50, v);                   // RAM still works
+}
+
 TEST(test_newer_version_file_is_kept) {
     rm_state();
     boot(true);
@@ -513,6 +614,8 @@ int main(void) {
     RUN(test_power_loss_at_every_step);
     RUN(test_alternation_never_touches_the_active_file);
     RUN(test_first_ever_save_power_loss);
+    RUN(test_winner_failing_its_reread_falls_back_to_the_other_file);
+    RUN(test_io_error_on_the_winner_reread_goes_ram_only_and_never_writes);
     RUN(test_newer_version_file_is_kept);
     RUN(test_write_scope_confines_writes);
     RUN(test_store_only_touches_its_directory);

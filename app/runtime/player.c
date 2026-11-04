@@ -6,6 +6,7 @@
 #include "os.h"
 #include "play_queue.h"
 #include "player.h"
+#include "resume.h"
 #include "settings_store.h"
 #include "storage_service.h"
 
@@ -34,6 +35,18 @@ static uint16_t g_skips;     // consecutive unplayable tracks skipped under repe
 static uint32_t g_gen;
 static uint32_t g_offer_gen;
 static bool g_offered;
+// Resume (resume.h). g_base_frames: the stream started at this frame of the track, so the position is g_base_frames + the audio core's count.
+static uint32_t g_base_frames;
+static uint64_t g_file_size;
+static bool g_resume_pause;       // the track being opened is a boot resume: leave it paused as soon as it is open
+static resume_state_t g_rs;       // a record waiting to be stored once the player lock is released (settings_put takes its own lock)
+static bool g_rs_has, g_rs_clear;
+static resume_why_t g_rs_why;
+#if RESUME_WRITE_WHILE_PLAYING
+static uint32_t g_rs_periodic_ms; // time of the last periodic attempt
+#endif
+static output_path_t g_out_path;  // see player.h
+static bool g_hp_at_boot;
 
 // What to do once the lock is released (storage requests may wait on the storage queue; never hold the player lock for that).
 typedef struct {
@@ -43,6 +56,7 @@ typedef struct {
     bool rollback;     // the queue position was advanced for this start: put it back if the start cannot even be requested
     uint16_t prev_pos;
     uint32_t gen;
+    uint32_t frame;    // start position (resume), 0 = the beginning
     char path[PLAYER_PATH_MAX];
 } action_t;
 
@@ -120,9 +134,65 @@ static void reset_info(player_src_t src, player_state_t state, const char *name)
     g_error_stopped = false;
     g_next_valid = false;
     g_offered = false;
+    g_base_frames = 0;
+    g_file_size = 0;
+    g_resume_pause = false;
     g_gen++;
     snprintf(g_info.name, sizeof g_info.name, "%s", name);
     g_started_ms = os_tick_ms();
+}
+
+// ---- Resume bookkeeping: records are queued under the player lock and stored after it is released ----
+
+// Describe what plays now. Lock held. Needs the audio core's count for the position.
+static bool rs_snapshot(resume_state_t *r, bool have, const audio_stats_t *st) {
+    if (!have || g_info.src != PLAYER_SRC_FILE || g_q.count == 0 || (g_info.state != PLAYER_PLAYING && g_info.state != PLAYER_PAUSED) ||
+        !pq_path(&g_q, g_q.pos, r->path, sizeof r->path)) {
+        return false;
+    }
+    r->index = pq_entry(&g_q, g_q.pos); // the folder entry, not the slot: under shuffle the slot order is different at the next boot
+    r->size = g_file_size;
+    r->frame = g_base_frames + st->pcm_frames;
+    r->playing = g_info.state == PLAYER_PLAYING;
+    return true;
+}
+
+static void rs_queue(const resume_state_t *r, resume_why_t why) {
+    g_rs = *r;
+    g_rs_why = why;
+    g_rs_has = true;
+    g_rs_clear = false;
+}
+
+// A new track of the queue starts from its beginning. Lock held.
+static void rs_queue_track_start(void) {
+    resume_state_t r;
+    memset(&r, 0, sizeof r);
+    if (g_q.count != 0 && pq_path(&g_q, g_q.pos, r.path, sizeof r.path)) {
+        r.index = pq_entry(&g_q, g_q.pos);
+        r.size = g_file_size;
+        r.playing = true;
+        rs_queue(&r, RESUME_EVENT);
+    }
+}
+
+static void rs_queue_clear(void) {
+    g_rs_clear = true;
+    g_rs_has = false;
+}
+
+static void rs_flush(void) {
+    lock();
+    resume_state_t r = g_rs;
+    resume_why_t why = g_rs_why;
+    bool has = g_rs_has, clr = g_rs_clear;
+    g_rs_has = g_rs_clear = false;
+    unlock();
+    if (has) {
+        (void)resume_save(&r, why, os_tick_ms());
+    } else if (clr) {
+        resume_clear();
+    }
 }
 
 static void go_idle(action_t *a) {
@@ -158,15 +228,18 @@ static void begin_track(action_t *a, bool automatic, const char *why) {
     }
     a->start = true;
     a->gen = g_gen;
+    a->frame = 0;
+    rs_queue_track_start();
     printf("player: track %u/%u '%s' (%s)\n", (unsigned)(g_q.pos + 1u), (unsigned)g_q.count, pq_name(&g_q, g_q.pos), why);
 }
 
 static void run_action(const action_t *a) {
+    rs_flush();
     if (a->stop) {
         storage_stop_request();
         (void)audio_stop();
     }
-    if (a->start && !storage_play_request(a->path)) {
+    if (a->start && !(a->frame != 0 ? storage_play_request_at(a->path, a->frame) : storage_play_request(a->path))) {
         lock();
         if (a->rollback && g_gen == a->gen && g_q.count != 0) {
             if (a->snap) {
@@ -188,6 +261,8 @@ static void apply_file(const player_file_t *f) {
     g_info.estimated = f->estimated;
     g_info.codec = f->codec;
     snprintf(g_info.format, sizeof g_info.format, "%s", f->format);
+    g_base_frames = (uint32_t)f->start_frame;
+    g_file_size = f->file_size;
     g_started_ms = os_tick_ms();
 }
 
@@ -207,6 +282,7 @@ static void apply_next(void) {
     g_info.msg[0] = '\0';
     g_info.elapsed_s = 0;
     apply_file(&g_next_pf);
+    rs_queue_track_start();
     printf("player: track %u/%u '%s' (gapless%s)\n", (unsigned)(g_q.pos + 1u), (unsigned)g_q.count, g_info.name,
            mv == PQ_RESTART ? " repeat" : mv == PQ_WRAPPED ? " wrap" : "");
 }
@@ -240,6 +316,9 @@ static void service(action_t *a, bool have, const audio_stats_t *st) {
             begin_track(a, true, mv == PQ_RESTART ? "repeat" : mv == PQ_WRAPPED ? "wrap" : "auto");
         } else {
             printf("player: queue end\n");
+            if (g_q.count != 0) {
+                rs_queue_clear(); // the album finished: nothing to resume
+            }
             go_idle(a);
         }
     } else if (g_info.src != PLAYER_SRC_NONE && (g_info.state == PLAYER_PLAYING || g_info.state == PLAYER_PAUSED) &&
@@ -267,6 +346,16 @@ void player_service(void) {
     action_t a = {0};
     lock();
     service(&a, have, &st);
+#if RESUME_WRITE_WHILE_PLAYING
+    uint32_t now = os_tick_ms();
+    if (g_info.state == PLAYER_PLAYING && now - g_rs_periodic_ms >= RESUME_PERIOD_MS && resume_periodic_due(now)) {
+        g_rs_periodic_ms = now;
+        resume_state_t r;
+        if (rs_snapshot(&r, have, &st)) {
+            rs_queue(&r, RESUME_PERIODIC);
+        }
+    }
+#endif
     unlock();
     run_action(&a);
 }
@@ -280,7 +369,7 @@ void player_get(player_info_t *out) {
     g_info.vol_att_db = g_vol;
     if (have) {
         uint32_t frames = g_info.state == PLAYER_VERIFYING || g_info.state == PLAYER_VERIFIED ? st.decoded_frames : st.pcm_frames;
-        g_info.elapsed_s = g_info.rate != 0 && g_info.src == PLAYER_SRC_FILE ? frames / g_info.rate : 0;
+        g_info.elapsed_s = g_info.rate != 0 && g_info.src == PLAYER_SRC_FILE ? (g_base_frames + frames) / g_info.rate : 0;
         g_info.muted = st.muted != 0;
     }
     bool stop_feed = g_info.state == PLAYER_ERROR && g_info.src == PLAYER_SRC_FILE && !g_error_stopped;
@@ -347,6 +436,29 @@ void player_play_folder(const char *dir, const file_entry_t *entries, uint32_t c
     run_action(&a);
 }
 
+player_resume_t player_resume_folder(const char *dir, const file_entry_t *entries, uint32_t count, uint32_t index, uint32_t frame) {
+    action_t a = {0};
+    lock();
+    if (g_info.state != PLAYER_IDLE || g_info.src != PLAYER_SRC_NONE) {
+        unlock();
+        return PLAYER_RESUME_BUSY;
+    }
+    reseed();
+    pq_set_repeat(&g_q, player_repeat()); // the saved modes, as for a track chosen in Files
+    g_q.shuffle = (uint8_t)player_shuffle();
+    if (!pq_build(&g_q, dir, entries, count, index)) {
+        unlock();
+        return PLAYER_RESUME_INVALID;
+    }
+    begin_track(&a, false, "resume");
+    g_rs_has = false; // the saved position stays as it is until the user does something
+    g_resume_pause = true;
+    a.frame = frame;
+    unlock();
+    run_action(&a);
+    return PLAYER_RESUME_OK;
+}
+
 void player_next(void) {
     action_t a = {0};
     audio_stats_t st;
@@ -360,6 +472,7 @@ void player_next(void) {
             begin_track(&a, false, mv == PQ_WRAPPED ? "wrap" : "next");
         } else {
             printf("player: queue end\n");
+            rs_queue_clear();
             go_idle(&a); // Next on the last track: stop, Now Playing goes idle
         }
     }
@@ -374,7 +487,7 @@ void player_prev(void) {
     lock();
     service(&a, have, &st);
     if (g_info.src == PLAYER_SRC_FILE && g_q.count != 0 && g_info.state != PLAYER_VERIFYING && g_info.state != PLAYER_VERIFIED) {
-        uint32_t elapsed = have && g_info.rate != 0 ? st.pcm_frames / g_info.rate : g_info.elapsed_s;
+        uint32_t elapsed = have && g_info.rate != 0 ? (g_base_frames + st.pcm_frames) / g_info.rate : g_info.elapsed_s;
         a.prev_pos = g_q.pos;
         a.rollback = true;
         pq_move_t mv = pq_prev(&g_q, elapsed); // PQ_MOVED: the one before; PQ_RESTART: this one again from the start
@@ -438,13 +551,20 @@ void player_log_end(void) {
 }
 
 void player_pause_toggle(void) {
+    audio_stats_t st;
+    bool have = audio_stats_get(&st);
     lock();
-    if (g_info.state == PLAYER_PLAYING) {
-        g_info.state = PLAYER_PAUSED;
-        (void)audio_pause(true);
-    } else if (g_info.state == PLAYER_PAUSED) {
-        g_info.state = PLAYER_PLAYING;
-        (void)audio_pause(false);
+    if (g_info.state == PLAYER_PLAYING || g_info.state == PLAYER_PAUSED) {
+        bool pause = g_info.state == PLAYER_PLAYING;
+        g_info.state = pause ? PLAYER_PAUSED : PLAYER_PLAYING;
+        (void)audio_pause(pause);
+        resume_state_t r;
+        if (rs_snapshot(&r, have, &st)) {
+            rs_queue(&r, RESUME_EVENT);
+        }
+        unlock();
+        rs_flush();
+        return;
     } else if (g_info.src == PLAYER_SRC_FILE && (g_info.state == PLAYER_ENDED || g_info.state == PLAYER_VERIFIED) && g_path[0] != '\0') {
         // A completed MD5 check: play the same file again from the start, with sound.
         char path[PLAYER_PATH_MAX], name[sizeof g_info.name];
@@ -459,7 +579,14 @@ void player_pause_toggle(void) {
 
 void player_stop(void) {
     action_t a = {0};
+    audio_stats_t st;
+    bool have = audio_stats_get(&st);
     lock();
+    resume_state_t r;
+    if (rs_snapshot(&r, have, &st)) {
+        r.playing = false; // Stop keeps the place: the next boot offers this track paused here
+        rs_queue(&r, RESUME_EVENT);
+    }
     go_idle(&a);
     unlock();
     run_action(&a);
@@ -477,15 +604,36 @@ uint32_t player_volume_step(int32_t steps) {
     unlock();
     (void)audio_set_volume(v);
     settings_set_u8(SETTING_VOLUME_ATT_DB, (uint8_t)v); // persisted by the storage task a moment later
+    settings_set_u8(SETTING_VOLUME_PATH, (uint8_t)g_out_path); // ... together with the path it was set for
     return v;
 }
 
+void player_set_output_path(output_path_t path) {
+    lock();
+    g_out_path = path;
+    unlock();
+}
+
+void player_set_headphones_at_boot(bool inserted) {
+    lock();
+    g_hp_at_boot = inserted;
+    unlock();
+}
+
+uint32_t player_volume_restore_att(uint32_t saved_att, output_path_t saved_path, output_path_t cur_path, bool headphones_at_boot) {
+    // Headphone safety (docs/bluetooth.md "Volume restore policy"): honour the saved level on the same known path; otherwise never louder than the default.
+    bool cap = saved_path == OUT_PATH_UNKNOWN || cur_path == OUT_PATH_UNKNOWN || saved_path != cur_path ||
+               (headphones_at_boot && saved_path == OUT_PATH_LINE);
+    return cap && saved_att < PLAYER_RESTORE_MIN_ATT_DB ? PLAYER_RESTORE_MIN_ATT_DB : saved_att;
+}
+
 void player_restore_volume(uint32_t att_db) {
-    // Headphone safety (docs/audio.md): a restored volume is never LOUDER than the power-on default, whatever was saved.
-    if (att_db < PLAYER_RESTORE_MIN_ATT_DB) {
-        att_db = PLAYER_RESTORE_MIN_ATT_DB;
+    uint8_t saved_path = OUT_PATH_UNKNOWN; // a volume saved before the path was recorded: unknown, so capped
+    if (!settings_get_u8(SETTING_VOLUME_PATH, &saved_path) || saved_path > OUT_PATH_BT) {
+        saved_path = OUT_PATH_UNKNOWN;
     }
     lock();
+    att_db = player_volume_restore_att(att_db, (output_path_t)saved_path, g_out_path, g_hp_at_boot);
     bool apply = !g_vol_touched;
     if (apply) {
         g_vol = audio_vol_clamp(att_db);
@@ -507,12 +655,29 @@ void player_file_started(const player_file_t *f) {
         // boundary) are not ours.
         g_changes_seen = audio_track_change_count();
         apply_file(f);
+        if (g_resume_pause && g_info.state == PLAYER_PLAYING) {
+            // Boot resume: nothing has been fed yet, so pausing now keeps the track silent until the user presses play.
+            g_resume_pause = false;
+            g_info.state = PLAYER_PAUSED;
+            (void)audio_pause(true);
+        }
     }
     unlock();
 }
 
 void player_file_failed(const char *msg) {
     lock();
+    if (g_resume_pause && g_info.src == PLAYER_SRC_FILE) {
+        // The boot resume could not start (file unreadable): drop it quietly instead of greeting the user with an error.
+        reset_info(PLAYER_SRC_NONE, PLAYER_IDLE, "");
+        pq_clear(&g_q);
+        g_auto = false;
+        rs_queue_clear();
+        unlock();
+        rs_flush();
+        printf("player: resume discarded (%s)\n", msg);
+        return;
+    }
     if (g_info.src == PLAYER_SRC_FILE) {
         g_info.state = PLAYER_ERROR;
         snprintf(g_info.msg, sizeof g_info.msg, "%s", msg);

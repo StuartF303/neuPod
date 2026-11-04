@@ -67,6 +67,8 @@ const file_entry_t *storage_list_entries(void);
  * through player_get() (player.h). A new request replaces the stream in progress.
  */
 bool storage_play_request(const char *path);
+/** As storage_play_request(), starting at PCM frame @p frame of the track (resume; see track_feed_seek() for how exact that is per codec). */
+bool storage_play_request_at(const char *path, uint32_t frame);
 /** Like storage_play_request for a .flac, but decode flat out without sound and compare the STREAMINFO MD5 (player_get shows the result). */
 bool storage_verify_request(const char *path);
 /** Stop feeding the current file stream (the caller stops the audio core itself). */

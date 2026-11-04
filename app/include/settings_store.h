@@ -42,9 +42,10 @@ extern "C" {
 #define SETTINGS_FILE_B SETTINGS_DIR "/settings.b"
 #define SETTINGS_FILE_OLD SETTINGS_DIR "/settings.old" /**< a file written by a NEWER firmware, kept aside instead of being wiped */
 
-#define SETTINGS_MAX_ITEMS 32u /**< distinct tags kept (settings, Wi-Fi networks, link keys, BT device records) */
+#define SETTINGS_MAX_ITEMS 48u /**< distinct tags kept (settings, Wi-Fi networks, link keys, BT device records): worst case about 38 */
 #define SETTINGS_VALUE_MAX 96u /**< bytes per stored value; a sealed secret holds up to 96 - 29 = 67 bytes of plaintext (Wi-Fi passwords are at most 63) */
-#define SETTINGS_VERSION 1u
+#define SETTINGS_VERSION 2u /**< written; 1 (same layout, at most 32 items) is still read. Firmware older than 2 sets a version-2 file aside instead of reading it */
+#define SETTINGS_VERSION_V1 1u
 
 /** Tags of the user settings, four ASCII characters like BTstack's own ('NPxx'; BTstack uses 'BTL?' / 'BTD?'). */
 #define SETTINGS_TAG(a, b, c, d) (((uint32_t)(a) << 24) | ((uint32_t)(b) << 16) | ((uint32_t)(c) << 8) | (uint32_t)(d))
@@ -52,6 +53,9 @@ extern "C" {
 #define SETTING_BACKLIGHT_PCT SETTINGS_TAG('N', 'P', 'b', 'l') /**< u8, 5..100 */
 #define SETTING_CLICK_FEEDBACK SETTINGS_TAG('N', 'P', 'c', 'k') /**< u8, click_mode_t: 0 off, 1 haptic (the old "on"), 2 piezo, 3 both */
 #define SETTING_GAPLESS SETTINGS_TAG('N', 'P', 'g', 'p')       /**< u8, 0 or 1; absent = on */
+#define SETTING_VOLUME_PATH SETTINGS_TAG('N', 'P', 'v', 'p')   /**< u8, output_path_t the volume was saved for (player.h); absent = unknown */
+#define SETTING_RESUME0 SETTINGS_TAG('N', 'P', 'r', '0')       /**< resume record header + start of the track path (resume.h) */
+#define SETTING_RESUME1 SETTINGS_TAG('N', 'P', 'r', '1')       /**< rest of the track path */
 #define SETTING_HAPTIC_ACTUATOR SETTINGS_TAG('N', 'P', 'h', 'a') /**< u8, 0 = ERM, 1 = LRA; absent = the build default */
 #define SETTING_HAPTIC_CAL SETTINGS_TAG('N', 'P', 'h', 'c')      /**< 11 bytes, haptic_logic.h: DRV2605L auto-calibration for one actuator */
 #define SETTING_SHUFFLE SETTINGS_TAG('N', 'P', 's', 'h')       /**< u8, pq_shuffle_t: 0 off, 1 songs; absent = off */
@@ -76,7 +80,7 @@ typedef enum {
     SETTINGS_LOAD_OK,         /**< a valid file was read */
     SETTINGS_LOAD_RECOVERED,  /**< ... and the other file was damaged (a save was cut short): the valid one was used */
     SETTINGS_LOAD_CORRUPT,    /**< files exist but fail magic/version/CRC: defaults, the next save replaces them */
-    SETTINGS_LOAD_IO_ERROR,   /**< could not read the card: defaults, RAM-only */
+    SETTINGS_LOAD_IO_ERROR,   /**< could not read the card (or a validated file on the second read): RAM-only for this boot, no save touches the card; defaults, or the older file's contents when the newer one failed its re-read */
 } settings_load_result_t;
 
 typedef struct {
@@ -155,6 +159,10 @@ const hal_bt_storage_t *settings_bt_storage(void); /* link keys and device recor
  * -1 = off. The aborted flush returns NFS_ERR_IO.
  */
 void settings_test_set_power_loss_step(int step);
+/** Unit tests only: make the next re-read of the winning file during settings_load() fail, to exercise the fall back to the other file. */
+void settings_test_fail_next_reread(void);
+/** Unit tests only: as above, but the re-read fails with an I/O error. */
+void settings_test_ioerr_next_reread(void);
 
 #ifdef __cplusplus
 }

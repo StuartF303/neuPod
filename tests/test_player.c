@@ -7,6 +7,7 @@
 
 #include "os.h"
 #include "player.h"
+#include "resume.h"
 #include "settings_store.h"
 #include "unit.h"
 
@@ -16,16 +17,21 @@ static bool g_play_ok = true;
 static int g_play_calls;
 static char g_last_path[300];
 static uint8_t g_gapless_setting = 1, g_shuffle_setting, g_repeat_setting;
+static uint8_t g_set_vol_path = 0xFF; // 0xFF = tag absent
+static uint8_t g_set_vol_att = 0xFF;
+static uint32_t g_audio_vol = 999, g_pcm_frames = 44100u * 10u;
+static int g_pause_calls;
+static bool g_paused;
 uint32_t audio_track_change_count(void) { return g_changes; }
 uint32_t audio_pcm_ended_count(void) { return g_ended; }
 bool audio_stats_get(audio_stats_t *o) {
     memset(o, 0, sizeof *o);
     o->source = AUDIO_SRC_PCM;
-    o->pcm_frames = 44100u * 10u;
+    o->pcm_frames = g_pcm_frames;
     return true;
 }
-bool audio_set_volume(uint32_t v) { (void)v; return true; }
-bool audio_pause(bool p) { (void)p; return true; }
+bool audio_set_volume(uint32_t v) { g_audio_vol = v; return true; }
+bool audio_pause(bool p) { g_pause_calls++; g_paused = p; return true; }
 bool audio_stop(void) { return true; }
 bool audio_tone(uint32_t m) { (void)m; return true; }
 bool storage_play_request(const char *path) {
@@ -33,11 +39,44 @@ bool storage_play_request(const char *path) {
     snprintf(g_last_path, sizeof g_last_path, "%s", path);
     return g_play_ok;
 }
+static uint32_t g_last_frame;
+bool storage_play_request_at(const char *path, uint32_t frame) {
+    g_last_frame = frame;
+    return storage_play_request(path);
+}
 bool storage_verify_request(const char *p) { (void)p; return true; }
 bool storage_stop_request(void) { return true; }
 static uint8_t *slot(uint32_t tag) { return tag == SETTING_SHUFFLE ? &g_shuffle_setting : tag == SETTING_REPEAT ? &g_repeat_setting : &g_gapless_setting; }
-bool settings_get_u8(uint32_t tag, uint8_t *out) { *out = *slot(tag); return true; }
-void settings_set_u8(uint32_t tag, uint8_t v) { *slot(tag) = v; }
+bool settings_get_u8(uint32_t tag, uint8_t *out) {
+    if (tag == SETTING_VOLUME_PATH) {
+        *out = g_set_vol_path;
+        return g_set_vol_path != 0xFF;
+    }
+    *out = *slot(tag);
+    return true;
+}
+void settings_set_u8(uint32_t tag, uint8_t v) {
+    if (tag == SETTING_VOLUME_PATH) {
+        g_set_vol_path = v;
+    } else if (tag == SETTING_VOLUME_ATT_DB) {
+        g_set_vol_att = v;
+    } else {
+        *slot(tag) = v;
+    }
+}
+// resume.c is tested on its own (test_resume.c); here only what the player hands to it
+static resume_state_t g_rs_last;
+static int g_rs_saves, g_rs_periodic, g_rs_clears;
+static bool g_rs_due = true;
+bool resume_periodic_due(uint32_t now) { (void)now; return g_rs_due; }
+bool resume_save(const resume_state_t *s, resume_why_t why, uint32_t now) {
+    (void)now;
+    g_rs_last = *s;
+    g_rs_saves++;
+    g_rs_periodic += why == RESUME_PERIODIC;
+    return true;
+}
+void resume_clear(void) { g_rs_clears++; }
 struct os_mutex { int x; };
 os_mutex_t *os_mutex_create(void) { return calloc(1, sizeof(struct os_mutex)); }
 bool os_mutex_lock(os_mutex_t *m, uint32_t t) { (void)m; (void)t; return true; }
@@ -129,6 +168,173 @@ TEST(setting_off_offers_nothing) {
     ASSERT_FALSE(player_next_track(path, sizeof path));
     g_gapless_setting = 1;
     ASSERT_TRUE(player_next_track(path, sizeof path));
+}
+
+TEST(volume_policy_cases) {
+    const uint32_t quiet = 40, loud = 10, dflt = PLAYER_RESTORE_MIN_ATT_DB;
+    // same known path: the saved level comes back, loud or quiet
+    ASSERT_EQ(loud, player_volume_restore_att(loud, OUT_PATH_WIRED, OUT_PATH_WIRED, false));
+    ASSERT_EQ(quiet, player_volume_restore_att(quiet, OUT_PATH_BT, OUT_PATH_BT, false));
+    ASSERT_EQ(loud, player_volume_restore_att(loud, OUT_PATH_LINE, OUT_PATH_LINE, false));
+    // a different path caps at -30 dB (every pair), but never makes a quiet level louder or moves it
+    ASSERT_EQ(dflt, player_volume_restore_att(loud, OUT_PATH_BT, OUT_PATH_WIRED, false));
+    ASSERT_EQ(dflt, player_volume_restore_att(loud, OUT_PATH_WIRED, OUT_PATH_BT, false));
+    ASSERT_EQ(dflt, player_volume_restore_att(loud, OUT_PATH_LINE, OUT_PATH_OPTICAL, false));
+    ASSERT_EQ(quiet, player_volume_restore_att(quiet, OUT_PATH_BT, OUT_PATH_WIRED, false));
+    ASSERT_EQ(dflt, player_volume_restore_att(dflt, OUT_PATH_BT, OUT_PATH_WIRED, false));
+    // headphones detected at boot: only a level saved for line-out is capped
+    ASSERT_EQ(dflt, player_volume_restore_att(loud, OUT_PATH_LINE, OUT_PATH_LINE, true));
+    ASSERT_EQ(loud, player_volume_restore_att(loud, OUT_PATH_WIRED, OUT_PATH_WIRED, true));
+    ASSERT_EQ(quiet, player_volume_restore_att(quiet, OUT_PATH_LINE, OUT_PATH_LINE, true));
+    // an unknown path on either side (nothing detects it yet, or a volume saved before paths were recorded) is capped
+    ASSERT_EQ(dflt, player_volume_restore_att(loud, OUT_PATH_UNKNOWN, OUT_PATH_WIRED, false));
+    ASSERT_EQ(dflt, player_volume_restore_att(loud, OUT_PATH_WIRED, OUT_PATH_UNKNOWN, false));
+    ASSERT_EQ(dflt, player_volume_restore_att(loud, OUT_PATH_UNKNOWN, OUT_PATH_UNKNOWN, false));
+}
+
+TEST(restore_reads_the_saved_path_and_the_step_writes_it) {
+    player_set_output_path(OUT_PATH_UNKNOWN);
+    g_set_vol_path = 0xFF;
+    player_restore_volume(10); // no path saved: capped
+    ASSERT_EQ(PLAYER_RESTORE_MIN_ATT_DB, g_audio_vol);
+    // a source reports the path; the volume the user sets is saved together with it
+    player_set_output_path(OUT_PATH_BT);
+    (void)player_volume_step(0);
+    ASSERT_EQ(OUT_PATH_BT, g_set_vol_path);
+}
+
+TEST(resume_saves_on_pause_track_change_stop_and_end) {
+    int saves = g_rs_saves;
+    start_album(1);                               // a new track: saved from its beginning
+    ASSERT_TRUE(g_rs_saves > saves);
+    ASSERT_EQ(0, strcmp(g_rs_last.path, "/Album/02.flac"));
+    ASSERT_EQ(1, g_rs_last.index);
+    ASSERT_EQ(0, g_rs_last.frame);
+    saves = g_rs_saves;
+    g_pcm_frames = 44100u * 25u;
+    player_pause_toggle();                        // pause: the position is stored
+    ASSERT_EQ(saves + 1, g_rs_saves);
+    ASSERT_EQ(44100u * 25u, g_rs_last.frame);
+    ASSERT_FALSE(g_rs_last.playing);
+    player_pause_toggle();
+    ASSERT_TRUE(g_rs_last.playing);
+    player_next();                                // track change
+    ASSERT_EQ(0, strcmp(g_rs_last.path, "/Album/03.flac"));
+    ASSERT_EQ(0, g_rs_last.frame);
+    player_file_t f = file("t");
+    player_file_started(&f);
+    g_pcm_frames = 44100u * 7u;
+    saves = g_rs_saves;
+    player_stop();                                // stop keeps the place
+    ASSERT_EQ(saves + 1, g_rs_saves);
+    ASSERT_EQ(44100u * 7u, g_rs_last.frame);
+    ASSERT_FALSE(g_rs_last.playing);
+    // the end of the album forgets it
+    start_album(3);
+    int clears = g_rs_clears;
+    player_next();
+    ASSERT_EQ(clears + 1, g_rs_clears);
+    g_pcm_frames = 44100u * 10u;
+}
+
+#if RESUME_WRITE_WHILE_PLAYING
+TEST(periodic_save_only_while_playing_and_only_when_due) {
+    start_album(0);
+    int periodic = g_rs_periodic;
+    g_rs_due = false;
+    for (int i = 0; i < 100; i++) player_service();
+    ASSERT_EQ(periodic, g_rs_periodic);
+    g_rs_due = true;
+    for (int i = 0; i < 40; i++) player_service(); // the fake clock runs 1 s per call: the player's own 30 s guard opens
+    ASSERT_TRUE(g_rs_periodic > periodic);
+    ASSERT_TRUE(g_rs_last.playing);
+    periodic = g_rs_periodic;
+    player_pause_toggle();
+    for (int i = 0; i < 60; i++) player_service(); // paused: no periodic record
+    ASSERT_EQ(periodic, g_rs_periodic);
+}
+
+#endif
+
+TEST(resume_folder_starts_paused_at_the_saved_frame_and_elapsed_includes_it) {
+    player_stop();
+    g_pause_calls = 0;
+    int saves = g_rs_saves;
+    ASSERT_EQ(PLAYER_RESUME_OK, player_resume_folder("/Album", g_dir, 4, 2, 44100u * 90u));
+    ASSERT_EQ(44100u * 90u, g_last_frame);
+    ASSERT_EQ(0, strcmp(g_last_path, "/Album/03.flac"));
+    ASSERT_EQ(saves, g_rs_saves);                 // opening the resumed track must not overwrite the saved position
+    ASSERT_EQ(3, pos());
+    player_file_t f = file("resumed");
+    f.start_frame = 44100u * 90u;
+    player_file_started(&f);
+    ASSERT_EQ(1, g_pause_calls);
+    ASSERT_TRUE(g_paused);
+    g_pcm_frames = 0;                             // the audio core counts from the start of the stream
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(PLAYER_PAUSED, i.state);
+    ASSERT_EQ(90, i.elapsed_s);
+    player_pause_toggle();                        // play: the position is saved from the resume point
+    ASSERT_EQ(44100u * 90u, g_rs_last.frame);
+    g_pcm_frames = 44100u * 5u;
+    player_get(&i);
+    ASSERT_EQ(95, i.elapsed_s);
+    g_pcm_frames = 44100u * 10u;
+    // refused when something already plays
+    ASSERT_EQ(PLAYER_RESUME_BUSY, player_resume_folder("/Album", g_dir, 4, 0, 0));
+}
+
+TEST(shuffled_player_saves_the_folder_entry_and_resumes_into_a_shuffled_queue) {
+    player_stop();
+    player_set_shuffle(PQ_SHUFFLE_SONGS);
+    start_album(2);                               // entry 2 chosen: slot 0 of the shuffled queue
+    player_next();                                // some other entry, whatever the shuffle picked
+    player_file_t f = file("t");
+    player_file_started(&f);
+    g_pcm_frames = 44100u * 3u;
+    player_pause_toggle();
+    char name[8];
+    snprintf(name, sizeof name, "%s", strrchr(g_rs_last.path, '/') + 1);
+    unsigned entry = (unsigned)(name[1] - '1');   // "0N.flac" -> N-1: the folder index of the file
+    ASSERT_EQ(entry, g_rs_last.index);            // the entry, not the slot
+    ASSERT_EQ(44100u * 3u, g_rs_last.frame);
+    player_stop();
+    // restore: the saved entry is the current track, in a queue that follows the saved shuffle mode
+    ASSERT_EQ(PLAYER_RESUME_OK, player_resume_folder("/Album", g_dir, 4, g_rs_last.index, g_rs_last.frame));
+    ASSERT_EQ(0, strcmp(g_last_path + strlen("/Album/"), name));
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(1, i.shuffle);
+    ASSERT_EQ(1, i.queue_pos);                    // slot 0 of the new shuffled round
+    ASSERT_EQ(4, i.queue_len);
+    player_file_started(&f);
+    ASSERT_TRUE(g_paused);
+    player_set_shuffle(PQ_SHUFFLE_OFF);
+    player_stop();
+}
+
+TEST(repeat_all_never_clears_the_record_at_the_album_end) {
+    player_stop();
+    player_set_repeat(PQ_REPEAT_ALL);
+    start_album(3);
+    int clears = g_rs_clears;
+    player_next();                                // wraps instead of ending
+    ASSERT_EQ(clears, g_rs_clears);
+    ASSERT_EQ(0, strcmp(g_rs_last.path, "/Album/01.flac"));
+    player_set_repeat(PQ_REPEAT_OFF);
+    player_stop();
+}
+
+TEST(a_resume_that_cannot_start_is_dropped_quietly) {
+    player_stop();
+    int clears = g_rs_clears;
+    ASSERT_EQ(PLAYER_RESUME_OK, player_resume_folder("/Album", g_dir, 4, 0, 1000));
+    player_file_failed("Cannot open file");
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(PLAYER_IDLE, i.state);
+    ASSERT_EQ(clears + 1, g_rs_clears);
 }
 
 static const char *cur_name(void) {
@@ -271,6 +477,16 @@ TEST(an_unplayable_last_track_wraps_under_repeat_all_and_an_all_broken_queue_end
 
 int main(void) {
     player_init();
+    RUN(volume_policy_cases);
+    RUN(restore_reads_the_saved_path_and_the_step_writes_it);
+    RUN(resume_saves_on_pause_track_change_stop_and_end);
+#if RESUME_WRITE_WHILE_PLAYING
+    RUN(periodic_save_only_while_playing_and_only_when_due);
+#endif
+    RUN(resume_folder_starts_paused_at_the_saved_frame_and_elapsed_includes_it);
+    RUN(shuffled_player_saves_the_folder_entry_and_resumes_into_a_shuffled_queue);
+    RUN(repeat_all_never_clears_the_record_at_the_album_end);
+    RUN(a_resume_that_cannot_start_is_dropped_quietly);
     RUN(late_announcement_after_a_skip_is_ignored_and_gapless_continues);
     RUN(handoff_counted_during_the_ramp_down_of_a_skip_does_not_advance_the_queue);
     RUN(failed_start_request_rolls_the_queue_position_back);

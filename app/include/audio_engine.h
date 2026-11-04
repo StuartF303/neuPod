@@ -23,6 +23,7 @@ extern "C" {
 #endif
 
 #define AUDIO_SAMPLE_RATE 44100u
+#define AUDIO_DATA_RING_BYTES 32768u /**< capacity of the compressed-data ring (85 ms of 32-bit stereo at 48 kHz): rides out an SD hiccup */
 
 typedef struct {
     uint32_t blocks;           /**< Blocks served since the stream opened. */
