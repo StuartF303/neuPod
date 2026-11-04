@@ -22,7 +22,11 @@ typedef enum { CLICK_OFF = 0, CLICK_HAPTIC = 1, CLICK_PIEZO = 2, CLICK_BOTH = 3 
 
 /** False (and @p out untouched) for a stored value that is not a mode. */
 bool click_mode_from_stored(uint8_t v, click_mode_t *out);
-/** Menu order: Piezo, Haptic, Both, Off, then round again. */
+/** 1 once a piezo driver exists (build with -DNEUPOD_PIEZO_FITTED=1). Until then the Click menu skips Piezo and Both. */
+#ifndef NEUPOD_PIEZO_FITTED
+#define NEUPOD_PIEZO_FITTED 0
+#endif
+/** Menu order: Piezo, Haptic, Both, Off, then round again; without a piezo fitted: Haptic, Off (a stored Piezo / Both still works and moves on). */
 click_mode_t click_mode_next(click_mode_t m);
 const char *click_mode_name(click_mode_t m);
 bool click_mode_uses_haptic(click_mode_t m);
@@ -44,10 +48,11 @@ bool haptic_click_admissible(bool calibrating);
 
 /**
  * Stored calibration record (settings tag SETTING_HAPTIC_CAL): version, actuator, A_CAL_COMP, A_CAL_BEMF,
- * BEMF_GAIN, and the actuator parameters it was measured with (rated mV rms, resonance Hz; little endian).
- * It is only used again for the same actuator type and the same parameters, so changing either recalibrates.
+ * BEMF_GAIN, and the actuator parameters it was measured with (rated mV rms, peak mV, resonance Hz; little endian;
+ * the calibration takes RATED_VOLTAGE and OD_CLAMP as inputs). It is only used again for the same actuator type and
+ * the same parameters, so changing any of them recalibrates. Version 1 records (no peak) are rejected: recalibrate.
  */
-#define HAPTIC_CAL_RECORD_LEN 9u
+#define HAPTIC_CAL_RECORD_LEN 11u
 void haptic_cal_encode(hal_haptic_actuator_t act, const hal_haptic_lra_params_t *lra, const hal_haptic_cal_t *cal,
                        uint8_t out[HAPTIC_CAL_RECORD_LEN]);
 /** True and @p cal filled (valid = true) when the record is well formed and belongs to @p act / @p lra. */

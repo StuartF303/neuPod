@@ -16,11 +16,17 @@ TEST(click_mode_values) {
     ASSERT_FALSE(click_mode_from_stored(255, &m));
     ASSERT_EQ(CLICK_HAPTIC, m); // untouched by a bad value
 
-    // cycle: Piezo -> Haptic -> Both -> Off -> Piezo
     ASSERT_EQ(CLICK_HAPTIC, click_mode_next(CLICK_PIEZO));
-    ASSERT_EQ(CLICK_BOTH, click_mode_next(CLICK_HAPTIC));
     ASSERT_EQ(CLICK_OFF, click_mode_next(CLICK_BOTH));
+#if NEUPOD_PIEZO_FITTED
+    // Piezo -> Haptic -> Both -> Off -> Piezo
+    ASSERT_EQ(CLICK_BOTH, click_mode_next(CLICK_HAPTIC));
     ASSERT_EQ(CLICK_PIEZO, click_mode_next(CLICK_OFF));
+#else
+    // no piezo fitted: Haptic <-> Off only (Off's next lands on Haptic)
+    ASSERT_EQ(CLICK_OFF, click_mode_next(CLICK_HAPTIC));
+    ASSERT_EQ(CLICK_HAPTIC, click_mode_next(CLICK_OFF));
+#endif
 
     ASSERT_TRUE(click_mode_uses_haptic(CLICK_HAPTIC) && click_mode_uses_haptic(CLICK_BOTH));
     ASSERT_FALSE(click_mode_uses_haptic(CLICK_PIEZO) || click_mode_uses_haptic(CLICK_OFF));
@@ -79,16 +85,22 @@ TEST(cal_record) {
     other.rated_mv_rms = 1800;
     ASSERT_FALSE(haptic_cal_decode(rec, sizeof rec, HAL_HAPTIC_LRA, &other, &got));
     other = lra;
-    other.peak_mv = 2500; // the peak ceiling is not an input of the calibration measurement
-    ASSERT_TRUE(haptic_cal_decode(rec, sizeof rec, HAL_HAPTIC_LRA, &other, &got));
+    other.peak_mv = 2500; // OD_CLAMP is an input of the calibration
+    ASSERT_FALSE(haptic_cal_decode(rec, sizeof rec, HAL_HAPTIC_LRA, &other, &got));
 
     // an ERM record matches an ERM whatever the LRA parameters are
     haptic_cal_encode(HAL_HAPTIC_ERM, &lra, &cal, rec);
     ASSERT_TRUE(haptic_cal_decode(rec, sizeof rec, HAL_HAPTIC_ERM, &other, &got));
     ASSERT_FALSE(haptic_cal_decode(rec, sizeof rec, HAL_HAPTIC_LRA, &lra, &got));
 
-    // damaged records
+    // damaged records, and the old 9-byte version 1 record (no peak) is not accepted
     haptic_cal_encode(HAL_HAPTIC_LRA, &lra, &cal, rec);
+    {
+        const uint8_t v1[9] = {1, 1, 0x21, 0x7B, 2, 0xD0, 0x07, 0xEB, 0x00};
+        ASSERT_FALSE(haptic_cal_decode(v1, sizeof v1, HAL_HAPTIC_LRA, &lra, &got));
+        uint8_t v1_padded[HAPTIC_CAL_RECORD_LEN] = {1, 1, 0x21, 0x7B, 2, 0xD0, 0x07};
+        ASSERT_FALSE(haptic_cal_decode(v1_padded, sizeof v1_padded, HAL_HAPTIC_LRA, &lra, &got));
+    }
     ASSERT_FALSE(haptic_cal_decode(rec, sizeof rec - 1, HAL_HAPTIC_LRA, &lra, &got));
     ASSERT_FALSE(haptic_cal_decode(NULL, 0, HAL_HAPTIC_LRA, &lra, &got));
     rec[0] = 9; // unknown version

@@ -124,18 +124,20 @@ read STATUS DIAG_RESULT (1 = failed), then A_CAL_COMP, A_CAL_BEMF and BEMF_GAIN.
 chip from reset with the previous good values.
 
 The haptic task (core 0) owns this. The results are stored in the settings store (`NPhc`, 9 bytes: version,
-actuator, comp, bemf, gain, rated mV, resonance Hz) and re-applied on every boot, so the motor spins for the
+actuator, comp, bemf, gain, rated mV, peak mV, resonance Hz; version 2, 11 bytes) and re-applied on every boot, so the motor spins for the
 calibration once per actuator. It runs automatically when an LRA is selected (or built in) and no matching record
-exists, once the settings are known (a boot without a card cannot store it, so it repeats each boot), and on demand
-from Settings > Haptics > Calibrate. Changing the actuator type, or the rated voltage or resonance, makes the stored
-record not match, so it recalibrates; switching back and forth between types re-runs it for each. The task holds the
-I2C bus (the gauge read waits) for about a second but sleeps between polls, never blocking the UI; clicks during
-it are dropped. If the automatic attempt fails it is not retried until the next boot or a manual Calibrate.
+exists, once the settings are known (the card's values have loaded, or there is no working card; a boot without a card cannot store it, so it repeats each boot). If the record cannot be stored (store full) the row shows Failed and a console line says so, and on demand
+from Settings > Haptics > Calibrate. Changing the actuator type, or the rated voltage, peak voltage or resonance (OD_CLAMP is a calibration input), makes the stored
+record not match, so it recalibrates (as does an old version 1 record, which had no peak); switching back and forth between types re-runs it for each. The task holds the
+I2C bus (the gauge read waits) for about a second but sleeps between polls, never blocking the UI. Clicks during it:
+`rt_haptic_click()` drops the request while the state is RUNNING (nothing is queued), and the task drains its queue when
+a calibration starts and again when it ends, which also discards a click that raced past the check. If the automatic attempt fails it is not retried until the next boot or a manual Calibrate.
 
 ### Click setting and rate limit
 
-Settings > Click: Piezo / Haptic / Both / Off (`NPck` 2 / 1 / 3 / 0). There is no piezo driver yet, so Piezo
-and the piezo half of Both are silent (`rt_piezo_click()` is a stub). Haptic clicks go through a 2-deep queue and a
+Settings > Click: Piezo / Haptic / Both / Off (`NPck` 2 / 1 / 3 / 0). There is no piezo driver yet
+(`NEUPOD_PIEZO_FITTED` is 0), so the menu cycles Haptic / Off only; a Piezo or Both value already stored is accepted but
+silent (`rt_piezo_click()` is a stub). Haptic clicks go through a 2-deep queue and a
 35 ms gate (`haptic_gate_pass`): a fast wheel spin drops requests instead of queueing them.
 
 ### Bring-up order (motor safety)

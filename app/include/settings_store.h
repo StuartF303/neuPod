@@ -53,7 +53,7 @@ extern "C" {
 #define SETTING_CLICK_FEEDBACK SETTINGS_TAG('N', 'P', 'c', 'k') /**< u8, click_mode_t: 0 off, 1 haptic (the old "on"), 2 piezo, 3 both */
 #define SETTING_GAPLESS SETTINGS_TAG('N', 'P', 'g', 'p')       /**< u8, 0 or 1; absent = on */
 #define SETTING_HAPTIC_ACTUATOR SETTINGS_TAG('N', 'P', 'h', 'a') /**< u8, 0 = ERM, 1 = LRA; absent = the build default */
-#define SETTING_HAPTIC_CAL SETTINGS_TAG('N', 'P', 'h', 'c')      /**< 9 bytes, haptic_logic.h: DRV2605L auto-calibration for one actuator */
+#define SETTING_HAPTIC_CAL SETTINGS_TAG('N', 'P', 'h', 'c')      /**< 11 bytes, haptic_logic.h: DRV2605L auto-calibration for one actuator */
 #define SETTING_WIFI SETTINGS_TAG('N', 'P', 'w', 'f')            /**< 4 bytes: enabled, during playback, idle-off minutes, zone */
 #define SETTING_NTP_SERVER SETTINGS_TAG('N', 'P', 'n', 's')      /**< string */
 #define SETTING_TEST_URL SETTINGS_TAG('N', 'P', 't', 'u')        /**< string */

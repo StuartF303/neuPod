@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
+#include <stdio.h>
+
 #include "capabilities.h"
 #include "drv2605l.h"
 #include "hal_haptic.h"
@@ -32,6 +34,8 @@ static void wake_task(uint8_t msg) {
 
 void rt_haptic_click(void) {
     // Dropped here, not in the task: while it calibrates it cannot dequeue, so anything queued would buzz afterwards.
+    // The check-then-send is racy by design (the state can flip to RUNNING between them); that is safe because
+    // calibrate_and_store() drains the queue again once the calibration is over, so such a click is discarded.
     if (haptic_click_admissible(g_cal_state == HAPTIC_CAL_RUNNING)) {
         wake_task(MSG_CLICK);
     }
@@ -75,12 +79,14 @@ static bool needs_calibration(hal_haptic_actuator_t act) {
     return !(act == HAL_HAPTIC_ERM && hal_haptic_get_erm_loop() == HAL_HAPTIC_LOOP_OPEN);
 }
 
-// Persisted settings are known: the card's values were loaded, or every boot check has resolved (so storage is settled
-// as absent/failed). caps_all_resolved() rather than a capabilities_t copy: that struct is about 800 B of this task's stack.
+// Persisted settings are known: the card's values have been loaded (even an unreadable card ends up "loaded": defaults),
+// or every boot check has resolved and storage is not OK (no card: nothing will ever load). Never on caps_all_resolved()
+// alone: with a card that is only mounting, that could calibrate before the stored record arrives. (caps_available()
+// rather than a capabilities_t copy: that struct is about 800 B of this task's stack.)
 static bool settings_settled(void) {
     settings_status_t st;
     settings_get_status(&st);
-    return st.loaded || caps_all_resolved();
+    return st.loaded || (caps_all_resolved() && !caps_available(CAP_STORAGE));
 }
 
 // Runs the datasheet auto-calibration and stores the result. Bus mutex held by the caller.
@@ -102,8 +108,13 @@ static void calibrate_and_store(hal_haptic_actuator_t act) {
         uint8_t rec[HAPTIC_CAL_RECORD_LEN];
         hal_haptic_get_lra_params(&lra);
         haptic_cal_encode(act, &lra, &cal, rec);
-        settings_put(SETTING_HAPTIC_CAL, rec, sizeof rec);
-        g_cal_state = HAPTIC_CAL_OK;
+        if (settings_put(SETTING_HAPTIC_CAL, rec, sizeof rec)) {
+            g_cal_state = HAPTIC_CAL_OK;
+        } else {
+            // Calibrated for this session (the driver keeps the values) but it would run again next boot: say so.
+            printf("haptic: calibration done but not stored (settings store full)\n");
+            g_cal_state = HAPTIC_CAL_FAILED;
+        }
     } else {
         g_cal_state = HAPTIC_CAL_FAILED; // the driver already restored the previous good values
     }
@@ -151,13 +162,15 @@ static void apply_settings(uint32_t pend) {
     (void)hal_haptic_standby(true);
 }
 
-static void handle_control(uint32_t pend) {
+// True when the request was served (the chip is then in standby); false when nothing was touched (no haptics, or the bus
+// was busy and the request re-posted), so the caller's idea of "awake" stays valid.
+static bool handle_control(uint32_t pend) {
     if (!caps_available(CAP_HAPTICS)) {
-        return;
+        return false;
     }
     if (!os_mutex_lock(rt_i2c_mutex(), RT_HAPTIC_CAL_LOCK_MS)) {
         post(pend); // bus busy: try again
-        return;
+        return false;
     }
     if (pend & PEND_RELOAD) {
         apply_settings(pend);
@@ -170,6 +183,7 @@ static void handle_control(uint32_t pend) {
         (void)hal_haptic_standby(true);
     }
     os_mutex_unlock(rt_i2c_mutex());
+    return true;
 }
 
 void haptic_task(void *arg) {
@@ -187,8 +201,10 @@ void haptic_task(void *arg) {
         }
         uint32_t pend;
         while ((pend = __atomic_exchange_n(&g_pending, 0u, __ATOMIC_ACQ_REL)) != 0) { // also those posted during a calibration
-            handle_control(pend); // leaves the chip in standby
-            awake = false;
+            if (!handle_control(pend)) {
+                break; // nothing touched (re-posted if the bus was busy): the chip's state, and so "awake", is unchanged
+            }
+            awake = false; // the control request left the chip in standby
             req = MSG_WAKE; // a click dequeued alongside a control request is stale by now
         }
         if (req != MSG_CLICK || g_cal_state == HAPTIC_CAL_RUNNING || !caps_available(CAP_HAPTICS)) {

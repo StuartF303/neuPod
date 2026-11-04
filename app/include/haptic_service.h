@@ -13,7 +13,9 @@
  * store) and its auto-calibration. The calibration results are stored too (haptic_logic.h) and re-applied on
  * every boot, so it runs once per actuator: automatically the first time an LRA is selected (or its parameters
  * change), and on request from Settings. It runs on this task (core 0), holding the I2C bus for about a second but
- * waiting with the scheduler's delay, so the UI is never blocked; clicks arriving meanwhile are dropped.
+ * waiting with the scheduler's delay, so the UI is never blocked. Clicks during it: rt_haptic_click() drops the request
+ * while the state is HAPTIC_CAL_RUNNING (nothing is queued), and the task drains its queue when a calibration starts
+ * and again when it ends, which also discards a click that raced past the check.
  */
 #ifndef NEUPOD_HAPTIC_SERVICE_H
 #define NEUPOD_HAPTIC_SERVICE_H
