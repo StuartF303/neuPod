@@ -1,0 +1,266 @@
+// SPDX-License-Identifier: MPL-2.0
+#include "bt_saved.h"
+
+#include <stdio.h>
+#include <string.h>
+
+#include "settings_store.h"
+
+static hal_bt_device_t g_pending;
+static volatile bool g_have_pending;
+static uint32_t g_pending_after; /* hal_bt_link_attempt() when the candidate began: its own events carry a larger number */
+static void (*g_lock)(void);
+static void (*g_unlock)(void);
+#define LOCK() do { if (g_lock != NULL) g_lock(); } while (0)
+#define UNLOCK() do { if (g_unlock != NULL) g_unlock(); } while (0)
+
+void bt_saved_set_lock(void (*lock)(void), void (*unlock)(void)) {
+    g_lock = lock;
+    g_unlock = unlock;
+}
+/* Addresses whose link key must be deleted (a replaced headset, a Pair that did not finish, a record that could not be saved). A small ring:
+ * a Pair can end and the next begin before the UI tick that drains it. Written by on_event (radio worker or UI task), drained by the
+ * UI task, so a plain head / tail with the worker as the only producer. */
+#define STALE_MAX 4u
+static uint8_t g_stale[STALE_MAX][6];
+static volatile uint32_t g_stale_head, g_stale_tail;
+static volatile bt_saved_notice_t g_notice;
+
+static void stale_push(const uint8_t addr[6]) {
+    LOCK();
+    uint32_t h = g_stale_head;
+    bool dup = false;
+    for (uint32_t i = g_stale_tail; i != h; i++) {
+        dup = dup || memcmp(g_stale[i % STALE_MAX], addr, 6) == 0; /* already queued */
+    }
+    if (!dup) {
+        if (h - g_stale_tail >= STALE_MAX) {
+            g_stale_tail++; /* full: the oldest goes (four unprocessed forgets in a row is not a real case; the key it names is rotated out by BTstack's LRU) */
+        }
+        memcpy(g_stale[h % STALE_MAX], addr, 6);
+        g_stale_head = h + 1u;
+    }
+    UNLOCK();
+}
+
+/* Caller holds the lock. A Pair for this address makes any queued delete of it wrong: it would drop the new attempt and the new key. */
+static void stale_remove(const uint8_t addr[6]) {
+    uint32_t w = g_stale_tail;
+    for (uint32_t i = g_stale_tail; i != g_stale_head; i++) {
+        if (memcmp(g_stale[i % STALE_MAX], addr, 6) != 0) {
+            if (w != i) {
+                memcpy(g_stale[w % STALE_MAX], g_stale[i % STALE_MAX], 6);
+            }
+            w++;
+        }
+    }
+    g_stale_head = w;
+}
+
+static bool addr_empty(const uint8_t a[6]) {
+    static const uint8_t zero[6];
+    return memcmp(a, zero, 6) == 0;
+}
+
+bool bt_saved_get(hal_bt_device_t *out) {
+    uint8_t v[BT_SAVED_MAX_LEN + 1u];
+    uint32_t len = settings_get(SETTING_BT_DEVICE, v, sizeof v);
+    if (len < BT_SAVED_MIN_LEN || len > BT_SAVED_MAX_LEN || v[0] != BT_SAVED_VERSION) {
+        return false; /* absent, damaged, or written by a newer layout */
+    }
+    hal_bt_device_t d;
+    memset(&d, 0, sizeof d);
+    memcpy(d.addr, &v[1], 6);
+    if (addr_empty(d.addr)) {
+        return false;
+    }
+    d.cod = (uint32_t)v[7] | (uint32_t)v[8] << 8 | (uint32_t)v[9] << 16;
+    d.audio_sink = ((d.cod >> 8) & 0x1Fu) == HAL_BT_COD_MAJOR_AUDIO_VIDEO;
+    d.rssi = HAL_BT_RSSI_UNKNOWN;
+    uint32_t n = len - BT_SAVED_MIN_LEN;
+    for (uint32_t i = 0; i < n; i++) { /* a name came from a remote device and then from a file: no control bytes, no NUL */
+        d.name[i] = v[BT_SAVED_MIN_LEN + i] < 0x20u ? '?' : (char)v[BT_SAVED_MIN_LEN + i];
+    }
+    d.name[n] = '\0';
+    if (out != NULL) {
+        *out = d;
+    }
+    return true;
+}
+
+bool bt_saved_put(const hal_bt_device_t *dev) {
+    if (dev == NULL || addr_empty(dev->addr)) {
+        return false;
+    }
+    uint8_t v[BT_SAVED_MAX_LEN];
+    v[0] = BT_SAVED_VERSION;
+    memcpy(&v[1], dev->addr, 6);
+    v[7] = (uint8_t)(dev->cod & 0xFFu);
+    v[8] = (uint8_t)((dev->cod >> 8) & 0xFFu);
+    v[9] = (uint8_t)((dev->cod >> 16) & 0xFFu);
+    uint32_t n = 0;
+    while (n < HAL_BT_NAME_MAX && dev->name[n] != '\0') {
+        v[BT_SAVED_MIN_LEN + n] = (uint8_t)dev->name[n];
+        n++;
+    }
+    return settings_put(SETTING_BT_DEVICE, v, BT_SAVED_MIN_LEN + n);
+}
+
+/* Changes reach the card only while the store is persistent (card mounted read-write and loaded). Otherwise a put / delete lands in RAM only
+ * and is undone by the next boot. */
+static bool store_writable(void) {
+    settings_status_t st;
+    settings_get_status(&st);
+    return st.persistent;
+}
+
+void bt_saved_clear(void) {
+    if (!store_writable()) {
+        /* The key (and the old record) stay on the card: dropping the record in RAM would make the headset reappear after a reboot, or
+         * leave a key nobody can remove. Keep it, so Forget is still possible once the card is writable. */
+        printf("bt: record kept (store not writable)\n");
+        return;
+    }
+    settings_delete(SETTING_BT_DEVICE);
+}
+
+bool bt_saved_pair_begin(const hal_bt_device_t *dev) {
+    LOCK();
+    if (g_have_pending) {
+        UNLOCK();
+        return false; /* a Pair is in flight: do not replace its candidate before the HAL has even accepted this one */
+    }
+    stale_remove(dev->addr);
+    g_pending = *dev;
+    g_pending_after = hal_bt_link_attempt();
+    g_have_pending = true;
+    g_notice = BT_SAVED_NOTICE_NONE;
+    UNLOCK();
+    return true;
+}
+
+bt_saved_notice_t bt_saved_notice(void) {
+    /* "Not saved" is only true while the store is not writable: a card that became writable has the record by the next flush. */
+    if (g_notice == BT_SAVED_NOTICE_NOT_SAVED && store_writable()) {
+        return BT_SAVED_NOTICE_NONE;
+    }
+    return g_notice;
+}
+
+void bt_saved_connect_begin(void) {
+    if (g_notice == BT_SAVED_NOTICE_NOT_SAVED) {
+        g_notice = BT_SAVED_NOTICE_NONE;
+    }
+}
+
+void bt_saved_pair_abort(void) { g_have_pending = false; }
+
+void bt_saved_on_event(const hal_bt_event_t *ev) {
+    if (ev->type != HAL_BT_EVT_LINK) {
+        return;
+    }
+    if (g_have_pending && (int32_t)(ev->attempt - g_pending_after) <= 0) {
+        return; /* an event of an earlier attempt (a cancelled one finishing late): it says nothing about this Pair */
+    }
+    switch (ev->link) {
+    case HAL_BT_LINK_CONNECTED:
+        if (g_have_pending && memcmp(ev->dev.addr, g_pending.addr, 6) == 0) {
+            hal_bt_device_t old;
+            bool had_old = bt_saved_get(&old);
+            if (!bt_saved_put(&g_pending)) {
+                /* No room: the headset cannot be remembered, so its key must not stay either. Queueing it for deletion also drops the link
+                 * (it is the current peer) on the next tick; the screens say why. */
+                stale_push(g_pending.addr);
+                g_notice = BT_SAVED_NOTICE_FULL;
+            } else {
+                if (had_old && memcmp(old.addr, g_pending.addr, 6) != 0) {
+                    stale_push(old.addr);
+                }
+                if (!store_writable()) {
+                    /* Accepted into RAM only (card read-only or absent): gone after a reboot. Say so; the key is in the same RAM store. */
+                    g_notice = BT_SAVED_NOTICE_NOT_SAVED;
+                    printf("bt: pair not persisted (store not writable)\n");
+                }
+            }
+            g_have_pending = false;
+        }
+        break;
+    case HAL_BT_LINK_FAILED:
+    case HAL_BT_LINK_DISCONNECTED:
+        if (g_have_pending) {
+            /* The Pair did not finish (or was cancelled after the key was made): do not leave a key for a device nobody remembers. */
+            hal_bt_device_t cur;
+            if (!bt_saved_get(&cur) || memcmp(cur.addr, g_pending.addr, 6) != 0) {
+                stale_push(g_pending.addr);
+            } else {
+                /* Re-pairing the remembered headset: BTstack deletes its old key when the bonding starts, so after a failure or a cancel the
+                 * record would name a headset without a key. Forget the record too. */
+                /* Straight from the store, even when it is not writable: BTstack deleted the key in RAM too, so the record must go with it
+                 * (on a read-only card both come back at the next boot, consistent). */
+                settings_delete(SETTING_BT_DEVICE);
+            }
+            g_have_pending = false;
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+void bt_saved_queue_delete(const uint8_t addr[6]) { stale_push(addr); }
+
+bool bt_saved_peek_stale(uint8_t addr[6]) {
+    LOCK();
+    bool have = g_stale_tail != g_stale_head;
+    if (have) {
+        memcpy(addr, g_stale[g_stale_tail % STALE_MAX], 6);
+    }
+    UNLOCK();
+    return have;
+}
+
+void bt_saved_drop_stale(void) {
+    LOCK();
+    if (g_stale_tail != g_stale_head) {
+        g_stale_tail++;
+    }
+    UNLOCK();
+}
+
+hal_status_t bt_saved_delete_key(const uint8_t addr[6]) {
+    if (!store_writable()) {
+        /* The delete could only reach RAM; the card keeps the key. Do not touch the radio either (it would drop a live link to this
+         * address): not done, the caller keeps it queued. */
+        return HAL_EBUSY;
+    }
+    hal_status_t st = hal_bt_forget(addr);
+    if (st == HAL_ENODEV) {
+        /* The stack is not up (it never started, or failed): BTstack reads its keys from the store on demand, so deleting the record there is
+         * what forgetting means. */
+        hal_bt_storage_delete_key(settings_bt_storage(), addr);
+        st = HAL_OK;
+    }
+    return st; /* HAL_EBUSY: ask again */
+}
+
+void bt_saved_drain_stale(void) {
+    static bool waiting;
+    uint8_t a[6];
+    if (!store_writable()) {
+        if (!waiting && bt_saved_peek_stale(a)) {
+            printf("bt: key delete waits (store not writable)\n");
+            waiting = true;
+        }
+        return; /* nothing can be made durable: no per-tick work */
+    }
+    if (waiting) {
+        printf("bt: store writable, draining queued key deletes\n");
+        waiting = false;
+    }
+    while (bt_saved_peek_stale(a)) {
+        if (bt_saved_delete_key(a) != HAL_OK) {
+            break; /* the radio's request slots are full: the address stays queued and the next tick tries again */
+        }
+        bt_saved_drop_stale();
+    }
+}

@@ -154,6 +154,8 @@ ui_screen_t *ui_screen_files_create(void);
 ui_screen_t *ui_screen_settings_create(void);
 ui_screen_t *ui_screen_bluetooth_create(void); /* ui_bluetooth.c */
 ui_screen_t *ui_screen_bt_devices_create(void); /* ui_bluetooth.c: starts a scan when it opens */
+/** "Name\nState" of the remembered Bluetooth headset ("Connected", "Pairing...", "Failed: not found", "Not connected"); "" if none (ui_bluetooth.c). */
+void ui_bt_headset_text(char *out, size_t n);
 ui_screen_t *ui_screen_wifi_create(void); /* ui_wifi.c */
 ui_screen_t *ui_screen_wifi_networks_create(void); /* ui_wifi.c: starts a scan when it opens */
 ui_screen_t *ui_screen_nettest_create(void); /* ui_nettest.c */

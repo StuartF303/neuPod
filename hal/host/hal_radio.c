@@ -4,14 +4,24 @@
  * a fixed handful of devices (headsets, a speaker, a car kit whose name arrives late, a phone, an unnamed device) so
  * the UI and its tests run on a PC. Events are delivered from hal_bt_poll(), i.e. from the calling task, never from a
  * foreign thread. Times are shortened so the scripted tour reaches the interesting states quickly.
+ *
+ * Pairing (stage 2a) is simulated per device so every path can be tested: most devices pair and connect; the car kit refuses
+ * (AUTH), the phone has no A2DP sink (NO_SINK), an unnamed device and any address not in the table do not answer (NOT_FOUND).
+ * "Link keys" are kept in RAM and, when the stack was given a hal_bt_storage_t, mirrored into it as 'BTL0'..'BTL7' records in
+ * BTstack's own 28-byte layout and raw-index tags (hal_bt_storage_delete_key() works on them), so a saved device survives a restart of the simulation
+ * exactly like on the board. Like BTstack's dedicated bonding, a Pair deletes any old key for the address first.
  */
 #include <string.h>
 
+#include "hal_host.h"
 #include "hal_radio.h"
 #include "hal_system.h"
 
 #define SIM_BRING_UP_MS 250u
 #define SIM_SCAN_MS 2400u
+#define SIM_PAIR_MS 900u    /* a Pair action takes this long to reach its outcome */
+#define SIM_CONNECT_MS 500u /* ... a Connect this long */
+#define SIM_KEYS HAL_BT_KEY_SLOTS
 
 typedef struct {
     uint32_t at_ms;      /* when it is reported, relative to the scan start */
@@ -38,6 +48,17 @@ static hal_bt_state_t g_state = HAL_BT_OFF;
 static uint32_t g_t0;            /* start of bring-up or of the current scan */
 static uint32_t g_reported;      /* devices reported so far in this scan */
 static bool g_named[N_DEVS];
+static const hal_bt_storage_t *g_storage;
+
+/* link */
+static uint32_t g_attempt;
+static hal_bt_link_state_t g_link = HAL_BT_LINK_DISCONNECTED;
+static hal_bt_fail_t g_reason = HAL_BT_FAIL_NONE;
+static hal_bt_device_t g_peer;
+static uint32_t g_link_t0;
+static bool g_accepting;
+static uint8_t g_keys[SIM_KEYS][6];
+static bool g_key_used[SIM_KEYS];
 
 static void emit_state(hal_bt_state_t s) {
     g_state = s;
@@ -63,13 +84,83 @@ static void emit_dev(uint32_t i, bool with_name) {
     g_cb(&ev, g_ctx);
 }
 
+static bool is_zero_addr(const uint8_t a[6]) {
+    static const uint8_t z[6] = {0};
+    return memcmp(a, z, 6) == 0;
+}
+
+static int key_index(const uint8_t a[6]) {
+    for (uint32_t i = 0; i < SIM_KEYS; i++) {
+        if (g_key_used[i] && memcmp(g_keys[i], a, 6) == 0) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+static void key_add(const uint8_t a[6]) {
+    if (key_index(a) >= 0) {
+        return;
+    }
+    for (uint32_t i = 0; i < SIM_KEYS; i++) {
+        if (!g_key_used[i]) {
+            memcpy(g_keys[i], a, 6);
+            g_key_used[i] = true;
+            if (g_storage != NULL) {
+                uint8_t rec[HAL_BT_KEY_RECORD_LEN] = {0};
+                memcpy(rec + HAL_BT_KEY_ADDR_OFFSET, a, 6);
+                rec[HAL_BT_KEY_RECORD_LEN - 1] = 4; /* a "type" byte; the simulator never uses the key */
+                (void)g_storage->put(g_storage->ctx, HAL_BT_KEY_TAG(i), rec, sizeof rec);
+            }
+            return;
+        }
+    }
+}
+
+static void key_del(const uint8_t a[6]) {
+    int i = key_index(a);
+    if (i >= 0) {
+        g_key_used[i] = false;
+        if (g_storage != NULL) {
+            g_storage->del(g_storage->ctx, HAL_BT_KEY_TAG((uint32_t)i));
+        }
+    }
+}
+
+static void keys_load(void) {
+    memset(g_key_used, 0, sizeof g_key_used);
+    if (g_storage == NULL) {
+        return;
+    }
+    for (uint32_t i = 0; i < SIM_KEYS; i++) {
+        uint8_t rec[HAL_BT_KEY_RECORD_LEN];
+        if (g_storage->get(g_storage->ctx, HAL_BT_KEY_TAG(i), rec, sizeof rec) >= (int)(HAL_BT_KEY_ADDR_OFFSET + 6u)) {
+            memcpy(g_keys[i], rec + HAL_BT_KEY_ADDR_OFFSET, 6);
+            g_key_used[i] = true;
+        }
+    }
+}
+
+static void emit_link(hal_bt_link_state_t s, hal_bt_fail_t reason) {
+    g_link = s;
+    g_reason = s == HAL_BT_LINK_FAILED ? reason : HAL_BT_FAIL_NONE;
+    if (s != HAL_BT_LINK_PAIRING) {
+        g_accepting = false; /* the Pair action is over (or this was a Connect) */
+    }
+    if (g_cb != NULL) {
+        hal_bt_event_t ev = {.type = HAL_BT_EVT_LINK, .state = g_state, .dev = g_peer, .link = s, .reason = g_reason, .attempt = g_attempt};
+        g_cb(&ev, g_ctx);
+    }
+}
+
 hal_status_t hal_bt_init(hal_bt_event_fn cb, void *ctx, const hal_bt_storage_t *storage) {
-    (void)storage;
     if (g_state != HAL_BT_OFF && g_state != HAL_BT_FAILED) {
         return HAL_EBUSY;
     }
     g_cb = cb;
     g_ctx = ctx;
+    g_storage = storage;
+    keys_load();
     g_t0 = hal_millis();
     emit_state(HAL_BT_STARTING);
     return HAL_OK;
@@ -94,6 +185,9 @@ hal_status_t hal_bt_inquiry_start(uint8_t duration_s) {
     if (g_state != HAL_BT_ON) {
         return HAL_ENODEV;
     }
+    if (g_link == HAL_BT_LINK_PAIRING || g_link == HAL_BT_LINK_CONNECTING) {
+        return HAL_EBUSY; /* an inquiry would starve the link set-up */
+    }
     g_t0 = hal_millis();
     g_reported = 0;
     memset(g_named, 0, sizeof g_named);
@@ -112,7 +206,10 @@ void hal_bt_inquiry_stop(void) {
     }
 }
 
+static void link_poll(void);
+
 void hal_bt_poll(void) {
+    link_poll();
     uint32_t dt = hal_millis() - g_t0;
     if (g_state == HAL_BT_STARTING) {
         if (dt >= SIM_BRING_UP_MS) {
@@ -140,9 +237,152 @@ void hal_bt_poll(void) {
     }
 }
 
+/* ---- pairing and the connection ---- */
+
+/* What the simulated remote does for @p addr: 0 = works, else the failure reason. */
+static hal_bt_fail_t sim_outcome(const uint8_t addr[6]) {
+    for (uint32_t i = 0; i < N_DEVS; i++) {
+        if (memcmp(addr, k_devs[i].addr, 6) == 0) {
+            if (k_devs[i].cod == 0x240404 || k_devs[i].cod == 0x240414) {
+                return HAL_BT_FAIL_NONE;
+            }
+            if (k_devs[i].cod == 0x200420) {
+                return HAL_BT_FAIL_AUTH; /* the car kit refuses to pair */
+            }
+            if (k_devs[i].name == NULL) {
+                return HAL_BT_FAIL_NOT_FOUND; /* does not answer */
+            }
+            return HAL_BT_FAIL_NO_SINK; /* the phone */
+        }
+    }
+    return HAL_BT_FAIL_NOT_FOUND;
+}
+
+static bool link_idle(void) { return g_link == HAL_BT_LINK_DISCONNECTED || g_link == HAL_BT_LINK_FAILED; }
+
+static hal_status_t link_precheck(const uint8_t addr[6]) {
+    if (addr == NULL || is_zero_addr(addr)) {
+        return HAL_EINVAL;
+    }
+    if (g_state == HAL_BT_SCANNING || !link_idle()) {
+        return HAL_EBUSY;
+    }
+    if (g_state != HAL_BT_ON) {
+        return HAL_ENODEV;
+    }
+    return HAL_OK;
+}
+
+hal_status_t hal_bt_pair(const hal_bt_device_t *dev) {
+    if (dev == NULL) {
+        return HAL_EINVAL;
+    }
+    hal_status_t st = link_precheck(dev->addr);
+    if (st != HAL_OK) {
+        return st;
+    }
+    g_attempt++;
+    g_peer = *dev;
+    g_link_t0 = hal_millis();
+    key_del(dev->addr); /* bonding starts from a clean slate, as in BTstack */
+    g_accepting = true;
+    emit_link(HAL_BT_LINK_PAIRING, HAL_BT_FAIL_NONE);
+    return HAL_OK;
+}
+
+hal_status_t hal_bt_connect(const uint8_t addr[6]) {
+    hal_status_t st = link_precheck(addr);
+    if (st != HAL_OK) {
+        return st;
+    }
+    g_attempt++;
+    memset(&g_peer, 0, sizeof g_peer);
+    memcpy(g_peer.addr, addr, 6);
+    g_peer.rssi = HAL_BT_RSSI_UNKNOWN;
+    for (uint32_t i = 0; i < N_DEVS; i++) { /* the sim "knows" the names of its devices */
+        if (memcmp(addr, k_devs[i].addr, 6) == 0) {
+            g_peer.cod = k_devs[i].cod;
+            g_peer.audio_sink = ((k_devs[i].cod >> 8) & 0x1Fu) == HAL_BT_COD_MAJOR_AUDIO_VIDEO;
+            if (k_devs[i].name != NULL) {
+                strncpy(g_peer.name, k_devs[i].name, HAL_BT_NAME_MAX);
+            }
+        }
+    }
+    g_link_t0 = hal_millis();
+    emit_link(HAL_BT_LINK_CONNECTING, HAL_BT_FAIL_NONE);
+    return HAL_OK;
+}
+
+void hal_bt_disconnect(void) {
+    if (g_link == HAL_BT_LINK_PAIRING || g_link == HAL_BT_LINK_CONNECTING || g_link == HAL_BT_LINK_CONNECTED) {
+        emit_link(HAL_BT_LINK_DISCONNECTED, HAL_BT_FAIL_NONE);
+    }
+}
+
+hal_status_t hal_bt_forget(const uint8_t addr[6]) {
+    if (addr == NULL) {
+        return HAL_EINVAL;
+    }
+    if (g_state == HAL_BT_OFF || g_state == HAL_BT_STARTING || g_state == HAL_BT_FAILED) {
+        return HAL_ENODEV; /* no stack: the caller deletes the key from the storage */
+    }
+    if (g_link != HAL_BT_LINK_DISCONNECTED && g_link != HAL_BT_LINK_FAILED && memcmp(addr, g_peer.addr, 6) == 0) {
+        hal_bt_disconnect();
+    }
+    key_del(addr);
+    return HAL_OK;
+}
+
+hal_bt_link_state_t hal_bt_link_state(void) { return g_link; }
+uint32_t hal_bt_link_attempt(void) { return g_attempt; }
+hal_bt_fail_t hal_bt_link_reason(void) { return g_link == HAL_BT_LINK_FAILED ? g_reason : HAL_BT_FAIL_NONE; }
+
+bool hal_bt_link_device(hal_bt_device_t *out) {
+    if (g_link == HAL_BT_LINK_DISCONNECTED) {
+        return false;
+    }
+    *out = g_peer;
+    return true;
+}
+
+bool hal_bt_accepting(void) { return g_accepting; }
+
+void hal_host_bt_drop_link(void) {
+    if (g_link == HAL_BT_LINK_CONNECTED) {
+        emit_link(HAL_BT_LINK_FAILED, HAL_BT_FAIL_LINK_LOST);
+    }
+}
+
+void hal_host_bt_remote_hangup(void) {
+    if (g_link == HAL_BT_LINK_CONNECTED) {
+        emit_link(HAL_BT_LINK_DISCONNECTED, HAL_BT_FAIL_NONE);
+    } else if (g_link == HAL_BT_LINK_PAIRING) {
+        emit_link(HAL_BT_LINK_FAILED, HAL_BT_FAIL_BUSY);
+    } else if (g_link == HAL_BT_LINK_CONNECTING) {
+        emit_link(HAL_BT_LINK_FAILED, HAL_BT_FAIL_NOT_FOUND);
+    }
+}
+
+static void link_poll(void) {
+    uint32_t dt = hal_millis() - g_link_t0;
+    if (g_link == HAL_BT_LINK_PAIRING && dt >= SIM_PAIR_MS) {
+        hal_bt_fail_t r = sim_outcome(g_peer.addr);
+        if (r == HAL_BT_FAIL_NONE || r == HAL_BT_FAIL_NO_SINK) {
+            key_add(g_peer.addr); /* authentication succeeded before the SDP check: the key is kept even without a sink */
+        }
+        emit_link(r == HAL_BT_FAIL_NONE ? HAL_BT_LINK_CONNECTED : HAL_BT_LINK_FAILED, r);
+    } else if (g_link == HAL_BT_LINK_CONNECTING && dt >= SIM_CONNECT_MS) {
+        hal_bt_fail_t r = sim_outcome(g_peer.addr);
+        if (r == HAL_BT_FAIL_NONE && key_index(g_peer.addr) < 0) {
+            r = HAL_BT_FAIL_AUTH; /* the key was forgotten */
+        }
+        emit_link(r == HAL_BT_FAIL_NONE ? HAL_BT_LINK_CONNECTED : HAL_BT_LINK_FAILED, r);
+    }
+}
+
 hal_status_t hal_radio_a2dp_connect(const uint8_t addr[6]) {
     (void)addr;
-    return HAL_ENOTSUP; /* stage 2 */
+    return HAL_ENOTSUP; /* stage 2b */
 }
 
 void hal_radio_a2dp_disconnect(void) {}

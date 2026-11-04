@@ -42,12 +42,12 @@ extern "C" {
 #define SETTINGS_FILE_B SETTINGS_DIR "/settings.b"
 #define SETTINGS_FILE_OLD SETTINGS_DIR "/settings.old" /**< a file written by a NEWER firmware, kept aside instead of being wiped */
 
-#define SETTINGS_MAX_ITEMS 48u /**< distinct tags kept (settings, Wi-Fi networks, link keys, BT device records): worst case about 38 */
+#define SETTINGS_MAX_ITEMS 48u /**< distinct tags kept (settings, Wi-Fi networks, link keys, BT device records): worst case about 39 */
 #define SETTINGS_VALUE_MAX 96u /**< bytes per stored value; a sealed secret holds up to 96 - 29 = 67 bytes of plaintext (Wi-Fi passwords are at most 63) */
 #define SETTINGS_VERSION 2u /**< written; 1 (same layout, at most 32 items) is still read. Firmware older than 2 sets a version-2 file aside instead of reading it */
 #define SETTINGS_VERSION_V1 1u
 
-/** Tags of the user settings, four ASCII characters like BTstack's own ('NPxx'; BTstack uses 'BTL?' / 'BTD?'). */
+/** Tags of the user settings, four ASCII characters like BTstack's own ('NPxx'; BTstack uses 'BTL' + slot / 'BTD' + slot). */
 #define SETTINGS_TAG(a, b, c, d) (((uint32_t)(a) << 24) | ((uint32_t)(b) << 16) | ((uint32_t)(c) << 8) | (uint32_t)(d))
 #define SETTING_VOLUME_ATT_DB SETTINGS_TAG('N', 'P', 'v', 'o') /**< u8, attenuation in dB */
 #define SETTING_BACKLIGHT_PCT SETTINGS_TAG('N', 'P', 'b', 'l') /**< u8, 5..100 */
@@ -61,6 +61,7 @@ extern "C" {
 #define SETTING_SHUFFLE SETTINGS_TAG('N', 'P', 's', 'h')       /**< u8, pq_shuffle_t: 0 off, 1 songs; absent = off */
 #define SETTING_REPEAT SETTINGS_TAG('N', 'P', 'r', 'p')        /**< u8, pq_repeat_t: 0 off, 1 one, 2 all; absent = off */
 #define SETTING_RESUME_PLAY SETTINGS_TAG('N', 'P', 'r', 'a')   /**< u8, 0 or 1: start playing at boot when the resume record says playing; absent = 0 (restore paused) */
+#define SETTING_BT_DEVICE SETTINGS_TAG('N', 'P', 'b', 'd')     /**< the one remembered headset: version, address, class, name (bt_saved.h; 10..42 bytes) */
 #define SETTING_WIFI SETTINGS_TAG('N', 'P', 'w', 'f')            /**< 4 bytes: enabled, during playback, idle-off minutes, zone */
 #define SETTING_NTP_SERVER SETTINGS_TAG('N', 'P', 'n', 's')      /**< string */
 #define SETTING_TEST_URL SETTINGS_TAG('N', 'P', 't', 'u')        /**< string */

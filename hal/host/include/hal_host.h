@@ -27,6 +27,15 @@ void hal_host_set_chip_id(const uint8_t id[8]);
 /** Tests: the simulated access point goes away (link loss): hal_wifi_state() then reports HAL_WIFI_IDLE. */
 void hal_host_wifi_drop_link(void);
 
+/** Tests: the simulated Bluetooth headset goes away: a CONNECTED link turns FAILED with HAL_BT_FAIL_LINK_LOST. */
+void hal_host_bt_drop_link(void);
+
+/**
+ * Tests: the simulated headset hangs up (stage 2a, nothing is open on the link). CONNECTED turns DISCONNECTED (no failure, like reason 0x13 on the
+ * board); a Pair in progress ends FAILED with HAL_BT_FAIL_BUSY and a Connect with HAL_BT_FAIL_NOT_FOUND, and the Pair window closes at once.
+ */
+void hal_host_bt_remote_hangup(void);
+
 /** Write the panel's current contents to @p path as a binary PPM (P6). False on I/O error. */
 bool hal_host_display_dump_ppm(const char *path);
 

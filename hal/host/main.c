@@ -39,6 +39,14 @@
     "snap:wifi-found s _ snap:wifi-kb-empty _ s _ s s _ snap:wifi-kb p x x x x x x "          \
     "snap:wifi-joined m m m x x x snap:home-clock"
 
+// Bluetooth pairing (stage 2a): Settings > Bluetooth > Scan, pair the first headset (busy dots, then Connected), the Settings rows and right pane
+// with the remembered headset, Disconnect, Forget (asks twice), then a pairing the car kit refuses (Failed: pairing refused).
+#define TOUR_BT                                                                                    \
+    "x x x x s s s s _ x s s s s s s s s snap:settings-bt _ snap:bt-idle s s _ x x x x x x x x x "  \
+    "snap:bt-found s _ snap:bt-pairing x x x x snap:bt-paired m snap:bt-saved m snap:settings-bt-saved _ s s s s _ x "       \
+    "snap:bt-disconnected s _ snap:bt-forget-asks _ snap:bt-forgotten s s _ x x x x x x x x x s s s s _ x x x x "           \
+    "snap:bt-failed m m m"
+
 // Album art: Extras > Files > three albums, with a trip back to Home while the embedded-art album is paused (a Cover.JPG beside the track; a
 // JPEG inside the track; a PNG inside it plus a progressive cover.jpg beside it). The test tracks last 0.3 s: Settings > Repeat is set to
 // One first (a track that ended would drop Now Playing to idle before the snapshot), each track is paused (wait: tokens hold the script until the player / art service get there, so no wall-clock timing) so the art
@@ -102,6 +110,10 @@ int main(int argc, char **argv) {
             cfg.ui_script = TOUR_WIFI;
             cfgp_tour = true;
             g_expect = 8;
+        } else if (strcmp(argv[i], "--tour-bt") == 0) {
+            cfg.ui_script = TOUR_BT;
+            cfgp_tour = true;
+            g_expect = 13;
         } else if (strcmp(argv[i], "--tour-art") == 0) {
             cfg.ui_script = TOUR_ART;
             cfgp_tour = true;
@@ -113,7 +125,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--snapshots") == 0 && i + 1 < argc) {
             g_snapshot_dir = argv[++i];
         } else {
-            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-art] [--script KEYS] [--snapshots DIR]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art] [--script KEYS] [--snapshots DIR]\n", argv[0]);
             return 64;
         }
     }

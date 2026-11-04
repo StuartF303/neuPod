@@ -401,7 +401,10 @@ static void pane_text(int32_t g, char *out, size_t n) {
             } else {
                 snprintf(a, sizeof a, "-");
             }
-            snprintf(out, n, "%s\n%s\nSelect to scan", bs == HAL_BT_SCANNING ? "Scanning..." : "On", a);
+            char hs[80];
+            ui_bt_headset_text(hs, sizeof hs);
+            snprintf(out, n, "%s\n%s\n%s%sSelect to %s", bs == HAL_BT_SCANNING ? "Scanning..." : "On", a, hs, hs[0] != '\0' ? "\n" : "",
+                     hs[0] != '\0' ? "manage" : "scan");
         } else if (bs == HAL_BT_STARTING) {
             snprintf(out, n, "Starting...");
         } else {
