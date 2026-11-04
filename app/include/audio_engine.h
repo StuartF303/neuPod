@@ -66,6 +66,8 @@ typedef struct {
     uint32_t channels, bits;
     uint32_t verify;     /**< FLAC: decode flat out, no sound, and compare the MD5 */
     uint64_t total_frames; /**< length the container announces (0 = unknown, or not trustworthy: MP3 estimates) */
+    uint32_t skip_frames;  /**< ALAC: encoder priming frames to drop at the start (with trim_exact) */
+    uint32_t trim_exact;   /**< 1: total_frames is the exact output length (edit list / iTunSMPB): the decoder cuts there */
     uint8_t md5[16];     /**< FLAC STREAMINFO checksum (all zero: none recorded) */
     uint32_t cookie_len; /**< ALAC magic cookie */
     uint8_t cookie[64];
@@ -77,7 +79,7 @@ typedef enum {
     AUDIO_EVT_STREAM_OPENED = 1,
     AUDIO_EVT_STREAM_CLOSED,
     AUDIO_EVT_UNDERRUN,     /**< value = total underruns so far (at most one event per second) */
-    AUDIO_EVT_END_OF_TRACK, /**< the PCM stream ran to its end and has finished playing */
+    AUDIO_EVT_END_OF_TRACK, /**< a stream's last sample has played. value 0: nothing follows (the output stops); 1: gapless handoff, the next stream is already playing */
     AUDIO_EVT_CMD_ERROR,    /**< value = command type that failed */
     AUDIO_EVT_STORM,        /**< PCM data starved for too long: playback was stopped and muted (value = blocks) */
 } audio_event_type_t;
@@ -110,7 +112,8 @@ bool audio_tone(uint32_t mode);
 bool audio_pcm_start(uint32_t rate, uint8_t channels, uint8_t bits);
 /**
  * Start a codec stream (FLAC / MP3: the compressed bytes in file order; ALAC: length-prefixed packets). As for
- * audio_pcm_start(), write no data before audio_pcm_started_count() shows the request was processed.
+ * audio_pcm_start(), write no data before audio_pcm_started_count() shows the request was processed. Replaces whatever plays,
+ * with a ramp, and cancels an announced successor.
  */
 bool audio_stream_start(const audio_stream_desc_t *d);
 /** Seek requests from the decoder: true (once per request) with the stream byte offset wanted. */
@@ -120,12 +123,36 @@ void audio_seek_ack(void);
 /** Core 1 has flushed the ring: the feed may resume. */
 bool audio_seek_done(void);
 uint32_t audio_codec_error(void);
-/** Number of audio_pcm_start() requests core 1 has finished setting up (data may be written once this reaches your count). */
+/** Number of hard starts (audio_pcm_start / audio_stream_start) core 1 has finished setting up (data may be written once this reaches your count). */
 uint32_t audio_pcm_started_count(void);
-/** Number of PCM streams that played to their end (AUDIO_EVT_END_OF_TRACK, but pollable by any task). */
+/** Number of streams that played to their end with nothing following (AUDIO_EVT_END_OF_TRACK with value 0, but pollable by any task). */
 uint32_t audio_pcm_ended_count(void);
-/** No more PCM follows what is already in the data ring: report AUDIO_EVT_END_OF_TRACK when it has played. */
+/** Number of gapless handoffs completed: the last sample of a stream has played and the announced successor's first sample follows
+ *  (AUDIO_EVT_END_OF_TRACK with value 1). */
+uint32_t audio_track_change_count(void);
+/**
+ * The current stream's last byte is in the data ring: publish its length so core 1 knows where it ends. If a successor was announced
+ * (audio_stream_next), the bytes written from now on belong to it, and it may be written at once (no waiting for core 1).
+ * Call audio_stream_next_pending() first to know which case applies. Always succeeds once a stream was started.
+ */
+bool audio_stream_end(void);
+/** Old name of audio_stream_end(). */
 bool audio_pcm_end(void);
+/** True once the end of the stream being fed has been published (and not withdrawn by a seek). */
+bool audio_stream_end_published(void);
+/**
+ * Gapless handoff, step 1: tell core 1 which stream follows the one being fed. Accepted only when the current stream's decoder is
+ * open (core 1 reports it) and no successor is announced yet; otherwise false: try again later. The caller must then (a) finish
+ * writing the current stream, (b) call audio_stream_end(), (c) write the successor's bytes. @p d must have the same sample rate and
+ * channel count as the current stream (a different format is a hard start: audio_stream_start() after the end event).
+ */
+bool audio_stream_next(const audio_stream_desc_t *d);
+/** audio_stream_next() would be accepted right now. */
+bool audio_stream_next_ok(void);
+/** Withdraw an announced successor that has not started being written (skip, stop). Safe at any time. */
+void audio_stream_next_cancel(void);
+/** A successor is announced and the current stream has not been ended yet. */
+bool audio_stream_next_pending(void);
 bool audio_pause(bool paused);
 /** Stop the current source (tone or PCM) with a short fade; the stream stays open. */
 bool audio_stop(void);

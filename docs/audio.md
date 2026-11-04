@@ -187,6 +187,52 @@ More than 2 channels are rejected with a message, as are unsupported rates ("Uns
   request (byte offset), core 0 repositions the file and acknowledges, core 1 then empties the data ring and acknowledges back, and only then does core 0 write again
   (`stream_io.h`; unit-tested with a real second thread).
 
+### Gapless playback and the play queue
+
+Decision record: [ADR-0016](adr/0016-gapless-playback-and-play-queue.md). The queue is the playable files of the folder a track was chosen
+from, in Files order; the player (core 0) owns it. Gapless is on by default (Settings, "Gapless playback").
+
+**Handshake.** Every stream core 0 starts or announces gets a sequence number; its description (`audio_stream_desc_t`) and its length in
+bytes live in `g_audio_slot[seq & 1]`. The data ring carries streams back to back.
+
+1. Hard start (`audio_stream_start`, command `STREAM_START`, a = sequence number): core 1 flushes both rings, re-clocks the sink if the rate
+   differs, ramps, as before. It cancels any announcement.
+2. Once the current decoder is open (core 1 publishes `g_audio_open_seq`), the storage task asks the player which track follows, opens and
+   parses it (the rate and channel count must match) and announces it: `audio_stream_next()` fills the other slot, sets `g_audio_next_valid`
+   and sends `STREAM_NEXT`. Core 1 only remembers the number (it handles this command while waiting for data too).
+3. When the current track is completely in the ring, `audio_stream_end()` publishes its byte count in its slot and the announced track's
+   bytes follow immediately. Core 1's byte source (`sio_t.end`) reads the ring first and the length second, so whenever it sees the next
+   stream's bytes it also sees the boundary; reads never cross it, and the decoder sees the end of its stream there. Codecs that stop early
+   because of trimming (see below) skip the rest of the stream up to the boundary.
+4. The decoder returns its last frame: core 1 looks at the command ring once more (an announcement sent just before the end is not missed),
+   then, if the announcement is still valid (`g_audio_next_valid` re-read after copying the description), closes the decoder, opens the next one
+   on the same sink, PCM ring and volume, and pushes the number of PCM frames written so far into a small boundary ring. The block interrupt
+   counts the frames it serves; when they reach the boundary it reports `END_OF_TRACK` with value 1 and `elapsed` restarts. So the event
+   fires in the block that carries the old track's last sample (within 256 frames), not when decoding ends. No mute change, no ramp.
+5. Nothing announced (last track, gapless off, other rate or channel count, unreadable file, a track too short to chain): the track ends
+   as before (ring drains, ramp, `END_OF_TRACK` value 0) and the player starts the next one with a hard start.
+
+Seeks: a decoder only seeks while it opens, when nothing can be announced yet. A seek request nevertheless withdraws an announcement and the
+end marker (core 0), and `g_audio_next_valid` makes a stale `STREAM_NEXT` harmless. Stop, skip or a new start clear `g_audio_next_valid`
+before anything reuses a slot; core 1 drops its pending note on stop. Only one handoff may be pending at a time. A different format is
+refused by core 1 too (error event, the track ends normally).
+
+**Encoder delay and padding.** FLAC and WAV lengths are exact. MP3: with a LAME tag `dr_mp3` drops `delay + 529` frames at the start and `padding - 529`
+at the end; the parser reports exactly the length it will deliver, and the codec layer does not trim again. Without a LAME tag nothing is
+trimmed (and a missing frame count gives an estimate, shown with `~`). ALAC/M4A: the edit list (`elst`, one non-empty entry: `media_time` = priming,
+`segment_duration` = length) is preferred, else `iTunSMPB` (hex: priming, padding, original length). A trim that does not fit the media is
+ignored. The reported `total_frames` is the trimmed length. The test vectors: `tools/gen_trim_vectors.py`.
+
+**Host tests.** `gapless` runs the real core-1 loop and the real core-0 stream controller against a fake sink with a real-time block clock and
+compares the sink's samples frame by frame with each track decoded on its own (WAV, FLAC, MP3, ALAC with an edit list; skip, stop, seek and rate
+change cases). `play_queue` covers the queue rules.
+
+**Bench, 3 Nov 2026 (Pico 2 W):** `30-signals/gapless/` (3-part FLAC then 3-part LAME MP3, one queue): five `(gapless)`
+handoffs incl. FLAC → MP3, one `END_OF_TRACK(1)` per boundary, sink never re-clocked, mute line open throughout, 0 underruns.
+Next / Previous (restart when more than 3 s in, previous track within 3 s) / Next on the last track (`queue end`) correct; a skip
+while the successor was being announced leaves later joins gapless. Gapless Off: `(auto)` joins with the ramp, setting
+persists across a reboot. 44.1 → 48 kHz in `10-matrix/`: `(auto)` with a re-clock, `dma_underruns=0`, 0 underruns.
+
 ### Memory and CPU
 
 | | Value |

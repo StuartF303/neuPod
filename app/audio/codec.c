@@ -69,6 +69,8 @@ codec_err_t codec_open(codec_t *c, const codec_params_t *p, const codec_io_t *io
     c->kind = p->kind;
     c->verify = p->verify && p->kind == CODEC_FLAC;
     c->total_frames = p->total_frames;
+    c->skip_left = p->kind == CODEC_ALAC ? p->skip_frames : 0u; // MP3: dr_mp3 trims; FLAC: exact already
+    c->limit = p->trim_exact && p->kind == CODEC_ALAC ? p->total_frames : 0u;
     if (c->verify) {
         md5_init(&c->md5);
     }
@@ -159,8 +161,28 @@ static int32_t read_raw(codec_t *c, int32_t *out, uint32_t max_frames);
 // Zero frames means the end of the stream, an abandoned read (not our business), or a failure that looks like an end:
 // dr_flac and dr_mp3 return 0 on damaged data and on arena exhaustion, so those are told apart here.
 int32_t codec_read(codec_t *c, int32_t *out, uint32_t max_frames) {
-    int32_t n = read_raw(c, out, max_frames);
+    if (c->limit != 0 && c->frames_out >= c->limit) {
+        return 0; // the trimmed end (encoder padding follows in the stream)
+    }
+    int32_t n;
+    for (;;) {
+        n = read_raw(c, out, max_frames);
+        if (n <= 0 || c->skip_left == 0) {
+            break;
+        }
+        uint32_t k = (uint32_t)n < c->skip_left ? (uint32_t)n : c->skip_left; // encoder priming: not part of the track
+        c->skip_left -= k;
+        if (k == (uint32_t)n) {
+            continue;
+        }
+        memmove(out, out + 2u * k, (size_t)(n - (int32_t)k) * 2u * sizeof(int32_t));
+        n -= (int32_t)k;
+        break;
+    }
     if (n > 0) {
+        if (c->limit != 0 && c->frames_out + (uint32_t)n > c->limit) {
+            n = (int32_t)(c->limit - c->frames_out);
+        }
         c->frames_out += (uint32_t)n;
         return n;
     }

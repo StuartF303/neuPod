@@ -223,6 +223,7 @@ static void monitor_task(void *arg) {
         os_delay_until_ms(&last, 100);
         uint32_t t = os_tick_ms() - start;
         drain_audio_events();
+        player_service(); // the queue moves on even when no screen is polling the player
         if (t >= next_beat) {
             next_beat += HEARTBEAT_MS;
             check_audio_alive();

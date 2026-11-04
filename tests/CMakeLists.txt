@@ -227,3 +227,34 @@ if(NEUPOD_HOST_ASAN)
   target_link_libraries(test_codecs_asan Threads::Threads m)
   add_test(NAME codecs_asan COMMAND test_codecs_asan)
 endif()
+
+# Gapless playback: the real core-1 loop (audio_core.c, white box) with a fake sink, fed by the real core-0 stream controller from
+# the vectors in tests/assets/audio; the sink output is compared with the tracks decoded on their own.
+add_executable(test_gapless test_gapless.c
+  ${CMAKE_SOURCE_DIR}/app/audio/audio_shared.c ${CMAKE_SOURCE_DIR}/app/audio/audio_ctl.c ${CMAKE_SOURCE_DIR}/app/audio/codec.c
+  ${CMAKE_SOURCE_DIR}/app/audio/track_feed.c ${CMAKE_SOURCE_DIR}/app/audio/track_stream.c ${NEUPOD_CODEC_TEST_VENDOR})
+target_include_directories(test_gapless PRIVATE ${CMAKE_SOURCE_DIR}/app/include ${CMAKE_SOURCE_DIR}/app/third_party/alac)
+target_compile_definitions(test_gapless PRIVATE NEUPOD_TEST_ASSETS="${CMAKE_SOURCE_DIR}/tests/assets/audio")
+target_link_libraries(test_gapless neupod_rt_core Threads::Threads m)
+set_source_files_properties(test_gapless.c PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Wno-multichar")
+add_test(NAME gapless COMMAND test_gapless)
+set_tests_properties(gapless PROPERTIES TIMEOUT 120)
+
+# Play queue: folder order, skipping non-audio entries, next / previous rules, end of queue.
+add_executable(test_play_queue test_play_queue.c)
+target_link_libraries(test_play_queue neupod_rt_core)
+add_test(NAME play_queue COMMAND test_play_queue)
+set_source_files_properties(test_play_queue.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+# art_service retargeted by a track change in the middle of a decode (gapless handoff): the old picture must not be published.
+add_executable(test_art_service test_art_service.c ${CMAKE_SOURCE_DIR}/app/runtime/art_service.c)
+target_compile_definitions(test_art_service PRIVATE NEUPOD_ART_ASSETS="${CMAKE_SOURCE_DIR}/tests/assets/art")
+target_link_libraries(test_art_service neupod_rt_core neupod_storage_tests hal_host)
+set_source_files_properties(test_art_service.c PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra")
+add_test(NAME art_service COMMAND test_art_service)
+
+# Player queue / gapless announcement bookkeeping against fakes of the audio core, storage and settings.
+add_executable(test_player test_player.c ${CMAKE_SOURCE_DIR}/app/runtime/player.c)
+target_link_libraries(test_player neupod_rt_core)
+set_source_files_properties(test_player.c PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra")
+add_test(NAME player COMMAND test_player)

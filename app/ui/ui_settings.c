@@ -19,6 +19,7 @@
 #include "neupod_version.h"
 #include "nfs.h"
 #include "os.h"
+#include "player.h"
 #include "storage_service.h"
 #include "ui_input.h"
 #include "wifi_service.h"
@@ -232,7 +233,7 @@ static ui_screen_t *make_display(void) {
 
 /* ---- the Settings screen itself ---------------------------------------------------------------------- */
 
-enum { G_ABOUT, G_DISPLAY, G_CLICK, G_BLUETOOTH, G_WIFI, G_STORAGE, G_BATTERY, G_COUNT };
+enum { G_ABOUT, G_DISPLAY, G_CLICK, G_GAPLESS, G_BLUETOOTH, G_WIFI, G_STORAGE, G_BATTERY, G_COUNT };
 
 typedef struct {
     ui_screen_t base;
@@ -243,13 +244,15 @@ typedef struct {
     char text[200];
 } settings_t;
 
-static const char *const k_group[G_COUNT] = {"About", "Display", "Click feedback", "Bluetooth", "Wi-Fi", "Storage", "Battery"};
+static const char *const k_group[G_COUNT] = {"About", "Display", "Click feedback", "Gapless playback", "Bluetooth", "Wi-Fi", "Storage", "Battery"};
 
 static void settings_get(void *ctx, int32_t i, ui_list_item_t *o) {
     (void)ctx;
     snprintf(o->label, sizeof o->label, "%s", k_group[i]);
     if (i == G_CLICK) {
         snprintf(o->detail, sizeof o->detail, "%s", g_ui_state.click_feedback ? "On" : "Off");
+    } else if (i == G_GAPLESS) {
+        snprintf(o->detail, sizeof o->detail, "%s", player_gapless_enabled() ? "On" : "Off");
     } else if (i == G_DISPLAY) {
         snprintf(o->detail, sizeof o->detail, "%u %%", (unsigned)g_ui_state.backlight_pct);
         o->chevron = true;
@@ -277,6 +280,10 @@ static void pane_text(int32_t g, char *out, size_t n) {
     case G_CLICK:
         snprintf(out, n, "Haptic click\n%s\n%s", g_ui_state.click_feedback ? "On" : "Off",
                  caps_available(CAP_HAPTICS) ? "Motor ready" : "No haptic driver");
+        break;
+    case G_GAPLESS:
+        snprintf(out, n, "Gapless\n%s\n%s", player_gapless_enabled() ? "On" : "Off",
+                 player_gapless_enabled() ? "Tracks of one album play without a break" : "Short pause between tracks");
         break;
     case G_BLUETOOTH: {
         hal_bt_state_t bs = hal_bt_state();
@@ -366,6 +373,11 @@ static bool settings_button(ui_screen_t *b, uint8_t btn) {
         ui_list_refresh(s->list);
         settings_update_pane(s);
         ui_feedback_step(); /* a click when switched on is the confirmation */
+        return true;
+    case G_GAPLESS:
+        player_set_gapless(!player_gapless_enabled()); /* saved with the other settings; read when the next track is prepared */
+        ui_list_refresh(s->list);
+        settings_update_pane(s);
         return true;
     case G_BLUETOOTH: next = make_bluetooth(); break;
     case G_WIFI: next = ui_screen_wifi_create(); break;

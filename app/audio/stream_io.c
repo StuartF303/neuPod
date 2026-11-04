@@ -16,8 +16,22 @@ size_t sio_read(void *ctx, void *dst, size_t n) {
     while (got < n) {
         bool eof = *s->eof != 0; // read before the ring: data written before the flag is then visible
         uint32_t avail = spsc_ring_available(s->ring);
+        uint32_t want = (uint32_t)(n - got);
+        if (s->end != NULL) { // after the ring: if the next stream's bytes are visible, the boundary before them is too
+            uint32_t end = *s->end;
+            if (end != SIO_END_UNKNOWN) {
+                uint64_t at = s->pos + got;
+                uint32_t rem = end > at ? (uint32_t)(end - at) : 0u;
+                if (rem == 0) {
+                    break; // the stream is over; whatever follows in the ring belongs to the next one
+                }
+                if (want > rem) {
+                    want = rem;
+                }
+            }
+        }
         if (avail != 0) {
-            got += spsc_ring_read(s->ring, d + got, (uint32_t)(n - got));
+            got += spsc_ring_read(s->ring, d + got, want);
             continue;
         }
         if (eof) {
@@ -43,6 +57,15 @@ static bool discard(sio_t *s, uint64_t n) {
         n -= k;
     }
     return true;
+}
+
+bool sio_drain_end(sio_t *s) {
+    uint8_t tmp[128];
+    for (;;) {
+        if (sio_read(s, tmp, sizeof tmp) < sizeof tmp) {
+            return !s->aborted;
+        }
+    }
 }
 
 bool sio_aborted(void *ctx) { return ((sio_t *)ctx)->aborted; }

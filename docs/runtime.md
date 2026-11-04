@@ -34,10 +34,11 @@ printed in the audio line (`core1_stack_free=`).
 
 | From to | Mechanism |
 | --- | --- |
-| core 0 to 1: commands | ring of `audio_cmd_t` (open, close, statistics window, volume, tone, PCM start/end, pause, stop); several core-0 tasks send, so `audio_ctl.c` serialises them with a mutex |
+| core 0 to 1: commands | ring of `audio_cmd_t` (open, close, statistics window, volume, tone, stream start, stream next, pause, stop); several core-0 tasks send, so `audio_ctl.c` serialises them with a mutex |
 | core 0 to 1: stream data | byte ring, 32 KB, fed by the storage task while a file plays: raw WAV bytes, compressed FLAC / MP3 bytes, or length-prefixed ALAC packets |
+| core 0 to 1: stream slots | two slots (`seq & 1`) with the stream description and its byte length (published once its last byte is in the ring), plus `g_audio_next_valid` (the announced successor, cleared to cancel); see [Audio](audio.md#gapless-playback-and-the-play-queue) |
 | core 1 to 0: seek request | request counter plus byte offset, acknowledged by core 0, flush acknowledged by core 1 (`stream_io.h`) |
-| core 1 to 0: handshake | two counters written only by core 1: PCM streams set up / played to the end (core 0 must not write data for a new stream before the first one moves) |
+| core 1 to 0: handshake | counters written only by core 1: streams set up / ended with nothing following (core 0 must not write data for a new stream before the first moves), the sequence number of the open decoder, and gapless handoffs completed (written by the block interrupt) |
 | core 1 to 0: events | two rings (one per producer: the block interrupt, the main loop): stream opened/closed, underrun (at most ~1/s), end of track, command error |
 | core 1 to 0: statistics | seqlock-published `audio_stats_t`, written only by the block interrupt |
 | inside core 1: decoder to sink | PCM ring, 4096 stereo int32 frames (16 blocks, 93 ms at 44.1 kHz) |
@@ -74,7 +75,7 @@ Priority 7 is the highest; the kernel idle task is 0.
 | boot checks (transient, 6) | 1 | 3 to 5 KB | once at boot | bounded by per-check deadlines |
 
 Core 1 has its own 16 KB stack array and a 116 KB codec arena (both static RAM). Heap: `heap_4`, 80 KB (`NEUPOD_RTOS_HEAP_BYTES`, `app/os/memory_budget.h`), holds task stacks and kernel objects; static RAM beyond that is the LVGL
-pool (72 KB, `NEUPOD_LVGL_POOL_BYTES`), the BTstack pools (about 7 KB), the settings store (about 5 KB), the two render buffers (30 KB), the album-art thumbnail (8 KB, `app/runtime/art_service.c`), the directory-listing buffer (about 19 KB) and the audio core's rings and block buffer (about 28 KB).
+pool (72 KB, `NEUPOD_LVGL_POOL_BYTES`), the BTstack pools (about 7 KB), the settings store (about 5 KB), the two render buffers (30 KB), the album-art thumbnail (8 KB, `app/runtime/art_service.c`), the directory-listing buffer (about 19 KB) and the audio core's rings and block buffer (about 28 KB), the play queue (3.6 KB) and two track contexts for the stream controller (2.8 KB).
 The monitor prints the heap low-water mark and each task's lowest free stack every 10 s. Input is above
 the UI so wheel frames are never lost while LVGL renders; the monitor is lowest; boot-check tasks sit
 below the UI so the splash keeps animating while they run.

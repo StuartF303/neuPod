@@ -12,6 +12,8 @@
 #include "settings_store.h"
 #include "storage_service.h"
 #include "meta.h"
+#include "track_feed.h"
+#include "track_stream.h"
 #include "wav.h"
 
 typedef enum { REQ_LIST, REQ_SPACE, REQ_PREFETCH, REQ_PLAY, REQ_STOP, REQ_VERIFY, REQ_SETTINGS_LOAD } req_kind_t;
@@ -142,44 +144,7 @@ static void list_dir(const storage_req_t *rq, storage_result_t *res) {
 
 // ---- Streaming: card -> audio core's data ring ----------------------------------------------------------
 //
-// One file at a time. WAV: raw PCM bytes. FLAC / MP3: the compressed bytes in file order (FLAC with a synthesised
-// 42-byte header in place of the file's metadata). M4A (ALAC): demuxed here, then each packet is sent with a
-// 4-byte big-endian length in front. The decoders run on core 1; see docs/audio.md.
-
-#define STREAM_CHUNK 2048u // one SD read; small enough not to hold the task (priority 5) for long
-typedef enum { FEED_BYTES, FEED_M4A } feed_kind_t;
-static struct {
-    nfs_file_t *f;
-    bool active;
-    feed_kind_t kind;
-    // FEED_BYTES: [hdr][file bytes from base, data_len of them]
-    uint8_t hdr[FLAC_SYNTH_HEADER_BYTES];
-    uint32_t hdr_len, hdr_pos;
-    uint64_t base, data_len, remaining;
-    // FEED_M4A
-    mp4_info_t mp4;
-    mp4_iter_t it;
-    uint64_t cur_off;
-    uint32_t cur_left, cur_size;
-    bool len_pending;
-    // seek handshake: 0 none, 1 acked and waiting for the audio core to flush
-    int seek_state;
-    // end of stream: file closed, the end marker still has to reach the audio core (retried until accepted) and the
-    // stream stays registered until the audio core reports the end, so a late seek request is still answered
-    bool finishing, end_sent;
-    uint32_t ended_base;
-} g_stream;
-static uint8_t g_chunk[STREAM_CHUNK];
-
-static void stream_close(void) {
-    if (g_stream.f != NULL) {
-        (void)nfs_close(g_stream.f);
-    }
-    g_stream.f = NULL;
-    g_stream.active = false;
-    g_stream.seek_state = 0;
-    g_stream.finishing = g_stream.end_sent = false;
-}
+// The stream controller (app/audio/track_stream.c, docs/audio.md) does the work; this is its glue to the card and the player.
 
 static int32_t file_read_cb(void *ctx, uint64_t off, void *dst, uint32_t n) {
     size_t got = 0;
@@ -189,344 +154,59 @@ static int32_t file_read_cb(void *ctx, uint64_t off, void *dst, uint32_t n) {
     return (int32_t)got;
 }
 
-static bool ext_is(const char *path, const char *ext) {
-    size_t n = strlen(path), e = strlen(ext);
-    if (n < e) {
-        return false;
-    }
-    for (size_t i = 0; i < e; i++) {
-        char c = path[n - e + i];
-        if (c >= 'A' && c <= 'Z') {
-            c = (char)(c + 'a' - 'A');
-        }
-        if (c != ext[i]) {
-            return false;
-        }
-    }
-    return true;
-}
-
-static const char *base_name(const char *path) {
-    const char *s = strrchr(path, '/');
-    return s != NULL ? s + 1 : path;
-}
-
-static void rate_text(uint32_t rate, char *out, size_t n) {
-    unsigned k10 = rate / 100u;
-    if (k10 % 10u == 0) {
-        snprintf(out, n, "%u", k10 / 10u);
-    } else {
-        snprintf(out, n, "%u.%u", k10 / 10u, k10 % 10u);
-    }
-}
-
-static void fill_format(player_file_t *pf, const char *name, unsigned bits, uint32_t rate, unsigned channels) {
-    char r[12];
-    rate_text(rate, r, sizeof r);
-    snprintf(pf->format, sizeof pf->format, "%s %u/%s%s", name, bits, r, channels == 1 ? " mono" : "");
-}
-
-static void stream_start(const char *path, bool verify) {
-    stream_close();
-    char msg[80];
+static const char *ts_open(const char *path, meta_read_fn *rd, void **rctx, uint64_t *size, char *msg, size_t msg_n) {
     nfs_file_t *f;
     nfs_err_t err = nfs_open(&f, path, NFS_O_READ);
-    uint64_t size = 0;
-    if (err == NFS_OK && (err = nfs_size(f, &size)) != NFS_OK) {
+    if (err == NFS_OK && (err = nfs_size(f, size)) != NFS_OK) {
         (void)nfs_close(f);
     }
     if (err != NFS_OK) {
-        snprintf(msg, sizeof msg, "Cannot open file: %s", nfs_err_str(err));
-        player_file_failed(msg);
-        return;
+        snprintf(msg, msg_n, "Cannot open file: %s", nfs_err_str(err));
+        return msg;
     }
-    meta_set_scratch(g_chunk, sizeof g_chunk); // header parsing borrows the chunk buffer: no stream is feeding now
+    *rd = file_read_cb;
+    *rctx = f;
+    return NULL;
+}
+
+static void ts_close(void *rctx) { (void)nfs_close((nfs_file_t *)rctx); }
+
+static void to_player_file(const track_info_t *i, player_file_t *pf) {
+    memset(pf, 0, sizeof *pf);
+    snprintf(pf->format, sizeof pf->format, "%s", i->format);
+    pf->rate = i->rate;
+    pf->total_frames = i->total_frames;
+    pf->tags = i->tags;
+    pf->title_is_name = i->title_is_name;
+    pf->estimated = i->estimated;
+    pf->verify = i->verify;
+    pf->codec = i->codec;
+    memcpy(pf->md5, i->md5, 16);
+}
+
+static void ts_started(const char *path, const track_info_t *i) {
     player_file_t pf;
-    memset(&pf, 0, sizeof pf);
-    audio_stream_desc_t d;
-    memset(&d, 0, sizeof d);
-    const char *fail = NULL;
-    memset(&g_stream, 0, sizeof g_stream);
-    snprintf(pf.tags.title, sizeof pf.tags.title, "%s", base_name(path));
-    pf.title_is_name = true;
-
-    if (ext_is(path, ".wav")) {
-        wav_info_t w;
-        wav_err_t we = wav_parse(file_read_cb, f, size, &w);
-        if (we != WAV_OK) {
-            fail = wav_err_str(we);
-        } else {
-            d.codec = AUDIO_CODEC_PCM;
-            d.rate = w.rate;
-            d.channels = w.channels;
-            d.bits = w.bits;
-            pf.rate = w.rate;
-            pf.total_frames = w.frames;
-            fill_format(&pf, "WAV", w.bits, w.rate, w.channels);
-            g_stream.kind = FEED_BYTES;
-            g_stream.base = w.data_offset;
-            g_stream.data_len = w.data_bytes;
-        }
-    } else if (ext_is(path, ".flac")) {
-        flac_info_t fi;
-        meta_err_t me = flac_parse(file_read_cb, f, size, &fi);
-        if (me != META_OK) {
-            fail = meta_err_str(me);
-        } else {
-            d.codec = AUDIO_CODEC_FLAC;
-            d.rate = fi.rate;
-            d.channels = fi.channels;
-            d.bits = fi.bits;
-            d.verify = verify;
-            d.total_frames = fi.total_frames;
-            memcpy(d.md5, fi.md5, 16);
-            pf.rate = fi.rate;
-            pf.total_frames = fi.total_frames;
-            pf.tags = fi.tags;
-            pf.title_is_name = fi.tags.title[0] == '\0';
-            if (pf.title_is_name) {
-                snprintf(pf.tags.title, sizeof pf.tags.title, "%s", base_name(path));
-            }
-            fill_format(&pf, "FLAC", fi.bits, fi.rate, fi.channels);
-            g_stream.kind = FEED_BYTES;
-            g_stream.hdr_len = flac_make_header(&fi, g_stream.hdr);
-            g_stream.base = fi.audio_offset;
-            g_stream.data_len = size > fi.audio_offset ? size - fi.audio_offset : 0;
-        }
-    } else if (ext_is(path, ".mp3") && !verify) {
-        mp3_info_t mi;
-        meta_err_t me = mp3_parse(file_read_cb, f, size, &mi);
-        if (me != META_OK) {
-            fail = meta_err_str(me);
-        } else {
-            d.codec = AUDIO_CODEC_MP3;
-            d.rate = mi.rate;
-            d.channels = mi.channels;
-            d.bits = 32;
-            pf.rate = mi.rate;
-            pf.total_frames = mi.total_frames;
-            pf.estimated = mi.estimated;
-            pf.tags = mi.tags;
-            pf.title_is_name = mi.tags.title[0] == '\0';
-            if (pf.title_is_name) {
-                snprintf(pf.tags.title, sizeof pf.tags.title, "%s", base_name(path));
-            }
-            snprintf(pf.format, sizeof pf.format, "MP3 %s%uk", mi.vbr ? "VBR ~" : "", (unsigned)mi.bitrate_kbps);
-            g_stream.kind = FEED_BYTES;
-            g_stream.base = mi.audio_offset;
-            g_stream.data_len = size > mi.audio_offset ? size - mi.audio_offset : 0;
-        }
-    } else if ((ext_is(path, ".m4a") || ext_is(path, ".mp4")) && !verify) {
-        meta_err_t me = mp4_parse(file_read_cb, f, size, &g_stream.mp4);
-        if (me != META_OK) {
-            fail = meta_err_str(me);
-        } else {
-            const mp4_info_t *m = &g_stream.mp4;
-            d.codec = AUDIO_CODEC_ALAC;
-            d.rate = m->rate;
-            d.channels = m->channels;
-            d.bits = m->bits;
-            d.cookie_len = m->cookie_len;
-            d.total_frames = m->total_frames;
-            memcpy(d.cookie, m->cookie, m->cookie_len);
-            pf.rate = m->rate;
-            pf.total_frames = m->total_frames;
-            pf.tags = m->tags;
-            pf.title_is_name = m->tags.title[0] == '\0';
-            if (pf.title_is_name) {
-                snprintf(pf.tags.title, sizeof pf.tags.title, "%s", base_name(path));
-            }
-            fill_format(&pf, "ALAC", m->bits, m->rate, m->channels);
-            g_stream.kind = FEED_M4A;
-            mp4_iter_init(&g_stream.it, &g_stream.mp4);
-        }
-    } else if (verify) {
-        fail = "Verify works on FLAC files";
-    } else {
-        fail = "Not a playable file";
-    }
-    if (fail != NULL) {
-        (void)nfs_close(f);
-        memset(&g_stream, 0, sizeof g_stream);
-        player_file_failed(fail);
-        return;
-    }
-    pf.verify = verify;
-    pf.codec = d.codec;
-    memcpy(pf.md5, d.md5, 16);
-
-    uint32_t want = audio_pcm_started_count() + 1u;
-    bool sent = d.codec == AUDIO_CODEC_PCM ? audio_pcm_start(d.rate, (uint8_t)d.channels, (uint8_t)d.bits) : audio_stream_start(&d);
-    if (!sent) {
-        (void)nfs_close(f);
-        memset(&g_stream, 0, sizeof g_stream);
-        player_file_failed("Audio engine busy, try again");
-        return;
-    }
-    // The audio core flushes its data ring while setting the stream up (and re-clocks the DAC if the rate
-    // changed): write nothing before it says it is ready.
-    for (uint32_t t = 0; audio_pcm_started_count() != want; t += 2) {
-        if (t > 1500u) {
-            (void)nfs_close(f);
-            memset(&g_stream, 0, sizeof g_stream);
-            player_file_failed("Audio engine did not respond");
-            return;
-        }
-        os_delay_ms(2);
-    }
-    g_stream.f = f;
-    g_stream.remaining = g_stream.data_len;
-    if (g_stream.kind == FEED_BYTES && nfs_seek(f, g_stream.base) != NFS_OK) {
-        stream_close();
-        (void)audio_stop();
-        player_file_failed("Cannot read the audio data");
-        return;
-    }
-    g_stream.ended_base = audio_pcm_ended_count();
-    g_stream.active = true;
+    to_player_file(i, &pf);
     player_file_started(&pf);
-    if (!verify) {
+    if (!i->verify) {
         art_service_track(path, &pf.tags); // queues the album art; it is decoded later, between audio top-ups (art_yield)
     }
 }
 
-static void stream_finish(void) {
-    if (g_stream.f != NULL) {
-        (void)nfs_close(g_stream.f);
-        g_stream.f = NULL;
-    }
-    g_stream.finishing = true; // the end marker is sent from stream_pump, retried until the audio core's command ring takes it
+// Gapless handoff: the new track's art (the per-album cache makes a same-album change free).
+static void ts_track_changed(const char *path, const track_info_t *i) { art_service_track(path, &i->tags); }
+
+static void ts_next_announced(const track_info_t *i) {
+    player_file_t pf;
+    to_player_file(i, &pf);
+    player_next_announced(&pf);
 }
 
-// Reposition the feed for the audio core's seek request (stream byte offset) and tell it we are idle.
-static void stream_seek(uint64_t off) {
-    if (g_stream.finishing) {
-        g_stream.end_sent = false; // the audio core drops its end flag when it flushes: send the marker again afterwards
-    } else if (g_stream.kind == FEED_BYTES) {
-        if (off < g_stream.hdr_len) {
-            g_stream.hdr_pos = (uint32_t)off;
-            g_stream.remaining = g_stream.data_len;
-            (void)nfs_seek(g_stream.f, g_stream.base);
-        } else {
-            uint64_t in = off - g_stream.hdr_len;
-            if (in > g_stream.data_len) {
-                in = g_stream.data_len;
-            }
-            g_stream.hdr_pos = g_stream.hdr_len;
-            g_stream.remaining = g_stream.data_len - in;
-            (void)nfs_seek(g_stream.f, g_stream.base + in);
-        }
-    } else { // packet streams have no byte positions a decoder can seek to; restart from the first packet
-        mp4_iter_init(&g_stream.it, &g_stream.mp4);
-        g_stream.cur_left = 0;
-        g_stream.len_pending = false;
-    }
-    audio_seek_ack();
-    g_stream.seek_state = 1;
-}
+static uint32_t ts_now(void) { return os_tick_ms(); }
 
-static void stream_pump(void) {
-    if (!g_stream.active) {
-        return;
-    }
-    if (g_stream.finishing && audio_pcm_ended_count() != g_stream.ended_base) { // the audio core has finished: nothing more can be asked
-        stream_close();
-        return;
-    }
-    if (g_stream.seek_state == 0) {
-        uint64_t off;
-        if (audio_seek_poll(&off)) {
-            stream_seek(off);
-        }
-    }
-    if (g_stream.seek_state == 1) { // wait for the audio core to flush its ring before writing again
-        if (audio_seek_done()) {
-            g_stream.seek_state = 0;
-        }
-        return;
-    }
-    if (g_stream.finishing) {
-        if (!g_stream.end_sent && audio_pcm_end()) {
-            g_stream.end_sent = true; // keep the stream registered (1 ms ticks) until the audio core reports the end
-        }
-        return;
-    }
-    uint32_t space = audio_data_space();
-    if (g_stream.kind == FEED_BYTES) {
-        if (g_stream.hdr_pos < g_stream.hdr_len) {
-            uint32_t n = g_stream.hdr_len - g_stream.hdr_pos;
-            if (space >= n) {
-                (void)audio_data_write(g_stream.hdr + g_stream.hdr_pos, n);
-                g_stream.hdr_pos += n;
-            }
-            return;
-        }
-        if (space < STREAM_CHUNK) {
-            return;
-        }
-        size_t want = g_stream.remaining < STREAM_CHUNK ? (size_t)g_stream.remaining : STREAM_CHUNK;
-        size_t got = 0;
-        nfs_err_t err = want != 0 ? nfs_read(g_stream.f, g_chunk, want, &got) : NFS_OK;
-        if (err != NFS_OK) {
-            stream_close();
-            (void)audio_stop();
-            player_file_failed("Card read error during playback");
-            return;
-        }
-        if (got > 0) {
-            (void)audio_data_write(g_chunk, (uint32_t)got); // space was checked and we are the only producer
-            g_stream.remaining -= got;
-        }
-        if (got == 0 || g_stream.remaining == 0) {
-            stream_finish();
-        }
-        return;
-    }
-    // FEED_M4A
-    if (g_stream.cur_left == 0 && !g_stream.len_pending) {
-        uint64_t off;
-        uint32_t sz;
-        if (!mp4_iter_next(&g_stream.it, file_read_cb, g_stream.f, &off, &sz)) {
-            stream_finish();
-            return;
-        }
-        g_stream.cur_off = off;
-        g_stream.cur_left = g_stream.cur_size = sz;
-        g_stream.len_pending = true;
-        if (nfs_seek(g_stream.f, off) != NFS_OK) {
-            stream_close();
-            (void)audio_stop();
-            player_file_failed("Card read error during playback");
-            return;
-        }
-        return;
-    }
-    if (g_stream.len_pending) {
-        if (space >= 4) {
-            uint8_t l[4] = {(uint8_t)(g_stream.cur_size >> 24), (uint8_t)(g_stream.cur_size >> 16),
-                            (uint8_t)(g_stream.cur_size >> 8), (uint8_t)g_stream.cur_size};
-            (void)audio_data_write(l, 4);
-            g_stream.len_pending = false;
-        }
-        return;
-    }
-    if (space < 256u) {
-        return;
-    }
-    size_t want = g_stream.cur_left < STREAM_CHUNK ? g_stream.cur_left : STREAM_CHUNK;
-    if (want > space) {
-        want = space;
-    }
-    size_t got = 0;
-    if (nfs_read(g_stream.f, g_chunk, want, &got) != NFS_OK || got == 0) {
-        stream_close();
-        (void)audio_stop();
-        player_file_failed("Card read error during playback");
-        return;
-    }
-    (void)audio_data_write(g_chunk, (uint32_t)got);
-    g_stream.cur_left -= (uint32_t)got;
-}
+static const track_stream_ops_t k_stream_ops = {.open = ts_open, .close = ts_close, .next_track = player_next_track,
+                                                .next_announced = ts_next_announced, .started = ts_started, .track_changed = ts_track_changed,
+                                                .failed = player_file_failed, .now_ms = ts_now, .delay_ms = os_delay_ms};
 
 #define SETTINGS_POLL_MS 500u
 // A settings save is SD writes (a FAT update and two data sectors: typically a few ms, but an SD card may stall far longer). It must
@@ -562,7 +242,7 @@ static bool art_yield(void *ctx) {
     if (os_queue_pending(g_req_q)) {
         return false;
     }
-    stream_pump();
+    track_stream_pump();
     uint32_t now = os_tick_ms();
     if (now - slice_start >= ART_SLICE_MS) {
         os_delay_ms(1);
@@ -574,12 +254,13 @@ static bool art_yield(void *ctx) {
 
 void storage_task(void *arg) {
     (void)arg;
+    track_stream_init(&k_stream_ops);
     for (;;) {
         storage_req_t rq;
         // While a file streams, wake every millisecond to keep the audio data ring full.
         // Idle: wake twice a second so a pending settings save is not forgotten (nothing else wakes this task).
-        if (!os_queue_recv(g_req_q, &rq, g_stream.active ? 1u : SETTINGS_POLL_MS)) {
-            stream_pump();
+        if (!os_queue_recv(g_req_q, &rq, track_stream_active() ? 1u : SETTINGS_POLL_MS)) {
+            track_stream_pump();
             settings_poll();
             if (art_service_pending()) {
                 art_service_run(art_yield, NULL); // only when idle; it gives way to any request that arrives
@@ -589,13 +270,13 @@ void storage_task(void *arg) {
         storage_result_t res = {0};
         switch (rq.kind) {
         case REQ_PLAY:
-            stream_start(rq.path, false);
+            track_stream_start(rq.path, false);
             continue;
         case REQ_VERIFY:
-            stream_start(rq.path, true);
+            track_stream_start(rq.path, true);
             continue;
         case REQ_STOP:
-            stream_close();
+            track_stream_stop();
             continue;
         case REQ_SETTINGS_LOAD:
             settings_service_load_now();
@@ -613,6 +294,6 @@ void storage_task(void *arg) {
             continue;
         }
         (void)os_queue_send(g_res_q, &res, 100);
-        stream_pump();
+        track_stream_pump();
     }
 }

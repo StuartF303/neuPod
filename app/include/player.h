@@ -16,6 +16,7 @@
 #include "audio_dsp.h"
 #include "audio_engine.h"
 #include "meta.h"
+#include "storage_service.h"
 #include "wav.h"
 
 #ifdef __cplusplus
@@ -54,6 +55,8 @@ typedef struct {
     uint32_t elapsed_s;    /**< from the audio core's own frame count */
     uint32_t vol_att_db;
     bool muted;            /**< output stage mute line asserted */
+    uint16_t queue_pos;    /**< file playback through a folder queue: 1-based position ("n of N"); 0 when there is no queue */
+    uint16_t queue_len;
 } player_info_t;
 
 /** After audio_engine_start(): create state and apply the default (low) volume. */
@@ -64,8 +67,22 @@ void player_get(player_info_t *out);
 
 /** Start @p mode, or stop it if it is already the active test signal. TONE_OFF stops. */
 void player_tone_toggle(tone_mode_t mode);
-/** Play the WAV at @p path (display name @p name). Result arrives through player_get(). */
+/** Play the file at @p path (display name @p name), alone: no queue. Result arrives through player_get(). */
 void player_play_file(const char *path, const char *name);
+/**
+ * Play the file at @p index of the folder listing @p entries (of @p dir) and queue the rest of the playable files of that folder in
+ * listing order (play_queue.h); the files before it stay queued for Previous. The queue then plays through by itself.
+ */
+void player_play_folder(const char *dir, const file_entry_t *entries, uint32_t count, uint32_t index);
+/** Next queued track (hard start). On the last track: stop, and Now Playing goes idle. No-op without a queue. */
+void player_next(void);
+/** Previous queued track; more than 3 s into a track (or on the first one) it restarts the current track instead. No-op without a queue. */
+void player_prev(void);
+/** Housekeeping that must not depend on a screen polling player_get(): advances the queue when a track ended. Called by the monitor task. */
+void player_service(void);
+/** "Gapless playback" setting (settings store, default On). Off: tracks still follow each other, with the ordinary stop/start between. */
+bool player_gapless_enabled(void);
+void player_set_gapless(bool on);
 /** Pause <-> resume. On a finished track (or a completed MD5 check) it plays the same file again from the start. Otherwise no-op. */
 void player_pause_toggle(void);
 void player_stop(void);
@@ -101,6 +118,13 @@ typedef struct {
 } player_file_t;
 void player_file_started(const player_file_t *f);
 void player_file_failed(const char *msg);
+/**
+ * Gapless: the path of the track after the one playing, if the audio core may be told about it ahead of time (setting on, queue
+ * has a next track, a file is playing). False otherwise.
+ */
+bool player_next_track(char *path, size_t n);
+/** The audio core was told to continue with the track player_next_track() returned; @p f describes it. The player shows it when the audio core reports the handoff. */
+void player_next_announced(const player_file_t *f);
 /** Count the PCM ends seen by the audio core at the moment this stream was requested. */
 uint32_t player_file_generation(void);
 

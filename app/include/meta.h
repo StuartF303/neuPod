@@ -92,8 +92,10 @@ typedef struct {
     uint8_t channels;
     uint32_t bitrate_kbps; /**< first frame's bitrate (CBR) or the average (VBR) */
     bool vbr;
-    uint64_t total_frames; /**< PCM frames: from the Xing/Info frame count, else estimated from the size */
+    uint64_t total_frames; /**< PCM frames the decoder delivers: Xing/Info frame count minus the LAME encoder delay and padding
+                                (dr_mp3 trims them itself), else estimated from the size */
     bool estimated;
+    uint32_t lame_delay, lame_padding; /**< LAME tag fields (12 bits each; 0 = no LAME tag). dr_mp3 additionally drops 529 frames of decoder delay. */
     uint64_t audio_offset; /**< file offset of the first frame header (after ID3v2) */
     audio_tags_t tags;
 } mp3_info_t;
@@ -106,7 +108,9 @@ typedef struct {
     uint32_t rate;
     uint8_t channels, bits;
     uint32_t frame_length;               /**< ALAC frames per packet */
-    uint64_t total_frames;               /**< from mdhd duration, converted to the sample rate */
+    uint64_t total_frames;               /**< PCM frames to play: the edit list / iTunSMPB length when present, else the mdhd duration, at the sample rate */
+    uint32_t skip_frames;                /**< encoder priming to drop at the start (edit list media_time, else iTunSMPB); 0 = none */
+    bool trimmed;                        /**< skip_frames / total_frames come from an edit list or iTunSMPB (exact: the decoder cuts the output there) */
     uint8_t cookie[MP4_COOKIE_MAX];      /**< ALACSpecificConfig (+ optional layout) */
     uint32_t cookie_len;
     uint32_t sample_count;               /**< packets */

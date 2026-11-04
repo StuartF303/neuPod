@@ -58,6 +58,7 @@ set(NEUPOD_RT_CORE_SOURCES               # pure logic, no OS: host-testable on t
   ${NEUPOD_APP_DIR}/audio/stream_io.c
   ${NEUPOD_APP_DIR}/audio/art.c          # album art: source order + streamed JPEG thumbnail (core 0 only)
   ${NEUPOD_APP_DIR}/third_party/tjpgd/tjpgd.c  # ChaN's TJpgDec; third party, compiled without warning flags (app/CMakeLists.txt)
+  ${NEUPOD_APP_DIR}/runtime/play_queue.c
 )
 # Bare-metal audio core (core 1). Subject to the core-1 rules (cmake/check_core1_rules.cmake):
 # no RTOS, stdio, malloc or SDK blocking primitives. audio_ctl.c is the core-0 side.
@@ -93,6 +94,8 @@ set(NEUPOD_RUNTIME_SOURCES
   ${NEUPOD_APP_DIR}/runtime/wifi_service.c
   ${NEUPOD_APP_DIR}/storage/nfs_path.c   # portable half of the nfs API (the backend is in the HAL libs)
   ${NEUPOD_APP_DIR}/audio/audio_ctl.c
+  ${NEUPOD_APP_DIR}/audio/track_feed.c
+  ${NEUPOD_APP_DIR}/audio/track_stream.c
 )
 # Settings store on the SD card (portable; needs the nfs API and hal_storage's write lock).
 set(NEUPOD_SETTINGS_SOURCES

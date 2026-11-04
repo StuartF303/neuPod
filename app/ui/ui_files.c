@@ -187,18 +187,12 @@ static bool files_button(ui_screen_t *s, uint8_t btn) {
             const char *name = storage_list_entries()[i].name;
             if (has_ext(name, ".wav") || has_ext(name, ".flac") || has_ext(name, ".mp3") || has_ext(name, ".m4a") ||
                 has_ext(name, ".mp4")) {
-                char full[NFS_PATH_MAX];
-                size_t pl = strlen(f->path);
-                if (pl + 1 + strlen(name) + 1 > sizeof full) {
+                if (strlen(f->path) + 1 + strlen(name) + 1 > NFS_PATH_MAX) {
                     show_toast(f, "Path too long");
                     return true;
                 }
-                strcpy(full, f->path);
-                if (pl > 1) {
-                    strcat(full, "/");
-                }
-                strcat(full, name);
-                player_play_file(full, name);
+                /* the rest of the folder (playable files, in this order) plays after it */
+                player_play_folder(f->path, storage_list_entries(), f->count, (uint32_t)i);
                 ui_frame_push(ui_screen_nowplaying_create());
             } else {
                 show_toast(f, "Not a playable file (WAV, FLAC, MP3, M4A)");

@@ -52,6 +52,7 @@ static struct {
     bool pending;
     bool have_key;
     art_key_t key;
+    uint32_t gen;  // bumped whenever the job is retargeted: a run in progress notices and abandons its (now stale) work
     bool wait_ack; // the previous picture was on screen when this job was queued
     char path[NFS_PATH_MAX];
     art_ref_t emb;
@@ -78,6 +79,7 @@ void art_service_track(const char *path, const audio_tags_t *tags) {
     if (g_job.have_key && memcmp(&g_job.key, &k, sizeof k) == 0) {
         return; // same album and picture: keep the thumbnail we have (or the job already queued for it)
     }
+    g_job.gen++;
     g_job.key = k;
     g_job.have_key = true;
     g_job.pending = true;
@@ -165,8 +167,27 @@ static int find_folder_art(const char *track, char *out, size_t cap, bool *abort
     return rank;
 }
 
-void art_service_run(art_yield_fn yield, void *yc) {
+// The caller's yield hook may feed the audio stream, which can start a new track and retarget the job (art_service_track) in the
+// middle of a decode. Every yield is therefore followed by a check of the job generation: a run for a stale job stops at once and never
+// publishes what it decoded; the retargeted job is picked up from scratch.
+typedef struct {
+    art_yield_fn yield;
+    void *ctx;
+    uint32_t gen;
+} guard_t;
+static bool guarded_yield(void *vctx) {
+    guard_t *g = vctx;
+    return g->yield(g->ctx) && g_job.gen == g->gen;
+}
+
+void art_service_run(art_yield_fn caller_yield, void *caller_ctx) {
     if (!g_job.pending) return;
+    guard_t guard = {.yield = caller_yield, .ctx = caller_ctx, .gen = g_job.gen};
+    art_yield_fn yield = guarded_yield;
+    void *yc = &guard;
+    char job_path[NFS_PATH_MAX]; // the job as it was when the run started (the shared one may be retargeted under us)
+    snprintf(job_path, sizeof job_path, "%s", g_job.path);
+    const art_ref_t job_emb = g_job.emb;
     if (g_job.wait_ack) { // let the UI take the old picture off the screen before its pixels are overwritten
         uint32_t t0 = os_tick_ms();
         while (g_ack != g_seq / 2u && os_tick_ms() - t0 < ACK_WAIT_MS) {
@@ -177,7 +198,7 @@ void art_service_run(art_yield_fn yield, void *yc) {
     }
     uint32_t t0 = os_tick_ms();
     art_src_t order[2];
-    size_t n = art_sources(&g_job.emb, true, order); // a cover file in the folder is only looked for when it is reached
+    size_t n = art_sources(&job_emb, true, order); // a cover file in the folder is only looked for when it is reached
     art_err_t err = ART_E_FORMAT;
     art_info_t info = {0};
     const char *used = "none";
@@ -185,13 +206,13 @@ void art_service_run(art_yield_fn yield, void *yc) {
     art_err_t emb_err = ART_OK;
     for (size_t i = 0; i < n && !found; i++) {
         if (order[i] == ART_SRC_EMBEDDED) {
-            err = decode_file(g_job.path, g_job.emb.offset, g_job.emb.length, false, &info, yield, yc);
+            err = decode_file(job_path, job_emb.offset, job_emb.length, false, &info, yield, yc);
             used = "embedded";
             emb_err = err;
         } else {
             char cover[NFS_PATH_MAX];
             bool aborted = false;
-            if (find_folder_art(g_job.path, cover, sizeof cover, &aborted, yield, yc) == 0) {
+            if (find_folder_art(job_path, cover, sizeof cover, &aborted, yield, yc) == 0) {
                 err = aborted ? ART_E_ABORTED : ART_E_FORMAT;
                 used = aborted ? "folder scan" : "no cover file";
                 nocover = !aborted;
@@ -204,6 +225,9 @@ void art_service_run(art_yield_fn yield, void *yc) {
             return; // a request is waiting (or the stream needs the task): the job stays queued and restarts from scratch
         }
         found = err == ART_OK;
+    }
+    if (g_job.gen != guard.gen) {
+        return; // retargeted after the last yield: this result belongs to the previous track; the new job restarts from scratch
     }
     g_job.pending = false;
     if (found) {

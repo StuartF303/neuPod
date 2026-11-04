@@ -23,6 +23,13 @@ typedef struct {
     uint32_t timescale;
     uint64_t duration;
     int err;
+    uint32_t movie_ts;                       // mvhd timescale (edit list durations are in it)
+    bool elst_ok;                            // the current trak has an edit list with one non-empty entry
+    int64_t elst_media_time;                 // that entry's start in the media (priming), media timescale
+    uint64_t elst_seg;                       // its duration, movie timescale (0 = to the end of the media)
+    bool itun_ok;                            // iTunSMPB found: priming, padding and original length
+    uint32_t itun_skip, itun_pad;
+    uint64_t itun_len;
 } pctx_t;
 
 typedef struct {
@@ -62,9 +69,61 @@ static void covr_item(pctx_t *p, const box_t *it) {
     }
 }
 
+static int hexval(int c) { return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1; }
+
+// Parse the next hexadecimal token of an iTunSMPB string; false at its end or on a malformed token.
+static bool smpb_token(const char **s, const char *end, uint64_t *v) {
+    while (*s < end && **s == ' ') (*s)++;
+    int digits = 0;
+    uint64_t x = 0;
+    while (*s < end && hexval(**s) >= 0 && digits < 16) {
+        x = (x << 4) | (uint64_t)hexval(**s);
+        (*s)++;
+        digits++;
+    }
+    if (digits == 0 || (*s < end && **s != ' ' && **s != '\0')) return false;
+    *v = x;
+    return true;
+}
+
+// '----' item: [mean][name][data]. Only com.apple.iTunes / iTunSMPB is read:
+// " 00000000 <priming> <padding> <original length, 64 bit> ..." (hexadecimal).
+static void freeform_item(pctx_t *p, const box_t *it) {
+    box_t c;
+    uint64_t pos = it->body;
+    bool is_smpb = false;
+    for (int i = 0; i < 4 && read_box(p, pos, it->end, &c); i++) {
+        if (c.type == FOURCC('n', 'a', 'm', 'e') && c.end - c.body == 4 + 8) {
+            char nm[8];
+            is_smpb = p->rd(p->ctx, c.body + 4, nm, 8) == 8 && memcmp(nm, "iTunSMPB", 8) == 0;
+        } else if (c.type == FOURCC('d', 'a', 't', 'a') && is_smpb && c.end - c.body > 8) {
+            char v[72];
+            uint64_t n = c.end - c.body - 8;
+            if (n > sizeof v - 1) n = sizeof v - 1;
+            int32_t got = p->rd(p->ctx, c.body + 8, v, (uint32_t)n);
+            if (got <= 0) return;
+            v[got] = '\0';
+            const char *s = v, *e = v + got;
+            uint64_t t0, pr, pd, len;
+            if (smpb_token(&s, e, &t0) && smpb_token(&s, e, &pr) && smpb_token(&s, e, &pd) && smpb_token(&s, e, &len) && pr < 0x10000u && pd < 0x100000u) {
+                p->itun_ok = true;
+                p->itun_skip = (uint32_t)pr;
+                p->itun_pad = (uint32_t)pd;
+                p->itun_len = len;
+            }
+            return;
+        }
+        pos = c.end;
+    }
+}
+
 static void ilst_item(pctx_t *p, const box_t *it) {
     if (it->type == FOURCC('c', 'o', 'v', 'r')) {
         covr_item(p, it);
+        return;
+    }
+    if (it->type == FOURCC('-', '-', '-', '-')) {
+        freeform_item(p, it);
         return;
     }
     box_t d;
@@ -88,6 +147,28 @@ static void leaf(pctx_t *p, const box_t *b, uint32_t parent) {
     uint64_t len = b->end - b->body;
     if (parent == FOURCC('i', 'l', 's', 't')) {
         ilst_item(p, b);
+        return;
+    }
+    if (b->type == FOURCC('m', 'v', 'h', 'd') && len >= 20) {
+        int32_t got = p->rd(p->ctx, b->body, h, 24);
+        p->movie_ts = got >= 24 && h[0] == 1 ? be32(h + 20) : got >= 20 && h[0] == 0 ? be32(h + 12) : 0;
+        return;
+    }
+    if (b->type == FOURCC('e', 'l', 's', 't') && !p->got_audio && len >= 8 && p->rd(p->ctx, b->body, h, 8) == 8) {
+        // Edit list: use it when it has exactly one real (non-empty) edit: the track plays from media_time for segment_duration.
+        uint32_t ver = h[0], n = be32(h + 4), esz = ver == 1 ? 20u : 12u;
+        p->elst_ok = false;
+        int found = 0;
+        for (uint32_t i = 0; i < n && i < 8 && 8 + (uint64_t)(i + 1) * esz <= len; i++) {
+            uint8_t e[20];
+            if (p->rd(p->ctx, b->body + 8 + (uint64_t)i * esz, e, esz) != (int32_t)esz) break;
+            int64_t mt = ver == 1 ? (int64_t)be64(e + 8) : (int64_t)(int32_t)be32(e + 4);
+            if (mt < 0) continue; // an empty edit (a delay): nothing to trim
+            found++;
+            p->elst_media_time = mt;
+            p->elst_seg = ver == 1 ? be64(e) : be32(e);
+        }
+        p->elst_ok = found == 1;
         return;
     }
     if (b->type == FOURCC('m', 'd', 'h', 'd') && !p->got_audio) { // before 'hdlr' in the file: keep the latest trak's
@@ -165,6 +246,7 @@ static void walk(pctx_t *p, uint64_t pos, uint64_t end, int depth, uint32_t pare
         case FOURCC('s', 't', 'b', 'l'):
         case FOURCC('u', 'd', 't', 'a'):
         case FOURCC('i', 'l', 's', 't'):
+        case FOURCC('e', 'd', 't', 's'):
             if (depth < 8) walk(p, b.body, b.end, depth + 1, b.type);
             break;
         case FOURCC('m', 'e', 't', 'a'): // full box: 4 bytes of version/flags before the children
@@ -173,6 +255,7 @@ static void walk(pctx_t *p, uint64_t pos, uint64_t end, int depth, uint32_t pare
         case FOURCC('t', 'r', 'a', 'k'):
             if (!p->got_audio && !p->trak_done) {
                 p->in_audio_trak = false;
+                p->elst_ok = false; // an edit list belongs to its own trak
                 walk(p, b.body, b.end, depth + 1, b.type);
                 if (p->in_audio_trak) p->got_audio = true;
                 p->in_audio_trak = false;
@@ -191,6 +274,13 @@ static void walk(pctx_t *p, uint64_t pos, uint64_t end, int depth, uint32_t pare
         }
         pos = b.end;
     }
+}
+
+// v * mul / div without overflowing 64 bits; false if it would overflow.
+static bool scale_u64(uint64_t v, uint32_t mul, uint32_t div, uint64_t *out) {
+    if (div == 0 || (mul != 0 && v > UINT64_MAX / mul)) return false;
+    *out = v * mul / div;
+    return true;
 }
 
 meta_err_t mp4_parse(meta_read_fn rd, void *ctx, uint64_t file_size, mp4_info_t *out) {
@@ -222,6 +312,24 @@ meta_err_t mp4_parse(meta_read_fn rd, void *ctx, uint64_t file_size, mp4_info_t 
     if (p.timescale != 0) { // duration * rate without overflow, clamped to 2^40 frames
         uint64_t secs = p.duration / p.timescale, rem = p.duration % p.timescale;
         out->total_frames = secs > (1ull << 40) / out->rate ? (1ull << 40) : secs * out->rate + rem * out->rate / p.timescale;
+    }
+    // Encoder priming and padding. The edit list is authoritative; iTunSMPB is the fallback. A trim that does not fit the
+    // media (or is not whole-frame sane) is ignored: playing the whole track is better than cutting at nonsense.
+    uint64_t media = (uint64_t)out->sample_count * out->frame_length; // upper bound of what the packets can decode to
+    uint64_t skip, len;
+    if (p.elst_ok && p.timescale != 0 && p.elst_media_time >= 0 && scale_u64((uint64_t)p.elst_media_time, out->rate, p.timescale, &skip) &&
+        (p.elst_seg != 0 && p.movie_ts != 0 ? scale_u64(p.elst_seg, out->rate, p.movie_ts, &len)
+                                            : (len = out->total_frames > skip ? out->total_frames - skip : 0, true)) &&
+        len != 0 && skip < 0x10000u && skip <= media && len <= media - skip) {
+        out->skip_frames = (uint32_t)skip;
+        out->total_frames = len;
+        out->trimmed = true;
+    }
+    // iTunSMPB is the fallback when there is no edit list, or the edit list does not fit the media
+    if (!out->trimmed && p.itun_ok && p.itun_len != 0 && p.itun_skip <= media && p.itun_len <= media - p.itun_skip) {
+        out->skip_frames = p.itun_skip;
+        out->total_frames = p.itun_len;
+        out->trimmed = true;
     }
     return META_OK;
 }
