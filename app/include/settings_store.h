@@ -52,6 +52,8 @@ extern "C" {
 #define SETTING_BACKLIGHT_PCT SETTINGS_TAG('N', 'P', 'b', 'l') /**< u8, 5..100 */
 #define SETTING_CLICK_FEEDBACK SETTINGS_TAG('N', 'P', 'c', 'k') /**< u8, 0 or 1 */
 #define SETTING_GAPLESS SETTINGS_TAG('N', 'P', 'g', 'p')       /**< u8, 0 or 1; absent = on */
+#define SETTING_SHUFFLE SETTINGS_TAG('N', 'P', 's', 'h')       /**< u8, pq_shuffle_t: 0 off, 1 songs; absent = off */
+#define SETTING_REPEAT SETTINGS_TAG('N', 'P', 'r', 'p')        /**< u8, pq_repeat_t: 0 off, 1 one, 2 all; absent = off */
 #define SETTING_WIFI SETTINGS_TAG('N', 'P', 'w', 'f')            /**< 4 bytes: enabled, during playback, idle-off minutes, zone */
 #define SETTING_NTP_SERVER SETTINGS_TAG('N', 'P', 'n', 's')      /**< string */
 #define SETTING_TEST_URL SETTINGS_TAG('N', 'P', 't', 'u')        /**< string */
