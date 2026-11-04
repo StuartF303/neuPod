@@ -48,6 +48,13 @@ jobs:
           export PICO_SDK_PATH=$HOME/pico-sdk
           scripts/build.sh rp2350 --clean -- -DNEUPOD_REQUIRE_CRYPTO=ON
 
+      # Debug leaves assert() enabled in the SDK; the core-1 closure check (a post-build step) must hold there too.
+      - name: Build (Debug, core-1 closure check)
+        run: |
+          export PICO_SDK_PATH=$HOME/pico-sdk
+          cmake -S . -B build/rp2350-debug -G Ninja -DNEUPOD_PLATFORM=rp2350 -DCMAKE_BUILD_TYPE=Debug -DNEUPOD_REQUIRE_CRYPTO=ON
+          ninja -C build/rp2350-debug
+
       - uses: actions/upload-artifact@v7
         with:
           name: neupod-rp2350

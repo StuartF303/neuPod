@@ -42,6 +42,11 @@ IGNORED_EDGES = [
     (r"^(irq_set_exclusive_handler|irq_add_shared_handler|irq_remove_handler|hw_claim_unused_from_range|hw_claim_or_assert|"
      r"pio_sm_init|pio_add_program|pio_remove_program|dma_channel_configure|gpio_init|gpio_set_function)$", r"^hard_assertion_failure$",
      "SDK hard_assert on programmer errors (bad arguments, double registration), not reachable with the arguments hal_audio.c passes"),
+    (r"^(irq_set_exclusive_handler|irq_remove_handler|pio_remove_program|channel_config_set_chain_to|channel_config_set_dreq|"
+     r"hw_claim_clear|insert_bl_32|make_j_16|resolve_j_16|find_offset_for_program|irq_add_tail_to_free_list)$", r"^__assert_func$",
+     "SDK plain assert() on programmer errors (argument range, 'not found' on teardown), compiled in only when NDEBUG is unset "
+     "(Debug builds; Release has none). Same class as the hard_assert entry above; the callers are listed one by one so an "
+     "assert() in our own or vendored code (hal_audio.c, decoders) is still a violation"),
 ]
 
 def main():
