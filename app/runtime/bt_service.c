@@ -57,7 +57,9 @@ void bt_service_event_flush(void) {
 hal_status_t bt_service_pair(const hal_bt_device_t *dev) {
     /* Wi-Fi coexistence policy point (runtime_config.h NEUPOD_BT_WIFI_COEX_ALLOW): allowed, nothing is checked. */
     hal_bt_device_t d = *dev;
-    bt_saved_pair_begin(&d); /* before the request: the first event for it can arrive at once */
+    if (!bt_saved_pair_begin(&d)) { /* before the request: the first event for it can arrive at once */
+        return HAL_EBUSY; /* a Pair is already in flight */
+    }
     hal_status_t st = hal_bt_pair(&d);
     if (st != HAL_OK) {
         bt_saved_pair_abort();

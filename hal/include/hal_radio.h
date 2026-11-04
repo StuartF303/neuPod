@@ -161,6 +161,7 @@ typedef enum {
     HAL_BT_FAIL_LINK_LOST, /**< an established link ended without being asked to (the headset went away or switched off) */
     HAL_BT_FAIL_INTERNAL,  /**< the stack refused the request (out of buffers, busy) */
     HAL_BT_FAIL_BUSY,      /**< a Pair that the headset ended or had no resources for: busy with something else, or not in pairing mode */
+    HAL_BT_FAIL_PIN,       /**< a pre-2.1 headset that wants a PIN: only Secure Simple Pairing is supported */
 } hal_bt_fail_t;
 
 /** One short phrase per reason, shared by the console and the UI ("Failed: <phrase>"; at most 19 characters). */
@@ -173,6 +174,7 @@ static inline const char *hal_bt_fail_text(hal_bt_fail_t r) {
     case HAL_BT_FAIL_LINK_LOST: return "link lost";
     case HAL_BT_FAIL_INTERNAL: return "radio error";
     case HAL_BT_FAIL_BUSY: return "busy or not pairing";
+    case HAL_BT_FAIL_PIN: return "PIN not supported";
     case HAL_BT_FAIL_NONE: break;
     }
     return "error";

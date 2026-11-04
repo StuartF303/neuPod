@@ -69,7 +69,9 @@ static void pump_link_idle(uint32_t max_ms) {
 
 // bt_service_pair() and bt_service_tick() minus the RTOS queue.
 static hal_status_t do_pair(const hal_bt_device_t *d) {
-    bt_saved_pair_begin(d);
+    if (!bt_saved_pair_begin(d)) {
+        return HAL_EBUSY;
+    }
     hal_status_t st = hal_bt_pair(d);
     if (st != HAL_OK) {
         bt_saved_pair_abort();
@@ -435,6 +437,53 @@ TEST(test_an_event_of_an_older_attempt_is_ignored) {
     hal_bt_disconnect();
 }
 
+// Read-only / RAM-only store: a Pair is accepted into RAM only, and says so; Forget must not drop the record or the queue entry.
+TEST(test_pair_and_forget_with_a_store_that_is_not_writable) {
+    fresh_card();
+    settings_init(NULL);
+    settings_attach_storage(false); // no usable card: RAM-only
+    hal_bt_device_t d = dev_of(A_AIRPODS, "AirPods Pro 3", 0x240404), got;
+    settings_status_t st;
+    settings_get_status(&st);
+    ASSERT_FALSE(st.persistent);
+    ASSERT_EQ(HAL_OK, do_pair(&d));
+    pump_link_idle(3000);
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, hal_bt_link_state());
+    ASSERT_TRUE(bt_saved_get(&got)); // remembered for the session ...
+    ASSERT_EQ(BT_SAVED_NOTICE_NOT_SAVED, bt_saved_notice()); // ... and the UI is told it will not survive
+    // Forget: the key delete cannot be made durable, so it stays queued and the record stays
+    ASSERT_EQ(HAL_EBUSY, bt_saved_delete_key(A_AIRPODS));
+    bt_saved_queue_delete(A_AIRPODS);
+    bt_saved_clear();
+    ASSERT_TRUE(bt_saved_get(&got));
+    do_tick();
+    uint8_t a[6];
+    ASSERT_TRUE(bt_saved_peek_stale(a));
+    // the card becomes usable: the delete goes through and the record can go
+    fresh_store();
+    do_tick();
+    ASSERT_FALSE(bt_saved_peek_stale(a));
+    ASSERT_FALSE(key_present(A_AIRPODS));
+    bt_saved_clear();
+    ASSERT_FALSE(bt_saved_get(&got));
+    hal_bt_disconnect();
+}
+
+// A second Pair cannot overwrite the candidate of the one in flight.
+TEST(test_pair_begin_refuses_while_a_candidate_is_live) {
+    fresh_store();
+    hal_bt_device_t d = dev_of(A_AIRPODS, "AirPods Pro 3", 0x240404), e = dev_of(A_XM5, "WH-1000XM5", 0x240404), got;
+    ASSERT_TRUE(bt_saved_pair_begin(&d));
+    ASSERT_FALSE(bt_saved_pair_begin(&e));
+    ASSERT_EQ(HAL_OK, hal_bt_pair(&d));
+    pump_link_idle(3000);
+    ASSERT_TRUE(bt_saved_get(&got));
+    ASSERT_TRUE(memcmp(got.addr, A_AIRPODS, 6) == 0); // the first candidate survived
+    hal_bt_disconnect();
+    ASSERT_TRUE(bt_saved_pair_begin(&e)); // and once it is settled a new one is accepted
+    bt_saved_pair_abort();
+}
+
 int main(void) {
     if (mkdtemp(g_tpl) == NULL) {
         perror("mkdtemp");
@@ -455,6 +504,8 @@ int main(void) {
     RUN(test_two_stale_addresses_are_both_handled_in_one_tick);
     RUN(test_a_failed_or_cancelled_pair_of_the_saved_headset_clears_its_record);
     RUN(test_an_event_of_an_older_attempt_is_ignored);
+    RUN(test_pair_and_forget_with_a_store_that_is_not_writable);
+    RUN(test_pair_begin_refuses_while_a_candidate_is_live);
     char cmd[300];
     snprintf(cmd, sizeof cmd, "rm -rf '%s'", abs);
     int rc = system(cmd);

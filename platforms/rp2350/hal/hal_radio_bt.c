@@ -704,6 +704,18 @@ static void link_packet(uint8_t *packet) {
         }
         break;
     }
+    case HCI_EVENT_PIN_CODE_REQUEST: {
+        /* A pre-2.1 headset (no Secure Simple Pairing). In bondable mode BTstack forwards the request and nothing else answers it, so the
+         * headset would wait for the timer. There is no PIN entry: refuse now and end the attempt. */
+        bd_addr_t a;
+        hci_event_pin_code_request_get_bd_addr(packet, a);
+        (void)gap_pin_code_negative(a);
+        if (g_lphase != LP_IDLE && memcmp(a, g_peer.addr, 6) == 0) {
+            g_lphase = LP_IDLE; /* link_end() drops the connection; the bonding failure that follows is then ignored */
+            link_end(HAL_BT_LINK_FAILED, HAL_BT_FAIL_PIN);
+        }
+        break;
+    }
     case HCI_EVENT_CONNECTION_COMPLETE: {
         bd_addr_t a;
         hci_event_connection_complete_get_bd_addr(packet, a);
@@ -751,15 +763,17 @@ static void link_packet(uint8_t *packet) {
              * (supervision timeout 0x08, ...) is a lost link. */
             g_lphase = LP_IDLE;
             if (why == ERROR_CODE_CONNECTION_TERMINATED_BY_LOCAL_HOST || why == ERROR_CODE_REMOTE_USER_TERMINATED_CONNECTION) {
+                printf("bt: link closed %s reason 0x%02X (idle, no profile yet)\n", bd_addr_to_str(g_peer.addr), (unsigned)why);
                 set_link(HAL_BT_LINK_DISCONNECTED, HAL_BT_FAIL_NONE);
             } else {
                 printf("bt: link lost 0x%02X\n", (unsigned)why);
                 set_link(HAL_BT_LINK_FAILED, HAL_BT_FAIL_LINK_LOST);
             }
-        } else if (g_lphase != LP_IDLE && why != ERROR_CODE_CONNECTION_TERMINATED_BY_LOCAL_HOST) {
+        } else if (g_lphase != LP_IDLE && !(why == ERROR_CODE_CONNECTION_TERMINATED_BY_LOCAL_HOST && g_lphase == LP_BONDING)) {
             /* The link dropped during set-up (bonding, SDP, authentication) from the other side or by timeout: end the attempt now, so the
-             * Pair window does not stay open until the timer. (A disconnect BTstack itself sends after a failed bonding is local: the
-             * bonding result, with the real reason, follows it.) The phase is cleared first: there is no connection left to cancel. */
+             * Pair window does not stay open until the timer. Only while bonding is a local disconnect ignored: BTstack sends one itself after
+             * a failed bonding, and the bonding result, with the real reason, follows it. In AUTH / SDP nothing follows, so end here. The phase
+             * is cleared first: there is no connection left to cancel. */
             bool authenticating = g_lphase == LP_AUTH;
             g_lphase = LP_IDLE;
             printf("bt: link dropped in set-up 0x%02X\n", (unsigned)why);

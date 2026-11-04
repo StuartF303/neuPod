@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "bt_saved.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "settings_store.h"
@@ -91,15 +92,36 @@ bool bt_saved_put(const hal_bt_device_t *dev) {
     return settings_put(SETTING_BT_DEVICE, v, BT_SAVED_MIN_LEN + n);
 }
 
-void bt_saved_clear(void) { settings_delete(SETTING_BT_DEVICE); }
+/* Changes reach the card only while the store is persistent (card mounted read-write and loaded). Otherwise a put / delete lands in RAM only
+ * and is undone by the next boot. */
+static bool store_writable(void) {
+    settings_status_t st;
+    settings_get_status(&st);
+    return st.persistent;
+}
 
-void bt_saved_pair_begin(const hal_bt_device_t *dev) {
+void bt_saved_clear(void) {
+    if (!store_writable()) {
+        /* The key (and the old record) stay on the card: dropping the record in RAM would make the headset reappear after a reboot, or
+         * leave a key nobody can remove. Keep it, so Forget is still possible once the card is writable. */
+        printf("bt: record kept (store not writable)\n");
+        return;
+    }
+    settings_delete(SETTING_BT_DEVICE);
+}
+
+bool bt_saved_pair_begin(const hal_bt_device_t *dev) {
     LOCK();
+    if (g_have_pending) {
+        UNLOCK();
+        return false; /* a Pair is in flight: do not replace its candidate before the HAL has even accepted this one */
+    }
     g_pending = *dev;
     g_pending_after = hal_bt_link_attempt();
     g_have_pending = true;
     g_notice = BT_SAVED_NOTICE_NONE;
     UNLOCK();
+    return true;
 }
 
 bt_saved_notice_t bt_saved_notice(void) { return g_notice; }
@@ -123,8 +145,15 @@ void bt_saved_on_event(const hal_bt_event_t *ev) {
                  * (it is the current peer) on the next tick; the screens say why. */
                 stale_push(g_pending.addr);
                 g_notice = BT_SAVED_NOTICE_FULL;
-            } else if (had_old && memcmp(old.addr, g_pending.addr, 6) != 0) {
-                stale_push(old.addr);
+            } else {
+                if (had_old && memcmp(old.addr, g_pending.addr, 6) != 0) {
+                    stale_push(old.addr);
+                }
+                if (!store_writable()) {
+                    /* Accepted into RAM only (card read-only or absent): gone after a reboot. Say so; the key is in the same RAM store. */
+                    g_notice = BT_SAVED_NOTICE_NOT_SAVED;
+                    printf("bt: pair not persisted (store not writable)\n");
+                }
             }
             g_have_pending = false;
         }
@@ -170,12 +199,24 @@ void bt_saved_drop_stale(void) {
 }
 
 hal_status_t bt_saved_delete_key(const uint8_t addr[6]) {
+    static bool logged;
     hal_status_t st = hal_bt_forget(addr);
     if (st == HAL_ENODEV) {
         /* The stack is not up (it never started, or failed): BTstack reads its keys from the store on demand, so deleting the record there is
          * what forgetting means. */
         hal_bt_storage_delete_key(settings_bt_storage(), addr);
-        return HAL_OK;
+        st = HAL_OK;
+    }
+    if (st == HAL_OK && !store_writable()) {
+        /* The delete only reached RAM; the card still holds the key. Not done: keep it queued and try again once the card is writable. */
+        if (!logged) {
+            printf("bt: key delete not persisted (store not writable), kept queued\n");
+            logged = true;
+        }
+        return HAL_EBUSY;
+    }
+    if (st == HAL_OK) {
+        logged = false;
     }
     return st; /* HAL_EBUSY: ask again */
 }

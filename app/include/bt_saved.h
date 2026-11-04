@@ -35,7 +35,7 @@ extern "C" {
 bool bt_saved_get(hal_bt_device_t *out);
 /** Remember @p dev (replacing any previous one). false if the address is empty or the store is full. */
 bool bt_saved_put(const hal_bt_device_t *dev);
-/** Forget the record (not the link key: hal_bt_forget() does that). */
+/** Forget the record (not the link key: hal_bt_forget() does that). Does nothing while the store is not writable (the record would come back at the next boot). */
 void bt_saved_clear(void);
 
 /**
@@ -44,8 +44,8 @@ void bt_saved_clear(void);
  */
 void bt_saved_set_lock(void (*lock)(void), void (*unlock)(void));
 
-/** A Pair action for @p dev is about to start: remember it as the candidate. Call BEFORE hal_bt_pair(). */
-void bt_saved_pair_begin(const hal_bt_device_t *dev);
+/** A Pair action for @p dev is about to start: remember it as the candidate. Call BEFORE hal_bt_pair(). false (nothing changed) while another candidate is live: do not start the Pair. */
+bool bt_saved_pair_begin(const hal_bt_device_t *dev);
 /** The Pair was not started after all (hal_bt_pair() refused): drop the candidate. */
 void bt_saved_pair_abort(void);
 /**
@@ -61,7 +61,7 @@ bool bt_saved_peek_stale(uint8_t addr[6]);
 void bt_saved_drop_stale(void);
 /**
  * Delete the link key for @p addr: hal_bt_forget() when the stack is up, otherwise (OFF, STARTING, FAILED) straight from the settings
- * store. HAL_OK when done or queued, HAL_EBUSY when the radio could not take the request yet.
+ * store. HAL_OK when done, HAL_EBUSY when the radio could not take the request yet or the store is not writable (the key is still on the card).
  */
 hal_status_t bt_saved_delete_key(const uint8_t addr[6]);
 /** Queue @p addr for deletion by the next bt_saved_drain_stale(). */
@@ -70,7 +70,8 @@ void bt_saved_queue_delete(const uint8_t addr[6]);
 void bt_saved_drain_stale(void);
 
 /** Why the last Pair ended without a remembered headset although it connected. Cleared by the next bt_saved_pair_begin(). */
-typedef enum { BT_SAVED_NOTICE_NONE = 0, BT_SAVED_NOTICE_FULL /**< the settings store is full: "Can't save: settings full" */ } bt_saved_notice_t;
+typedef enum { BT_SAVED_NOTICE_NONE = 0, BT_SAVED_NOTICE_FULL /**< the settings store is full: "Can't save: settings full" */,
+                         BT_SAVED_NOTICE_NOT_SAVED /**< remembered in RAM only (card read-only / absent): gone after a reboot */ } bt_saved_notice_t;
 bt_saved_notice_t bt_saved_notice(void);
 
 #ifdef __cplusplus

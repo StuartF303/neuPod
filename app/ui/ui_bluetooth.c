@@ -63,7 +63,9 @@ static void link_text_for(const uint8_t addr[6], char *out, size_t n) {
     case HAL_BT_LINK_CONNECTING: snprintf(out, n, "Connecting..."); break;
     /* There is no audio yet and nothing keeps an idle link open, so the link closes by itself a few seconds after it opens (docs/bluetooth.md):
      * say what is true, "paired", not "connected" that will drop. */
-    case HAL_BT_LINK_CONNECTED: snprintf(out, n, "Paired, no audio yet"); break;
+    case HAL_BT_LINK_CONNECTED:
+        snprintf(out, n, bt_saved_notice() == BT_SAVED_NOTICE_NOT_SAVED ? "Paired - not saved (read-only)" : "Paired, no audio yet");
+        break;
     case HAL_BT_LINK_FAILED: snprintf(out, n, "Failed: %s", hal_bt_fail_text(hal_bt_link_reason())); break;
     case HAL_BT_LINK_DISCONNECTED: snprintf(out, n, "Not connected"); break;
     }
