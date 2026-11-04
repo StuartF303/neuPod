@@ -31,10 +31,14 @@
 #define FB_LOOP_GAIN 2u          /* step 3c */
 #define AUTO_CAL_TIME_SEL 3u     /* step 3f (1000-1200 ms) */
 
-#ifndef NEUPOD_HAPTIC_LRA_RATED_REG
-#define NEUPOD_HAPTIC_LRA_RATED_REG 0x3Eu /* power-on default; needs f_LRA to compute (Eq. 5) */
-#endif
-
+/*
+ * LRA register values (LEADER LD0832AA defaults: 2.0 V rms rated, 235 Hz, peak ceiling 2.8 V), computed from the
+ * parameters at init, never hard-coded:
+ *   Eq. 5  RATED_VOLTAGE = floor(2000 mV x sqrt(1 - (4 x 300 us + 300 us) x 235 Hz) / 20.58 mV) = 78 (0x4E)
+ *   Eq. 9  OD_CLAMP      = floor(2800 mV / 21.22 mV)                                          = 131 (0x83)
+ *   DRIVE_TIME           = half period 2.128 ms -> (2.128 - 0.5) / 0.1 = 16 (2.1 ms)         CONTROL1 = 0x90
+ * CONTROL3: ERM_OPEN_LOOP and LRA_OPEN_LOOP cleared (closed loop, auto-resonance), DATA_FORMAT_RTP signed.
+ */
 static hal_haptic_actuator_t s_act = NEUPOD_HAPTIC_ACTUATOR;
 static hal_haptic_loop_t s_loop = NEUPOD_HAPTIC_ERM_LOOP;
 static hal_haptic_cal_t s_cal
@@ -42,6 +46,8 @@ static hal_haptic_cal_t s_cal
     = {true, false, NEUPOD_HAPTIC_CAL_COMP, NEUPOD_HAPTIC_CAL_BEMF, NEUPOD_HAPTIC_CAL_BEMF_GAIN}
 #endif
     ;
+static hal_haptic_lra_params_t s_lra = HAL_HAPTIC_LRA_LD0832AA;
+static void (*s_delay)(uint32_t) = hal_delay_ms;
 static bool s_inited;
 static bool s_click_loaded;
 static uint8_t s_click_effect = CLICK_DEFAULT_EFFECT;
@@ -79,6 +85,48 @@ uint8_t drv2605l_erm_ol_od_clamp_reg(uint32_t mv) {
 
 uint32_t drv2605l_erm_ol_od_clamp_mv(uint8_t reg) { return ((uint32_t)reg * 21590u + 500u) / 1000u; }
 
+static uint64_t isqrt64(uint64_t v) {
+    uint64_t r = 0, bit = 1ull << 62;
+    while (bit > v) {
+        bit >>= 2;
+    }
+    while (bit != 0) {
+        if (v >= r + bit) {
+            v -= r + bit;
+            r = (r >> 1) + bit;
+        } else {
+            r >>= 1;
+        }
+        bit >>= 2;
+    }
+    return r;
+}
+
+uint8_t drv2605l_lra_rated_reg(uint32_t rms_mv, uint32_t freq_hz, uint8_t sample_sel) {
+    // (4 x tSAMPLE + 300 us) x f is in parts per million (us x Hz).
+    uint64_t x_ppm = (4ull * (150u + 50u * (sample_sel & 3u)) + 300u) * freq_hz;
+    if (x_ppm >= 1000000u) {
+        return 0;
+    }
+    // sqrt(mv^2 x (1 - x)) x 1000 = isqrt(mv^2 x (1e6 - x_ppm)); divide by 20.58 mV (x 1000).
+    uint64_t r = isqrt64((uint64_t)rms_mv * rms_mv * (1000000u - x_ppm)) / 20580u;
+    return (uint8_t)(r > 255u ? 255u : r);
+}
+
+uint32_t drv2605l_lra_drive_time_us(uint8_t reg) { return 500u + 100u * (reg & 0x1Fu); }
+
+uint8_t drv2605l_lra_drive_time_reg(uint32_t freq_hz) {
+    if (freq_hz == 0) {
+        return DRV_ERM_DRIVE_TIME;
+    }
+    uint32_t half_us = 500000u / freq_hz;
+    if (half_us <= 500u) {
+        return 0;
+    }
+    uint32_t r = (half_us - 500u + 50u) / 100u;
+    return (uint8_t)(r > 31u ? 31u : r);
+}
+
 uint8_t drv2605l_lra_od_clamp_reg(uint32_t mv) {
     uint32_t r = (uint32_t)((uint64_t)mv * 1000u / 21220u);
     return (uint8_t)(r > 255u ? 255u : r);
@@ -114,6 +162,8 @@ hal_status_t drv2605l_pack_sequence(const uint8_t *e, size_t count, uint8_t out[
 }
 
 void drv2605l_set_cal_timeout_ms(uint32_t ms) { s_cal_timeout_ms = ms ? ms : DEFAULT_CAL_TIMEOUT_MS; }
+
+void drv2605l_set_delay_fn(void (*fn)(uint32_t ms)) { s_delay = fn ? fn : hal_delay_ms; }
 
 // --- bus helpers ----------------------------------------------------------------------------
 
@@ -154,13 +204,14 @@ static hal_haptic_cal_t default_cal_for(hal_haptic_actuator_t act) {
 
 // Static actuator configuration (everything the calibration takes as input).
 // Order matters for motor safety: the chip powers up in ERM OPEN-LOOP, where OD_CLAMP is the
-// full-scale drive (about 21.96 mV x OD, so 182 would be ~4 V). So CONTROL3 is switched to closed
+// full-scale drive (21.59 mV x OD, so 182 would be ~3.9 V). So CONTROL3 is switched to closed
 // loop and verified FIRST, and RATED_VOLTAGE / OD_CLAMP are written LAST.
 static hal_status_t configure(void) {
-    uint8_t rated, od, fb, c3;
+    uint8_t rated, od, fb, c3, ctl1 = DRV_ERM_CONTROL1;
     const bool erm_open = s_act == HAL_HAPTIC_ERM && s_loop == HAL_HAPTIC_LOOP_OPEN;
     TRY(rd(DRV_REG_CONTROL3, &c3));
     c3 = erm_open ? (uint8_t)(c3 | DRV_CTRL3_ERM_OPEN_LOOP) : (uint8_t)(c3 & ~DRV_CTRL3_ERM_OPEN_LOOP);
+    c3 &= (uint8_t)~DRV_CTRL3_LRA_OPEN_LOOP; // the LRA always runs closed loop (auto-resonance)
     TRY(wr(DRV_REG_CONTROL3, c3)); // DATA_FORMAT_RTP stays 0 (signed)
     uint8_t c3_back = 0xFF;
     TRY(rd(DRV_REG_CONTROL3, &c3_back));
@@ -179,12 +230,13 @@ static hal_status_t configure(void) {
         fb = (uint8_t)((FB_BRAKE_FACTOR << 4) | (FB_LOOP_GAIN << 2) |
                        (s_cal.valid ? s_cal.bemf_gain : BEMF_GAIN_ERM_DEFAULT));
     } else {
-        rated = NEUPOD_HAPTIC_LRA_RATED_REG;
-        od = drv2605l_lra_od_clamp_reg(DRV_ERM_OD_MAX_MV); // same 3.6 V ceiling until the LRA is known
+        rated = drv2605l_lra_rated_reg(s_lra.rated_mv_rms, s_lra.freq_hz, DRV_LRA_SAMPLE_SEL);
+        od = drv2605l_lra_od_clamp_reg(s_lra.peak_mv);
+        ctl1 = (uint8_t)(0x80u | drv2605l_lra_drive_time_reg(s_lra.freq_hz)); // STARTUP_BOOST + DRIVE_TIME
         fb = (uint8_t)(DRV_FB_LRA | (FB_BRAKE_FACTOR << 4) | (FB_LOOP_GAIN << 2) |
                        (s_cal.valid ? s_cal.bemf_gain : 2u));
     }
-    const uint8_t ctl[3] = {fb, DRV_ERM_CONTROL1, DRV_ERM_CONTROL2};
+    const uint8_t ctl[3] = {fb, ctl1, DRV_ERM_CONTROL2};
     TRY(map(hal_i2c_reg_write_burst(DRV2605L_ADDR, DRV_REG_FEEDBACK, ctl, sizeof ctl)));
     TRY(wr(DRV_REG_CONTROL4, (uint8_t)(AUTO_CAL_TIME_SEL << 4)));
     if (s_cal.valid) {
@@ -217,7 +269,7 @@ static hal_status_t init_body(void) {
     uint32_t t0 = hal_millis();
     bool done = false;
     do {
-        hal_delay_ms(1); // give the reset time first; the chip may not ACK meanwhile
+        s_delay(1); // give the reset time first; the chip may not ACK meanwhile
         uint8_t mode;
         if (rd(DRV_REG_MODE, &mode) == HAL_OK && !(mode & DRV_MODE_DEV_RESET)) {
             done = true;
@@ -257,6 +309,28 @@ hal_status_t hal_haptic_set_actuator(hal_haptic_actuator_t act) {
 }
 
 hal_haptic_actuator_t hal_haptic_get_actuator(void) { return s_act; }
+
+hal_status_t hal_haptic_set_lra_params(const hal_haptic_lra_params_t *p) {
+    if (p == NULL || p->rated_mv_rms < 500u || p->rated_mv_rms > p->peak_mv || p->peak_mv > DRV_ERM_OD_MAX_MV ||
+        p->freq_hz < 50u || p->freq_hz > 500u) {
+        return HAL_EINVAL;
+    }
+    if (memcmp(p, &s_lra, sizeof s_lra) == 0) {
+        return HAL_OK;
+    }
+    s_lra = *p;
+    if (s_act == HAL_HAPTIC_LRA) {
+        s_cal = default_cal_for(HAL_HAPTIC_LRA); // measured with the old parameters
+        return s_inited ? hal_haptic_init() : HAL_OK;
+    }
+    return HAL_OK;
+}
+
+void hal_haptic_get_lra_params(hal_haptic_lra_params_t *out) {
+    if (out) {
+        *out = s_lra;
+    }
+}
 
 hal_status_t hal_haptic_set_erm_loop(hal_haptic_loop_t loop) {
     if (loop != HAL_HAPTIC_LOOP_OPEN && loop != HAL_HAPTIC_LOOP_CLOSED) {
@@ -310,7 +384,7 @@ static hal_status_t calibrate_inner(hal_haptic_cal_t *out) {
     uint32_t t0 = hal_millis();
     uint8_t go = 1;
     do {
-        hal_delay_ms(CAL_POLL_MS);
+        s_delay(CAL_POLL_MS); // a scheduler delay in the firmware: other tasks run during the ~1 s
         TRY(rd(DRV_REG_GO, &go));
     } while ((go & 1u) && hal_millis() - t0 < s_cal_timeout_ms);
     if (go & 1u) {
@@ -434,7 +508,7 @@ hal_status_t hal_haptic_rtp_end(void) {
 hal_status_t hal_haptic_standby(bool standby) {
     hal_status_t st = wr(DRV_REG_MODE, standby ? DRV_MODE_STANDBY : DRV_MODE_INTERNAL_TRIGGER);
     if (st == HAL_OK && !standby) {
-        hal_delay_ms(1); // oscillator wake-up margin
+        s_delay(1); // oscillator wake-up margin
     }
     return st;
 }

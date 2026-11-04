@@ -13,18 +13,19 @@
 #include "capabilities.h"
 #include "hal_display.h"
 #include "hal_radio.h"
+#include "haptic_logic.h"
 #include "haptic_service.h"
 #include "player.h"
 #include "settings_store.h"
 #include "ui_internal.h"
 
-ui_state_t g_ui_state = {.click_feedback = true, .backlight_pct = 100};
+ui_state_t g_ui_state = {.click_mode = CLICK_HAPTIC, .backlight_pct = 100};
 
 void ui_apply_backlight(void) { hal_display_backlight((uint8_t)((g_ui_state.backlight_pct * 255u + 50u) / 100u)); }
 
 void ui_state_persist(void) {
     settings_set_u8(SETTING_BACKLIGHT_PCT, g_ui_state.backlight_pct);
-    settings_set_u8(SETTING_CLICK_FEEDBACK, g_ui_state.click_feedback ? 1u : 0u);
+    settings_set_u8(SETTING_CLICK_FEEDBACK, (uint8_t)g_ui_state.click_mode);
 }
 
 // The settings store is loaded from the card some time after boot (storage task): when its contents are replaced, take
@@ -41,8 +42,9 @@ static void sync_from_settings(void) {
         g_ui_state.backlight_pct = v;
         ui_apply_backlight();
     }
-    if (settings_get_u8(SETTING_CLICK_FEEDBACK, &v) && v <= 1) {
-        g_ui_state.click_feedback = v != 0;
+    click_mode_t m;
+    if (settings_get_u8(SETTING_CLICK_FEEDBACK, &v) && click_mode_from_stored(v, &m)) {
+        g_ui_state.click_mode = m; /* an old stored 0 / 1 is Off / Haptic, as before */
     }
 }
 
@@ -264,9 +266,24 @@ static void update_wifi(void) {
     g_wifi_col = col;
 }
 
+// The haptic task applies the stored actuator and calibration once the settings are known: when they are (re)loaded,
+// and once more when the boot checks have all resolved (a boot with no card never loads them, but storage is then settled).
+static void kick_haptics(void) {
+    static uint32_t kicked_key = UINT32_MAX;
+    if (!caps_available(CAP_HAPTICS)) {
+        return;
+    }
+    uint32_t key = settings_generation() * 2u + (caps_all_resolved() ? 1u : 0u);
+    if (key != kicked_key) {
+        kicked_key = key;
+        rt_haptic_settings_loaded();
+    }
+}
+
 void ui_frame_tick(uint32_t now_ms) {
     (void)now_ms;
     sync_from_settings();
+    kick_haptics();
     update_wifi();
     update_battery();
     ui_screen_t *top = ui_stack_top(&g_stack);
@@ -276,8 +293,11 @@ void ui_frame_tick(uint32_t now_ms) {
 }
 
 void ui_feedback_step(void) {
-    if (g_ui_state.click_feedback && caps_available(CAP_HAPTICS)) {
+    if (click_mode_uses_haptic(g_ui_state.click_mode) && caps_available(CAP_HAPTICS)) {
         rt_haptic_click();
+    }
+    if (click_mode_uses_piezo(g_ui_state.click_mode)) {
+        rt_piezo_click();
     }
 }
 

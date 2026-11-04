@@ -5,6 +5,7 @@
 
 #include "battery_store.h"
 #include "capabilities.h"
+#include "haptic_logic.h"
 #include "input_events.h"
 #include "lvgl.h"
 #include "ui.h"
@@ -66,7 +67,7 @@ struct ui_screen {
 
 /** Persistent state the screens and Settings share (RAM only for now). */
 typedef struct {
-    bool click_feedback; /* haptic click on every list step */
+    click_mode_t click_mode; /* what answers every list step: piezo, haptic, both or nothing */
     uint8_t backlight_pct; /* 5..100 */
 } ui_state_t;
 extern ui_state_t g_ui_state;

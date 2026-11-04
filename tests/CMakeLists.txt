@@ -258,3 +258,8 @@ add_executable(test_player test_player.c ${CMAKE_SOURCE_DIR}/app/runtime/player.
 target_link_libraries(test_player neupod_rt_core)
 set_source_files_properties(test_player.c PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra")
 add_test(NAME player COMMAND test_player)
+
+add_executable(test_haptic_logic test_haptic_logic.c)
+target_link_libraries(test_haptic_logic neupod_rt_core)
+add_test(NAME haptic_logic COMMAND test_haptic_logic)
+set_source_files_properties(test_haptic_logic.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
