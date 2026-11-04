@@ -137,6 +137,280 @@ TEST(a_single_track_folder_is_a_queue_of_one) {
     ASSERT_EQ(0, q.count);
 }
 
+// ---- shuffle / repeat -----------------------------------------------------------------------------------------------------
+
+static bool is_permutation(const play_queue_t *q) {
+    bool seen[PLAY_QUEUE_MAX_TRACKS] = {0};
+    for (uint32_t i = 0; i < q->count; i++) {
+        uint16_t en = q->order[i];
+        if (en >= q->count || seen[en]) {
+            return false;
+        }
+        seen[en] = true;
+    }
+    return true;
+}
+
+static file_entry_t g_many[40];
+static void many(void) {
+    for (int i = 0; i < 40; i++) {
+        g_many[i] = e("", false);
+        snprintf(g_many[i].name, sizeof g_many[i].name, "%02d.flac", i);
+    }
+}
+
+TEST(shuffle_is_a_valid_permutation_with_the_chosen_track_first) {
+    many();
+    static play_queue_t q;
+    for (uint32_t seed = 1; seed <= 200; seed++) {
+        pq_clear(&q);
+        pq_seed(&q, seed);
+        pq_set_shuffle(&q, PQ_SHUFFLE_SONGS);
+        ASSERT_TRUE(pq_build(&q, "/a", g_many, 40, seed % 40));
+        ASSERT_EQ(40, q.count);
+        ASSERT_TRUE(is_permutation(&q));
+        ASSERT_EQ(0, q.pos);
+        ASSERT_EQ(seed % 40, pq_entry(&q, 0)); // the track the user chose plays first
+    }
+    // the same seed gives the same order, another seed another one
+    static play_queue_t a, b, c;
+    pq_clear(&a); pq_clear(&b); pq_clear(&c);
+    pq_seed(&a, 7); pq_set_shuffle(&a, PQ_SHUFFLE_SONGS); ASSERT_TRUE(pq_build(&a, "/a", g_many, 40, 0));
+    pq_seed(&b, 7); pq_set_shuffle(&b, PQ_SHUFFLE_SONGS); ASSERT_TRUE(pq_build(&b, "/a", g_many, 40, 0));
+    pq_seed(&c, 8); pq_set_shuffle(&c, PQ_SHUFFLE_SONGS); ASSERT_TRUE(pq_build(&c, "/a", g_many, 40, 0));
+    ASSERT_EQ(0, memcmp(a.order, b.order, 40 * sizeof a.order[0]));
+    ASSERT_TRUE(memcmp(a.order, c.order, 40 * sizeof a.order[0]) != 0);
+    // paths follow the permutation
+    char path[300], want[300];
+    ASSERT_TRUE(pq_path(&a, 3, path, sizeof path));
+    snprintf(want, sizeof want, "/a/%02d.flac", a.order[3]);
+    ASSERT_EQ(0, strcmp(path, want));
+}
+
+TEST(shuffle_actually_mixes) {
+    many();
+    static play_queue_t q;
+    pq_clear(&q);
+    pq_seed(&q, 12345);
+    pq_set_shuffle(&q, PQ_SHUFFLE_SONGS);
+    ASSERT_TRUE(pq_build(&q, "/a", g_many, 40, 0));
+    int in_place = 0;
+    for (uint32_t i = 0; i < 40; i++) {
+        in_place += q.order[i] == i;
+    }
+    ASSERT_TRUE(in_place < 10);
+}
+
+TEST(toggling_shuffle_mid_play_keeps_the_current_track) {
+    many();
+    static play_queue_t q;
+    pq_clear(&q);
+    pq_seed(&q, 99);
+    ASSERT_TRUE(pq_build(&q, "/a", g_many, 40, 17));
+    ASSERT_EQ(17, q.pos);
+    pq_set_shuffle(&q, PQ_SHUFFLE_SONGS);
+    ASSERT_TRUE(is_permutation(&q));
+    ASSERT_EQ(17, pq_entry(&q, q.pos));
+    ASSERT_EQ(0, strcmp(pq_name(&q, q.pos), "17.flac"));
+    // walk some tracks, then switch off: back to folder order, same track playing
+    ASSERT_EQ(PQ_MOVED, pq_next(&q));
+    ASSERT_EQ(PQ_MOVED, pq_next(&q));
+    uint16_t cur = pq_entry(&q, q.pos);
+    pq_set_shuffle(&q, PQ_SHUFFLE_OFF);
+    ASSERT_EQ(cur, q.pos);
+    for (uint32_t i = 0; i < 40; i++) {
+        ASSERT_EQ(i, q.order[i]);
+    }
+    pq_set_shuffle(&q, PQ_SHUFFLE_OFF); // same mode again: nothing changes
+    ASSERT_EQ(cur, q.pos);
+}
+
+TEST(shuffle_plays_every_track_once_then_ends_without_repeat) {
+    many();
+    static play_queue_t q;
+    pq_clear(&q);
+    pq_seed(&q, 5);
+    pq_set_shuffle(&q, PQ_SHUFFLE_SONGS);
+    ASSERT_TRUE(pq_build(&q, "/a", g_many, 40, 3));
+    bool seen[40] = {0};
+    seen[pq_entry(&q, q.pos)] = true;
+    for (int i = 1; i < 40; i++) {
+        ASSERT_EQ(PQ_MOVED, pq_auto_next(&q));
+        uint16_t en = pq_entry(&q, q.pos);
+        ASSERT_FALSE(seen[en]);
+        seen[en] = true;
+    }
+    ASSERT_EQ(PQ_END, pq_auto_next(&q));
+    ASSERT_EQ(39, q.pos);
+}
+
+TEST(previous_walks_back_through_the_shuffled_order) {
+    many();
+    static play_queue_t q;
+    pq_clear(&q);
+    pq_seed(&q, 5);
+    pq_set_shuffle(&q, PQ_SHUFFLE_SONGS);
+    ASSERT_TRUE(pq_build(&q, "/a", g_many, 40, 3));
+    uint16_t a = pq_entry(&q, 0);
+    (void)pq_next(&q);
+    uint16_t b = pq_entry(&q, q.pos);
+    (void)pq_next(&q);
+    ASSERT_EQ(PQ_MOVED, pq_prev(&q, 1));
+    ASSERT_EQ(b, pq_entry(&q, q.pos));
+    ASSERT_EQ(PQ_RESTART, pq_prev(&q, 4)); // more than 3 s in: restart
+    ASSERT_EQ(b, pq_entry(&q, q.pos));
+    ASSERT_EQ(PQ_MOVED, pq_prev(&q, 0));
+    ASSERT_EQ(a, pq_entry(&q, q.pos));
+    ASSERT_EQ(PQ_RESTART, pq_prev(&q, 0)); // first slot
+}
+
+TEST(repeat_one_loops_automatic_advances_but_next_still_moves_on) {
+    static play_queue_t q;
+    pq_clear(&q);
+    ASSERT_TRUE(pq_build(&q, "/a", g_dir, N, 5));
+    pq_set_repeat(&q, PQ_REPEAT_ONE);
+    ASSERT_EQ(2, q.pos);
+    ASSERT_EQ(PQ_RESTART, pq_auto_next(&q));
+    ASSERT_EQ(PQ_RESTART, pq_auto_next(&q));
+    ASSERT_EQ(2, q.pos);
+    uint16_t en;
+    ASSERT_TRUE(pq_peek_auto(&q, &en)); // the gapless look-ahead is the same track
+    ASSERT_EQ(2, en);
+    ASSERT_EQ(PQ_MOVED, pq_next(&q));   // the button
+    ASSERT_EQ(3, q.pos);
+    q.pos = 5; // on the last track too
+    ASSERT_EQ(PQ_RESTART, pq_auto_next(&q));
+    ASSERT_EQ(PQ_END, pq_next(&q));
+    pq_clear(&q); // the mode survives clearing and rebuilding
+    ASSERT_EQ(PQ_REPEAT_ONE, q.repeat);
+}
+
+TEST(repeat_all_wraps_to_the_first_track) {
+    static play_queue_t q;
+    pq_clear(&q);
+    ASSERT_TRUE(pq_build(&q, "/a", g_dir, N, 8)); // 6 tracks, at slot 4
+    pq_set_repeat(&q, PQ_REPEAT_ALL);
+    uint16_t en;
+    ASSERT_TRUE(pq_peek_auto(&q, &en));
+    ASSERT_EQ(5, en);
+    ASSERT_EQ(PQ_MOVED, pq_auto_next(&q));
+    ASSERT_TRUE(pq_peek_auto(&q, &en));
+    ASSERT_EQ(0, en); // the look-ahead at the end is the first track
+    ASSERT_EQ(PQ_WRAPPED, pq_auto_next(&q));
+    ASSERT_EQ(0, q.pos);
+    pq_set_repeat(&q, PQ_REPEAT_OFF); // repeat off: the end is the end
+    q.pos = 5;
+    ASSERT_FALSE(pq_peek_auto(&q, &en));
+    ASSERT_EQ(PQ_END, pq_auto_next(&q));
+    ASSERT_EQ(5, q.pos);
+    file_entry_t one[] = {{.name = "only.flac"}}; // a one-track queue repeats itself
+    ASSERT_TRUE(pq_build(&q, "/x", one, 1, 0));
+    pq_set_repeat(&q, PQ_REPEAT_ALL);
+    ASSERT_EQ(PQ_WRAPPED, pq_auto_next(&q));
+    ASSERT_EQ(0, q.pos);
+}
+
+TEST(repeat_all_with_shuffle_reshuffles_and_never_opens_with_the_last_track) {
+    many();
+    static play_queue_t q;
+    for (uint32_t seed = 1; seed <= 300; seed++) {
+        pq_clear(&q);
+        pq_seed(&q, seed);
+        pq_set_shuffle(&q, PQ_SHUFFLE_SONGS);
+        pq_set_repeat(&q, PQ_REPEAT_ALL);
+        ASSERT_TRUE(pq_build(&q, "/a", g_many, 40, 0));
+        q.pos = 39;
+        uint16_t last = pq_entry(&q, 39);
+        uint16_t peek, peek2;
+        ASSERT_TRUE(pq_peek_auto(&q, &peek));
+        ASSERT_TRUE(peek != last);
+        ASSERT_TRUE(pq_peek_auto(&q, &peek2)); // stable until the move is made
+        ASSERT_EQ(peek, peek2);
+        ASSERT_EQ(PQ_WRAPPED, pq_auto_next(&q));
+        ASSERT_EQ(0, q.pos);
+        ASSERT_EQ(peek, pq_entry(&q, 0)); // the track the gapless look-ahead promised
+        ASSERT_TRUE(is_permutation(&q));
+    }
+    // two tracks: the new round must not open with the track that just ended
+    file_entry_t two[] = {{.name = "a.flac"}, {.name = "b.flac"}};
+    pq_clear(&q);
+    pq_seed(&q, 3);
+    pq_set_shuffle(&q, PQ_SHUFFLE_SONGS);
+    pq_set_repeat(&q, PQ_REPEAT_ALL);
+    ASSERT_TRUE(pq_build(&q, "/x", two, 2, 0));
+    for (int i = 0; i < 20; i++) {
+        uint16_t last = pq_entry(&q, 1);
+        ASSERT_EQ(PQ_MOVED, pq_auto_next(&q));
+        ASSERT_EQ(PQ_WRAPPED, pq_auto_next(&q));
+        ASSERT_TRUE(pq_entry(&q, 0) != last);
+        ASSERT_TRUE(is_permutation(&q));
+    }
+}
+
+TEST(a_committed_entry_wins_over_a_changed_plan) {
+    many();
+    static play_queue_t q;
+    pq_clear(&q);
+    pq_seed(&q, 11);
+    ASSERT_TRUE(pq_build(&q, "/a", g_many, 40, 4));
+    // folder order, the audio core was told "5", then shuffle is switched on
+    pq_set_shuffle(&q, PQ_SHUFFLE_SONGS);
+    ASSERT_EQ(PQ_MOVED, pq_commit(&q, 5));
+    ASSERT_EQ(5, pq_entry(&q, q.pos));
+    ASSERT_EQ(1, q.pos);
+    ASSERT_TRUE(is_permutation(&q));
+    // the other way round: shuffle off after the offer
+    uint16_t offered = pq_entry(&q, q.pos + 1u);
+    pq_set_shuffle(&q, PQ_SHUFFLE_OFF);
+    ASSERT_EQ(PQ_MOVED, pq_commit(&q, offered));
+    ASSERT_EQ(offered, q.pos);
+    ASSERT_EQ(PQ_RESTART, pq_commit(&q, offered)); // the same track again: a repeat
+    pq_set_repeat(&q, PQ_REPEAT_ALL);
+    q.pos = 39;
+    ASSERT_EQ(PQ_WRAPPED, pq_commit(&q, 0));
+    ASSERT_EQ(0, q.pos);
+}
+
+TEST(snapshot_restores_order_position_and_seed_after_a_wrap) {
+    many();
+    static play_queue_t q;
+    pq_clear(&q);
+    pq_seed(&q, 21);
+    pq_set_shuffle(&q, PQ_SHUFFLE_SONGS);
+    pq_set_repeat(&q, PQ_REPEAT_ALL);
+    ASSERT_TRUE(pq_build(&q, "/a", g_many, 40, 0));
+    q.pos = 39;
+    static pq_snapshot_t s;
+    static uint16_t order[40];
+    memcpy(order, q.order, sizeof order);
+    uint16_t cur = pq_entry(&q, q.pos);
+    pq_snapshot(&q, &s);
+    ASSERT_EQ(PQ_WRAPPED, pq_next(&q));
+    ASSERT_TRUE(memcmp(order, q.order, sizeof order) != 0);
+    pq_restore(&q, &s);
+    ASSERT_EQ(0, memcmp(order, q.order, sizeof order));
+    ASSERT_EQ(39, q.pos);
+    ASSERT_EQ(cur, pq_entry(&q, q.pos));
+}
+
+TEST(commit_of_an_entry_at_or_behind_the_position_is_pulled_in_as_the_next_track) {
+    many();
+    static play_queue_t q;
+    pq_clear(&q);
+    pq_seed(&q, 4);
+    ASSERT_TRUE(pq_build(&q, "/a", g_many, 40, 10));
+    ASSERT_EQ(PQ_MOVED, pq_commit(&q, 3)); // folder order: jumps to it
+    ASSERT_EQ(3, q.pos);
+    pq_set_shuffle(&q, PQ_SHUFFLE_SONGS);  // shuffled: entry 3 is current at slot 0; commit an entry that sat earlier in the walk
+    ASSERT_EQ(PQ_MOVED, pq_next(&q));
+    uint16_t earlier = pq_entry(&q, 0);
+    ASSERT_EQ(PQ_MOVED, pq_commit(&q, earlier)); // behind pos: it becomes the next slot, the permutation stays valid
+    ASSERT_EQ(2, q.pos);
+    ASSERT_EQ(earlier, pq_entry(&q, 2));
+    ASSERT_TRUE(is_permutation(&q));
+    ASSERT_EQ(PQ_END, pq_commit(&q, 99));  // not an entry: nothing happens
+}
+
 int main(void) {
     RUN(audio_names_are_recognised_case_insensitively);
     RUN(queue_is_the_folder_in_files_order_from_the_chosen_track);
@@ -145,5 +419,16 @@ int main(void) {
     RUN(previous_restarts_after_three_seconds_otherwise_goes_back);
     RUN(a_folder_too_big_for_the_pool_keeps_a_window_around_the_chosen_track);
     RUN(a_single_track_folder_is_a_queue_of_one);
+    RUN(shuffle_is_a_valid_permutation_with_the_chosen_track_first);
+    RUN(shuffle_actually_mixes);
+    RUN(toggling_shuffle_mid_play_keeps_the_current_track);
+    RUN(shuffle_plays_every_track_once_then_ends_without_repeat);
+    RUN(previous_walks_back_through_the_shuffled_order);
+    RUN(repeat_one_loops_automatic_advances_but_next_still_moves_on);
+    RUN(repeat_all_wraps_to_the_first_track);
+    RUN(repeat_all_with_shuffle_reshuffles_and_never_opens_with_the_last_track);
+    RUN(snapshot_restores_order_position_and_seed_after_a_wrap);
+    RUN(commit_of_an_entry_at_or_behind_the_position_is_pulled_in_as_the_next_track);
+    RUN(a_committed_entry_wins_over_a_changed_plan);
     return RESULT();
 }
