@@ -32,14 +32,24 @@ const char *click_mode_name(click_mode_t m) {
 bool click_mode_uses_haptic(click_mode_t m) { return m == CLICK_HAPTIC || m == CLICK_BOTH; }
 bool click_mode_uses_piezo(click_mode_t m) { return m == CLICK_PIEZO || m == CLICK_BOTH; }
 
-bool haptic_gate_pass(haptic_gate_t *g, uint32_t now_ms, uint32_t min_gap_ms) {
-    if (g->have && (uint32_t)(now_ms - g->last_ms) < min_gap_ms) {
-        return false;
-    }
+bool haptic_gate_ready(const haptic_gate_t *g, uint32_t now_ms, uint32_t min_gap_ms) {
+    return !g->have || (uint32_t)(now_ms - g->last_ms) >= min_gap_ms;
+}
+
+void haptic_gate_mark(haptic_gate_t *g, uint32_t now_ms) {
     g->have = true;
     g->last_ms = now_ms;
+}
+
+bool haptic_gate_pass(haptic_gate_t *g, uint32_t now_ms, uint32_t min_gap_ms) {
+    if (!haptic_gate_ready(g, now_ms, min_gap_ms)) {
+        return false;
+    }
+    haptic_gate_mark(g, now_ms);
     return true;
 }
+
+bool haptic_click_admissible(bool calibrating) { return !calibrating; }
 
 void haptic_cal_encode(hal_haptic_actuator_t act, const hal_haptic_lra_params_t *lra, const hal_haptic_cal_t *cal,
                        uint8_t out[HAPTIC_CAL_RECORD_LEN]) {

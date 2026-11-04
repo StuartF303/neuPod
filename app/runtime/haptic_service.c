@@ -30,7 +30,12 @@ static void wake_task(uint8_t msg) {
     }
 }
 
-void rt_haptic_click(void) { wake_task(MSG_CLICK); }
+void rt_haptic_click(void) {
+    // Dropped here, not in the task: while it calibrates it cannot dequeue, so anything queued would buzz afterwards.
+    if (haptic_click_admissible(g_cal_state == HAPTIC_CAL_RUNNING)) {
+        wake_task(MSG_CLICK);
+    }
+}
 
 void rt_piezo_click(void) {} // no piezo driver yet (docs/i2c-peripherals.md): selecting Piezo is stored but silent
 
@@ -70,22 +75,25 @@ static bool needs_calibration(hal_haptic_actuator_t act) {
     return !(act == HAL_HAPTIC_ERM && hal_haptic_get_erm_loop() == HAL_HAPTIC_LOOP_OPEN);
 }
 
-// Persisted settings are known: either the card's values were loaded, or storage is settled as absent/failed.
+// Persisted settings are known: the card's values were loaded, or every boot check has resolved (so storage is settled
+// as absent/failed). caps_all_resolved() rather than a capabilities_t copy: that struct is about 800 B of this task's stack.
 static bool settings_settled(void) {
     settings_status_t st;
     settings_get_status(&st);
-    if (st.loaded) {
-        return true;
-    }
-    capabilities_t c;
-    caps_get(&c);
-    return c.state[CAP_STORAGE] != CAP_PENDING;
+    return st.loaded || caps_all_resolved();
 }
 
 // Runs the datasheet auto-calibration and stores the result. Bus mutex held by the caller.
+static void drain_queue(void) {
+    uint8_t m;
+    while (os_queue_recv(g_q, &m, OS_NO_WAIT)) {
+    }
+}
+
 static void calibrate_and_store(hal_haptic_actuator_t act) {
     hal_haptic_cal_t cal = {0};
     g_cal_state = HAPTIC_CAL_RUNNING;
+    drain_queue(); // clicks queued just before it started
     hal_status_t st = hal_haptic_calibrate(&cal); // ~1 s, scheduler delays in between
     if (st == HAL_ENOTSUP) {
         g_cal_state = HAPTIC_CAL_NOT_NEEDED;
@@ -99,6 +107,7 @@ static void calibrate_and_store(hal_haptic_actuator_t act) {
     } else {
         g_cal_state = HAPTIC_CAL_FAILED; // the driver already restored the previous good values
     }
+    drain_queue(); // a click that slipped in as it started would otherwise buzz now
 }
 
 // Apply the stored actuator and calibration to the chip; calibrate if this actuator has none. Bus mutex held.
@@ -176,20 +185,23 @@ void haptic_task(void *arg) {
             }
             continue;
         }
-        const uint32_t pend = __atomic_exchange_n(&g_pending, 0u, __ATOMIC_ACQ_REL);
-        if (pend != 0) {
+        uint32_t pend;
+        while ((pend = __atomic_exchange_n(&g_pending, 0u, __ATOMIC_ACQ_REL)) != 0) { // also those posted during a calibration
             handle_control(pend); // leaves the chip in standby
             awake = false;
+            req = MSG_WAKE; // a click dequeued alongside a control request is stale by now
         }
         if (req != MSG_CLICK || g_cal_state == HAPTIC_CAL_RUNNING || !caps_available(CAP_HAPTICS)) {
             continue;
         }
-        if (!haptic_gate_pass(&gate, os_tick_ms(), RT_HAPTIC_MIN_GAP_MS)) {
+        const uint32_t now = os_tick_ms();
+        if (!haptic_gate_ready(&gate, now, RT_HAPTIC_MIN_GAP_MS)) {
             continue; // too soon after the last click: dropped, never queued
         }
         if (!os_mutex_lock(rt_i2c_mutex(), 20)) {
-            continue; // bus busy (gauge read): skip this click rather than delay anything
+            continue; // bus busy (gauge read): skip this click rather than delay anything; it does not use up the gap
         }
+        haptic_gate_mark(&gate, now);
         const uint8_t effect = hal_haptic_get_actuator() == HAL_HAPTIC_LRA ? RT_HAPTIC_CLICK_EFFECT_LRA : RT_HAPTIC_CLICK_EFFECT;
         if (!awake) {
             if (hal_haptic_standby(false) == HAL_OK && hal_haptic_click_prepare(effect) == HAL_OK) {

@@ -46,6 +46,17 @@ TEST(rate_gate) {
     ASSERT_TRUE(haptic_gate_pass(&w, 0x30, 35));
 }
 
+TEST(gate_split_and_calibration_drop) {
+    haptic_gate_t g = {0};
+    ASSERT_TRUE(haptic_gate_ready(&g, 100, 35));
+    ASSERT_TRUE(haptic_gate_ready(&g, 101, 35)); // checking does not consume the gap (a click that lost the bus)
+    haptic_gate_mark(&g, 101);
+    ASSERT_FALSE(haptic_gate_ready(&g, 120, 35));
+    ASSERT_TRUE(haptic_gate_ready(&g, 136, 35));
+    ASSERT_TRUE(haptic_click_admissible(false));
+    ASSERT_FALSE(haptic_click_admissible(true)); // no clicks are queued while calibrating
+}
+
 TEST(cal_record) {
     const hal_haptic_lra_params_t lra = HAL_HAPTIC_LRA_LD0832AA;
     const hal_haptic_cal_t cal = {.valid = true, .a_cal_comp = 0x21, .a_cal_bemf = 0x7B, .bemf_gain = 2};
@@ -90,6 +101,7 @@ TEST(cal_record) {
 int main(void) {
     RUN(click_mode_values);
     RUN(rate_gate);
+    RUN(gate_split_and_calibration_drop);
     RUN(cal_record);
     RESULT();
 }

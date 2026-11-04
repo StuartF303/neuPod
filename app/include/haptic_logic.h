@@ -34,6 +34,13 @@ typedef struct {
     bool have;
 } haptic_gate_t;
 bool haptic_gate_pass(haptic_gate_t *g, uint32_t now_ms, uint32_t min_gap_ms);
+/** The same test without recording the request (a click that then loses the bus must not consume the gap)... */
+bool haptic_gate_ready(const haptic_gate_t *g, uint32_t now_ms, uint32_t min_gap_ms);
+/** ...and the record, made once the click is really going out. */
+void haptic_gate_mark(haptic_gate_t *g, uint32_t now_ms);
+
+/** A click request is worth queueing only when no calibration is running (the motor is busy and the task cannot serve it). */
+bool haptic_click_admissible(bool calibrating);
 
 /**
  * Stored calibration record (settings tag SETTING_HAPTIC_CAL): version, actuator, A_CAL_COMP, A_CAL_BEMF,
