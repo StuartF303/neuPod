@@ -76,7 +76,8 @@ void hal_wifi_leave(void);
 /** Give up a join that never finished: leave the network and report HAL_WIFI_FAILED (not IDLE) until the next join. */
 void hal_wifi_abort_join(void);
 
-int hal_wifi_rssi(void);                 /**< dBm of the current link, 0 if unknown */
+#define HAL_WIFI_RSSI_UNKNOWN 0         /**< hal_wifi_rssi() when the link has no reading (a real RSSI is always negative) */
+int hal_wifi_rssi(void);                 /**< dBm of the current link, HAL_WIFI_RSSI_UNKNOWN if unknown */
 bool hal_wifi_ip(char out[16]);          /**< dotted address when UP */
 bool hal_wifi_ssid(char out[33]);        /**< the joined network */
 

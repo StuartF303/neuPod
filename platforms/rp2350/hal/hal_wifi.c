@@ -228,7 +228,7 @@ void hal_wifi_poll(void) {
 int hal_wifi_rssi(void) {
     int32_t r = 0;
     if (!g_on || cyw43_wifi_get_rssi(&cyw43_state, &r) != 0) {
-        return 0;
+        return HAL_WIFI_RSSI_UNKNOWN;
     }
     return (int)r;
 }

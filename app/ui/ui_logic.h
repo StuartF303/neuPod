@@ -58,11 +58,12 @@ extern const ui_signal_thr_t k_ui_signal_wifi; /**< runtime_config.h UI_SIG_WIFI
 extern const ui_signal_thr_t k_ui_signal_bt;   /**< runtime_config.h UI_SIG_BT_* */
 
 /**
- * Bars (1..4) for @p rssi_dbm. @p prev is the bars last shown (0 = none: no hysteresis); with a previous value, the bars
+ * Bars (1..4) for @p rssi_dbm. A reading of 0 dBm or more is "unknown" (a failed radio read, HAL_WIFI_RSSI_UNKNOWN, or
+ * HAL_BT_RSSI_UNKNOWN): it returns @p prev (held), i.e. 0 = no bars when there is none. @p prev is the bars last shown (0 = none: no hysteresis); with a previous value, the bars
  * rise only once the signal is hyst_db above a threshold and fall only once it is hyst_db below it (use UI_SIG_HYST_DB).
  */
 int ui_signal_bars(int32_t rssi_dbm, const ui_signal_thr_t *thr, int prev, int32_t hyst_db);
-/** "Excellent", "Good", "Fair" or "Weak" for 4..1 bars (the Settings summary pane). */
+/** "Excellent", "Good", "Fair", "Weak" for 4..1 bars, "-" for 0 (no reading) (the Settings summary pane). */
 const char *ui_signal_word(int bars);
 /** Colour class of a bar count: 3 = green (3 or 4 bars), 2 = yellow (2 bars), 1 = red (1 bar). */
 int ui_signal_class(int bars);

@@ -111,8 +111,10 @@ typedef struct {
     bool dim;        /* greyed, not meant to be opened */
     uint8_t bars;    /* signal meter at the right edge, 1..4 (ui_signal_bars; 0 = none) */
     bool busy;       /* pulsing dots at the right edge instead of the meter: the row's action is still running.
-                        The model sets it for as long as the work lasts (and gives up after UI_BUSY_TIMEOUT_MS);
-                        the list animates it by itself while any bound row is busy. Call ui_list_refresh when it changes. */
+                        The model sets it for as long as the work lasts and clears it on completion; a row driven by
+                        an action the screen started (a Networks join) also gives up after UI_BUSY_TIMEOUT_MS, while
+                        status rows (scanning, JOINING/NO_IP, radio starting) simply track the HAL state.
+                        The list animates it by itself while any bound row is busy. Call ui_list_refresh when it changes. */
 } ui_list_item_t;
 
 typedef struct {

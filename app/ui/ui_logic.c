@@ -106,7 +106,12 @@ const ui_signal_thr_t k_ui_signal_bt = {UI_SIG_BT_4_DBM, UI_SIG_BT_3_DBM, UI_SIG
 /* The RSSI at which @p bars (2..4) starts. */
 static int32_t bar_floor(const ui_signal_thr_t *t, int bars) { return bars >= 4 ? t->b4 : bars == 3 ? t->b3 : t->b2; }
 
+static bool rssi_ge_zero(int32_t rssi) { return rssi >= 0; }
+
 int ui_signal_bars(int32_t rssi, const ui_signal_thr_t *thr, int prev, int32_t hyst) {
+    if (rssi_ge_zero(rssi)) {
+        return prev >= 1 && prev <= 4 ? prev : 0;
+    }
     if (prev < 1 || prev > 4) {
         prev = 0;
         hyst = 0;
@@ -123,4 +128,4 @@ int ui_signal_bars(int32_t rssi, const ui_signal_thr_t *thr, int prev, int32_t h
 
 int ui_signal_class(int bars) { return bars >= 3 ? 3 : bars == 2 ? 2 : 1; }
 
-const char *ui_signal_word(int bars) { return bars >= 4 ? "Excellent" : bars == 3 ? "Good" : bars == 2 ? "Fair" : "Weak"; }
+const char *ui_signal_word(int bars) { return bars <= 0 ? "-" : bars >= 4 ? "Excellent" : bars == 3 ? "Good" : bars == 2 ? "Fair" : "Weak"; }

@@ -19,6 +19,8 @@
 #define GLYPH_N 4
 #define GLYPH_W 22 /* 4 x 4 px + 3 x 2 px gaps */
 #define GLYPH_GAP 6
+#define ROW_INSET 8      /* right inset of the rightmost item */
+#define ROW_CHEV_W 22    /* inset when the row has a chevron */
 static const int32_t k_bar_h[GLYPH_N] = {5, 8, 11, 14};
 
 enum { GS_GREEN, GS_YELLOW, GS_RED, GS_OFF, GS_OFF_SEL, GS_DOT0, GS_DOT1, GS_DOT2, GS_DOT0_SEL, GS_DOT1_SEL, GS_DOT2_SEL, GS_N };
@@ -50,7 +52,7 @@ static void glyph_styles_init(void) {
         [GS_RED] = {UI_L_ERR, LV_OPA_COVER, 0},   [GS_OFF] = {UI_L_LINE, LV_OPA_COVER, 0},
         [GS_OFF_SEL] = {0xFFFFFF, LV_OPA_40, 0},  [GS_DOT0] = {UI_L_DIM, LV_OPA_30, 2},
         [GS_DOT1] = {UI_L_DIM, LV_OPA_60, 2},     [GS_DOT2] = {UI_L_DIM, LV_OPA_COVER, 2},
-        [GS_DOT0_SEL] = {0xFFFFFF, LV_OPA_30, 2}, [GS_DOT1_SEL] = {0xFFFFFF, LV_OPA_60, 2},
+        [GS_DOT0_SEL] = {0xFFFFFF, LV_OPA_60, 2}, [GS_DOT1_SEL] = {0xFFFFFF, LV_OPA_80, 2},
         [GS_DOT2_SEL] = {0xFFFFFF, LV_OPA_COVER, 2},
     };
     for (int i = 0; i < GS_N; i++) {
@@ -112,7 +114,7 @@ static void glyph_set_style(row_t *r, int i, int gs) {
 }
 
 /* Draw the row's glyph: pulsing dots if busy, else the meter, else nothing. */
-static void glyph_apply(ui_list_t *l, row_t *r) {
+static void glyph_apply(ui_list_t *l, row_t *r, bool restyle_only) {
     bool show = r->busy || r->bars != 0;
     if (!show) {
         for (int i = 0; i < GLYPH_N && r->g[i] != NULL; i++) {
@@ -120,7 +122,7 @@ static void glyph_apply(ui_list_t *l, row_t *r) {
         }
         return;
     }
-    int32_t x0 = l->w - (r->chevron ? 22 : 8) - GLYPH_W;
+    int32_t x0 = l->w - (r->chevron ? ROW_CHEV_W : ROW_INSET) - GLYPH_W;
     bool on = r->sel && l->focus;
     for (int i = 0; i < GLYPH_N; i++) {
         if (r->g[i] == NULL) {
@@ -144,8 +146,10 @@ static void glyph_apply(ui_list_t *l, row_t *r) {
             y = UI_ROW_H / 2 + 7 - h;
             gs = i < r->bars ? (cls == 3 ? GS_GREEN : cls == 2 ? GS_YELLOW : GS_RED) : (on ? GS_OFF_SEL : GS_OFF);
         }
-        lv_obj_set_size(r->g[i], 4, h);
-        lv_obj_set_pos(r->g[i], x0 + i * 6, y);
+        if (!restyle_only) { /* the busy timer only swaps styles: the geometry was set when the row was bound */
+            lv_obj_set_size(r->g[i], 4, h);
+            lv_obj_set_pos(r->g[i], x0 + i * 6, y);
+        }
         glyph_set_style(r, i, gs);
     }
 }
@@ -158,7 +162,7 @@ static void busy_cb(lv_timer_t *t) {
         row_t *r = &l->row[i];
         if (r->idx >= 0 && r->busy) {
             any = true;
-            glyph_apply(l, r);
+            glyph_apply(l, r, true);
         }
     }
     if (!any) {
@@ -198,11 +202,11 @@ static void bind_row(ui_list_t *l, row_t *r, int32_t idx) {
     r->bars = it.bars > 4 ? 4 : it.bars;
     int32_t glyph_w = (r->busy || r->bars != 0) ? GLYPH_W + GLYPH_GAP : 0;
     int32_t detail_w = it.detail[0] ? (int32_t)strlen(it.detail) * 8 + 10 : 0; /* about 7.5 px per character */
-    int32_t label_w = l->w - 10 - (it.chevron ? 22 : 8) - glyph_w - detail_w;
+    int32_t label_w = l->w - 10 - (it.chevron ? ROW_CHEV_W : ROW_INSET) - glyph_w - detail_w;
     lv_obj_set_width(r->label, label_w);
-    lv_obj_align(r->detail, LV_ALIGN_RIGHT_MID, (it.chevron ? -22 : -8) - glyph_w, 0);
+    lv_obj_align(r->detail, LV_ALIGN_RIGHT_MID, -(it.chevron ? ROW_CHEV_W : ROW_INSET) - glyph_w, 0);
     style_row(l, r, it.dim);
-    glyph_apply(l, r);
+    glyph_apply(l, r, false);
 }
 
 static void update_scrollbar(ui_list_t *l) {

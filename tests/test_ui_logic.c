@@ -158,7 +158,17 @@ TEST(signal_bars_hysteresis) {
     ASSERT_EQ(4, ui_signal_bars(-60, w, 9, 3));
 }
 
+TEST(signal_bars_unknown_rssi) {
+    const ui_signal_thr_t *w = &k_ui_signal_wifi;
+    ASSERT_EQ(0, ui_signal_bars(0, w, 0, 3));   /* failed read, nothing shown yet: no bars, not "excellent" */
+    ASSERT_EQ(0, ui_signal_bars(127, &k_ui_signal_bt, 0, 0));
+    ASSERT_EQ(2, ui_signal_bars(0, w, 2, 3));   /* held while the read fails */
+    ASSERT_EQ(4, ui_signal_bars(0, w, 4, 3));
+    ASSERT_TRUE(ui_signal_word(0)[0] == '-');
+}
+
 int main(void) {
+    RUN(signal_bars_unknown_rssi);
     RUN(signal_bars_thresholds);
     RUN(signal_bars_hysteresis);
     RUN(nav_clamps_and_window_follows);
