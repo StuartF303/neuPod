@@ -1,0 +1,10 @@
+10000000 <audio_core_main>:
+10000000:	push	{r4, lr}
+10000002:	bl	10000020 <hal_audio_open>
+10000006:	pop	{r4, pc}
+
+10000020 <hal_audio_open>:
+10000020:	bl	10000200 <__assert_func>
+
+10000200 <__assert_func>:
+10000200:	bx	lr

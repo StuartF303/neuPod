@@ -1,0 +1,10 @@
+10000000 <audio_core_main>:
+10000000:	push	{r4, lr}
+10000002:	bl	10000020 <irq_set_exclusive_handler>
+10000006:	pop	{r4, pc}
+
+10000020 <irq_set_exclusive_handler>:
+10000020:	bl	10000200 <__assert_func>
+
+10000200 <__assert_func>:
+10000200:	bx	lr
