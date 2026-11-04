@@ -17,6 +17,7 @@
 #define NEUPOD_HAL_RADIO_H
 
 #include <stddef.h>
+#include <string.h>
 
 #include "hal_types.h"
 
@@ -159,7 +160,23 @@ typedef enum {
     HAL_BT_FAIL_TIMEOUT,   /**< no result within HAL_BT_PAIR_TIMEOUT_MS / HAL_BT_CONNECT_TIMEOUT_MS */
     HAL_BT_FAIL_LINK_LOST, /**< an established link ended without being asked to (the headset went away or switched off) */
     HAL_BT_FAIL_INTERNAL,  /**< the stack refused the request (out of buffers, busy) */
+    HAL_BT_FAIL_BUSY,      /**< a Pair that the headset ended or had no resources for: busy with something else, or not in pairing mode */
 } hal_bt_fail_t;
+
+/** One short phrase per reason, shared by the console and the UI ("Failed: <phrase>"; at most 19 characters). */
+static inline const char *hal_bt_fail_text(hal_bt_fail_t r) {
+    switch (r) {
+    case HAL_BT_FAIL_NOT_FOUND: return "not found";
+    case HAL_BT_FAIL_AUTH: return "pairing refused";
+    case HAL_BT_FAIL_NO_SINK: return "not a headset";
+    case HAL_BT_FAIL_TIMEOUT: return "timed out";
+    case HAL_BT_FAIL_LINK_LOST: return "link lost";
+    case HAL_BT_FAIL_INTERNAL: return "radio error";
+    case HAL_BT_FAIL_BUSY: return "busy or not pairing";
+    case HAL_BT_FAIL_NONE: break;
+    }
+    return "error";
+}
 
 #define HAL_BT_PAIR_TIMEOUT_MS 30000u    /**< a Pair action is abandoned after this long */
 #define HAL_BT_CONNECT_TIMEOUT_MS 20000u /**< ... and a Connect */
@@ -215,8 +232,8 @@ void hal_bt_inquiry_stop(void);
 
 /**
  * Pair with @p dev (address, class and name as found by the inquiry) and connect: the Pair action. The device becomes
- * discoverable and connectable and bondable ONLY for as long as this runs (until CONNECTED, FAILED or a disconnect), then
- * all three go off again. Steps: outgoing ACL link, authentication with SSP "just works" (link key stored through
+ * connectable and bondable (never discoverable), for this headset only, ONLY for as long as this runs (until CONNECTED, FAILED or a disconnect), then
+ * both go off again. Steps: outgoing ACL link, authentication with SSP "just works" (link key stored through
  * hal_bt_storage_t), then an SDP query for an A2DP sink. Progress is HAL_BT_EVT_LINK: PAIRING, then CONNECTED or FAILED.
  * HAL_ENODEV if the stack is not up, HAL_EBUSY if a scan runs (stop it first) or the link is not idle (PAIRING, CONNECTING
  * or CONNECTED), HAL_EINVAL for a NULL or all-zero address. Returns once the request is made.
@@ -235,9 +252,26 @@ void hal_bt_disconnect(void);
 
 /**
  * Forget a device: delete its link key from the storage (disconnecting first if it is the current peer, or cancelling a Pair /
- * Connect to it). The next connection needs a new Pair. Safe for an address that was never paired.
+ * Connect to it). The next connection needs a new Pair. Safe for an address that was never paired. HAL_OK: queued.
+ * HAL_EBUSY: the request slots are full, try again later. HAL_ENODEV: the stack is not up (OFF, STARTING or FAILED), nothing was
+ * done: delete the key straight from the storage with hal_bt_storage_delete_key(), which needs no stack.
  */
-void hal_bt_forget(const uint8_t addr[6]);
+hal_status_t hal_bt_forget(const uint8_t addr[6]);
+
+/** BTstack's link key records ('BTL0'..'BTL7', 27 bytes: sequence number (4), address (6), key (16), type (1)); see btstack_link_key_db_tlv.c. */
+#define HAL_BT_KEY_SLOTS 8u
+#define HAL_BT_KEY_RECORD_LEN 27u
+#define HAL_BT_KEY_ADDR_OFFSET 4u
+#define HAL_BT_KEY_TAG(i) (((uint32_t)'B' << 24) | ((uint32_t)'T' << 16) | ((uint32_t)'L' << 8) | (uint32_t)('0' + (i)))
+/** Delete the link key record for @p addr straight from @p st, without the stack (the same effect as hal_bt_forget()). */
+static inline void hal_bt_storage_delete_key(const hal_bt_storage_t *st, const uint8_t addr[6]) {
+    for (uint32_t i = 0; st != NULL && i < HAL_BT_KEY_SLOTS; i++) {
+        uint8_t e[HAL_BT_KEY_RECORD_LEN];
+        if (st->get(st->ctx, HAL_BT_KEY_TAG(i), e, sizeof e) == (int)sizeof e && memcmp(e + HAL_BT_KEY_ADDR_OFFSET, addr, 6) == 0) {
+            st->del(st->ctx, HAL_BT_KEY_TAG(i));
+        }
+    }
+}
 
 hal_bt_link_state_t hal_bt_link_state(void);
 /** Why the link is FAILED (HAL_BT_FAIL_NONE in any other state; cleared by the next Pair / Connect). */
@@ -245,7 +279,7 @@ hal_bt_fail_t hal_bt_link_reason(void);
 /** The remote device of the current attempt or link (PAIRING, CONNECTING, CONNECTED), or of the one that just FAILED (so a screen can tell
  * whose failure it is): address, class and name as given to Pair (Connect knows only the address); false when DISCONNECTED. */
 bool hal_bt_link_device(hal_bt_device_t *out);
-/** true while the device is discoverable or connectable: only while a Pair action runs (stage 1's rule that nobody can find or connect to us otherwise). */
+/** true while the device is connectable and bondable: only while a Pair action runs, and then for the chosen headset only. It is never discoverable. */
 bool hal_bt_accepting(void);
 
 /**

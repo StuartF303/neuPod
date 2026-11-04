@@ -7,8 +7,9 @@
  *
  * Pairing (stage 2a) is simulated per device so every path can be tested: most devices pair and connect; the car kit refuses
  * (AUTH), the phone has no A2DP sink (NO_SINK), an unnamed device and any address not in the table do not answer (NOT_FOUND).
- * "Link keys" are kept in RAM and, when the stack was given a hal_bt_storage_t, mirrored into it as 'BTL0'..'BTL7' records
- * (the tags BTstack's own link key database uses), so a saved device survives a restart of the simulation exactly like on the board.
+ * "Link keys" are kept in RAM and, when the stack was given a hal_bt_storage_t, mirrored into it as 'BTL0'..'BTL7' records in
+ * BTstack's own 27-byte layout (hal_bt_storage_delete_key() works on them), so a saved device survives a restart of the simulation
+ * exactly like on the board. Like BTstack's dedicated bonding, a Pair deletes any old key for the address first.
  */
 #include <string.h>
 
@@ -20,8 +21,7 @@
 #define SIM_SCAN_MS 2400u
 #define SIM_PAIR_MS 900u    /* a Pair action takes this long to reach its outcome */
 #define SIM_CONNECT_MS 500u /* ... a Connect this long */
-#define SIM_KEYS 8u
-#define SIM_KEY_TAG(i) ((uint32_t)'B' << 24 | (uint32_t)'T' << 16 | (uint32_t)'L' << 8 | (uint32_t)('0' + (i)))
+#define SIM_KEYS HAL_BT_KEY_SLOTS
 
 typedef struct {
     uint32_t at_ms;      /* when it is reported, relative to the scan start */
@@ -106,7 +106,10 @@ static void key_add(const uint8_t a[6]) {
             memcpy(g_keys[i], a, 6);
             g_key_used[i] = true;
             if (g_storage != NULL) {
-                (void)g_storage->put(g_storage->ctx, SIM_KEY_TAG(i), a, 6);
+                uint8_t rec[HAL_BT_KEY_RECORD_LEN] = {0};
+                memcpy(rec + HAL_BT_KEY_ADDR_OFFSET, a, 6);
+                rec[HAL_BT_KEY_RECORD_LEN - 1] = 4; /* a "type" byte; the simulator never uses the key */
+                (void)g_storage->put(g_storage->ctx, HAL_BT_KEY_TAG(i), rec, sizeof rec);
             }
             return;
         }
@@ -118,7 +121,7 @@ static void key_del(const uint8_t a[6]) {
     if (i >= 0) {
         g_key_used[i] = false;
         if (g_storage != NULL) {
-            g_storage->del(g_storage->ctx, SIM_KEY_TAG((uint32_t)i));
+            g_storage->del(g_storage->ctx, HAL_BT_KEY_TAG((uint32_t)i));
         }
     }
 }
@@ -129,9 +132,9 @@ static void keys_load(void) {
         return;
     }
     for (uint32_t i = 0; i < SIM_KEYS; i++) {
-        uint8_t a[6];
-        if (g_storage->get(g_storage->ctx, SIM_KEY_TAG(i), a, sizeof a) == (int)sizeof a) {
-            memcpy(g_keys[i], a, 6);
+        uint8_t rec[HAL_BT_KEY_RECORD_LEN];
+        if (g_storage->get(g_storage->ctx, HAL_BT_KEY_TAG(i), rec, sizeof rec) == (int)sizeof rec) {
+            memcpy(g_keys[i], rec + HAL_BT_KEY_ADDR_OFFSET, 6);
             g_key_used[i] = true;
         }
     }
@@ -279,6 +282,7 @@ hal_status_t hal_bt_pair(const hal_bt_device_t *dev) {
     }
     g_peer = *dev;
     g_link_t0 = hal_millis();
+    key_del(dev->addr); /* bonding starts from a clean slate, as in BTstack */
     g_accepting = true;
     emit_link(HAL_BT_LINK_PAIRING, HAL_BT_FAIL_NONE);
     return HAL_OK;
@@ -312,14 +316,18 @@ void hal_bt_disconnect(void) {
     }
 }
 
-void hal_bt_forget(const uint8_t addr[6]) {
+hal_status_t hal_bt_forget(const uint8_t addr[6]) {
     if (addr == NULL) {
-        return;
+        return HAL_EINVAL;
+    }
+    if (g_state == HAL_BT_OFF || g_state == HAL_BT_STARTING || g_state == HAL_BT_FAILED) {
+        return HAL_ENODEV; /* no stack: the caller deletes the key from the storage */
     }
     if (g_link != HAL_BT_LINK_DISCONNECTED && g_link != HAL_BT_LINK_FAILED && memcmp(addr, g_peer.addr, 6) == 0) {
         hal_bt_disconnect();
     }
     key_del(addr);
+    return HAL_OK;
 }
 
 hal_bt_link_state_t hal_bt_link_state(void) { return g_link; }

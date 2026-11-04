@@ -44,13 +44,28 @@ void bt_saved_pair_begin(const hal_bt_device_t *dev);
 void bt_saved_pair_abort(void);
 /**
  * Feed every HAL_BT_EVT_LINK event here. CONNECTED while a Pair candidate is pending makes it the remembered headset (and, if it
- * replaced a different one, queues that one's address for bt_saved_take_stale()); FAILED or DISCONNECTED drops the candidate (its address is queued for
- * bt_saved_take_stale() too, unless it is the remembered headset: a Pair that got as far as making a key must not leave it behind).
+ * replaced a different one, queues that one's address for deletion); if the record cannot be stored (store full) the new key is queued for deletion
+ * instead and bt_saved_notice() says why. FAILED or DISCONNECTED drops the candidate and queues its address for deletion, unless it is the remembered
+ * headset: BTstack already deleted that key when the Pair began, so the record is cleared instead.
  * Other events are ignored. Safe to call from the radio worker: it only touches the settings store.
  */
 void bt_saved_on_event(const hal_bt_event_t *ev);
-/** The address of a headset that a new Pair replaced, whose link key should now be deleted (hal_bt_forget). Returns it once. */
-bool bt_saved_take_stale(uint8_t addr[6]);
+/** The oldest address whose link key should now be deleted (a replaced headset, a Pair that did not finish, a record that could not be saved); false if none. Stays queued until bt_saved_drop_stale(). */
+bool bt_saved_peek_stale(uint8_t addr[6]);
+void bt_saved_drop_stale(void);
+/**
+ * Delete the link key for @p addr: hal_bt_forget() when the stack is up, otherwise (OFF, STARTING, FAILED) straight from the settings
+ * store. HAL_OK when done or queued, HAL_EBUSY when the radio could not take the request yet.
+ */
+hal_status_t bt_saved_delete_key(const uint8_t addr[6]);
+/** Queue @p addr for deletion by the next bt_saved_drain_stale(). */
+void bt_saved_queue_delete(const uint8_t addr[6]);
+/** Process the stale queue (up to four deep): each address is deleted, or kept for the next call if the radio is busy. Called from bt_service_tick(). */
+void bt_saved_drain_stale(void);
+
+/** Why the last Pair ended without a remembered headset although it connected. Cleared by the next bt_saved_pair_begin(). */
+typedef enum { BT_SAVED_NOTICE_NONE = 0, BT_SAVED_NOTICE_FULL /**< the settings store is full: "Can't save: settings full" */ } bt_saved_notice_t;
+bt_saved_notice_t bt_saved_notice(void);
 
 #ifdef __cplusplus
 }

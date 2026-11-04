@@ -51,7 +51,7 @@ Core 1 never calls any of this, and BTstack never runs on it. The rules in [Runt
 The "radio" boot check task (4.8 s deadline, then it keeps waiting up to 12 s so a slow bring-up still upgrades the result) calls
 `hal_system_late_init()` (CYW43 driver, which also starts BTstack's memory and run loop through `btstack_cyw43_init`), then
 `bt_service_start()`, which sets the local name (`neuPod`), the Class of Device (Audio, portable audio), makes the device
-**not discoverable, not connectable and not bondable** (nobody can find or pair with it, except while a Pair action runs, stage 2a) and calls `hci_power_control(HCI_POWER_ON)`.
+**never discoverable, and not connectable or bondable** (nobody can find it; only while a Pair action runs is it connectable and bondable, for the chosen headset only, stage 2a) and calls `hci_power_control(HCI_POWER_ON)`.
 
 Expected UART lines (about 1 to 3 s after the splash starts; the exact time is a thing to measure on the board):
 
@@ -107,32 +107,35 @@ Built, host-tested, **not yet run on the board**. No audio: the connection ends 
 
 | Call | What it does |
 | --- | --- |
-| `hal_bt_pair(dev)` | The Pair action. Discoverable + connectable + bondable **on**, outgoing ACL link, SSP "just works" authentication (the link key goes to the SD-card store), then an SDP query for an A2DP sink (UUID 0x110B) on the same link. All three go off again when it ends. 30 s limit (`HAL_BT_PAIR_TIMEOUT_MS`) |
-| `hal_bt_connect(addr)` | Connect to a device paired before: SDP query first (it creates the link), then authentication with the **stored key** (`gap_request_security_level`). Not discoverable, not connectable, not bondable: a headset that lost its key fails with `HAL_BT_FAIL_AUTH` instead of silently pairing again. 20 s limit |
+| `hal_bt_pair(dev)` | The Pair action. **Never discoverable.** Connectable and bondable **on** (with auto-accept and the "no input, no output" IO capability) for this headset only: a connection filter (`gap_register_classic_connection_filter`) rejects every other address, and a link key that appears for any other address is deleted at once. Outgoing ACL link, SSP "just works" authentication (the link key goes to the SD-card store), then an SDP query for an A2DP sink (UUID 0x110B) on the same link. Everything goes off again when it ends. 30 s limit (`HAL_BT_PAIR_TIMEOUT_MS`) |
+| `hal_bt_connect(addr)` | Connect to a device paired before: SDP query first (it creates the link), then authentication with the **stored key** (`gap_request_security_level`). Not connectable, not bondable, and the IO-capability request is refused (IO capability UNKNOWN), so no transient pairing can authenticate the link. A Connect with **no stored key** (checked before it starts, again before authenticating, and again on the result) fails with `HAL_BT_FAIL_AUTH`; so does a headset that lost its key, instead of silently pairing again. 20 s limit |
 | `hal_bt_disconnect()` | Cancels a Pair / Connect, or drops the link. Reported as DISCONNECTED, never as FAILED |
-| `hal_bt_forget(addr)` | Deletes the link key (drops the link first if it is the current peer) |
+| `hal_bt_forget(addr)` | Deletes the link key (drops the link first if it is the current peer). `HAL_EBUSY`: both request slots are busy, retry. `HAL_ENODEV`: the stack is OFF, STARTING or FAILED: delete the record straight from the store with `hal_bt_storage_delete_key()` (what `bt_saved_delete_key()` does; BTstack reads its keys from the store on demand) |
 | `hal_bt_link_state()` / `_link_reason()` / `_link_device()` / `hal_bt_accepting()` | State, failure reason, the device the state is about (also after a failure, so a screen can tell whose failure it is), and whether the radio is discoverable or connectable right now (only while Pair runs) |
 
 States (`hal_bt_link_state_t`): `DISCONNECTED`, `PAIRING`, `CONNECTING`, `CONNECTED`, `FAILED` (with `hal_bt_fail_t`: `NOT_FOUND` no answer, `AUTH` pairing refused or stored key rejected, `NO_SINK` no A2DP sink,
-`TIMEOUT`, `LINK_LOST` an established link ended by the other side, `INTERNAL` the stack refused). A link change is a `HAL_BT_EVT_LINK` event (state, reason, device). It is separate from the
+`TIMEOUT`, `LINK_LOST` an established link ended by the other side, `INTERNAL` the stack refused or went down, `BUSY` a Pair the headset ended or had no resources for: busy with something else or not in pairing mode). One phrase per reason, `hal_bt_fail_text()`, serves the console and the UI. A link change is a `HAL_BT_EVT_LINK` event (state, reason, device). It is separate from the
 radio state (`hal_bt_state_t`), except that a Pair or Connect needs the radio ON and not scanning, and a scan is refused while a link is being set up (`HAL_EBUSY` both ways). One link at a time.
 There is **no reconnect** at power-up or after a drop: stage 3.
 
 **The saved headset** (`app/include/bt_saved.h`, `app/runtime/bt_saved.c`): settings key **`NPbd`** (`SETTING_BT_DEVICE`), 10 to 42 bytes: version 1, address, class (24 bit), name. The pairing key itself is BTstack's `BTL?` record in
 the same store (sealed). Capacity: the store holds 48 tags; the documented worst case (Wi-Fi networks, 8 link keys, resume, settings) was about 38, now about 39; a host test fills 47 other tags and still stores it, and checks that a full store refuses it
 cleanly. Rules, all tested: a device is remembered only after a Pair **ended CONNECTED**; a failed or cancelled Pair leaves the previous headset alone; a second headset **replaces** the first, and the first one's key is deleted
-(`bt_service_tick` calls `hal_bt_forget` for it); a Pair that got as far as making a key and then failed (no A2DP sink) has its key deleted as well. Forget deletes the key and the record.
+(a queue of four addresses drained by `bt_service_tick`; an address stays queued until the radio takes it); a Pair that got as far as making a key and then failed (no A2DP sink) has its key deleted as well. If the record **cannot be saved** (store full) the new key is deleted, the link is dropped and the Devices screen says "Can't save: settings full". Re-pairing the **remembered** headset deletes its old key when the bonding starts (BTstack does that), so if that Pair fails or is cancelled the record is cleared too. Forget deletes the key and the record.
 `bt_service_pair` / `_connect` / `_disconnect` / `_forget` (`app/runtime/bt_service.c`) are what the UI calls. Link events are handled in the radio callback, not by a screen, so a Pair that finishes while the user has left the screen is still remembered.
 
-**UI** ([UI](ui.md)): Settings > Bluetooth gains, once a headset is saved, three rows under "Scan for devices": its **name** (state on the right: Not connected / Pairing... / Connecting... / Connected / Failed: reason, with busy dots while working),
+**UI** ([UI](ui.md)): Settings > Bluetooth gains, once a headset is saved, three rows under "Scan for devices": its **name** (state on the right: Not connected / Pairing... / Connecting... / Paired, no audio yet / Failed: reason, with busy dots while working),
 **Connect** (becomes **Disconnect**, or **Cancel** while working) and **Forget** (asks for a second Select within 4 s). The right-hand pane shows the radio state, the address, the headset and its state. On the Devices screen, Select on an audio device stops
-the scan if needed and starts the Pair action; the row shows busy dots, then Connected or Failed: reason; the first row becomes **Cancel pairing** meanwhile. Menu on the Devices screen cancels a Pair in progress (so the radio does not stay discoverable for nobody).
+the scan if needed and starts the Pair action; the row shows busy dots, then "Paired, no audio yet" or Failed: reason; the first row becomes **Cancel pairing** meanwhile. Menu on the Devices screen cancels a Pair in progress (so the radio does not stay connectable for nobody).
 
-**Failure stance.** Fail closed for the radio: discoverable, connectable and bondable go off on every way out of a Pair (success, failure, timeout, cancel, leaving the screen), and the 30 s timer is the backstop. A saved device is written only on success.
+**Failure stance.** Fail closed for the radio: connectable and bondable go off on every way out of a Pair (success, failure, timeout, cancel, leaving the screen, the stack going down), and the 30 s timer is the backstop. Never discoverable. A saved device is written only on success.
 Fail open for the features: with no card the saved headset and the keys live in RAM for the session (as the store always does).
 
-**Known limit of 2a.** Nothing holds the link open (the A2DP signalling channel arrives in 2b), so BTstack closes an idle link a few seconds after the SDP query: "Connected" turns into "Not connected" by itself. It is reported as
-DISCONNECTED, not as a failure. A stage 2b connection keeps it up.
+**Known limit of 2a.** Nothing holds the link open (the A2DP signalling channel arrives in 2b), so BTstack closes an idle link a few seconds after the SDP query. No keep-alive is added. The HAL still reports CONNECTED while the link is up, but the UI words it **"Paired, no audio yet"**
+rather than "Connected", so the later idle close ("Not connected", reported as DISCONNECTED, not as a failure) does not contradict it. A stage 2b connection keeps the link up.
+
+**Teardown.** Cancelling a connection that is still being created retries `hci_create_connection_cancel` every 200 ms (at most 10 times) when the controller cannot take a command yet. Every Pair / Connect has an attempt number: a disconnect request or an SDP
+result that belongs to an earlier attempt cannot end the next one (a query still running from a cancelled attempt makes the next one wait for the SDP client). When BTstack reports the stack OFF, a link or attempt in progress becomes FAILED (`INTERNAL`) and everything is reset.
 
 **Pairing order.** Pair uses `gap_dedicated_bonding` and keeps the link (`hci_dedicated_bonding_defer_disconnect`) for the SDP query; that call deletes any old key for the address first, which is what a re-pair wants. Connect cannot use it for that very reason.
 
@@ -224,12 +227,12 @@ the number to check on the board (earlier bench figures: heap minimum free about
 
 | | main | stage 2a | delta |
 | --- | --- | --- | --- |
-| flash image (`text`) | 1,263,280 B | 1,284,580 B | **+21,300 B** (SDP client and L2CAP now linked and used, the pairing state machine, the saved-headset module, the UI rows) |
+| flash image (`text`) | 1,263,280 B | 1,285,584 B | **+22,304 B** (SDP client and L2CAP now linked and used, the pairing state machine, the saved-headset module, the UI rows) |
 | `data` | 0 | 0 | 0 |
-| static RAM (`bss`) | 488,896 B | 489,256 B | **+360 B** (L2CAP and SDP client state, the link state machine, the saved-device candidate) |
-| free SRAM (`__HeapLimit - __end__`) | 15,320 B | 14,960 B | **-360 B** |
+| static RAM (`bss`) | 488,896 B | 489,320 B | **+424 B** (L2CAP and SDP client state, the link state machine, the saved-device candidate and the four-deep key-deletion queue) |
+| free SRAM (`__HeapLimit - __end__`) | 15,320 B | 14,896 B | **-424 B** |
 
-BTstack heap use: none. `HAVE_MALLOC` is not defined and every pool is a static array in `.bss`; the pool counts in `btstack_config.h` did not change (the 360 B above is everything that moved). The FreeRTOS heap and the task stacks are unchanged;
+BTstack heap use: none. `HAVE_MALLOC` is not defined and every pool is a static array in `.bss`; the pool counts in `btstack_config.h` did not change (the 424 B above is everything that moved). The FreeRTOS heap and the task stacks are unchanged;
 the new code runs on the 6 KB radio-worker stack, so its high-water mark is on the bench list. No internal-flash write code is linked (`flash_safe_execute`, `pico_flash`, `btstack_tlv_flash_bank` are absent from the ELF). The core-1 closure check reports ok.
 
 BTstack pools (`btstack_config.h`) are sized for **one** headset: 1 HCI connection, 4 L2CAP channels, 1 AVDTP connection, 2 stream endpoints, 1 AVRCP connection,
@@ -247,7 +250,7 @@ grant for use with its chips).
 ## Stage 2 design notes (2a built; 2b and 2c not built)
 
 * **Priority and RAM ([ADR-0013](adr/0013-bluetooth-ram-psram.md), amendment of 4 Nov 2026):** stage 2 follows the Audio Pack tone test and MP3/ALAC playback. The original funding (sizing the codec arena, releasing LVGL's second render buffer)
-  no longer pays: the arena saving was already spent in #17, and free SRAM is now about 15 KB (15,320 B measured on `main`, 14,960 B with stage 2a). The **core 1 to core 0 Bluetooth PCM ring reuses the 32 KB I2S PCM ring storage**: the outputs are
+  no longer pays: the arena saving was already spent in #17, and free SRAM is now about 15 KB (15,320 B measured on `main`, 14,896 B with stage 2a). The **core 1 to core 0 Bluetooth PCM ring reuses the 32 KB I2S PCM ring storage**: the outputs are
   exclusive (I2S or Bluetooth, never both), so the same bytes serve whichever sink is active. That adds **no new static RAM**; the SBC encoder state and working buffers are measured in 2b and come out of the free SRAM.
 * **Hi-res audio to Bluetooth:** decimated **on core 1** by a 2:1 or 4:1 half-band FIR to 44.1 / 48 kHz, with 24 to 16 bit TPDF dither, before the samples enter the core 1 to core 0 ring. SBC cannot carry more than 48 kHz / 16 bit.
 * **Wi-Fi during A2DP:** allowed (Stuart's decision, **provisional**, see [Wi-Fi alongside Bluetooth](#wi-fi-alongside-bluetooth-provisional): one policy macro, no interlock). The stage 2b bench test has to show an A2DP stream stable while Wi-Fi comes and goes.
@@ -277,13 +280,14 @@ Only the hardware can confirm these; the host simulator and tests cover the stat
 
 1. **Pair.** Headset in pairing mode (AirPods Pro 3: case open, button held until the light flashes white). Settings > Bluetooth > Scan for devices > Select the headset: busy dots, then "Connected" within a few seconds; UART shows `bt: pair`,
    `bt: paired with`, `bt: connected to ... (A2DP sink found)`. Back on Settings > Bluetooth the headset is listed, the right pane shows its name and state.
-2. **Discoverable only while pairing.** During the Pair, another phone sees "neuPod" in its Bluetooth list; within a second of Connected / Failed / Cancel it no longer does (and cannot connect). At rest, no phone ever sees it.
+2. **Never discoverable; connectable only while pairing, and only for the chosen headset.** No phone ever sees "neuPod" in its Bluetooth list, before, during or after a Pair. During a Pair a second device (or the same phone) that tries to connect to neuPod by address is rejected, and no key is created for it; after Connected / Failed / Cancel nothing can connect.
 3. **Link key on the card, not in flash.** After pairing, `/.neupod/settings.a` or `.b` has changed and no other path on the card; reboot: the headset is still listed. Nothing writes the internal flash (core 1 and the audio underrun counter unaffected during the Pair; `underruns=0`).
 4. **Connect / Disconnect / Forget.** Disconnect, Connect: reaches Connected again with the stored key and **without** the headset being put in pairing mode (it must be on and not connected to something else). Forget (twice Select): the row disappears; Connect is gone; pair again works.
    Key lost on the headset side (forget neuPod in its own settings or factory reset it): Connect shows "Failed: pairing refused", it does not silently re-pair.
 5. **Failures.** Headset switched off: Connect shows "Failed: not found" within the 20 s limit. A phone as the target: "Failed: not a headset" and no saved device afterwards. Walk away from the headset until it drops: "Failed: link lost" (or "Not connected" if it closed an idle link).
    Menu on the Devices screen during a Pair cancels it.
-6. **The idle link.** Note how long "Connected" lasts without audio (expected: BTstack closes the idle link after about 10 s; reported as Not connected, not as a failure). Stage 2b keeps it up.
+6. **The idle link.** Note how long "Paired, no audio yet" lasts (expected: BTstack closes the idle link after about 10 s; reported as Not connected, not as a failure). Stage 2b keeps it up.
+   Also: Connect with the key deleted from the card by hand fails at once with "pairing refused" and no radio traffic; and a headset that is busy with another phone during a Pair says "busy or not pairing".
 7. **Wi-Fi alongside (provisional policy).** With Wi-Fi joined and a transfer running, Pair, Connect and Disconnect: no HCI reset, no Wi-Fi drop, no stalled transfer. Also with "Wi-Fi while playing" On and a file playing from the card (I2S path, no Bluetooth audio yet): `underruns=0`.
 8. **Memory.** Monitor lines `heap: free=... min_free=...`, `lvgl_mem`, and the radio worker's stack minimum after several Pair / Connect / Forget cycles: the worker's free stack must stay clear of zero (the new code and its `printf`s run there).
 9. **Repeat Pair 10 times** (Forget in between) and with a headset that connects back to us by itself right after pairing (we are connectable during the Pair for this): no stuck "Pairing...", no orphan key (Forget leaves the card with no `BTL?` record for it).

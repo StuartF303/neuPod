@@ -86,12 +86,20 @@ static volatile bool g_accepting;
 static hal_bt_device_t g_peer;       /* written by the caller that wins the idle -> PAIRING / CONNECTING transition, then read by the worker */
 static link_phase_t g_lphase;        /* worker only (the scan has its own g_phase) */
 static void link_packet(uint8_t *packet);
+static void link_reset(void);
 static bool g_pairing;               /* this attempt is a Pair (bondable, discoverable) */
 static hci_con_handle_t g_acl = HCI_CON_HANDLE_INVALID;
 static bool g_sink_seen;
 static btstack_timer_source_t g_link_timer;
 static btstack_context_callback_registration_t g_link_reg, g_disc_reg, g_forget_reg;
 static volatile bool g_disc_queued, g_forget_queued;
+static uint32_t g_attempt;            /* bumped by every Pair / Connect request (any task, atomically) */
+static volatile uint32_t g_disc_tag;  /* the attempt a queued disconnect request was made for */
+static uint32_t g_sdp_gen;            /* the attempt that started the SDP query now running */
+static bool g_sdp_live, g_sdp_wait;   /* a query is running / the current attempt waits for the SDP client to be free */
+static btstack_timer_source_t g_cancel_timer;
+static uint8_t g_cancel_addr[6];
+static uint8_t g_cancel_tries;
 #define FORGET_SLOTS 2u
 static uint8_t g_forget_addr[FORGET_SLOTS][6];
 static volatile int g_forget_state[FORGET_SLOTS]; /* 0 free, 1 being filled, 2 ready */
@@ -326,6 +334,7 @@ static void packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint
             on_working();
             break;
         case HCI_STATE_OFF:
+            link_reset();
             if (g_state == HAL_BT_STARTING) {
                 printf("bt: HCI did not come up\n");
                 set_state(HAL_BT_FAILED);
@@ -407,20 +416,8 @@ static void worker_scan_stop(void *arg) {
 
 /* ---- pairing and the connection ---- */
 
-static const char *fail_name(hal_bt_fail_t r) {
-    switch (r) {
-    case HAL_BT_FAIL_NONE: return "none";
-    case HAL_BT_FAIL_NOT_FOUND: return "not found";
-    case HAL_BT_FAIL_AUTH: return "authentication";
-    case HAL_BT_FAIL_NO_SINK: return "no A2DP sink";
-    case HAL_BT_FAIL_TIMEOUT: return "timeout";
-    case HAL_BT_FAIL_LINK_LOST: return "link lost";
-    case HAL_BT_FAIL_INTERNAL: return "stack refused";
-    }
-    return "?";
-}
-
-/* HCI / SDP / L2CAP status to our reason. */
+/* HCI / SDP / L2CAP status to our reason. During a Pair, "the remote ended it" and "no resources" mean a headset that is busy or not in
+ * pairing mode (not "out of range"). */
 static hal_bt_fail_t fail_from_status(uint8_t st) {
     switch (st) {
     case ERROR_CODE_AUTHENTICATION_FAILURE:
@@ -430,25 +427,34 @@ static hal_bt_fail_t fail_from_status(uint8_t st) {
     case ERROR_CODE_CONNECTION_REJECTED_DUE_TO_SECURITY_REASONS:
     case ERROR_CODE_PAIRING_WITH_UNIT_KEY_NOT_SUPPORTED:
         return HAL_BT_FAIL_AUTH;
+    case ERROR_CODE_REMOTE_USER_TERMINATED_CONNECTION:
+    case ERROR_CODE_CONNECTION_REJECTED_DUE_TO_LIMITED_RESOURCES:
+        return g_pairing ? HAL_BT_FAIL_BUSY : HAL_BT_FAIL_NOT_FOUND;
     case ERROR_CODE_PAGE_TIMEOUT:
     case ERROR_CODE_CONNECTION_TIMEOUT:
     case ERROR_CODE_CONNECTION_ACCEPT_TIMEOUT_EXCEEDED:
-    case ERROR_CODE_CONNECTION_REJECTED_DUE_TO_LIMITED_RESOURCES:
     case ERROR_CODE_CONNECTION_REJECTED_DUE_TO_UNACCEPTABLE_BD_ADDR:
-    case ERROR_CODE_REMOTE_USER_TERMINATED_CONNECTION:
         return HAL_BT_FAIL_NOT_FOUND;
     default:
         return HAL_BT_FAIL_INTERNAL;
     }
 }
 
-/* Discoverable, connectable and bondable only while a Pair action runs. */
+/* Never discoverable. During a Pair: connectable (for the chosen headset only, see accept_filter), bondable, and "just works" with
+ * auto-accept. At rest and in Connect: none of them, and the IO-capability request is refused (IO capability UNKNOWN), so no transient
+ * pairing can authenticate a link. */
 static void set_accepting(bool on) {
-    gap_discoverable_control(on ? 1 : 0);
+    gap_discoverable_control(0);
     gap_connectable_control(on ? 1 : 0);
     gap_set_bondable_mode(on ? 1 : 0);
     gap_ssp_set_auto_accept(on ? 1 : 0);
+    gap_ssp_set_io_capability(on ? SSP_IO_CAPABILITY_NO_INPUT_NO_OUTPUT : SSP_IO_CAPABILITY_UNKNOWN);
     g_accepting = on;
+}
+
+/* BTstack asks this for every incoming connection request: only the headset being paired. */
+static int accept_filter(bd_addr_t addr, hci_link_type_t type) {
+    return g_accepting && type == HCI_LINK_TYPE_ACL && memcmp(addr, g_peer.addr, 6) == 0;
 }
 
 static void emit_link(hal_bt_link_state_t s, hal_bt_fail_t reason) {
@@ -467,11 +473,26 @@ static void set_link(hal_bt_link_state_t s, hal_bt_fail_t reason) {
     }
 }
 
+/* Cancel a connection that is still being created. The controller may not take a command yet: retry every 200 ms (at most 10 times). */
+static void cancel_create_try(btstack_timer_source_t *ts) {
+    (void)ts;
+    if (hci_can_send_command_packet_now()) {
+        hci_send_cmd(&hci_create_connection_cancel, g_cancel_addr);
+    } else if (++g_cancel_tries < 10u) {
+        btstack_run_loop_set_timer(&g_cancel_timer, 200);
+        btstack_run_loop_add_timer(&g_cancel_timer);
+    }
+}
+
 static void cancel_pending_acl(void) {
     if (g_acl != HCI_CON_HANDLE_INVALID) {
         (void)gap_disconnect(g_acl);
-    } else if (g_lphase != LP_IDLE && hci_can_send_command_packet_now()) {
-        hci_send_cmd(&hci_create_connection_cancel, g_peer.addr); /* still paging */
+    } else if (g_lphase != LP_IDLE) {
+        memcpy(g_cancel_addr, g_peer.addr, 6); /* g_peer may belong to the next attempt by the time the retry runs */
+        g_cancel_tries = 0;
+        btstack_run_loop_remove_timer(&g_cancel_timer);
+        btstack_run_loop_set_timer_handler(&g_cancel_timer, cancel_create_try);
+        cancel_create_try(&g_cancel_timer);
     }
 }
 
@@ -487,9 +508,7 @@ static void link_end(hal_bt_link_state_t s, hal_bt_fail_t reason) {
         g_lphase = LP_IDLE;
     }
     if (s == HAL_BT_LINK_FAILED) {
-        char name[HAL_BT_NAME_MAX + 1];
-        hal_log_text(name, sizeof name, g_peer.name);
-        printf("bt: link to %s '%s' failed: %s\n", bd_addr_to_str(g_peer.addr), name, fail_name(reason));
+        printf("bt: %s failed: %s\n", bd_addr_to_str(g_peer.addr), hal_bt_fail_text(reason));
     }
     set_link(s, reason);
 }
@@ -503,11 +522,17 @@ static void link_timeout(btstack_timer_source_t *ts) {
 
 static void link_up(void) {
     g_lphase = LP_UP;
-    char name[HAL_BT_NAME_MAX + 1];
-    hal_log_text(name, sizeof name, g_peer.name);
-    printf("bt: connected to %s '%s' (A2DP sink found)\n", bd_addr_to_str(g_peer.addr), name);
+    printf("bt: connected %s\n", bd_addr_to_str(g_peer.addr));
     link_end(HAL_BT_LINK_CONNECTED, HAL_BT_FAIL_NONE);
 }
+
+static bool have_link_key(void) {
+    link_key_t k;
+    link_key_type_t t;
+    return gap_get_link_key_for_bd_addr(g_peer.addr, k, &t);
+}
+
+static void start_sdp(void);
 
 static void sdp_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint16_t size) {
     (void)channel;
@@ -520,12 +545,22 @@ static void sdp_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint16_
         g_sink_seen = true; /* the query asked for the Audio Sink service class: any record that came back is one */
         break;
     case SDP_EVENT_QUERY_COMPLETE: {
+        uint32_t gen = g_sdp_gen;
+        g_sdp_live = false; /* the SDP client is free again, whichever attempt started this query */
+        if (gen != g_attempt) {
+            /* A query of an attempt that was cancelled. If the current attempt was waiting for the client, start its query now. */
+            if (g_sdp_wait && g_lphase == LP_SDP) {
+                g_sdp_wait = false;
+                start_sdp();
+            }
+            return;
+        }
         if (g_lphase != LP_SDP) {
             return; /* the attempt ended while the query ran */
         }
         uint8_t st = sdp_event_query_complete_get_status(packet);
         if (st != 0) {
-            printf("bt: SDP query failed (status 0x%02X)\n", (unsigned)st);
+            printf("bt: SDP 0x%02X\n", (unsigned)st);
             link_end(HAL_BT_LINK_FAILED, fail_from_status(st));
         } else if (!g_sink_seen) {
             link_end(HAL_BT_LINK_FAILED, HAL_BT_FAIL_NO_SINK);
@@ -533,6 +568,8 @@ static void sdp_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint16_
             link_up(); /* authenticated by the bonding that came first */
         } else if (g_acl == HCI_CON_HANDLE_INVALID) {
             link_end(HAL_BT_LINK_FAILED, HAL_BT_FAIL_LINK_LOST);
+        } else if (!have_link_key()) {
+            link_end(HAL_BT_LINK_FAILED, HAL_BT_FAIL_AUTH); /* never authenticate a Connect without a stored key */
         } else {
             g_lphase = LP_AUTH; /* Connect: now authenticate with the stored key */
             gap_request_security_level(g_acl, LEVEL_2);
@@ -547,9 +584,16 @@ static void sdp_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint16_
 static void start_sdp(void) {
     g_lphase = LP_SDP;
     g_sink_seen = false;
+    if (g_sdp_live) {
+        g_sdp_wait = true; /* the query of a cancelled attempt is still ending: its completion starts ours (the attempt timer is the backstop) */
+        return;
+    }
+    g_sdp_gen = g_attempt;
+    g_sdp_live = true;
     uint8_t rc = sdp_client_query_uuid16(sdp_handler, g_peer.addr, BLUETOOTH_SERVICE_CLASS_AUDIO_SINK);
     if (rc != 0) {
-        printf("bt: SDP query could not start (0x%02X)\n", (unsigned)rc);
+        g_sdp_live = false;
+        printf("bt: SDP start 0x%02X\n", (unsigned)rc);
         link_end(HAL_BT_LINK_FAILED, HAL_BT_FAIL_INTERNAL);
     }
 }
@@ -559,12 +603,9 @@ static void worker_link_start(void *arg) {
     (void)arg;
     g_acl = HCI_CON_HANDLE_INVALID;
     g_sink_seen = false;
+    g_sdp_wait = false;
     g_pairing = g_link == HAL_BT_LINK_PAIRING;
-    {
-        char name[HAL_BT_NAME_MAX + 1];
-        hal_log_text(name, sizeof name, g_peer.name);
-        printf("bt: %s %s '%s'\n", g_pairing ? "pair" : "connect", bd_addr_to_str(g_peer.addr), name);
-    }
+    printf("bt: %s %s\n", g_pairing ? "pair" : "connect", bd_addr_to_str(g_peer.addr));
     emit_link((hal_bt_link_state_t)g_link, HAL_BT_FAIL_NONE);
     btstack_run_loop_set_timer_handler(&g_link_timer, link_timeout);
     btstack_run_loop_set_timer(&g_link_timer, g_pairing ? HAL_BT_PAIR_TIMEOUT_MS : HAL_BT_CONNECT_TIMEOUT_MS);
@@ -574,9 +615,11 @@ static void worker_link_start(void *arg) {
         g_lphase = LP_BONDING;
         int rc = gap_dedicated_bonding(g_peer.addr, 0);
         if (rc != 0) {
-            printf("bt: gap_dedicated_bonding failed (%d)\n", rc);
+            printf("bt: bonding start %d\n", rc);
             link_end(HAL_BT_LINK_FAILED, HAL_BT_FAIL_INTERNAL);
         }
+    } else if (!have_link_key()) {
+        link_end(HAL_BT_LINK_FAILED, HAL_BT_FAIL_AUTH); /* no stored key: Connect never pairs */
     } else {
         start_sdp();
     }
@@ -602,7 +645,9 @@ static void drop_link(void) {
 static void worker_disconnect(void *arg) {
     (void)arg;
     g_disc_queued = false;
-    drop_link();
+    if (g_disc_tag == g_attempt) { /* a request made for an attempt that has since ended must not kill the next one */
+        drop_link();
+    }
 }
 
 static void worker_forget(void *arg) {
@@ -623,8 +668,31 @@ static void worker_forget(void *arg) {
     }
 }
 
+/* The stack went down (HCI_STATE_OFF) under a link or an attempt: nothing is left of it. */
+static void link_reset(void) {
+    g_acl = HCI_CON_HANDLE_INVALID;
+    g_sdp_live = g_sdp_wait = false;
+    btstack_run_loop_remove_timer(&g_cancel_timer);
+    if (g_link == HAL_BT_LINK_DISCONNECTED || g_link == HAL_BT_LINK_FAILED) {
+        g_lphase = LP_IDLE;
+        return;
+    }
+    g_lphase = LP_IDLE; /* no connection to cancel, no command to send */
+    link_end(HAL_BT_LINK_FAILED, HAL_BT_FAIL_INTERNAL);
+}
+
 static void link_packet(uint8_t *packet) {
     switch (hci_event_packet_get_type(packet)) {
+    case HCI_EVENT_LINK_KEY_NOTIFICATION: {
+        /* A key may only come from the headset being paired, during its Pair. Any other key is deleted at once. */
+        bd_addr_t a;
+        hci_event_link_key_request_get_bd_addr(packet, a);
+        if (!(g_lphase != LP_IDLE && memcmp(a, g_peer.addr, 6) == 0)) {
+            gap_drop_link_key_for_bd_addr(a);
+            printf("bt: dropped stray key %s\n", bd_addr_to_str(a));
+        }
+        break;
+    }
     case HCI_EVENT_CONNECTION_COMPLETE: {
         bd_addr_t a;
         hci_event_connection_complete_get_bd_addr(packet, a);
@@ -646,10 +714,9 @@ static void link_packet(uint8_t *packet) {
         }
         uint8_t st = gap_event_dedicated_bonding_completed_get_status(packet);
         if (st == 0) {
-            printf("bt: paired with %s\n", bd_addr_to_str(g_peer.addr));
             start_sdp();
         } else {
-            printf("bt: pairing failed (status 0x%02X)\n", (unsigned)st);
+            printf("bt: bonding 0x%02X\n", (unsigned)st);
             link_end(HAL_BT_LINK_FAILED, fail_from_status(st));
         }
         break;
@@ -658,10 +725,9 @@ static void link_packet(uint8_t *packet) {
         if (g_lphase != LP_AUTH || gap_event_security_level_get_handle(packet) != g_acl) {
             break;
         }
-        if (gap_event_security_level_get_status(packet) == 0 && gap_event_security_level_get_security_level(packet) >= LEVEL_2) {
+        if (gap_event_security_level_get_status(packet) == 0 && gap_event_security_level_get_security_level(packet) >= LEVEL_2 && have_link_key()) {
             link_up();
         } else {
-            printf("bt: authentication with the stored key failed (status 0x%02X)\n", (unsigned)gap_event_security_level_get_status(packet));
             link_end(HAL_BT_LINK_FAILED, HAL_BT_FAIL_AUTH);
         }
         break;
@@ -678,16 +744,12 @@ static void link_packet(uint8_t *packet) {
             if (why == ERROR_CODE_CONNECTION_TERMINATED_BY_LOCAL_HOST) {
                 set_link(HAL_BT_LINK_DISCONNECTED, HAL_BT_FAIL_NONE);
             } else {
-                printf("bt: link lost (reason 0x%02X)\n", (unsigned)why);
+                printf("bt: link lost 0x%02X\n", (unsigned)why);
                 set_link(HAL_BT_LINK_FAILED, HAL_BT_FAIL_LINK_LOST);
             }
-        } else if (g_lphase != LP_IDLE) {
-            /* Hung up during set-up: the bonding / SDP result usually follows; if it does not, the timer ends the attempt. */
-            printf("bt: link dropped during set-up (reason 0x%02X)\n", (unsigned)why);
-            if (g_lphase == LP_AUTH) {
-                link_end(HAL_BT_LINK_FAILED, HAL_BT_FAIL_AUTH);
-            }
-        }
+        } else if (g_lphase == LP_AUTH) {
+            link_end(HAL_BT_LINK_FAILED, HAL_BT_FAIL_AUTH);
+        } /* during bonding / SDP the result event follows; the attempt timer is the backstop */
         break;
     }
     default:
@@ -707,7 +769,11 @@ static hal_status_t link_reserve(hal_bt_link_state_t to) {
     if (cur != HAL_BT_LINK_DISCONNECTED && cur != HAL_BT_LINK_FAILED) {
         return HAL_EBUSY;
     }
-    return __atomic_compare_exchange_n(&g_link, &cur, (int)to, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST) ? HAL_OK : HAL_EBUSY;
+    if (!__atomic_compare_exchange_n(&g_link, &cur, (int)to, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
+        return HAL_EBUSY;
+    }
+    (void)__atomic_add_fetch(&g_attempt, 1u, __ATOMIC_SEQ_CST); /* the attempt number that disconnect requests and SDP callbacks are checked against */
+    return HAL_OK;
 }
 
 static bool addr_is_zero(const uint8_t a[6]) {
@@ -749,14 +815,18 @@ void hal_bt_disconnect(void) {
     if (g_link == HAL_BT_LINK_DISCONNECTED || g_link == HAL_BT_LINK_FAILED) {
         return;
     }
+    g_disc_tag = g_attempt; /* the attempt this request is about */
     if (!__atomic_exchange_n(&g_disc_queued, true, __ATOMIC_SEQ_CST)) {
         btstack_run_loop_execute_on_main_thread(&g_disc_reg);
     }
 }
 
-void hal_bt_forget(const uint8_t addr[6]) {
-    if (addr == NULL || g_state == HAL_BT_OFF || g_state == HAL_BT_STARTING || g_state == HAL_BT_FAILED) {
-        return; /* the stack is not up: nothing to edit (the key stays in the settings store) */
+hal_status_t hal_bt_forget(const uint8_t addr[6]) {
+    if (addr == NULL) {
+        return HAL_EINVAL;
+    }
+    if (g_state == HAL_BT_OFF || g_state == HAL_BT_STARTING || g_state == HAL_BT_FAILED) {
+        return HAL_ENODEV; /* no stack to ask: the caller deletes the key from the storage (hal_bt_storage_delete_key) */
     }
     for (uint32_t i = 0; i < FORGET_SLOTS; i++) {
         int free_state = 0;
@@ -766,10 +836,10 @@ void hal_bt_forget(const uint8_t addr[6]) {
             if (!__atomic_exchange_n(&g_forget_queued, true, __ATOMIC_SEQ_CST)) {
                 btstack_run_loop_execute_on_main_thread(&g_forget_reg);
             }
-            return;
+            return HAL_OK;
         }
     }
-    /* both slots busy (two forgets in the same instant): the caller repeats it */
+    return HAL_EBUSY; /* both slots busy: the caller retries */
 }
 
 hal_bt_link_state_t hal_bt_link_state(void) { return (hal_bt_link_state_t)g_link; }
@@ -821,7 +891,7 @@ static uint32_t worker_init(void *param) {
         gap_set_class_of_device(LOCAL_COD);
         /* Not discoverable, not connectable, not bondable until a Pair action says otherwise (set_accepting). SSP "just works":
          * we have no display and no keys. */
-        gap_ssp_set_io_capability(SSP_IO_CAPABILITY_NO_INPUT_NO_OUTPUT);
+        gap_register_classic_connection_filter(accept_filter);
         set_accepting(false);
     }
     set_state(HAL_BT_STARTING);

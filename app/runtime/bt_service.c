@@ -68,15 +68,17 @@ void bt_service_disconnect(void) { hal_bt_disconnect(); }
 void bt_service_forget(void) {
     hal_bt_device_t d;
     if (bt_saved_get(&d)) {
-        hal_bt_forget(d.addr); /* disconnects first if it is the current peer, and deletes the link key */
+        /* Disconnects first if it is the current peer, and deletes the link key (straight from the store when the stack is down). If the radio
+         * cannot take the request now, it is retried by the tick. */
+        hal_bt_device_t keep = d;
+        if (bt_saved_delete_key(keep.addr) == HAL_EBUSY) {
+            bt_saved_queue_delete(keep.addr);
+        }
     }
     bt_saved_clear();
 }
 
 void bt_service_tick(void) {
     hal_bt_poll();
-    uint8_t a[6];
-    while (bt_saved_take_stale(a)) {
-        hal_bt_forget(a); /* the key of a headset a new Pair replaced, or of a Pair that did not finish */
-    }
+    bt_saved_drain_stale(); /* keys of a replaced headset, of a Pair that did not finish or could not be saved */
 }

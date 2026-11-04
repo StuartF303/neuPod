@@ -45,19 +45,6 @@ static const char *state_text(hal_bt_state_t s) {
 
 static bool link_busy(hal_bt_link_state_t l) { return l == HAL_BT_LINK_PAIRING || l == HAL_BT_LINK_CONNECTING; }
 
-static const char *fail_text(hal_bt_fail_t r) {
-    switch (r) {
-    case HAL_BT_FAIL_NOT_FOUND: return "not found";
-    case HAL_BT_FAIL_AUTH: return "pairing refused";
-    case HAL_BT_FAIL_NO_SINK: return "not a headset";
-    case HAL_BT_FAIL_TIMEOUT: return "timed out";
-    case HAL_BT_FAIL_LINK_LOST: return "link lost";
-    case HAL_BT_FAIL_INTERNAL: return "radio busy";
-    case HAL_BT_FAIL_NONE: break;
-    }
-    return "error";
-}
-
 /* Does the link (its current attempt, or the last one that failed) concern the device with address @p addr? */
 static bool link_is_for(const uint8_t addr[6]) {
     hal_bt_device_t peer;
@@ -74,8 +61,10 @@ static void link_text_for(const uint8_t addr[6], char *out, size_t n) {
     switch (l) {
     case HAL_BT_LINK_PAIRING: snprintf(out, n, "Pairing..."); break;
     case HAL_BT_LINK_CONNECTING: snprintf(out, n, "Connecting..."); break;
-    case HAL_BT_LINK_CONNECTED: snprintf(out, n, "Connected"); break;
-    case HAL_BT_LINK_FAILED: snprintf(out, n, "Failed: %s", fail_text(hal_bt_link_reason())); break;
+    /* There is no audio yet and nothing keeps an idle link open, so the link closes by itself a few seconds after it opens (docs/bluetooth.md):
+     * say what is true, "paired", not "connected" that will drop. */
+    case HAL_BT_LINK_CONNECTED: snprintf(out, n, "Paired, no audio yet"); break;
+    case HAL_BT_LINK_FAILED: snprintf(out, n, "Failed: %s", hal_bt_fail_text(hal_bt_link_reason())); break;
     case HAL_BT_LINK_DISCONNECTED: snprintf(out, n, "Not connected"); break;
     }
 }
@@ -312,6 +301,8 @@ static void dev_get(void *ctx, int32_t idx, ui_list_item_t *o) {
         snprintf(o->label, sizeof o->label, "%s", st == HAL_BT_SCANNING ? "Stop scanning" : "Scan again");
         if (d->msg_until != 0) {
             snprintf(o->detail, sizeof o->detail, "%s", d->msg);
+        } else if (bt_saved_notice() == BT_SAVED_NOTICE_FULL) {
+            snprintf(o->detail, sizeof o->detail, "Can't save: settings full");
         } else if (st == HAL_BT_SCANNING) {
             snprintf(o->detail, sizeof o->detail, "%d found", (int)d->ndev);
         }
@@ -417,7 +408,7 @@ static void dev_tick(ui_screen_t *s) {
         }
         changed = true;
     }
-    uint32_t sig = (uint32_t)hal_bt_link_state() | (uint32_t)hal_bt_link_reason() << 4;
+    uint32_t sig = (uint32_t)hal_bt_link_state() | (uint32_t)hal_bt_link_reason() << 4 | (uint32_t)bt_saved_notice() << 12;
     if (sig != d->sig) {
         d->sig = sig;
         changed = true;

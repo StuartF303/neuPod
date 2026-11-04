@@ -17,10 +17,10 @@ static char g_tpl[] = "neupod_btsaved_test_XXXXXX";
 
 static const uint8_t A_AIRPODS[6] = {0x28, 0xCD, 0xC1, 0x01, 0x02, 0x03};
 static const uint8_t A_XM5[6] = {0x00, 0x1B, 0x7C, 0x4A, 0x10, 0x22};
+static const uint8_t A_FLIP[6] = {0x70, 0x99, 0x1C, 0x0B, 0x55, 0x66};
 static const uint8_t A_CAR[6] = {0x04, 0x52, 0xC7, 0x31, 0x32, 0x33};   // refuses to pair
 static const uint8_t A_PHONE[6] = {0xF4, 0x0E, 0x22, 0x9A, 0x8B, 0x7C};  // authenticates, but offers no A2DP sink
 
-#define KEY_TAG(i) SETTINGS_TAG('B', 'T', 'L', '0' + (i))
 
 static hal_bt_device_t dev_of(const uint8_t a[6], const char *name, uint32_t cod) {
     hal_bt_device_t d;
@@ -78,18 +78,15 @@ static hal_status_t do_pair(const hal_bt_device_t *d) {
 }
 static void do_tick(void) {
     hal_bt_poll();
-    uint8_t a[6];
-    while (bt_saved_take_stale(a)) {
-        hal_bt_forget(a);
-    }
+    bt_saved_drain_stale();
 }
 
 // The link keys are stored sealed: read them through the same adapter BTstack (and the simulator) use.
 static bool key_present(const uint8_t a[6]) {
     const hal_bt_storage_t *bt = settings_bt_storage();
-    for (int i = 0; i < 8; i++) {
-        uint8_t v[8];
-        if (bt->get(bt->ctx, KEY_TAG(i), v, sizeof v) == 6 && memcmp(v, a, 6) == 0) {
+    for (uint32_t i = 0; i < HAL_BT_KEY_SLOTS; i++) {
+        uint8_t v[HAL_BT_KEY_RECORD_LEN];
+        if (bt->get(bt->ctx, HAL_BT_KEY_TAG(i), v, sizeof v) == (int)sizeof v && memcmp(v + HAL_BT_KEY_ADDR_OFFSET, a, 6) == 0) {
             return true;
         }
     }
@@ -244,7 +241,7 @@ TEST(test_only_a_pair_that_ended_connected_is_remembered) {
     ASSERT_EQ(0x240404, got.cod);
     ASSERT_TRUE(key_present(A_AIRPODS));
     uint8_t stale[6];
-    ASSERT_FALSE(bt_saved_take_stale(stale)); // nothing was replaced
+    ASSERT_FALSE(bt_saved_peek_stale(stale)); // nothing was replaced
     hal_bt_disconnect();
 
     // 5. the record and the key survive a reboot of the store
@@ -274,10 +271,11 @@ TEST(test_only_a_pair_that_ended_connected_is_remembered) {
     ASSERT_EQ(HAL_BT_LINK_CONNECTED, hal_bt_link_state());
     ASSERT_TRUE(bt_saved_get(&got));
     ASSERT_TRUE(memcmp(got.addr, A_XM5, 6) == 0);
-    ASSERT_TRUE(bt_saved_take_stale(stale));
+    ASSERT_TRUE(bt_saved_peek_stale(stale));
     ASSERT_TRUE(memcmp(stale, A_AIRPODS, 6) == 0);
-    ASSERT_FALSE(bt_saved_take_stale(stale)); // once
-    hal_bt_forget(stale);
+    bt_saved_drop_stale();
+    ASSERT_FALSE(bt_saved_peek_stale(stale)); // once
+    ASSERT_EQ(HAL_OK, hal_bt_forget(stale));
     ASSERT_FALSE(key_present(A_AIRPODS));
     ASSERT_TRUE(key_present(A_XM5));
     hal_bt_disconnect();
@@ -302,6 +300,123 @@ TEST(test_only_a_pair_that_ended_connected_is_remembered) {
     ASSERT_FALSE(bt_saved_get(&got));
 }
 
+// A fake BTstack link key record in the store (the layout of btstack_link_key_db_tlv.c).
+static void put_key_record(uint32_t slot, const uint8_t addr[6]) {
+    const hal_bt_storage_t *bt = settings_bt_storage();
+    uint8_t rec[HAL_BT_KEY_RECORD_LEN] = {0};
+    memcpy(rec + HAL_BT_KEY_ADDR_OFFSET, addr, 6);
+    ASSERT_EQ(0, bt->put(bt->ctx, HAL_BT_KEY_TAG(slot), rec, sizeof rec));
+}
+
+// Runs before the radio is started: the stack is OFF, so Forget has no one to ask and must still delete the key.
+TEST(test_forget_while_the_stack_is_down_deletes_straight_from_the_store) {
+    fresh_card();
+    settings_init(NULL);
+    settings_attach_storage(true);
+    ASSERT_EQ(SETTINGS_LOAD_FRESH, settings_load());
+    ASSERT_EQ(HAL_BT_OFF, hal_bt_state());
+    put_key_record(2, A_XM5);
+    put_key_record(3, A_AIRPODS);
+    ASSERT_TRUE(key_present(A_XM5));
+    ASSERT_EQ(HAL_ENODEV, hal_bt_forget(A_XM5)); // the HAL says it cannot
+    ASSERT_TRUE(key_present(A_XM5));
+    ASSERT_EQ(HAL_OK, bt_saved_delete_key(A_XM5)); // the caller's fallback does it
+    ASSERT_FALSE(key_present(A_XM5));
+    ASSERT_TRUE(key_present(A_AIRPODS)); // only that one
+    bt_saved_queue_delete(A_AIRPODS); // and through the queue the tick drains
+    bt_saved_drain_stale();
+    ASSERT_FALSE(key_present(A_AIRPODS));
+    uint8_t a[6];
+    ASSERT_FALSE(bt_saved_peek_stale(a));
+}
+
+static void fresh_store(void) {
+    fresh_card();
+    settings_init(NULL);
+    settings_attach_storage(true);
+    ASSERT_EQ(SETTINGS_LOAD_FRESH, settings_load());
+}
+
+TEST(test_store_full_when_the_headset_cannot_be_saved) {
+    fresh_store();
+    for (uint32_t i = 0; i < SETTINGS_MAX_ITEMS; i++) { // every slot taken
+        ASSERT_TRUE(settings_put(SETTINGS_TAG('Z', 'Z', (char)('0' + i / 10), (char)('0' + i % 10)), "x", 1));
+    }
+    hal_bt_device_t d = dev_of(A_AIRPODS, "AirPods Pro 3", 0x240404), got;
+    ASSERT_EQ(HAL_OK, do_pair(&d));
+    pump_link_idle(3000);
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, hal_bt_link_state()); // the radio side worked ...
+    ASSERT_FALSE(bt_saved_get(&got));                       // ... but there was no room to remember it
+    ASSERT_EQ(BT_SAVED_NOTICE_FULL, bt_saved_notice());
+    uint8_t a[6];
+    ASSERT_TRUE(bt_saved_peek_stale(a)); // its key is queued for deletion
+    ASSERT_TRUE(memcmp(a, A_AIRPODS, 6) == 0);
+    do_tick();
+    ASSERT_EQ(HAL_BT_LINK_DISCONNECTED, hal_bt_link_state()); // and the link goes with it (it was the current peer)
+    ASSERT_FALSE(key_present(A_AIRPODS));
+    ASSERT_FALSE(bt_saved_peek_stale(a));
+    // the next Pair clears the notice
+    fresh_store();
+    ASSERT_EQ(HAL_OK, do_pair(&d));
+    ASSERT_EQ(BT_SAVED_NOTICE_NONE, bt_saved_notice());
+    pump_link_idle(3000);
+    ASSERT_TRUE(bt_saved_get(&got));
+    hal_bt_disconnect();
+}
+
+TEST(test_two_stale_addresses_are_both_handled_in_one_tick) {
+    fresh_store();
+    hal_bt_device_t d, got;
+    uint8_t a[6];
+    d = dev_of(A_AIRPODS, "AirPods Pro 3", 0x240404);
+    ASSERT_EQ(HAL_OK, do_pair(&d));
+    pump_link_idle(3000);
+    hal_bt_disconnect();
+    d = dev_of(A_XM5, "WH-1000XM5", 0x240404);
+    ASSERT_EQ(HAL_OK, do_pair(&d)); // replaces the AirPods ...
+    pump_link_idle(3000);
+    hal_bt_disconnect();
+    d = dev_of(A_FLIP, "Flip 6", 0x240414);
+    ASSERT_EQ(HAL_OK, do_pair(&d)); // ... and this replaces the XM5, before any tick ran
+    pump_link_idle(3000);
+    hal_bt_disconnect();
+    ASSERT_TRUE(bt_saved_get(&got));
+    ASSERT_TRUE(memcmp(got.addr, A_FLIP, 6) == 0);
+    ASSERT_TRUE(key_present(A_AIRPODS));
+    ASSERT_TRUE(key_present(A_XM5));
+    ASSERT_TRUE(bt_saved_peek_stale(a)); // two queued, oldest first
+    ASSERT_TRUE(memcmp(a, A_AIRPODS, 6) == 0);
+    do_tick();
+    ASSERT_FALSE(key_present(A_AIRPODS));
+    ASSERT_FALSE(key_present(A_XM5));
+    ASSERT_TRUE(key_present(A_FLIP));
+    ASSERT_FALSE(bt_saved_peek_stale(a));
+}
+
+TEST(test_a_failed_or_cancelled_pair_of_the_saved_headset_clears_its_record) {
+    fresh_store();
+    hal_bt_device_t d = dev_of(A_CAR, "Car audio", 0x200420), got;
+    ASSERT_TRUE(bt_saved_put(&d)); // pretend the car kit was remembered
+    ASSERT_EQ(HAL_OK, do_pair(&d)); // re-pairing it: BTstack drops the old key first, and the car kit refuses
+    pump_link_idle(3000);
+    ASSERT_EQ(HAL_BT_FAIL_AUTH, hal_bt_link_reason());
+    ASSERT_FALSE(bt_saved_get(&got)); // the record would name a headset without a key
+    do_tick();
+
+    d = dev_of(A_AIRPODS, "AirPods Pro 3", 0x240404);
+    ASSERT_EQ(HAL_OK, do_pair(&d));
+    pump_link_idle(3000);
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, hal_bt_link_state());
+    hal_bt_disconnect();
+    ASSERT_TRUE(bt_saved_get(&got));
+    ASSERT_TRUE(key_present(A_AIRPODS));
+    ASSERT_EQ(HAL_OK, do_pair(&d)); // cancelled re-pair of the remembered one
+    hal_bt_poll();
+    hal_bt_disconnect();
+    ASSERT_FALSE(bt_saved_get(&got));
+    ASSERT_FALSE(key_present(A_AIRPODS));
+}
+
 int main(void) {
     if (mkdtemp(g_tpl) == NULL) {
         perror("mkdtemp");
@@ -316,7 +431,11 @@ int main(void) {
     RUN(test_record_round_trip_and_reboot);
     RUN(test_damaged_records_are_ignored);
     RUN(test_capacity_has_room_for_the_record);
+    RUN(test_forget_while_the_stack_is_down_deletes_straight_from_the_store);
     RUN(test_only_a_pair_that_ended_connected_is_remembered);
+    RUN(test_store_full_when_the_headset_cannot_be_saved);
+    RUN(test_two_stale_addresses_are_both_handled_in_one_tick);
+    RUN(test_a_failed_or_cancelled_pair_of_the_saved_headset_clears_its_record);
     char cmd[300];
     snprintf(cmd, sizeof cmd, "rm -rf '%s'", abs);
     int rc = system(cmd);
