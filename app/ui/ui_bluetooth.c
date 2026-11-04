@@ -60,6 +60,7 @@ static void bt_get(void *ctx, int32_t idx, ui_list_item_t *o) {
     case ROW_STATUS:
         snprintf(o->label, sizeof o->label, "Status");
         snprintf(o->detail, sizeof o->detail, "%s", state_text(st));
+        o->busy = st == HAL_BT_STARTING;
         return;
     case ROW_ADDRESS:
         snprintf(o->label, sizeof o->label, "Address");
@@ -158,6 +159,7 @@ static void dev_get(void *ctx, int32_t idx, ui_list_item_t *o) {
         } else if (st == HAL_BT_SCANNING) {
             snprintf(o->detail, sizeof o->detail, "%d found", (int)d->ndev);
         }
+        o->busy = st == HAL_BT_SCANNING;
         o->dim = st != HAL_BT_ON && st != HAL_BT_SCANNING;
         return;
     }
@@ -182,7 +184,7 @@ static void dev_get(void *ctx, int32_t idx, ui_list_item_t *o) {
     snprintf(o->label, sizeof o->label, "%s%s", v->audio_sink ? LV_SYMBOL_AUDIO " " : "", v->name[0] != '\0' ? v->name : addr);
     o->dim = !v->audio_sink; /* not a headset or speaker: shown, but not what we are looking for */
     if (v->rssi != HAL_BT_RSSI_UNKNOWN) {
-        snprintf(o->detail, sizeof o->detail, "%d dBm", (int)v->rssi);
+        o->bars = (uint8_t)ui_signal_bars(v->rssi, &k_ui_signal_bt, 0, 0);
     }
 }
 

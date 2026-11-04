@@ -16,8 +16,10 @@
 #include "haptic_logic.h"
 #include "haptic_service.h"
 #include "player.h"
+#include "runtime_config.h"
 #include "settings_store.h"
 #include "ui_internal.h"
+#include "wifi_service.h"
 
 ui_state_t g_ui_state = {.click_mode = CLICK_HAPTIC, .backlight_pct = 100};
 
@@ -254,13 +256,25 @@ static void update_battery(void) {
     g_batt_col = col;
 }
 
+static int g_wifi_bars; /* bars last shown for the joined network (0 = not joined), with hysteresis */
+
+int ui_wifi_bars(void) { return g_wifi_bars; }
+
 static void update_wifi(void) {
     hal_wifi_status st = hal_wifi_state();
-    if (st == g_wifi_shown) {
+    int bars = 0;
+    if (st == HAL_WIFI_UP) {
+        wifi_info_t wi;
+        wifi_get_info(&wi);
+        bars = ui_signal_bars(wi.rssi, &k_ui_signal_wifi, g_wifi_bars, UI_SIG_HYST_DB);
+    }
+    if (st == g_wifi_shown && bars == g_wifi_bars) {
         return;
     }
     g_wifi_shown = st;
-    uint32_t col = st == HAL_WIFI_UP ? UI_L_OK : st == HAL_WIFI_FAILED || st == HAL_WIFI_BAD_AUTH ? UI_L_ERR : UI_L_DIM;
+    g_wifi_bars = bars;
+    int cls = ui_signal_class(bars);
+    uint32_t col = st == HAL_WIFI_UP ? (bars == 0 ? UI_L_OK : cls == 3 ? UI_L_OK : cls == 2 ? UI_L_WARN : UI_L_ERR) : st == HAL_WIFI_FAILED || st == HAL_WIFI_BAD_AUTH ? UI_L_ERR : UI_L_DIM;
     lv_label_set_text(g_wifi, st == HAL_WIFI_DOWN ? "" : LV_SYMBOL_WIFI);
     ui_label_recolour(g_wifi, g_wifi_col, col);
     g_wifi_col = col;

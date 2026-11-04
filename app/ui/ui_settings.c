@@ -409,7 +409,7 @@ static void pane_text(int32_t g, char *out, size_t n) {
         wifi_info_t wi;
         wifi_get_info(&wi);
         if (wi.state == HAL_WIFI_UP) {
-            snprintf(out, n, "%s\n%s\n%d dBm", wi.ssid, wi.ip, wi.rssi);
+            snprintf(out, n, "%s\n%s\nSignal: %s", wi.ssid, wi.ip, ui_signal_word(ui_wifi_bars()));
         } else if (wi.saved == 0) {
             snprintf(out, n, "No network saved\nSelect to add one");
         } else {
