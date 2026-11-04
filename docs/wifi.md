@@ -96,6 +96,7 @@ Order (design response, 3 Nov 2026): **W2 → W4 → W3**. Library sync is why W
 | W2 (next) | device HTTP API and a C# companion app for library sync (no TLS on the device) |
 | W4 | over-the-air updates: bootrom A/B partitions with TBYB, image staged on SD, flashed only with playback stopped and core 1 parked in SRAM ([ADR-0014](adr/0014-ota-ab-partitions.md)) |
 | W3 | podcasts through the companion; polish: roaming, AP list caching, captive portal detection, Wi-Fi during playback measurements, SD-file throughput test |
+| W5 | "Play to…": DLNA/UPnP AV control point + media server (SSDP discovery, `SetAVTransportURI` → URL on our HTTP server, `Play`, `RenderingControl` for volume/transport); renderer pulls from SD over HTTP with range requests; no transcoding; radio stays on for the session; ≈ 15–20 KB RAM. See [Requirements → Connectivity](requirements.md#wi-fi-feature-stages-4-nov-2026) |
 
 ## What to check on the board
 
