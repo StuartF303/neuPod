@@ -6,10 +6,12 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "art_service.h"
 #include "hal_storage.h"
 #include "hal_system.h"
 #include "input_events.h"
 #include "os.h"
+#include "player.h"
 #include "sys_clock.h"
 #include "ui_internal.h"
 
@@ -25,7 +27,12 @@ typedef struct {
     ui_list_t *list;
     const menu_entry_t *entries;
     int32_t n;
-    lv_obj_t *uptime, *storage; /* home right pane */
+    lv_obj_t *uptime, *storage; /* home right pane: lines 2 and 3 (idle: clock, card summary) */
+    lv_obj_t *line1;            /* home right pane: line 1 (idle: "Nothing playing") */
+    lv_obj_t *art_box, *art_img, *art_note; /* home right pane: art box, thumbnail inside it, note shown without a thumbnail */
+    lv_image_dsc_t art_dsc;     /* points at the art service's thumbnail; nothing is copied */
+    uint32_t art_gen, last_ms;
+    bool art_shown, playing, refresh; /* refresh: the next tick skips the rate limit and re-sets the thumbnail (after resume) */
 } menu_screen_t;
 
 static void menu_get(void *ctx, int32_t idx, ui_list_item_t *out) {
@@ -203,16 +210,112 @@ static const menu_entry_t k_home[] = {{"Music", ui_screen_music_create},
                                       {"Shuffle Songs", make_shuffle},
                                       {"Now Playing", make_nowplaying}};
 
+static void home_set(lv_obj_t *l, const char *t) {
+    if (strcmp(lv_label_get_text(l), t) != 0) {
+        lv_label_set_text(l, t);
+    }
+}
+
+static void home_hide(lv_obj_t *o, bool hidden) {
+    if (lv_obj_is_hidden(o) != hidden) {
+        lv_obj_set_hidden(o, hidden);
+    }
+}
+
+/* The art box while a file plays: the art service's thumbnail when it has one for the track, the note otherwise (same rule as Now
+ * Playing, which leaves OPENING out because the view may still hold the previous album). The ack tells the decoder this screen no
+ * longer points at the old pixels. */
+static void home_art(menu_screen_t *m, bool live) {
+    art_view_t v;
+    art_view_get(&v);
+    bool show = live && v.state == ART_VIEW_READY && v.w != 0 && v.h != 0;
+    if (show) {
+        if (!m->art_shown || m->art_gen != v.gen || m->refresh) {
+            memset(&m->art_dsc, 0, sizeof m->art_dsc);
+            m->art_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
+            m->art_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
+            m->art_dsc.header.w = v.w;
+            m->art_dsc.header.h = v.h;
+            m->art_dsc.header.stride = (uint32_t)v.w * 2u;
+            m->art_dsc.data_size = (uint32_t)v.w * v.h * 2u;
+            m->art_dsc.data = (const uint8_t *)v.px;
+            lv_image_set_src(m->art_img, &m->art_dsc);
+            lv_obj_invalidate(m->art_img);
+            m->art_gen = v.gen;
+            m->art_shown = true;
+        }
+    } else {
+        m->art_shown = false;
+    }
+    home_hide(m->art_img, !m->art_shown);
+    home_hide(m->art_note, !m->playing || m->art_shown);
+    art_view_ack(v.gen);
+}
+
+/* Switch the pane between "idle" (placeholder ring, clock) and "playing" (note / thumbnail, track text). */
+static void home_mode(menu_screen_t *m, bool playing) {
+    if (playing == m->playing) {
+        return;
+    }
+    m->playing = playing;
+    home_hide(lv_obj_get_child(m->art_box, 0), playing); /* ring and dot of the placeholder */
+    home_hide(lv_obj_get_child(m->art_box, 1), playing);
+    lv_obj_set_style_text_color(m->line1, lv_color_hex(playing ? UI_L_TEXT : UI_L_DIM), 0);
+    lv_obj_set_style_text_color(m->uptime, lv_color_hex(playing ? UI_L_DIM : UI_L_TEXT), 0);
+}
+
+/* Nothing to free: it only exists so the frame calls resume (it only does when suspend ran first). */
+static void home_suspend(ui_screen_t *s) { (void)s; }
+
+static void home_resume(ui_screen_t *s) {
+    menu_screen_t *m = (menu_screen_t *)s;
+    m->refresh = true; /* the art generation may have moved while Now Playing was on top: tick at once, re-set the thumbnail */
+}
+
 static void home_tick(ui_screen_t *s) {
     menu_screen_t *m = (menu_screen_t *)s;
-    static uint32_t last_ms;
     uint32_t now = os_tick_ms();
-    if (now - last_ms < 500u && last_ms != 0) {
-        return; /* the pane shows seconds and a card summary: twice a second is plenty */
+    /* The player and the art view are polled on every tick: the art decoder only waits ~300 ms for our ack before it overwrites the
+     * thumbnail we point at. Label writes are strcmp-guarded, so nothing is redrawn needlessly. */
+    player_info_t n;
+    player_get(&n);
+    char buf[96];
+    bool live = n.state == PLAYER_PLAYING || n.state == PLAYER_PAUSED || n.state == PLAYER_ENDED;
+    bool file = n.src == PLAYER_SRC_FILE && (live || n.state == PLAYER_OPENING || n.state == PLAYER_ERROR || n.state == PLAYER_VERIFYING ||
+                                             n.state == PLAYER_VERIFIED);
+    bool tone = n.src == PLAYER_SRC_TONE;
+    bool changed = (file || tone) != m->playing;
+    home_mode(m, file || tone);
+    home_art(m, file && live);
+    bool force = m->refresh || changed;
+    m->refresh = false;
+    if (file || tone) {
+        const char *sym = n.state == PLAYER_PAUSED ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY;
+        if (file) {
+            home_set(m->line1, n.tags.title[0] != '\0' ? n.tags.title : n.name);
+            home_set(m->uptime, n.tags.artist);
+            if (n.state == PLAYER_ENDED) {
+                snprintf(buf, sizeof buf, "Finished");
+            } else if (n.state == PLAYER_ERROR || n.state == PLAYER_VERIFYING || n.state == PLAYER_VERIFIED) {
+                snprintf(buf, sizeof buf, "%s", n.state == PLAYER_ERROR ? "Error" : n.state == PLAYER_VERIFYING ? "Verifying" : "Verified");
+            } else if (n.queue_len > 1) {
+                snprintf(buf, sizeof buf, "%s %u of %u", sym, (unsigned)n.queue_pos, (unsigned)n.queue_len);
+            } else {
+                snprintf(buf, sizeof buf, "%s %s", sym, n.state == PLAYER_PAUSED ? "Paused" : n.state == PLAYER_OPENING ? "Opening" : "Playing");
+            }
+        } else {
+            home_set(m->line1, n.name);
+            home_set(m->uptime, "Test signal");
+            snprintf(buf, sizeof buf, "%s", sym);
+        }
+        home_set(m->storage, buf);
+        return;
     }
-    last_ms = now;
-    uint32_t sec = now / 1000u;
-    char buf[40];
+    if (!force && now - m->last_ms < 500u && m->last_ms != 0) {
+        return; /* idle pane: a clock and a card summary, twice a second is plenty */
+    }
+    m->last_ms = now;
+    home_set(m->line1, "Nothing playing");
     clock_tm_t lt;
     if (clock_local_now(&lt)) { // a real clock once NTP (or a manual set) has told us the time
         static const char *const wd[7] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
@@ -221,10 +324,7 @@ static void home_tick(ui_screen_t *s) {
     } else {
         snprintf(buf, sizeof buf, "--:--");
     }
-    (void)sec;
-    if (strcmp(lv_label_get_text(m->uptime), buf) != 0) {
-        lv_label_set_text(m->uptime, buf);
-    }
+    home_set(m->uptime, buf);
     // Storage summary: what we really know, nothing invented (no RTC, no track).
     if (hal_storage_ready()) {
         hal_card_info_t info;
@@ -238,9 +338,7 @@ static void home_tick(ui_screen_t *s) {
     } else {
         snprintf(buf, sizeof buf, "No card");
     }
-    if (strcmp(lv_label_get_text(m->storage), buf) != 0) {
-        lv_label_set_text(m->storage, buf);
-    }
+    home_set(m->storage, buf);
 }
 
 ui_screen_t *ui_screen_home_create(void) {
@@ -249,20 +347,31 @@ ui_screen_t *ui_screen_home_create(void) {
         return NULL;
     }
     lv_obj_t *pane = pane_new(m->base.root, 160, 160);
-    ui_artwork(pane, 32, 32, 96);
-    lv_obj_t *np = ui_label(pane, "Nothing playing", UI_L_DIM);
-    lv_obj_set_width(np, 160);
-    lv_obj_set_style_text_align(np, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_pos(np, 0, 140);
+    m->art_box = ui_artwork(pane, 32, 32, 96); /* keeps its ring and dot (children 0, 1) while idle */
+    m->art_img = lv_image_create(m->art_box);
+    lv_obj_set_size(m->art_img, 96, 96);
+    lv_image_set_inner_align(m->art_img, LV_IMAGE_ALIGN_CONTAIN);
+    lv_obj_center(m->art_img);
+    lv_obj_set_hidden(m->art_img, true);
+    m->art_note = ui_label(m->art_box, LV_SYMBOL_AUDIO, 0xFFFFFF);
+    lv_obj_set_style_text_font(m->art_note, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_opa(m->art_note, LV_OPA_50, 0);
+    lv_obj_center(m->art_note);
+    lv_obj_set_hidden(m->art_note, true);
+    m->line1 = ui_label(pane, "Nothing playing", UI_L_DIM);
     m->uptime = ui_label(pane, "", UI_L_TEXT);
-    lv_obj_set_width(m->uptime, 160);
-    lv_obj_set_style_text_align(m->uptime, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_pos(m->uptime, 0, 162);
     m->storage = ui_label(pane, "", UI_L_DIM);
-    lv_obj_set_width(m->storage, 160);
-    lv_obj_set_style_text_align(m->storage, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_pos(m->storage, 0, 182);
+    lv_obj_t *lines[3] = {m->line1, m->uptime, m->storage};
+    static const int32_t ys[3] = {140, 162, 182};
+    for (int i = 0; i < 3; i++) {
+        lv_obj_set_width(lines[i], 160);
+        lv_label_set_long_mode(lines[i], LV_LABEL_LONG_DOT);
+        lv_obj_set_style_text_align(lines[i], LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_pos(lines[i], 0, ys[i]);
+    }
     m->base.on_tick = home_tick;
+    m->base.suspend = home_suspend;
+    m->base.resume = home_resume;
     home_tick(&m->base);
     return &m->base;
 }
