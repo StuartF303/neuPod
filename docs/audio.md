@@ -225,7 +225,10 @@ ignored. The reported `total_frames` is the trimmed length. The test vectors: `t
 
 **Host tests.** `gapless` runs the real core-1 loop and the real core-0 stream controller against a fake sink with a real-time block clock and
 compares the sink's samples frame by frame with each track decoded on its own (WAV, FLAC, MP3, ALAC with an edit list; skip, stop, seek and rate
-change cases). `play_queue` covers the queue rules.
+change cases). `play_queue` covers the queue rules (including shuffle permutations, repeat, wrap re-shuffle) and `player` the mid-play toggles.
+
+Shuffle and repeat (Settings > Shuffle / Repeat, saved; Now Playing shows small shuffle/loop icons, loop with a 1 for repeat-one): see the
+amendment in ADR-0016. UART reasons added: `repeat`, `wrap` (and `gapless repeat`, `gapless wrap`).
 
 **Bench, 3 Nov 2026 (Pico 2 W):** `30-signals/gapless/` (3-part FLAC then 3-part LAME MP3, one queue): five `(gapless)`
 handoffs incl. FLAC → MP3, one `END_OF_TRACK(1)` per boundary, sink never re-clocked, mute line open throughout, 0 underruns.

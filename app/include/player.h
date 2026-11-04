@@ -16,6 +16,7 @@
 #include "audio_dsp.h"
 #include "audio_engine.h"
 #include "meta.h"
+#include "play_queue.h"
 #include "storage_service.h"
 #include "wav.h"
 
@@ -57,6 +58,8 @@ typedef struct {
     bool muted;            /**< output stage mute line asserted */
     uint16_t queue_pos;    /**< file playback through a folder queue: 1-based position ("n of N"); 0 when there is no queue */
     uint16_t queue_len;
+    uint8_t shuffle;       /**< pq_shuffle_t of the queue being played; 0 when there is no queue */
+    uint8_t repeat;        /**< pq_repeat_t of the queue being played; 0 when there is no queue */
 } player_info_t;
 
 /** After audio_engine_start(): create state and apply the default (low) volume. */
@@ -83,6 +86,16 @@ void player_service(void);
 /** "Gapless playback" setting (settings store, default On). Off: tracks still follow each other, with the ordinary stop/start between. */
 bool player_gapless_enabled(void);
 void player_set_gapless(bool on);
+/**
+ * Shuffle (off / songs) and repeat (off / one / all) of the folder queue; settings store, default Off. Changes apply at once to the queue
+ * being played (turning shuffle on keeps the current track current); a gapless handoff already announced to the audio core still happens.
+ * Repeat-one only loops the track when it ends by itself: Next still moves on. Repeat-all wraps at the end of the queue, re-shuffling
+ * (never opening the new round with the track that just ended, if there is another).
+ */
+pq_shuffle_t player_shuffle(void);
+pq_repeat_t player_repeat(void);
+void player_set_shuffle(pq_shuffle_t mode);
+void player_set_repeat(pq_repeat_t mode);
 /** Pause <-> resume. On a finished track (or a completed MD5 check) it plays the same file again from the start. Otherwise no-op. */
 void player_pause_toggle(void);
 void player_stop(void);
