@@ -16,7 +16,7 @@ static uint32_t g_changes, g_ended;
 static bool g_play_ok = true;
 static int g_play_calls;
 static char g_last_path[300];
-static uint8_t g_gapless_setting = 1, g_shuffle_setting, g_repeat_setting;
+static uint8_t g_gapless_setting = 1, g_shuffle_setting, g_repeat_setting, g_resume_play_setting;
 static uint8_t g_set_vol_path = 0xFF; // 0xFF = tag absent
 static uint8_t g_set_vol_att = 0xFF;
 static uint32_t g_audio_vol = 999, g_pcm_frames = 44100u * 10u;
@@ -46,7 +46,7 @@ bool storage_play_request_at(const char *path, uint32_t frame) {
 }
 bool storage_verify_request(const char *p) { (void)p; return true; }
 bool storage_stop_request(void) { return true; }
-static uint8_t *slot(uint32_t tag) { return tag == SETTING_SHUFFLE ? &g_shuffle_setting : tag == SETTING_REPEAT ? &g_repeat_setting : &g_gapless_setting; }
+static uint8_t *slot(uint32_t tag) { return tag == SETTING_SHUFFLE ? &g_shuffle_setting : tag == SETTING_REPEAT ? &g_repeat_setting : tag == SETTING_RESUME_PLAY ? &g_resume_play_setting : &g_gapless_setting; }
 bool settings_get_u8(uint32_t tag, uint8_t *out) {
     if (tag == SETTING_VOLUME_PATH) {
         *out = g_set_vol_path;
@@ -260,7 +260,7 @@ TEST(resume_folder_starts_paused_at_the_saved_frame_and_elapsed_includes_it) {
     player_stop();
     g_pause_calls = 0;
     int saves = g_rs_saves;
-    ASSERT_EQ(PLAYER_RESUME_OK, player_resume_folder("/Album", g_dir, 4, 2, 44100u * 90u));
+    ASSERT_EQ(PLAYER_RESUME_OK, player_resume_folder("/Album", g_dir, 4, 2, 44100u * 90u, false));
     ASSERT_EQ(44100u * 90u, g_last_frame);
     ASSERT_EQ(0, strcmp(g_last_path, "/Album/03.flac"));
     ASSERT_EQ(saves, g_rs_saves);                 // opening the resumed track must not overwrite the saved position
@@ -282,7 +282,7 @@ TEST(resume_folder_starts_paused_at_the_saved_frame_and_elapsed_includes_it) {
     ASSERT_EQ(95, i.elapsed_s);
     g_pcm_frames = 44100u * 10u;
     // refused when something already plays
-    ASSERT_EQ(PLAYER_RESUME_BUSY, player_resume_folder("/Album", g_dir, 4, 0, 0));
+    ASSERT_EQ(PLAYER_RESUME_BUSY, player_resume_folder("/Album", g_dir, 4, 0, 0, false));
 }
 
 TEST(shuffled_player_saves_the_folder_entry_and_resumes_into_a_shuffled_queue) {
@@ -301,7 +301,7 @@ TEST(shuffled_player_saves_the_folder_entry_and_resumes_into_a_shuffled_queue) {
     ASSERT_EQ(44100u * 3u, g_rs_last.frame);
     player_stop();
     // restore: the saved entry is the current track, in a queue that follows the saved shuffle mode
-    ASSERT_EQ(PLAYER_RESUME_OK, player_resume_folder("/Album", g_dir, 4, g_rs_last.index, g_rs_last.frame));
+    ASSERT_EQ(PLAYER_RESUME_OK, player_resume_folder("/Album", g_dir, 4, g_rs_last.index, g_rs_last.frame, false));
     ASSERT_EQ(0, strcmp(g_last_path + strlen("/Album/"), name));
     player_info_t i;
     player_get(&i);
@@ -326,10 +326,97 @@ TEST(repeat_all_never_clears_the_record_at_the_album_end) {
     player_stop();
 }
 
+TEST(resume_autoplay_setting_defaults_off_and_round_trips) {
+    ASSERT_TRUE(!player_resume_autoplay());
+    player_set_resume_autoplay(true);
+    ASSERT_TRUE(player_resume_autoplay());
+    player_set_resume_autoplay(false);
+    ASSERT_TRUE(!player_resume_autoplay());
+}
+
+// The caller (storage_service resume_boot) passes play = setting && record.playing. All four combinations, through the same decision.
+TEST(boot_resume_plays_only_with_the_setting_on_and_a_record_that_was_playing) {
+    for (int setting = 0; setting < 2; setting++) {
+        for (int rec_playing = 0; rec_playing < 2; rec_playing++) {
+            player_stop();
+            player_set_resume_autoplay(setting != 0);
+            g_pause_calls = 0;
+            g_paused = false;
+            bool play = player_resume_autoplay() && rec_playing != 0;
+            ASSERT_EQ(PLAYER_RESUME_OK, player_resume_folder("/Album", g_dir, 4, 1, 44100u * 20u, play));
+            player_file_t f = file("r");
+            f.start_frame = 44100u * 20u;
+            player_file_started(&f);
+            player_info_t i;
+            player_get(&i);
+            if (setting && rec_playing) {
+                ASSERT_EQ(PLAYER_PLAYING, i.state);
+                ASSERT_EQ(0, g_pause_calls);
+                ASSERT_TRUE(!g_paused);
+            } else {
+                ASSERT_EQ(PLAYER_PAUSED, i.state);
+                ASSERT_EQ(1, g_pause_calls);
+                ASSERT_TRUE(g_paused);
+            }
+        }
+    }
+    player_set_resume_autoplay(false);
+    player_stop();
+}
+
+// A boot resume that is replaced or cancelled while still opening must not make a later failure "quiet": that failure is an ordinary error.
+static void expect_ordinary_error_after_failure(void) {
+    int clears = g_rs_clears;
+    player_file_failed("Cannot open file");
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(PLAYER_ERROR, i.state);
+    ASSERT_EQ(clears, g_rs_clears);
+}
+
+TEST(a_replaced_autoplay_resume_leaves_no_quiet_failure_behind) {
+    player_stop();
+    ASSERT_EQ(PLAYER_RESUME_OK, player_resume_folder("/Album", g_dir, 4, 0, 1000, true));
+    player_next();
+    expect_ordinary_error_after_failure();
+
+    player_stop();
+    ASSERT_EQ(PLAYER_RESUME_OK, player_resume_folder("/Album", g_dir, 4, 0, 1000, true));
+    player_play_folder("/Album", g_dir, 4, 1);
+    expect_ordinary_error_after_failure();
+
+    player_stop();
+    ASSERT_EQ(PLAYER_RESUME_OK, player_resume_folder("/Album", g_dir, 4, 0, 1000, true));
+    player_stop();
+    start_album(0);                               // a new ordinary start after the Stop
+    expect_ordinary_error_after_failure();
+    player_stop();
+}
+
+TEST(a_failure_after_an_autoplay_resume_started_is_an_ordinary_error) {
+    player_stop();
+    ASSERT_EQ(PLAYER_RESUME_OK, player_resume_folder("/Album", g_dir, 4, 0, 1000, true));
+    player_file_t f = file("r");
+    player_file_started(&f);
+    expect_ordinary_error_after_failure();
+    player_stop();
+}
+
+TEST(an_autoplay_resume_that_cannot_start_is_still_dropped_quietly) {
+    player_stop();
+    int clears = g_rs_clears;
+    ASSERT_EQ(PLAYER_RESUME_OK, player_resume_folder("/Album", g_dir, 4, 0, 1000, true));
+    player_file_failed("Cannot open file");
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(PLAYER_IDLE, i.state);
+    ASSERT_TRUE(g_rs_clears > clears);
+}
+
 TEST(a_resume_that_cannot_start_is_dropped_quietly) {
     player_stop();
     int clears = g_rs_clears;
-    ASSERT_EQ(PLAYER_RESUME_OK, player_resume_folder("/Album", g_dir, 4, 0, 1000));
+    ASSERT_EQ(PLAYER_RESUME_OK, player_resume_folder("/Album", g_dir, 4, 0, 1000, false));
     player_file_failed("Cannot open file");
     player_info_t i;
     player_get(&i);
@@ -487,6 +574,11 @@ int main(void) {
     RUN(shuffled_player_saves_the_folder_entry_and_resumes_into_a_shuffled_queue);
     RUN(repeat_all_never_clears_the_record_at_the_album_end);
     RUN(a_resume_that_cannot_start_is_dropped_quietly);
+    RUN(resume_autoplay_setting_defaults_off_and_round_trips);
+    RUN(boot_resume_plays_only_with_the_setting_on_and_a_record_that_was_playing);
+    RUN(an_autoplay_resume_that_cannot_start_is_still_dropped_quietly);
+    RUN(a_replaced_autoplay_resume_leaves_no_quiet_failure_behind);
+    RUN(a_failure_after_an_autoplay_resume_started_is_an_ordinary_error);
     RUN(late_announcement_after_a_skip_is_ignored_and_gapless_continues);
     RUN(handoff_counted_during_the_ramp_down_of_a_skip_does_not_advance_the_queue);
     RUN(failed_start_request_rolls_the_queue_position_back);

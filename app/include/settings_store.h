@@ -60,6 +60,7 @@ extern "C" {
 #define SETTING_HAPTIC_CAL SETTINGS_TAG('N', 'P', 'h', 'c')      /**< 11 bytes, haptic_logic.h: DRV2605L auto-calibration for one actuator */
 #define SETTING_SHUFFLE SETTINGS_TAG('N', 'P', 's', 'h')       /**< u8, pq_shuffle_t: 0 off, 1 songs; absent = off */
 #define SETTING_REPEAT SETTINGS_TAG('N', 'P', 'r', 'p')        /**< u8, pq_repeat_t: 0 off, 1 one, 2 all; absent = off */
+#define SETTING_RESUME_PLAY SETTINGS_TAG('N', 'P', 'r', 'a')   /**< u8, 0 or 1: start playing at boot when the resume record says playing; absent = 0 (restore paused) */
 #define SETTING_WIFI SETTINGS_TAG('N', 'P', 'w', 'f')            /**< 4 bytes: enabled, during playback, idle-off minutes, zone */
 #define SETTING_NTP_SERVER SETTINGS_TAG('N', 'P', 'n', 's')      /**< string */
 #define SETTING_TEST_URL SETTINGS_TAG('N', 'P', 't', 'u')        /**< string */

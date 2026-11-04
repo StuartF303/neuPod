@@ -216,7 +216,7 @@ static const track_stream_ops_t k_stream_ops = {.open = ts_open, .close = ts_clo
                                                 .failed = player_file_failed, .now_ms = ts_now, .delay_ms = os_delay_ms};
 
 // Boot resume (resume.h): runs on this task right after the settings load. Lists the saved folder (into g_entries, so only while the UI has
-// not listed anything yet), checks the file against what was saved and hands the folder to the player, paused.
+// not listed anything yet), checks the file against what was saved and hands the folder to the player, paused (or playing: setting "Resume playing on power-up" on and the record was playing).
 static void resume_boot(void) {
     resume_state_t r;
     char dir[NFS_PATH_MAX];
@@ -252,7 +252,8 @@ static void resume_boot(void) {
     } else if (plan == RESUME_PLAN_GONE) {
         printf("resume: '%s' is gone, offering '%s' from its beginning\n", name, g_entries[idx].name);
     }
-    player_resume_t pr = plan == RESUME_PLAN_NOTHING ? PLAYER_RESUME_INVALID : player_resume_folder(dir, g_entries, res.count, idx, frame);
+    bool play = player_resume_autoplay() && r.playing;
+    player_resume_t pr = plan == RESUME_PLAN_NOTHING ? PLAYER_RESUME_INVALID : player_resume_folder(dir, g_entries, res.count, idx, frame, play);
     if (pr == PLAYER_RESUME_BUSY) {
         return; // the user started something first: keep the record, it is not the user's loss
     }
@@ -261,7 +262,7 @@ static void resume_boot(void) {
         resume_clear();
         return;
     }
-    printf("resume: '%s' paused at frame %u\n", g_entries[idx].name, (unsigned)frame);
+    printf("resume: '%s' %s at frame %u\n", g_entries[idx].name, play ? "playing" : "paused", (unsigned)frame);
 }
 
 #define SETTINGS_POLL_MS 500u
