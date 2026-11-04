@@ -5,6 +5,7 @@
 #include "os.h"
 #include "crypto_secret.h"
 #include "player.h"
+#include "resume.h"
 #include "settings_service.h"
 #include "settings_store.h"
 #include "storage_service.h"
@@ -14,6 +15,9 @@
 
 static os_mutex_t *g_mu;
 static os_mutex_t *g_crypto_mu;
+static os_mutex_t *g_resume_mu;
+static void resume_lock(void) { (void)os_mutex_lock(g_resume_mu, OS_WAIT_FOREVER); }
+static void resume_unlock(void) { os_mutex_unlock(g_resume_mu); }
 static void crypto_lock(void) { (void)os_mutex_lock(g_crypto_mu, OS_WAIT_FOREVER); }
 static void crypto_unlock(void) { os_mutex_unlock(g_crypto_mu); }
 
@@ -29,6 +33,10 @@ static void unlock_fn(void *ctx) {
 void settings_service_init(void) {
     g_mu = os_mutex_create();
     g_crypto_mu = os_mutex_create();
+    g_resume_mu = os_mutex_create();
+    if (g_resume_mu != NULL) {
+        resume_set_lock(resume_lock, resume_unlock);
+    }
     if (g_crypto_mu != NULL) {
         secret_set_lock(crypto_lock, crypto_unlock);
     }

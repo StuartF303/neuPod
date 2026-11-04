@@ -162,6 +162,8 @@ static bool g_gapless = true;
 static int g_art_calls;
 static int g_announced, g_started, g_failed;
 static volatile bool g_started_reset_cap;
+static uint64_t g_start_req;      // play_list(): where the first track starts (resume), 0 = the beginning
+static uint64_t g_started_frame;  // the start position the stream controller reported for the last start
 static uint32_t g_seen_changes; // track changes the "player" has applied to its queue position
 // Like player_next_track(): first fold in any handoff the audio core completed, THEN look at what follows. (The first version of this
 // test advanced the position only in its own loop, so a handoff completing between that and the feed's question made the feed
@@ -179,7 +181,7 @@ static bool ops_next_track(char *path, size_t n) {
 static void ops_next_announced(const track_info_t *i) { (void)i; g_announced++; }
 static void ops_track_changed(const char *p, const track_info_t *i) { (void)p; (void)i; g_art_calls++; }
 static void ops_started(const char *p, const track_info_t *i) {
-    (void)i;
+    g_started_frame = i->start_frame;
     (void)p;
     g_started++;
     if (g_started_reset_cap) { // the audio core has flushed and is silent: what is captured from here on is this track only
@@ -363,7 +365,8 @@ static bool play_list(uint32_t max_ms) {
     uint32_t changes0 = audio_track_change_count();
     uint32_t seen_ended = ended0;
     g_seen_changes = changes0;
-    track_stream_start(g_list[0], false);
+    track_stream_start_at(g_list[0], false, g_start_req);
+    g_start_req = 0;
     uint64_t t0 = hal_micros();
     while (hal_micros() - t0 < (uint64_t)max_ms * 1000u) {
         sync_queue();
@@ -665,6 +668,105 @@ TEST(an_incompatible_announcement_is_refused_by_the_core_and_the_track_ends_norm
     wait_idle();
 }
 
+// ---- resume: start a track at a given frame ------------------------------------------------------------------------------
+
+// Play one track from @p frame to its end; the output must equal the reference from the frame the controller reports.
+static bool play_from(const char *path, uint64_t frame) {
+    wait_idle();
+    const char *l[] = {path};
+    set_list(1, l);
+    g_start_req = frame;
+    return play_list(8000);
+}
+// Captured output == reference[start ...], same length.
+static bool tail_exact(const char *path, uint32_t start) {
+    const ref_t *r = ref_of(path);
+    uint32_t want = r->frames - start;
+    bool ok = true;
+    pthread_mutex_lock(&g_cap_mu);
+    if (g_cap_frames < want || g_cap_frames > want + 1100u) { // (the sink pads the end with silence: block rounding and the ramp-down)
+        printf("  length: captured %u frames, expected %u\n", g_cap_frames, want);
+        ok = false;
+    }
+    for (uint32_t k = 256; ok && k < g_cap_frames && k < want; k++) { // (the first block is faded in by the volume ramp)
+        if (g_cap[2u * k] != r->pcm[2u * (start + k)] || g_cap[2u * k + 1u] != r->pcm[2u * (start + k) + 1u]) {
+            printf("  mismatch at output frame %u (track frame %u)\n", k, start + k);
+            ok = false;
+        }
+    }
+    pthread_mutex_unlock(&g_cap_mu);
+    return ok;
+}
+
+TEST(resume_wav_starts_on_the_exact_frame) {
+    ASSERT_TRUE(play_from(P[7], 50000));
+    ASSERT_EQ(50000, g_started_frame);
+    ASSERT_TRUE(tail_exact(P[7], 50000));
+    ASSERT_EQ(0, g_failed);
+}
+TEST(resume_flac_with_a_seek_table_starts_on_the_exact_frame) {
+    ASSERT_TRUE(play_from(P[8], 9000)); // nearest earlier point: 8192, the decoder drops 808 frames
+    ASSERT_EQ(9000, g_started_frame);
+    ASSERT_TRUE(tail_exact(P[8], 9000));
+    ASSERT_TRUE(play_from(P[8], 4096)); // exactly on a point
+    ASSERT_EQ(4096, g_started_frame);
+    ASSERT_TRUE(tail_exact(P[8], 4096));
+    ASSERT_TRUE(play_from(P[8], 13000)); // inside the last (short) frame
+    ASSERT_EQ(13000, g_started_frame);
+    ASSERT_TRUE(tail_exact(P[8], 13000));
+    ASSERT_EQ(0, g_failed);
+}
+TEST(resume_flac_without_a_seek_table_starts_at_the_beginning) {
+    ASSERT_TRUE(play_from(P[0], 9000));
+    ASSERT_EQ(0, g_started_frame);
+    ASSERT_TRUE(tail_exact(P[0], 0));
+    ASSERT_EQ(0, g_failed);
+}
+TEST(resume_alac_starts_on_the_exact_frame_trimmed_or_not) {
+    ASSERT_TRUE(play_from(P[2], 10000)); // packet 2 (4096 frames each), the decoder drops 1808
+    ASSERT_EQ(10000, g_started_frame);
+    ASSERT_TRUE(tail_exact(P[2], 10000));
+    ASSERT_TRUE(play_from(P[4], 3000)); // edit list: 2112 frames of priming are not part of the track, 6000 frames play
+    ASSERT_EQ(3000, g_started_frame);
+    ASSERT_TRUE(tail_exact(P[4], 3000));
+    ASSERT_TRUE(play_from(P[4], 5999)); // the last frame
+    ASSERT_EQ(5999, g_started_frame);
+    ASSERT_TRUE(tail_exact(P[4], 5999));
+    ASSERT_EQ(0, g_failed);
+}
+TEST(resume_mp3_starts_near_the_frame_and_plays_to_the_end) {
+    char mp3[600];
+    snprintf(mp3, sizeof mp3, "%s/mp3_44k_st.mp3", ASSETS);
+    const ref_t *r = ref_of(P[1]);
+    (void)r;
+    ASSERT_TRUE(play_from(mp3, 22050));
+    ASSERT_TRUE(g_started_frame > 22050 - 1200 && g_started_frame < 22050 + 1200); // the frame the landed header corresponds to (CBR: about one frame)
+    ASSERT_EQ(0, g_failed);
+    pthread_mutex_lock(&g_cap_mu);
+    uint32_t got = g_cap_frames;
+    pthread_mutex_unlock(&g_cap_mu);
+    // half of the 44100-frame vector remains, give or take the frame granularity and the padding that is no longer trimmed
+    printf("  mp3 resume at 22050 played %u frames\n", got);
+    ASSERT_TRUE(got > 22050u - 4600u && got < 22050u + 4600u);
+    // the seek point is a frame header: confirmed by the one after it
+    FILE *f = fopen(mp3, "rb");
+    static uint8_t buf[16000];
+    size_t n = f ? fread(buf, 1, sizeof buf, f) : 0;
+    if (f) fclose(f);
+    mio_t m = {buf, n, 0};
+    uint64_t at = 0, landed = 0;
+    ASSERT_TRUE(mp3_seek_point(whole_rd, &m, n, 0, 44100, 22050, &at, &landed));
+    ASSERT_TRUE(landed == g_started_frame);
+    ASSERT_TRUE(at > 0 && at < n);
+    ASSERT_TRUE(buf[at] == 0xFF && (buf[at + 1] & 0xE0) == 0xE0);
+}
+TEST(resume_past_the_end_starts_at_the_beginning) {
+    ASSERT_TRUE(play_from(P[5], 1000000)); // 5000-frame WAV
+    ASSERT_EQ(0, g_started_frame);
+    ASSERT_TRUE(tail_exact(P[5], 0));
+    ASSERT_EQ(0, g_failed);
+}
+
 int main(void) {
     g_cap = malloc((size_t)CAP_MAX_FRAMES * 8u);
     g_jitter = getenv("NEUPOD_TEST_JITTER") != NULL;
@@ -693,8 +795,9 @@ int main(void) {
     snprintf(P[7], sizeof P[7], "/tmp/neupod_gapless_long_%d.wav", (int)getpid());
     write_wav(P[7], 132300, 330.0);
     set_path(6, "flac24_48k_st.flac");
-    for (int i = 0; i <= 7; i++) add_ref(P[i]);
-    if (g_ref_n != 8) {
+    set_path(8, "flac16_44k_st_seek.flac");
+    for (int i = 0; i <= 8; i++) add_ref(P[i]);
+    if (g_ref_n != 9) {
         printf("could not load the references\n");
         return 1;
     }
@@ -719,6 +822,12 @@ int main(void) {
     RUN(stop_during_a_pending_next_stream_is_safe);
     RUN(seek_withdraws_an_announced_stream_and_a_new_one_can_follow);
     RUN(an_incompatible_announcement_is_refused_by_the_core_and_the_track_ends_normally);
+    RUN(resume_wav_starts_on_the_exact_frame);
+    RUN(resume_flac_with_a_seek_table_starts_on_the_exact_frame);
+    RUN(resume_flac_without_a_seek_table_starts_at_the_beginning);
+    RUN(resume_alac_starts_on_the_exact_frame_trimmed_or_not);
+    RUN(resume_mp3_starts_near_the_frame_and_plays_to_the_end);
+    RUN(resume_past_the_end_starts_at_the_beginning);
     if (unit_failures) for (int i = 0; i < g_trace_n; i++) printf("  trace %d: changes=%u consumed=%u written=%u bound=%u have=%d\n", i, g_trace[i].changes, g_trace[i].consumed, g_trace[i].written, g_trace[i].bound, g_trace[i].have);
     unlink(P[1]);
     unlink(P[5]);

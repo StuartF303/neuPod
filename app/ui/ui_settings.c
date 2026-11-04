@@ -2,7 +2,8 @@
 /*
  * Settings: groups on the left, a live summary pane on the right (docs/ui.md mock-up). Select opens a
  * detail screen (About, Storage, Battery: live read-only lists; Display: backlight; Bluetooth: status and device discovery)
- * or, for Click feedback, toggles On/Off. Backlight and click feedback are stored in the settings store (settings_store.h).
+ * or, for Click, cycles Piezo / Haptic / Both / Off. Haptics opens the actuator (ERM / LRA) and Calibrate rows.
+ * Backlight, click mode and haptics choices are stored in the settings store (settings_store.h).
  */
 #include <stdarg.h>
 #include <stdio.h>
@@ -16,6 +17,7 @@
 #include "hal_radio.h"
 #include "hal_storage.h"
 #include "hal_system.h"
+#include "haptic_service.h"
 #include "neupod_version.h"
 #include "nfs.h"
 #include "os.h"
@@ -231,9 +233,84 @@ static ui_screen_t *make_display(void) {
     return NULL; /* the modal pushed itself */
 }
 
+/* ---- Haptics: actuator and calibration (the work is done by the haptic task, never here) ---- */
+
+static const char *cal_text(void) {
+    if (!caps_available(CAP_HAPTICS)) {
+        return "No driver";
+    }
+    switch (rt_haptic_cal_state()) {
+    case HAPTIC_CAL_NOT_NEEDED: return "Not needed";
+    case HAPTIC_CAL_RUNNING: return "Running...";
+    case HAPTIC_CAL_OK: return "Done";
+    case HAPTIC_CAL_FAILED: return "Failed";
+    default: return "Not done";
+    }
+}
+
+typedef struct {
+    ui_screen_t base;
+    ui_list_t *list;
+    uint32_t last_ms;
+} haptics_t;
+
+static void haptics_get(void *ctx, int32_t i, ui_list_item_t *o) {
+    (void)ctx;
+    if (i == 0) {
+        put(o, "Actuator", "%s", rt_haptic_actuator() == HAL_HAPTIC_LRA ? "LRA" : "ERM");
+    } else {
+        put(o, "Calibrate", "%s", cal_text());
+    }
+    o->dim = !caps_available(CAP_HAPTICS);
+}
+
+static void haptics_scroll(ui_screen_t *s, int32_t steps) { ui_list_move(((haptics_t *)s)->list, steps); }
+
+static bool haptics_button(ui_screen_t *b, uint8_t btn) {
+    haptics_t *s = (haptics_t *)b;
+    if (btn != HAL_BTN_SELECT) {
+        return false;
+    }
+    if (caps_available(CAP_HAPTICS)) {
+        if (ui_list_selected(s->list) == 0) {
+            /* a changed type is calibrated automatically; the other type's calibration is dropped */
+            rt_haptic_set_actuator(rt_haptic_actuator() == HAL_HAPTIC_LRA ? HAL_HAPTIC_ERM : HAL_HAPTIC_LRA);
+        } else {
+            rt_haptic_request_calibration();
+        }
+        ui_list_refresh(s->list);
+    }
+    return true;
+}
+
+static void haptics_tick(ui_screen_t *b) {
+    haptics_t *s = (haptics_t *)b;
+    uint32_t now = os_tick_ms();
+    if (now - s->last_ms >= 500u) {
+        s->last_ms = now;
+        ui_list_refresh(s->list);
+    }
+}
+
+static void haptics_destroy(ui_screen_t *b) { ui_list_destroy(((haptics_t *)b)->list); }
+
+static ui_screen_t *make_haptics(void) {
+    haptics_t *s = (haptics_t *)ui_screen_new(sizeof *s, "Haptics");
+    if (s == NULL) {
+        return NULL;
+    }
+    s->base.on_scroll = haptics_scroll;
+    s->base.on_button = haptics_button;
+    s->base.on_tick = haptics_tick;
+    s->base.destroy = haptics_destroy;
+    s->last_ms = os_tick_ms();
+    s->list = ui_list_create(s->base.root, UI_W, &(ui_list_model_t){.count = 2, .ctx = s, .get = haptics_get});
+    return &s->base;
+}
+
 /* ---- the Settings screen itself ---------------------------------------------------------------------- */
 
-enum { G_ABOUT, G_DISPLAY, G_CLICK, G_GAPLESS, G_BLUETOOTH, G_WIFI, G_STORAGE, G_BATTERY, G_COUNT };
+enum { G_ABOUT, G_DISPLAY, G_CLICK, G_HAPTICS, G_GAPLESS, G_SHUFFLE, G_REPEAT, G_BLUETOOTH, G_WIFI, G_STORAGE, G_BATTERY, G_COUNT };
 
 typedef struct {
     ui_screen_t base;
@@ -244,15 +321,27 @@ typedef struct {
     char text[200];
 } settings_t;
 
-static const char *const k_group[G_COUNT] = {"About", "Display", "Click feedback", "Gapless playback", "Bluetooth", "Wi-Fi", "Storage", "Battery"};
+static const char *const k_group[G_COUNT] = {"About", "Display", "Click", "Haptics", "Gapless playback", "Shuffle", "Repeat", "Bluetooth", "Wi-Fi", "Storage", "Battery"};
+
+static const char *shuffle_text(void) { return player_shuffle() == PQ_SHUFFLE_SONGS ? "Songs" : "Off"; }
+static const char *repeat_text(void) {
+    pq_repeat_t r = player_repeat();
+    return r == PQ_REPEAT_ONE ? "One" : r == PQ_REPEAT_ALL ? "All" : "Off";
+}
 
 static void settings_get(void *ctx, int32_t i, ui_list_item_t *o) {
     (void)ctx;
     snprintf(o->label, sizeof o->label, "%s", k_group[i]);
     if (i == G_CLICK) {
-        snprintf(o->detail, sizeof o->detail, "%s", g_ui_state.click_feedback ? "On" : "Off");
+        snprintf(o->detail, sizeof o->detail, "%s", click_mode_name(g_ui_state.click_mode));
+    } else if (i == G_HAPTICS) {
+        o->chevron = true;
     } else if (i == G_GAPLESS) {
         snprintf(o->detail, sizeof o->detail, "%s", player_gapless_enabled() ? "On" : "Off");
+    } else if (i == G_SHUFFLE) {
+        snprintf(o->detail, sizeof o->detail, "%s", shuffle_text());
+    } else if (i == G_REPEAT) {
+        snprintf(o->detail, sizeof o->detail, "%s", repeat_text());
     } else if (i == G_DISPLAY) {
         snprintf(o->detail, sizeof o->detail, "%u %%", (unsigned)g_ui_state.backlight_pct);
         o->chevron = true;
@@ -278,12 +367,24 @@ static void pane_text(int32_t g, char *out, size_t n) {
         snprintf(out, n, "Backlight\n%u %%", (unsigned)g_ui_state.backlight_pct);
         break;
     case G_CLICK:
-        snprintf(out, n, "Haptic click\n%s\n%s", g_ui_state.click_feedback ? "On" : "Off",
-                 caps_available(CAP_HAPTICS) ? "Motor ready" : "No haptic driver");
+        snprintf(out, n, "Click\n%s\n%s", click_mode_name(g_ui_state.click_mode),
+                 click_mode_uses_haptic(g_ui_state.click_mode) && !caps_available(CAP_HAPTICS) ? "No haptic driver"
+                 : click_mode_uses_piezo(g_ui_state.click_mode) ? "Piezo not fitted yet"
+                                                                 : "Select to change");
+        break;
+    case G_HAPTICS:
+        snprintf(out, n, "Haptics\n%s\nCalibration: %s", rt_haptic_actuator() == HAL_HAPTIC_LRA ? "LRA" : "ERM", cal_text());
         break;
     case G_GAPLESS:
         snprintf(out, n, "Gapless\n%s\n%s", player_gapless_enabled() ? "On" : "Off",
                  player_gapless_enabled() ? "Tracks of one album play without a break" : "Short pause between tracks");
+        break;
+    case G_SHUFFLE:
+        snprintf(out, n, "Shuffle\n%s\n%s", shuffle_text(), player_shuffle() == PQ_SHUFFLE_SONGS ? "Folder plays in random order" : "Folder plays in order");
+        break;
+    case G_REPEAT:
+        snprintf(out, n, "Repeat\n%s\n%s", repeat_text(),
+                 player_repeat() == PQ_REPEAT_ONE ? "Current track loops" : player_repeat() == PQ_REPEAT_ALL ? "Folder starts over at the end" : "Stops at the end of the folder");
         break;
     case G_BLUETOOTH: {
         hal_bt_state_t bs = hal_bt_state();
@@ -368,14 +469,25 @@ static bool settings_button(ui_screen_t *b, uint8_t btn) {
     case G_ABOUT: next = make_about(); break;
     case G_DISPLAY: next = make_display(); break;
     case G_CLICK:
-        g_ui_state.click_feedback = !g_ui_state.click_feedback;
+        g_ui_state.click_mode = click_mode_next(g_ui_state.click_mode);
         ui_state_persist();
         ui_list_refresh(s->list);
         settings_update_pane(s);
         ui_feedback_step(); /* a click when switched on is the confirmation */
         return true;
+    case G_HAPTICS: next = make_haptics(); break;
     case G_GAPLESS:
         player_set_gapless(!player_gapless_enabled()); /* saved with the other settings; read when the next track is prepared */
+        ui_list_refresh(s->list);
+        settings_update_pane(s);
+        return true;
+    case G_SHUFFLE:
+        player_set_shuffle(player_shuffle() == PQ_SHUFFLE_SONGS ? PQ_SHUFFLE_OFF : PQ_SHUFFLE_SONGS);
+        ui_list_refresh(s->list);
+        settings_update_pane(s);
+        return true;
+    case G_REPEAT:
+        player_set_repeat((pq_repeat_t)(((unsigned)player_repeat() + 1u) % 3u)); /* Off -> One -> All -> Off */
         ui_list_refresh(s->list);
         settings_update_pane(s);
         return true;

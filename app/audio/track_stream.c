@@ -54,7 +54,7 @@ void track_stream_stop(void) {
 }
 
 // Open @p path and parse it into @p t. NULL on success, else the reason.
-static const char *trk_open(trk_t *t, const char *path, bool verify, char *msg, size_t msg_n) {
+static const char *trk_open(trk_t *t, const char *path, bool verify, uint64_t frame, char *msg, size_t msg_n) {
     memset(t, 0, sizeof *t);
     meta_read_fn rd;
     void *rctx;
@@ -71,13 +71,18 @@ static const char *trk_open(trk_t *t, const char *path, bool verify, char *msg, 
         return fail;
     }
     t->rctx = rctx;
+    if (frame != 0) {
+        (void)track_feed_seek(&t->feed, &t->info, frame); // nothing fed yet; on a codec that cannot seek the track simply starts at its beginning
+    }
     return NULL;
 }
 
-void track_stream_start(const char *path, bool verify) {
+void track_stream_start(const char *path, bool verify) { track_stream_start_at(path, verify, 0); }
+
+void track_stream_start_at(const char *path, bool verify, uint64_t frame) {
     track_stream_stop();
     char msg[80];
-    const char *fail = trk_open(&g_stream.cur, path, verify, msg, sizeof msg);
+    const char *fail = trk_open(&g_stream.cur, path, verify, frame, msg, sizeof msg);
     if (fail != NULL) {
         memset(&g_stream, 0, sizeof g_stream);
         g_ops->failed(fail);
@@ -124,7 +129,7 @@ static void next_prepare(void) {
             return;
         }
         char msg[80];
-        const char *fail = trk_open(&g_stream.nxt, path, false, msg, sizeof msg);
+        const char *fail = trk_open(&g_stream.nxt, path, false, 0, msg, sizeof msg);
         if (fail != NULL) {
             printf("storage: next track '%s' not prepared (%s): it will start normally\n", path, fail);
             g_stream.next_state = NEXT_NO;

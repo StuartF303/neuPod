@@ -157,10 +157,69 @@ const char *track_feed_open(track_feed_t *t, const char *path, uint64_t size, me
         return fail;
     }
     pf->verify = verify;
+    pf->file_size = size;
     pf->codec = d->codec;
     memcpy(pf->md5, d->md5, 16);
     t->remaining = t->data_len;
     return NULL;
+}
+
+uint64_t track_feed_seek(track_feed_t *t, track_info_t *pf, uint64_t frame) {
+    audio_stream_desc_t *d = &pf->desc;
+    pf->start_frame = 0;
+    if (frame == 0 || pf->verify || (pf->total_frames != 0 && frame >= pf->total_frames)) {
+        return 0;
+    }
+    if (d->codec == AUDIO_CODEC_PCM) {
+        uint64_t off = frame * d->channels * ((d->bits + 7u) / 8u);
+        if (off >= t->data_len) {
+            return 0;
+        }
+        t->base += off;
+        t->data_len -= off;
+    } else if (d->codec == AUDIO_CODEC_FLAC) {
+        uint64_t sample, off;
+        if (d->total_frames == 0 || !flac_seek_point(t->rd, t->rctx, pf->file_size, frame, &sample, &off) || off >= t->data_len) {
+            return 0;
+        }
+        t->base += off;
+        t->data_len -= off;
+        // The synthesised STREAMINFO announces the frames that really follow; the decoder drops the ones before the target.
+        uint64_t left = d->total_frames - sample;
+        t->hdr[21] = (uint8_t)((t->hdr[21] & 0xF0u) | ((left >> 32) & 0xFu));
+        t->hdr[22] = (uint8_t)(left >> 24);
+        t->hdr[23] = (uint8_t)(left >> 16);
+        t->hdr[24] = (uint8_t)(left >> 8);
+        t->hdr[25] = (uint8_t)left;
+        d->skip_frames = (uint32_t)(frame - sample);
+        d->total_frames -= frame;
+    } else if (d->codec == AUDIO_CODEC_MP3) {
+        uint64_t at, landed;
+        if (!mp3_seek_point(t->rd, t->rctx, pf->file_size, t->base, pf->total_frames, frame, &at, &landed) || at >= t->base + t->data_len) {
+            return 0;
+        }
+        frame = landed; // where the frame header really is, so the saved position does not drift from resume to resume
+        t->data_len -= at - t->base; // no Xing/LAME frame any more: the decoder does not trim, it plays what follows
+        t->base = at;
+    } else if (d->codec == AUDIO_CODEC_ALAC) {
+        const mp4_info_t *m = &t->mp4;
+        uint64_t raw = frame + m->skip_frames;
+        uint64_t k = m->frame_length != 0 ? raw / m->frame_length : m->sample_count;
+        if (k >= m->sample_count) {
+            return 0;
+        }
+        if (!mp4_iter_seek(&t->it, t->rd, t->rctx, (uint32_t)k)) {
+            mp4_iter_init(&t->it, &t->mp4);
+            return 0;
+        }
+        d->skip_frames = (uint32_t)(raw - k * m->frame_length);
+        d->total_frames = d->total_frames > frame ? d->total_frames - frame : 0;
+    } else {
+        return 0;
+    }
+    t->remaining = t->data_len;
+    pf->start_frame = frame;
+    return frame;
 }
 
 void track_feed_relocated(track_feed_t *t) { t->it.info = &t->mp4; }

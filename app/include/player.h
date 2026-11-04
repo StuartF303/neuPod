@@ -16,6 +16,7 @@
 #include "audio_dsp.h"
 #include "audio_engine.h"
 #include "meta.h"
+#include "play_queue.h"
 #include "storage_service.h"
 #include "wav.h"
 
@@ -57,6 +58,8 @@ typedef struct {
     bool muted;            /**< output stage mute line asserted */
     uint16_t queue_pos;    /**< file playback through a folder queue: 1-based position ("n of N"); 0 when there is no queue */
     uint16_t queue_len;
+    uint8_t shuffle;       /**< pq_shuffle_t of the queue being played; 0 when there is no queue */
+    uint8_t repeat;        /**< pq_repeat_t of the queue being played; 0 when there is no queue */
 } player_info_t;
 
 /** After audio_engine_start(): create state and apply the default (low) volume. */
@@ -83,6 +86,16 @@ void player_service(void);
 /** "Gapless playback" setting (settings store, default On). Off: tracks still follow each other, with the ordinary stop/start between. */
 bool player_gapless_enabled(void);
 void player_set_gapless(bool on);
+/**
+ * Shuffle (off / songs) and repeat (off / one / all) of the folder queue; settings store, default Off. Changes apply at once to the queue
+ * being played (turning shuffle on keeps the current track current); a gapless handoff already announced to the audio core still happens.
+ * Repeat-one only loops the track when it ends by itself: Next still moves on. Repeat-all wraps at the end of the queue, re-shuffling
+ * (never opening the new round with the track that just ended, if there is another).
+ */
+pq_shuffle_t player_shuffle(void);
+pq_repeat_t player_repeat(void);
+void player_set_shuffle(pq_shuffle_t mode);
+void player_set_repeat(pq_repeat_t mode);
 /** Pause <-> resume. On a finished track (or a completed MD5 check) it plays the same file again from the start. Otherwise no-op. */
 void player_pause_toggle(void);
 void player_stop(void);
@@ -91,12 +104,38 @@ void player_stop(void);
 uint32_t player_volume_step(int32_t steps);
 
 /**
- * Apply a volume saved in the settings store (attenuation in dB) at boot. Ignored if the user already changed the volume
- * this session, and clamped to be at most as loud as the power-on default (AUDIO_VOL_DEFAULT_ATT_DB): a saved loud setting
- * never comes back at full blast after a power cycle (headphone safety).
+ * Apply a volume saved in the settings store (attenuation in dB) at boot, by player_volume_restore_att() with the output path saved beside
+ * it. Ignored if the user already changed the volume this session.
  */
 void player_restore_volume(uint32_t att_db);
 #define PLAYER_RESTORE_MIN_ATT_DB AUDIO_VOL_DEFAULT_ATT_DB
+
+/**
+ * Where the sound goes. A volume is saved together with the path it was set for (SETTING_VOLUME_PATH) and only comes back as loud as it was
+ * when the path is the same (docs/bluetooth.md, "Volume restore policy"). Line-out and optical are separate values here on purpose: any
+ * difference counts as a change of path. Nothing in the firmware detects the path yet (no Bluetooth audio routing, no jack detect): until a
+ * source calls player_set_output_path() it stays OUT_PATH_UNKNOWN and every restore is capped, as before.
+ */
+typedef enum { OUT_PATH_UNKNOWN = 0, OUT_PATH_WIRED, OUT_PATH_LINE, OUT_PATH_OPTICAL, OUT_PATH_BT } output_path_t;
+/** The output path now in use (call when it changes, and before the settings load at boot if it is known then). */
+void player_set_output_path(output_path_t path);
+/** A headphone insertion was detected at boot (before the settings load). Caps a volume that was saved for line-out. */
+void player_set_headphones_at_boot(bool inserted);
+/**
+ * The restore policy as a pure function: attenuation to apply for a volume saved as @p saved_att on @p saved_path, now on @p cur_path.
+ * The saved level is honoured, except it is raised to PLAYER_RESTORE_MIN_ATT_DB (-30 dB) when the path is unknown on either side or differs
+ * from the saved one, or when headphones were inserted at boot and the saved path was line-out. A level quieter than -30 dB is never changed.
+ */
+uint32_t player_volume_restore_att(uint32_t saved_att, output_path_t saved_path, output_path_t cur_path, bool headphones_at_boot);
+
+/**
+ * Resume at boot (storage task, once the settings are loaded and the saved folder was listed): queue the folder @p entries of @p dir with the
+ * entry at @p index current (with the saved shuffle and repeat modes: under shuffle the order is new, the track is the saved one), and start it
+ * PAUSED at PCM frame @p frame (the exactness depends on the codec: track_feed.h). PLAYER_RESUME_BUSY: the player is not idle (the saved
+ * record should be kept); PLAYER_RESUME_INVALID: the entry is not playable (nothing started).
+ */
+typedef enum { PLAYER_RESUME_OK, PLAYER_RESUME_BUSY, PLAYER_RESUME_INVALID } player_resume_t;
+player_resume_t player_resume_folder(const char *dir, const file_entry_t *entries, uint32_t count, uint32_t index, uint32_t frame);
 
 /** Short name for a mode, e.g. "1 kHz tone". */
 const char *player_tone_name(tone_mode_t mode);
@@ -115,6 +154,8 @@ typedef struct {
     bool title_is_name, estimated, verify;
     uint32_t codec;
     uint8_t md5[16];
+    uint64_t file_size;
+    uint64_t start_frame; /**< the stream starts at this frame of the track (resume), 0 normally */
 } player_file_t;
 void player_file_started(const player_file_t *f);
 void player_file_failed(const char *msg);

@@ -56,8 +56,10 @@
 #define UI_BUSY_TIMEOUT_MS RT_WIFI_JOIN_TIMEOUT_MS
 
 /* Click feedback: ROM effect played on every list step (3 = Strong Click 30 %, deliberately gentle). */
-#define RT_HAPTIC_CLICK_EFFECT 3u
+#define RT_HAPTIC_CLICK_EFFECT 3u     /* ERM library B: Strong Click 30 % */
+#define RT_HAPTIC_CLICK_EFFECT_LRA 4u /* LRA library 6: Sharp Click 100 % */
 #define RT_HAPTIC_MIN_GAP_MS 35u  /* requests closer than this are dropped */
+#define RT_HAPTIC_CAL_LOCK_MS 500u /* wait for the I2C bus before a ~1 s calibration */
 #define RT_HAPTIC_IDLE_MS 2000u   /* back to standby after this long without a click */
 #define RT_PRIO_HAPTIC RT_PRIO_I2C
 #define RT_STACK_HAPTIC 2048u

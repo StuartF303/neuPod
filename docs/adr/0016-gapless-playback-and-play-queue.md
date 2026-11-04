@@ -48,4 +48,23 @@ now one file played, core 1 drained and ramped down, and the next start flushed 
   at the window's end without saying so. A later UI hint ("queue limited") would be the remedy.
 * The art service restarts its decode when a gapless handoff changes the album mid-decode (a job generation is re-checked after every
   yield); a same-album handoff costs nothing.
-* The player logs one line per track change on the UART (`player: track 3/6 'name' (start|next|prev|restart|gapless|auto|skip)`, `player: queue end`).
+* The player logs one line per track change on the UART (`player: track 3/6 'name' (start|next|prev|restart|gapless|auto|skip|repeat|wrap)`, `player: queue end`; a handoff made by the audio core reads `gapless`, `gapless repeat` or `gapless wrap`).
+
+## Amendment: shuffle and repeat
+
+* Shuffle (off / songs) and repeat (off / one / all) are settings (`NPsh`, `NPrp`, default off), applied to the queue being played at once.
+* The queue keeps entries in folder order plus a play-order array (`order[slot]`, 256 B in `play_queue_t`, no allocation); `pos` is a slot.
+  Shuffle is a seeded Fisher-Yates permutation (xorshift32, seeded from the tick count at the user's action) with the current track at slot 0,
+  so turning it on mid-play keeps the track; turning it off returns to folder order at the same track. Previous walks back through the
+  shuffled order; more than 3 s in it restarts as before.
+* Repeat-one only applies when a track ends by itself (and to the gapless look-ahead, which then offers the same file again); the Next
+  button still moves on. Repeat-all wraps to slot 0 instead of `queue end`; with shuffle it re-shuffles and never opens the new round with
+  the track that just ended (unless the queue has one track). The opening track is fixed when the look-ahead asks (`wrap_first`), so the
+  announced handoff and the later move agree.
+* The gapless descriptor handoff is unchanged. If a mode changes after the next track was announced to the audio core, the player records
+  the announced queue entry and, when the handoff happens, pulls exactly that entry in as the next track (`pq_commit`) rather than trusting
+  the new order. A failed start request after a move puts the queue back exactly as it was (a file-static 264 B snapshot of the order, taken only when shuffle is on; kept off the task stacks).
+* Turning shuffle on mid-play puts the current track at slot 0, so Previous restarts it (there is no history before it).
+* Under repeat-all an unplayable track at the end is skipped by wrapping, at most one lap in a row, so an all-broken queue ends in the error.
+* Cost: `.bss` +268 B (one queue instance) + 264 B (snapshot), flash about +3.3 KB. The main menu's "Shuffle Songs" stays a placeholder (needs the library).
+

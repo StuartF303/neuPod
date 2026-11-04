@@ -69,7 +69,7 @@ codec_err_t codec_open(codec_t *c, const codec_params_t *p, const codec_io_t *io
     c->kind = p->kind;
     c->verify = p->verify && p->kind == CODEC_FLAC;
     c->total_frames = p->total_frames;
-    c->skip_left = p->kind == CODEC_ALAC ? p->skip_frames : 0u; // MP3: dr_mp3 trims; FLAC: exact already
+    c->skip_left = p->kind == CODEC_ALAC || p->kind == CODEC_FLAC ? p->skip_frames : 0u; // MP3: dr_mp3 trims. FLAC: only a resume seek sets it (frames between a seek point and the target)
     c->limit = p->trim_exact && p->kind == CODEC_ALAC ? p->total_frames : 0u;
     if (c->verify) {
         md5_init(&c->md5);
