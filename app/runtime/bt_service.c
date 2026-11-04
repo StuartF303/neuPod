@@ -27,7 +27,17 @@ static void on_event(const hal_bt_event_t *ev, void *ctx) {
     }
 }
 
-void bt_service_init(void) { g_q = os_queue_create(sizeof(hal_bt_event_t), EVENT_QUEUE_LEN); }
+static os_mutex_t *g_saved_mu;
+static void saved_lock(void) { (void)os_mutex_lock(g_saved_mu, OS_WAIT_FOREVER); }
+static void saved_unlock(void) { os_mutex_unlock(g_saved_mu); }
+
+void bt_service_init(void) {
+    g_q = os_queue_create(sizeof(hal_bt_event_t), EVENT_QUEUE_LEN);
+    g_saved_mu = os_mutex_create(); /* the stale-key queue is written by the radio worker and the UI task */
+    if (g_saved_mu != NULL) {
+        bt_saved_set_lock(saved_lock, saved_unlock);
+    }
+}
 
 hal_status_t bt_service_start(void) {
     if (g_q == NULL) {

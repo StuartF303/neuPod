@@ -4,7 +4,7 @@
  * @brief The one remembered Bluetooth headset (docs/bluetooth.md, stage 2a): its address, class and name in the settings store
  *        (SETTING_BT_DEVICE), and the rule for when a Pair action makes a device the remembered one.
  *
- * The pairing key itself is BTstack's link key record (tag 'BTL?', sealed) in the same store; this record only says WHICH
+ * The pairing key itself is BTstack's link key record (tag 'B','T','L' and a slot number, sealed) in the same store; this record only says WHICH
  * device the Settings > Bluetooth rows act on. Remembering a headset replaces the previous one. A device is remembered only after
  * a Pair action ended CONNECTED (the key is stored by then); a failed or cancelled Pair leaves the previous headset untouched.
  *
@@ -38,6 +38,12 @@ bool bt_saved_put(const hal_bt_device_t *dev);
 /** Forget the record (not the link key: hal_bt_forget() does that). */
 void bt_saved_clear(void);
 
+/**
+ * Make the stale queue and the pending candidate safe between the radio worker and the UI task: @p lock / @p unlock bracket every access (a short
+ * critical section; bt_service passes an OS mutex). Without it (host tests) there is no locking. Call once at start-up, before any other call.
+ */
+void bt_saved_set_lock(void (*lock)(void), void (*unlock)(void));
+
 /** A Pair action for @p dev is about to start: remember it as the candidate. Call BEFORE hal_bt_pair(). */
 void bt_saved_pair_begin(const hal_bt_device_t *dev);
 /** The Pair was not started after all (hal_bt_pair() refused): drop the candidate. */
@@ -47,7 +53,7 @@ void bt_saved_pair_abort(void);
  * replaced a different one, queues that one's address for deletion); if the record cannot be stored (store full) the new key is queued for deletion
  * instead and bt_saved_notice() says why. FAILED or DISCONNECTED drops the candidate and queues its address for deletion, unless it is the remembered
  * headset: BTstack already deleted that key when the Pair began, so the record is cleared instead.
- * Other events are ignored. Safe to call from the radio worker: it only touches the settings store.
+ * Other events are ignored, and so are link events of an attempt older than the pending candidate's (hal_bt_link_attempt() when it began). Safe to call from the radio worker: it only touches the settings store.
  */
 void bt_saved_on_event(const hal_bt_event_t *ev);
 /** The oldest address whose link key should now be deleted (a replaced headset, a Pair that did not finish, a record that could not be saved); false if none. Stays queued until bt_saved_drop_stale(). */

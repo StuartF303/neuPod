@@ -58,7 +58,7 @@ This amends **Funded by** and the **RAM budget** line of the decision above; the
 planning stage 2a ([Bluetooth](../bluetooth.md)).
 
 - **What changed.** The two funding sources no longer exist. The codec arena was sized down in #17 and that saving was spent there, and free static
-  SRAM on the testbed is now about **15.5 KB** (15,320 B measured on `main` at 4944981, `__HeapLimit - __end__`; 14,896 B with stage 2a). A new 32 KB budget cannot be found.
+  SRAM on the testbed is now about **15.5 KB** (15,320 B measured on `main` at 4944981, `__HeapLimit - __end__`; 14,876 B with stage 2a). A new 32 KB budget cannot be found.
 - **New decision.** The **core 1 to core 0 Bluetooth PCM ring uses the same 32 KB storage as the I2S PCM ring** (`NEUPOD_PCM_RING_FRAMES` = 4096 frames, 32 KB). The two outputs are exclusive (audio goes to
   I2S **or** to Bluetooth, never both), so one set of bytes serves whichever sink is active; the ring is emptied and its counters reset when the output path changes. This adds **no new static RAM**.
   The 32 KB of the decision above is therefore **withdrawn** as new memory. What stage 2b still needs of its own (the SBC encoder state and its working buffers) is small, is **measured when 2b is built**, and comes out of the free SRAM.

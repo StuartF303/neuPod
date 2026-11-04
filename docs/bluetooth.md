@@ -118,10 +118,10 @@ States (`hal_bt_link_state_t`): `DISCONNECTED`, `PAIRING`, `CONNECTING`, `CONNEC
 radio state (`hal_bt_state_t`), except that a Pair or Connect needs the radio ON and not scanning, and a scan is refused while a link is being set up (`HAL_EBUSY` both ways). One link at a time.
 There is **no reconnect** at power-up or after a drop: stage 3.
 
-**The saved headset** (`app/include/bt_saved.h`, `app/runtime/bt_saved.c`): settings key **`NPbd`** (`SETTING_BT_DEVICE`), 10 to 42 bytes: version 1, address, class (24 bit), name. The pairing key itself is BTstack's `BTL?` record in
+**The saved headset** (`app/include/bt_saved.h`, `app/runtime/bt_saved.c`): settings key **`NPbd`** (`SETTING_BT_DEVICE`), 10 to 42 bytes: version 1, address, class (24 bit), name. The pairing key itself is BTstack's `BTL` record (tag "BTL" + raw slot number 0..7) in
 the same store (sealed). Capacity: the store holds 48 tags; the documented worst case (Wi-Fi networks, 8 link keys, resume, settings) was about 38, now about 39; a host test fills 47 other tags and still stores it, and checks that a full store refuses it
 cleanly. Rules, all tested: a device is remembered only after a Pair **ended CONNECTED**; a failed or cancelled Pair leaves the previous headset alone; a second headset **replaces** the first, and the first one's key is deleted
-(a queue of four addresses drained by `bt_service_tick`; an address stays queued until the radio takes it); a Pair that got as far as making a key and then failed (no A2DP sink) has its key deleted as well. If the record **cannot be saved** (store full) the new key is deleted, the link is dropped and the Devices screen says "Can't save: settings full". Re-pairing the **remembered** headset deletes its old key when the bonding starts (BTstack does that), so if that Pair fails or is cancelled the record is cleared too. Forget deletes the key and the record.
+(a queue of four addresses under a mutex, drained by `bt_service_tick`; an address stays queued until the radio takes it; a link event carries its attempt number and `bt_saved` ignores events of an attempt older than its pending Pair); a Pair that got as far as making a key and then failed (no A2DP sink) has its key deleted as well. If the record **cannot be saved** (store full) the new key is deleted, the link is dropped and the Devices screen says "Can't save: settings full". Re-pairing the **remembered** headset deletes its old key when the bonding starts (BTstack does that), so if that Pair fails or is cancelled the record is cleared too. Forget deletes the key and the record.
 `bt_service_pair` / `_connect` / `_disconnect` / `_forget` (`app/runtime/bt_service.c`) are what the UI calls. Link events are handled in the radio callback, not by a screen, so a Pair that finishes while the user has left the screen is still remembered.
 
 **UI** ([UI](ui.md)): Settings > Bluetooth gains, once a headset is saved, three rows under "Scan for devices": its **name** (state on the right: Not connected / Pairing... / Connecting... / Paired, no audio yet / Failed: reason, with busy dots while working),
@@ -162,7 +162,7 @@ Link keys and the device database are stored in the **settings store** instead, 
 | | |
 | --- | --- |
 | API | `app/include/settings_store.h`, `app/settings/settings_store.c`; RTOS glue `app/runtime/settings_service.c` |
-| Content | tag (32-bit) to value (up to 96 bytes), up to 48 tags (`SETTINGS_MAX_ITEMS`; worst case about 39 with the saved headset): volume (`NPvo`), backlight (`NPbl`), output path of the saved volume (`NPvp`), the resume record (`NPr0`/`NPr1`, [Audio](audio.md#resume-last-track-and-position)), shuffle and repeat (`NPsh`/`NPrp`), click mode (`NPck`: 0 off, 1 haptic, 2 piezo, 3 both), haptic actuator (`NPha`) and calibration (`NPhc`), Wi-Fi settings and networks ([Wi-Fi](wifi.md)), BTstack link keys (`BTL?`, 27 bytes plaintext, stored sealed since the secrets work, up to 8), the remembered headset (`NPbd`, 10 to 42 bytes, stage 2a) and later device records. The same tag/value/length model as BTstack's TLV, so `hal_bt_storage_t` (in `hal_radio.h`) maps one to one onto `btstack_tlv_t` |
+| Content | tag (32-bit) to value (up to 96 bytes), up to 48 tags (`SETTINGS_MAX_ITEMS`; worst case about 39 with the saved headset): volume (`NPvo`), backlight (`NPbl`), output path of the saved volume (`NPvp`), the resume record (`NPr0`/`NPr1`, [Audio](audio.md#resume-last-track-and-position)), shuffle and repeat (`NPsh`/`NPrp`), click mode (`NPck`: 0 off, 1 haptic, 2 piezo, 3 both), haptic actuator (`NPha`) and calibration (`NPhc`), Wi-Fi settings and networks ([Wi-Fi](wifi.md)), BTstack link keys (`BTL` + slot 0..7, 28 bytes plaintext, stored sealed since the secrets work, up to 8), the remembered headset (`NPbd`, 10 to 42 bytes, stage 2a) and later device records. The same tag/value/length model as BTstack's TLV, so `hal_bt_storage_t` (in `hal_radio.h`) maps one to one onto `btstack_tlv_t` |
 | File | two alternating files `/.neupod/settings.a` and `settings.b`: magic `NPST`, version (2; version-1 files, same layout and at most 32 items, are still read), count, sequence number, items, CRC-32. Little endian. About 4.9 KB at most (48 tags x 101 bytes). Firmware older than the version-2 store does not read these files: it sets them aside as "newer" and starts from defaults (it never overwrites them), so a rollback loses the settings but not the file |
 | Reading | `settings_load()` on the storage task right after the card mounted. A file that fails magic, version or CRC gives **defaults** (reported on the UART, replaced by the next save). A newer or older layout is treated the same way |
 | Crash-safe save | **no rename and no delete.** The image is written in place over the OLDER (or invalid) of the two files and synced; the other file is never touched. Load takes the valid file with the higher sequence (wrap-safe), so a power cut at any point leaves at least the previous complete state; a torn file just fails its CRC. A file with a NEWER layout version is moved aside as `settings.old` at the next save instead of being wiped (firmware rollback). Host tests cut the power during the write, again during a rewrite after a cut, and on the very first save |
@@ -227,12 +227,12 @@ the number to check on the board (earlier bench figures: heap minimum free about
 
 | | main | stage 2a | delta |
 | --- | --- | --- | --- |
-| flash image (`text`) | 1,263,280 B | 1,285,584 B | **+22,304 B** (SDP client and L2CAP now linked and used, the pairing state machine, the saved-headset module, the UI rows) |
+| flash image (`text`) | 1,263,280 B | 1,285,648 B | **+22,368 B** (SDP client and L2CAP now linked and used, the pairing state machine, the saved-headset module, the UI rows) |
 | `data` | 0 | 0 | 0 |
-| static RAM (`bss`) | 488,896 B | 489,320 B | **+424 B** (L2CAP and SDP client state, the link state machine, the saved-device candidate and the four-deep key-deletion queue) |
-| free SRAM (`__HeapLimit - __end__`) | 15,320 B | 14,896 B | **-424 B** |
+| static RAM (`bss`) | 488,896 B | 489,340 B | **+444 B** (L2CAP and SDP client state, the link state machine, the saved-device candidate and the four-deep key-deletion queue) |
+| free SRAM (`__HeapLimit - __end__`) | 15,320 B | 14,876 B | **-444 B** |
 
-BTstack heap use: none. `HAVE_MALLOC` is not defined and every pool is a static array in `.bss`; the pool counts in `btstack_config.h` did not change (the 424 B above is everything that moved). The FreeRTOS heap and the task stacks are unchanged;
+BTstack heap use: none. `HAVE_MALLOC` is not defined and every pool is a static array in `.bss`; the pool counts in `btstack_config.h` did not change (the 444 B above is everything that moved). The FreeRTOS heap and the task stacks are unchanged;
 the new code runs on the 6 KB radio-worker stack, so its high-water mark is on the bench list. No internal-flash write code is linked (`flash_safe_execute`, `pico_flash`, `btstack_tlv_flash_bank` are absent from the ELF). The core-1 closure check reports ok.
 
 BTstack pools (`btstack_config.h`) are sized for **one** headset: 1 HCI connection, 4 L2CAP channels, 1 AVDTP connection, 2 stream endpoints, 1 AVRCP connection,
@@ -250,7 +250,7 @@ grant for use with its chips).
 ## Stage 2 design notes (2a built; 2b and 2c not built)
 
 * **Priority and RAM ([ADR-0013](adr/0013-bluetooth-ram-psram.md), amendment of 4 Nov 2026):** stage 2 follows the Audio Pack tone test and MP3/ALAC playback. The original funding (sizing the codec arena, releasing LVGL's second render buffer)
-  no longer pays: the arena saving was already spent in #17, and free SRAM is now about 15 KB (15,320 B measured on `main`, 14,896 B with stage 2a). The **core 1 to core 0 Bluetooth PCM ring reuses the 32 KB I2S PCM ring storage**: the outputs are
+  no longer pays: the arena saving was already spent in #17, and free SRAM is now about 15 KB (15,320 B measured on `main`, 14,876 B with stage 2a). The **core 1 to core 0 Bluetooth PCM ring reuses the 32 KB I2S PCM ring storage**: the outputs are
   exclusive (I2S or Bluetooth, never both), so the same bytes serve whichever sink is active. That adds **no new static RAM**; the SBC encoder state and working buffers are measured in 2b and come out of the free SRAM.
 * **Hi-res audio to Bluetooth:** decimated **on core 1** by a 2:1 or 4:1 half-band FIR to 44.1 / 48 kHz, with 24 to 16 bit TPDF dither, before the samples enter the core 1 to core 0 ring. SBC cannot carry more than 48 kHz / 16 bit.
 * **Wi-Fi during A2DP:** allowed (Stuart's decision, **provisional**, see [Wi-Fi alongside Bluetooth](#wi-fi-alongside-bluetooth-provisional): one policy macro, no interlock). The stage 2b bench test has to show an A2DP stream stable while Wi-Fi comes and goes.
@@ -290,7 +290,7 @@ Only the hardware can confirm these; the host simulator and tests cover the stat
    Also: Connect with the key deleted from the card by hand fails at once with "pairing refused" and no radio traffic; and a headset that is busy with another phone during a Pair says "busy or not pairing".
 7. **Wi-Fi alongside (provisional policy).** With Wi-Fi joined and a transfer running, Pair, Connect and Disconnect: no HCI reset, no Wi-Fi drop, no stalled transfer. Also with "Wi-Fi while playing" On and a file playing from the card (I2S path, no Bluetooth audio yet): `underruns=0`.
 8. **Memory.** Monitor lines `heap: free=... min_free=...`, `lvgl_mem`, and the radio worker's stack minimum after several Pair / Connect / Forget cycles: the worker's free stack must stay clear of zero (the new code and its `printf`s run there).
-9. **Repeat Pair 10 times** (Forget in between) and with a headset that connects back to us by itself right after pairing (we are connectable during the Pair for this): no stuck "Pairing...", no orphan key (Forget leaves the card with no `BTL?` record for it).
+9. **Repeat Pair 10 times** (Forget in between) and with a headset that connects back to us by itself right after pairing (we are connectable during the Pair for this): no stuck "Pairing...", no orphan key (Forget leaves the card with no `BTL` record (tag "BTL" + raw slot number 0..7) for it).
 
 ## What to check on the board (stage 1)
 

@@ -100,6 +100,7 @@ static bool g_sdp_live, g_sdp_wait;   /* a query is running / the current attemp
 static btstack_timer_source_t g_cancel_timer;
 static uint8_t g_cancel_addr[6];
 static uint8_t g_cancel_tries;
+static uint32_t g_cancel_attempt;     /* the attempt a pending create-connection cancel belongs to */
 #define FORGET_SLOTS 2u
 static uint8_t g_forget_addr[FORGET_SLOTS][6];
 static volatile int g_forget_state[FORGET_SLOTS]; /* 0 free, 1 being filled, 2 ready */
@@ -416,6 +417,12 @@ static void worker_scan_stop(void *arg) {
 
 /* ---- pairing and the connection ---- */
 
+/* The key record layout hal_bt_storage_delete_key() relies on (btstack_link_key_db_tlv.c, link_key_nvm_t: uint32 seq, bd_addr_t, link_key_t,
+ * link_key_type_t): size = round_up(4 + 6 + 16 + sizeof(link_key_type_t), 4). The struct is private to BTstack, so the assert is on its parts. */
+_Static_assert(sizeof(bd_addr_t) == 6 && sizeof(link_key_t) == 16, "link key record layout");
+_Static_assert(HAL_BT_KEY_RECORD_LEN == ((4u + 6u + 16u + sizeof(link_key_type_t) + 3u) & ~3u), "HAL_BT_KEY_RECORD_LEN must match BTstack's link_key_nvm_t");
+_Static_assert(HAL_BT_KEY_SLOTS == NVM_NUM_LINK_KEYS, "HAL_BT_KEY_SLOTS must match NVM_NUM_LINK_KEYS");
+
 /* HCI / SDP / L2CAP status to our reason. During a Pair, "the remote ended it" and "no resources" mean a headset that is busy or not in
  * pairing mode (not "out of range"). */
 static hal_bt_fail_t fail_from_status(uint8_t st) {
@@ -458,14 +465,14 @@ static int accept_filter(bd_addr_t addr, hci_link_type_t type) {
 }
 
 static void emit_link(hal_bt_link_state_t s, hal_bt_fail_t reason) {
-    hal_bt_event_t ev = {.type = HAL_BT_EVT_LINK, .state = (hal_bt_state_t)g_state, .dev = g_peer, .link = s, .reason = reason};
+    hal_bt_event_t ev = {.type = HAL_BT_EVT_LINK, .state = (hal_bt_state_t)g_state, .dev = g_peer, .link = s, .reason = reason, .attempt = g_attempt};
     emit(&ev);
 }
 
 /* Publish the new link state, then tell the listener. (The event is built first: once an idle state is visible a caller may start
  * the next attempt and overwrite g_peer.) */
 static void set_link(hal_bt_link_state_t s, hal_bt_fail_t reason) {
-    hal_bt_event_t ev = {.type = HAL_BT_EVT_LINK, .state = (hal_bt_state_t)g_state, .dev = g_peer, .link = s, .reason = reason};
+    hal_bt_event_t ev = {.type = HAL_BT_EVT_LINK, .state = (hal_bt_state_t)g_state, .dev = g_peer, .link = s, .reason = reason, .attempt = g_attempt};
     g_reason = reason;
     int prev = __atomic_exchange_n(&g_link, (int)s, __ATOMIC_SEQ_CST);
     if (prev != (int)s) {
@@ -476,6 +483,9 @@ static void set_link(hal_bt_link_state_t s, hal_bt_fail_t reason) {
 /* Cancel a connection that is still being created. The controller may not take a command yet: retry every 200 ms (at most 10 times). */
 static void cancel_create_try(btstack_timer_source_t *ts) {
     (void)ts;
+    if (g_cancel_attempt != g_attempt) {
+        return; /* a newer attempt has started: do not cancel its page to the same headset */
+    }
     if (hci_can_send_command_packet_now()) {
         hci_send_cmd(&hci_create_connection_cancel, g_cancel_addr);
     } else if (++g_cancel_tries < 10u) {
@@ -490,6 +500,7 @@ static void cancel_pending_acl(void) {
     } else if (g_lphase != LP_IDLE) {
         memcpy(g_cancel_addr, g_peer.addr, 6); /* g_peer may belong to the next attempt by the time the retry runs */
         g_cancel_tries = 0;
+        g_cancel_attempt = g_attempt;
         btstack_run_loop_remove_timer(&g_cancel_timer);
         btstack_run_loop_set_timer_handler(&g_cancel_timer, cancel_create_try);
         cancel_create_try(&g_cancel_timer);
@@ -843,6 +854,7 @@ hal_status_t hal_bt_forget(const uint8_t addr[6]) {
 }
 
 hal_bt_link_state_t hal_bt_link_state(void) { return (hal_bt_link_state_t)g_link; }
+uint32_t hal_bt_link_attempt(void) { return __atomic_load_n(&g_attempt, __ATOMIC_SEQ_CST); }
 hal_bt_fail_t hal_bt_link_reason(void) { return g_link == HAL_BT_LINK_FAILED ? (hal_bt_fail_t)g_reason : HAL_BT_FAIL_NONE; }
 
 bool hal_bt_link_device(hal_bt_device_t *out) {

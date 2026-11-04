@@ -8,7 +8,7 @@
  * Pairing (stage 2a) is simulated per device so every path can be tested: most devices pair and connect; the car kit refuses
  * (AUTH), the phone has no A2DP sink (NO_SINK), an unnamed device and any address not in the table do not answer (NOT_FOUND).
  * "Link keys" are kept in RAM and, when the stack was given a hal_bt_storage_t, mirrored into it as 'BTL0'..'BTL7' records in
- * BTstack's own 27-byte layout (hal_bt_storage_delete_key() works on them), so a saved device survives a restart of the simulation
+ * BTstack's own 28-byte layout and raw-index tags (hal_bt_storage_delete_key() works on them), so a saved device survives a restart of the simulation
  * exactly like on the board. Like BTstack's dedicated bonding, a Pair deletes any old key for the address first.
  */
 #include <string.h>
@@ -51,6 +51,7 @@ static bool g_named[N_DEVS];
 static const hal_bt_storage_t *g_storage;
 
 /* link */
+static uint32_t g_attempt;
 static hal_bt_link_state_t g_link = HAL_BT_LINK_DISCONNECTED;
 static hal_bt_fail_t g_reason = HAL_BT_FAIL_NONE;
 static hal_bt_device_t g_peer;
@@ -133,7 +134,7 @@ static void keys_load(void) {
     }
     for (uint32_t i = 0; i < SIM_KEYS; i++) {
         uint8_t rec[HAL_BT_KEY_RECORD_LEN];
-        if (g_storage->get(g_storage->ctx, HAL_BT_KEY_TAG(i), rec, sizeof rec) == (int)sizeof rec) {
+        if (g_storage->get(g_storage->ctx, HAL_BT_KEY_TAG(i), rec, sizeof rec) >= (int)(HAL_BT_KEY_ADDR_OFFSET + 6u)) {
             memcpy(g_keys[i], rec + HAL_BT_KEY_ADDR_OFFSET, 6);
             g_key_used[i] = true;
         }
@@ -147,7 +148,7 @@ static void emit_link(hal_bt_link_state_t s, hal_bt_fail_t reason) {
         g_accepting = false; /* the Pair action is over (or this was a Connect) */
     }
     if (g_cb != NULL) {
-        hal_bt_event_t ev = {.type = HAL_BT_EVT_LINK, .state = g_state, .dev = g_peer, .link = s, .reason = g_reason};
+        hal_bt_event_t ev = {.type = HAL_BT_EVT_LINK, .state = g_state, .dev = g_peer, .link = s, .reason = g_reason, .attempt = g_attempt};
         g_cb(&ev, g_ctx);
     }
 }
@@ -280,6 +281,7 @@ hal_status_t hal_bt_pair(const hal_bt_device_t *dev) {
     if (st != HAL_OK) {
         return st;
     }
+    g_attempt++;
     g_peer = *dev;
     g_link_t0 = hal_millis();
     key_del(dev->addr); /* bonding starts from a clean slate, as in BTstack */
@@ -293,6 +295,7 @@ hal_status_t hal_bt_connect(const uint8_t addr[6]) {
     if (st != HAL_OK) {
         return st;
     }
+    g_attempt++;
     memset(&g_peer, 0, sizeof g_peer);
     memcpy(g_peer.addr, addr, 6);
     g_peer.rssi = HAL_BT_RSSI_UNKNOWN;
@@ -331,6 +334,7 @@ hal_status_t hal_bt_forget(const uint8_t addr[6]) {
 }
 
 hal_bt_link_state_t hal_bt_link_state(void) { return g_link; }
+uint32_t hal_bt_link_attempt(void) { return g_attempt; }
 hal_bt_fail_t hal_bt_link_reason(void) { return g_link == HAL_BT_LINK_FAILED ? g_reason : HAL_BT_FAIL_NONE; }
 
 bool hal_bt_link_device(hal_bt_device_t *out) {

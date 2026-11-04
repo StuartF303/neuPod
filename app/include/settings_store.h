@@ -47,7 +47,7 @@ extern "C" {
 #define SETTINGS_VERSION 2u /**< written; 1 (same layout, at most 32 items) is still read. Firmware older than 2 sets a version-2 file aside instead of reading it */
 #define SETTINGS_VERSION_V1 1u
 
-/** Tags of the user settings, four ASCII characters like BTstack's own ('NPxx'; BTstack uses 'BTL?' / 'BTD?'). */
+/** Tags of the user settings, four ASCII characters like BTstack's own ('NPxx'; BTstack uses 'BTL' + slot / 'BTD' + slot). */
 #define SETTINGS_TAG(a, b, c, d) (((uint32_t)(a) << 24) | ((uint32_t)(b) << 16) | ((uint32_t)(c) << 8) | (uint32_t)(d))
 #define SETTING_VOLUME_ATT_DB SETTINGS_TAG('N', 'P', 'v', 'o') /**< u8, attenuation in dB */
 #define SETTING_BACKLIGHT_PCT SETTINGS_TAG('N', 'P', 'b', 'l') /**< u8, 5..100 */

@@ -7,6 +7,16 @@
 
 static hal_bt_device_t g_pending;
 static volatile bool g_have_pending;
+static uint32_t g_pending_after; /* hal_bt_link_attempt() when the candidate began: its own events carry a larger number */
+static void (*g_lock)(void);
+static void (*g_unlock)(void);
+#define LOCK() do { if (g_lock != NULL) g_lock(); } while (0)
+#define UNLOCK() do { if (g_unlock != NULL) g_unlock(); } while (0)
+
+void bt_saved_set_lock(void (*lock)(void), void (*unlock)(void)) {
+    g_lock = lock;
+    g_unlock = unlock;
+}
 /* Addresses whose link key must be deleted (a replaced headset, a Pair that did not finish, a record that could not be saved). A small ring:
  * a Pair can end and the next begin before the UI tick that drains it. Written by on_event (radio worker or UI task), drained by the
  * UI task, so a plain head / tail with the worker as the only producer. */
@@ -16,17 +26,20 @@ static volatile uint32_t g_stale_head, g_stale_tail;
 static volatile bt_saved_notice_t g_notice;
 
 static void stale_push(const uint8_t addr[6]) {
+    LOCK();
     uint32_t h = g_stale_head;
+    bool dup = false;
     for (uint32_t i = g_stale_tail; i != h; i++) {
-        if (memcmp(g_stale[i % STALE_MAX], addr, 6) == 0) {
-            return; /* already queued */
+        dup = dup || memcmp(g_stale[i % STALE_MAX], addr, 6) == 0; /* already queued */
+    }
+    if (!dup) {
+        if (h - g_stale_tail >= STALE_MAX) {
+            g_stale_tail++; /* full: the oldest goes (four unprocessed forgets in a row is not a real case; the key it names is rotated out by BTstack's LRU) */
         }
+        memcpy(g_stale[h % STALE_MAX], addr, 6);
+        g_stale_head = h + 1u;
     }
-    if (h - g_stale_tail >= STALE_MAX) {
-        g_stale_tail++; /* full: the oldest goes (four unprocessed forgets in a row is not a real case; the key it names is rotated out by BTstack's LRU) */
-    }
-    memcpy(g_stale[h % STALE_MAX], addr, 6);
-    g_stale_head = h + 1u;
+    UNLOCK();
 }
 
 static bool addr_empty(const uint8_t a[6]) {
@@ -81,9 +94,12 @@ bool bt_saved_put(const hal_bt_device_t *dev) {
 void bt_saved_clear(void) { settings_delete(SETTING_BT_DEVICE); }
 
 void bt_saved_pair_begin(const hal_bt_device_t *dev) {
+    LOCK();
     g_pending = *dev;
+    g_pending_after = hal_bt_link_attempt();
     g_have_pending = true;
     g_notice = BT_SAVED_NOTICE_NONE;
+    UNLOCK();
 }
 
 bt_saved_notice_t bt_saved_notice(void) { return g_notice; }
@@ -93,6 +109,9 @@ void bt_saved_pair_abort(void) { g_have_pending = false; }
 void bt_saved_on_event(const hal_bt_event_t *ev) {
     if (ev->type != HAL_BT_EVT_LINK) {
         return;
+    }
+    if (g_have_pending && (int32_t)(ev->attempt - g_pending_after) <= 0) {
+        return; /* an event of an earlier attempt (a cancelled one finishing late): it says nothing about this Pair */
     }
     switch (ev->link) {
     case HAL_BT_LINK_CONNECTED:
@@ -133,17 +152,21 @@ void bt_saved_on_event(const hal_bt_event_t *ev) {
 void bt_saved_queue_delete(const uint8_t addr[6]) { stale_push(addr); }
 
 bool bt_saved_peek_stale(uint8_t addr[6]) {
-    if (g_stale_tail == g_stale_head) {
-        return false;
+    LOCK();
+    bool have = g_stale_tail != g_stale_head;
+    if (have) {
+        memcpy(addr, g_stale[g_stale_tail % STALE_MAX], 6);
     }
-    memcpy(addr, g_stale[g_stale_tail % STALE_MAX], 6);
-    return true;
+    UNLOCK();
+    return have;
 }
 
 void bt_saved_drop_stale(void) {
+    LOCK();
     if (g_stale_tail != g_stale_head) {
         g_stale_tail++;
     }
+    UNLOCK();
 }
 
 hal_status_t bt_saved_delete_key(const uint8_t addr[6]) {

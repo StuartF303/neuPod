@@ -187,6 +187,7 @@ typedef struct {
     hal_bt_device_t dev;
     hal_bt_link_state_t link; /**< HAL_BT_EVT_LINK */
     hal_bt_fail_t reason;     /**< HAL_BT_EVT_LINK with link == HAL_BT_LINK_FAILED */
+    uint32_t attempt;         /**< HAL_BT_EVT_LINK: the Pair / Connect attempt this event belongs to (hal_bt_link_attempt() at that time) */
 } hal_bt_event_t;
 
 typedef void (*hal_bt_event_fn)(const hal_bt_event_t *ev, void *ctx);
@@ -258,22 +259,28 @@ void hal_bt_disconnect(void);
  */
 hal_status_t hal_bt_forget(const uint8_t addr[6]);
 
-/** BTstack's link key records ('BTL0'..'BTL7', 27 bytes: sequence number (4), address (6), key (16), type (1)); see btstack_link_key_db_tlv.c. */
+/**
+ * BTstack's link key records (btstack_link_key_db_tlv.c, link_key_nvm_t): tag 'B','T','L' and the RAW slot index 0..7 (not an ASCII digit); value =
+ * sequence number (4), address (6), key (16), key type (1 byte with the short enums this toolchain uses), padded to a multiple of 4 = 28 bytes.
+ * hal_radio_bt.c asserts the size against BTstack's own types. Match a record by "at least offset + 6 bytes", not by an exact length.
+ */
 #define HAL_BT_KEY_SLOTS 8u
-#define HAL_BT_KEY_RECORD_LEN 27u
+#define HAL_BT_KEY_RECORD_LEN 28u
 #define HAL_BT_KEY_ADDR_OFFSET 4u
-#define HAL_BT_KEY_TAG(i) (((uint32_t)'B' << 24) | ((uint32_t)'T' << 16) | ((uint32_t)'L' << 8) | (uint32_t)('0' + (i)))
+#define HAL_BT_KEY_TAG(i) (((uint32_t)'B' << 24) | ((uint32_t)'T' << 16) | ((uint32_t)'L' << 8) | (uint32_t)(i))
 /** Delete the link key record for @p addr straight from @p st, without the stack (the same effect as hal_bt_forget()). */
 static inline void hal_bt_storage_delete_key(const hal_bt_storage_t *st, const uint8_t addr[6]) {
     for (uint32_t i = 0; st != NULL && i < HAL_BT_KEY_SLOTS; i++) {
         uint8_t e[HAL_BT_KEY_RECORD_LEN];
-        if (st->get(st->ctx, HAL_BT_KEY_TAG(i), e, sizeof e) == (int)sizeof e && memcmp(e + HAL_BT_KEY_ADDR_OFFSET, addr, 6) == 0) {
+        if (st->get(st->ctx, HAL_BT_KEY_TAG(i), e, sizeof e) >= (int)(HAL_BT_KEY_ADDR_OFFSET + 6u) && memcmp(e + HAL_BT_KEY_ADDR_OFFSET, addr, 6) == 0) {
             st->del(st->ctx, HAL_BT_KEY_TAG(i));
         }
     }
 }
 
 hal_bt_link_state_t hal_bt_link_state(void);
+/** Number of the latest Pair / Connect attempt (counts up by one for every request that was accepted). A link event of an earlier attempt is stale. */
+uint32_t hal_bt_link_attempt(void);
 /** Why the link is FAILED (HAL_BT_FAIL_NONE in any other state; cleared by the next Pair / Connect). */
 hal_bt_fail_t hal_bt_link_reason(void);
 /** The remote device of the current attempt or link (PAIRING, CONNECTING, CONNECTED), or of the one that just FAILED (so a screen can tell

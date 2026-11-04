@@ -86,7 +86,7 @@ static bool key_present(const uint8_t a[6]) {
     const hal_bt_storage_t *bt = settings_bt_storage();
     for (uint32_t i = 0; i < HAL_BT_KEY_SLOTS; i++) {
         uint8_t v[HAL_BT_KEY_RECORD_LEN];
-        if (bt->get(bt->ctx, HAL_BT_KEY_TAG(i), v, sizeof v) == (int)sizeof v && memcmp(v + HAL_BT_KEY_ADDR_OFFSET, a, 6) == 0) {
+        if (bt->get(bt->ctx, HAL_BT_KEY_TAG(i), v, sizeof v) >= (int)(HAL_BT_KEY_ADDR_OFFSET + 6u) && memcmp(v + HAL_BT_KEY_ADDR_OFFSET, a, 6) == 0) {
             return true;
         }
     }
@@ -417,6 +417,24 @@ TEST(test_a_failed_or_cancelled_pair_of_the_saved_headset_clears_its_record) {
     ASSERT_FALSE(key_present(A_AIRPODS));
 }
 
+// A link event of an earlier attempt (a cancelled Pair finishing late) must not make the new candidate "remembered".
+TEST(test_an_event_of_an_older_attempt_is_ignored) {
+    fresh_store();
+    hal_bt_device_t d = dev_of(A_AIRPODS, "AirPods Pro 3", 0x240404), got;
+    bt_saved_pair_begin(&d);
+    hal_bt_event_t old = {.type = HAL_BT_EVT_LINK, .link = HAL_BT_LINK_CONNECTED, .attempt = hal_bt_link_attempt()};
+    memcpy(old.dev.addr, A_AIRPODS, 6);
+    bt_saved_on_event(&old); // the attempt before the one that is about to start
+    ASSERT_FALSE(bt_saved_get(&got));
+    old.link = HAL_BT_LINK_FAILED;
+    bt_saved_on_event(&old); // and a late failure does not drop the candidate either
+    ASSERT_EQ(HAL_OK, hal_bt_pair(&d));
+    pump_link_idle(3000);
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, hal_bt_link_state());
+    ASSERT_TRUE(bt_saved_get(&got)); // the real attempt (a larger number) still counts
+    hal_bt_disconnect();
+}
+
 int main(void) {
     if (mkdtemp(g_tpl) == NULL) {
         perror("mkdtemp");
@@ -436,6 +454,7 @@ int main(void) {
     RUN(test_store_full_when_the_headset_cannot_be_saved);
     RUN(test_two_stale_addresses_are_both_handled_in_one_tick);
     RUN(test_a_failed_or_cancelled_pair_of_the_saved_headset_clears_its_record);
+    RUN(test_an_event_of_an_older_attempt_is_ignored);
     char cmd[300];
     snprintf(cmd, sizeof cmd, "rm -rf '%s'", abs);
     int rc = system(cmd);
