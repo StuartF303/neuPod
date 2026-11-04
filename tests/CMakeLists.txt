@@ -146,11 +146,16 @@ file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/art/flac_with_jpeg.flac "${ART
 file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/art/flac_with_png.flac "${ART_FS}/Album C/track.flac")
 file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/art/qprog_300x300.jpg "${ART_FS}/Album C/cover.jpg")
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_art)
+# Settings persist as files under the fake card's .neupod folder: wipe them so the tour (which sets Repeat One) starts from defaults and
+# leaves nothing behind for the next run.
+add_test(NAME art_tour_reset COMMAND ${CMAKE_COMMAND} -E remove_directory ${ART_FS}/.neupod)
+set_tests_properties(art_tour_reset PROPERTIES FIXTURES_SETUP art_clean)
 add_test(NAME art_tour
   COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --tour-art --snapshots ${CMAKE_BINARY_DIR}/snapshots_art)
 set_tests_properties(art_tour PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_FS_ROOT=${ART_FS};NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  FIXTURES_REQUIRED art_clean
   FIXTURES_SETUP art_snapshots
   TIMEOUT 120)
 add_executable(test_art_snapshot test_art_snapshot.c)

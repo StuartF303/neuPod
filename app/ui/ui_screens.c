@@ -264,6 +264,9 @@ static void home_mode(menu_screen_t *m, bool playing) {
     lv_obj_set_style_text_color(m->uptime, lv_color_hex(playing ? UI_L_DIM : UI_L_TEXT), 0);
 }
 
+/* Nothing to free: it only exists so the frame calls resume (it only does when suspend ran first). */
+static void home_suspend(ui_screen_t *s) { (void)s; }
+
 static void home_resume(ui_screen_t *s) {
     menu_screen_t *m = (menu_screen_t *)s;
     m->refresh = true; /* the art generation may have moved while Now Playing was on top: tick at once, re-set the thumbnail */
@@ -272,17 +275,19 @@ static void home_resume(ui_screen_t *s) {
 static void home_tick(ui_screen_t *s) {
     menu_screen_t *m = (menu_screen_t *)s;
     uint32_t now = os_tick_ms();
-    if (!m->refresh && now - m->last_ms < 500u && m->last_ms != 0) {
-        return; /* the pane shows a clock and a card summary: twice a second is plenty */
-    }
-    m->last_ms = now;
+    /* The player and the art view are polled on every tick: the art decoder only waits ~300 ms for our ack before it overwrites the
+     * thumbnail we point at. Label writes are strcmp-guarded, so nothing is redrawn needlessly. */
     player_info_t n;
     player_get(&n);
     char buf[96];
-    bool file = n.src == PLAYER_SRC_FILE && (n.state == PLAYER_PLAYING || n.state == PLAYER_PAUSED || n.state == PLAYER_ENDED || n.state == PLAYER_OPENING);
+    bool live = n.state == PLAYER_PLAYING || n.state == PLAYER_PAUSED || n.state == PLAYER_ENDED;
+    bool file = n.src == PLAYER_SRC_FILE && (live || n.state == PLAYER_OPENING || n.state == PLAYER_ERROR || n.state == PLAYER_VERIFYING ||
+                                             n.state == PLAYER_VERIFIED);
     bool tone = n.src == PLAYER_SRC_TONE;
+    bool changed = (file || tone) != m->playing;
     home_mode(m, file || tone);
-    home_art(m, file && n.state != PLAYER_OPENING);
+    home_art(m, file && live);
+    bool force = m->refresh || changed;
     m->refresh = false;
     if (file || tone) {
         const char *sym = n.state == PLAYER_PAUSED ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY;
@@ -291,6 +296,8 @@ static void home_tick(ui_screen_t *s) {
             home_set(m->uptime, n.tags.artist);
             if (n.state == PLAYER_ENDED) {
                 snprintf(buf, sizeof buf, "Finished");
+            } else if (n.state == PLAYER_ERROR || n.state == PLAYER_VERIFYING || n.state == PLAYER_VERIFIED) {
+                snprintf(buf, sizeof buf, "%s", n.state == PLAYER_ERROR ? "Error" : n.state == PLAYER_VERIFYING ? "Verifying" : "Verified");
             } else if (n.queue_len > 1) {
                 snprintf(buf, sizeof buf, "%s %u of %u", sym, (unsigned)n.queue_pos, (unsigned)n.queue_len);
             } else {
@@ -304,6 +311,10 @@ static void home_tick(ui_screen_t *s) {
         home_set(m->storage, buf);
         return;
     }
+    if (!force && now - m->last_ms < 500u && m->last_ms != 0) {
+        return; /* idle pane: a clock and a card summary, twice a second is plenty */
+    }
+    m->last_ms = now;
     home_set(m->line1, "Nothing playing");
     clock_tm_t lt;
     if (clock_local_now(&lt)) { // a real clock once NTP (or a manual set) has told us the time
@@ -359,6 +370,7 @@ ui_screen_t *ui_screen_home_create(void) {
         lv_obj_set_pos(lines[i], 0, ys[i]);
     }
     m->base.on_tick = home_tick;
+    m->base.suspend = home_suspend;
     m->base.resume = home_resume;
     home_tick(&m->base);
     return &m->base;

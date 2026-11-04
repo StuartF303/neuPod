@@ -3,7 +3,7 @@
 //   art-cover     600x600 Cover.JPG beside the track  -> the four colour quadrants, filling the 112 px box
 //   art-embedded  500x333 JPEG inside the FLAC        -> the quadrants, letterboxed (dark bars above and below)
 //   art-home      Home while the embedded-art album is paused -> the same quadrants in the 96 px box of the right pane, and the
-//                 title text (no "Nothing playing" placeholder ring) under it
+//                 title text under it (and no placeholder ring)
 //   art-none      PNG inside + progressive cover.jpg  -> the note placeholder, no picture colours
 #include <stdbool.h>
 #include <stdint.h>
@@ -108,12 +108,21 @@ TEST(test_home_pane_shows_art_and_title) {
     ASSERT_TRUE(dist(&p, HX + 72, HY + 16 + 16, 40, 200, 60) < 48);
     ASSERT_TRUE(dist(&p, HX + 24, HY + 16 + 48, 50, 60, 220) < 48);
     ASSERT_TRUE(dist(&p, HX + 72, HY + 16 + 48, 230, 210, 40) < 48);
-    // the title line (y = 140 in the pane) has dark text pixels on the light pane background
+    // no placeholder ring: the idle Home snapshot (home.ppm, same tour) has its ring edge at (box mid-height, x = 48 - 21); that pixel
+    // must differ here, and must really be ring-coloured there (pale against the dark gradient)
+    ppm_t idle;
+    ASSERT_TRUE(load_ppm(g_dir, "home", &idle));
+    if (idle.px != NULL) {
+        const uint8_t *r = idle.px + ((size_t)(HY + 48) * (size_t)idle.w + (size_t)(HX + 48 - 21 + 1)) * 3u;
+        ASSERT_TRUE(dist(&p, HX + 48 - 21 + 1, HY + 48, r[0], r[1], r[2]) > 25);
+        free(idle.px);
+    }
+    // the title line (y = 140 in the pane) has text pixels near UI_L_TEXT (0x1D1D1B); the dim "Nothing playing" (0x5B5A56) would not count
     int dark = 0;
     for (int y = 24 + 140; y < 24 + 160; y++) {
         for (int x = 160; x < 320; x++) {
             const uint8_t *q = p.px + ((size_t)y * (size_t)p.w + (size_t)x) * 3u;
-            if (q[0] < 100 && q[1] < 100 && q[2] < 100) dark++;
+            if (q[0] < 0x40 && q[1] < 0x40 && q[2] < 0x40) dark++;
         }
     }
     ASSERT_TRUE(dark > 40);
