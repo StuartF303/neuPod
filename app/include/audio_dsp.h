@@ -53,6 +53,8 @@ int32_t audio_sine_q31(uint32_t phase);
 #define AUDIO_TONE_HZ 1000u
 #define AUDIO_TONE_LEVEL_Q31 214748365 /**< 0.1 = -20 dBFS peak */
 #define AUDIO_IDENT_SEGMENT_MS 1000u   /**< left, then right, 1 s each */
+#define AUDIO_IDENT_LEFT_HZ 400u       /**< ident: low tone on the left */
+#define AUDIO_IDENT_RIGHT_HZ 1600u     /**< ident: high tone (two octaves up) on the right */
 #define AUDIO_SCALE_NOTE_MS 300u
 #define AUDIO_SCALE_RAMP_MS 10u
 #define AUDIO_SCALE_REST_MS 600u       /**< silence between passes */

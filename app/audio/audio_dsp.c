@@ -100,7 +100,13 @@ void tonegen_init(tonegen_t *g, tone_mode_t mode, uint32_t rate) {
     g->pos = 0;
     g->index = 0;
     g->switch_pending = false;
-    g->inc = phase_inc(mode == TONE_SCALE ? audio_scale_note_mhz(0) : AUDIO_TONE_HZ * 1000u, rate);
+    uint32_t mhz = AUDIO_TONE_HZ * 1000u;
+    if (mode == TONE_SCALE) {
+        mhz = audio_scale_note_mhz(0);
+    } else if (mode == TONE_IDENT) {
+        mhz = AUDIO_IDENT_LEFT_HZ * 1000u;
+    }
+    g->inc = phase_inc(mhz, rate);
 }
 
 // Raised-cosine envelope value (Q31) for x = k / ramp in 0..1: sin^2(pi/2 * x).
@@ -137,6 +143,8 @@ void tonegen_fill(tonegen_t *g, int32_t *out, uint32_t frames) {
                 g->index ^= 1u;
                 g->pos = 0;
                 g->switch_pending = false;
+                next = 0; // restart the new tone at phase 0 (the wrap left a small residue)
+                g->inc = phase_inc((g->index == 0 ? AUDIO_IDENT_LEFT_HZ : AUDIO_IDENT_RIGHT_HZ) * 1000u, g->rate);
             }
             g->phase = next;
             break;

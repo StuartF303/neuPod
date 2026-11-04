@@ -372,13 +372,44 @@ TEST(ident_alternates_channels_at_zero_crossings) {
         }
     }
     ASSERT_TRUE(left_energy_s[0] > 40000 && right_energy_s[0] == 0);   // first second: left only
-    ASSERT_TRUE(right_energy_s[1] > 40000 && left_energy_s[1] < 100);  // then right (switch lands near the boundary)
-    ASSERT_TRUE(left_energy_s[2] > 40000 && right_energy_s[2] < 100);
+    ASSERT_TRUE(right_energy_s[1] > 40000 && left_energy_s[1] < 48000 / 400 + 16);  // then right (switch waits for a zero crossing: <= one 400 Hz period)
+    ASSERT_TRUE(left_energy_s[2] > 40000 && right_energy_s[2] < 48000 / 1600 + 16);
     // No step at the switch: the sample before the right channel's first non-zero is tiny.
     for (uint32_t i = 1; i < 48000u * 4u; i++) {
         if ((buf[2 * i] == 0) != (buf[2 * (i - 1)] == 0) && buf[2 * i] != 0) { // left restarts
             ASSERT_TRUE(abs(buf[2 * i]) < 30000000); // started near a zero crossing (< 1.4 % of full scale)
         }
+    }
+}
+
+TEST(ident_frequencies_per_channel) {
+    static int32_t buf[96000 * 3 * 2];
+    const uint32_t rates[4] = {44100, 48000, 88200, 96000};
+    for (int r = 0; r < 4; r++) {
+        const uint32_t rate = rates[r];
+        tonegen_t g;
+        tonegen_init(&g, TONE_IDENT, rate);
+        tonegen_fill(&g, buf, rate * 3);
+        int l_cross = 0, r_cross = 0;
+        uint32_t l_tail = 0, r_first = 0;
+        for (uint32_t i = 1; i < rate * 2; i++) {
+            if (i < rate && buf[2 * (i - 1)] < 0 && buf[2 * i] >= 0) {
+                l_cross++;   // second 1, left
+            }
+            if (i >= rate && buf[2 * (i - 1) + 1] < 0 && buf[2 * i + 1] >= 0) {
+                r_cross++;   // second 2, right
+            }
+            if (i < rate && buf[2 * i + 1] != 0) {
+                r_first++;   // right must be silent while left plays
+            }
+            if (i >= rate && buf[2 * i] != 0) {
+                l_tail++;    // left tail after the switch: at most one 400 Hz period
+            }
+        }
+        ASSERT_TRUE(l_cross >= 399 && l_cross <= 401);
+        ASSERT_TRUE(r_cross >= 1599 && r_cross <= 1601);
+        ASSERT_EQ(0, r_first);
+        ASSERT_TRUE(l_tail <= rate / 400u + 16u);
     }
 }
 
@@ -441,6 +472,7 @@ int main(void) {
     RUN(tone_is_minus_20_dbfs);
     RUN(tone_frequency_is_exact);
     RUN(ident_alternates_channels_at_zero_crossings);
+    RUN(ident_frequencies_per_channel);
     RUN(scale_notes_and_envelope);
     return RESULT();
 }

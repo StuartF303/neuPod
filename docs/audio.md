@@ -137,7 +137,7 @@ The Audio Pack DAC takes 32-bit slots; how many of the bits it uses is the DAC's
 | Source | What | Notes |
 | --- | --- | --- |
 | 1 kHz tone | sine, -20 dBFS peak, both channels | phase accumulator, 1024-point table with linear interpolation (worst error about -104 dBFS) |
-| L/R ident | the same tone, 1 s left only, then 1 s right only, repeating | switches at a zero crossing; if you hear it in the wrong ear the channel order is swapped (slot order is left first) |
+| L/R ident | 400 Hz on the left only for 1 s, then 1600 Hz on the right only for 1 s, repeating (low = left, high = right) | switches at a zero crossing; if you hear it in the wrong ear the channel order is swapped (slot order is left first) |
 | Scale | C4 D4 E4 F4 G4 A4 B4 C5, then B4 down to C4, 300 ms per note, 10 ms raised-cosine attack and release, 600 ms rest, loops until stopped | equal temperament, A4 = 440 Hz; frequencies rounded to a millihertz, phase step exact to 2^-32 |
 | WAV | integer PCM 16/24/32-bit, mono or stereo, 44.1/48/88.2/96 kHz | RIFF parser walks the chunks (LIST and other chunks before `data`, odd sizes, extensible PCM); float, 8-bit, other rates and RF64 are rejected with a message |
 
