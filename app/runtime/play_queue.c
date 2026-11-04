@@ -33,8 +33,6 @@ void pq_clear(play_queue_t *q) {
     q->wrap_first = PLAY_QUEUE_NO_ENTRY;
 }
 
-void pq_seed(play_queue_t *q, uint32_t seed) { q->rng = seed != 0 ? seed : 0x9E3779B9u; }
-
 // xorshift32: enough for a shuffle (not security relevant), 4 bytes of state.
 static uint32_t rnd(play_queue_t *q) {
     uint32_t x = q->rng != 0 ? q->rng : 0x9E3779B9u;
@@ -47,6 +45,14 @@ static uint32_t rnd(play_queue_t *q) {
 
 // Uniform-enough value in [0, n) (multiply-shift; the bias is at most n / 2^32 for n <= 128).
 static uint32_t rnd_below(play_queue_t *q, uint32_t n) { return (uint32_t)(((uint64_t)rnd(q) * n) >> 32); }
+
+// Small seeds (a tick count) start xorshift in a weak patch: discard a few outputs.
+void pq_seed(play_queue_t *q, uint32_t seed) {
+    q->rng = seed != 0 ? seed : 0x9E3779B9u;
+    for (int i = 0; i < 3; i++) {
+        (void)rnd(q);
+    }
+}
 
 static void identity(play_queue_t *q) {
     for (uint32_t i = 0; i < q->count; i++) {

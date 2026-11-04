@@ -29,6 +29,8 @@ static uint16_t g_next_entry = PLAY_QUEUE_NO_ENTRY; // queue entry the audio cor
 static uint16_t g_offer_entry = PLAY_QUEUE_NO_ENTRY;
 // An announcement is only accepted for the offer it answers: any restart of playback (reset_info) bumps g_gen, so the answer to
 // an offer made before a skip, stop or new start is ignored instead of marking a successor that no longer exists.
+static pq_snapshot_t g_snap; // the queue before the move being started (under the lock; g_gen rejects a stale rollback)
+static uint16_t g_skips;     // consecutive unplayable tracks skipped under repeat-all (reset by any successful start); capped at the queue length
 static uint32_t g_gen;
 static uint32_t g_offer_gen;
 static bool g_offered;
@@ -37,8 +39,7 @@ static bool g_offered;
 typedef struct {
     bool start;
     bool stop;
-    bool snap;         // snap holds the queue as it was before a move that may have re-shuffled it (repeat-all wrap)
-    pq_snapshot_t snap_q;
+    bool snap;         // g_snap holds the queue as it was before a move that may have re-shuffled it (repeat-all wrap)
     bool rollback;     // the queue position was advanced for this start: put it back if the start cannot even be requested
     uint16_t prev_pos;
     uint32_t gen;
@@ -131,6 +132,16 @@ static void go_idle(action_t *a) {
     a->stop = true;
 }
 
+// Remember the queue as it is, so that a start request that is refused puts it back exactly (a wrap re-shuffles the order).
+static void prepare_rollback(action_t *a) {
+    a->prev_pos = g_q.pos;
+    a->rollback = true;
+    if (g_q.shuffle) {
+        pq_snapshot(&g_q, &g_snap);
+        a->snap = true;
+    }
+}
+
 // Start queue entry g_q.pos (hard start: the audio core ramps down, re-clocks if needed, ramps up).
 static void begin_track(action_t *a, bool automatic, const char *why) {
     if (!pq_path(&g_q, g_q.pos, a->path, sizeof a->path)) {
@@ -142,6 +153,9 @@ static void begin_track(action_t *a, bool automatic, const char *why) {
     g_ended_base = audio_pcm_ended_count();
     g_changes_seen = audio_track_change_count();
     g_auto = automatic;
+    if (!automatic) {
+        g_skips = 0;
+    }
     a->start = true;
     a->gen = g_gen;
     printf("player: track %u/%u '%s' (%s)\n", (unsigned)(g_q.pos + 1u), (unsigned)g_q.count, pq_name(&g_q, g_q.pos), why);
@@ -156,7 +170,7 @@ static void run_action(const action_t *a) {
         lock();
         if (a->rollback && g_gen == a->gen && g_q.count != 0) {
             if (a->snap) {
-                pq_restore(&g_q, &a->snap_q); // a wrap re-shuffled the order: put the whole queue back
+                pq_restore(&g_q, &g_snap); // a wrap re-shuffled the order: put the whole queue back
             } else {
                 g_q.pos = a->prev_pos; // the next press must not skip the entry that never started
             }
@@ -220,12 +234,7 @@ static void service(action_t *a, bool have, const audio_stats_t *st) {
                audio_pcm_ended_count() != g_ended_base) {
         // The track played to its end and nothing followed in the audio core (gapless off, another sample rate, a fault-free end):
         // go on with the queue the ordinary way, or stop at its end.
-        a->prev_pos = g_q.pos;
-        a->rollback = true;
-        if (g_q.shuffle) {
-            pq_snapshot(&g_q, &a->snap_q);
-            a->snap = true;
-        }
+        prepare_rollback(a);
         pq_move_t mv = g_q.count != 0 ? pq_auto_next(&g_q) : PQ_END;
         if (mv != PQ_END) {
             begin_track(a, true, mv == PQ_RESTART ? "repeat" : mv == PQ_WRAPPED ? "wrap" : "auto");
@@ -239,11 +248,13 @@ static void service(action_t *a, bool have, const audio_stats_t *st) {
         g_info.state = PLAYER_ERROR;
         snprintf(g_info.msg, sizeof g_info.msg, "%s",
                  st->codec_error != 0 ? codec_error_text(st->codec_error) : "Stopped: audio data ran dry");
-    } else if (g_info.src == PLAYER_SRC_FILE && g_info.state == PLAYER_ERROR && g_auto && g_q.count != 0 && pq_has_next(&g_q)) {
-        // A track the queue moved on to cannot be played: skip it rather than stopping the album.
+    } else if (g_info.src == PLAYER_SRC_FILE && g_info.state == PLAYER_ERROR && g_auto && g_q.count != 0 &&
+               (g_q.repeat == PQ_REPEAT_ALL ? g_skips < g_q.count : pq_has_next(&g_q))) {
+        // A track the queue moved on to cannot be played: skip it rather than stopping the album. Under repeat-all this wraps at the end,
+        // but never more than one lap of unplayable tracks in a row (an all-broken queue ends in the error).
         printf("player: skipping '%s' (%s)\n", g_info.name, g_info.msg);
-        a->prev_pos = g_q.pos;
-        a->rollback = true;
+        g_skips++;
+        prepare_rollback(a);
         (void)pq_next(&g_q);
         begin_track(a, true, "skip");
         a->stop = true; // the failed track may still be feeding or have left the audio core half set up
@@ -343,12 +354,7 @@ void player_next(void) {
     lock();
     service(&a, have, &st); // a gapless handoff that just happened moves the queue first
     if (g_info.src == PLAYER_SRC_FILE && g_q.count != 0 && g_info.state != PLAYER_VERIFYING && g_info.state != PLAYER_VERIFIED) {
-        a.prev_pos = g_q.pos;
-        a.rollback = true;
-        if (g_q.shuffle) {
-            pq_snapshot(&g_q, &a.snap_q);
-            a.snap = true;
-        }
+        prepare_rollback(&a);
         pq_move_t mv = pq_next(&g_q);
         if (mv != PQ_END) {
             begin_track(&a, false, mv == PQ_WRAPPED ? "wrap" : "next");
@@ -496,6 +502,7 @@ void player_file_started(const player_file_t *f) {
     if (g_info.src == PLAYER_SRC_FILE && g_info.state == PLAYER_OPENING) {
         g_info.state = f->verify ? PLAYER_VERIFYING : PLAYER_PLAYING;
         g_next_valid = false;
+        g_skips = 0;
         // The audio core has flushed and restarted: handoffs counted until now (the old track's ramp-down could still have crossed a
         // boundary) are not ours.
         g_changes_seen = audio_track_change_count();

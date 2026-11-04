@@ -236,6 +236,39 @@ TEST(failed_start_after_a_shuffled_wrap_restores_the_whole_queue) {
     player_set_shuffle(PQ_SHUFFLE_OFF);
 }
 
+TEST(an_unplayable_last_track_wraps_under_repeat_all_and_an_all_broken_queue_ends) {
+    start_album(2);
+    player_set_repeat(PQ_REPEAT_ALL);
+    g_ended++;
+    player_service();                        // auto-advance to track 4 (last)
+    ASSERT_EQ(4, pos());
+    player_file_failed("cannot open");
+    player_service();                        // skipped: wraps to track 1 instead of ending
+    ASSERT_EQ(1, pos());
+    ASSERT_EQ(0, strcmp(g_last_path, "/Album/01.flac"));
+    player_file_t f = file("t");
+    player_file_started(&f);                 // a successful start resets the skip count
+    // everything broken: one lap at most, then the error stays
+    int calls = g_play_calls;
+    for (int i = 0; i < 12; i++) {
+        player_file_failed("cannot open");
+        player_service();
+    }
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(PLAYER_ERROR, i.state);
+    ASSERT_TRUE(g_play_calls - calls <= 4);
+    player_set_repeat(PQ_REPEAT_OFF);
+    start_album(2);                          // without repeat-all the last track's failure still ends there
+    g_ended++;
+    player_service();
+    player_file_failed("cannot open");
+    player_service();
+    player_get(&i);
+    ASSERT_EQ(PLAYER_ERROR, i.state);
+    ASSERT_EQ(4, pos());
+}
+
 int main(void) {
     player_init();
     RUN(late_announcement_after_a_skip_is_ignored_and_gapless_continues);
@@ -245,6 +278,7 @@ int main(void) {
     RUN(repeat_one_replays_the_track_at_its_end_and_offers_it_gaplessly);
     RUN(repeat_all_wraps_instead_of_ending);
     RUN(failed_start_after_a_shuffled_wrap_restores_the_whole_queue);
+    RUN(an_unplayable_last_track_wraps_under_repeat_all_and_an_all_broken_queue_ends);
     RUN(shuffle_toggled_mid_play_keeps_the_track_and_the_handoff_already_announced);
     return RESULT();
 }

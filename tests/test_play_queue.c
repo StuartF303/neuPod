@@ -393,6 +393,24 @@ TEST(snapshot_restores_order_position_and_seed_after_a_wrap) {
     ASSERT_EQ(cur, pq_entry(&q, q.pos));
 }
 
+TEST(commit_of_an_entry_at_or_behind_the_position_is_pulled_in_as_the_next_track) {
+    many();
+    static play_queue_t q;
+    pq_clear(&q);
+    pq_seed(&q, 4);
+    ASSERT_TRUE(pq_build(&q, "/a", g_many, 40, 10));
+    ASSERT_EQ(PQ_MOVED, pq_commit(&q, 3)); // folder order: jumps to it
+    ASSERT_EQ(3, q.pos);
+    pq_set_shuffle(&q, PQ_SHUFFLE_SONGS);  // shuffled: entry 3 is current at slot 0; commit an entry that sat earlier in the walk
+    ASSERT_EQ(PQ_MOVED, pq_next(&q));
+    uint16_t earlier = pq_entry(&q, 0);
+    ASSERT_EQ(PQ_MOVED, pq_commit(&q, earlier)); // behind pos: it becomes the next slot, the permutation stays valid
+    ASSERT_EQ(2, q.pos);
+    ASSERT_EQ(earlier, pq_entry(&q, 2));
+    ASSERT_TRUE(is_permutation(&q));
+    ASSERT_EQ(PQ_END, pq_commit(&q, 99));  // not an entry: nothing happens
+}
+
 int main(void) {
     RUN(audio_names_are_recognised_case_insensitively);
     RUN(queue_is_the_folder_in_files_order_from_the_chosen_track);
@@ -410,6 +428,7 @@ int main(void) {
     RUN(repeat_all_wraps_to_the_first_track);
     RUN(repeat_all_with_shuffle_reshuffles_and_never_opens_with_the_last_track);
     RUN(snapshot_restores_order_position_and_seed_after_a_wrap);
+    RUN(commit_of_an_entry_at_or_behind_the_position_is_pulled_in_as_the_next_track);
     RUN(a_committed_entry_wins_over_a_changed_plan);
     return RESULT();
 }
