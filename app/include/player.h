@@ -128,14 +128,19 @@ void player_set_headphones_at_boot(bool inserted);
  */
 uint32_t player_volume_restore_att(uint32_t saved_att, output_path_t saved_path, output_path_t cur_path, bool headphones_at_boot);
 
+/** Setting "Resume playing on power-up" (settings store, default Off): the boot resume starts playing when the saved record says it was playing. */
+bool player_resume_autoplay(void);
+void player_set_resume_autoplay(bool on);
+
 /**
  * Resume at boot (storage task, once the settings are loaded and the saved folder was listed): queue the folder @p entries of @p dir with the
  * entry at @p index current (with the saved shuffle and repeat modes: under shuffle the order is new, the track is the saved one), and start it
- * PAUSED at PCM frame @p frame (the exactness depends on the codec: track_feed.h). PLAYER_RESUME_BUSY: the player is not idle (the saved
+ * PAUSED (or, with @p play, PLAYING: the caller passes the setting AND the record's playing flag) at PCM frame @p frame (the exactness depends on the codec: track_feed.h). PLAYER_RESUME_BUSY: the player is not idle (the saved
  * record should be kept); PLAYER_RESUME_INVALID: the entry is not playable (nothing started).
  */
 typedef enum { PLAYER_RESUME_OK, PLAYER_RESUME_BUSY, PLAYER_RESUME_INVALID } player_resume_t;
-player_resume_t player_resume_folder(const char *dir, const file_entry_t *entries, uint32_t count, uint32_t index, uint32_t frame);
+player_resume_t player_resume_folder(const char *dir, const file_entry_t *entries, uint32_t count, uint32_t index, uint32_t frame,
+                                   bool play);
 
 /** Short name for a mode, e.g. "1 kHz tone". */
 const char *player_tone_name(tone_mode_t mode);

@@ -310,7 +310,7 @@ static ui_screen_t *make_haptics(void) {
 
 /* ---- the Settings screen itself ---------------------------------------------------------------------- */
 
-enum { G_ABOUT, G_DISPLAY, G_CLICK, G_HAPTICS, G_GAPLESS, G_SHUFFLE, G_REPEAT, G_BLUETOOTH, G_WIFI, G_STORAGE, G_BATTERY, G_COUNT };
+enum { G_ABOUT, G_DISPLAY, G_CLICK, G_HAPTICS, G_GAPLESS, G_SHUFFLE, G_REPEAT, G_RESUME, G_BLUETOOTH, G_WIFI, G_STORAGE, G_BATTERY, G_COUNT };
 
 typedef struct {
     ui_screen_t base;
@@ -321,7 +321,7 @@ typedef struct {
     char text[200];
 } settings_t;
 
-static const char *const k_group[G_COUNT] = {"About", "Display", "Click", "Haptics", "Gapless playback", "Shuffle", "Repeat", "Bluetooth", "Wi-Fi", "Storage", "Battery"};
+static const char *const k_group[G_COUNT] = {"About", "Display", "Click", "Haptics", "Gapless playback", "Shuffle", "Repeat", "Resume on power-up", "Bluetooth", "Wi-Fi", "Storage", "Battery"};
 
 static const char *shuffle_text(void) { return player_shuffle() == PQ_SHUFFLE_SONGS ? "Songs" : "Off"; }
 static const char *repeat_text(void) {
@@ -342,6 +342,8 @@ static void settings_get(void *ctx, int32_t i, ui_list_item_t *o) {
         snprintf(o->detail, sizeof o->detail, "%s", shuffle_text());
     } else if (i == G_REPEAT) {
         snprintf(o->detail, sizeof o->detail, "%s", repeat_text());
+    } else if (i == G_RESUME) {
+        snprintf(o->detail, sizeof o->detail, "%s", player_resume_autoplay() ? "On" : "Off");
     } else if (i == G_DISPLAY) {
         snprintf(o->detail, sizeof o->detail, "%u %%", (unsigned)g_ui_state.backlight_pct);
         o->chevron = true;
@@ -385,6 +387,10 @@ static void pane_text(int32_t g, char *out, size_t n) {
     case G_REPEAT:
         snprintf(out, n, "Repeat\n%s\n%s", repeat_text(),
                  player_repeat() == PQ_REPEAT_ONE ? "Current track loops" : player_repeat() == PQ_REPEAT_ALL ? "Folder starts over at the end" : "Stops at the end of the folder");
+        break;
+    case G_RESUME:
+        snprintf(out, n, "Resume playing\n%s\n%s", player_resume_autoplay() ? "On" : "Off",
+                 player_resume_autoplay() ? "Plays on power-up if it was playing" : "Power-up leaves the track paused");
         break;
     case G_BLUETOOTH: {
         hal_bt_state_t bs = hal_bt_state();
@@ -488,6 +494,11 @@ static bool settings_button(ui_screen_t *b, uint8_t btn) {
         return true;
     case G_REPEAT:
         player_set_repeat((pq_repeat_t)(((unsigned)player_repeat() + 1u) % 3u)); /* Off -> One -> All -> Off */
+        ui_list_refresh(s->list);
+        settings_update_pane(s);
+        return true;
+    case G_RESUME:
+        player_set_resume_autoplay(!player_resume_autoplay());
         ui_list_refresh(s->list);
         settings_update_pane(s);
         return true;

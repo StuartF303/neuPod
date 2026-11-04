@@ -258,6 +258,11 @@ shared), `resume_plan()` decides, and the player opens the track (in a queue bui
 the file is there with the same size: that frame; same name but another size: the same track from the beginning; the file is gone: the playable
 entry at the saved queue position, from its beginning; the folder cannot be read, or holds nothing playable, or the track cannot be opened: the record is discarded.
 
+**Resume playing on power-up** (Settings, `NPra`, u8, default Off; `player_resume_autoplay()`): Off keeps the behaviour above (always paused). On: the same restore, but when the saved record says it was
+playing (`resume_state_t.playing`) the track starts playing instead of being paused (`player_resume_folder(..., play)`); a record that says paused or stopped still restores paused. The setting is read
+after the settings load and the volume restore (same task, in that order), so auto-play uses the restored volume, including the -30 dB cap for an unknown or different output path. A track that cannot be
+opened is dropped quietly in both modes.
+
 **Seeking to a frame** (`track_feed_seek()`, core 0 only; the one core-1 change is that the FLAC decoder honours `skip_frames`):
 
 | Codec | Start position |

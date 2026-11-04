@@ -38,7 +38,8 @@ static bool g_offered;
 // Resume (resume.h). g_base_frames: the stream started at this frame of the track, so the position is g_base_frames + the audio core's count.
 static uint32_t g_base_frames;
 static uint64_t g_file_size;
-static bool g_resume_pause;       // the track being opened is a boot resume: leave it paused as soon as it is open
+static bool g_resume_boot;        // the track being opened is a boot resume (a failed open is dropped quietly)
+static bool g_resume_play;        // ... and it is to play (setting "Resume playing on power-up" and the record was playing), not stay paused
 static resume_state_t g_rs;       // a record waiting to be stored once the player lock is released (settings_put takes its own lock)
 static bool g_rs_has, g_rs_clear;
 static resume_why_t g_rs_why;
@@ -89,6 +90,13 @@ bool player_gapless_enabled(void) {
 
 void player_set_gapless(bool on) { settings_set_u8(SETTING_GAPLESS, on ? 1u : 0u); }
 
+bool player_resume_autoplay(void) {
+    uint8_t v;
+    return settings_get_u8(SETTING_RESUME_PLAY, &v) && v == 1; // default Off
+}
+
+void player_set_resume_autoplay(bool on) { settings_set_u8(SETTING_RESUME_PLAY, on ? 1u : 0u); }
+
 pq_shuffle_t player_shuffle(void) {
     uint8_t v;
     return settings_get_u8(SETTING_SHUFFLE, &v) && v == PQ_SHUFFLE_SONGS ? PQ_SHUFFLE_SONGS : PQ_SHUFFLE_OFF; // default Off
@@ -136,7 +144,7 @@ static void reset_info(player_src_t src, player_state_t state, const char *name)
     g_offered = false;
     g_base_frames = 0;
     g_file_size = 0;
-    g_resume_pause = false;
+    g_resume_boot = false;
     g_gen++;
     snprintf(g_info.name, sizeof g_info.name, "%s", name);
     g_started_ms = os_tick_ms();
@@ -436,7 +444,7 @@ void player_play_folder(const char *dir, const file_entry_t *entries, uint32_t c
     run_action(&a);
 }
 
-player_resume_t player_resume_folder(const char *dir, const file_entry_t *entries, uint32_t count, uint32_t index, uint32_t frame) {
+player_resume_t player_resume_folder(const char *dir, const file_entry_t *entries, uint32_t count, uint32_t index, uint32_t frame, bool play) {
     action_t a = {0};
     lock();
     if (g_info.state != PLAYER_IDLE || g_info.src != PLAYER_SRC_NONE) {
@@ -452,7 +460,8 @@ player_resume_t player_resume_folder(const char *dir, const file_entry_t *entrie
     }
     begin_track(&a, false, "resume");
     g_rs_has = false; // the saved position stays as it is until the user does something
-    g_resume_pause = true;
+    g_resume_boot = true;
+    g_resume_play = play; // play: the track just starts (the settings load restored the volume, capped by the path policy, just before)
     a.frame = frame;
     unlock();
     run_action(&a);
@@ -655,19 +664,19 @@ void player_file_started(const player_file_t *f) {
         // boundary) are not ours.
         g_changes_seen = audio_track_change_count();
         apply_file(f);
-        if (g_resume_pause && g_info.state == PLAYER_PLAYING) {
+        if (g_resume_boot && !g_resume_play && g_info.state == PLAYER_PLAYING) {
             // Boot resume: nothing has been fed yet, so pausing now keeps the track silent until the user presses play.
-            g_resume_pause = false;
             g_info.state = PLAYER_PAUSED;
             (void)audio_pause(true);
         }
+        g_resume_boot = false; // the boot resume is open (paused or playing): later failures are ordinary ones
     }
     unlock();
 }
 
 void player_file_failed(const char *msg) {
     lock();
-    if (g_resume_pause && g_info.src == PLAYER_SRC_FILE) {
+    if (g_resume_boot && g_info.src == PLAYER_SRC_FILE) {
         // The boot resume could not start (file unreadable): drop it quietly instead of greeting the user with an error.
         reset_info(PLAYER_SRC_NONE, PLAYER_IDLE, "");
         pq_clear(&g_q);
