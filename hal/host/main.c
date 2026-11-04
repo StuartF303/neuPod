@@ -35,7 +35,7 @@
 
 // Wi-Fi: Settings > Wi-Fi > Scan (Networks screen), pick a network, type the password on the wheel keyboard, join, NTP time on the home screen.
 #define TOUR_WIFI                                                                                  \
-    "x s s s s _ s s s s snap:settings-wifi _ snap:wifi-idle s s _ snap:wifi-scan x x x x x x "      \
+    "x s s s s _ s s s s s snap:settings-wifi _ snap:wifi-idle s s _ snap:wifi-scan x x x x x x "      \
     "snap:wifi-found s _ snap:wifi-kb-empty _ s _ s s _ snap:wifi-kb p x x x x x x "          \
     "snap:wifi-joined m m m x x x snap:home-clock"
 

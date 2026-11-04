@@ -109,7 +109,58 @@ TEST(stack_push_pop) {
     ASSERT_FALSE(ui_stack_push(&s, NULL));
 }
 
+TEST(signal_bars_thresholds) {
+    const ui_signal_thr_t *w = &k_ui_signal_wifi;
+    ASSERT_EQ(4, ui_signal_bars(-30, w, 0, 0));
+    ASSERT_EQ(4, ui_signal_bars(-60, w, 0, 0));
+    ASSERT_EQ(3, ui_signal_bars(-61, w, 0, 0));
+    ASSERT_EQ(3, ui_signal_bars(-70, w, 0, 0));
+    ASSERT_EQ(2, ui_signal_bars(-71, w, 0, 0));
+    ASSERT_EQ(2, ui_signal_bars(-80, w, 0, 0));
+    ASSERT_EQ(1, ui_signal_bars(-81, w, 0, 0));
+    ASSERT_EQ(1, ui_signal_bars(-127, w, 0, 0));
+    const ui_signal_thr_t *b = &k_ui_signal_bt;
+    ASSERT_EQ(4, ui_signal_bars(-55, b, 0, 0));
+    ASSERT_EQ(3, ui_signal_bars(-56, b, 0, 0));
+    ASSERT_EQ(3, ui_signal_bars(-65, b, 0, 0));
+    ASSERT_EQ(2, ui_signal_bars(-75, b, 0, 0));
+    ASSERT_EQ(1, ui_signal_bars(-76, b, 0, 0));
+    /* the same RSSI reads one step lower on Bluetooth between the two scales */
+    ASSERT_EQ(4, ui_signal_bars(-58, w, 0, 0));
+    ASSERT_EQ(3, ui_signal_bars(-58, b, 0, 0));
+    ASSERT_EQ(1, ui_signal_class(1));
+    ASSERT_EQ(2, ui_signal_class(2));
+    ASSERT_EQ(3, ui_signal_class(3));
+    ASSERT_EQ(3, ui_signal_class(4));
+}
+
+TEST(signal_bars_hysteresis) {
+    const ui_signal_thr_t *w = &k_ui_signal_wifi;
+    /* showing 3 bars: -60 is not enough to rise (needs -57), -73 is not enough to fall (needs below -73) */
+    ASSERT_EQ(3, ui_signal_bars(-60, w, 3, 3));
+    ASSERT_EQ(3, ui_signal_bars(-58, w, 3, 3));
+    ASSERT_EQ(4, ui_signal_bars(-57, w, 3, 3));
+    ASSERT_EQ(3, ui_signal_bars(-73, w, 3, 3));
+    ASSERT_EQ(2, ui_signal_bars(-74, w, 3, 3));
+    /* showing 4: stays until 4 dB below... i.e. below -63 */
+    ASSERT_EQ(4, ui_signal_bars(-63, w, 4, 3));
+    ASSERT_EQ(3, ui_signal_bars(-64, w, 4, 3));
+    /* a wobble of +/-2 dB around the boundary never changes the bars */
+    int bars = 3;
+    for (int i = 0; i < 20; i++) {
+        bars = ui_signal_bars(i % 2 ? -58 : -62, w, bars, 3);
+        ASSERT_EQ(3, bars);
+    }
+    /* a big jump moves several steps at once */
+    ASSERT_EQ(1, ui_signal_bars(-95, w, 4, 3));
+    ASSERT_EQ(4, ui_signal_bars(-40, w, 1, 3));
+    /* out-of-range previous = no hysteresis */
+    ASSERT_EQ(4, ui_signal_bars(-60, w, 9, 3));
+}
+
 int main(void) {
+    RUN(signal_bars_thresholds);
+    RUN(signal_bars_hysteresis);
     RUN(nav_clamps_and_window_follows);
     RUN(nav_short_and_empty_lists);
     RUN(nav_set_centres);

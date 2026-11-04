@@ -99,6 +99,9 @@ const char *ui_frame_top_title(void);
 /** Console line for a screen push / pop (ui.c): "ui: screen 'T' push|pop ..."; @p now_top is the screen revealed by a pop. */
 void ui_log_screen(const char *title, const char *what, const char *now_top);
 
+/** Bars (1..4) of the joined Wi-Fi network as the status bar shows them (hysteresis applied); 0 when not joined. */
+int ui_wifi_bars(void);
+
 /* ---- List widget (ui_list.c) ---------------------------------------------------------------------- */
 
 typedef struct {
@@ -106,6 +109,10 @@ typedef struct {
     char detail[32]; /* right-aligned, optional */
     bool chevron;    /* "›" at the right edge */
     bool dim;        /* greyed, not meant to be opened */
+    uint8_t bars;    /* signal meter at the right edge, 1..4 (ui_signal_bars; 0 = none) */
+    bool busy;       /* pulsing dots at the right edge instead of the meter: the row's action is still running.
+                        The model sets it for as long as the work lasts (and gives up after UI_BUSY_TIMEOUT_MS);
+                        the list animates it by itself while any bound row is busy. Call ui_list_refresh when it changes. */
 } ui_list_item_t;
 
 typedef struct {

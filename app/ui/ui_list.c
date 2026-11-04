@@ -8,13 +8,29 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "runtime_config.h"
 #include "ui_internal.h"
+#include "ui_logic.h"
 
 #define POOL (UI_ROWS_VISIBLE + 2)
 #define SCROLL_ANIM_MS 110
 
+/* Right-edge glyph: four little rectangles, drawn as a signal meter (rising bars) or as pulsing dots (busy). */
+#define GLYPH_N 4
+#define GLYPH_W 22 /* 4 x 4 px + 3 x 2 px gaps */
+#define GLYPH_GAP 6
+static const int32_t k_bar_h[GLYPH_N] = {5, 8, 11, 14};
+
+enum { GS_GREEN, GS_YELLOW, GS_RED, GS_OFF, GS_OFF_SEL, GS_DOT0, GS_DOT1, GS_DOT2, GS_DOT0_SEL, GS_DOT1_SEL, GS_DOT2_SEL, GS_N };
+static lv_style_t g_gs[GS_N]; /* shared by every glyph rectangle: no per-object style memory */
+
 typedef struct {
     lv_obj_t *obj, *label, *detail, *chev;
+    lv_obj_t *g[GLYPH_N]; /* created the first time the row needs a glyph */
+    const lv_style_t *gs[GLYPH_N];
+    uint8_t bars;
+    bool busy;
+    bool chevron;
     int32_t idx; /* bound item, -1 = unbound/hidden */
     bool sel;
     bool bar;                          /* selection bar style currently applied */
@@ -23,6 +39,27 @@ typedef struct {
 
 static lv_style_t g_bar_style; /* the blue selection bar, shared by every row */
 static bool g_bar_ready;
+
+static void glyph_styles_init(void) {
+    static const struct {
+        uint32_t col;
+        lv_opa_t opa;
+        int32_t radius;
+    } d[GS_N] = {
+        [GS_GREEN] = {UI_L_OK, LV_OPA_COVER, 0},  [GS_YELLOW] = {UI_L_WARN, LV_OPA_COVER, 0},
+        [GS_RED] = {UI_L_ERR, LV_OPA_COVER, 0},   [GS_OFF] = {UI_L_LINE, LV_OPA_COVER, 0},
+        [GS_OFF_SEL] = {0xFFFFFF, LV_OPA_40, 0},  [GS_DOT0] = {UI_L_DIM, LV_OPA_30, 2},
+        [GS_DOT1] = {UI_L_DIM, LV_OPA_60, 2},     [GS_DOT2] = {UI_L_DIM, LV_OPA_COVER, 2},
+        [GS_DOT0_SEL] = {0xFFFFFF, LV_OPA_30, 2}, [GS_DOT1_SEL] = {0xFFFFFF, LV_OPA_60, 2},
+        [GS_DOT2_SEL] = {0xFFFFFF, LV_OPA_COVER, 2},
+    };
+    for (int i = 0; i < GS_N; i++) {
+        lv_style_init(&g_gs[i]);
+        lv_style_set_bg_color(&g_gs[i], lv_color_hex(d[i].col));
+        lv_style_set_bg_opa(&g_gs[i], d[i].opa);
+        lv_style_set_radius(&g_gs[i], d[i].radius);
+    }
+}
 
 struct ui_list {
     lv_obj_t *box;
@@ -33,6 +70,8 @@ struct ui_list {
     bool focus;
     row_t row[POOL];
     lv_obj_t *sb; /* scroll bar */
+    lv_timer_t *busy_timer; /* runs only while a bound row is busy */
+    uint32_t busy_phase;
     lv_obj_t *parent;
 };
 
@@ -62,10 +101,87 @@ static void style_row(ui_list_t *l, row_t *r, bool dim) {
     r->c_chev = sub;
 }
 
+static void glyph_set_style(row_t *r, int i, int gs) {
+    if (r->gs[i] != &g_gs[gs]) {
+        if (r->gs[i] != NULL) {
+            lv_obj_remove_style(r->g[i], (lv_style_t *)r->gs[i], 0);
+        }
+        lv_obj_add_style(r->g[i], &g_gs[gs], 0);
+        r->gs[i] = &g_gs[gs];
+    }
+}
+
+/* Draw the row's glyph: pulsing dots if busy, else the meter, else nothing. */
+static void glyph_apply(ui_list_t *l, row_t *r) {
+    bool show = r->busy || r->bars != 0;
+    if (!show) {
+        for (int i = 0; i < GLYPH_N && r->g[i] != NULL; i++) {
+            lv_obj_set_hidden(r->g[i], true);
+        }
+        return;
+    }
+    int32_t x0 = l->w - (r->chevron ? 22 : 8) - GLYPH_W;
+    bool on = r->sel && l->focus;
+    for (int i = 0; i < GLYPH_N; i++) {
+        if (r->g[i] == NULL) {
+            r->g[i] = lv_obj_create(r->obj);
+            lv_obj_remove_style_all(r->g[i]);
+            lv_obj_set_scrollable(r->g[i], false);
+            r->gs[i] = NULL;
+        }
+        lv_obj_set_hidden(r->g[i], false);
+        int gs;
+        int32_t h;
+        int32_t y;
+        if (r->busy) { /* a bright dot travelling left to right, with a short tail */
+            int32_t d = (int32_t)((l->busy_phase + GLYPH_N) - (uint32_t)i) % GLYPH_N;
+            gs = (d == 0 ? GS_DOT2 : d == 1 ? GS_DOT1 : GS_DOT0) + (on ? GS_DOT0_SEL - GS_DOT0 : 0);
+            h = 4;
+            y = UI_ROW_H / 2 - 2;
+        } else {
+            int cls = ui_signal_class(r->bars);
+            h = k_bar_h[i];
+            y = UI_ROW_H / 2 + 7 - h;
+            gs = i < r->bars ? (cls == 3 ? GS_GREEN : cls == 2 ? GS_YELLOW : GS_RED) : (on ? GS_OFF_SEL : GS_OFF);
+        }
+        lv_obj_set_size(r->g[i], 4, h);
+        lv_obj_set_pos(r->g[i], x0 + i * 6, y);
+        glyph_set_style(r, i, gs);
+    }
+}
+
+static void busy_cb(lv_timer_t *t) {
+    ui_list_t *l = lv_timer_get_user_data(t);
+    bool any = false;
+    l->busy_phase++;
+    for (int i = 0; i < POOL; i++) {
+        row_t *r = &l->row[i];
+        if (r->idx >= 0 && r->busy) {
+            any = true;
+            glyph_apply(l, r);
+        }
+    }
+    if (!any) {
+        l->busy_timer = NULL;
+        lv_timer_delete(t);
+    }
+}
+
+static void busy_timer_sync(ui_list_t *l) {
+    bool any = false;
+    for (int i = 0; i < POOL; i++) {
+        any = any || (l->row[i].idx >= 0 && l->row[i].busy);
+    }
+    if (any && l->busy_timer == NULL && l->box != NULL) {
+        l->busy_timer = lv_timer_create(busy_cb, UI_BUSY_FRAME_MS, l);
+    }
+}
+
 static void bind_row(ui_list_t *l, row_t *r, int32_t idx) {
     r->idx = idx;
     if (idx < 0 || idx >= l->model.count) {
         r->idx = -1;
+        r->busy = false;
         lv_obj_set_hidden(r->obj, true);
         return;
     }
@@ -77,11 +193,16 @@ static void bind_row(ui_list_t *l, row_t *r, int32_t idx) {
     set_text(r->label, it.label);
     set_text(r->detail, it.detail);
     set_text(r->chev, it.chevron ? LV_SYMBOL_RIGHT : "");
+    r->chevron = it.chevron;
+    r->busy = it.busy;
+    r->bars = it.bars > 4 ? 4 : it.bars;
+    int32_t glyph_w = (r->busy || r->bars != 0) ? GLYPH_W + GLYPH_GAP : 0;
     int32_t detail_w = it.detail[0] ? (int32_t)strlen(it.detail) * 8 + 10 : 0; /* about 7.5 px per character */
-    int32_t label_w = l->w - 10 - (it.chevron ? 22 : 8) - detail_w;
+    int32_t label_w = l->w - 10 - (it.chevron ? 22 : 8) - glyph_w - detail_w;
     lv_obj_set_width(r->label, label_w);
-    lv_obj_align(r->detail, LV_ALIGN_RIGHT_MID, it.chevron ? -22 : -8, 0);
+    lv_obj_align(r->detail, LV_ALIGN_RIGHT_MID, (it.chevron ? -22 : -8) - glyph_w, 0);
     style_row(l, r, it.dim);
+    glyph_apply(l, r);
 }
 
 static void update_scrollbar(ui_list_t *l) {
@@ -117,6 +238,7 @@ static void layout(ui_list_t *l, bool rebind_all) {
         }
     }
     update_scrollbar(l);
+    busy_timer_sync(l);
 }
 
 static void scroll_anim_cb(void *var, int32_t v) {
@@ -154,6 +276,10 @@ static void build(ui_list_t *l) {
         row_t *r = &l->row[i];
         r->idx = -1;
         r->sel = false;
+        memset(r->g, 0, sizeof r->g);
+        memset(r->gs, 0, sizeof r->gs);
+        r->bars = 0;
+        r->busy = false;
         r->bar = false; /* a rebuild after suspend() has new objects: no bar style on them yet */
         r->obj = lv_obj_create(l->box);
         lv_obj_remove_style_all(r->obj);
@@ -193,6 +319,7 @@ ui_list_t *ui_list_create(lv_obj_t *parent, int32_t w, const ui_list_model_t *mo
         lv_style_set_bg_grad_color(&g_bar_style, lv_color_hex(UI_L_SEL_BOT));
         lv_style_set_bg_grad_dir(&g_bar_style, LV_GRAD_DIR_VER);
         lv_style_set_bg_opa(&g_bar_style, LV_OPA_COVER);
+        glyph_styles_init();
         g_bar_ready = true;
     }
     l->w = w;
@@ -211,6 +338,9 @@ void ui_list_destroy(ui_list_t *l) {
         return;
     }
     lv_anim_delete(l, scroll_anim_cb);
+    if (l->busy_timer != NULL) {
+        lv_timer_delete(l->busy_timer);
+    }
     if (l->box != NULL) {
         lv_obj_delete(l->box);
     }
@@ -271,6 +401,10 @@ void ui_list_suspend(ui_list_t *l) {
         return;
     }
     lv_anim_delete(l, scroll_anim_cb);
+    if (l->busy_timer != NULL) {
+        lv_timer_delete(l->busy_timer);
+        l->busy_timer = NULL;
+    }
     lv_obj_delete(l->box); /* frees every row object: the pool is small (docs/ui-input.md) */
     l->box = NULL;
 }
