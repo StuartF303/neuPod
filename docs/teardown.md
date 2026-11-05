@@ -13,6 +13,7 @@ Photos by Stuart, 5 Nov 2026 (original set: [workphotos report](https://reports.
 7. **Board layout** (component side up, dock at the bottom): top-left small connector = headphone/hold flex; top-centre Apple-marked QFN = PMU; top-centre-right wide ZIF = LCD; top-right fine-pitch FPC connector = click wheel; two BGAs = S5L8702 + SDRAM; 12.000 MHz crystal bottom-left; bottom = 30-pin dock and HDD ZIF; bottom-right = charger/buck (4R7 inductor) and the battery connector.
 8. **Click wheel flex** is Apple assembly **631-0457** (Foxconn). The finger block measures ≈ 4 mm against the ruler (16:31) → **0.3 mm pitch, 13 positions** (0.4 mm would be 5.2 mm, 0.5 mm 6.5 mm), matching the 5G connector Rockbox documents; the 5G pin assignment is the starting point for probing. Fingers are on one face only — confirm top- vs bottom-contact before choosing the board connector (HDGC 0.3K-HX-13PWB, LCSC C2919524, or Hirose/Molex equivalent). Board-side socket: 13-position 0.3 mm FPC connector with a flip latch.
 9. **Frame datum (stripped frame, 16:32):** two **locating pins** at the bottom corners of the ribbed section either side of the dock cut-out pass through the two holes flanking the dock on the board — they fix the board's XY position and are the datum for the new board outline. Two **screw holes** sit on the horizontal rib about a third of the way up. The board sits behind the grid with its **component side facing the ribs**: tall parts live in the pockets, and the wheel-facing side must be essentially flat because the wheel sub-board lies against it through the frame window. Pockets as cast: left and right columns ~10–11 mm wide, centre ~23 mm, split by the rib at a third and a second rib across the centre column. The adhesive strip on the LCD divider is where the panel sticks.
+10. **Volumes (Stuart, 16:57):** donor battery pocket in the back shell **45 × 20 × 5 mm** (width to double-check against photo 05); HDD **70 × 55 × 5 mm** in 1 mm rubber bumpers → **70 × 55 × 7 mm free cavity** over the ribs on the board side, overlapping the LCD area. Consequences: tall parts live in the pockets below the rib tops, so the 7 mm cavity is spare → a 505060 (≈2,500 mAh, 5 mm) or 605060 (≈3,000 mAh, 6 mm) LiPo fits there with foam margins, ~5× the donor capacity (~30 h card-to-BT at ~100 mA). The freed 45 × 20 × 5 mm shell pocket suits an X-axis LRA / iPhone-class Taptic Engine (35 × 11 × 4.5 mm).
 
 ## Measurements still needed (before/with the scan)
 
@@ -20,7 +21,6 @@ Photos by Stuart, 5 Nov 2026 (original set: [workphotos report](https://reports.
 - Wheel flex: contact face (top/bottom) and exact finger count under a loupe.
 - LCD ZIF and wheel ZIF pitch and pin count (count conductors over a known length with a loupe).
 - Headphone/hold flex connector pitch and pin count; battery connector type.
-- Battery pouch outline and thickness; shell-side free depth.
 - Screw positions (board-to-frame, frame-to-shell).
 
 ## Photos
