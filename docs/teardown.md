@@ -11,12 +11,12 @@ Photos by Stuart, 5 Nov 2026 (original set: [workphotos report](https://reports.
 5. **Wheel sub-board 821-0545-A**: five dome switches on the rear, flex tail on the left edge; the frame has a window for it.
 6. **The logic board is only ≈ 55 × 55 mm** (board out, 16:25): it occupies the lower half of the frame under the click wheel; the LCD and its backplate fill the upper half with nothing behind them. Usable PCB area is therefore ~30 cm², about a third of the 95 × 55 mm figure in the open-source notes — this supersedes that figure. Outline and screw positions to be measured with calipers.
 7. **Board layout** (component side up, dock at the bottom): top-left small connector = headphone/hold flex; top-centre Apple-marked QFN = PMU; top-centre-right wide ZIF = LCD; top-right fine-pitch FPC connector = click wheel; two BGAs = S5L8702 + SDRAM; 12.000 MHz crystal bottom-left; bottom = 30-pin dock and HDD ZIF; bottom-right = charger/buck (4R7 inductor) and the battery connector.
-8. **Click wheel flex** is Apple assembly **631-0457** (Foxconn). The tail shows ~13 fingers in ~4 mm → **0.3 mm pitch, 13 positions** (to confirm: 10 pitches should span 3.0 mm), matching the 5G connector Rockbox documents. Board-side socket: 13-position 0.3 mm FPC connector with a flip latch.
+8. **Click wheel flex** is Apple assembly **631-0457** (Foxconn). The finger block measures ≈ 4 mm against the ruler (16:31) → **0.3 mm pitch, 13 positions** (0.4 mm would be 5.2 mm, 0.5 mm 6.5 mm), matching the 5G connector Rockbox documents; the 5G pin assignment is the starting point for probing. Fingers are on one face only — confirm top- vs bottom-contact before choosing the board connector (HDGC 0.3K-HX-13PWB, LCSC C2919524, or Hirose/Molex equivalent). Board-side socket: 13-position 0.3 mm FPC connector with a flip latch.
 
 ## Measurements still needed (before/with the scan)
 
 - Board outline (≈ 55 × 55 mm) and the two screw holes with calipers; rib positions and height above the board; board thickness; pocket dimensions.
-- Wheel flex pitch confirmation (10 pitches = 3.0 mm) and finger count.
+- Wheel flex: contact face (top/bottom) and exact finger count under a loupe.
 - LCD ZIF and wheel ZIF pitch and pin count (count conductors over a known length with a loupe).
 - Headphone/hold flex connector pitch and pin count; battery connector type.
 - Battery pouch outline and thickness; shell-side free depth.
