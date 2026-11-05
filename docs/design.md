@@ -429,4 +429,17 @@ What each AMOLED board already gives us (not on the list): AMOLED + touch, micro
 | Debug | none → UART0 on GPIO0/1 + picotool; Debug Probe UART side | built-in USB-JTAG, nothing to add |
 | GPIO verdict | I²S 3 + wheel 4 + module UART 2 = 9 → fits only with **one** radio and the wheel on ≤ 4 lines; RM2 (+4) does not also fit | I²S 3 + wheel 4 + UART 2 = 9 → fits using EXIO for enables/mute/HP-detect; MCLK needs a spare pin — tight |
 
-**Mouser list, first cut:** SJ-43516-SMT ×3, VG1040003D ×2, PKLCS1212E4001-R1 ×3, ESP32-DevKitC-32E ×1. Not Mouser: RM2 (Pimoroni/Pi Hut), Feasycom module + DB200 (direct), ES8388 module (AliExpress).
+**Mouser list (5 Nov 2026):** SJ-43516-SMT ×3, ESP32-DevKitC-32E ×1; haptics — Vybronics VLV101040A ×1 (X-axis LRA), Vybronics VG1040003D ×2 (coin LRA), TDK PowerHap 0904H014 ×1 (1313H019 if unavailable), Boreas BOS1901 breakout or IC ×1, Murata PKLCS1212E4001-R1 ×3. Not Mouser: RM2 (Pimoroni/Pi Hut), Feasycom module + DB200 (direct), ES8388 module (AliExpress), iPhone 8 Taptic Engine ×1 (eBay, reference sample).
+
+### Click feedback — Taptic-class actuators (5 Nov 2026)
+
+A "Taptic Engine" is a large, well-damped X-axis LRA driven with short waveforms, first-half-cycle overdrive and active braking. The DRV2605L already on the bench does all three in LRA closed-loop mode; the ERM was buzzy because an ERM cannot brake. Candidates for the A/B against the stock piezo buzzer:
+
+| Option | Size | Drive | Feel / notes |
+| --- | --- | --- | --- |
+| Salvaged iPhone 7/8/SE2 Taptic Engine | ~35 × 11 × 4.5 mm | DRV2605L LRA mode (auto-cal finds the params) or DRV2624/2625 | The real thing; thick shell only; reference sample |
+| Off-the-shelf X-axis rectangular LRA (Vybronics VLV101040A class) | ~10 × 10 × 4 to 20 × 10 × 3.5 mm | DRV2605L LRA mode | 80 % of the Taptic feel, datasheeted, £1–3; best fit for the thin shell |
+| Piezo haptic: TDK PowerHap 0904H014 + Boreas BOS1901 | **9 × 4 × 1.4 mm**; BOS1901 boosts 3.3 V to ±95 V internally | BOS1901 (I²C + waveform in; senses presses) | Sharpest, fastest (<1 ms), thinnest, lowest power; "tick" rather than "thud" — ideal for a wheel detent |
+| Coin LRA (VG1040003D) | 10 × 3.6 mm | DRV2605L | Softer, slightly ringy — fallback |
+
+Decision after the A/B; the final board keeps a piezo-buzzer footprint plus whichever haptic wins.

@@ -77,6 +77,12 @@ microSD, SDXC up to 2 TB, via SDIO (4-bit) for throughput; exFAT so the card is 
 - Library index/metadata cached in PSRAM or on-card database to keep browse fast with 100k+ tracks.
 - **Card power (requirement, 3 Nov 2026):** GPIO-controlled load switch on card VDD, so a wedged card can be power-cycled. SD clock from integer dividers only; multi-block reads capped at 128 blocks ([Storage](storage.md)).
 
+### v2 enhancement: High-Speed USB disk mode via SD bridge (parked 4 Nov 2026)
+
+Context: the card will not be removed in normal use (opening a Classic is hard), and both candidate SoCs have Full-Speed USB only (~1 MB/s mass storage; 100 GB ≈ a day). Wi-Fi sync is 1–3 MB/s. For v1 the bulk path is USB-C mass storage for small loads and Wi-Fi sync for the rest; the initial load is accepted as slow.
+
+v2: a USB 2.0 High-Speed SD bridge on the board takes the card in "disk mode" (stock-iPod behaviour): the PC sees a plain card reader at 20–35 MB/s with exFAT read/write; the MCU unmounts, shows "connected" and charges. Parts (JLC-class): Genesys **GL823K** bridge (QFN-24, 12 MHz crystal, ~$0.50) or GL3224 (USB 3.0); SD bus mux **TS3A27518**-class 6-channel analogue switch on one GPIO; USB D+/D− mux **TS3USB221**-class so the same USB-C serves the bridge by default or the MCU FS port (CDC console, DFU, USB audio out) on request; bridge powered from VBUS only. Costs ~60 mm² and three Extended part types; USB audio out is unavailable in disk mode. SoC alternative if USB speed ever becomes mandatory: ESP32-P4 (HS USB, 768 KB SRAM, 16–32 MB PSRAM, no radio, ~1 W class) — rejected for v1 on power and size.
+
 ## Display
 
 Preferred upgrade: a 2.4"–2.8" IPS TFT (ST7789V / ILI9341, 240×320) replacing the stock panel; keep the stock panel as plan B.
