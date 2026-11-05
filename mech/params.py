@@ -54,7 +54,7 @@ HDD_CAVITY_T_STATED = P("HDD_CAVITY_T_STATED", 7.0, "measured",
 # --------------------------------------------------------------------------- #
 # Datum: locating pins and the donor logic board
 PIN_D = P("PIN_D", 1.5, "estimate", "locating-pin diameter")
-PIN_PITCH = P("PIN_PITCH", 47.0, "photo", "pin-to-pin centre distance; photo 18 hole centres ≈ 4 mm in from each board edge")
+PIN_PITCH = P("PIN_PITCH", 28.5, "photo", "pin-to-pin centre distance: pins sit at the bottom ends of the two vertical ribs, flanking the dock bar (photo 16 ≈ 29–31, photo 18 holes ≈ 26); CALIPER THIS")
 PIN_H = P("PIN_H", 2.5, "estimate", "pin height above the rib plane (through the board)")
 
 BOARD_W = P("BOARD_W", 55.0, "measured", "donor 820-2437, X")
@@ -107,7 +107,7 @@ WHEEL_D = P("WHEEL_D", 40.0, "measured", "capacitive ring + controller sub-assem
 WHEEL_T = P("WHEEL_T", 0.7, "estimate", "sub-assembly thickness between switch tops and the bezel")
 WHEEL_FLEX_W = P("WHEEL_FLEX_W", 5.0, "photo", "13-pin 0.3 mm flex width (fingers ≈ 4 mm)")
 WHEEL_FLEX_EXIT = P("WHEEL_FLEX_EXIT", "left", "measured", "flex tail leaves the wheel's left edge")
-WHEEL_CONN_POS = P("WHEEL_CONN_POS", (22.0, 49.0), "photo", "donor wheel connector, board top-right (X, Y)")
+WHEEL_CONN_POS = P("WHEEL_CONN_POS", (-21.0, 48.7), "photo", "donor wheel connector centre, REAR face; photo 12 top-right seen from the rear = top-left in this front-view frame. FIXED: reused flex")
 WHEEL_CONN_SIZE = P("WHEEL_CONN_SIZE", (6.0, 3.5, 1.0), "datasheet", "13P 0.3 mm FPC connector, flip latch (HDGC 0.3K-HX-13PWB class)")
 
 # --------------------------------------------------------------------------- #
@@ -134,7 +134,8 @@ HDD_Y0 = P("HDD_Y0", 1.0, "photo", "HDD bottom edge above the pins (photo 03: �
 BATT_POCKET = P("BATT_POCKET", (45.0, 20.0, 5.0), "measured", "donor cell pocket X × Y × T (width to re-check)")
 BATT_POCKET_POS = P("BATT_POCKET_POS", (-17.0, None), "photo", "pocket X0 (right-biased, beside the jack); Y set in derived block to the shell top")
 JACK_BODY = P("JACK_BODY", (14.0, 9.0, 5.0), "estimate", "headphone jack + hold switch module X × Y × T, top-left corner")
-JACK_CONN_POS = P("JACK_CONN_POS", (22.0, -1.0), "measured", "jack/hold flex connector on the donor board, bottom-right")
+JACK_CONN_POS = P("JACK_CONN_POS", (-22.0, 2.5), "photo", "donor jack/hold flex connector centre, REAR face, beside the dock; photo 12 bottom-right seen from the rear = bottom-left here. FIXED: reused flex")
+JACK_CONN_SIZE = P("JACK_CONN_SIZE", (5.0, 3.0, 1.2), "estimate", "jack/hold FPC connector body")
 JACK_FLEX_L = P("JACK_FLEX_L", 110.0, "estimate", "donor jack/hold flex length, jack to connector")
 RF_WINDOW = P("RF_WINDOW", (20.0, 10.0), "estimate", "RF-transparent plastic window at the top-left of the back shell, X × Y footprint on the inner face")
 RF_WINDOW_X0 = P("RF_WINDOW_X0", -30.0, "estimate", "RF window left edge X")
@@ -170,7 +171,7 @@ HAPTIC_LRA = P("HAPTIC_LRA", (10.0, 10.0, 4.0), "datasheet", "rectangular LRA")
 HAPTIC_PIEZO = P("HAPTIC_PIEZO", (12.0, 12.0, 0.6), "datasheet", "piezo disc Ø12")
 B2B_CONN = P("B2B_CONN", (10.0, 4.0), "datasheet", "board-to-board mezzanine pair footprint; stack height is derived per layout")
 FLEX_LINK_W = P("FLEX_LINK_W", 8.0, "estimate", "inter-board flex width")
-SWITCH_BOARD_SHAPE = P("SWITCH_BOARD_SHAPE", "square", "estimate", "layout D switch board: 'round' (no room for a connector outside the wheel) or 'square'")
+SWITCH_BOARD_SHAPE = P("SWITCH_BOARD_SHAPE", "full", "measured", "front board in the stock position: 'full' = full donor outline carrying the switches (Stuart, 5 Nov); 'square'/'round' kept for comparison")
 SWITCH_BOARD_D = P("SWITCH_BOARD_D", 42.0, "estimate", "round switch board diameter (40–45)")
 SWITCH_BOARD_SQ = P("SWITCH_BOARD_SQ", (50.0, 45.0), "estimate", "square switch board X × Y: wide enough for the pin holes, corners carry the wheel connector and the link")
 CLEARANCE = P("CLEARANCE", 0.3, "estimate", "design clearance to any fixed surface")

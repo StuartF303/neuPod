@@ -59,12 +59,12 @@ def stock_connectors():
     """Donor connector bodies on the rear face (for reference only)."""
     out = []
     w, l, h = p.WHEEL_CONN_SIZE
-    out.append(Part("donor_wheel_conn", box_at(*p.WHEEL_CONN_POS, p.BOARD_FRONT_Z, (w, l), h), (0.3, 0.3, 0.3),
-                    "front", notes="13P wheel FPC connector, wheel face, top-right"))
+    out.append(Part("donor_wheel_conn", box_at(*p.WHEEL_CONN_POS, 0.0, (w, l), -h), (0.3, 0.3, 0.3),
+                    "board", notes="13P wheel FPC connector, rear face (flex wraps the left board edge)"))
     out.append(Part("donor_lcd_zif", box_at(*p.LCD_ZIF_POS, 0.0, (22.0, 4.0), -1.5), (0.3, 0.3, 0.3), "board",
                     notes="wide LCD ZIF, rear face, top centre"))
-    out.append(Part("donor_jack_conn", box_at(*p.JACK_CONN_POS, 0.0, (5.0, 3.0), -1.2), (0.3, 0.3, 0.3), "board",
-                    notes="headphone/hold flex connector, bottom-right"))
+    out.append(Part("donor_jack_conn", box_at(*p.JACK_CONN_POS, 0.0, p.JACK_CONN_SIZE[:2], -p.JACK_CONN_SIZE[2]), (0.3, 0.3, 0.3), "board",
+                    notes="headphone/hold flex connector, rear face, beside the dock"))
     return out
 
 
@@ -76,6 +76,8 @@ def switch_board(name, z0, t=1.0, notes=""):
     """Layout D switch board: round (SWITCH_BOARD_D) or square (SWITCH_BOARD_SQ) with the pin holes,
     wheel locating holes and the USB-C slot."""
     cx, cy = p.WHEEL_CX, p.WHEEL_CY
+    if p.SWITCH_BOARD_SHAPE == "full":
+        return Part(name, board_outline(z0, t, usbc=True), PCB_NEW, "board", fixed=False, notes=notes)
     if p.SWITCH_BOARD_SHAPE == "round":
         b = cyl(cx, cy, z0, p.SWITCH_BOARD_D, t)
     else:

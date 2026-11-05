@@ -178,8 +178,8 @@ def md(rep_d, rep_s):
     desc = {"A": "single 55×55 board, stock position, switches on the wheel face",
             "B": "A + second board in the HDD cavity, components toward the shell, mezzanine link",
             "C": "L-shaped rigid board extending under the LCD backplate",
-            "D1": "dedicated switch board + main board behind the ribs (and on under the LCD)",
-            "D2": "dedicated switch board + main board under the LCD, battery behind the ribs"}
+            "D1": "full-size front board (switches) + main board behind the ribs (and on under the LCD)",
+            "D2": "full-size front board (switches) + main board under the LCD, battery behind the ribs"}
     for nm, d in rep_d["layouts"].items():
         ds = rep_s["layouts"][nm]
         o.append(f"### Layout {nm} — {desc[nm]}\n")
@@ -231,8 +231,11 @@ RECOMMENDATION = """## 4. Reading the numbers
 | A | 1 | 0 | 29 cm² | 1400 / 2500 mAh | ~95 mm, coax/flex antenna needed | pockets give ≤1.3 mm over a cell: no module (RM2 2.5, ESP32 3.1) fits a pocket once a cell is behind the ribs; RM2 also hits a screw boss in LC_upper |
 | B | 2 | mezzanine 1.9 mm | 29 + 28 cm² | 1000 / 1150 mAh | ~60 mm | cavity board steals the only 50×60 footprint; cell moves under the LCD where only a 30×48 class fits below the jack |
 | C | 1 (L) | 0 | 43 cm² | none / 400 mAh | ~40 mm | rigid L passes through the divider (1.0 mm into the casting) — needs the casting notched; with the AMOLED the backplate is clear, with the stock LCD it is not |
-| D1 | 2 | 1 flex | 22 + 38 cm² | 400 / 400 mAh | ~60 mm | main board eats the HDD cavity; only the 20 mm shell strip is left for a cell |
-| D2 | 2 | 1 flex | 22 + 18 cm² | 1400 / 2500 mAh | ~20 mm | cell behind the ribs passes under the divider; main board sits on the backplate with 5 mm clear behind it; AMOLED and jack runs short; USB-C on the switch board with USB on the link flex |
+| D1 | 2 | 1 flex | 29 + 38 cm² | 400 / 400 mAh | ~60 mm | main board eats the HDD cavity; only the 20 mm shell strip is left for a cell |
+| D2 | 2 | 1 flex | 29 + 18 cm² | 1400 / 2500 mAh | ~20 mm | cell behind the ribs passes under the divider; main board sits on the backplate with 5 mm clear behind it; short AMOLED run; wheel, jack/hold and USB-C stay on the front board at the donor positions, their signals ride the link flex |
+
+Fixed in every layout: the 13P wheel connector and the jack/hold connector sit at the donor positions on the
+rear face of the stock-position board (WHEEL_CONN_POS, JACK_CONN_POS), because both flexes are reused as they are.
 
 Common to all: the mid-mount USB-C body overlaps the 37 mm adhesive ring by ~1.5 mm at the wheel's bottom edge
 (WHEEL_CY_FROM_BOTTOM and the receptacle depth decide this — the donor's dock connector lived in the same spot,
@@ -241,15 +244,15 @@ the wheel face; any layout keeps a 13P 0.3 mm connector on that face outside the
 
 ## 5. Recommendation
 
-**Take layout D2 forward**: a 50 × 45 mm two-layer *switch board* in the stock position (five switches, two
-wheel-locating holes, pin holes, USB-C slot, wheel FPC connector, one link connector) plus a *main board*
-under the LCD (≈ 56 × 32 mm, ~18 cm², both faces usable on the rear, 5 mm of height) and the cell behind the
-ribs. It is the only layout that gives the best cell in **both** depth models, puts the radio within ~20 mm of
-the RF window (a short flex or edge antenna), keeps the AMOLED and jack flexes short, and decouples the one piece of geometry that must be
-exact (the switch zone) from the board that will iterate. Cost: two boards and one 0.5 mm flex (or a rigid-flex
-in one panel) — about £15–25 more per set than A at JLC quantities, and the switch board can be ordered now from
-the datum measurements alone. Fallback if the scan shows the divider has no gap behind it for the link flex:
-layout B (mezzanine through pocket UL), accepting the smaller cell.
+**Take layout D2 forward**: a new *front board* with the full donor outline in the stock position (five switches,
+two wheel-locating holes, pin and screw holes, USB-C, wheel FPC connector, link connector, and low-profile parts
+on both faces — ≤ 1.3 mm in the pockets once a cell is behind the ribs) plus a *main board* under the LCD
+(≈ 56 × 32 mm, ~18 cm², 5 mm of height on its rear face) and the cell behind the ribs. It is the only layout that
+gives the best cell in **both** depth models, puts the radio within ~20 mm of the RF window, and keeps the
+AMOLED flex short. The reused wheel and jack/hold flexes plug in at the donor connector positions, unchanged. The front board reproduces the donor's mechanical interface exactly, so it can be
+laid out from the datum measurements alone. Cost: two boards and one 0.5 mm flex (or one rigid-flex panel).
+Fallback if the scan shows no gap behind the divider for the link flex: layout B (mezzanine through pocket UL),
+accepting the smaller cell.
 
 If the scan shows ≥ 6 mm behind the ribs (Stuart's 7 mm), D2 takes a 505060/605060 (2.5–3 Ah); if it shows the
 ~4 mm the envelope implies, a 3 mm cell (~1.4 Ah) — still 2–3× the donor's ~550 mAh.
