@@ -12,10 +12,11 @@ Photos by Stuart, 5 Nov 2026 (original set: [workphotos report](https://reports.
 6. **The logic board is only ≈ 55 × 55 mm** (board out, 16:25): it occupies the lower half of the frame under the click wheel; the LCD and its backplate fill the upper half with nothing behind them. Usable PCB area is therefore ~30 cm², about a third of the 95 × 55 mm figure in the open-source notes — this supersedes that figure. Outline and screw positions to be measured with calipers.
 7. **Board layout** (component side up, dock at the bottom): top-left small connector = headphone/hold flex; top-centre Apple-marked QFN = PMU; top-centre-right wide ZIF = LCD; top-right fine-pitch FPC connector = click wheel; two BGAs = S5L8702 + SDRAM; 12.000 MHz crystal bottom-left; bottom = 30-pin dock and HDD ZIF; bottom-right = charger/buck (4R7 inductor) and the battery connector.
 8. **Click wheel flex** is Apple assembly **631-0457** (Foxconn). The finger block measures ≈ 4 mm against the ruler (16:31) → **0.3 mm pitch, 13 positions** (0.4 mm would be 5.2 mm, 0.5 mm 6.5 mm), matching the 5G connector Rockbox documents; the 5G pin assignment is the starting point for probing. Fingers are on one face only — confirm top- vs bottom-contact before choosing the board connector (HDGC 0.3K-HX-13PWB, LCSC C2919524, or Hirose/Molex equivalent). Board-side socket: 13-position 0.3 mm FPC connector with a flip latch.
+9. **Frame datum (stripped frame, 16:32):** two **locating pins** at the bottom corners of the ribbed section either side of the dock cut-out pass through the two holes flanking the dock on the board — they fix the board's XY position and are the datum for the new board outline. Two **screw holes** sit on the horizontal rib about a third of the way up. The board sits behind the grid with its **component side facing the ribs**: tall parts live in the pockets, and the wheel-facing side must be essentially flat because the wheel sub-board lies against it through the frame window. Pockets as cast: left and right columns ~10–11 mm wide, centre ~23 mm, split by the rib at a third and a second rib across the centre column. The adhesive strip on the LCD divider is where the panel sticks.
 
 ## Measurements still needed (before/with the scan)
 
-- Board outline (≈ 55 × 55 mm) and the two screw holes with calipers; rib positions and height above the board; board thickness; pocket dimensions.
+- Locating-pin diameter and pin-to-pin centre distance (first dimension of the outline); board outline (≈ 55 × 55 mm) and the two screw holes relative to the pins; rib positions and height above the board; board thickness; pocket dimensions.
 - Wheel flex: contact face (top/bottom) and exact finger count under a loupe.
 - LCD ZIF and wheel ZIF pitch and pin count (count conductors over a known length with a loupe).
 - Headphone/hold flex connector pitch and pin count; battery connector type.
@@ -33,4 +34,4 @@ Photos by Stuart, 5 Nov 2026 (original set: [workphotos report](https://reports.
 | ![Front assembly edge](assets/teardown/01-front-assembly-edge.jpg) | ![Mid-frame edge against the ruler](assets/teardown/02-midframe-edge-ruler.jpg) |
 | ![Mid-frame edge, second view](assets/teardown/11-midframe-edge-2.jpg) | ![Logic board removed, component side, ruler](assets/teardown/12-logic-board-removed.jpg) |
 | ![Click-wheel connector close-up](assets/teardown/13-wheel-connector-closeup.jpg) | ![Wheel flex 631-0457](assets/teardown/14-wheel-flex-631-0457.jpg) |
-| ![Wheel flex fingers](assets/teardown/15-wheel-flex-fingers.jpg) | |
+| ![Wheel flex fingers](assets/teardown/15-wheel-flex-fingers.jpg) | ![Stripped mid-frame: ribs, locating pins, screw holes](assets/teardown/16-midframe-stripped-pins.jpg) |
