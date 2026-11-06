@@ -126,11 +126,13 @@ def _radio():
 
 
 def _usbc(z_board_rear, t):
-    """Mid-mount receptacle straddling the board at the dock aperture, mating face at the board bottom edge."""
+    """Mid-mount receptacle straddling the board, overhanging the dock edge so its mating face sits just inside the
+    shell aperture (keeps the body clear of the wheel ring, which starts ~6 mm above the dock edge)."""
     w, l, h = p.USBC
     zc = z_board_rear + t / 2
-    return Part("usbc_midmount", box_at(0.0, p.BOARD_BOTTOM_Y + l / 2, zc - h / 2, (w, l), h), COMP, "candidate",
-                fixed=False, notes="centred in the dock aperture")
+    y0 = p.INT_Y0 + p.CLEARANCE
+    return Part("usbc_midmount", box_at(0.0, y0 + l / 2, zc - h / 2, (w, l), h), COMP, "candidate",
+                fixed=False, notes=f"mating face at the shell aperture; overhangs the dock edge by {p.BOARD_BOTTOM_Y - y0:.1f} mm")
 
 
 def _donor_conns(z_rear=0.0):
@@ -159,7 +161,9 @@ def _common_small(z, face, pocket_for):
 
 # --------------------------------------------------------------------------- #
 AMOLED_CONN = (19.0, 4.5, 1.0)
-AMOLED_CONN_Y = 38.9   # rear face, top of pocket UC: the tab above sits on the divider (no rear-face height there)
+def amoled_conn_y():
+    """Rear face, top of pocket UC: the tab above sits on the divider (no rear-face height there)."""
+    return _pc("UC")[1] + _pc("UC")[3] / 2 - AMOLED_CONN[1] / 2 - 0.35
 
 
 def _front_board_rear_common(z, with_radio=True, with_sd=True):
@@ -170,7 +174,8 @@ def _front_board_rear_common(z, with_radio=True, with_sd=True):
     if OPTIONS["mcu"] == "ESP32S3":
         out.append(comp(mname, (msize[1], msize[0], msize[2]), ucx, ucy, z, "rear", "pocket UC, rotated; antenna inside metal"))
     else:
-        out.append(comp(mname, msize, ucx - 8.5, ucy - 1.45, z, "rear", "pocket UC, above the left screw boss"))
+        y_mcu = p.SCREW_RIB_Y + p.BOSS_D / 2 + 0.3 + msize[1] / 2
+        out.append(comp(mname, msize, ucx - 8.5, y_mcu, z, "rear", "pocket UC, above the left screw boss"))
         if with_sd:
             out.append(comp("microsd", p.MICROSD, ucx + 6.5, ucy - 1.0, z, "rear", "pocket UC — the only pocket ≥ 14 mm both ways"))
     if with_radio:
@@ -183,9 +188,10 @@ def _front_board_rear_common(z, with_radio=True, with_sd=True):
     out.append(comp("charger", p.QFN_SMALL, -6.0, 16.5, z, "rear", "pocket LC_upper"))
     out.append(comp("gauge", p.QFN_SMALL, 0.0, 16.5, z, "rear", "pocket LC_upper"))
     out.append(comp("inductor", p.INDUCTOR, 6.5, 16.5, z, "rear", "pocket LC_upper"))
-    ulx = _pc("UL")[0]
-    out.append(comp("psram", p.PSRAM_FLASH, ulx, 28.5, z, "rear", "pocket UL"))
-    out.append(comp("flash", p.PSRAM_FLASH, ulx, 34.0, z, "rear", "pocket UL"))
+    ulx, uly, _, ull = _pc("UL")
+    y_ul0 = uly - ull / 2
+    out.append(comp("psram", p.PSRAM_FLASH, ulx, y_ul0 + 3.2, z, "rear", "pocket UL"))
+    out.append(comp("flash", p.PSRAM_FLASH, ulx, y_ul0 + 8.6, z, "rear", "pocket UL"))
     return out
 
 
@@ -199,7 +205,7 @@ def layout_A():
     parts += _front_board_rear_common(z)
     parts.append(_usbc(0.0, t))
     parts += _donor_conns(z)
-    amo = (0.0, AMOLED_CONN_Y)
+    amo = (0.0, amoled_conn_y())
     parts.append(comp("amoled_conn", AMOLED_CONN, *amo, z, "rear", "30P 0.5 mm FPC, rear face, top of pocket UC (where the LCD ZIF was)"))
     bat, batt_box, blabel = best_cell(cavity_boxes())
     if bat:
@@ -242,7 +248,7 @@ def layout_B():
     stack = 0.0 - z2_top
     bw, bl = p.B2B_CONN
     lx = _pc("LL")[0]
-    parts.append(Part("b2b_link", box_at(lx, 6.0, z2_top, (bw, bl), stack), LINK, "candidate", fixed=False,
+    parts.append(Part("b2b_link", box_at(lx, p.JACK_CONN_POS[1] + 3.8, z2_top, (bw, bl), stack), LINK, "candidate", fixed=False,
                       notes=f"mezzanine pair, stack {stack:.1f} mm, pocket LL"))
     bat, batt_box, blabel = best_cell(under_lcd_boxes(lcd_z_back() - p.CLEARANCE))
     if bat:
@@ -310,10 +316,10 @@ def layout_D1():
         parts.append(comp(nm, p.QFN_SMALL, cx, cy, z, "rear"))
     parts.append(comp("inductor", p.INDUCTOR, 0.0, 6.0, z, "rear"))
     parts.append(_usbc(0.0, t))
-    fy = AMOLED_CONN_Y - 9.0
+    fy = amoled_conn_y() - 9.0
     parts.append(Part("flex_link", box(-p.FLEX_LINK_W / 2, fy, z_top, p.FLEX_LINK_W / 2, fy + 4.0, 0.0),
                       FLEX, "candidate", fixed=False, notes="front board → main board, through pocket UC"))
-    parts.append(comp("amoled_conn", AMOLED_CONN, 0.0, AMOLED_CONN_Y, 0.0, "rear", "on the front board, top of pocket UC; display lines ride the link"))
+    parts.append(comp("amoled_conn", AMOLED_CONN, 0.0, amoled_conn_y(), 0.0, "rear", "on the front board, top of pocket UC; display lines ride the link"))
     bat, batt_box, blabel = best_cell(under_lcd_boxes(lcd_z_back() - p.CLEARANCE))
     if bat:
         parts.append(bat)
@@ -321,7 +327,7 @@ def layout_D1():
     meta = dict(boards={"front_board": _sb_desc(), "main_board": f"54 x {y1 - p.HDD_Y0:.0f} behind the ribs"},
                 links=["flex, front board → main board (through pocket UC); USB-C, display and jack lines ride it"],
                 battery=bat.name if bat else None, batt_box=batt_box, batt_where=blabel, haptic="haptic_lra", antenna=rname,
-                wheel_conn=(*p.WHEEL_CONN_POS, 0.0), amoled_conn=(0.0, AMOLED_CONN_Y, 0.0), jack_conn=(*p.JACK_CONN_POS, 0.0),
+                wheel_conn=(*p.WHEEL_CONN_POS, 0.0), amoled_conn=(0.0, amoled_conn_y(), 0.0), jack_conn=(*p.JACK_CONN_POS, 0.0),
                 zones={"main board, shell side": (z - p.Z_BACK_IN) - p.CLEARANCE,
                        "front board rear face": p.RIB_GAP - p.CLEARANCE,
                        "wheel face inside 37 mm ring": p.SWITCH_H})
@@ -345,8 +351,8 @@ def layout_D2():
     rname, rsize = _radio()
     parts.append(comp(rname, rsize, -17.0, 83.0, z, "rear", "top-left, against the plastic insert (RF window)"))
     parts.append(comp(mname, msize, -1.0, 62.0, z, "rear"))
-    parts.append(comp("psram", p.PSRAM_FLASH, -14.0, 54.0, z, "rear"))
-    parts.append(comp("flash", p.PSRAM_FLASH, -7.0, 54.0, z, "rear"))
+    parts.append(comp("psram", p.PSRAM_FLASH, -14.0, 54.4, z, "rear"))
+    parts.append(comp("flash", p.PSRAM_FLASH, -7.0, 54.4, z, "rear"))
     parts.append(comp("microsd", p.MICROSD, 17.0, 62.0, z, "rear"))
     for nm, (cx, cy) in {"haptic_drv": (-24, 58), "codec": (-24, 64), "charger": (14, 50), "gauge": (20, 50)}.items():
         parts.append(comp(nm, p.QFN_SMALL, cx, cy, z, "rear"))

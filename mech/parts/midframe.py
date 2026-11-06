@@ -8,7 +8,7 @@ proud toward the back shell.  The vertical ribs step: ±LOWER_RIB_X below the sc
 rib (ending at the dock strap, where the locating pins are), UPPER_RIB_X above it.
 """
 from .. import params as p
-from .common import Part, box, cyl
+from .common import Part, box, cyl, rounded_box
 
 CAST = (0.62, 0.64, 0.66)
 PIN = (0.9, 0.2, 0.2)
@@ -44,13 +44,16 @@ def midframe():
     wt = p.FRAME_WALL_T
     zr, zf_rib, zt = p.RIB_Z_BACK, p.RIB_Z_TOP, p.Z_FRONT_IN
     zw = p.FRAME_Z_BACK
-    # outer walls, open at the bottom between ±FRAME_DOCK_GAP_X
-    frame = box(-xo, y0, zw, xo, y1, zt).cut(box(-xo + wt, y0 + wt, zw - 1, xo - wt, y1 - wt, zt + 1))
+    # outer walls with the scanned corner radius, open at the bottom between ±FRAME_DOCK_GAP_X
+    R = p.FRAME_CORNER_R
+    frame = rounded_box(-xo, y0, zw, xo, y1, zt, R).cut(
+        rounded_box(-xo + wt, y0 + wt, zw - 1, xo - wt, y1 - wt, zt + 1, max(R - wt, 0.5)))
     frame = frame.cut(box(-p.FRAME_DOCK_GAP_X, y0 - 1, zw - 1, p.FRAME_DOCK_GAP_X, y0 + wt + 0.01, zt + 1))
     # bottom wall inner edge (scan) — fill between the outer wall and BOTTOM_WALL_Y outside the dock gap
     for sx in (-1, 1):
         x_a, x_b = sorted((sx * p.FRAME_DOCK_GAP_X, sx * (xo - wt)))
-        frame = frame.union(box(x_a, y0 + wt, zw, x_b, p.BOTTOM_WALL_Y, zt))
+        frame = frame.union(box(x_a, y0 + wt, zw, x_b, p.BOTTOM_WALL_Y, zt).intersect(
+            rounded_box(-xo, y0, zw - 1, xo, y1, zt + 1, R)))
     # dock strap at wall-top height over the dock connector
     dx0, dy0, dx1, dy1 = p.DOCK_STRAP
     frame = frame.union(box(dx0, dy0, zt - p.DOCK_STRAP_T, dx1, dy1, zt))
@@ -68,6 +71,19 @@ def midframe():
     for x in p.UPPER_RIB_X:                                                           # upper verticals
         a, b = _xr(x, p.RIB_W)
         ribs = ribs.union(box(a, ys1, zr, b, p.DIVIDER_Y0, zf_rib))
+    # small fillets where the ribs meet (pocket corners), approximated by square-minus-circle blocks
+    r = p.POCKET_CORNER_R
+    if r > 0:
+        def fil(cx, cy, sx, sy):
+            sq = box(cx, cy, zr, cx + sx * r, cy + sy * r, zf_rib)
+            return sq.cut(cyl(cx + sx * r, cy + sy * r, zr - 1, 2 * r, zf_rib - zr + 2))
+        hw = p.RIB_W / 2
+        for x in (-p.LOWER_RIB_X, p.LOWER_RIB_X):
+            for side in (-1, 1):
+                ribs = ribs.union(fil(x + side * hw, ys0, side, -1))
+        for x in p.UPPER_RIB_X:
+            for side in (-1, 1):
+                ribs = ribs.union(fil(x + side * hw, ys1, side, 1))
     frame = frame.union(ribs)
     # screw bosses (rib front → board rear face) and holes
     for sx, sy in p.SCREW_POS:

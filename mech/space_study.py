@@ -228,13 +228,19 @@ def md(rep_d, rep_s):
 
 RECOMMENDATION = """## 4. What the scans changed (6 Nov 2026)
 
-- **Board is 55 × 45 mm** (+ a 20 × 1.9 tab on the top-edge centre), not 55 × 55. The wheel/switch centre sits
-  27.8 mm above the dock edge and 17.2 mm below the top; switch radius 14.1 mm; switch tops ≈ 0.8 mm (centre 1.2).
-  Photo 18 is upside down; the board's wheel sits near the LCD end.
-- **Ribs step**: lower verticals at ±12.4 (dock strap → screw rib), upper at −16.0 / +15.9 (screw rib → divider);
-  screw rib 23.7 mm above the pins, cross rib 9.8. Pins sit at the lower rib ends: **pitch ≈ 24.8**.
-- The two "wheel-locating holes" (±4.5 at the wheel centre) land on the screw rib: they are very probably the
-  board screws. Modelled that way (SCREWS_ARE_WHEEL_HOLES).
+- **Board is 55 × ~43.5 mm** (+ a 20 × 1.9 tab on the top-edge centre), not 55 × 55, with a ~19.5 mm notch in the
+  dock edge for the 30-pin connector. Switch radius 14.1 mm; switch tops ≈ 0.8 mm (centre 1.2).
+  Photo 18 is upside down; the wheel sits nearer the LCD end.
+- **The two holes either side of the centre switch are the board screws** into the middle (screw) rib (confirmed by
+  Stuart), so the wheel centre sits exactly on that rib: 25.6 mm above the pins, 26.3 above the dock edge, 17.2
+  below the top edge. The dock edge rests against the frame's bottom wall.
+- **Ribs step**: lower verticals at ±12.4 (bottom wall → screw rib), upper at −16.0 / +15.9 (screw rib → divider);
+  cross rib 15.4 above the pins.
+- **Locating pins stand where the lower ribs meet the bottom wall**, just outside each rib, either side of the dock
+  port: pitch ≈ 26.4 (photo 16 scaled by the scanned frame; the pins are too thin to scan). On the board they land
+  0.7 mm from the dock edge, so they read as edge notches — as the teardown noted.
+- **Frame outer corners R ≈ 4.8** (both scans), small fillets in the pocket corners; the back-shell dock aperture is
+  a 21 × 3 slot with fully rounded ends.
 - **Divider is flush with the ribs on the board side** and stands 1.3 mm proud at the rear. A board can run straight
   over it into the LCD bay (layout C and the D2 link); a cell behind the ribs that crosses it loses 1.3 mm.
 - **Frame front is a 4 mm tray**: walls and the dock strap stand 4.0 mm in front of the rib front face; the board,
@@ -253,7 +259,7 @@ RECOMMENDATION = """## 4. What the scans changed (6 Nov 2026)
 | D2 | 24 + 24 | none | 405060 2.0 Ah behind the ribs | 26 mm | 0 |
 
 Fixed in every layout: front board = donor outline with the five switches, the screw/locating holes, the wheel
-13P and jack/hold connectors at the donor positions (rear face), USB-C under the dock strap, and the AMOLED
+13P and jack/hold connectors at the donor positions (rear face), USB-C under the dock strap (overhanging the dock edge to clear the wheel ring), and the AMOLED
 connector at the top of pocket UC (the tab above sits on the divider, so nothing taller than ~0.2 mm goes behind it).
 
 ## 5. Recommendation
@@ -275,8 +281,8 @@ are all set by the scan and do not depend on the open depth question. It is the 
 2. Back-shell inside depth, floor to rim (BACK_SHELL_SIDE_H — the floor did not scan), and the assembled thickness
    at the centre (SHELL_T).
 3. Front plate + wheel stack: bezel inner face to glass (FRONT_PLATE_T), wheel sub-assembly thickness.
-4. Pin centre-to-centre and diameter; pin centre to the board's dock edge (PIN_PITCH, PIN_D, BOARD_BOTTOM_Y).
-5. Board 55 × 45 and thickness; switch height (outer/centre); confirm the ±4.5 holes are the board screws.
+4. Pin centre-to-centre and diameter, and pin centre to the frame's bottom wall (PIN_PITCH, PIN_D, FRAME_PIN_YF).
+5. Board length dock edge → top edge (≈ 43.5 derived) and thickness; centre switch to top edge (17.2); switch heights.
 6. Dock strap thickness (DOCK_STRAP_T), and the AMOLED module outline from the datasheet.
 """
 

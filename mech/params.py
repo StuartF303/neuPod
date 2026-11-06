@@ -55,19 +55,19 @@ HDD_CAVITY_T_STATED = P("HDD_CAVITY_T_STATED", 7.0, "measured",
 # --------------------------------------------------------------------------- #
 # Datum: locating pins and the donor logic board
 PIN_D = P("PIN_D", 1.5, "estimate", "locating-pin diameter")
-PIN_PITCH = P("PIN_PITCH", 24.8, "scan", "pins at the bottom ends of the two LOWER vertical ribs (rib centres ±12.4 in the frame scan); photo 18 holes ≈ 22–26. CALIPER THIS")
+PIN_PITCH = P("PIN_PITCH", 26.4, "photo", "pins stand where the lower vertical ribs meet the bottom wall, just outside each rib, either side of the dock (photo 16 scaled by the scanned strap width; too thin to scan). CALIPER")
 PIN_H = P("PIN_H", 2.5, "estimate", "pin height above the rib plane (through the board)")
 
 BOARD_W = P("BOARD_W", 55.0, "measured", "donor 820-2437, X (scan 55.4 incl. edge bleed)")
-BOARD_L = P("BOARD_L", 45.0, "scan", "donor 820-2437, Y, main edges (scan 45.0; the 55 noted at teardown was the width)")
+WHEEL_TO_TOP = P("WHEEL_TO_TOP", 17.2, "scan", "centre switch to the board's top main edge (pcb scan)")
 BOARD_TAB = P("BOARD_TAB", (20.0, 1.9), "scan", "tab at the top-edge centre, X × Y (teardown finding 11)")
 BOARD_T = P("BOARD_T", 1.0, "estimate", "donor board thickness; new board target 1.0–1.2")
-BOARD_BOTTOM_Y = P("BOARD_BOTTOM_Y", -2.7, "scan", "pin centre to board bottom (dock) edge: limited by the frame bottom wall (inner edge 2.7 below the pins). CALIPER")
+BOARD_DOCK_NOTCH = P("BOARD_DOCK_NOTCH", (19.5, 2.0), "scan", "donor notch in the dock edge for the 30-pin connector, width × depth (pcb scan edge dips at ±9.5; depth estimate)")
 BOARD_CORNER_R = P("BOARD_CORNER_R", 1.5, "estimate")
-DOCK_AP_W = P("DOCK_AP_W", 21.0, "measured", "30-pin dock aperture width (X), bottom edge")
-DOCK_AP_H = P("DOCK_AP_H", 3.0, "measured", "30-pin dock aperture height (Z)")
+DOCK_AP_W = P("DOCK_AP_W", 21.0, "measured", "dock aperture in the back shell, width (X), ends fully rounded (Stuart, 6 Nov)")
+DOCK_AP_H = P("DOCK_AP_H", 3.0, "measured", "dock aperture height (Z) = end radius × 2")
 SCREW_D = P("SCREW_D", 1.6, "estimate", "board-to-frame screw hole dia (M1.4?)")
-SCREW_X = P("SCREW_X", 5.0, "photo", "screw holes at ±SCREW_X on the screw rib (photo 16) — probably the same holes as the 'wheel locating holes' at ±4.5")
+SCREW_X = P("SCREW_X", 4.5, "measured", "board screws at ±X from the wheel centre on the middle (screw) rib = the two holes either side of the centre switch (Stuart, 6 Nov)")
 TOP_SCREW_POS = P("TOP_SCREW_POS", (13.0, 40.0), "photo", "top screw holes at ±X, Y (photo 18, which is upside down): either side of the top tab")
 
 # --------------------------------------------------------------------------- #
@@ -75,8 +75,10 @@ TOP_SCREW_POS = P("TOP_SCREW_POS", (13.0, 40.0), "photo", "top screw holes at ±
 # Frame features in FRAME-CENTRED coordinates (suffix _F: origin at the casting's bbox centre, front view),
 # read off frame-new1-btm (front face) and 1106_03frame_top (rear face).  FRAME_PIN_YF ties them to the datum.
 FRAME_OUT = P("FRAME_OUT", (60.2, 101.2), "scan", "casting outline X × Y")
-FRAME_PIN_YF = P("FRAME_PIN_YF", -45.3, "scan", "pin centres in frame coords: lower rib ends at the top edge of the dock strap")
+FRAME_PIN_YF = P("FRAME_PIN_YF", -47.2, "photo", "pin centres in frame coords: ~0.8 above the bottom-wall inner edge (photo 16)")
 FRAME_WALL_T = P("FRAME_WALL_T", 2.0, "scan", "outer wall thickness (1.6–2.4 along the walls)")
+FRAME_CORNER_R = P("FRAME_CORNER_R", 4.8, "scan", "outer plan-view corner radius (4.1–5.5 across the four corners, both scans)")
+POCKET_CORNER_R = P("POCKET_CORNER_R", 0.8, "photo", "fillet in the pocket corners (photo 16)")
 FRAME_WALL_FRONT_H = P("FRAME_WALL_FRONT_H", 4.0, "scan", "walls stand this far proud of the rib front face on the board side (3.6 lower half, 4.2 upper)")
 FRAME_WALLS_TO_FLOOR = P("FRAME_WALLS_TO_FLOOR", False, "scan", "rear: walls are flush with the rib rear face (they do not reach the shell floor)")
 RIB_W = P("RIB_W", 2.1, "scan", "vertical rib width in plan (2.0–2.2)")
@@ -97,7 +99,7 @@ RIB_GAP = P("RIB_GAP", 0.5, "estimate", "board rear face to rib front face (comp
 RIB_T = P("RIB_T", 1.4, "estimate", "rib thickness Z; scan-derived if the dock strap is 1.0 thick (strap rear face sits 4.4 in front of the rib rear plane). CALIPER")
 BOSS_D = P("BOSS_D", 3.0, "estimate", "screw boss diameter on the screw rib")
 FRAME_DOCK_GAP_X = P("FRAME_DOCK_GAP_X", 15.1, "scan", "the bottom wall is open between ±X for the dock")
-SCREWS_ARE_WHEEL_HOLES = P("SCREWS_ARE_WHEEL_HOLES", True, "estimate", "the two 'wheel locating holes' (±4.5 at the wheel centre) land on the screw rib: treat them as the board screws. CHECK")
+SCREWS_ARE_WHEEL_HOLES = P("SCREWS_ARE_WHEEL_HOLES", True, "measured", "confirmed: the holes beside the centre switch are the screw holes in the middle bar")
 
 # --------------------------------------------------------------------------- #
 # Button zone (wheel-facing side of the board) — must be reproduced exactly
@@ -106,7 +108,6 @@ SWITCH_H = P("SWITCH_H", 0.8, "scan", "outer four switches, top above the board 
 SWITCH_H_C = P("SWITCH_H_C", 1.2, "scan", "centre switch top incl. actuator nub")
 SWITCH_RADIUS = P("SWITCH_RADIUS", 14.1, "scan", "N/S/E/W centres from the centre switch: 14.5 / 14.1 / 14.0 / 14.0 (N, S, W, E)")
 WHEEL_CX = P("WHEEL_CX", 0.5, "scan", "centre switch X from the board centre line")
-WHEEL_CY_FROM_BOTTOM = P("WHEEL_CY_FROM_BOTTOM", 27.8, "scan", "centre switch above the board's bottom (dock) edge; 17.2 below the top main edge")
 ADHESIVE_RING_D = P("ADHESIVE_RING_D", 37.0, "measured", "wheel adhesive ring on the board")
 WHEEL_LOC_HOLE_D = P("WHEEL_LOC_HOLE_D", 1.2, "estimate", "wheel locating holes")
 WHEEL_LOC_HOLE_X = P("WHEEL_LOC_HOLE_X", 4.5, "measured", "either side of the centre switch")
@@ -119,7 +120,7 @@ FRONT_FACE_LOWPROFILE_H = P("FRONT_FACE_LOWPROFILE_H", 0.8, "estimate",
 WHEEL_D = P("WHEEL_D", 40.0, "measured", "capacitive ring + controller sub-assembly diameter")
 WHEEL_FLEX_W = P("WHEEL_FLEX_W", 5.0, "photo", "13-pin 0.3 mm flex width (fingers ≈ 4 mm)")
 WHEEL_FLEX_EXIT = P("WHEEL_FLEX_EXIT", "left", "measured", "flex tail leaves the wheel's left edge")
-WHEEL_CONN_POS = P("WHEEL_CONN_POS", (-20.8, 39.3), "photo", "donor wheel connector centre, REAR face, 2.7 below the top edge; photo 12 is a rear view (its top-right = top-left here). FIXED: reused flex")
+WHEEL_CONN_OFS = P("WHEEL_CONN_OFS", (-20.8, 2.7), "photo", "donor wheel connector centre X, and distance below the board's top edge; REAR face (photo 12 is a rear view). FIXED: reused flex")
 WHEEL_CONN_SIZE = P("WHEEL_CONN_SIZE", (6.0, 3.5, 1.0), "datasheet", "13P 0.3 mm FPC connector, flip latch (HDGC 0.3K-HX-13PWB class)")
 
 # --------------------------------------------------------------------------- #
@@ -149,7 +150,7 @@ JACK_BLOCK_DROP = P("JACK_BLOCK_DROP", 1.3, "scan", "block top sits this far bel
 JACK_BOSS_F = P("JACK_BOSS_F", (22.0, 32.0, 7.0), "scan", "round feature below the block (jack barrel / screw boss): x, y, dia")
 JACK_BOSS_DROP = P("JACK_BOSS_DROP", 4.1, "scan", "its top below the rim")
 PLASTIC_INSERT_YF = P("PLASTIC_INSERT_YF", 46.0, "scan", "inner edge of the plastic top insert (shell coords); it spans x -28.5…15 beside the jack")
-JACK_CONN_POS = P("JACK_CONN_POS", (-21.9, 1.5), "photo", "donor jack/hold connector centre, REAR face, beside the dock (photo 12 bottom-right, rear view). FIXED: reused flex")
+JACK_CONN_OFS = P("JACK_CONN_OFS", (-21.9, 4.2), "photo", "donor jack/hold connector centre X, and height above the dock edge; REAR face. FIXED: reused flex")
 JACK_CONN_SIZE = P("JACK_CONN_SIZE", (5.0, 3.0, 1.2), "estimate", "jack/hold FPC connector body")
 JACK_FLEX_L = P("JACK_FLEX_L", 110.0, "estimate", "donor jack/hold flex length, jack to connector")
 RF_WINDOW = P("RF_WINDOW", (43.5, 5.0), "scan", "plastic top insert = the RF-transparent window, X × Y on the inner face (plastic scans, steel does not)")
@@ -205,8 +206,7 @@ def YF(y):
     return y + FRAME_CY
 
 
-BOARD_TOP_Y = P("BOARD_TOP_Y", BOARD_BOTTOM_Y + BOARD_L, "derived", "main top edge (the tab adds BOARD_TAB[1])")
-WHEEL_CY = P("WHEEL_CY", BOARD_BOTTOM_Y + WHEEL_CY_FROM_BOTTOM, "derived")
+WHEEL_CY = P("WHEEL_CY", 0.0, "derived", "set below: on the screw rib")
 BOARD_FRONT_Z = P("BOARD_FRONT_Z", BOARD_T, "derived", "wheel-facing face of the board")
 RIB_Z_TOP = P("RIB_Z_TOP", -RIB_GAP, "derived", "rib FRONT face (toward the board)")
 RIB_Z_BACK = P("RIB_Z_BACK", -RIB_GAP - RIB_T, "derived", "rib rear face = front of the HDD cavity in the lower half")
@@ -233,8 +233,15 @@ DIVIDER_Y0 = P("DIVIDER_Y0", YF(DIVIDER_YF[0]), "derived")
 DIVIDER_Y1 = P("DIVIDER_Y1", YF(DIVIDER_YF[1]), "derived")
 FRAME_DIVIDER_Z_BACK = P("FRAME_DIVIDER_Z_BACK", RIB_Z_BACK - DIVIDER_REAR_PROUD, "derived", "rear face of the divider")
 SCREW_RIB_Y = P("SCREW_RIB_Y", YF(SCREW_RIB_YF), "derived")
+PARAMS["WHEEL_CY"]["value"] = WHEEL_CY = SCREW_RIB_Y          # screws beside the centre switch go into this rib
+BOARD_TOP_Y = P("BOARD_TOP_Y", WHEEL_CY + WHEEL_TO_TOP, "derived", "main top edge (the tab adds BOARD_TAB[1])")
 CENTRE_SPLIT_Y = P("CENTRE_SPLIT_Y", YF(CROSS_RIB_YF), "derived", "cross rib in the lower centre column")
 BOTTOM_WALL_Y = P("BOTTOM_WALL_Y", YF(FRAME_BOTTOM_WALL_YF), "derived")
+BOARD_BOTTOM_Y = P("BOARD_BOTTOM_Y", BOTTOM_WALL_Y + 0.1, "derived", "dock edge sits against the frame's bottom wall")
+BOARD_L = P("BOARD_L", BOARD_TOP_Y - BOARD_BOTTOM_Y, "derived", "main edges, Y (scan read 44.4 incl. edge bleed). CALIPER to confirm")
+WHEEL_CONN_POS = P("WHEEL_CONN_POS", (WHEEL_CONN_OFS[0], BOARD_TOP_Y - WHEEL_CONN_OFS[1]), "derived")
+JACK_CONN_POS = P("JACK_CONN_POS", (JACK_CONN_OFS[0], BOARD_BOTTOM_Y + JACK_CONN_OFS[1]), "derived")
+WHEEL_CY_FROM_BOTTOM = P("WHEEL_CY_FROM_BOTTOM", WHEEL_CY - BOARD_BOTTOM_Y, "derived", "centre switch above the dock edge")
 DOCK_STRAP = P("DOCK_STRAP", (DOCK_STRAP_F[0], YF(DOCK_STRAP_F[1]), DOCK_STRAP_F[2], YF(DOCK_STRAP_F[3])), "derived")
 LCD_WIN_Y0 = P("LCD_WIN_Y0", YF(LCD_WINDOW_YF[0]), "derived")
 LCD_WIN_Y1 = P("LCD_WIN_Y1", YF(LCD_WINDOW_YF[1]), "derived")
@@ -248,7 +255,7 @@ CAVITY_T_BEHIND_RIBS = P("CAVITY_T_BEHIND_RIBS", RIB_Z_BACK - Z_BACK_IN, "derive
 CAVITY_T_UNDER_DIVIDER = P("CAVITY_T_UNDER_DIVIDER", FRAME_DIVIDER_Z_BACK - Z_BACK_IN, "derived", "what a cell crossing the divider gets")
 CAVITY_T_UNDER_LCD = P("CAVITY_T_UNDER_LCD", LCD_Z_BACK - Z_BACK_IN, "derived", "upper half: backplate rear to shell floor")
 POCKET_T_FULL = P("POCKET_T_FULL", 0 - Z_BACK_IN, "derived", "board rear face to shell floor through an open pocket")
-SCREW_POS = P("SCREW_POS", [(-WHEEL_LOC_HOLE_X, WHEEL_CY), (WHEEL_LOC_HOLE_X, WHEEL_CY)] if SCREWS_ARE_WHEEL_HOLES
+SCREW_POS = P("SCREW_POS", [(WHEEL_CX - SCREW_X, WHEEL_CY), (WHEEL_CX + SCREW_X, WHEEL_CY)] if SCREWS_ARE_WHEEL_HOLES
                else [(-SCREW_X, SCREW_RIB_Y), (SCREW_X, SCREW_RIB_Y)], "derived", "board screws into the screw rib")
 JACK_X0 = P("JACK_X0", JACK_BLOCK_F[0], "derived")
 JACK_POS = P("JACK_POS", (JACK_BOSS_F[0] - JACK_BOSS_F[2] / 2 - 0.5, YF(JACK_BOSS_F[1] - JACK_BOSS_F[2] / 2)), "derived", "lowest-left corner of the jack module (boss included)")

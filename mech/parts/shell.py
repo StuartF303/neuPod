@@ -1,4 +1,5 @@
 """Back shell (stainless tray) and front plate (bezel + glass)."""
+import cadquery as cq
 from .. import params as p
 from .common import Part, box, cyl, rounded_box
 
@@ -20,8 +21,10 @@ def back_shell():
     shell = outer.cut(inner)
     # dock aperture in the bottom end wall
     zc = p.BOARD_T / 2
-    shell = shell.cut(box(-p.DOCK_AP_W / 2, y0 - 1, zc - p.DOCK_AP_H / 2, p.DOCK_AP_W / 2, p.INT_Y0 + 1,
-                          zc + p.DOCK_AP_H / 2))
+    w, h = p.DOCK_AP_W, p.DOCK_AP_H
+    slot = (cq.Workplane("XZ").slot2D(w, h).extrude(-(p.BACK_SHELL_WALL + 2.0))
+            .translate((0, y0 - 1.0, zc)))
+    shell = shell.cut(slot)
     return Part("back_shell", shell, STEEL, "shell",
                 notes="stainless tray; dock aperture in the bottom end wall")
 

@@ -96,8 +96,9 @@ def placement(name):
         return [], (0.0, fy, p.RIB_Z_TOP + 1.5)
     if name == "frame_rear":       # seen from behind: flip about Y; rib rear face then at z −1.5 → RIB_Z_BACK
         return [rot([0, 1, 0], 180)], (0.0, fy, p.RIB_Z_BACK + 1.5)
-    if name == "pcb_wheel_face":   # long side is X; wheel nearer the TOP edge; board plane z 0 → BOARD_FRONT_Z
-        return [rot([0, 0, 1], 90), rot([0, 0, 1], 180)], (0.0, p.BOARD_BOTTOM_Y + 22.6, p.BOARD_FRONT_Z)
+    if name == "pcb_wheel_face":   # long side is X; wheel nearer the TOP edge; centre switch (+0.53, +5.24 from the
+        # levelled scan centre after the two rotations) → (WHEEL_CX, WHEEL_CY); board plane z 0 → BOARD_FRONT_Z
+        return [rot([0, 0, 1], 90), rot([0, 0, 1], 180)], (p.WHEEL_CX - 0.53, p.WHEEL_CY - 5.24, p.BOARD_FRONT_Z)
     if name == "back_shell_in":    # front view; rim at z +2.0 → Z_RIM
         return [], (0.0, fy, p.Z_RIM - 2.0)
     if name == "back_shell_out":   # seen from behind: flip about Y; back face then at z ≈ −0.3 → Z_BACK_OUT

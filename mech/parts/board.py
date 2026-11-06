@@ -36,6 +36,9 @@ def board_outline(z0=0.0, t=None, usbc=False):
         b = b.cut(cyl(hx, hy, z0 - 1, p.SCREW_D, t + 2))
     if usbc:
         b = b.cut(usbc_cutout(z0, t))
+    else:
+        nw, nd = p.BOARD_DOCK_NOTCH
+        b = b.cut(box(-nw / 2, y0 - 1, z0 - 1, nw / 2, y0 + nd, z0 + t + 1))
     return b
 
 
