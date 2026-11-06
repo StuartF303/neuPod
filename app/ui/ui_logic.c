@@ -152,9 +152,13 @@ bool ui_idle_activity(ui_idle_t *t, uint32_t now_ms) {
     return was;
 }
 
-bool ui_idle_tick(ui_idle_t *t, uint32_t now_ms, bool enabled, uint32_t timeout_ms) {
-    int32_t elapsed = (int32_t)(now_ms - t->last_ms); /* negative: the last input is ahead of this tick */
-    bool dim = enabled && elapsed >= 0 && (uint32_t)elapsed >= timeout_ms;
+bool ui_idle_tick(ui_idle_t *t, uint32_t now_ms, bool enabled, bool inhibit, uint32_t timeout_ms) {
+    if (inhibit) {
+        t->last_ms = now_ms; /* the timer restarts when the inhibit ends */
+    }
+    uint32_t elapsed = now_ms - t->last_ms;
+    bool future = elapsed >= 0u - UI_IDLE_FUTURE_MS; /* the last input is slightly ahead of this tick (host tour) */
+    bool dim = enabled && !future && elapsed >= timeout_ms;
     bool changed = dim != t->dimmed;
     t->dimmed = dim;
     return changed;

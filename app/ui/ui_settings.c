@@ -219,6 +219,7 @@ static void backlight_change(void *ctx, const wi_value_t *v) {
 
 static void backlight_done(void *ctx, bool ok, const wi_value_t *v) {
     (void)ctx;
+    ui_idle_inhibit(false);
     if (ok) {
         g_ui_state.backlight_pct = (uint8_t)v->number;
         ui_apply_backlight();
@@ -228,8 +229,11 @@ static void backlight_done(void *ctx, bool ok, const wi_value_t *v) {
 
 static void open_backlight_slider(void) {
     /* never fully dark: you could not find the way back */
-    ui_input_open(&(wi_request_t){.kind = WI_K_SLIDER, .title = "Backlight", .done = backlight_done, .change = backlight_change,
-                                  .value = g_ui_state.backlight_pct, .min = 5, .max = 100, .step = 5, .unit = "%"});
+    ui_idle_inhibit(true); /* the preview must stay at the live level */
+    if (!ui_input_open(&(wi_request_t){.kind = WI_K_SLIDER, .title = "Backlight", .done = backlight_done, .change = backlight_change,
+                                       .value = g_ui_state.backlight_pct, .min = 5, .max = 100, .step = 5, .unit = "%"})) {
+        ui_idle_inhibit(false);
+    }
 }
 
 /* Display: a two-level list like Haptics (Backlight opens the slider, the other two rows toggle in place) */
@@ -435,7 +439,9 @@ static void pane_text(int32_t g, char *out, size_t n) {
     }
     case G_DISPLAY:
         if (g_ui_state.autodim) {
-            snprintf(out, n, "Backlight\n%u %%\nDims to %u %% after %s", (unsigned)g_ui_state.backlight_pct, (unsigned)UI_DIM_PCT, ui_autodim_name(g_ui_state.dim_idx));
+            snprintf(out, n, "Backlight\n%u %%\n%s %u %% after %s", (unsigned)g_ui_state.backlight_pct,
+                     g_ui_state.backlight_pct > UI_DIM_PCT ? "Dims to" : "Stays at", (unsigned)ui_backlight_effective(g_ui_state.backlight_pct, true),
+                     ui_autodim_name(g_ui_state.dim_idx));
         } else {
             snprintf(out, n, "Backlight\n%u %%\nAuto-dim off", (unsigned)g_ui_state.backlight_pct);
         }
@@ -599,7 +605,12 @@ static void settings_tick(ui_screen_t *b) {
 static void settings_destroy(ui_screen_t *b) { ui_list_destroy(((settings_t *)b)->list); }
 
 static void list_suspend(ui_screen_t *x) { ui_list_suspend(((settings_t *)x)->list); }
-static void list_resume(ui_screen_t *x) { ui_list_resume(((settings_t *)x)->list); }
+static void list_resume(ui_screen_t *x) {
+    settings_t *s = (settings_t *)x;
+    ui_list_resume(s->list);
+    ui_list_refresh(s->list); /* a detail screen may have changed a value */
+    settings_update_pane(s);
+}
 
 ui_screen_t *ui_screen_settings_create(void) {
     settings_t *s = (settings_t *)ui_screen_new(sizeof *s, "Settings");

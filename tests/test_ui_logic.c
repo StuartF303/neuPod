@@ -181,17 +181,17 @@ TEST(autodim_choices) {
 TEST(idle_dims_at_exactly_the_timeout) {
     ui_idle_t t;
     ui_idle_init(&t, 5000);
-    ASSERT_FALSE(ui_idle_tick(&t, 5000 + 29999, true, 30000));
+    ASSERT_FALSE(ui_idle_tick(&t, 5000 + 29999, true, false, 30000));
     ASSERT_FALSE(t.dimmed);
-    ASSERT_TRUE(ui_idle_tick(&t, 5000 + 30000, true, 30000));
+    ASSERT_TRUE(ui_idle_tick(&t, 5000 + 30000, true, false, 30000));
     ASSERT_TRUE(t.dimmed);
-    ASSERT_FALSE(ui_idle_tick(&t, 5000 + 90000, true, 30000)); /* a transition once, not per tick */
+    ASSERT_FALSE(ui_idle_tick(&t, 5000 + 90000, true, false, 30000)); /* a transition once, not per tick */
 }
 
 TEST(idle_clock_starts_at_init_not_zero) {
     ui_idle_t t;
     ui_idle_init(&t, 600000); /* a long boot */
-    ASSERT_FALSE(ui_idle_tick(&t, 600000, true, 10000));
+    ASSERT_FALSE(ui_idle_tick(&t, 600000, true, false, 10000));
     ASSERT_FALSE(t.dimmed);
 }
 
@@ -199,48 +199,76 @@ TEST(idle_activity_wakes) {
     ui_idle_t t;
     ui_idle_init(&t, 0);
     ASSERT_FALSE(ui_idle_activity(&t, 100)); /* not dimmed: no transition */
-    ASSERT_TRUE(ui_idle_tick(&t, 100 + 15000, true, 15000));
+    ASSERT_TRUE(ui_idle_tick(&t, 100 + 15000, true, false, 15000));
     ASSERT_TRUE(ui_idle_activity(&t, 20000));
     ASSERT_FALSE(t.dimmed);
-    ASSERT_FALSE(ui_idle_tick(&t, 20000 + 14999, true, 15000)); /* the clock restarted */
-    ASSERT_TRUE(ui_idle_tick(&t, 20000 + 15000, true, 15000));
+    ASSERT_FALSE(ui_idle_tick(&t, 20000 + 14999, true, false, 15000)); /* the clock restarted */
+    ASSERT_TRUE(ui_idle_tick(&t, 20000 + 15000, true, false, 15000));
 }
 
 TEST(idle_disabled_never_dims_and_wakes) {
     ui_idle_t t;
     ui_idle_init(&t, 0);
-    ASSERT_FALSE(ui_idle_tick(&t, 1000000, false, 10000));
+    ASSERT_FALSE(ui_idle_tick(&t, 1000000, false, false, 10000));
     ASSERT_FALSE(t.dimmed);
-    ASSERT_TRUE(ui_idle_tick(&t, 1000000, true, 10000));
-    ASSERT_TRUE(ui_idle_tick(&t, 1000001, false, 10000)); /* switched off while dimmed (late settings load) */
+    ASSERT_TRUE(ui_idle_tick(&t, 1000000, true, false, 10000));
+    ASSERT_TRUE(ui_idle_tick(&t, 1000001, false, false, 10000)); /* switched off while dimmed (late settings load) */
     ASSERT_FALSE(t.dimmed);
 }
 
 TEST(idle_timer_change_reevaluates) {
     ui_idle_t t;
     ui_idle_init(&t, 0);
-    ASSERT_TRUE(ui_idle_tick(&t, 20000, true, 10000));
-    ASSERT_TRUE(ui_idle_tick(&t, 20000, true, 60000)); /* longer timeout: no longer idle */
+    ASSERT_TRUE(ui_idle_tick(&t, 20000, true, false, 10000));
+    ASSERT_TRUE(ui_idle_tick(&t, 20000, true, false, 60000)); /* longer timeout: no longer idle */
     ASSERT_FALSE(t.dimmed);
-    ASSERT_TRUE(ui_idle_tick(&t, 60000, true, 60000));
+    ASSERT_TRUE(ui_idle_tick(&t, 60000, true, false, 60000));
 }
 
 TEST(idle_future_activity_is_not_idle) {
     ui_idle_t t;
     ui_idle_init(&t, 1000);
     ui_idle_activity(&t, 1000 + 5 * 300u); /* the tour stamps events ahead of the tick clock */
-    ASSERT_FALSE(ui_idle_tick(&t, 1000, true, 0));
+    ASSERT_FALSE(ui_idle_tick(&t, 1000, true, false, 0));
     ASSERT_FALSE(t.dimmed);
-    ASSERT_TRUE(ui_idle_tick(&t, 1000 + 5 * 300u, true, 0));
+    ASSERT_TRUE(ui_idle_tick(&t, 1000 + 5 * 300u, true, false, 0));
 }
 
 TEST(idle_survives_tick_wrap) {
     ui_idle_t t;
     ui_idle_init(&t, 0xFFFFFF00u);
-    ASSERT_FALSE(ui_idle_tick(&t, 0x00000100u, true, 1000)); /* 512 ms across the wrap */
-    ASSERT_TRUE(ui_idle_tick(&t, 0x00000100u + 488u, true, 1000));
+    ASSERT_FALSE(ui_idle_tick(&t, 0x00000100u, true, false, 1000)); /* 512 ms across the wrap */
+    ASSERT_TRUE(ui_idle_tick(&t, 0x00000100u + 488u, true, false, 1000));
     ui_idle_activity(&t, 0xFFFFFFF0u);
-    ASSERT_FALSE(ui_idle_tick(&t, 0x100u, true, 1000));
+    ASSERT_FALSE(ui_idle_tick(&t, 0x100u, true, false, 1000));
+}
+
+TEST(idle_long_idle_stays_dimmed) {
+    ui_idle_t t;
+    ui_idle_init(&t, 1000);
+    ASSERT_TRUE(ui_idle_tick(&t, 1000 + 10000, true, false, 10000));
+    uint32_t day25 = 25u * 24u * 3600u * 1000u; /* past the int32 limit of about 24.8 days */
+    ASSERT_FALSE(ui_idle_tick(&t, 1000 + day25, true, false, 10000));
+    ASSERT_TRUE(t.dimmed);
+}
+
+TEST(idle_inhibit_holds_and_restarts) {
+    ui_idle_t t;
+    ui_idle_init(&t, 0);
+    ASSERT_TRUE(ui_idle_tick(&t, 20000, true, false, 10000));
+    ASSERT_TRUE(ui_idle_tick(&t, 20000, true, true, 10000)); /* slider opened: wakes */
+    ASSERT_FALSE(ui_idle_tick(&t, 90000, true, true, 10000));
+    ASSERT_FALSE(t.dimmed);
+    ASSERT_FALSE(ui_idle_tick(&t, 90000 + 9999, true, false, 10000)); /* closed: counts from now */
+    ASSERT_TRUE(ui_idle_tick(&t, 90000 + 10000, true, false, 10000));
+}
+
+TEST(idle_future_stamp_window) {
+    ui_idle_t t;
+    ui_idle_init(&t, 0);
+    ui_idle_activity(&t, 59000);
+    ASSERT_FALSE(ui_idle_tick(&t, 0, true, false, 0)); /* 59 s ahead: within the tolerance */
+    ASSERT_FALSE(t.dimmed);
 }
 
 TEST(backlight_effective_level) {
@@ -271,6 +299,9 @@ int main(void) {
     RUN(idle_timer_change_reevaluates);
     RUN(idle_future_activity_is_not_idle);
     RUN(idle_survives_tick_wrap);
+    RUN(idle_long_idle_stays_dimmed);
+    RUN(idle_inhibit_holds_and_restarts);
+    RUN(idle_future_stamp_window);
     RUN(backlight_effective_level);
     return RESULT();
 }

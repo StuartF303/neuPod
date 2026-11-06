@@ -26,6 +26,9 @@
 ui_state_t g_ui_state = {.click_mode = CLICK_HAPTIC, .backlight_pct = 100, .autodim = true, .dim_idx = UI_AUTODIM_DEFAULT_IDX};
 
 static ui_idle_t g_idle;
+static bool g_idle_inhibit;
+
+void ui_idle_inhibit(bool on) { g_idle_inhibit = on; }
 
 void ui_apply_backlight(void) {
     hal_display_backlight((uint8_t)((ui_backlight_effective(g_ui_state.backlight_pct, g_idle.dimmed) * 255u + 50u) / 100u));
@@ -319,7 +322,7 @@ static void kick_haptics(void) {
 
 void ui_frame_tick(uint32_t now_ms) {
     sync_from_settings();
-    if (ui_idle_tick(&g_idle, now_ms, g_ui_state.autodim, ui_autodim_seconds(g_ui_state.dim_idx) * 1000u)) {
+    if (ui_idle_tick(&g_idle, now_ms, g_ui_state.autodim, g_idle_inhibit, ui_autodim_seconds(g_ui_state.dim_idx) * 1000u)) {
         backlight_transition();
     }
     kick_haptics();

@@ -75,6 +75,8 @@ typedef struct {
 extern ui_state_t g_ui_state;
 /** Show the backlight level on the panel: the set level, or the dimmed one while idle. The only place that computes it. */
 void ui_apply_backlight(void);
+/** Hold the auto-dim off while a screen previews the backlight (the slider); the idle time restarts when it is released. */
+void ui_idle_inhibit(bool on);
 /** Remember a changed UI setting (RAM now, the card a moment later: settings_store.h). */
 void ui_state_persist(void);
 

@@ -71,6 +71,7 @@ int ui_signal_class(int bars);
 /* ---- Backlight auto-dim: idle clock and effective level ------------------------------------------- */
 
 #define UI_DIM_PCT 10u          /**< the idle backlight level, absolute; a set level below it is left alone */
+#define UI_IDLE_FUTURE_MS 60000u /**< how far ahead of the tick clock an input stamp may be (the tour spaces events by 300 ms) */
 #define UI_AUTODIM_STEPS 6u     /**< entries of the "Dim after" choice */
 #define UI_AUTODIM_DEFAULT_IDX 2u /**< 30 s */
 
@@ -89,8 +90,9 @@ void ui_idle_init(ui_idle_t *t, uint32_t now_ms);
 /** Input happened at @p now_ms (may be ahead of the tick clock in the host tour). True if that ended a dim. */
 bool ui_idle_activity(ui_idle_t *t, uint32_t now_ms);
 /** Re-evaluate: dimmed exactly when @p enabled and at least @p timeout_ms have passed since the last input (wrap-safe;
- *  a last input in the future is not idle). True if the dimmed state changed. */
-bool ui_idle_tick(ui_idle_t *t, uint32_t now_ms, bool enabled, uint32_t timeout_ms);
+ *  a last input up to UI_IDLE_FUTURE_MS ahead of @p now_ms is not idle). While @p inhibit is set it is never dimmed and the
+ *  clock restarts at @p now_ms. True if the dimmed state changed. */
+bool ui_idle_tick(ui_idle_t *t, uint32_t now_ms, bool enabled, bool inhibit, uint32_t timeout_ms);
 /** Level (percent) to show: the set level, capped at UI_DIM_PCT while dimmed. Never brighter than @p set_pct. */
 uint8_t ui_backlight_effective(uint8_t set_pct, bool dimmed);
 

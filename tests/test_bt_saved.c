@@ -178,7 +178,7 @@ TEST(test_capacity_has_room_for_the_record) {
     settings_init(NULL);
     settings_attach_storage(true);
     ASSERT_EQ(SETTINGS_LOAD_FRESH, settings_load());
-    // the documented worst case is about 39 tags with this record; fill 47 others and it still fits
+    // the documented worst case is about 41 tags with this record; fill 47 others and it still fits
     for (uint32_t i = 0; i < SETTINGS_MAX_ITEMS - 1u; i++) {
         ASSERT_TRUE(settings_put(SETTINGS_TAG('Z', 'Z', (char)('0' + i / 10), (char)('0' + i % 10)), "x", 1));
     }
