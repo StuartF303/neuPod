@@ -1,0 +1,1902 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/ui/">
+      
+      
+        <link rel="prev" href="../reference/">
+      
+      
+        <link rel="next" href="../runtime/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>UI - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#ui-mock-ups" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              UI
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#main-menu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Main menu
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#library-artists" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Library — artists
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#now-playing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Now playing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#album-browser" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Album browser
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implemented-stage-2-home-menu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implemented (stage 2: home menu)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implemented (stage 2: home menu)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#now-playing-art" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Now Playing art
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#not-yet-drawn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not yet drawn
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bluetooth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wifi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../i2c-peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-music-library-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#main-menu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Main menu
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#library-artists" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Library — artists
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#now-playing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Now playing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#album-browser" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Album browser
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implemented-stage-2-home-menu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implemented (stage 2: home menu)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implemented (stage 2: home menu)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#now-playing-art" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Now Playing art
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#not-yet-drawn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not yet drawn
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="ui-mock-ups">UI mock-ups<a class="headerlink" href="#ui-mock-ups" title="Permanent link">&para;</a></h1>
+<p>Text, number, level, choice and date entry with the click wheel is one library: <a href="../ui-input/">Wheel input widgets</a>. Wi-Fi screens: <a href="../wifi/">Wi-Fi</a>.</p>
+<p>Target: the Phase 1 panel, <strong>320×240 landscape</strong>. Each screen is an original drawing at the
+panel's native size (SVG, <code>viewBox="0 0 320 240"</code>); the look follows the classic click-wheel
+player layout — split menu with artwork, blue selection bar — lightly modernised. These are
+design intent, not screenshots of any existing firmware.</p>
+<p>Click-wheel vocabulary used below: <strong>Menu</strong> (top button, goes back), <strong>Select</strong> (centre),
+<strong>Play/Pause</strong> (bottom), <strong>Left</strong> / <strong>Right</strong> (previous / next), <strong>scroll</strong> (finger on the ring).</p>
+<h2 id="main-menu">Main menu<a class="headerlink" href="#main-menu" title="Permanent link">&para;</a></h2>
+<p><img alt="Main menu" src="../assets/ui/main-menu.svg" /></p>
+<ul>
+<li>Scroll moves the selection bar through Music, Podcasts, Photos, Extras, Settings, Shuffle
+  Songs, Now Playing. Scroll acceleration follows the Rockbox constants (4 counts per step,
+  velocity-based acceleration).</li>
+<li><strong>Select</strong> opens the highlighted item. <strong>Menu</strong> does nothing at the top level.</li>
+<li><strong>Play/Pause</strong> toggles playback without leaving the menu; the right pane shows the current
+  track's artwork and title, or a clock when nothing is playing.</li>
+<li><strong>Left</strong> / <strong>Right</strong> skip tracks in the background.</li>
+</ul>
+<h2 id="library-artists">Library — artists<a class="headerlink" href="#library-artists" title="Permanent link">&para;</a></h2>
+<p><img alt="Artists list" src="../assets/ui/library-artists.svg" /></p>
+<ul>
+<li>Full-width list; scroll bar on the right shows position in long lists. Fast scrolling shows a
+  letter overlay (not drawn) so a 100k-track library is navigable.</li>
+<li><strong>Select</strong> descends (artist → albums → tracks); <strong>Menu</strong> ascends one level.</li>
+<li><strong>Right</strong> on an artist jumps to All Albums for that artist; <strong>Left</strong> returns to the previous
+  level without animation.</li>
+<li>The same template serves Albums, Songs, Genres, Composers, Playlists and Podcasts.</li>
+</ul>
+<h2 id="now-playing">Now playing<a class="headerlink" href="#now-playing" title="Permanent link">&para;</a></h2>
+<p><img alt="Now playing" src="../assets/ui/now-playing.svg" /></p>
+<ul>
+<li>Shows artwork (see <a href="#now-playing-art">Now Playing art</a>), title, artist, album, the format badge (e.g. FLAC 24/96, wired, bit-perfect)
+  and the progress bar with elapsed and remaining time.</li>
+<li>Scroll adjusts <strong>volume</strong> by default; a first <strong>Select</strong> switches the scroll to <strong>seek</strong> (bar
+  highlights), a second Select returns to volume. Pressing Select again shows rating / shuffle /
+  repeat options (not drawn).</li>
+<li><strong>Play/Pause</strong> toggles; <strong>Left</strong> / <strong>Right</strong> previous / next track (hold Right to fast-forward).</li>
+<li><strong>Menu</strong> returns to the list the track was chosen from.</li>
+<li>On Bluetooth output the badge reads the negotiated codec (e.g. SBC-XQ, AAC).</li>
+</ul>
+<h2 id="album-browser">Album browser<a class="headerlink" href="#album-browser" title="Permanent link">&para;</a></h2>
+<p><img alt="Album browser" src="../assets/ui/album-browser.svg" /></p>
+<ul>
+<li>Dark full-screen carousel of album artwork; the centre album is enlarged with a reflection.</li>
+<li>Scroll flips through albums with acceleration; <strong>Select</strong> opens the centre album's track
+  list; <strong>Menu</strong> returns to the library.</li>
+<li>This view is the one place the UI uses the panel's colour depth heavily; on the AMOLED
+  candidate the black background also saves power.</li>
+</ul>
+<h2 id="settings">Settings<a class="headerlink" href="#settings" title="Permanent link">&para;</a></h2>
+<p><img alt="Settings" src="../assets/ui/settings.svg" /></p>
+<ul>
+<li>Two-pane: list of settings groups on the left, a live detail pane on the right for the
+  highlighted group (shown: Bluetooth — connected device, codec, battery).</li>
+<li><strong>Select</strong> enters a group; inside, scroll changes the value and Select confirms.</li>
+<li>"Click" is where the piezo / haptic / both / off choice lives (the piezo has no driver yet), and "Haptics" holds the
+  actuator (ERM / LRA) and Calibrate rows; hardware decision in <a href="../requirements/#reused-parts-and-mechanical">Requirements → Reused parts and mechanical</a>.</li>
+<li>"Output" chooses headphone / line / optical / USB when the jack detect cannot decide.</li>
+</ul>
+<h2 id="implemented-stage-2-home-menu">Implemented (stage 2: home menu)<a class="headerlink" href="#implemented-stage-2-home-menu" title="Permanent link">&para;</a></h2>
+<p>Firmware screens in <code>app/ui/</code> (LVGL, light theme as in the mock-ups above; all drawing is original). Rendering
+is partial (two 320x24 strip buffers); the list scrolls with one short animation, everything else is static.
+Nothing persists across a reboot yet (settings are RAM only).</p>
+<p><strong>Common frame.</strong> A status bar on every screen: title in the middle, battery icon and percentage on the right
+("--" when the gauge failed its check; green with a charge symbol while charging, red at 15 % or less), and a
+play/pause glyph slot on the left (empty: nothing plays yet). <strong>Menu</strong> goes back one screen (nothing at the top
+level), <strong>Select</strong> enters. Lists clamp at both ends (no wrap), the selection bar jumps and the list scrolls
+smoothly when the selection leaves the window; a thin scroll bar shows on long lists.</p>
+<p><strong>Scrolling.</strong> The wheel reports counts; 4 counts make one list step, and fast movement multiplies it (2x, 4x, 8x
+when many counts arrive within 150 ms; the constants <code>UI_COUNTS_PER_STEP</code>, <code>UI_ACCEL_*</code> are in
+<code>app/include/runtime_config.h</code>). Each testbed key press is exactly one step.</p>
+<table>
+<thead>
+<tr>
+<th>Screen</th>
+<th>What it does now</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Home</td>
+<td>Left list: Music, Podcasts, Photos, Extras, Settings, Shuffle Songs, Now Playing. Right pane follows the player (polled on every UI tick, and at once when Home comes back on top; the clock and card summary refresh twice a second). Playing a file: the 96 px art box shows the album art thumbnail (the note when there is none), then title (file name when there is no title tag), artist, and a play or pause symbol with the queue position (<code>3 of 12</code>, or just <code>Playing</code> / <code>Paused</code> without a queue; <code>Finished</code> once the last track has ended, and <code>Error</code>, <code>Verifying</code> or <code>Verified</code> for those player states, detail stays on Now Playing). Test tone: note, tone name, <code>Test signal</code>, play symbol. Nothing playing: the artwork placeholder, <code>Nothing playing</code>, the clock (<code>--:--</code> until the time is set) and a card summary (type and size, or <code>No card</code>).</td>
+</tr>
+<tr>
+<td>Music</td>
+<td>Artists, Albums, Songs, Genres, Playlists; each opens an <code>Empty - no library yet</code> list.</td>
+</tr>
+<tr>
+<td>Podcasts, Photos, Shuffle Songs</td>
+<td>Placeholder screens saying what is missing.</td>
+</tr>
+<tr>
+<td>Now Playing</td>
+<td>Live: title, artist and album with track number from the file's tags (the file name if there is no title), a format badge such as <code>FLAC 24/96</code>, <code>MP3 320k</code> or <code>ALAC 16/44.1</code>, <code>Playing</code> / <code>Paused</code> / <code>Finished</code> or the error, elapsed and remaining time with a progress bar, and the volume with a level bar. <strong>The wheel is the volume</strong> (2 dB per step, starts at -30 dB); <strong>Play</strong> (or Select) pauses and resumes, and on <code>Finished</code> (or after a FLAC MD5 check) plays the same file again from the start, with sound; <strong>Right / Left = next / previous track of the queue</strong> (Previous more than 3 s into a track restarts it; Next on the last track stops and the screen goes idle); with more than one track queued the status line reads <code>Playing - 3 of 12</code>; <strong>Menu goes back while the sound continues</strong>. Without anything playing it says <code>Nothing playing</code>. Play/Pause works on every screen.</td>
+</tr>
+<tr>
+<td>Extras</td>
+<td>Files, Test tone.</td>
+</tr>
+<tr>
+<td>Extras, Test tone</td>
+<td>Three rows, each <code>On</code> / <code>Off</code>: <strong>1 kHz tone</strong>, <strong>L/R ident</strong> (1 s left, then 1 s right) and <strong>Scale</strong> (C4 up to C5 and back, looping). Select starts or stops the highlighted one (starting one stops the other); <strong>Left / Right = volume</strong>; the screen shows the volume and the level reaching the DAC. Leaving the screen stops the sound. See <a href="../audio/">Audio</a>.</td>
+</tr>
+<tr>
+<td>Extras, Files</td>
+<td><strong>Read-only</strong> browser of the card: folders first then files, alphabetical, hidden entries skipped (a name starting with a dot, or the FAT hidden / system attribute: <code>System Volume Information</code>, <code>$RECYCLE.BIN</code>; the host build has no such attribute, so only the dot rule applies there), size on the right, a chevron on folders. Select opens a folder, Menu goes up (at the root it leaves). <strong>Select on a <code>.wav</code>, <code>.flac</code>, <code>.mp3</code> or <code>.m4a</code> (ALAC) plays it</strong> and opens Now Playing; the rest of that folder (playable files only, in the order shown, from the chosen one) is queued and plays on by itself, gaplessly when the rate matches; <strong>Right on a <code>.flac</code> verifies its MD5 without sound</strong> (see <a href="../audio/">Audio</a>). Other files show <code>Not a playable file</code> for 3 s; an AAC <code>.m4a</code> opens Now Playing with <code>AAC not supported yet</code>. At most 256 entries per folder are kept (<code>... more (first 256 shown)</code> row after them); names longer than 63 bytes are cut at a character boundary. Directory reads run in the storage task, so the screen shows <code>Loading...</code> and keeps responding; without a working card it says why (<code>Storage unavailable: no card</code>).</td>
+</tr>
+<tr>
+<td>Settings</td>
+<td>Two panes (groups left, live summary right). <strong>About</strong>: version, build hash, platform, uptime, heap free, audio blocks / underruns / jitter, core 1 stack, and the result of every boot check. <strong>Display</strong>: Select opens a three-row list: <strong>Backlight</strong> (Select, then scroll adjusts it in 5 % steps, never below 5 %), <strong>Auto-dim</strong> (Select toggles On/Off, default On) and <strong>Dim after</strong> (Select cycles 10 s / 15 s / 30 s / 1 min / 2 min / 5 min, default 30 s; greyed and inert while Auto-dim is Off); all saved on the card. After the idle time with no input the backlight steps down to 10 % (a set level below 10 % is left alone, idle never brightens); any input restores the set level at once and is delivered to the screen as normal. The idle clock starts when the menu appears. The backlight-off stage is not built yet (<a href="../backlog/">backlog</a> UI-5). <strong>Click</strong>: Select cycles Haptic / Off today (default Haptic, which needs the haptic driver); Piezo and Both join the cycle once a piezo driver exists; saved on the card, and an older saved On/Off still reads as Haptic/Off. <strong>Haptics</strong>: Select opens a two-row list: <strong>Actuator</strong> (Select toggles ERM / LRA; a changed type calibrates itself) and <strong>Calibrate</strong> (Select runs the auto-calibration, about a second; shows Not needed / Not done / Running... / Done / Failed); see <a href="../i2c-peripherals/">I2C peripherals</a>. <strong>Gapless playback</strong>: Select toggles On/Off (default On); saved on the card; Off keeps the auto-advance but with the ordinary stop and start between tracks. <strong>Resume playing</strong>: Select toggles On/Off (default Off); saved on the card. Off: the last track comes back paused at its place. On: if the player was playing when it was last used, it plays on again at boot (if it was paused or stopped, it still comes back paused). <strong>Bluetooth</strong>: status (Off / Starting / On / Scanning / Unavailable with the reason), the local address and <strong>Scan for devices</strong>, which opens the <strong>Devices</strong> screen: it starts a scan as it opens and fills in live; its first row is Stop scanning / Scan again, then the devices found: audio devices (speaker symbol) first with a signal meter (see below), others greyed out, up to 12. <strong>Select on an audio device pairs with it</strong> (<a href="../bluetooth/#pairing-and-the-connection-stage-2a">Bluetooth</a>): the scan stops, the row shows busy dots and "Pairing...", then "Paired, no audio yet" (the device is now remembered; the link is not kept open until audio arrives in a later update, so it may drop by itself to "Not connected") or "Failed: <reason>" (not found, pairing refused, not a headset, timed out, link lost, radio error, busy or not pairing); if the settings store is full the first row says "Can't save: settings full" and the pairing is undone; the first row reads <strong>Cancel pairing</strong> meanwhile, and Menu cancels it. A device that is not an audio device says "Not an audio device"; with a headset already connected it says "Disconnect first" (one headset). Once a headset is remembered, three rows follow <strong>Scan for devices</strong>: its <strong>name</strong> (state on the right, with busy dots while pairing or connecting), <strong>Connect</strong> (reads <strong>Disconnect</strong> while connected and <strong>Cancel</strong> while working; greyed while a scan runs or another link exists) and <strong>Forget</strong> (Select shows "Select again"; a second Select within 4 s forgets the headset and its pairing key). The right-hand pane shows the radio state, the address, the remembered headset's name and its state. Nothing connects by itself at power-up (stage 3). <strong>Wi-Fi</strong>: on/off, status (name, address, signal as a meter), <strong>Scan for networks</strong> (opens the <strong>Networks</strong> screen: it scans as it opens; first row Scan again, then the networks found and the remembered ones, a name with <code>*</code> is remembered; each name once, with its strongest access point; Select on one starts the join flow, Menu goes back), Other network..., time zone, the time (set by hand if there is no network), Wi-Fi while playing; see <a href="../wifi/">Wi-Fi</a>. <strong>Storage</strong>: card type, size, filesystem, mode, free space (computed by the storage task, <code>computing...</code> until done). <strong>Battery</strong>: voltage, charge, rate, state, alerts, gauge status; live, once a second.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="now-playing-art">Now Playing art<a class="headerlink" href="#now-playing-art" title="Permanent link">&para;</a></h3>
+<p>The 112 x 112 box at the top left of Now Playing shows the album art of the track that is playing (the layout is unchanged: title, artist and album to its right,
+progress below, all at 320 x 240).</p>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>What the box shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Track just started, art being found or decoded</td>
+<td>The dark box with a note glyph (the audio always starts first; art never delays it)</td>
+</tr>
+<tr>
+<td>JPEG found</td>
+<td>The picture, kept in proportion and centred, with the dark box as letterbox bars</td>
+</tr>
+<tr>
+<td>No art, PNG, progressive JPEG, damaged JPEG, picture too large (over 5120 px)</td>
+<td>The note glyph</td>
+</tr>
+<tr>
+<td>Nothing playing, a test tone, an error, or still opening</td>
+<td>The note glyph</td>
+</tr>
+</tbody>
+</table>
+<p>Where the picture comes from, in order: the picture inside the file (MP3 ID3v2 <code>APIC</code> / <code>PIC</code>, FLAC <code>PICTURE</code>, MP4 <code>covr</code>; a JPEG is preferred to a PNG, a front cover
+to other types), then <code>cover.jpg</code>, <code>folder.jpg</code>, <code>front.jpg</code> in the track's folder (any letter case; that order). An embedded PNG is skipped without being read, and the
+folder is then tried. A JPEG that is embedded but progressive or damaged also falls back to the folder files. PNG and progressive JPEG need the PSRAM board
+(<a href="../adr/0013-bluetooth-ram-psram/">ADR-0013</a>, amendment of 3 Nov 2026).</p>
+<p>How it works: after the track has started, the storage task (core 0, the only user of the card) decodes the JPEG with TJpgDec straight from the card in 512-byte reads, shrunk by the
+decoder to 1/1, 1/2, 1/4 or 1/8 (the largest shrink that keeps the long side at 64 pixels or more), one MCU row at a time, and averages it into one <strong>64 x 64 RGB565 thumbnail (8 KB of static RAM)</strong>; the
+whole picture is never in RAM. LVGL shows the thumbnail scaled to fit the box (1.75 times for a full-size thumbnail; soft edges are the price of the RAM). While it decodes, the task keeps the audio data ring topped up, sleeps 1 ms
+after every 2 ms of work (so input and UI keep running, the storage task outranks them) and stops as soon as another request is queued (it restarts afterwards). The result is
+kept for the album: a track whose folder, album tag and embedded picture size match the last one shows it at once, without decoding again. A big picture takes
+roughly a second or two on the bench (the card read dominates); the <code>art:</code> line on the UART gives source, size, scale and time. Decoder working memory (about 8.6 KB at most) comes from the
+heap for the length of one decode; if it is not available the note stays. Colour order: the thumbnail is native-order RGB565 like LVGL's draw buffers (the display driver swaps for the panel).</p>
+<p><strong>Click feedback.</strong> Every list step asks the haptic task for a click (ROM effect 3, a gentle click). The request is
+a non-blocking queue write: the UI never waits on the I2C bus, requests closer than 35 ms are dropped, and the
+driver goes back to standby after 2 s without a click or at any error.</p>
+<p><strong>Keys.</strong> UART testbed: <code>w</code>/<code>k</code> up, <code>s</code>/<code>j</code> down, Enter or <code>e</code> Select, <code>m</code> or Backspace Menu, <code>a</code> Left, <code>d</code> Right,
+<code>p</code> or Space Play/Pause. Host window: Up/Down arrows and mouse wheel scroll, Enter Select, Esc/Backspace/<code>m</code> Menu,
+Left/Right, Space/<code>p</code> Play/Pause. The wheel, when it works, sends the same events.</p>
+<p><strong>Signal meter and busy dots.</strong> Wi-Fi network rows, Bluetooth device rows and the Wi-Fi status row show signal as four small bars at the right edge instead of dBm: 4 or 3 bars green, 2 yellow, 1 red (the unlit bars are grey). Wi-Fi: 4 bars at -60 dBm or stronger, 3 down to -70, 2 down to -80, else 1; Bluetooth is 5 dB stronger (-55 / -65 / -75). The thresholds and the 3 dB hysteresis are <code>UI_SIG_*</code> in <code>runtime_config.h</code>; <code>ui_signal_bars()</code> (<code>ui_logic.c</code>, host-tested in <code>test_ui_logic</code>) is a pure function. The Wi-Fi icon in the status bar takes the colour of the joined network's bars and changes only after the signal has moved 3 dB past a threshold, so it does not flicker. A list row whose action is still running (a join started from the Networks list, a Wi-Fi or Bluetooth scan, the radio starting) shows four pulsing dots in the same place: set <code>busy</code> on the row in the list model (<code>ui_list_item_t</code>, alongside <code>bars</code>) for as long as the work lasts and call <code>ui_list_refresh</code> when it changes; the list animates it with one timer that runs only while a visible row is busy. The model owns the end: a Networks join ends when the station is up, the join fails, or <code>UI_BUSY_TIMEOUT_MS</code> (the join deadline) passes.</p>
+<p><strong>Console log (UART).</strong> Every screen push and pop prints <code>ui: screen 'Title' push|pop [-&gt; 'Revealed'] depth=N lvgl_mem=used/totalB</code> (modals too), and every list step prints <code>ui: sel &lt;screen&gt; &lt;index&gt; '&lt;label&gt;'</code>, so the UI can be driven with the testbed keys without seeing the panel. Passwords are never printed: the text widget is not a list.</p>
+<p><strong>Host tour.</strong> <code>neupod --tour --snapshots DIR</code> walks through the screens by script and writes <code>home</code>, <code>music-menu</code>,
+<code>music-empty</code>, <code>extras</code>, <code>files</code>, <code>files-sub</code>, <code>files-many</code>, <code>files-many-end</code>, <code>settings</code>, <code>settings-bt</code>, <code>bt-idle</code>, <code>bt-scanning</code> and <code>bt-found</code> (the Devices screen), <code>bt-pair</code>, <code>about</code>, <code>nowplaying</code>
+(PPM) into <code>DIR</code> (the tour's key script predates the longer Settings list, so several of these names no longer show the screen they are named for; use <code>--tour-bt</code> for Bluetooth);
+<code>neupod --tour-bt --snapshots DIR</code> pairs the first simulated headset and writes <code>settings-bt</code>, <code>bt-idle</code>, <code>bt-found</code>, <code>bt-pairing</code> (busy dots), <code>bt-paired</code> (Devices, Connected), <code>bt-saved</code> (Settings &gt; Bluetooth with the headset rows),
+<code>settings-bt-saved</code> (the Settings pane), <code>bt-disconnected</code>, <code>bt-forget-asks</code>, <code>bt-forgotten</code>, <code>bt-failed</code> (a pairing the simulated car kit refuses; ctest <code>bt_tour</code>); <code>neupod --tour-art --snapshots DIR</code> plays three one-track albums (cover file, JPEG inside the FLAC, PNG inside plus a progressive cover) and writes <code>art-cover</code>, <code>art-embedded</code>, <code>art-none</code> (ctest <code>art_tour</code>, checked by <code>art_snapshot</code>).
+<code>ctest</code> runs it as <code>runtime_smoke</code> against a small fixture card (<code>build/host/fsroot_fixture</code>,
+<code>NEUPOD_FS_ROOT</code>) and writes <code>build/host/snapshots/</code>.</p>
+<h2 id="not-yet-drawn">Not yet drawn<a class="headerlink" href="#not-yet-drawn" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Hold-switch lock overlay, charging screen, USB mass-storage ("Connected") screen.</li>
+<li>Podcasts and Photos browsers; the search screen.</li>
+<li>Letter overlay during fast scroll; rating / shuffle / repeat sub-screens.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,1975 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/adr/0017-music-library-index/">
+      
+      
+        <link rel="prev" href="../0016-gapless-playback-and-play-queue/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>ADR-0017 Music library index - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#adr-0017-music-library-index" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              ADR-0017 Music library index
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../bluetooth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wifi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../i2c-peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proposal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposal
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Proposal">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#on-card-index-immutable-rebuilt-as-a-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On-card index, immutable, rebuilt as a set
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reader-browse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reader (browse)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanner-build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scanner (build)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#grouping-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Grouping rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#playing-from-the-library" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Playing from the library
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decisions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Decisions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#d6-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D6 notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#consequences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Consequences
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proposal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposal
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Proposal">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#on-card-index-immutable-rebuilt-as-a-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On-card index, immutable, rebuilt as a set
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reader-browse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reader (browse)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanner-build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scanner (build)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#grouping-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Grouping rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#playing-from-the-library" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Playing from the library
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decisions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Decisions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#d6-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D6 notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#consequences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Consequences
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="adr-0017-music-library-index">ADR-0017: Music library index<a class="headerlink" href="#adr-0017-music-library-index" title="Permanent link">&para;</a></h1>
+<p>Status: <strong>accepted</strong> (design note 4 Nov 2026; decisions D1–D6 taken 4 Nov 2026, see Decisions)</p>
+<h2 id="context">Context<a class="headerlink" href="#context" title="Permanent link">&para;</a></h2>
+<p>Music &gt; Artists / Albums / Songs / Genres and Shuffle Songs are placeholders (<code>app/ui/ui_screens.c:140-177</code>). Playback today
+comes only from Extras &gt; Files, with the ADR-0016 folder queue. Requirements: browse stays fast with 100k+ tracks, with the
+index cached in PSRAM or on the card (<code>docs/requirements.md</code>, Storage). Constraints:</p>
+<ul>
+<li><strong>RAM.</strong> Main SRAM is 512 KB and fully budgeted (<code>app/os/memory_budget.h</code>): FreeRTOS heap 80 KB, LVGL 72 KB, codec arena
+  99 KB, PCM ring 32 KB. PSRAM (U1 on the Waveshare board, APS6404L) is not fitted yet, and the design must not depend on it.</li>
+<li><strong>Card.</strong> exFAT. The card is written by Finder, Explorer and Linux, so the timestamps on directories can't be trusted to
+  flag changes inside them. Every file I/O goes through the storage task (<code>docs/runtime.md</code>). Playback streaming takes
+  priority over everything else on the card.</li>
+<li><strong>Tags.</strong> <code>audio_tags_t</code> (<code>app/include/meta.h</code>) has title, artist, album and track number only. A library also needs
+  album artist, genre, disc, year, the compilation flag and the sort tags.</li>
+<li><strong>UI.</strong> <code>ui_list</code> already pulls rows from a model on demand (<code>ui_list_model_t</code> with count and get). A 100k-row list
+  creates only the visible rows, so the index has to answer "row <em>i</em> of list <em>L</em>" cheaply. It does not need to fit in RAM.</li>
+</ul>
+<h2 id="proposal">Proposal<a class="headerlink" href="#proposal" title="Permanent link">&para;</a></h2>
+<h3 id="on-card-index-immutable-rebuilt-as-a-set">On-card index, immutable, rebuilt as a set<a class="headerlink" href="#on-card-index-immutable-rebuilt-as-a-set" title="Permanent link">&para;</a></h3>
+<p>The index lives in <code>/.neupod/lib/</code>. Every file is written once per build and never edited in place. Files are
+little-endian, with fixed-size records, and each one starts with <code>magic, version, count, crc32</code>.</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Record</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>manifest.bin</code></td>
+<td>1</td>
+<td>generation, the card fingerprint (D3), counts, CRC of each file, letter-jump tables. <strong>Written last.</strong> A build without a valid manifest doesn't exist</td>
+</tr>
+<tr>
+<td><code>dirs.bin</code> + <code>names.str</code></td>
+<td>8 B</td>
+<td>directory table (parent, name offset), so a path costs a dir id plus a file name rather than the full string</td>
+</tr>
+<tr>
+<td><code>tracks.bin</code></td>
+<td>32 B</td>
+<td>dir id, name offset, title offset, artist / album / genre ids, track, disc, year, duration (s), format/rate/bits code, playable code (0 = playable, else the reason: D6), file size, mtime</td>
+</tr>
+<tr>
+<td><code>strings.str</code></td>
+<td>var</td>
+<td>deduplicated UTF-8 string pool (titles, artist, album and genre names)</td>
+</tr>
+<tr>
+<td><code>artists.bin</code>, <code>albums.bin</code>, <code>genres.bin</code></td>
+<td>16 B</td>
+<td>sorted: name offset, an 8-byte folded sort-key prefix, first child, child count</td>
+</tr>
+<tr>
+<td><code>by_album.u32</code>, <code>by_title.u32</code>, <code>genre_artists.u32</code></td>
+<td>4 B</td>
+<td>track or artist ids in display order: album = (disc, track, title); Songs = title</td>
+</tr>
+</tbody>
+</table>
+<p>The sort orders let each browse level be a contiguous range: artist → its albums → their tracks. Each list screen therefore
+holds just (table, first, count), and row <em>i</em> is one 16 or 32 B record plus one string read.</p>
+<p><strong>Estimated size at 100k tracks:</strong> about 3.2 MB of tracks, about 3 MB of strings, about 1.5 MB of paths and about 1 MB of
+indexes, so <strong>about 9 MB</strong> in total, which is nothing on the card.</p>
+<p><strong>Atomic rebuild.</strong> The scanner writes into <code>/.neupod/lib.tmp/</code>, syncs every file, writes the manifest last, then renames
+<code>lib</code> → <code>lib.old</code>, renames <code>lib.tmp</code> → <code>lib</code>, and deletes <code>lib.old</code>. At boot, if <code>lib</code> is missing or its manifest is bad and
+<code>lib.old</code> is valid, it renames <code>lib.old</code> back. If power is lost at any point, you keep the old library or get the new one,
+never a mix. The writes use the same write-lock path as the settings store (<code>docs/bluetooth.md</code>).</p>
+<h3 id="reader-browse">Reader (browse)<a class="headerlink" href="#reader-browse" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The reader keeps one <code>FIL</code> per open table, with <code>FF_USE_FASTSEEK</code> already on, and a small LRU page cache of 4 × 2 KB pages
+  covering records and strings. The visible screen (10 rows) and the scroll window fit in it.</li>
+<li>Fast-scroll letter jumps (<code>docs/ui.md</code>, Library) use the 27-entry tables in the manifest, with no search.</li>
+<li>With PSRAM fitted, the same cache is simply larger (for example 1 MB), and nothing else changes.</li>
+<li>Reads go through the storage task at a lower priority than stream reads, so browsing never starves playback.</li>
+</ul>
+<h3 id="scanner-build">Scanner (build)<a class="headerlink" href="#scanner-build" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Walk</strong> <code>/Music</code>, or every root folder except <code>/.neupod</code>; TBD with D1. For each audio file, match it against the
+   previous <code>tracks.bin</code> sorted by (dir, name). If size and mtime are unchanged, copy the old record. Otherwise parse it
+   with the existing <code>*_parse</code> functions, after <strong>extending <code>audio_tags_t</code></strong>: TPE2 / aART / ALBUMARTIST, TCON (including
+   ID3v1 <code>(n)</code> genre references) / ©gen / gnre / GENRE, TPOS / disk / DISCNUMBER, year, TCMP / cpil / COMPILATION, and the
+   TSOP / TSO2 / TSOA / TSOT, soar / soaa / sonm and *SORT sort tags. Artwork is unchanged (<code>art_ref_t</code>, not indexed).</li>
+<li><strong>Intern</strong> strings without an in-RAM hash table, which would need about 160 KB at 100k tracks (about 20k distinct names at
+   8 B each). Strings spill to sorted runs on the card instead, and a merge removes the duplicates and assigns the ids.</li>
+<li><strong>Sort.</strong> An external merge sort on keys of (12-byte folded prefix + 4-byte id), with 32 KB runs. Ties beyond the prefix
+   compare the full strings from the pool, which is rare. <strong>Collation:</strong> ASCII case-folded; Latin-1 and Latin Extended-A
+   diacritics folded through a small table; leading "The " ignored, as the iPod does; sort tags win when present; digits
+   come before letters; everything else sorts by code point under "#".</li>
+<li><strong>Write</strong> the tables, then the manifest, then swap (see above).</li>
+</ol>
+<p><strong>Estimated cost, to be measured on the bench:</strong> the walk takes about 0.2–0.4 ms per directory entry. Parsing a new or
+changed file takes about 10–20 ms: open, read the head (pictures are skipped by seeking), and for MP4 walk to <code>moov</code>. A
+first scan of 5k tracks takes about 1.5 min, of 100k tracks about 25–35 min. A rescan after adding one album is the walk
+plus a few files, so seconds for 5k tracks and under a minute for 100k.</p>
+<p><strong>Scanner RAM:</strong> the sort and intern buffers (32 KB) are borrowed from the <strong>codec arena</strong>, which is free while nothing is
+playing; the tag scratch is about 1 KB. That gives a static <code>.bss</code> cost of zero for the scanner, and is why D2 matters.</p>
+<h3 id="grouping-rules">Grouping rules<a class="headerlink" href="#grouping-rules" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Albums are keyed by (album, album artist). If there is no album artist, the artist is used, except for compilations,
+  where the key is (album, "Compilations"). One album spread over several folders stays one album, and two albums called
+  "Greatest Hits" by different artists stay apart.</li>
+<li>Artists lists album artists (D4). Compilations gets its own Music menu entry, as on the iPod.</li>
+<li>With no album tag, the album is the folder name (D5). With no artist, it's "Unknown Artist". With no title, it's the file
+  name, as Now Playing does today.</li>
+</ul>
+<h3 id="playing-from-the-library">Playing from the library<a class="headerlink" href="#playing-from-the-library" title="Permanent link">&para;</a></h3>
+<p>Choosing a song queues its range: the album, the artist's tracks, all songs or the genre. That's a range in one of the
+order tables, so the queue becomes <strong>(table, first, count, position)</strong> instead of a list of names. ADR-0016 gapless and
+next/previous are unchanged; <code>play_queue.c</code> gets a "range source" alongside the folder source.</p>
+<p>Library-wide shuffle (Shuffle Songs over 100k) can't store a permutation: 400 KB of ids. It uses a stateless keyed
+permutation over [0, count) instead: a 4-round Feistel network on the next power of two, re-applied until the result is in
+range (cycle-walking). That's O(1) RAM, reproducible from a seed saved with resume, and visits every song exactly once.
+The <code>feat/shuffle-repeat</code> index-array shuffle stays for folder queues of up to 128 tracks.</p>
+<h2 id="decisions">Decisions<a class="headerlink" href="#decisions" title="Permanent link">&para;</a></h2>
+<p>Taken 4 Nov 2026.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Question</th>
+<th>Decision</th>
+<th>Rejected</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>D1</td>
+<td>Who builds the index</td>
+<td><strong>The device only.</strong> The device is the source of truth and validates the manifest. A PC tool writing the same format stays possible later if first scans of large libraries prove too slow</td>
+<td>A device plus PC tool now (two implementations of tags, collation and "playable" that would drift)</td>
+</tr>
+<tr>
+<td>D2</td>
+<td>When the scanner runs</td>
+<td><strong>Only when nothing is playing</strong>, with a progress screen ("Updating library… 1,234 / 5,000"), cancelled by Play and resumed later. It borrows the codec arena, so it needs no RAM of its own and cannot cause underruns. Revisit once PSRAM is fitted</td>
+<td>In the background during playback (~32 KB more RAM, competes with the stream pump for the card)</td>
+</tr>
+<tr>
+<td>D3</td>
+<td>How changes are noticed at boot</td>
+<td><strong>Fingerprint</strong> (volume serial number plus free-cluster count; walk only if it differs) <strong>plus a manual Settings &gt; Update library</strong> that forces a walk. A miss needs a write that changes no cluster count (for example an in-place retag inside the tag padding)</td>
+<td>A full walk every boot (tens of seconds at 100k); manual only</td>
+</tr>
+<tr>
+<td>D4</td>
+<td>Artists list</td>
+<td><strong>Album artists</strong>, falling back to the track artist; compilations (<code>TCMP</code> / <code>cpil</code>, or album artist "Various Artists") under their own <strong>Compilations</strong> menu, as on the iPod</td>
+<td>Every track artist</td>
+</tr>
+<tr>
+<td>D5</td>
+<td>Missing album tag</td>
+<td><strong>The folder name</strong> as the album, so libraries organised by folder still browse sensibly</td>
+<td>"Unknown Album"</td>
+</tr>
+<tr>
+<td>D6</td>
+<td>Files the device can't play (AAC, more than 2 channels, 32-bit ALAC, bad headers)</td>
+<td><strong>Listed, greyed out.</strong> See the D6 notes below</td>
+<td>Leaving them out, with a count in About</td>
+</tr>
+</tbody>
+</table>
+<h3 id="d6-notes">D6 notes<a class="headerlink" href="#d6-notes" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The scanner indexes every audio file it recognises by extension or header and stores a <strong>playable code</strong> in the track
+  record (0 = playable; otherwise codec unsupported, too many channels, unsupported bit depth, damaged header). Their
+  tags are parsed as normal, so they sort, group and count like any other track.</li>
+<li>Rows for them are drawn greyed out. Select shows the reason ("Can't play: AAC") instead of opening the track.</li>
+<li>Queues skip them: auto-advance and Next / Previous move to the next playable record in the order table, and Shuffle
+  Songs steps the Feistel permutation on past them, just as it already cycle-walks past ids out of range (one 32 B record
+  read per skipped id, through the page cache). Every skip loop is bounded by the queue length, so a queue with no playable
+  record stops with "Nothing playable here".</li>
+<li>Counts (Artists &gt; <em>n</em> songs, About) show playable and total ("1,204 songs, 37 can't play").</li>
+<li>The manifest records a <strong>decoder-set version</strong> (bumped by firmware that adds a codec or lifts a limit). On a mismatch the
+  next idle scan re-checks only the records with a non-zero playable code, so new codec support un-greys tracks without a
+  full rebuild.</li>
+</ul>
+<h2 id="consequences">Consequences<a class="headerlink" href="#consequences" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>RAM budget:</strong> reader about 10 KB (2 KB of open <code>FIL</code>s plus 8 KB of page cache) from the FreeRTOS heap, so check the heap
+  margin (runtime monitor) before merging. Scanner: 0 B static, 32 KB borrowed from the codec arena while idle. Library
+  queue: 16 B instead of a 3 KB name pool. Flash: about 12–15 KB for the scanner, reader and collation table (estimate).</li>
+<li>Phasing, one PR each: <strong>L1</strong> tag extension + walker + index writer + reader, host-tested on a FatFs disk image with a
+  synthetic tree of 100k entries; <strong>L2</strong> the Artists / Albums / Songs / Genres / Compilations screens, letter jump, play
+  from library; <strong>L3</strong> incremental rescan, fingerprint and progress UI; <strong>L4</strong> M3U/M3U8 playlists, Shuffle Songs (Feistel),
+  album browser.</li>
+<li>The Files browser and the folder queue stay as they are, as the fallback while the index is missing or being built.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>

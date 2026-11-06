@@ -1,0 +1,3256 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/design/">
+      
+      
+        <link rel="prev" href="../requirements/">
+      
+      
+        <link rel="next" href="../reference/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Design - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#design" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Design
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#goal-and-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal and scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#target-hardware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target hardware
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compute-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compute options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#connectivity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Connectivity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#display" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Display
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Display">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stock-lcd-plan-b-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stock LCD (plan B only)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audio
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Audio">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stock-audio-codec-reference-for-the-dac-choice" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stock audio codec (reference for the DAC choice)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#power-and-battery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Power and battery
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Power and battery">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stock-power-battery-and-charging-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stock power, battery and charging (reference)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-power-rails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 power rails
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reused-parts-and-mechanical" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reused parts and mechanical
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reused parts and mechanical">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#click-wheel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Click wheel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headphone-hold-switch-flex" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Headphone / hold-switch flex
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-this-means-for-the-phase-1-harness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this means for the Phase 1 harness
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#firmware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Firmware
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Firmware">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#development-environments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Development environments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#project-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project layout
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cost
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prior-art" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prior art
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-items" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open items
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Open items">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#questions-raised-at-export-1-nov-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Questions raised at export (1 Nov 2026)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-1-testbed-wiring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 testbed wiring
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 1 testbed wiring">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pico-2-w-pin-assignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pico 2 W pin assignment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#module-by-module-wiring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module-by-module wiring
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bus-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bus summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decisions-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decisions log
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bluetooth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wifi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../i2c-peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-music-library-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#goal-and-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal and scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#target-hardware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target hardware
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compute-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compute options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#connectivity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Connectivity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#display" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Display
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Display">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stock-lcd-plan-b-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stock LCD (plan B only)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audio
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Audio">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stock-audio-codec-reference-for-the-dac-choice" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stock audio codec (reference for the DAC choice)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#power-and-battery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Power and battery
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Power and battery">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stock-power-battery-and-charging-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stock power, battery and charging (reference)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-power-rails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 power rails
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reused-parts-and-mechanical" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reused parts and mechanical
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reused parts and mechanical">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#click-wheel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Click wheel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headphone-hold-switch-flex" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Headphone / hold-switch flex
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-this-means-for-the-phase-1-harness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this means for the Phase 1 harness
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#firmware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Firmware
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Firmware">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#development-environments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Development environments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#project-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project layout
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cost
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prior-art" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prior art
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-items" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open items
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Open items">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#questions-raised-at-export-1-nov-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Questions raised at export (1 Nov 2026)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-1-testbed-wiring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 testbed wiring
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 1 testbed wiring">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pico-2-w-pin-assignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pico 2 W pin assignment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#module-by-module-wiring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module-by-module wiring
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bus-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bus summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decisions-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decisions log
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="design">Design<a class="headerlink" href="#design" title="Permanent link">&para;</a></h1>
+<p>Exported from the neuPod design doc (Design tab, 27 Oct – 1 Nov 2026). Companion to the
+<a href="../requirements/">Requirements</a>. This page records the engineering decisions: architecture, pin
+budget, interfaces to the reused iPod parts, and what remains to be verified. Phase 1 target is a
+Raspberry Pi Pico 2 W on the bench driving the donor's click wheel, LCD and headphone flex.</p>
+<p>Decisions with lasting consequences are also recorded as <a href="../adr/">ADRs</a>.</p>
+<h2 id="goal-and-scope">Goal and scope<a class="headerlink" href="#goal-and-scope" title="Permanent link">&para;</a></h2>
+<p>Build the firmware and the replacement logic board in two phases:</p>
+<ol>
+<li><strong>Phase 1 — bench testbed.</strong> A Pico 2 W on a breadboard with off-the-shelf breakouts (display,
+   microSD, I²S DAC, fuel gauge, haptic driver) and, once measured and broken out, the donor's own
+   click wheel and headphone/hold flex. Every driver written here must port unchanged to the final
+   board through the HAL.</li>
+<li><strong>Phase 2 — custom board.</strong> An RP2350B (or ESP32-S3) board to the mid-frame's outline, with the
+   final display, DAC, charger and radio.</li>
+</ol>
+<p><img alt="System block diagram" src="../assets/diagrams/system-block.svg" /></p>
+<h2 id="target-hardware">Target hardware<a class="headerlink" href="#target-hardware" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Block</th>
+<th>Phase 1 (bench)</th>
+<th>Final board</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Compute</td>
+<td>Pico 2 W (RP2350A, 26 GPIO, 4 MB flash, no PSRAM)</td>
+<td>RP2350B + 8 MB APS6404L PSRAM (QSPI CS1) + 16 MB W25Q128 flash</td>
+</tr>
+<tr>
+<td>Radio</td>
+<td>CYW43439 on Pico 2 W via internal SPI (uses GP23/24/25/29 — not available to us)</td>
+<td>Not a bare CYW43439; RM2 module or ESP32 — open (<a href="../adr/0007-bluetooth-audio-path/">ADR-0007</a>)</td>
+</tr>
+<tr>
+<td>Display</td>
+<td>Adafruit 2.0" 320×240 IPS TFT (ST7789) on SPI1, landscape — see <a href="../wiring-phase1/">wiring</a></td>
+<td>ER-TFT024IPS-3 (or RM690B0 AMOLED), 8080-16 via PIO if pins allow</td>
+</tr>
+<tr>
+<td>Storage</td>
+<td>microSD, SDIO 4-bit via PIO on GP2–7 (<a href="../adr/0006-storage-microsd-sdio/">ADR-0006</a>; SPI mode is the fallback)</td>
+<td>SDIO 4-bit</td>
+</tr>
+<tr>
+<td>Audio</td>
+<td>Pimoroni Pico Audio Pack: PCM5100A + PAM8908 (I²S on GP9–11, GP22 = XSMT, active low)</td>
+<td>ES8311 / ES8388 / PCM5102A, MCLK provided (<a href="../adr/0012-audio-codec-final-board/">ADR-0012</a>)</td>
+</tr>
+<tr>
+<td>Input</td>
+<td>Donor click wheel via FPC breakout; hold switch from headphone flex</td>
+<td>Same</td>
+</tr>
+<tr>
+<td>Power</td>
+<td>USB from the Pico, Micro-Lipo (MCP73831) + MAX17048 for battery tests</td>
+<td>BQ25895 (0x6A) + fuel gauge, USB-C; SD VDD load switch</td>
+</tr>
+<tr>
+<td>USB</td>
+<td>Pico's native USB (TinyUSB: MSC + CDC)</td>
+<td>Native USB on USB-C</td>
+</tr>
+</tbody>
+</table>
+<h2 id="compute-options">Compute options<a class="headerlink" href="#compute-options" title="Permanent link">&para;</a></h2>
+<p>Available: GP0–GP22 and GP26–GP28 = <strong>26 GPIO</strong> (GP23/24/25/29 are consumed by the wireless module). GP26–28 are the only ADC-capable pins.</p>
+<table>
+<thead>
+<tr>
+<th>Interface</th>
+<th>Signals</th>
+<th>Pins</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LCD (SPI, 4-wire)</td>
+<td>SCK, MOSI, CS, DC, RST, backlight PWM</td>
+<td>6</td>
+<td>MISO omitted; ~19 fps full-frame at 62.5 MHz SPI, partial updates for UI. 8-bit 8080 (12–13 pins) does <strong>not</strong> fit on the 2 W alongside everything else</td>
+</tr>
+<tr>
+<td>microSD (SDIO 4-bit, PIO)</td>
+<td>CLK, CMD, D0–D3</td>
+<td>6</td>
+<td>Fallback: SPI mode on SPI0 with its own CS = 4 pins (D1/D2 become CD/unused)</td>
+</tr>
+<tr>
+<td>I²S audio</td>
+<td>BCLK, LRCLK, DOUT</td>
+<td>3</td>
+<td>PIO I²S; the PCM5100A needs no MCLK. Final board adds MCLK from <code>clk_gpout</code> (+1)</td>
+</tr>
+<tr>
+<td>I²C (shared bus)</td>
+<td>SDA, SCL</td>
+<td>2</td>
+<td>DAC control, fuel gauge, charger, haptic driver, future touch</td>
+</tr>
+<tr>
+<td>Click wheel</td>
+<td>Serial data, clock, enable/power, (optional extra)</td>
+<td>3–4</td>
+<td>Pinout and protocol to be confirmed from Rockbox <code>s5l8702/ipod6g</code> wheel driver and a logic-analyser capture of the stock board</td>
+</tr>
+<tr>
+<td>Headphone/hold flex</td>
+<td>Hold switch, headphone detect</td>
+<td>2</td>
+<td>Remote/accessory lines (2) left unconnected in Phase 1</td>
+</tr>
+<tr>
+<td>Battery / power</td>
+<td>Thermistor (ADC), charger INT or PGOOD</td>
+<td>2</td>
+<td>Thermistor on GP26–28</td>
+</tr>
+<tr>
+<td>Haptic (optional)</td>
+<td>Enable/trigger</td>
+<td>1</td>
+<td>DRV2605L on I²C</td>
+</tr>
+<tr>
+<td>Debug UART</td>
+<td>TX, RX</td>
+<td>2</td>
+<td>Optional — USB CDC can replace it once USB is up</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td></td>
+<td><strong>27–28 with everything</strong></td>
+<td><strong>24</strong> with SD in SPI mode and no UART — fits. SDIO + no haptic + no UART = 25 — fits</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Conclusion:</strong> the Pico 2 W works for Phase 1 if the LCD is SPI and either SD is SPI or haptics/UART are dropped. There is no headroom for a parallel LCD bus. The final board (RP2350B, 48 GPIO) lifts this: 8080-16 LCD (20 pins) + SDIO (6) + I²S with MCLK (4) + I²C (2) + wheel (4) + flex (4) + power (3) + haptic (1) + radio SPI (5 if CYW43439) ≈ 49 — so even the B variant is tight with a 16-bit bus; 8080-8 (12 pins) is the likely final choice.</p>
+<p>The application layer (LVGL UI, FatFs, codecs, library logic) is portable C. What is not portable is the radio and USB stack, and two requirements constrain the chip: classic Bluetooth A2DP (AirPods, most headphones) and USB mass storage.</p>
+<table>
+<thead>
+<tr>
+<th>Chip</th>
+<th>A2DP source</th>
+<th>Native USB device</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RP2350 + CYW43439</td>
+<td>Yes (BTstack; Sprout)</td>
+<td>Yes</td>
+<td>Current plan; 150 MHz M33 + PIO is enough</td>
+</tr>
+<tr>
+<td>ESP32 (original, WROVER-E)</td>
+<td>Yes (ESP-IDF / ESP-ADF)</td>
+<td>No</td>
+<td>Strong audio stack, 240 MHz, PSRAM; needs Wi-Fi-only transfer or a USB-SD bridge/mux</td>
+</tr>
+<tr>
+<td>ESP32-S3</td>
+<td>No (BLE only)</td>
+<td>Yes</td>
+<td>Best MCU on paper; needs an external A2DP transmitter</td>
+</tr>
+<tr>
+<td>ESP32-P4 + C6</td>
+<td>No</td>
+<td>Yes</td>
+<td>Overkill; C6 is BLE only</td>
+</tr>
+<tr>
+<td>STM32H7 / nRF / i.MX RT</td>
+<td>No radio</td>
+<td>Yes</td>
+<td>External Wi-Fi/BT module either way</td>
+</tr>
+</tbody>
+</table>
+<p>Escape hatch: a dedicated Bluetooth audio transmitter IC/module on I²S (Qualcomm QCC30xx/QCC51xx, Microchip BM83, BK3266-class) removes the A2DP constraint, adds aptX/LDAC, and makes the ESP32-S3 the strongest alternative. Decision: RP2350 + CYW43439 for Phase 1; keep the radio behind an interface so the ESP32-S3 + external A2DP route stays open for the final board.</p>
+<h2 id="connectivity">Connectivity<a class="headerlink" href="#connectivity" title="Permanent link">&para;</a></h2>
+<p><strong>Effect of an external Bluetooth audio module (Qualcomm QCC3008/3040/5125, Microchip BM83):</strong> A2DP and codec negotiation (AAC, aptX HD, some LDAC) move off the MCU; it streams I²S and controls the module over UART. That removes the RP2350's main advantage (BTstack A2DP) and makes the ESP32-S3 the better host (240 MHz, octal PSRAM, native USB, hardware QSPI for the AMOLED, ESP-ADF).</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>A: RP2350 + CYW43439</th>
+<th>B: ESP32-S3 + QCC module</th>
+<th>C: RP2350 + QCC module</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BT codecs</td>
+<td>SBC / SBC-XQ</td>
+<td>AAC, aptX HD, (LDAC)</td>
+<td>AAC, aptX HD, (LDAC)</td>
+</tr>
+<tr>
+<td>Wi-Fi</td>
+<td>CYW43439</td>
+<td>On-chip</td>
+<td>CYW43439</td>
+</tr>
+<tr>
+<td>AMOLED QSPI</td>
+<td>PIO, reduced fps</td>
+<td>Native peripheral</td>
+<td>PIO, reduced fps</td>
+</tr>
+<tr>
+<td>Extra parts</td>
+<td>None</td>
+<td>QCC module + antenna</td>
+<td>QCC module + CYW43439 (two radios)</td>
+</tr>
+<tr>
+<td>Firmware</td>
+<td>Pico SDK + BTstack</td>
+<td>ESP-IDF + ESP-ADF</td>
+<td>Pico SDK, no BT stack</td>
+</tr>
+<tr>
+<td>Power</td>
+<td>Lowest</td>
+<td>Moderate</td>
+<td>Moderate</td>
+</tr>
+</tbody>
+</table>
+<p>Bench test to decide: Pico 2 W running BTstack SBC-XQ vs a QCC3008 transmitter board (~£8, AliExpress/eBay) or BM83 eval module fed from the Audio Pack, both paired to AirPods.</p>
+<h2 id="storage">Storage<a class="headerlink" href="#storage" title="Permanent link">&para;</a></h2>
+<p>microSD over <strong>SDIO 4-bit on PIO</strong> (GP2–GP7 on the testbed), FatFs with exFAT, cards up to 2 TB.
+SPI mode is the fallback (CLK = SCK, CMD = MOSI, DAT0 = MISO, DAT3 = CS), which frees two GPIOs
+for the hold switch and headphone detect on the Pico 2 W. The card and the display sit on
+different buses so a frame refresh and an audio-buffer fill can run concurrently on DMA. See
+<a href="../requirements/#storage">Requirements → Storage</a>.</p>
+<h2 id="display">Display<a class="headerlink" href="#display" title="Permanent link">&para;</a></h2>
+<p>Phase 1 uses the Adafruit 2.0" 320×240 IPS TFT (ST7789) on SPI1 in landscape — see
+<a href="../adr/0002-display-st7789-spi-phase1/">ADR-0002</a> and the <a href="../wiring-phase1/">wiring page</a>. The
+final-board candidates (EastRising ER-TFT024IPS-3 and the 2.4" RM690B0 AMOLED) are in
+<a href="../requirements/#display">Requirements → Display</a>.</p>
+<h3 id="stock-lcd-plan-b-only">Stock LCD (plan B only)<a class="headerlink" href="#stock-lcd-plan-b-only" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Bus</td>
+<td>8080-series parallel, 18-bit data bus physically (D0–D17) plus CS, RS/DC, WR, RD, RESET, TE (tearing-effect) and a 2-bit panel ID</td>
+<td><code>lcd-s5l8702.c</code></td>
+</tr>
+<tr>
+<td>Pixel transfers</td>
+<td>RGB565, one transfer per pixel, on D[17:10] + D[8:1] ("Type II" 16-bit wiring — D0 and D9 unused for data)</td>
+<td><code>lcd-s5l8702.c</code></td>
+</tr>
+<tr>
+<td>Panel types</td>
+<td>Four supplier variants, read from GPIO 6.4/6.5 at boot. Types 0 and 1: 8-bit MIPI-DCS command set (ILI9340-like) on D[8:1] — <code>0x2A/0x2B</code> window, <code>0x2C</code> memory write, <code>0x11/0x29</code> wake, <code>0x28/0x10</code> sleep, <code>0x3A=0x06</code> 18-bit pixel format, <code>0x35</code> TE on. Types 2 and 3: 16-bit register set (ILI9320/9326-like) — <code>0x200/0x201</code> GRAM address, <code>0x202</code> write, <code>0x210–0x213</code> window; full init and gamma tables are in <code>lcd-6g.c</code></td>
+<td><code>lcd-6g.c</code></td>
+</tr>
+<tr>
+<td>Timing</td>
+<td>Rockbox sets <code>LCD_PHTIME</code> 0x11 for normal, 0x33 for ID reads — i.e. a slow bus is tolerated; PIO can meet it easily</td>
+<td><code>lcd-s5l8702.c</code></td>
+</tr>
+<tr>
+<td>Backlight</td>
+<td>White-LED string driven by the PMU's boost LED driver (regs 0x28 brightness, 0x29 on/off, 0x2A OCP 500 mA, 0x2B dim step). <strong>Needs a boost LED driver on our board</strong>; string voltage to measure</td>
+<td><code>backlight-6g.c</code></td>
+</tr>
+<tr>
+<td>Pin cost</td>
+<td>≥ 22 GPIO — rules it out on the Pico 2 W; viable only on the RP2350B board with an 8-bit command path and PIO</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Connector</td>
+<td>FPC pin count/pitch <strong>to measure</strong>; ID pins must be read to pick the init sequence</td>
+<td>measure</td>
+</tr>
+</tbody>
+</table>
+<h2 id="audio">Audio<a class="headerlink" href="#audio" title="Permanent link">&para;</a></h2>
+<p><img alt="Audio signal flow" src="../assets/diagrams/audio-signal-flow.svg" /></p>
+<h3 id="stock-audio-codec-reference-for-the-dac-choice">Stock audio codec (reference for the DAC choice)<a class="headerlink" href="#stock-audio-codec-reference-for-the-dac-choice" title="Permanent link">&para;</a></h3>
+<p>Stock part is a Cirrus CS42L55 at I²C address 0x94 (8-bit), I²S from the SoC, reset on GPIO 3.3, master clock from the SoC (<code>CLKCON3</code>), analogue rail "Vcodec" 1.8 V from PMU LDO3 (2.4 V when recording). The CS43131 (its DAC-only successor) was the original plan; it is dropped for stock reasons, see <a href="../adr/0012-audio-codec-final-board/">ADR-0012</a>.</p>
+<p>The audio quality policy, the Bluetooth codec table and the recording requirement are in
+<a href="../requirements/#audio">Requirements → Audio</a> and <a href="../adr/0003-audio-quality-policy/">ADR-0003</a>.</p>
+<h2 id="power-and-battery">Power and battery<a class="headerlink" href="#power-and-battery" title="Permanent link">&para;</a></h2>
+<p><img alt="Power tree" src="../assets/diagrams/power-tree.svg" /></p>
+<h3 id="stock-power-battery-and-charging-reference">Stock power, battery and charging (reference)<a class="headerlink" href="#stock-power-battery-and-charging-reference" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Stock</th>
+<th>Our equivalent</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PMU</td>
+<td>NXP PCF50635 ("D1671"): LDOs, backlight boost, ADC, hold/EXTON inputs, standby/wake</td>
+<td>Discrete: buck + LDOs, LED boost, fuel gauge</td>
+</tr>
+<tr>
+<td>Charger</td>
+<td>LTC4066 with HPWR (100/500 mA), SUSP, CLPROG (current doubling) GPIOs; battery charge limited to ~330–340 mA by RPROG</td>
+<td>BQ25895/BQ24074 with power-path; set charge current for the chosen cell</td>
+</tr>
+<tr>
+<td>Battery sense</td>
+<td>PMU ADC <code>BATSNS</code>, 10-bit, averaged</td>
+<td>Fuel gauge (BQ27441/MAX17048) or ADC divider</td>
+</tr>
+<tr>
+<td>Battery connector</td>
+<td>3-pin (cell+, thermistor, cell−) <strong>to measure</strong> pitch</td>
+<td>Same, or JST for a raw cell</td>
+</tr>
+<tr>
+<td>USB</td>
+<td>D+/D− routed to PMU ADC to detect charger type; USB insert on GPIO 12.3</td>
+<td>Native USB; CC pulldowns</td>
+</tr>
+<tr>
+<td>FireWire/dock power</td>
+<td>PMU EXTON input</td>
+<td>Not needed</td>
+</tr>
+<tr>
+<td>Storage</td>
+<td>1.8" ATA over 40-pin ZIF, power-gated via PMU</td>
+<td>microSD</td>
+</tr>
+<tr>
+<td>Dock accessory serial</td>
+<td>UART on the 30-pin (iPod Accessory Protocol) + accessory-ID resistor via PMU ADC</td>
+<td>Dropped (USB-C replaces the dock)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="phase-1-power-rails">Phase 1 power rails<a class="headerlink" href="#phase-1-power-rails" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Bench power:</strong> Pico's USB-C (VBUS 5 V) → VSYS → on-board buck-boost → 3V3. Budget on 3V3: SD ~100 mA peak, Audio Pack ~50 mA, I²C boards &lt;5 mA, CYW43439 up to ~300 mA bursts. Keep the TFT on VSYS.</li>
+<li><strong>Battery test:</strong> LiPo → MAX17048 → Micro-Lipo charger (charges from the charger's own USB-C) → Schottky → VSYS. With both USBs plugged in, the Pico runs from whichever is higher; the diode keeps them apart.</li>
+<li>All grounds common; star them at the Pico GND pins.</li>
+</ul>
+<h2 id="reused-parts-and-mechanical">Reused parts and mechanical<a class="headerlink" href="#reused-parts-and-mechanical" title="Permanent link">&para;</a></h2>
+<p>Source: Rockbox git, <code>firmware/target/arm/s5l8702/</code> (<code>lcd-s5l8702.c</code>, <code>ipod6g/lcd-6g.c</code>, <code>ipod/button-clickwheel.c</code>, <code>ipod6g/pmu-6g.c</code>, <code>backlight-6g.c</code>, <code>cscodec-6g.c</code>, <code>mikey-6g.c</code>, <code>power-6g.c</code>, <code>adc-6g.c</code>), plus the community 5G click-wheel teardown for the physical layer. What follows is what our board must replicate for each reused part; items marked <strong>measure</strong> still need the donor.</p>
+<h3 id="click-wheel">Click wheel<a class="headerlink" href="#click-wheel" title="Permanent link">&para;</a></h3>
+<p>The wheel is a self-contained touch controller (a Cypress PSoC on the 5G; same protocol family on the 6G) that streams 32-bit frames to the host. The S5L8702 uses a dedicated "WHEEL" peripheral on four port-14 pins (<code>PCON14</code> bits 8–23, alt-function 2); on our board this is a PIO state machine or a GPIO interrupt.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Lines to the host</td>
+<td>CLK (wheel → host, open-drain, ~53 kHz), SDO (wheel → host, open-drain), SDI (host → wheel), plus a 4th line the SoC configures with the other three — likely WAKE or enable. 18 kΩ pull-ups on the 5G flex</td>
+<td>5G teardown; Rockbox <code>PCON14</code> 4-pin config</td>
+</tr>
+<tr>
+<td>Supply</td>
+<td>Wheel has its own LDO (3.0 V out); fed from the iPod system rail (3.3–4.2 V). 3.3 V from our board is fine</td>
+<td>5G teardown</td>
+</tr>
+<tr>
+<td>Frame</td>
+<td>32 bits, LSB first, clocked by the wheel. Valid frame: <code>(status &amp; 0x800000FF) == 0x8000001A</code>. Bits 8–12 = Select, Right, Left, Play, Menu (1 = pressed). Bits 16–22 = finger position 0–95 (3.75°/count, clockwise, 0 at Menu). Bit 30 = finger on wheel. Bit 31 always set</td>
+<td>Rockbox <code>button-clickwheel.c</code></td>
+</tr>
+<tr>
+<td>Host → wheel</td>
+<td>On init and after Hold is released the host sends <code>0x8000023A</code>; the wheel replies with a <code>0x8000023A</code>-type frame carrying button state in bits 16–20. That is the only host transmission Rockbox makes</td>
+<td>Rockbox <code>s5l_clickwheel_init()</code></td>
+</tr>
+<tr>
+<td>Hold behaviour</td>
+<td>On Hold, Rockbox stops the wheel controller and drives the 4 lines as GPIO (low); on release it re-inits. We should power-gate or idle the wheel the same way for battery life</td>
+<td>Rockbox <code>button_read_device()</code></td>
+</tr>
+<tr>
+<td>Scroll handling</td>
+<td>96 counts/rev; Rockbox uses 4 counts per list step, velocity-based acceleration, 150 ms "untouched" debounce, 250 ms repeat timeout. Reuse these constants</td>
+<td>Rockbox</td>
+</tr>
+<tr>
+<td>Connector</td>
+<td>5G: 13-pin 0.3 mm FPC (DDK FF12-13A-R11AL-3H). <strong>6G Classic: pin count and pitch to measure</strong> on the donor</td>
+<td>5G teardown; measure</td>
+</tr>
+<tr>
+<td>Phase 1 plan</td>
+<td>Breakout the FPC; probe CLK/SDO on the stock board with a logic analyser to confirm which 6G pins are CLK, SDO, SDI and the 4th line; then PIO receiver on the Pico</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<h3 id="headphone-hold-switch-flex">Headphone / hold-switch flex<a class="headerlink" href="#headphone-hold-switch-flex" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Hold switch</td>
+<td>Not on a SoC GPIO: it goes to the PMU's GPIO2 (PCF50635 <code>GPIOSTAT</code>) with an interrupt. On our board: plain GPIO with pull-up, active-low = locked</td>
+<td><code>pmu-6g.c</code>, <code>button_hold()</code></td>
+</tr>
+<tr>
+<td>Headphone detect</td>
+<td>SoC GPIO 10.6, high when a plug is inserted</td>
+<td><code>headphones_inserted()</code></td>
+</tr>
+<tr>
+<td>Inline remote / mic ("Mikey")</td>
+<td>The flex carries an <strong>I²C-controlled chip at address 0x72</strong> that handles mic bias, Apple inline-remote volume/centre buttons and accessory ID. Needs I²C (shared bus) + mic bias from the codec rail. Register map is in <code>mikey-6g.c</code> (reg0 mode 0x2F = remote mode; reg4 centre button; reg5 vol ± events). Optional for us, but it means the flex has SDA/SCL on it</td>
+<td><code>mikey-6g.c</code></td>
+</tr>
+<tr>
+<td>Audio lines</td>
+<td>L, R, GND from the codec's headphone amp; mic line to Mikey</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Connector</td>
+<td>ZIF; pin count/pitch <strong>to measure</strong></td>
+<td>measure</td>
+</tr>
+</tbody>
+</table>
+<h3 id="what-this-means-for-the-phase-1-harness">What this means for the Phase 1 harness<a class="headerlink" href="#what-this-means-for-the-phase-1-harness" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Click wheel: 4 lines + 3.3 V + GND. Pull-ups to 3.3 V on CLK/SDO (18 kΩ). PIO clocked-serial receiver; one GPIO for the host init packet.</li>
+<li>Hold + headphone detect: two GPIO inputs with pull-ups.</li>
+<li>I²C bus: Mikey (0x72) on the headphone flex if we want the inline remote; CS43131 and the fuel gauge later.</li>
+<li>Stock LCD: skip on the Pico 2 W. Use the Adafruit 2.0" ST7789 over SPI1 (the ER-TFT024IPS-3 is the final-board candidate).</li>
+<li>No change to the earlier pin budget except the wheel is confirmed as 4 lines, not 3.</li>
+</ol>
+<h2 id="firmware">Firmware<a class="headerlink" href="#firmware" title="Permanent link">&para;</a></h2>
+<h3 id="development-environments">Development environments<a class="headerlink" href="#development-environments" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Environment</th>
+<th>What runs there</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Application (UI, library index, playback logic, codecs, FatFs)</td>
+<td>Host-native build (<code>PICO_PLATFORM=host</code>, LVGL SDL backend, FatFs on a disk-image file, SDL audio)</td>
+<td>Day-to-day development and unit tests; wheel mapped to mouse/keys</td>
+</tr>
+<tr>
+<td>Drivers (ST7789 SPI/PIO, click-wheel PIO receiver, SD, I²C)</td>
+<td>Wokwi (RP2350 / Pico 2 simulation with PIO, SPI, I²C, ST7789 part); Renode as RP2350 support matures</td>
+<td>Driver bring-up before hardware; scripted wheel-frame injection</td>
+</tr>
+<tr>
+<td>Radio, USB, audio, power</td>
+<td>Pico 2 W + Debug Probe, then the custom board</td>
+<td>BTstack A2DP, CYW43439, TinyUSB, I²S/DAC, charger/fuel gauge — no useful emulation</td>
+</tr>
+</tbody>
+</table>
+<p>Repo layout to support this: <code>app/</code> (portable C), <code>hal/host/</code> and <code>hal/rp2350/</code>, <code>tests/</code> (host), <code>tools/</code> (PC-side sync/updater, C# welcome here).</p>
+<p><strong>Project name: neuPod.</strong> Firmware repo at <code>~/projects/neuPod</code> on the bench Linux box (SDK and tools shared under <code>~/pico</code>: pico-sdk ≥ 2.1, pico-extras, pico-playground, picotool, OpenOCD with CMSIS-DAP). Build with <code>PICO_BOARD=pico2_w</code>, <code>PICO_PLATFORM=rp2350-arm-s</code>; flash over the Debug Probe with OpenOCD; UART console via the Probe at 115200. Editing via VS Code Remote-SSH + Claude Code on the box.</p>
+<h3 id="project-layout">Project layout<a class="headerlink" href="#project-layout" title="Permanent link">&para;</a></h3>
+<p>The firmware repo is this repository (<code>~/projects/neuPod</code> on the bench Linux box). SDK and
+tools are shared under <code>~/pico</code>: pico-sdk ≥ 2.1, pico-extras, pico-playground, picotool, OpenOCD
+with CMSIS-DAP. Build with <code>PICO_BOARD=pico2_w</code>, <code>PICO_PLATFORM=rp2350-arm-s</code>; flash over the
+Debug Probe with OpenOCD; UART console via the Probe at 115200. Layout: <code>app/</code> (portable C),
+<code>hal/include/</code> (HAL headers), <code>platforms/rp2350/</code>, <code>platforms/esp32s3/</code>, <code>hal/host/</code> (SDL build),
+<code>tests/</code>, <code>tools/</code>, <code>boards/</code>. See <a href="../adr/0005-firmware-architecture/">ADR-0005</a>.</p>
+<h2 id="cost">Cost<a class="headerlink" href="#cost" title="Permanent link">&para;</a></h2>
+<p>The parts and prototype-spin estimates are in <a href="../requirements/#cost">Requirements → Cost</a>; the
+supplier list is on the <a href="../reference/">Reference</a> page.</p>
+<h2 id="prior-art">Prior art<a class="headerlink" href="#prior-art" title="Permanent link">&para;</a></h2>
+<p>See <a href="../requirements/#prior-art">Requirements → Prior art</a>. The Rockbox <code>ipod6g</code> target is the
+primary source for every reused-part interface on this page.</p>
+<h2 id="open-items">Open items<a class="headerlink" href="#open-items" title="Permanent link">&para;</a></h2>
+<ul>
+<li>[x] Pull the Rockbox ipod6g wheel, LCD, PMU and codec drivers and record the interface requirements (section 4)</li>
+<li>[ ] Measure the 6G click-wheel connector (pin count, pitch) and map CLK / SDO / SDI / 4th line with a logic analyser on the stock board</li>
+<li>[ ] Measure the headphone flex and battery connectors (pin count, pitch); confirm which flex pins are SDA/SCL for Mikey</li>
+<li>[ ] Measure the stock LCD FPC and backlight string voltage (plan B only)</li>
+<li>[ ] Order FPC breakouts to match the measured pitches</li>
+<li>[x] Decide SD mode for Phase 1: SDIO 4-bit on GP2–7 (<a href="../adr/0006-storage-microsd-sdio/">ADR-0006</a>)</li>
+<li>[ ] Prove BTstack A2DP source to AirPods on the Pico 2 W</li>
+<li>
+<p>[ ] Order: Pico 2 W (or Plus 2 W), Debug Probe, Adafruit 2.0" 320×240 IPS TFT (ST7789), Pimoroni Pico Audio Pack, SD breakout, FPC breakout assortment; ER-TFTM024IPS-3 module for final-panel evaluation</p>
+</li>
+<li>
+<p>[ ] 3D-scan the mid-frame, original logic board, thin back and (when bought) thick back on the Revopoint Metro X (matte spray on chrome/steel/gloss connectors); flatbed-scan the bare board at ≥600 dpi for the 2D outline and hole centres; keep STL + DXF with the design files</p>
+</li>
+<li>
+<p>[ ] <strong>Decide click feedback before board commit:</strong> piezo (authentic, stock approach), LRA/ERM via DRV2605L (Moonlit-style haptic), or both selectable — see Requirements → Reused parts</p>
+</li>
+</ul>
+<h3 id="questions-raised-at-export-1-nov-2026">Questions raised at export (1 Nov 2026)<a class="headerlink" href="#questions-raised-at-export-1-nov-2026" title="Permanent link">&para;</a></h3>
+<p><strong>Click wheel</strong></p>
+<ul>
+<li>[ ] Mapping of CLK / SDO / SDI / 4th line to GP19 / GP26 / GP27 / GP28: <strong>not yet measured.</strong>
+  The design doc's working assumption is GP19 = CLK, GP26 = SDO, GP27 = SDI, GP28 = 4th line,
+  chosen only so the PIO receiver can use a contiguous pin pair; the
+  <a href="../wiring-phase1/">wiring page</a> correctly keeps all four as TBC until the donor's stock board
+  is probed with the logic analyser.</li>
+<li>[ ] What the 4th line is: Rockbox configures four port-14 pins together for the S5L8702's
+  WHEEL peripheral; the 5G teardown names SDI, SDO, CLK plus WAKE and RESET outputs. The 4th line
+  is <strong>probably WAKE or an enable</strong>, unconfirmed.</li>
+<li>[ ] Data sample edge and frame delimiting: <strong>not in any source we hold.</strong> Capture CLK/SDO with
+  the logic analyser and read it off the trace. Frames are 32 bits LSB-first; the validity test
+  <code>(x &amp; 0x800000FF) == 0x8000001A</code> is the only framing Rockbox relies on.</li>
+<li>[ ] How the host clocks out <code>0x8000023A</code>: Rockbox writes it to the WHEEL peripheral's TX
+  register (<code>WHEELTX</code>) and lets the hardware shift it; whether the wheel or the host drives CLK
+  during that transfer is <strong>unknown</strong> — observe on the stock board.</li>
+<li>[x] Where the 18 kΩ pull-ups sit: on the <strong>wheel's own flex</strong> (5G teardown). Treat the 6G the
+  same but verify with a meter before adding board pull-ups.</li>
+<li>[x] Added to <a href="../click-wheel-protocol/">click-wheel-protocol.md</a> (1 Nov 2026), marked as
+  Rockbox-sourced: after the init packet the wheel answers with a <code>0x8000023A</code>-type frame carrying button
+  state in bits 16–20; Rockbox's scroll constants (96 counts/rev, 4 counts per list step, 150 ms
+  untouched debounce, 250 ms repeat timeout); Hold handling (stop the controller, drive the four
+  lines low, re-init on release).</li>
+</ul>
+<p><strong>ST7789 (Adafruit 2.0" IPS, Phase 1)</strong></p>
+<ul>
+<li>[x] Confirmed on the bench 2026-11-02: MADCTL <code>0x60</code> (landscape), RGB order, offsets 0/0,
+  INVON needed, backlight active high; SPI1 at 62.5 MHz (clk_sys 125 MHz) is clean. See
+  <a href="../display-tests/">display tests</a>.</li>
+</ul>
+<p><strong>ESP32-S3 comparison module</strong></p>
+<ul>
+<li>[ ] Proposed, not yet decided: a module with <strong>16 MB flash and 8 MB octal PSRAM</strong>
+  (ESP32-S3-WROOM-1-N16R8 class dev board). Status LED: depends on the board chosen — record once
+  bought. The S3 has <strong>BLE only, no classic Bluetooth</strong>, so A2DP on that path requires the external
+  QCC module (see <a href="#connectivity">Connectivity</a>).</li>
+</ul>
+<p><strong>Prior art</strong></p>
+<ul>
+<li>[x] Sprout: by <strong>certain things</strong>, London (Sean — <code>seanpod</code> on GitHub). Crowd Supply pre-launch
+  page: <a href="https://www.crowdsupply.com/certain-things/sprout-pi-mainboard">https://www.crowdsupply.com/certain-things/sprout-pi-mainboard</a>; studio page:
+  <a href="https://certainthings.studio/sprout/">https://certainthings.studio/sprout/</a>.</li>
+</ul>
+<h2 id="phase-1-testbed-wiring">Phase 1 testbed wiring<a class="headerlink" href="#phase-1-testbed-wiring" title="Permanent link">&para;</a></h2>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><a href="../wiring-phase1/">wiring-phase1.md</a> is the source of truth for the pin plan. The tables
+below agree with it and add the breakout-module detail; the one difference is that the
+design doc proposed a tentative click-wheel line order, which is <strong>not</strong> adopted until the
+donor is measured (see <a href="#open-items">Open items</a>).</p>
+</div>
+<p>Everything runs at 3.3 V logic from the Pico's USB; the only exception is the TFT's Vin, which takes VSYS (5 V on USB) so its backlight boost doesn't load the Pico's 3V3 rail. The Audio Pack's fixed I²S pins (GP9–11, mute GP22) forced the SD block down to GP2–7 and I²C to GP20/21.</p>
+<p>&#91;embedded content: Phase 1 testbed · Pico 2 W and six modules, pins and buses]</p>
+<p>Left column: debug, storage and power. Right column: display, audio and the I²C sensor chain. Every signal is 3.3 V; the TFT alone takes VSYS for its backlight supply.</p>
+<h3 id="pico-2-w-pin-assignment">Pico 2 W pin assignment<a class="headerlink" href="#pico-2-w-pin-assignment" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>GP</th>
+<th>Header pin</th>
+<th>Function</th>
+<th>Bus</th>
+<th>Goes to</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>1</td>
+<td>UART0 TX</td>
+<td>UART 115200</td>
+<td>Debug Probe UART RX</td>
+</tr>
+<tr>
+<td>1</td>
+<td>2</td>
+<td>UART0 RX</td>
+<td>UART</td>
+<td>Debug Probe UART TX</td>
+</tr>
+<tr>
+<td>2</td>
+<td>4</td>
+<td>SD CLK</td>
+<td>SDIO 4-bit (PIO)</td>
+<td>SD breakout CLK</td>
+</tr>
+<tr>
+<td>3</td>
+<td>5</td>
+<td>SD CMD</td>
+<td>SDIO</td>
+<td>SD breakout CMD</td>
+</tr>
+<tr>
+<td>4</td>
+<td>6</td>
+<td>SD DAT0</td>
+<td>SDIO</td>
+<td>SD breakout DAT0</td>
+</tr>
+<tr>
+<td>5</td>
+<td>7</td>
+<td>SD DAT1</td>
+<td>SDIO</td>
+<td>SD breakout DAT1</td>
+</tr>
+<tr>
+<td>6</td>
+<td>9</td>
+<td>SD DAT2</td>
+<td>SDIO</td>
+<td>SD breakout DAT2</td>
+</tr>
+<tr>
+<td>7</td>
+<td>10</td>
+<td>SD DAT3</td>
+<td>SDIO</td>
+<td>SD breakout DAT3</td>
+</tr>
+<tr>
+<td>8</td>
+<td>11</td>
+<td>TFT backlight</td>
+<td>PWM</td>
+<td>TFT "Lite"</td>
+</tr>
+<tr>
+<td>9</td>
+<td>12</td>
+<td>I²S DATA</td>
+<td>I²S (PIO)</td>
+<td>Audio Pack GP9</td>
+</tr>
+<tr>
+<td>10</td>
+<td>14</td>
+<td>I²S BCK</td>
+<td>I²S</td>
+<td>Audio Pack GP10</td>
+</tr>
+<tr>
+<td>11</td>
+<td>15</td>
+<td>I²S LRCK</td>
+<td>I²S</td>
+<td>Audio Pack GP11</td>
+</tr>
+<tr>
+<td>12</td>
+<td>16</td>
+<td>SPI1 MISO</td>
+<td>SPI1</td>
+<td>TFT MISO (only needed for the TFT's own SD slot)</td>
+</tr>
+<tr>
+<td>13</td>
+<td>17</td>
+<td>TFT CS</td>
+<td>SPI1 CSn</td>
+<td>TFT TFT_CS</td>
+</tr>
+<tr>
+<td>14</td>
+<td>19</td>
+<td>SPI1 SCK</td>
+<td>SPI1</td>
+<td>TFT SCK</td>
+</tr>
+<tr>
+<td>15</td>
+<td>20</td>
+<td>SPI1 MOSI</td>
+<td>SPI1</td>
+<td>TFT MOSI</td>
+</tr>
+<tr>
+<td>16</td>
+<td>21</td>
+<td>TFT D/C</td>
+<td>GPIO out</td>
+<td>TFT D/C</td>
+</tr>
+<tr>
+<td>17</td>
+<td>22</td>
+<td>TFT RST</td>
+<td>GPIO out</td>
+<td>TFT RST</td>
+</tr>
+<tr>
+<td>18</td>
+<td>24</td>
+<td>TFT SD_CS (optional)</td>
+<td>SPI1 CSn</td>
+<td>TFT SD_CS, else spare</td>
+</tr>
+<tr>
+<td>19</td>
+<td>25</td>
+<td>reserved</td>
+<td>—</td>
+<td>Click wheel line (TBC — proposed CLK)</td>
+</tr>
+<tr>
+<td>20</td>
+<td>26</td>
+<td>I²C0 SDA</td>
+<td>I²C 400 kHz</td>
+<td>STEMMA QT chain</td>
+</tr>
+<tr>
+<td>21</td>
+<td>27</td>
+<td>I²C0 SCL</td>
+<td>I²C</td>
+<td>STEMMA QT chain</td>
+</tr>
+<tr>
+<td>22</td>
+<td>29</td>
+<td>Audio Pack mute / amp enable</td>
+<td>GPIO out</td>
+<td>Audio Pack GP22</td>
+</tr>
+<tr>
+<td>26</td>
+<td>31</td>
+<td>reserved</td>
+<td>—</td>
+<td>Click wheel line (TBC — proposed SDO)</td>
+</tr>
+<tr>
+<td>27</td>
+<td>32</td>
+<td>reserved</td>
+<td>—</td>
+<td>Click wheel line (TBC — proposed SDI) or hold switch</td>
+</tr>
+<tr>
+<td>28</td>
+<td>34</td>
+<td>reserved</td>
+<td>—</td>
+<td>Click wheel line (TBC — proposed 4th line) or headphone detect</td>
+</tr>
+<tr>
+<td>23, 24, 25, 29</td>
+<td>—</td>
+<td><strong>internal</strong></td>
+<td>—</td>
+<td>CYW43439 Wi-Fi/BT — do not use</td>
+</tr>
+</tbody>
+</table>
+<p>GND: header pins 3, 8, 13, 18, 23, 28, 33, 38. 3V3 out: pin 36. VSYS: pin 39. VBUS: pin 40.</p>
+<h3 id="module-by-module-wiring">Module-by-module wiring<a class="headerlink" href="#module-by-module-wiring" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Module pin</th>
+<th>Pico pin</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Debug Probe</strong></td>
+<td>SWD JST-SH (3-pin)</td>
+<td>Pico 2 W debug connector (JST-SH on the board edge)</td>
+<td>Use the supplied 3-pin cable; orientation keyed</td>
+</tr>
+<tr>
+<td></td>
+<td>UART TX / RX / GND</td>
+<td>GP1 / GP0 / GND</td>
+<td>Probe TX → Pico RX (GP1); Probe RX → Pico TX (GP0)</td>
+</tr>
+<tr>
+<td><strong>Adafruit microSD breakout (SPI/SDIO, 3 V)</strong></td>
+<td>3V, GND</td>
+<td>3V3 (36), GND</td>
+<td>3.3 V only — never 5 V</td>
+</tr>
+<tr>
+<td></td>
+<td>CLK, CMD, DAT0, DAT1, DAT2, DAT3</td>
+<td>GP2, GP3, GP4, GP5, GP6, GP7</td>
+<td>SDIO 4-bit via the pico-extras PIO <code>sd_card</code> driver; DAT0–3 must be consecutive GPIOs. Enable internal pull-ups on CMD and DAT0–3. SPI fallback: CLK=SCK, CMD=MOSI, DAT0=MISO, DAT3=CS; then GP5/GP6 are freed</td>
+</tr>
+<tr>
+<td></td>
+<td>DET</td>
+<td>spare / unused</td>
+<td>Card-detect switch, optional</td>
+</tr>
+<tr>
+<td><strong>Adafruit 2.0" IPS TFT, ST7789, EYESPI</strong></td>
+<td>Vin, GND</td>
+<td>VSYS (39), GND</td>
+<td>Vin 3–5 V; on-board regulator and level shifters</td>
+</tr>
+<tr>
+<td></td>
+<td>SCK, MOSI, MISO</td>
+<td>GP14, GP15, GP12</td>
+<td>SPI1 at up to 62.5 MHz; MISO only needed for the TFT's SD slot</td>
+</tr>
+<tr>
+<td></td>
+<td>TFT_CS, D/C, RST</td>
+<td>GP13, GP16, GP17</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Lite</td>
+<td>GP8</td>
+<td>PWM for backlight dimming; tie to 3V3 if you don't need dimming</td>
+</tr>
+<tr>
+<td></td>
+<td>SD_CS</td>
+<td>GP18 or leave unconnected</td>
+<td>Second SD slot — use the Adafruit SDIO breakout instead</td>
+</tr>
+<tr>
+<td><strong>Pimoroni Pico Audio Pack (PCM5100A + amp)</strong></td>
+<td>3V3, GND</td>
+<td>3V3 (36), GND</td>
+<td>The Pack is a plug-on board; without a Pico Omnibus/Decker, jumper from its labelled header sockets instead</td>
+</tr>
+<tr>
+<td></td>
+<td>GP9 (I²S DATA), GP10 (BCK), GP11 (LRCK)</td>
+<td>GP9, GP10, GP11</td>
+<td>PIO I²S, 16/24-bit, 44.1/48 kHz; PCM5100A needs no MCLK</td>
+</tr>
+<tr>
+<td></td>
+<td>GP22 (mute)</td>
+<td>GP22</td>
+<td>Drive high to enable the headphone amp (confirm polarity on Pimoroni's pinout)</td>
+</tr>
+<tr>
+<td></td>
+<td>Headphone jack</td>
+<td>—</td>
+<td>Use this jack for both headphone and line-level tests</td>
+</tr>
+<tr>
+<td><strong>Adafruit MAX17048 fuel gauge (STEMMA QT)</strong></td>
+<td>STEMMA QT (3V3, GND, SDA, SCL)</td>
+<td>3V3, GND, GP20, GP21</td>
+<td>STEMMA QT → male-jumper cable; I²C address 0x36</td>
+</tr>
+<tr>
+<td></td>
+<td>JST-PH battery in / out</td>
+<td>LiPo → in; out → charger</td>
+<td>Passes the battery through while sensing it</td>
+</tr>
+<tr>
+<td><strong>Adafruit DRV2605L haptic driver (STEMMA QT)</strong></td>
+<td>STEMMA QT</td>
+<td>daisy-chained from MAX17048</td>
+<td>I²C address 0x5A</td>
+</tr>
+<tr>
+<td></td>
+<td>Motor + / −</td>
+<td>Vibrating mini motor disc</td>
+<td>ERM disc; set DRV2605 to ERM library</td>
+</tr>
+<tr>
+<td><strong>Adafruit Micro-Lipo USB-C charger</strong></td>
+<td>JST-PH BAT</td>
+<td>from MAX17048 out</td>
+<td>Charges from its own USB-C; no power path</td>
+</tr>
+<tr>
+<td></td>
+<td>BAT / GND pads</td>
+<td>→ 1N5817 Schottky → VSYS (39) / GND</td>
+<td>Diode stops USB VBUS back-feeding the cell; Pico's buck-boost runs from 1.8–5.5 V</td>
+</tr>
+<tr>
+<td><strong>PKCELL 1200 mAh LiPo</strong></td>
+<td>JST-PH</td>
+<td>MAX17048 in</td>
+<td>No thermistor on this cell</td>
+</tr>
+<tr>
+<td><strong>USB logic analyser</strong></td>
+<td>CH0–3, GND</td>
+<td>click-wheel lines on the donor's stock board</td>
+<td>Capture CLK/SDO/SDI before removing the original logic board</td>
+</tr>
+</tbody>
+</table>
+<h3 id="bus-summary">Bus summary<a class="headerlink" href="#bus-summary" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Bus</th>
+<th>Pins</th>
+<th>Devices</th>
+<th>Driver</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SPI1</td>
+<td>GP12–15</td>
+<td>TFT (CS GP13)</td>
+<td>Pico SDK <code>spi1</code> + DMA; ST7789 driver</td>
+</tr>
+<tr>
+<td>SDIO (PIO)</td>
+<td>GP2–7</td>
+<td>microSD</td>
+<td>pico-extras <code>sd_card</code> PIO driver, FatFs</td>
+</tr>
+<tr>
+<td>I²S (PIO)</td>
+<td>GP9–11</td>
+<td>Audio Pack</td>
+<td>pico-extras <code>audio_i2s</code></td>
+</tr>
+<tr>
+<td>I²C0</td>
+<td>GP20–21</td>
+<td>MAX17048 (0x36), DRV2605L (0x5A); later CS43131, Mikey (0x72)</td>
+<td>Pico SDK <code>i2c0</code>, 400 kHz</td>
+</tr>
+<tr>
+<td>UART0</td>
+<td>GP0–1</td>
+<td>Debug Probe</td>
+<td>stdio UART</td>
+</tr>
+<tr>
+<td>SWD</td>
+<td>debug connector</td>
+<td>Debug Probe</td>
+<td>OpenOCD / picoprobe</td>
+</tr>
+<tr>
+<td>Internal SPI</td>
+<td>GP23–25, 29</td>
+<td>CYW43439</td>
+<td>cyw43-driver, BTstack, lwIP</td>
+</tr>
+</tbody>
+</table>
+<h2 id="decisions-log">Decisions log<a class="headerlink" href="#decisions-log" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Date</th>
+<th>Decision</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-10-25</td>
+<td>Donor: iPod Classic 6G A1238 (thin, 120 GB)</td>
+<td>Cheap, well-documented, colour panel</td>
+</tr>
+<tr>
+<td>2026-10-27</td>
+<td>Phase 1 on Pico 2 W; LCD over SPI</td>
+<td>Fits the 26-pin budget; drivers port to the final board unchanged</td>
+</tr>
+<tr>
+<td>2026-10-27</td>
+<td>Display: ER-TFT024IPS-3 primary, stock panel as plan B</td>
+<td>Fits window, documented, cheap</td>
+</tr>
+<tr>
+<td>2026-10-27</td>
+<td>Radio decision deferred until A2DP source is proven on CYW43439 via BTstack</td>
+<td>Determines whether final board copies the Pico W radio design or adds an ESP32</td>
+</tr>
+</tbody>
+</table>
+<p>Each of these is, or will be, an <a href="../adr/">ADR</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>

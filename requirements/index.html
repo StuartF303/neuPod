@@ -1,0 +1,2402 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/requirements/">
+      
+      
+        <link rel="prev" href="..">
+      
+      
+        <link rel="next" href="../design/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Requirements - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#requirements" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Requirements
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#goal-and-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal and scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#target-hardware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target hardware
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compute-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compute options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#connectivity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Connectivity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#display" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Display
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audio
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#power-and-battery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Power and battery
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reused-parts-and-mechanical" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reused parts and mechanical
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#firmware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Firmware
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cost
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prior-art" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prior art
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-items" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open items
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Open items">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added-at-export-1-nov-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added at export (1 Nov 2026)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bluetooth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wifi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../i2c-peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-music-library-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#goal-and-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal and scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#target-hardware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target hardware
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compute-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compute options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#connectivity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Connectivity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#display" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Display
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audio
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#power-and-battery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Power and battery
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reused-parts-and-mechanical" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reused parts and mechanical
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#firmware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Firmware
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cost
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prior-art" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prior art
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-items" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open items
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Open items">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added-at-export-1-nov-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added at export (1 Nov 2026)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="requirements">Requirements<a class="headerlink" href="#requirements" title="Permanent link">&para;</a></h1>
+<p>Exported from the neuPod design doc (Requirements tab, 25 Oct – 1 Nov 2026). Prices are approximate UK low-volume figures. The supplier and parts list is on the <a href="../reference/">Reference</a> page; the engineering detail is on the <a href="../design/">Design</a> page.</p>
+<h2 id="goal-and-scope">Goal and scope<a class="headerlink" href="#goal-and-scope" title="Permanent link">&para;</a></h2>
+<p>Design a drop-in replacement logic board for the iPod Classic 6G/7G that adds Wi-Fi, Bluetooth audio, microSD storage and USB-C, while reusing the original shell, click wheel and (optionally) screen.</p>
+<ul>
+<li>Fully reversible: original board, drive and battery can go back in.</li>
+<li>No soldering to original iPod parts; board connects to the existing flex cables.</li>
+<li>Fills a gap: no existing product gives a Classic Wi-Fi (Sprout targets 3G/4G/mini only; Moonlit, Boxy Pixel and iFlash add BT/USB-C/storage but keep the stock SoC).</li>
+<li>Target sizes: thin shell first (the donor in hand), thick shell as the easier variant.</li>
+</ul>
+<h2 id="target-hardware">Target hardware<a class="headerlink" href="#target-hardware" title="Permanent link">&para;</a></h2>
+<p>Donor in hand: Apple iPod Classic 6th generation, model A1238, EMC 2173, 120 GB — the <strong>thin</strong> shell (bought on eBay, 25 Oct 2026).</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Thin Classic (120 GB, late 160 GB)</th>
+<th>Thick Classic (80 GB, early 160 GB)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Overall thickness</td>
+<td>~10.5 mm</td>
+<td>~13.5 mm</td>
+</tr>
+<tr>
+<td>Internal depth (approx)</td>
+<td>~8 mm</td>
+<td>~11 mm</td>
+</tr>
+<tr>
+<td>Stock battery</td>
+<td>~550–650 mAh</td>
+<td>~850 mAh</td>
+</tr>
+<tr>
+<td>Stock HDD</td>
+<td>5 mm, 1.8" ZIF</td>
+<td>8 mm, 1.8" ZIF</td>
+</tr>
+<tr>
+<td>Opening</td>
+<td>Spring clips, stiffer</td>
+<td>Spring clips</td>
+</tr>
+</tbody>
+</table>
+<p>Why 6G/7G over 4G/5G: cheapest donors (£20–40 dead-HDD units), 320×240 colour panel, bigger wheel, and the LCD/wheel were reverse-engineered by Rockbox. 6G vs 7G makes no difference to a replacement board (same shell, screen, wheel). A thin-to-thick rear-shell swap (~£10) is a cheap way to gain battery depth.</p>
+<p>Opening: iFixit guide <a href="https://www.ifixit.com/Guide/iPod+Classic+Logic+Board+Replacement/572">iPod Classic Logic Board Replacement #572</a>. Thin metal opening tools; release clips along both long edges; open like a book hinged at the bottom-left; disconnect battery flex (bottom) and headphone/hold flex (top, ZIF) before separating; HDD on a ZIF ribbon — flip the latch before pulling.</p>
+<h2 id="compute-options">Compute options<a class="headerlink" href="#compute-options" title="Permanent link">&para;</a></h2>
+<p>Current preference: <strong>RP2350B</strong> as the always-on brain (Sprout Pico approach), with a footprint reserved for a Linux module (Raspberry Pi Compute Module Zero or ESP32-P4) if streaming apps are wanted later.</p>
+<p>Raspberry Pi's Broadcom application processors (BCM2710/2711/2712, the Zero 2 W's RP3A0 SiP) are not sold to third parties, so only their microcontrollers (RP2040/RP2350) can go on a custom PCB.</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Cores / clock</th>
+<th>RAM</th>
+<th>Wi-Fi/BT</th>
+<th>Linux</th>
+<th>PCB layers</th>
+<th>Unit cost</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RP2350B</td>
+<td>2× Cortex-M33 (or RISC-V) @ 150 MHz</td>
+<td>520 KB SRAM + QSPI PSRAM (up to 8 MB)</td>
+<td>External</td>
+<td>No</td>
+<td>4</td>
+<td>~£1</td>
+<td>48 GPIO; RP2354 variants have 2 MB flash in-package; instant-on; ~40 h battery class; PIO+DMA drives parallel LCD</td>
+</tr>
+<tr>
+<td>RP2040</td>
+<td>2× Cortex-M0+ @ 133 MHz</td>
+<td>264 KB</td>
+<td>External</td>
+<td>No</td>
+<td>4</td>
+<td>~£0.70</td>
+<td>Too little RAM/CPU for colour UI + codecs; avoid</td>
+</tr>
+<tr>
+<td>ESP32-S3</td>
+<td>2× Xtensa LX7 @ 240 MHz</td>
+<td>512 KB + 8 MB PSRAM</td>
+<td>On-chip (2.4 GHz n, BLE 5)</td>
+<td>No</td>
+<td>4</td>
+<td>~£2–3</td>
+<td>Simplest single-chip Wi-Fi/BT route; classic BT A2DP needs the older ESP32, S3 is BLE-only (LE Audio)</td>
+</tr>
+<tr>
+<td>Allwinner T113-S3</td>
+<td>2× Cortex-A7 @ 1.2 GHz</td>
+<td>128 MB DDR3 in-package</td>
+<td>External module</td>
+<td>Mainline</td>
+<td>4</td>
+<td>~£4–5</td>
+<td>QFN128, hand-reworkable; best fully-custom Linux route</td>
+</tr>
+<tr>
+<td>Rockchip RV1106</td>
+<td>Cortex-A7 @ 1.2 GHz</td>
+<td>256 MB in-package</td>
+<td>External</td>
+<td>Yes</td>
+<td>4</td>
+<td>~£4–6</td>
+<td>Luckfox Pico reference design</td>
+</tr>
+<tr>
+<td>Zero 2 W as module</td>
+<td>4× Cortex-A53 @ 1 GHz (RP3A0)</td>
+<td>512 MB LPDDR2</td>
+<td>CYW43438 on-board</td>
+<td>Yes</td>
+<td>Carrier only</td>
+<td>~£14</td>
+<td>65×30×~1 mm; 6-layer board; soldered to a custom carrier; 0.3–0.6 W idle</td>
+</tr>
+<tr>
+<td>Compute Module Zero</td>
+<td>as Zero 2 W</td>
+<td>512 MB</td>
+<td>On module</td>
+<td>Yes</td>
+<td>Carrier only</td>
+<td>~£15–20</td>
+<td>What Sprout Pi uses; check availability</td>
+</tr>
+</tbody>
+</table>
+<p>Avoid any SoC needing external DDR (6–8 layers, impedance control).</p>
+<h2 id="connectivity">Connectivity<a class="headerlink" href="#connectivity" title="Permanent link">&para;</a></h2>
+<p>Required: 2.4 GHz Wi-Fi, Bluetooth audio (A2DP to AirPods/headphones/speakers), USB-C for charging and drag-and-drop file transfer (mass storage), digital audio out over USB-C.</p>
+<ul>
+<li><strong>Radio for RP2350 route:</strong> Infineon CYW43439 over SPI (Pico W / Pico 2 W reference design is open, ~£2–3 + antenna) or an ESP32-C6 as radio co-processor over SPI (~£1.50, Wi-Fi 6 + BLE 5 only, easier to source). The C6 has <strong>no classic Bluetooth, so no A2DP</strong>; it only suits Wi-Fi.</li>
+<li><strong>Classic Bluetooth A2DP</strong> is needed for most headphones; confirm the chosen radio supports BR/EDR, not just BLE.</li>
+<li><strong>Antenna (requirement, 3 Nov 2026):</strong> the shell is a Faraday cage; the only RF-transparent area is the <strong>top plastic window of the 6G back</strong>. The antenna sits there with its keep-out, and the radio module chosen must have a u.FL connector or an on-module antenna that can be placed there. Applies to Bluetooth first.</li>
+<li><strong>Final-board radio:</strong> not a bare CYW43439 (not assemblable at JLCPCB, outside the BTstack grant). Options: RM2 module, or an ESP32 with its own stack — see <a href="../adr/0007-bluetooth-audio-path/">ADR-0007</a>.</li>
+<li><strong>USB-C:</strong> 5.1 kΩ CC pulldowns for 5 V from C-to-C cables; USB 2.0 data; no PD needed at 1–2 A. The 30-pin aperture (~21 × 3 mm) takes a mid-mount USB-C receptacle with a small printed/CNC filler.</li>
+<li><strong>GPIO:</strong> 2× spare via the wired-remote connector (as Sprout) is a nice-to-have.</li>
+</ul>
+<p>Existing kits for reference: Moonlit Market Classic Connect 2 (BT 5.2 aptX, Qi, haptics, USB-C charge; sync needs soldering), Boxy Pixel (BT 5.0 + USB-C charge only).</p>
+<h2 id="storage">Storage<a class="headerlink" href="#storage" title="Permanent link">&para;</a></h2>
+<p>microSD, SDXC up to 2 TB, via SDIO (4-bit) for throughput; exFAT so the card is readable on a PC.</p>
+<ul>
+<li>Push-push or hinged socket, accessible without opening the case is not possible on a Classic, so a reliable internal socket is enough.</li>
+<li>Keep a 2 TB card on the test list: controller compatibility is where iFlash users hit trouble.</li>
+<li>Library index/metadata cached in PSRAM or on-card database to keep browse fast with 100k+ tracks.</li>
+<li><strong>Card power (requirement, 3 Nov 2026):</strong> GPIO-controlled load switch on card VDD, so a wedged card can be power-cycled. SD clock from integer dividers only; multi-block reads capped at 128 blocks (<a href="../storage/">Storage</a>).</li>
+</ul>
+<h2 id="display">Display<a class="headerlink" href="#display" title="Permanent link">&para;</a></h2>
+<p>Preferred upgrade: a 2.4"–2.8" IPS TFT (ST7789V / ILI9341, 240×320) replacing the stock panel; keep the stock panel as plan B.</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Size / resolution</th>
+<th>Interface</th>
+<th>Cost</th>
+<th>Pros</th>
+<th>Cons</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stock 6G/7G panel</td>
+<td>2.5", 320×240 TN</td>
+<td>8080-style parallel (init sequence in Rockbox <code>ipod6g</code>)</td>
+<td>£0 (reused)</td>
+<td>No mechanical change; fully reversible</td>
+<td>Dim, low contrast; must be driven exactly as Rockbox does</td>
+</tr>
+<tr>
+<td>IPS TFT, ST7789V / ILI9341</td>
+<td>2.4" (~60 × 42 mm active) to 2.8", 240×320</td>
+<td>SPI or 8080 parallel; RP2350 PIO+DMA</td>
+<td>£3–6 bare panel</td>
+<td>Near-OLED contrast; trivial to drive; what Zac Builds used</td>
+<td>Needs masking/bezel fit to the Classic window; new FPC routing</td>
+</tr>
+<tr>
+<td>Mono OLED (SSD1309 / SSD1322)</td>
+<td>2.4–2.7", 128×64 or 256×64</td>
+<td>SPI / 8080</td>
+<td>£5–15</td>
+<td>Retro Sprout look; very low power</td>
+<td>No album art, no colour</td>
+</tr>
+<tr>
+<td>Colour OLED</td>
+<td>≤1.5" at 128×128; larger are MIPI phone panels</td>
+<td>SPI, or MIPI needing a bridge</td>
+<td>varies</td>
+<td>—</td>
+<td>Nothing practical at 2.5" 320×240; rule out</td>
+</tr>
+</tbody>
+</table>
+<p>Requirement: measure the Classic's window aperture and the LCD bay in the mid-frame before choosing a panel part number.</p>
+<p><strong>Shortlisted panel: EastRising <a href="https://www.buydisplay.com/2-4-inch-ips-240x320-tft-lcd-display-capacitive-touch-screen">ER-TFT024IPS-3</a></strong> — 2.4" IPS 240×320, ST7789V, bare glass, 50-pin 0.5 mm FPC. Active 36.72 × 48.96 mm, visual 38.72 × 50.96 mm, outline 42.72 × 59.26 × 2.3 mm (stock Classic panel ≈ 38 × 51 mm active, so ~1 mm margin each edge). 8080 8/9/16/18-bit, SPI, RGB; 500:1, 300 cd/m², 80° all round; VDD 2.8 V typ, backlight 4 WLED 70 mA. $6.35 direct; module version ER-TFTM024IPS-3 on <a href="https://www.ebay.co.uk/itm/305668452892">eBay (BuyDisplay)</a> ~$12.60 for prototyping. Datasheet, STEP model, ST7789V datasheet and ZIF drawing on the product page. Alternative: Ronbo RB024D12N19B (same glass, 12-pin SPI-only FPC).</p>
+<p><strong>Premium option: 2.4" AMOLED 450×600, Raydium RM690B0</strong> (DisplayModule <a href="https://www.displaymodule.com/products/2-4-amoled-display-450x600-spi-mcu-mipi">DM-AMOLED240-011</a>, also Anders, TailorPixels, SWICN; ~£45–50 single, ~$25 Alibaba lots). Same 36.72 × 48.96 mm active area as the IPS panel so it fits the window identically; 311 ppi, 24-bit, 100,000:1, 60 Hz; QSPI/SPI/MIPI. Needs an AMOLED PMIC (TPS65632-class, AVDD ~4.6 V / ELVSS negative) and a QSPI write path (PIO on RP2350 at reduced frame rate, native on ESP32-S3). Burn-in and content-dependent power are the trade-offs. Ruled out: no OLED exists in the Classic's native 2.5" 4:3 landscape; memory-in-pixel, e-paper, micro-LED and phone MIPI AMOLEDs don't suit. Final board could carry both the 50-pin IPS and the AMOLED FPC footprints.</p>
+<h2 id="audio">Audio<a class="headerlink" href="#audio" title="Permanent link">&para;</a></h2>
+<p>Hi-fi DAC with headphone amp driving the original 3.5 mm jack via the existing headphone/hold-switch flex, plus Bluetooth A2DP and USB-C digital audio out.</p>
+<ul>
+<li>Codec (3 Nov 2026, <a href="../adr/0012-audio-codec-final-board/">ADR-0012</a>, proposed): <strong>ES8311</strong> baseline, <strong>ES8388</strong> alternative, <strong>PCM5102A</strong> as the DAC-only no-MCLK fallback. CS43131 dropped (≈42 pcs at LCSC). Open point: the ES8311 is mono.</li>
+<li>I²S from the MCU; the board provides MCLK (256 fs from <code>clk_gpout</code>), but the codec must also run with its PLL from BCLK.</li>
+<li><strong>Audio isolation (requirement):</strong> audio runs on a dedicated bare-metal core with lock-free rings only (<a href="../adr/0011-bare-metal-audio-core/">ADR-0011</a>); any SoC candidate needs a spare core.</li>
+<li>Codecs required: MP3, AAC, ALAC, FLAC, Opus (software decode on RP2350 is fine at 150 MHz).</li>
+<li>Optional: small LRA for haptic click-wheel feedback (~£1, as Moonlit's kit).</li>
+</ul>
+<p><strong>Single jack, line or headphone:</strong> one 3.5 mm output from the DAC's headphone driver serves both; the codec's load/jack detection (CS43131 had this; check the ADR-0012 part) can switch a firmware "line mode" (fixed level, volume bypassed) when a high-impedance load is seen. No separate line-out socket.</p>
+<p><strong>Optional: optical S/PDIF via a mini-TOSLINK combo jack</strong> (Apple-style). Parts: 3.5 mm optical-combo socket with integrated IR transmitter (Everlight PLT133/T10W-series, Cliff FCR684206 or similar, ~£2–4; check barrel depth against the Classic's jack aperture). Signal generated by an RP2350 PIO state machine (biphase-mark, 64× fs) from the same audio buffer as I²S; route to S/PDIF and bypass volume when an optical plug is detected. The jack then lives on the new board rather than on the original headphone flex (flex still used for the hold switch).</p>
+<p><strong>Audio quality policy:</strong> lossless end-to-end on every wired/digital path. Decode once to a 32-bit mixer; no resampling unless the sink requires it; bit-perfect FLAC/ALAC to the DAC (CS43131: 32/384, ~130 dB DNR), to optical S/PDIF (24/96) and to USB-C UAC2. Dedicated low-noise analogue LDO and a 22.5792/24.576 MHz clock pair (or DAC PLL) for the DAC. Decode target: 24/96 FLAC on RP2350 (24/192 only on ESP32-S3-class).</p>
+<table>
+<thead>
+<tr>
+<th>Bluetooth codec</th>
+<th>Max bitrate</th>
+<th>Available on CYW43439 + BTstack</th>
+<th>Available on an external QCC module</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SBC / SBC-XQ</td>
+<td>328k / ~500k</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>AAC 256k</td>
+<td>256k</td>
+<td>Encoder not free (FDK licence, heavy on M33)</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>aptX / aptX HD</td>
+<td>352k / 576k</td>
+<td>No (Qualcomm licence)</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>LDAC</td>
+<td>990k</td>
+<td>No (Sony licence)</td>
+<td>Some modules</td>
+</tr>
+<tr>
+<td>LC3 (LE Audio)</td>
+<td>~345k</td>
+<td>Immature</td>
+<td>Varies</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Decision pending:</strong> Bluetooth path = SBC-XQ on the CYW43439 (simplest, no extra parts) or an external Qualcomm QCC3008/3040/5125 transmitter module on I²S with UART control (aptX HD/AAC/LDAC, what the commercial iPod BT kits use). Wi-Fi/BT coexistence and the metal shell limit link quality either way.</p>
+<p><strong>Recording (new requirement, 31 Oct 2026):</strong> the board shall record audio to microSD. Sources, in priority order: (1) mono mic on a 4-pole headset plugged into the 3.5 mm jack; (2) Bluetooth headset mic (HFP, voice quality only); (3) optional on-board MEMS mic for voice notes; (4) USB-C audio in. Target formats: WAV 48 kHz/16-bit for the jack and MEMS paths; whatever the BT profile delivers for HFP. The codec/DAC chosen must therefore include an ADC input (CS43131 is DAC-only — either add a small ADC such as a PCM1808/ES8311/WM8960-class codec, or move to a combined codec part). Keep the ADC analogue front end on its own clean LDO, away from the switcher, same as the DAC.</p>
+<p><strong>3.5 mm jack = 4-pole TRRS, CTIA pinout</strong> (tip L, ring 1 R, ring 2 GND, sleeve mic). Requirements:</p>
+<ul>
+<li>Mic bias ~2.0–2.7 V via ~2.2 kΩ, switchable off in firmware.</li>
+<li>Inline-button decode: headsets short the mic line through resistors (play/pause ≈ 0 Ω, vol+ ≈ 240 Ω, vol− ≈ 600 Ω); read with an ADC channel on the mic line and map to click-wheel actions.</li>
+<li>Jack insert detect (switched contact on the socket or codec jack-detect) to route headphone/line/optical and to disable mic bias when a 3-pole TRS plug is present (its sleeve is ground).</li>
+<li>Design for CTIA only; OMTP (mic/GND swapped) headsets are not supported.</li>
+<li>The optical-combo socket option above must still be 4-pole if chosen; check availability (optical + TRRS combos are rarer than optical + TRS).</li>
+</ul>
+<p><strong>Bluetooth profiles required:</strong> A2DP <strong>source</strong> for stereo playback — neuPod sends audio to the headphones/speaker, which are the A2DP sink (SBC/AAC minimum; aptX/LDAC per the transmitter decision above). <strong>AVRCP</strong> (neuPod as target, the headset as controller) for play/pause/next/previous from the headset buttons, plus <strong>absolute volume</strong> so the headset's volume and neuPod's are one control. HFP in the Audio Gateway role for the headset mic — note it drops both directions to 8/16 kHz mono (CVSD/mSBC), so BT recording is voice-note quality only. LE Audio / LC3 (stereo, bidirectional, good quality) is a nice-to-have: pick a radio whose stack can do LE Audio so it can be enabled later. Reference headset for testing: Stuart's AirPods Pro 3 (model A3063/A3064, 2025, Apple H2) — A2DP + AAC for playback, HFP for mic; LE Audio only via Apple's own path, so not usable for LC3 testing.</p>
+<h2 id="power-and-battery">Power and battery<a class="headerlink" href="#power-and-battery" title="Permanent link">&para;</a></h2>
+<p>Target: 2,000+ mAh in the thin shell, 3,000 mAh in the thick shell; 40 h Bluetooth playback is the benchmark (Sprout's figure with 2,500 mAh).</p>
+<table>
+<thead>
+<tr>
+<th>Shell</th>
+<th>Cell thickness available</th>
+<th>Candidate cells</th>
+<th>Capacity</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Thin (donor)</td>
+<td>~4 mm once HDD + original board are gone (~1 mm board)</td>
+<td>405080, 4055100-class pouch</td>
+<td>~2,000–2,500 mAh</td>
+</tr>
+<tr>
+<td>Thick</td>
+<td>~6–7 mm</td>
+<td>605070 / 605080, 7 mm variants</td>
+<td>~3,000–3,500 mAh</td>
+</tr>
+<tr>
+<td>Stock reference</td>
+<td>thin 550–650 mAh, thick 850 mAh; aftermarket thin ~1,000–1,200 mAh, thick 3,000 mAh (with stock board + iFlash)</td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Cells with built-in PCM (OV/UV/OC protection); thermistor input on the board.</li>
+<li>Charger (3 Nov 2026): <strong>BQ25895</strong> (I²C 0x6A, INT pin, full status registers, OTG, power-path). Firmware models its state machine in <code>hal_charger.h</code>; the testbed (Micro-Lipo MCP73831, no STAT pin) is a second implementation: VBUS present (cyw43 <code>WL_GPIO2</code>) AND MAX17048 CRATE &gt; 0 = charging; VBUS AND CRATE ≈ 0 AND SOC ≥ 98 % = full.</li>
+<li>Fuel gauge for real percentage in the UI: BQ27441 or MAX17048.</li>
+<li>Rails: 3.3 V for MCU/radio/SD, clean analogue rail for the DAC, LCD backlight boost.</li>
+<li>Power states: instant-on from sleep (RP2350 dormant mode), deep sleep when hold is on, hard off.</li>
+</ul>
+<p><strong>Power budget by state (estimates, to be measured on the bench):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Block</th>
+<th>Standby</th>
+<th>Playing, screen off, BT</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RP2350 core</td>
+<td>~1 mA sleep / 0.2 mA dormant</td>
+<td>25–40 mA</td>
+</tr>
+<tr>
+<td>ESP32-S3 core + octal PSRAM</td>
+<td>~10 µA deep sleep / ~2 mA light</td>
+<td>60–100 mA</td>
+</tr>
+<tr>
+<td>CYW43439 BT A2DP</td>
+<td>&lt;1 mA</td>
+<td>30–50 mA</td>
+</tr>
+<tr>
+<td>QCC3008-class BT module</td>
+<td>~1 mA</td>
+<td>20–35 mA</td>
+</tr>
+<tr>
+<td>microSD</td>
+<td>&lt;0.2 mA</td>
+<td>~10 mA average (bursts to 60)</td>
+</tr>
+<tr>
+<td>CS43131 DAC + HP amp</td>
+<td>off</td>
+<td>10–25 mA</td>
+</tr>
+<tr>
+<td>2.4" IPS + backlight</td>
+<td>off</td>
+<td>100–150 mA when on</td>
+</tr>
+<tr>
+<td>2.4" AMOLED</td>
+<td>off</td>
+<td>40–200 mA when on, content dependent</td>
+</tr>
+<tr>
+<td>Regulators, gauge, misc</td>
+<td>~1 mA</td>
+<td>~5 mA</td>
+</tr>
+</tbody>
+</table>
+<p>Totals playing to BT, screen off: architecture A (RP2350 + CYW43439) ~80–110 mA → 23–30 h on 2,500 mAh; architecture B (ESP32-S3 + QCC) ~110–160 mA → 16–22 h. Standby target &lt;0.5 mA: load switches on SD, DAC and radio rails; wake from hold switch or wheel. Backlight dims to ~10% within seconds and off within ~15 s; Wi-Fi off during playback; core clock scaled to the minimum that keeps the audio buffer full.</p>
+<h2 id="reused-parts-and-mechanical">Reused parts and mechanical<a class="headerlink" href="#reused-parts-and-mechanical" title="Permanent link">&para;</a></h2>
+<p>Reuse the shell, mid-frame, click wheel and its FPC, headphone/hold-switch flex, and (plan B) the LCD. Everything connects via the original ribbons into FPC/ZIF connectors on the new board.</p>
+<p><strong>Known internal geometry (open sources; everything else comes from the donor scan):</strong> envelope 103.5 × 61.8 × 10.5 mm thin / 13.5 mm thick (<a href="https://everymac.com/systems/apple/ipod/specs/ipod-classic-6th-generation-specs.html">everymac</a>). Stack front→back: front plate + glass; click wheel and LCD on a steel backing plate; metal mid-frame; logic board (full footprint, ~95 × 55 × 1.0 mm, two screws to the frame, connectors on its edges and back face); battery pouch on the board; 1.8" ZIF HDD in foam bumpers — Toshiba MK8022GAA/MK1231GAL/MK1634GAL, 54 × 71 × <strong>5 mm</strong> thin or <strong>8 mm</strong> thick; stainless back shell (<a href="https://www.ifixit.com/Teardown/iPod+Classic+Teardown/595">iFixit teardown</a>). Usable depth for our board + cell: ~6 mm thin, ~9 mm thick. Board silicon and revisions (A1238 120 GB = Rev A, 2008): S5L8702, K4X51163PE SDRAM, SST25VF080B flash, PCF50635 PMU, CS42L55 codec, LTC4066 charger (<a href="https://freemyipod.org/wiki/Classic">freemyipod</a>). Not published anywhere: board/mid-frame drawings, 6G connector pitches, battery outline, screw positions.</p>
+<ul>
+<li><strong>Board outline:</strong> match the original logic board's outline and the mid-frame screw holes (two Phillips screws); design to the mid-frame, not the shell. Original board ~1.6 mm; target 1.0–1.2 mm.</li>
+<li><strong>Connectors to provide:</strong> click wheel FPC, LCD FPC (stock pinout or new panel), headphone/hold flex, battery (3-pin, thermistor), microSD socket, USB-C mid-mount.</li>
+<li><strong>Click wheel:</strong> keep; serial protocol documented in Rockbox; new wheels available from Elite Obsolete.</li>
+<li><strong>Port aperture:</strong> 30-pin opening ~21 × 3 mm; USB-C with printed/CNC filler. Keep the port centred.</li>
+<li><strong>Antenna keep-out:</strong> near the headphone jack's plastic insert or under the wheel.</li>
+<li><strong>Thermal/EMI:</strong> metal shell; no thermal issue at RP2350 power levels.</li>
+<li><strong>Reversibility:</strong> no adhesive on original parts; foam spacers where the HDD was.</li>
+<li>Cosmetic parts if needed: Elite Obsolete (shells, wheels, faceplates), Moonlit Market, iFlash (shells, screws, tools).</li>
+</ul>
+<p><strong>Click wheel sub-board (how it works):</strong> a capacitive ring of ~16 copper segments under the plastic plus five dome switches, scanned by a microcontroller on the flex itself (Cypress PSoC on the 5G; same family on the 6G). The PSoC interpolates finger position to 96 steps per revolution and streams 32-bit frames on its own ~53 kHz clock while touched; the host only listens (one init packet). It has its own 3.0 V LDO fed from the system rail. All the touch logic therefore stays in the wheel — our board needs 4 lines + power and a frame decoder (design doc §4.1).</p>
+<p><strong>Click feedback — direction set 3 Nov 2026:</strong> the final board carries <strong>both</strong> a piezo footprint (stock feel) and an LRA footprint (LD0832AA, stocked); A/B on the testbed before freezing. The Click feedback setting becomes piezo / haptic / off. Background: The stock iPod has no haptic: the click is a <strong>piezo buzzer on the logic board</strong> driven as a tone (Rockbox <code>piezo-6g.c</code>). Options: (a) piezo only — authentic, ~£0.50, one GPIO/PWM; (b) LRA or ERM haptic via DRV2605L on I²C — the Moonlit Classic Connect feel, ~£5, needs board area near the wheel; (c) both, selectable in settings. Board footprints for both are cheap; the decision is about mid-frame space and whether the original feel matters.</p>
+<h2 id="firmware">Firmware<a class="headerlink" href="#firmware" title="Permanent link">&para;</a></h2>
+<p>Click-wheel-driven UI recreating the Classic experience (menus, Cover Flow, podcasts, search), audio pipeline with software codecs, BT/Wi-Fi stacks, USB mass storage. This is the largest cost in the project — more than the hardware.</p>
+<ul>
+<li>Starting points: Rockbox <code>ipod6g</code> target (LCD init, click wheel protocol, headphone detect); Sprout's open-source firmware (MPL-2.0) once published at github.com/seanpod/sprout; sPot (Guy Dupont) for a Pi/Spotify UI.</li>
+<li>Wi-Fi use cases: podcast download, library sync from a NAS/PC, firmware OTA. Streaming (Spotify/Apple Music) needs a Linux module.</li>
+<li>Host side: the iPod must mount as a plain USB drive — no iTunes dependency.</li>
+<li>Keep the stock-panel driver and a new-panel driver behind one display abstraction so either screen works.</li>
+<li><strong>RAM budget:</strong> every feature ADR states its RAM cost. The final board has 8 MB PSRAM (APS6404L, QSPI CS1, <a href="../adr/0013-bluetooth-ram-psram/">ADR-0013</a>); artwork, HTTP and AAC are PSRAM-only.</li>
+<li><strong>Flash and OTA:</strong> final board 16 MB W25Q128; bootrom A/B partitions with TBYB (<a href="../adr/0014-ota-ab-partitions/">ADR-0014</a>).</li>
+<li><strong>Secrets:</strong> RP2350 random 256-bit key in OTP at provisioning, chip-ID HKDF as the pre-provisioning fallback, no secure element; ESP32 route: eFuse key + flash encryption. Secure boot decided later (<a href="../wifi/#secrets-at-rest">Wi-Fi</a>).</li>
+<li><strong>Clock:</strong> <a href="../adr/0015-clock-plan/">ADR-0015</a>.</li>
+</ul>
+<h2 id="cost">Cost<a class="headerlink" href="#cost" title="Permanent link">&para;</a></h2>
+<p>About £35–55 in parts per board (RP2350 route ~£25–40), before the donor iPod and battery; budget £300–600 for two or three prototype spins including assembly. Figures are approximate, low-volume UK pricing, October 2026.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Estimate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Compute: RP2350B / ESP32-S3 / T113</td>
+<td>£1–5</td>
+</tr>
+<tr>
+<td>Compute: Zero 2 W or CM Zero (module route)</td>
+<td>£14–20</td>
+</tr>
+<tr>
+<td>DAC + headphone amp (CS43131 / ES9018K2M)</td>
+<td>£5–8</td>
+</tr>
+<tr>
+<td>Charger, fuel gauge, regulators</td>
+<td>£4–6</td>
+</tr>
+<tr>
+<td>Wi-Fi/BT (CYW43439 or ESP32-C6, if not on-chip)</td>
+<td>£2–5</td>
+</tr>
+<tr>
+<td>microSD socket, USB-C, FPC/ZIF connectors</td>
+<td>£3–4</td>
+</tr>
+<tr>
+<td>Passives, crystals, ESD, antenna</td>
+<td>£3–5</td>
+</tr>
+<tr>
+<td>PCB, 4-layer, JLCPCB, 5 pcs</td>
+<td>£20–40 per batch (6-layer ~double)</td>
+</tr>
+<tr>
+<td>Assembly</td>
+<td>£5–15 per board, or hand-build</td>
+</tr>
+<tr>
+<td>Battery 2,000–3,000 mAh</td>
+<td>£10–15</td>
+</tr>
+<tr>
+<td>Donor Classic</td>
+<td>£25–40 (already bought)</td>
+</tr>
+<tr>
+<td>Replacement IPS panel (optional)</td>
+<td>£3–6</td>
+</tr>
+<tr>
+<td>Thick rear shell (optional)</td>
+<td>~£10</td>
+</tr>
+</tbody>
+</table>
+<h2 id="prior-art">Prior art<a class="headerlink" href="#prior-art" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Project / resource</th>
+<th>What it is</th>
+<th>Link</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Sprout Pico / Pi (certain things, London)</td>
+<td>Open-source RP2350 replacement mainboard for iPod 3G/4G/mini; BT, Wi-Fi, CS43131 DAC, USB-C, 2 TB microSD; Pi version adds CM Zero for streaming. CERN-OHL-S v2 / MPL-2.0. Pre-launch on Crowd Supply</td>
+<td><a href="https://www.crowdsupply.com/certain-things/sprout-pi-mainboard">crowdsupply.com</a>, <a href="https://certainthings.studio/sprout/">certainthings.studio</a></td>
+</tr>
+<tr>
+<td>sPot (Guy Dupont, 2021)</td>
+<td>4G gutted, Raspberry Pi Zero W, colour screen, Spotify client, BT; code on GitHub, write-up on Hackaday</td>
+<td><a href="https://9to5mac.com/2021/01/28/developer-modifies-4th-gen-ipod-with-built-in-wi-fi-and-spotify/">9to5mac</a></td>
+</tr>
+<tr>
+<td>Zac Builds iPod</td>
+<td>5G with iFlash, USB-C transplant, BT module, IPS screen</td>
+<td><a href="https://www.yankodesign.com/?p=551626">yankodesign</a></td>
+</tr>
+<tr>
+<td>Moonlit Market Classic Connect 2</td>
+<td>All-in-one BT 5.2/Qi/haptic/USB-C kit for Classics, stock SoC</td>
+<td><a href="https://www.ifun.de/classic-connect-2-bluetooth-qi-und-usb-c-fuer-den-ipod-classic-277730/">ifun.de</a></td>
+</tr>
+<tr>
+<td>Boxy Pixel kit</td>
+<td>Aluminium/glass shell + BT/USB-C charge board</td>
+<td><a href="https://www.hardware.com.br/noticias/mod-kit-ipod-classic/amp/">hardware.com.br</a></td>
+</tr>
+<tr>
+<td>iFlash</td>
+<td>SD/mSATA storage adapters, compatibility tables</td>
+<td>iflash.xyz</td>
+</tr>
+<tr>
+<td>Rockbox</td>
+<td>Open firmware; <code>ipod6g</code> target holds the LCD and click-wheel driver code</td>
+<td>rockbox.org</td>
+</tr>
+<tr>
+<td>iFixit guide #572</td>
+<td>Opening and logic-board removal photos</td>
+<td><a href="https://www.ifixit.com/Guide/iPod+Classic+Logic+Board+Replacement/572">ifixit.com</a></td>
+</tr>
+<tr>
+<td>Communities</td>
+<td>r/ipod (wiki, build threads); YouTube: DankPods, Zac Builds, Macho Nacho</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2 id="open-items">Open items<a class="headerlink" href="#open-items" title="Permanent link">&para;</a></h2>
+<ul>
+<li>[ ] Open the donor; photograph both sides of the original logic board.</li>
+<li>[ ] Measure board outline, screw-hole positions, connector positions (wheel, LCD, headphone, battery, HDD ZIF).</li>
+<li>[ ] Measure the LCD window aperture and the LCD bay in the mid-frame (for an IPS panel swap).</li>
+<li>[ ] Measure usable cavity depth for the battery with the HDD removed.</li>
+<li>[ ] Identify the stock LCD and click-wheel FPC pin counts and pitches.</li>
+<li>[ ] Decide: RP2350-only vs RP2350 + Linux-module footprint.</li>
+<li>[ ] Decide radio: RM2 module vs ESP32 (WROOM-32E) vs ESP32-S3 + QCC module (<a href="../adr/0007-bluetooth-audio-path/">ADR-0007</a>; bare CYW43439 ruled out 3 Nov 2026). The ESP32-C6 co-processor is ruled out for A2DP: BLE only, no classic BT.</li>
+<li>[ ] Confirm Compute Module Zero availability and price.</li>
+<li>[ ] Watch for Sprout's GitHub release (hardware files and firmware).</li>
+</ul>
+<h3 id="added-at-export-1-nov-2026">Added at export (1 Nov 2026)<a class="headerlink" href="#added-at-export-1-nov-2026" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Click wheel — measure the 6G connector and confirm the line mapping; see the
+  <a href="../design/#open-items">design page</a> for the full list.</li>
+<li>[ ] ST7789 (Adafruit 2.0") panel parameters — MADCTL, RGB/BGR, offsets, inversion, backlight
+  polarity — to be found on the bench; see the <a href="../design/#open-items">design page</a>.</li>
+<li>[x] Click feedback: both footprints, A/B on the testbed (3 Nov 2026) — see
+  <a href="#reused-parts-and-mechanical">Reused parts and mechanical</a>.</li>
+<li>[ ] Recording requirement implies an ADC path; CS43131 dropped, codec in <a href="../adr/0012-audio-codec-final-board/">ADR-0012</a> —
+  stereo check on the ES8311 outstanding.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>

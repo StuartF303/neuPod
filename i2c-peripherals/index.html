@@ -1,0 +1,2457 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/i2c-peripherals/">
+      
+      
+        <link rel="prev" href="../storage/">
+      
+      
+        <link rel="next" href="../bench/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>I2C peripherals (fuel gauge, haptics) - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#i2c-peripherals-fuel-gauge-and-haptics" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              I2C peripherals (fuel gauge, haptics)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bluetooth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wifi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#bus-layer-hal_i2ch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bus layer (hal_i2c.h)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#max17048-0x36" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MAX17048 (0x36)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#drv2605l-0x5a" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DRV2605L (0x5A)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="DRV2605L (0x5A)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#motor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Motor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lra-leader-ld0832aa" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LRA: LEADER LD0832AA
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#calibration-and-persistence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Calibration and persistence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#click-setting-and-rate-limit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Click setting and rate limit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bring-up-order-motor-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bring-up order (motor safety)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#register-values-erm-open-loop-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Register values: ERM open loop (default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#register-values-erm-closed-loop-optional-datasheet-default-timings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Register values: ERM closed loop (optional, datasheet default timings)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#real-time-playback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Real-time playback
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#click-latency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Click latency
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-menu-i2c_test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test menu (i2c_test)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bench-results-2026-11-02" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bench results (2026-11-02)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Bench results (2026-11-02)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chosen-effect-ids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chosen effect IDs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-something-fails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When something fails
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-music-library-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#bus-layer-hal_i2ch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bus layer (hal_i2c.h)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#max17048-0x36" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MAX17048 (0x36)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#drv2605l-0x5a" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DRV2605L (0x5A)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="DRV2605L (0x5A)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#motor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Motor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lra-leader-ld0832aa" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LRA: LEADER LD0832AA
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#calibration-and-persistence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Calibration and persistence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#click-setting-and-rate-limit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Click setting and rate limit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bring-up-order-motor-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bring-up order (motor safety)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#register-values-erm-open-loop-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Register values: ERM open loop (default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#register-values-erm-closed-loop-optional-datasheet-default-timings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Register values: ERM closed loop (optional, datasheet default timings)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#real-time-playback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Real-time playback
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#click-latency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Click latency
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-menu-i2c_test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test menu (i2c_test)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bench-results-2026-11-02" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bench results (2026-11-02)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Bench results (2026-11-02)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chosen-effect-ids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chosen effect IDs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-something-fails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When something fails
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="i2c-peripherals-fuel-gauge-and-haptics">I2C peripherals: fuel gauge and haptics<a class="headerlink" href="#i2c-peripherals-fuel-gauge-and-haptics" title="Permanent link">&para;</a></h1>
+<p>Phase 1 breadboard: one I2C bus, <strong>I2C0 on the Pico 2 W, SDA = GP20, SCL = GP21</strong>, 400 kHz (fall back to
+100 kHz if NACKs appear). Both breakouts carry their own pull-ups, so the firmware keeps the RP2350
+internal pull-ups <strong>off</strong> (the pad reset state is pull-down enabled, so they are switched off
+explicitly). See <a href="../wiring-phase1/">Phase 1 wiring</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Device</th>
+<th>Board</th>
+<th>Address</th>
+<th>HAL</th>
+<th>Driver</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MAX17048 fuel gauge</td>
+<td>Adafruit MAX17048</td>
+<td>0x36</td>
+<td><code>hal_battery.h</code></td>
+<td><code>app/drivers/max17048.c</code></td>
+</tr>
+<tr>
+<td>DRV2605L haptic driver</td>
+<td>Adafruit DRV2605L</td>
+<td>0x5A</td>
+<td><code>hal_haptic.h</code></td>
+<td><code>app/drivers/drv2605l.c</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>hal_power.h</code> is kept for sleep and power-state control only; its old battery snapshot was never
+implemented and is replaced by <code>hal_battery.h</code>.</p>
+<h2 id="bus-layer-hal_i2ch">Bus layer (<code>hal_i2c.h</code>)<a class="headerlink" href="#bus-layer-hal_i2ch" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Every call is bounded: timeout = 2 x the byte time at the actual baud, never below 2 ms.</li>
+<li>A NACK is a normal answer and never causes recovery. Only a timeout, or a line that is still low
+  100 us after a failed transfer, starts recovery: reset the controller, then (if SDA/SCL is low) switch
+  the pins to GPIO, clock up to 9 SCL pulses (drive low / release, never drive high), generate a STOP
+  and restore the I2C function. <code>hal_i2c_get_stats()</code> counts errors and recoveries.</li>
+<li>Probing uses a 1-byte read (a zero-length write is unreliable on the RP2040/RP2350 controller) and
+  skips the reserved ranges 0x00-0x07 and 0x78-0x7F.</li>
+<li>Arbitration loss cannot be detected on the RP2350: the SDK clears the abort-source register
+  before the HAL can read it, so <code>ARB_LOST</code> is never reported there. A lost arbitration that leaves a
+  line low shows up as a stuck bus.</li>
+<li>Reserved addresses are refused (<code>BAD_PARAM</code>) by every call, not just probes.</li>
+<li>Dropping from 400 to 100 kHz is never automatic: <code>hal_i2c_set_baud()</code> is called by the test (or
+  application) deliberately.</li>
+</ul>
+<h2 id="max17048-0x36">MAX17048 (0x36)<a class="headerlink" href="#max17048-0x36" title="Permanent link">&para;</a></h2>
+<p>Registers are 16-bit big-endian. Used here:</p>
+<table>
+<thead>
+<tr>
+<th>Reg</th>
+<th>Name</th>
+<th>Scaling / use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0x02</td>
+<td>VCELL</td>
+<td>78.125 uV per LSB (mV = raw x 5 / 64, rounded)</td>
+</tr>
+<tr>
+<td>0x04</td>
+<td>SOC</td>
+<td>1/256 % per LSB (high byte = whole percent)</td>
+</tr>
+<tr>
+<td>0x06</td>
+<td>MODE</td>
+<td>bit 14 = quick-start</td>
+</tr>
+<tr>
+<td>0x08</td>
+<td>VERSION</td>
+<td>reads 0x001X</td>
+</tr>
+<tr>
+<td>0x0A</td>
+<td>HIBRT</td>
+<td>high byte hibernate threshold 0.208 %/h per LSB, low byte active threshold 1.25 mV per LSB</td>
+</tr>
+<tr>
+<td>0x0C</td>
+<td>CONFIG</td>
+<td>high byte RCOMP; low byte SLEEP (b7), ALSC (b6), ALRT (b5), ATHD (b4:0): alert at 32 - ATHD %</td>
+</tr>
+<tr>
+<td>0x16</td>
+<td>CRATE</td>
+<td>signed, 0.208 %/h per LSB</td>
+</tr>
+<tr>
+<td>0x1A</td>
+<td>STATUS</td>
+<td>RI b8, VH b9, VL b10, VR b11, HD b12, SC b13, ENVR b14</td>
+</tr>
+<tr>
+<td>0xFE</td>
+<td>CMD</td>
+<td>0x5400 = power-on reset (the chip may NACK the write as it resets)</td>
+</tr>
+</tbody>
+</table>
+<p><code>hal_battery_init()</code> also clears STATUS.RI (power-up/reset indicator) so a later RI means a fresh
+reset; <code>hal_battery_reset()</code> waits 250 ms after the reset command and leaves RI set. Quick-start is
+only valid with no load on the cell. HIBRT as read from the bench chip: <strong>0x8030</strong> (observed, not
+asserted by the tests).</p>
+<p>The driver uses integers only: millivolts, SOC in 1/256 %, rate in milli-percent per hour. A cell
+below 2.5 V counts as "no battery".</p>
+<div class="admonition warning">
+<p class="admonition-title">Source check</p>
+<p>The MAX17048 scaling above comes from the Maxim/Analog Devices register descriptions as recalled
+when writing the driver; the datasheet PDF could not be downloaded in the build environment, so
+it is <strong>not yet cross-checked line by line</strong>. Check VCELL against a multimeter on the cell during
+bench test 2.</p>
+</div>
+<p><strong>Bench note:</strong> the gauge is powered from the battery side. With no LiPo, or with a flat one, 0x36
+disappears from the bus (a flat LiPo made 0x36 vanish on the bench). That is expected, not a wiring
+fault.</p>
+<h2 id="drv2605l-0x5a">DRV2605L (0x5A)<a class="headerlink" href="#drv2605l-0x5a" title="Permanent link">&para;</a></h2>
+<p>Checked against TI datasheet SLOS854D. Used here:</p>
+<table>
+<thead>
+<tr>
+<th>Reg</th>
+<th>Name</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0x00</td>
+<td>STATUS</td>
+<td>b7:5 DEVICE_ID (7 = DRV2605L), b3 DIAG_RESULT (1 = calibration failed; clears on read)</td>
+</tr>
+<tr>
+<td>0x01</td>
+<td>MODE</td>
+<td>b7 reset, b6 standby, b2:0: 0 internal trigger, 5 RTP, 7 auto-calibration</td>
+</tr>
+<tr>
+<td>0x02</td>
+<td>RTP_INPUT</td>
+<td>real-time amplitude</td>
+</tr>
+<tr>
+<td>0x03</td>
+<td>LIBRARY</td>
+<td>1-5 and 7 ERM libraries A-F, 6 LRA</td>
+</tr>
+<tr>
+<td>0x04-0x0B</td>
+<td>WAVEFORM_SEQ</td>
+<td>effect id 1-123, or bit 7 set = wait (n x 10 ms); 0 ends the sequence</td>
+</tr>
+<tr>
+<td>0x0C</td>
+<td>GO</td>
+<td>start (clears itself at the end of playback / calibration)</td>
+</tr>
+<tr>
+<td>0x16 / 0x17</td>
+<td>RATED_VOLTAGE / OD_CLAMP</td>
+<td>see below</td>
+</tr>
+<tr>
+<td>0x18 / 0x19</td>
+<td>A_CAL_COMP / A_CAL_BEMF</td>
+<td>calibration results</td>
+</tr>
+<tr>
+<td>0x1A</td>
+<td>FEEDBACK_CONTROL</td>
+<td>b7 ERM(0)/LRA(1), b6:4 brake factor, b3:2 loop gain, b1:0 BEMF gain</td>
+</tr>
+<tr>
+<td>0x1B-0x1E</td>
+<td>CONTROL1-4</td>
+<td>drive time, sample/blanking/idiss, ERM open-loop and RTP format, auto-cal time</td>
+</tr>
+</tbody>
+</table>
+<h3 id="motor">Motor<a class="headerlink" href="#motor" title="Permanent link">&para;</a></h3>
+<p>Adafruit 1201 "Vibrating Mini Motor Disc": ERM, 10 mm coin, brushed, rated 3.0 V (operates 2-5 V),
+about 11,000 rpm, about 75-100 mA running. Default drive mode is <strong>ERM open loop</strong> with ROM library 2
+(TS2200 library B); the voltage ceiling is 3.6 V. Build-time defaults: <code>NEUPOD_HAPTIC_ACTUATOR=HAL_HAPTIC_ERM</code>
+and <code>NEUPOD_HAPTIC_ERM_LOOP=HAL_HAPTIC_LOOP_OPEN</code> (or <code>HAL_HAPTIC_LOOP_CLOSED</code>). Test menu keys: <code>o</code> toggles
+open/closed loop, <code>e</code> / <code>l</code> select ERM / LRA.</p>
+<p><strong>Why open loop:</strong> on the bench the closed-loop auto-calibration did not converge on this motor (3.0 V
+rated, 3.3 V supply; DIAG_RESULT failed after 1844 ms) and the motor buzzed instead of clicking. By user
+decision the ERM now runs open loop, which is also how Adafruit's own library drives this motor. Closed
+loop stays available (<code>o</code> key or build flag) for later experiments. The LRA path (library 6, LRA bit) is
+selectable at run time (Settings &gt; Haptics &gt; Actuator) and described below.</p>
+<h3 id="lra-leader-ld0832aa">LRA: LEADER LD0832AA<a class="headerlink" href="#lra-leader-ld0832aa" title="Permanent link">&para;</a></h3>
+<p>Target actuator for the final board: 8 mm coin LRA, rated 2.0 V rms, resonance about 235 Hz (build defaults in
+<code>HAL_HAPTIC_LRA_LD0832AA</code>, <code>hal_haptic_lra_params_t</code>; override at run time with <code>hal_haptic_set_lra_params()</code>).
+<strong>Not confirmed from the LCSC datasheet (C2682305):</strong> the datasheet could not be fetched from the build host, so
+2.0 V rms and 235 Hz are the figures from the brief. Everything below is computed from those two numbers, so a
+different actuator only needs different parameters. The peak ceiling (2.8 V, 2 V x sqrt(2) floored) is a design
+choice, not a datasheet figure.</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Formula (datasheet SLOS854D)</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LIBRARY</td>
+<td>LRA library</td>
+<td>6</td>
+</tr>
+<tr>
+<td>FEEDBACK</td>
+<td>N_ERM_LRA = 1, brake factor 2, loop gain 2, BEMF gain 2 (calibration overwrites the gain)</td>
+<td>0xAA</td>
+</tr>
+<tr>
+<td>RATED_VOLTAGE</td>
+<td>Eq. 5: V rms = 20.58 mV x RV / sqrt(1 - (4 x tSAMPLE + 300 us) x f), tSAMPLE = 300 us, so RV = floor(2000 x sqrt(1 - 1500 us x 235) / 20.58)</td>
+<td>78 (0x4E)</td>
+</tr>
+<tr>
+<td>OD_CLAMP</td>
+<td>Eq. 9: V peak = 21.22 mV x OD, so OD = floor(2800 / 21.22)</td>
+<td>131 (0x83) = 2.78 V</td>
+</tr>
+<tr>
+<td>CONTROL1</td>
+<td>STARTUP_BOOST + DRIVE_TIME = (half period - 0.5 ms) / 0.1 ms; half period 2.128 ms</td>
+<td>0x90 (2.1 ms)</td>
+</tr>
+<tr>
+<td>CONTROL2</td>
+<td>SAMPLE_TIME 3, BLANKING 1, IDISS 1 (datasheet defaults)</td>
+<td>0xF5</td>
+</tr>
+<tr>
+<td>CONTROL3</td>
+<td>ERM_OPEN_LOOP and LRA_OPEN_LOOP cleared (closed loop, auto-resonance), RTP signed</td>
+<td>0x80</td>
+</tr>
+<tr>
+<td>CONTROL4</td>
+<td>AUTO_CAL_TIME = 3</td>
+<td>0x30</td>
+</tr>
+</tbody>
+</table>
+<p>Click effect on an LRA: library 6 effect 4, Sharp Click 100 % (ERM keeps effect 3).</p>
+<h3 id="calibration-and-persistence">Calibration and persistence<a class="headerlink" href="#calibration-and-persistence" title="Permanent link">&para;</a></h3>
+<p><code>hal_haptic_calibrate()</code> follows datasheet 8.5.6: MODE = 7, write the inputs above, GO, poll GO every 10 ms
+(through the delay hook, <code>drv2605l_set_delay_fn</code>; the firmware installs the scheduler delay so other tasks run),
+read STATUS DIAG_RESULT (1 = failed), then A_CAL_COMP, A_CAL_BEMF and BEMF_GAIN. A failure or timeout rebuilds the
+chip from reset with the previous good values.</p>
+<p>The haptic task (core 0) owns this. The results are stored in the settings store (<code>NPhc</code>, 9 bytes: version,
+actuator, comp, bemf, gain, rated mV, peak mV, resonance Hz; version 2, 11 bytes) and re-applied on every boot, so the motor spins for the
+calibration once per actuator. It runs automatically when an LRA is selected (or built in) and no matching record
+exists, once the settings are known (the card's values have loaded, or there is no working card; a boot without a card cannot store it, so it repeats each boot). If the record cannot be stored (store full) the row shows Failed and a console line says so, and on demand
+from Settings &gt; Haptics &gt; Calibrate. Changing the actuator type, or the rated voltage, peak voltage or resonance (OD_CLAMP is a calibration input), makes the stored
+record not match, so it recalibrates (as does an old version 1 record, which had no peak); switching back and forth between types re-runs it for each. The task holds the
+I2C bus (the gauge read waits) for about a second but sleeps between polls, never blocking the UI. Clicks during it:
+<code>rt_haptic_click()</code> drops the request while the state is RUNNING (nothing is queued), and the task drains its queue when
+a calibration starts and again when it ends, which also discards a click that raced past the check. If the automatic attempt fails it is not retried until the next boot or a manual Calibrate.</p>
+<h3 id="click-setting-and-rate-limit">Click setting and rate limit<a class="headerlink" href="#click-setting-and-rate-limit" title="Permanent link">&para;</a></h3>
+<p>Settings &gt; Click: Piezo / Haptic / Both / Off (<code>NPck</code> 2 / 1 / 3 / 0). There is no piezo driver yet
+(<code>NEUPOD_PIEZO_FITTED</code> is 0), so the menu cycles Haptic / Off only; a Piezo or Both value already stored is accepted but
+silent (<code>rt_piezo_click()</code> is a stub). Haptic clicks go through a 2-deep queue and a
+35 ms gate (<code>haptic_gate_pass</code>): a fast wheel spin drops requests instead of queueing them.</p>
+<h3 id="bring-up-order-motor-safety">Bring-up order (motor safety)<a class="headerlink" href="#bring-up-order-motor-safety" title="Permanent link">&para;</a></h3>
+<p>In open loop OD_CLAMP is the full-scale drive (21.59 mV x OD, datasheet Eq. 6), so the clamp value
+must always match the loop mode in effect: 182 (the closed-loop value) would be about 3.93 V in open
+loop. The chip powers up open-loop. The driver therefore leaves standby, sets the chosen loop bit in
+CONTROL3 and reads it back, writes the feedback/timing registers, and writes RATED_VOLTAGE then
+OD_CLAMP <strong>last</strong>. If any step fails the chip is put back into standby and play/click/RTP/calibrate
+return an error until init succeeds. A failed or timed-out calibration resets the chip and re-applies
+the previous good calibration. The test menu puts the driver in a safe state (RTP 0, GO 0, standby)
+as soon as the bus comes up, and back in standby after every haptic test. The <code>l</code> (LRA) key is
+disabled unless the test is built with <code>NEUPOD_I2C_TEST_ALLOW_LRA</code>.</p>
+<h3 id="register-values-erm-open-loop-default">Register values: ERM open loop (default)<a class="headerlink" href="#register-values-erm-open-loop-default" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Formula (datasheet Eq. 6)</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CONTROL3</td>
+<td>ERM_OPEN_LOOP = 1 (power-on default), RTP signed</td>
+<td>0xA0</td>
+</tr>
+<tr>
+<td>OD_CLAMP</td>
+<td>V = 21.59 mV x OD, so OD = floor(3600 / 21.59)</td>
+<td>166 (0xA6) = 3.584 V (167 would be 3.605 V)</td>
+</tr>
+<tr>
+<td>RATED_VOLTAGE</td>
+<td>ignored in open loop (datasheet 8.5.2.1); the closed-loop value is written as a safe one</td>
+<td>141 (0x8D)</td>
+</tr>
+</tbody>
+</table>
+<p>The datasheet constant is 21.59 mV per step for ERM open loop (Eq. 6), not 21.96 mV; the maximum open-loop
+clamp is therefore 166, enforced by the tests. Open-loop RTP is signed: 0 = no drive, 127 = +OD_CLAMP,
+negative values drive in reverse (braking). The ramp test only uses 0 to 127 to 0.</p>
+<h3 id="register-values-erm-closed-loop-optional-datasheet-default-timings">Register values: ERM closed loop (optional, datasheet default timings)<a class="headerlink" href="#register-values-erm-closed-loop-optional-datasheet-default-timings" title="Permanent link">&para;</a></h3>
+<p>Timings used: DRIVE_TIME = 0x13 (ERM: 1 ms + 19 x 0.2 ms = 4.8 ms), BLANKING_TIME = 1 (75 us),
+IDISS_TIME = 1 (75 us); SAMPLE_TIME is LRA-only and left at 3. CONTROL1 = 0x93, CONTROL2 = 0xF5.</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Formula (datasheet)</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RATED_VOLTAGE</td>
+<td>Eq. 4: V = 21.18 mV x RV, so RV = floor(3000 / 21.18)</td>
+<td>141 (0x8D) = 2.986 V</td>
+</tr>
+<tr>
+<td>OD_CLAMP</td>
+<td>Eq. 8: V = 21.64 mV x OD x (4.8 ms - 300 us) / (4.8 ms + 75 us + 75 us), so OD = floor(3600 / 19.673 mV)</td>
+<td>182 (0xB6) = 3.580 V (183 would give 3.6001 V, over the limit)</td>
+</tr>
+<tr>
+<td>FEEDBACK (pre-cal)</td>
+<td>ERM, brake factor 2, loop gain 2, BEMF gain 2 (power-on default; calibration overwrites it)</td>
+<td>0x2A</td>
+</tr>
+<tr>
+<td>CONTROL3</td>
+<td>ERM_OPEN_LOOP cleared (power-on default is open loop), RTP format signed</td>
+<td>0x80</td>
+</tr>
+<tr>
+<td>CONTROL4</td>
+<td>AUTO_CAL_TIME = 3 (1000-1200 ms)</td>
+<td>0x30</td>
+</tr>
+</tbody>
+</table>
+<p>Brake factor 2, loop gain 2 and AUTO_CAL_TIME 3 are the "valid for most actuators" values in the
+datasheet calibration procedure. The floors are deliberate: the register never exceeds the
+requested voltage. The output cannot exceed the DRV2605L supply either (3.3 V on the breakout
+unless VIN is higher), so the real ceiling on this bench is the supply, not 3.6 V.</p>
+<h3 id="real-time-playback">Real-time playback<a class="headerlink" href="#real-time-playback" title="Permanent link">&para;</a></h3>
+<p>Signed format (the power-on default). Closed loop (bidirectional): 0x00 = no drive, 0x7F (127) = full
+rated voltage, 0x3F about half; negative values act as zero. Open loop: 0x7F = +OD_CLAMP, 0x81 =
+-OD_CLAMP (reverse drive). The ramp test uses 0 to 127 to 0, which is safe in both.</p>
+<h3 id="click-latency">Click latency<a class="headerlink" href="#click-latency" title="Permanent link">&para;</a></h3>
+<p><code>hal_haptic_click_prepare(effect)</code> loads the sequencer once; <code>hal_haptic_click()</code> is then a single
+two-byte I2C write (GO). Test 7 times that call with the microsecond clock. It measures the
+host-side I2C cost only; motor current and mechanical onset cannot be measured on this bench (no
+current sense or scope hook).</p>
+<h2 id="test-menu-i2c_test">Test menu (<code>i2c_test</code>)<a class="headerlink" href="#test-menu-i2c_test" title="Permanent link">&para;</a></h2>
+<p>Flash with <code>scripts/flash.sh rp2350 i2c_test</code>; menu on UART0 at 115200. <code>q</code> stops a running test (any
+key stops the effect sweep).</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Test</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Bus scan</td>
+<td>idle-line check, scan 0x08-0x77, PASS when 0x36 and 0x5A answer; retries at 100 kHz if a device is missing or errors occur</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Gauge</td>
+<td>dumps version/config, then 10 s of voltage, SOC and rate; SKIP if no battery</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Gauge under load</td>
+<td>5 s idle, 10 s with backlight 100 % and CPU busy; backlight is turned off at the end. Shows nothing if the Pico is USB-powered: the load current must flow from the battery through the gauge</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Haptic ID</td>
+<td>STATUS, device ID (must be 7), mode, library, control registers</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Haptic calibrate</td>
+<td>closed loop only (SKIP in open loop): auto-calibration (motor spins about 1 s); prints the measured values, then notes the restore, and a build-flag snippet</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Haptic sweep</td>
+<td>effects 1-123, 300 ms apart (1-10 only in run-all)</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Click latency</td>
+<td>20 clicks, min/avg/max microseconds</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Haptic RTP</td>
+<td>amplitude ramp 0 to 127 to 0 over 2 s</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Soak</td>
+<td>60 s: gauge read every 500 ms, click every 2 s; PASS only with zero I2C errors and recoveries ("clicks only" if the gauge is absent)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="bench-results-2026-11-02">Bench results (2026-11-02)<a class="headerlink" href="#bench-results-2026-11-02" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Working I2C speed</td>
+<td>399361 Hz measured actual at 400 kHz requested (both devices answered, no errors, 0 recoveries for 110 probe NACKs)</td>
+</tr>
+<tr>
+<td>Gauge identity</td>
+<td>VERSION 0x0012, CONFIG 0x971C, HIBRT read 0x8030</td>
+</tr>
+<tr>
+<td>Gauge VCELL check</td>
+<td>chip 3919 mV vs multimeter 3917.5 mV (0.04 %)</td>
+</tr>
+<tr>
+<td>Gauge under load (test 3)</td>
+<td>no change seen: the Pico was USB-powered, so the load did not pass through the gauge; the test needs the load current to flow from the battery through the gauge</td>
+</tr>
+<tr>
+<td>Haptic ID</td>
+<td>STATUS 0xE0 (device ID 7), start-up safe state worked (MODE 0x40)</td>
+</tr>
+<tr>
+<td>Closed-loop auto-cal</td>
+<td>failed to converge (1844 ms, DIAG_RESULT failed); motor buzzed but did not click; switched to open loop</td>
+</tr>
+<tr>
+<td>Click latency (call to GO write complete)</td>
+<td>closed loop 86 / 87 / 91 us; open loop 84 / 84 / 86 us (min / avg / max); target &lt; 15 ms</td>
+</tr>
+<tr>
+<td>Open-loop click feel</td>
+<td>effect 1 (Strong Click 100 %) at OD_CLAMP 166 (3.584 V): crisper than closed loop but still slightly buzzy; accepted for now</td>
+</tr>
+<tr>
+<td>RTP ramp (test 8)</td>
+<td>PASS, 2062 ms, open loop</td>
+</tr>
+<tr>
+<td>Soak result (test 9)</td>
+<td>PASS: 60 s, 120 gauge reads, 30 clicks, 510 transactions, 0 I2C errors, 0 recoveries</td>
+</tr>
+</tbody>
+</table>
+<h3 id="chosen-effect-ids">Chosen effect IDs<a class="headerlink" href="#chosen-effect-ids" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Use</th>
+<th>Effect ID</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Wheel click</td>
+<td>1 (Strong Click 100 %), provisional default; not yet chosen (test 6 sweep not run)</td>
+</tr>
+<tr>
+<td>Button click</td>
+<td><em>tbd</em></td>
+</tr>
+<tr>
+<td>Alert</td>
+<td><em>tbd</em></td>
+</tr>
+</tbody>
+</table>
+<h2 id="when-something-fails">When something fails<a class="headerlink" href="#when-something-fails" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Scan: nothing answers</td>
+<td>No ACK at all: check SDA GP20 / SCL GP21 wiring, breakout power, and that the breakout pull-ups are present</td>
+</tr>
+<tr>
+<td>Scan: lines low before start</td>
+<td>A device is holding the bus; the test tries recovery. If it stays low, power-cycle the breakouts</td>
+</tr>
+<tr>
+<td>0x36 missing, 0x5A fine</td>
+<td>Gauge is powered from the battery side: connect a charged LiPo (a flat one makes 0x36 vanish)</td>
+</tr>
+<tr>
+<td>0x5A missing</td>
+<td>DRV2605L power (3.3 V), wiring or EN pin</td>
+</tr>
+<tr>
+<td>Test 4: device ID not 7</td>
+<td>A different chip or a bad read</td>
+</tr>
+<tr>
+<td>Test 5: calibration fails or never finishes</td>
+<td>Wrong ERM/LRA setting, or the motor is not connected/seated</td>
+</tr>
+<tr>
+<td>Test 9 reports errors</td>
+<td>Look at the stats line: NACKs or timeouts point at wiring or pull-ups; try 100 kHz</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>

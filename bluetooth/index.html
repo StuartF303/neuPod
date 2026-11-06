@@ -1,0 +1,2350 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/bluetooth/">
+      
+      
+        <link rel="prev" href="../audio/">
+      
+      
+        <link rel="next" href="../wifi/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Bluetooth (BTstack, settings store) - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#bluetooth-btstack-the-settings-store-and-the-plan" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Bluetooth (BTstack, settings store)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#staged-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Staged plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#threading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Threading
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#boot-and-what-the-uart-shows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Boot and what the UART shows
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Discovery
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pairing-and-the-connection-stage-2a" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pairing and the connection (stage 2a)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pairing and the connection (stage 2a)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stage-2b-to-do-from-the-2a-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 2b to-do from the 2a review
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wi-fi-alongside-bluetooth-provisional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wi-Fi alongside Bluetooth (provisional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-the-sd-card-holds-the-pairing-data-and-never-the-internal-flash" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the SD card holds the pairing data (and never the internal flash)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Why the SD card holds the pairing data (and never the internal flash)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-the-write-lock-is-opened-and-only-for-this-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the write lock is opened, and only for this file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#volume-restore-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Volume restore policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-budget-rp2350-main-sram-512-kb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory budget (RP2350, main SRAM 512 KB)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#licence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Licence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stage-2-design-notes-2a-built-2b-and-2c-not-built" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 2 design notes (2a built; 2b and 2c not built)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-to-check-on-the-board-stage-2a" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What to check on the board (stage 2a)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-to-check-on-the-board-stage-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What to check on the board (stage 1)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wifi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../i2c-peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-music-library-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#staged-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Staged plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#threading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Threading
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#boot-and-what-the-uart-shows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Boot and what the UART shows
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Discovery
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pairing-and-the-connection-stage-2a" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pairing and the connection (stage 2a)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pairing and the connection (stage 2a)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stage-2b-to-do-from-the-2a-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 2b to-do from the 2a review
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wi-fi-alongside-bluetooth-provisional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wi-Fi alongside Bluetooth (provisional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-the-sd-card-holds-the-pairing-data-and-never-the-internal-flash" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the SD card holds the pairing data (and never the internal flash)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Why the SD card holds the pairing data (and never the internal flash)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-the-write-lock-is-opened-and-only-for-this-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the write lock is opened, and only for this file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#volume-restore-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Volume restore policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-budget-rp2350-main-sram-512-kb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory budget (RP2350, main SRAM 512 KB)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#licence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Licence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stage-2-design-notes-2a-built-2b-and-2c-not-built" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 2 design notes (2a built; 2b and 2c not built)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-to-check-on-the-board-stage-2a" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What to check on the board (stage 2a)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-to-check-on-the-board-stage-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What to check on the board (stage 1)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="bluetooth-btstack-the-settings-store-and-the-plan">Bluetooth: BTstack, the settings store and the plan<a class="headerlink" href="#bluetooth-btstack-the-settings-store-and-the-plan" title="Permanent link">&para;</a></h1>
+<p>Decision background: <a href="../adr/0007-bluetooth-audio-path/">ADR-0007</a> (BTstack on the CYW43439 for phase 1),
+<a href="../adr/0011-bare-metal-audio-core/">ADR-0011</a> (core 1 rules). Roles: neuPod is an <strong>A2DP source</strong> (SBC, and SBC-XQ =
+SBC at a high bitpool) and an <strong>AVRCP target</strong> (plus a controller side where absolute volume needs it); the headset is the
+sink. HFP comes later. This page covers what <strong>stage 1</strong> and <strong>stage 2a</strong> (pairing and connection management) built, and the plan for the rest of stage 2 and for stage 3.</p>
+<h2 id="staged-plan">Staged plan<a class="headerlink" href="#staged-plan" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Content</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>RAM trim; SD-backed settings store (volume, backlight, click feedback, and BTstack's link keys); BTstack classic running on core 0; HCI bring-up; device discovery with a Settings &gt; Bluetooth screen; host simulation</td>
+<td>built</td>
+</tr>
+<tr>
+<td>2a</td>
+<td>Pairing (SSP "just works") and one saved headset; connection states (Pairing, Connecting, Connected, Disconnected, Failed with a reason); Connect / Disconnect / Forget; Settings &gt; Bluetooth rows and the Devices pairing flow; link keys on the SD card; host simulation and tests. <strong>No audio.</strong> See <a href="#pairing-and-the-connection-stage-2a">Pairing and the connection</a></td>
+<td>built; bench: Pair / save / reconnect / Forget passed on a Sony WI-C200. Disconnect, re-pair after Forget, wiped-headset refusal and Wi-Fi + Bluetooth coexistence are deferred to 2b</td>
+</tr>
+<tr>
+<td>2b</td>
+<td>A2DP source with SBC / SBC-XQ; audio routing from core 1 through a new core 1 to core 0 PCM path (storage shared with the I2S ring, <a href="../adr/0013-bluetooth-ram-psram/">ADR-0013</a> amendment) with the source-side pacing model below; hi-res decimation on core 1; negotiated codec on the Now Playing badge</td>
+<td>planned</td>
+</tr>
+<tr>
+<td>2c</td>
+<td>AVRCP target with absolute volume, headset buttons, track metadata</td>
+<td>planned</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Reconnect on power-up and after a drop; polish (error states, auto-sleep of the radio); the ADR-0007 listening test (SBC-XQ against a QCC3008 board, AirPods Pro 3); power measurements</td>
+<td>planned</td>
+</tr>
+</tbody>
+</table>
+<h2 id="the-stack">The stack<a class="headerlink" href="#the-stack" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>BTstack</strong> from the Pico SDK 2.3.1 (<code>lib/btstack</code>, git <code>eb0bb8b5e</code>, <code>btstack_version.h</code> = 1.6.2): CMake targets
+  <code>pico_btstack_classic</code> (HCI, L2CAP, SDP, AVDTP, A2DP, AVRCP ...), <code>pico_btstack_hci_transport_cyw43</code> (HCI over the
+  CYW43439's shared bus, with the SDK's chip support and the controller's Bluetooth firmware), <code>pico_btstack_run_loop_async_context</code>
+  and <code>pico_btstack_sbc_encoder</code> (linked now to prove it builds; nothing calls it until stage 2, so it costs no flash).
+  Classic only: no BLE, no mesh. Configuration: <code>platforms/rp2350/btstack/btstack_config.h</code> (static pools, no <code>malloc</code>).</li>
+<li><strong>Not used</strong>: the SDK's <code>pico_btstack_cyw43</code> glue, because it stores BTstack's pairing data in the <strong>internal flash</strong>
+  (<code>pico_btstack_flash_bank</code> on <code>flash_safe_execute</code>). See "Why the SD card" below.</li>
+<li><strong>Our glue</strong>: <code>platforms/rp2350/hal/hal_radio_bt.c</code> provides <code>btstack_cyw43_init()</code> / <code>btstack_cyw43_deinit()</code> (the SDK's
+  <code>cyw43_arch_init()</code> calls them), implements the Bluetooth half of <code>hal/include/hal_radio.h</code> (<code>hal_bt_*</code>), and wraps
+  the settings store as a <code>btstack_tlv_t</code> for the link key database. <code>hal/host/hal_radio.c</code> is the host simulator.</li>
+<li><strong>Controller</strong>: the CYW43439 on the Pico 2 W. Its Bluetooth device address is the Wi-Fi MAC plus one (the SDK transport sets
+  it). <code>CYW43_ENABLE_BLUETOOTH=1</code> is set once for everything that links <code>neupod_freertos</code>, because <code>cyw43_arch_init()</code> is
+  compiled into several static libraries and every copy must agree.</li>
+</ul>
+<h2 id="threading">Threading<a class="headerlink" href="#threading" title="Permanent link">&para;</a></h2>
+<p>BTstack is single-threaded. It runs on the <strong>async context of the CYW43 driver</strong>, which with
+<code>pico_cyw43_arch_sys_freertos</code> is one FreeRTOS task, the "CYW43 worker" (core 0, priority 3, <strong>6 KB</strong> stack; it was
+4 KB before BTstack). Every BTstack callback, and our packet handler, runs on that task.</p>
+<table>
+<thead>
+<tr>
+<th>Caller</th>
+<th>How it reaches BTstack</th>
+<th>Blocks the caller?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>radio boot check (<code>hal_bt_init</code>)</td>
+<td><code>async_context_execute_sync</code></td>
+<td>yes, until the worker has queued the HCI power-on (milliseconds)</td>
+</tr>
+<tr>
+<td>UI task (<code>hal_bt_inquiry_start</code> / <code>_stop</code>; stage 2a: <code>hal_bt_pair</code> / <code>_connect</code> / <code>_disconnect</code> / <code>_forget</code>)</td>
+<td><code>btstack_run_loop_execute_on_main_thread</code> (a static callback registration each; the state is reserved with an atomic exchange first, so one request is in flight)</td>
+<td>no</td>
+</tr>
+<tr>
+<td>radio worker to the UI</td>
+<td><code>hal_bt_event_fn</code> callback, which <code>app/runtime/bt_service.c</code> turns into a 16-deep queue (<code>os_queue_send</code>, no wait: an event is dropped rather than holding the radio up)</td>
+<td>no</td>
+</tr>
+</tbody>
+</table>
+<p>Core 1 never calls any of this, and BTstack never runs on it. The rules in <a href="../runtime/">Runtime</a> hold unchanged;
+<code>tools/check_core1_closure.py</code> is still green on the linked image.</p>
+<h2 id="boot-and-what-the-uart-shows">Boot and what the UART shows<a class="headerlink" href="#boot-and-what-the-uart-shows" title="Permanent link">&para;</a></h2>
+<p>The "radio" boot check task (4.8 s deadline, then it keeps waiting up to 12 s so a slow bring-up still upgrades the result) calls
+<code>hal_system_late_init()</code> (CYW43 driver, which also starts BTstack's memory and run loop through <code>btstack_cyw43_init</code>), then
+<code>bt_service_start()</code>, which sets the local name (<code>neuPod</code>), the Class of Device (Audio, portable audio), makes the device
+<strong>never discoverable, and not connectable or bondable</strong> (nobody can find it; only while a Pair action runs is it connectable and bondable, for the chosen headset only, stage 2a) and calls <code>hci_power_control(HCI_POWER_ON)</code>.</p>
+<p>Expected UART lines (about 1 to 3 s after the splash starts; the exact time is a thing to measure on the board):</p>
+<div class="highlight"><pre><span></span><code>bt: HCI up, local BD_ADDR 28:CD:C1:xx:xx:xx
+bt: BTstack 1.6.2; controller HCI version 11 (Bluetooth 5.2) revision 0x.... , LMP 11, manufacturer 0x.... , LMP subversion 0x....
+boot: bluetooth ok      : HCI up, BD_ADDR 28:CD:C1:xx:xx:xx
+boot: wifi      DEGRADED: no Wi-Fi driver yet (Bluetooth comes first)
+boot: chk_radio  task stack free min .... B
+settings: no file yet (defaults) (0 items, seq 0)      (or: loaded (n items, seq n))
+</code></pre></div>
+<p>(The version numbers are what the controller reports; the values above are only the expected shape.) If HCI does not come up:
+<code>bt: HCI did not come up</code> or <code>bt: hci_power_control(ON) failed (n)</code> and the check shows "bluetooth stack down".</p>
+<h2 id="discovery">Discovery<a class="headerlink" href="#discovery" title="Permanent link">&para;</a></h2>
+<p><code>hal_bt_inquiry_start(10)</code> runs a general inquiry for 10 s (8 units of 1.28 s). Each result carries the address, the Class of
+Device, the signal strength (RSSI) and the name when it was in the extended inquiry response. The inquiry mode is set to "RSSI and
+extended inquiry response" (<code>hci_set_inquiry_mode(INQUIRY_MODE_RSSI_AND_EIR)</code> before power-on); BTstack's default is the plain mode,
+which carries neither. If the controller refuses the Inquiry command (BTstack gives no event for that) the scan ends at once with
+<code>bt: inquiry refused by the controller (status 0x..)</code>.
+<strong>Audio sinks</strong> are devices whose Class of Device major class is <em>Audio/Video</em> (bits 12..8 = 4: headsets, speakers, car kits).
+After the inquiry the radio asks for the names of audio devices that had none, one at a time (at most 6; a name request cannot
+overlap an inquiry). Up to 12 devices are kept per scan. Stopping a scan skips the name requests.</p>
+<p>Settings &gt; Bluetooth (<a href="../ui/">UI</a>) shows the status, the address and a <strong>Scan for devices</strong> row. Select opens the <strong>Devices</strong> screen,
+which starts the scan as it opens and lists everything found as it arrives: audio devices with a speaker symbol first (after the scan
+ends), then others greyed out, with the signal on the right. Its first row is <code>Stop scanning</code> / <code>Scan again</code>. Selecting an audio device pairs
+with it (stage 2a, below). Menu goes back and stops the scan.</p>
+<p>A device only answers an inquiry while it is <strong>discoverable</strong>: headphones in pairing mode, or a phone sitting on its Bluetooth
+settings page. Headphones that are connected to something else, or a phone with the screen off, do not appear.</p>
+<p>Console lines (UART), for testing without seeing the panel:</p>
+<div class="highlight"><pre><span></span><code>bt: scan start (10 s)
+bt: found 5C:xx:xx:xx:xx:xx cod=0x240404 rssi=-52 name='...' audio=yes
+bt: named 5C:xx:xx:xx:xx:xx cod=0x240404 rssi=-52 name='AirPods' audio=yes     (name arrived from a name request)
+bt: inquiry complete (3 results delivered by BTstack, 3 kept)
+bt: scan done, 3 devices
+</code></pre></div>
+<p>"Delivered by BTstack" counts every result before the 12-device limit; if it is 0 the controller heard nothing, if it is more than
+"kept" the limit was hit.</p>
+<h2 id="pairing-and-the-connection-stage-2a">Pairing and the connection (stage 2a)<a class="headerlink" href="#pairing-and-the-connection-stage-2a" title="Permanent link">&para;</a></h2>
+<p>Built and host-tested; Pair, save, reconnect and Forget passed on the bench (Sony WI-C200). Disconnect, re-pair after Forget, the refusal of a headset that wiped its key, and Wi-Fi + Bluetooth coexistence are <strong>deferred to the stage 2b bench</strong>. No audio: the connection ends at "the other side has an A2DP sink".</p>
+<p><strong>HAL</strong> (<code>hal/include/hal_radio.h</code>, <code>hal_bt_*</code>; the hardware half is <code>platforms/rp2350/hal/hal_radio_bt.c</code>, the host simulator <code>hal/host/hal_radio.c</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Call</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hal_bt_pair(dev)</code></td>
+<td>The Pair action. <strong>Never discoverable.</strong> Connectable and bondable <strong>on</strong> (with auto-accept and the "no input, no output" IO capability) for this headset only: a connection filter (<code>gap_register_classic_connection_filter</code>) rejects every other address, and a link key that appears for any other address is deleted at once. Outgoing ACL link, SSP "just works" authentication (the link key goes to the SD-card store), then an SDP query for an A2DP sink (UUID 0x110B) on the same link. Everything goes off again when it ends. 30 s limit (<code>HAL_BT_PAIR_TIMEOUT_MS</code>)</td>
+</tr>
+<tr>
+<td><code>hal_bt_connect(addr)</code></td>
+<td>Connect to a device paired before: SDP query first (it creates the link), then authentication with the <strong>stored key</strong> (<code>gap_request_security_level</code>). Not connectable, not bondable, and the IO-capability request is refused (IO capability UNKNOWN), so no transient pairing can authenticate the link. A Connect with <strong>no stored key</strong> (checked before it starts, again before authenticating, and again on the result) fails with <code>HAL_BT_FAIL_AUTH</code>; so does a headset that lost its key, instead of silently pairing again. 20 s limit</td>
+</tr>
+<tr>
+<td><code>hal_bt_disconnect()</code></td>
+<td>Cancels a Pair / Connect, or drops the link. Reported as DISCONNECTED, never as FAILED</td>
+</tr>
+<tr>
+<td><code>hal_bt_forget(addr)</code></td>
+<td>Deletes the link key (drops the link first if it is the current peer). <code>HAL_EBUSY</code>: both request slots are busy, retry. <code>HAL_ENODEV</code>: the stack is OFF, STARTING or FAILED: delete the record straight from the store with <code>hal_bt_storage_delete_key()</code> (what <code>bt_saved_delete_key()</code> does; BTstack reads its keys from the store on demand)</td>
+</tr>
+<tr>
+<td><code>hal_bt_link_state()</code> / <code>_link_reason()</code> / <code>_link_device()</code> / <code>hal_bt_accepting()</code></td>
+<td>State, failure reason, the device the state is about (also after a failure, so a screen can tell whose failure it is), and whether the radio is discoverable or connectable right now (only while Pair runs)</td>
+</tr>
+</tbody>
+</table>
+<p>States (<code>hal_bt_link_state_t</code>): <code>DISCONNECTED</code>, <code>PAIRING</code>, <code>CONNECTING</code>, <code>CONNECTED</code>, <code>FAILED</code> (with <code>hal_bt_fail_t</code>: <code>NOT_FOUND</code> no answer, <code>AUTH</code> pairing refused or stored key rejected, <code>NO_SINK</code> no A2DP sink,
+<code>TIMEOUT</code>, <code>LINK_LOST</code> an established link ended by the other side, <code>INTERNAL</code> the stack refused or went down, <code>BUSY</code> a Pair the headset ended or had no resources for: busy with something else or not in pairing mode, <code>PIN</code> a pre-2.1 headset that asks for a PIN). One phrase per reason, <code>hal_bt_fail_text()</code>, serves the console and the UI. A link change is a <code>HAL_BT_EVT_LINK</code> event (state, reason, device). It is separate from the
+radio state (<code>hal_bt_state_t</code>), except that a Pair or Connect needs the radio ON and not scanning, and a scan is refused while a link is being set up (<code>HAL_EBUSY</code> both ways). One link at a time.
+There is <strong>no reconnect</strong> at power-up or after a drop: stage 3.</p>
+<p><strong>The saved headset</strong> (<code>app/include/bt_saved.h</code>, <code>app/runtime/bt_saved.c</code>): settings key <strong><code>NPbd</code></strong> (<code>SETTING_BT_DEVICE</code>), 10 to 42 bytes: version 1, address, class (24 bit), name. The pairing key itself is BTstack's <code>BTL</code> record (tag "BTL" + raw slot number 0..7) in
+the same store (sealed). Capacity: the store holds 48 tags; the documented worst case (Wi-Fi networks, 8 link keys, resume, settings) was about 38, now about 41; a host test fills 47 other tags and still stores it, and checks that a full store refuses it
+cleanly. Rules, all tested: a device is remembered only after a Pair <strong>ended CONNECTED</strong>; a failed or cancelled Pair leaves the previous headset alone; a second headset <strong>replaces</strong> the first, and the first one's key is deleted
+(a queue of four addresses under a mutex, drained by <code>bt_service_tick</code>; an address stays queued until the radio takes it; a link event carries its attempt number and <code>bt_saved</code> ignores events of an attempt older than its pending Pair); a Pair that got as far as making a key and then failed (no A2DP sink) has its key deleted as well. If the store is <strong>not writable</strong> (card read-only or absent, so the store is RAM-only) a Pair still works for the session but the screen says "Paired - not saved (read-only)" and the console <code>bt: pair not persisted (store not writable)</code>; Forget then keeps the record and leaves the address in the stale queue until the card is writable (<code>bt: record kept ...</code>; the queue does no work, and does not touch the radio, while the store is unwritable: <code>bt: key delete waits ...</code>, then <code>bt: store writable, draining ...</code>; a new Pair of the same address removes its queue entry). A failed re-pair of the saved headset drops the record even then, since BTstack already deleted the key in RAM, because deleting only in RAM would bring the headset back at the next boot. <code>bt_saved_pair_begin</code> refuses (EBUSY) while another Pair candidate is live. If the record <strong>cannot be saved</strong> (store full) the new key is deleted, the link is dropped and the Devices screen says "Can't save: settings full". Re-pairing the <strong>remembered</strong> headset deletes its old key when the bonding starts (BTstack does that), so if that Pair fails or is cancelled the record is cleared too. Forget deletes the key and the record.
+<code>bt_service_pair</code> / <code>_connect</code> / <code>_disconnect</code> / <code>_forget</code> (<code>app/runtime/bt_service.c</code>) are what the UI calls. Link events are handled in the radio callback, not by a screen, so a Pair that finishes while the user has left the screen is still remembered.</p>
+<p><strong>UI</strong> (<a href="../ui/">UI</a>): Settings &gt; Bluetooth gains, once a headset is saved, three rows under "Scan for devices": its <strong>name</strong> (state on the right: Not connected / Pairing... / Connecting... / Paired, no audio yet / Failed: reason, with busy dots while working),
+<strong>Connect</strong> (becomes <strong>Disconnect</strong>, or <strong>Cancel</strong> while working) and <strong>Forget</strong> (asks for a second Select within 4 s). The right-hand pane shows the radio state, the address, the headset and its state. On the Devices screen, Select on an audio device stops
+the scan if needed and starts the Pair action; the row shows busy dots, then "Paired, no audio yet" or Failed: reason; the first row becomes <strong>Cancel pairing</strong> meanwhile. Menu on the Devices screen cancels a Pair in progress (so the radio does not stay connectable for nobody).</p>
+<p><strong>Failure stance.</strong> Fail closed for the radio: connectable and bondable go off on every way out of a Pair (success, failure, timeout, cancel, leaving the screen, the stack going down), and the 30 s timer is the backstop. Never discoverable. A saved device is written only on success.
+Fail open for the features: with no card the saved headset and the keys live in RAM for the session (as the store always does).</p>
+<p><strong>Known limit of 2a.</strong> Nothing holds the link open (the A2DP signalling channel arrives in 2b), so the link closes by itself shortly after the SDP query: by BTstack's idle timeout, or by the headset itself (reason 0x13, remote user terminated, seen on the bench after 1 to 2 s with a Sony WI-C200; BTstack's own idle timeout would be later). Both are reported as DISCONNECTED and logged as <code>bt: link closed &lt;addr&gt; reason 0x.. (idle, no profile yet)</code>, not as failures; only abnormal endings (supervision timeout and the like) are <code>LINK_LOST</code>. No keep-alive is added. The HAL still reports CONNECTED while the link is up, but the UI words it <strong>"Paired, no audio yet"</strong>
+rather than "Connected", so the later idle close ("Not connected", reported as DISCONNECTED, not as a failure) does not contradict it. A stage 2b connection keeps the link up.</p>
+<p><strong>Pairing method.</strong> Only Secure Simple Pairing (2.1 and later) is supported. With "no input, no output" IO capability the key is unauthenticated (<code>LEVEL_2</code>, "just works"), which is all a headset needs. A pre-2.1 headset that asks for a PIN is refused at once (<code>gap_pin_code_negative</code>) and the Pair ends FAILED "PIN not supported". <strong>SSP headsets only.</strong></p>
+<p><strong>Teardown.</strong> If the link drops during bonding, SDP or authentication from the other side (or by timeout), or locally during SDP or authentication, the attempt ends at once as FAILED (a local disconnect is ignored only while bonding: BTstack sends one itself after a failed bonding and the real bonding result follows), so the Pair window closes without waiting for the timer. Cancelling a connection that is still being created retries <code>hci_create_connection_cancel</code> every 200 ms (at most 10 times) when the controller cannot take a command yet. Every Pair / Connect has an attempt number: a disconnect request or an SDP
+result that belongs to an earlier attempt cannot end the next one (a query still running from a cancelled attempt makes the next one wait for the SDP client). When BTstack reports the stack OFF, a link or attempt in progress becomes FAILED (<code>INTERNAL</code>) and everything is reset.</p>
+<p><strong>Pairing order.</strong> Pair uses <code>gap_dedicated_bonding</code> and keeps the link for the SDP query: <code>btstack_config.h</code> defines <code>ENABLE_EXPLICIT_DEDICATED_BONDING_DISCONNECT</code>, so BTstack reports a good bonding at once and does not disconnect (a failed bonding still disconnects). Without that define the result is only reported after a disconnect, and every Pair timed out (found on the bench). <code>gap_dedicated_bonding</code> deletes any old key for the address first, which is what a re-pair wants; Connect cannot use it for that very reason. On real hardware the bonding result arrives before the link-key notification: neither the stray-key filter nor the candidate logic depends on the order (the Pair is still in progress when the key arrives, and a headset is only remembered after the SDP check).</p>
+<p><strong>Console lines</strong> (<code>hal_radio_bt.c</code>, <code>bt_saved.c</code>): <code>bt: pair &lt;addr&gt;</code>, <code>bt: connect &lt;addr&gt;</code>, <code>bt: connected &lt;addr&gt;</code>, <code>bt: &lt;addr&gt; failed: &lt;text&gt;</code>, <code>bt: link lost 0x..</code> (abnormal end of an established link), <code>bt: link closed &lt;addr&gt; reason 0x.. (idle, no profile yet)</code> (clean idle drop), <code>bt: link dropped in set-up 0x..</code>, <code>bt: bonding 0x..</code>, <code>bt: dropped stray key &lt;addr&gt;</code>, <code>bt: forgot &lt;addr&gt;</code>, <code>bt: pair not persisted (store not writable)</code>, <code>bt: key delete waits (store not writable)</code>, <code>bt: record kept (store not writable)</code>.</p>
+<h3 id="stage-2b-to-do-from-the-2a-review">Stage 2b to-do from the 2a review<a class="headerlink" href="#stage-2b-to-do-from-the-2a-review" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Bench: Disconnect, re-pair after Forget, a headset that wiped its key (Connect must refuse), Wi-Fi + Bluetooth coexistence.</li>
+<li>A host test that links <code>platforms/rp2350/hal/hal_radio_bt.c</code> against a BTstack stub and injects event sequences (bonding failure 0x16 then 0xD9, remote 0x13 during SDP, timeout in each phase, stack off mid-attempt, Forget of the current peer, PIN request). Today only the simulator in <code>hal/host/hal_radio.c</code> is tested.</li>
+<li>A boot-time sweep that drops any BTstack link key whose address is not the saved record (orphan keys after a damaged record or a power cut before the stale queue drains).</li>
+</ul>
+<h3 id="wi-fi-alongside-bluetooth-provisional">Wi-Fi alongside Bluetooth (provisional)<a class="headerlink" href="#wi-fi-alongside-bluetooth-provisional" title="Permanent link">&para;</a></h3>
+<p>Stuart's decision for stage 2: <strong>allow both</strong>; Wi-Fi follows its own "Wi-Fi while playing" setting and no interlock is built. <strong>This is provisional</strong>: the CYW43439 shares one radio and one bus between Wi-Fi and Bluetooth,
+and the decision may be revisited after bench testing. The policy lives in one place, <code>NEUPOD_BT_WIFI_COEX_ALLOW</code> in <code>app/include/runtime_config.h</code> (default 1); a future interlock hangs off it at <code>bt_service_pair()</code> / <code>bt_service_connect()</code> and in <code>wifi_service</code>.
+With 1 nothing is checked anywhere. Bench check (stage 2a): Wi-Fi joined and an NTP / HTTP transfer running, then Pair, Connect and Disconnect: no HCI reset, no dropped link, no Wi-Fi drop, and the 6 KB radio-worker stack minimum
+(<code>chk_radio</code> / the worker line) stays above its stage 1 value. Stage 2b repeats it with an A2DP stream.</p>
+<h2 id="why-the-sd-card-holds-the-pairing-data-and-never-the-internal-flash">Why the SD card holds the pairing data (and never the internal flash)<a class="headerlink" href="#why-the-sd-card-holds-the-pairing-data-and-never-the-internal-flash" title="Permanent link">&para;</a></h2>
+<p>BTstack normally keeps link keys and its device database in a TLV store in the last sectors of the <strong>internal QSPI flash</strong>.
+Erasing or programming that flash at run time means the XIP flash cannot be read for the duration (milliseconds to
+tens of milliseconds). <strong>Core 1 executes its code from that same flash</strong> (only the hot path is in RAM) and is deliberately not
+<code>multicore_lockout</code>-aware (ADR-0011: no RTOS, no locks, no cross-core stop requests), so a flash write from core 0 would stall or
+crash the audio core. Therefore <strong>nothing in this firmware writes the internal flash at run time</strong>, and the image contains none of
+<code>pico_flash</code>, <code>flash_safe_execute</code> or <code>btstack_tlv_flash_bank</code> code paths in use (checked on the linked ELF).</p>
+<p>Link keys and the device database are stored in the <strong>settings store</strong> instead, a small file on the microSD card:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>API</td>
+<td><code>app/include/settings_store.h</code>, <code>app/settings/settings_store.c</code>; RTOS glue <code>app/runtime/settings_service.c</code></td>
+</tr>
+<tr>
+<td>Content</td>
+<td>tag (32-bit) to value (up to 96 bytes), up to 48 tags (<code>SETTINGS_MAX_ITEMS</code>; worst case about 41 with the saved headset): volume (<code>NPvo</code>), backlight (<code>NPbl</code>), auto-dim and its idle time (<code>NPad</code>/<code>NPat</code>), output path of the saved volume (<code>NPvp</code>), the resume record (<code>NPr0</code>/<code>NPr1</code>, <a href="../audio/#resume-last-track-and-position">Audio</a>), shuffle and repeat (<code>NPsh</code>/<code>NPrp</code>), click mode (<code>NPck</code>: 0 off, 1 haptic, 2 piezo, 3 both), haptic actuator (<code>NPha</code>) and calibration (<code>NPhc</code>), Wi-Fi settings and networks (<a href="../wifi/">Wi-Fi</a>), BTstack link keys (<code>BTL</code> + slot 0..7, 28 bytes plaintext, stored sealed since the secrets work, up to 8), the remembered headset (<code>NPbd</code>, 10 to 42 bytes, stage 2a) and later device records. The same tag/value/length model as BTstack's TLV, so <code>hal_bt_storage_t</code> (in <code>hal_radio.h</code>) maps one to one onto <code>btstack_tlv_t</code></td>
+</tr>
+<tr>
+<td>File</td>
+<td>two alternating files <code>/.neupod/settings.a</code> and <code>settings.b</code>: magic <code>NPST</code>, version (2; version-1 files, same layout and at most 32 items, are still read), count, sequence number, items, CRC-32. Little endian. About 4.9 KB at most (48 tags x 101 bytes). Firmware older than the version-2 store does not read these files: it sets them aside as "newer" and starts from defaults (it never overwrites them), so a rollback loses the settings but not the file</td>
+</tr>
+<tr>
+<td>Reading</td>
+<td><code>settings_load()</code> on the storage task right after the card mounted. A file that fails magic, version or CRC gives <strong>defaults</strong> (reported on the UART, replaced by the next save). A newer or older layout is treated the same way</td>
+</tr>
+<tr>
+<td>Crash-safe save</td>
+<td><strong>no rename and no delete.</strong> The image is written in place over the OLDER (or invalid) of the two files and synced; the other file is never touched. Load takes the valid file with the higher sequence (wrap-safe), so a power cut at any point leaves at least the previous complete state; a torn file just fails its CRC. A file with a NEWER layout version is moved aside as <code>settings.old</code> at the next save instead of being wiped (firmware rollback). Host tests cut the power during the write, again during a rewrite after a cut, and on the very first save</td>
+</tr>
+<tr>
+<td>Who writes</td>
+<td>only the <strong>storage task</strong> (<code>settings_service_poll</code>: it wakes every 500 ms when idle and looks at the store at most every 250 ms). The first unsaved change is written about 1.5 s later, so a burst of wheel clicks is one write; a failed save is retried after 5 s. <strong>No save while audio is playing</strong> (an SD card can stall for far longer than the audio ring lasts): changes wait for pause, stop, the end of the track or an idle moment, then are written. The cost is that a volume change made during a long track is lost if the power fails before the next pause. While paused the ring is full and nothing consumes it, so a write cannot hurt. Core 1 never touches it</td>
+</tr>
+<tr>
+<td>No card / degraded</td>
+<td>the store is <strong>RAM-only</strong>: every setter and the BTstack storage still work for the session, nothing is written, the UART says so. After 3 failed saves in a row the store stops trying (RAM-only) until restart. Failure stance: fail <strong>safe for the card</strong> (no write is attempted when the card or its mount is not healthy) and fail <strong>open for the features</strong> (settings and pairing keep working in RAM)</td>
+</tr>
+<tr>
+<td>Reads before the load</td>
+<td>BTstack writes are refused until the store knows whether there is a card and has loaded it (the load would otherwise throw them away). With no card at all they are accepted for the session</td>
+</tr>
+</tbody>
+</table>
+<h3 id="how-the-write-lock-is-opened-and-only-for-this-file">How the write lock is opened, and only for this file<a class="headerlink" href="#how-the-write-lock-is-opened-and-only-for-this-file" title="Permanent link">&para;</a></h3>
+<p>The card is write-locked by default (<code>hal_storage_set_write_enabled(false)</code>). <code>settings_flush()</code> is the only production code that opens it, and it
+does so in one fixed pattern:</p>
+<ol>
+<li><code>nfs_write_scope_enter("/.neupod")</code>: from now until <code>nfs_write_scope_leave()</code> every mutating <code>nfs_*</code> call (open for write, mkdir, unlink,
+   rename, with both paths) whose normalised path is not <code>/.neupod</code> itself or below it <strong>fails with <code>NFS_ERR_IO</code></strong>, on the card and on the host.
+   <code>..</code> is resolved before the check and the comparison is by path component (<code>/.neupod2</code> is outside).</li>
+<li><code>hal_storage_set_write_enabled(true)</code> (remembering the previous state).</li>
+<li>save (the five steps above).</li>
+<li><code>hal_storage_set_write_enabled(previous)</code>, then the scope is left. There is one exit path, so a failed or "power lost" save restores both.</li>
+</ol>
+<p>What this does <strong>not</strong> cover, stated plainly: FatFs updates the FAT and the directory entries that belong to files inside <code>/.neupod</code>,
+and those sectors are shared with the rest of the volume; the scope limits which <em>files</em> can be changed, not which sectors the file
+system touches while changing them. It also does not stop a raw <code>hal_storage_write()</code>, which nothing else in the firmware
+calls outside the storage test menus. The store never formats, never creates or deletes anything outside <code>/.neupod</code>, and its
+paths are compile-time constants. The scope is not recursive and is meant for one caller on one task, so it has no lock.</p>
+<h3 id="volume-restore-policy">Volume restore policy<a class="headerlink" href="#volume-restore-policy" title="Permanent link">&para;</a></h3>
+<p>The saved volume is restored at boot after the load, <strong>but never louder than the power-on default</strong> (-30 dB, <code>player_restore_volume</code>, headphone safety,
+see <a href="../audio/">Audio</a>), and only if the user has not changed the volume yet in this session. A saved quiet level (for example -40 dB) comes back; a saved
+loud level (for example -10 dB) comes back as -30 dB. The constant is <code>PLAYER_RESTORE_MIN_ATT_DB</code>.</p>
+<p><strong>Replacement (design response, 3 Nov 2026; built in <code>player_volume_restore_att()</code>):</strong> honour the saved level, except cap at -30 dB when</p>
+<ul>
+<li>the output path differs from the one the level was saved for (Bluetooth ↔ wired ↔ line/optical), or</li>
+<li>a headphone insertion is detected at boot and the saved path was line-out.</li>
+</ul>
+<p>The output path is stored alongside the level in the settings store (<code>NPvp</code>, an <code>output_path_t</code>: wired, line, optical, Bluetooth). Conservative readings
+taken where the text is silent: a level saved without a path (older firmware) or a restore when the current path is unknown is capped; line-out and optical
+count as different paths (any change of path is a change); a level already quieter than -30 dB is never touched. <strong>Nothing in the firmware reports the output
+path yet</strong> (no Bluetooth audio routing, no jack detect), so until a source calls <code>player_set_output_path()</code> / <code>player_set_headphones_at_boot()</code> every restore
+is capped at -30 dB, exactly as before; the policy, the stored path and the tests are in place.</p>
+<h2 id="memory-budget-rp2350-main-sram-512-kb">Memory budget (RP2350, main SRAM 512 KB)<a class="headerlink" href="#memory-budget-rp2350-main-sram-512-kb" title="Permanent link">&para;</a></h2>
+<p>The static RAM ("bss", every figure from <code>arm-none-eabi-size</code> on the linked <code>neupod.elf</code>):</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>before (feat/codecs)</th>
+<th>after stage 1</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FreeRTOS heap (<code>NEUPOD_RTOS_HEAP_BYTES</code>)</td>
+<td>112 KB</td>
+<td><strong>80 KB</strong></td>
+</tr>
+<tr>
+<td>LVGL pool (<code>NEUPOD_LVGL_POOL_BYTES</code>)</td>
+<td>96 KB</td>
+<td><strong>72 KB</strong> (the host tour still passes)</td>
+</tr>
+<tr>
+<td>codec arena</td>
+<td>116 KB</td>
+<td>116 KB</td>
+</tr>
+<tr>
+<td>settings store (items, parse buffers)</td>
+<td>0</td>
+<td>about 5.3 KB at the end of stage 1; 12.7 KB with Wi-Fi (<a href="../wifi/">Wi-Fi</a>) and 32 items; <strong>about 9.9 KB now with 48 items</strong> (items 5.0 KB + one 4.9 KB image buffer: the load validates the two files in the buffer and parses the winner straight into the items, so there are no staging copies)</td>
+</tr>
+<tr>
+<td>BTstack (HCI buffers, pools) and the Bluetooth HAL</td>
+<td>0</td>
+<td>about 6.6 KB</td>
+</tr>
+<tr>
+<td><strong>bss total</strong></td>
+<td><strong>481,588 B</strong></td>
+<td><strong>436,480 B</strong> (45,108 B freed)</td>
+</tr>
+<tr>
+<td>flash image (<code>text</code>)</td>
+<td>1,060,732 B</td>
+<td>1,120,532 B (+59,800 B: BTstack classic, transport, settings, UI)</td>
+</tr>
+</tbody>
+</table>
+<p>The two constants are in <code>app/os/memory_budget.h</code>. Heap consumers that grew: the CYW43 worker stack (4 to 6 KB), a transient 4 KB boot-check stack
+for the radio check, the Bluetooth event queue (about 1 KB) and the settings mutex. The monitor prints the heap low-water mark and the LVGL pool peak every 10 s, which is
+the number to check on the board (earlier bench figures: heap minimum free about 58 KB of 112 KB, LVGL peak about 38 KB, both before this change).</p>
+<p><strong>Stage 2a delta</strong> (clean Release builds of <code>main</code> at 4944981 and of the branch, <code>arm-none-eabi-size</code> on <code>neupod.elf</code>):</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>main</th>
+<th>stage 2a</th>
+<th>delta</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>flash image (<code>text</code>)</td>
+<td>1,263,280 B</td>
+<td>1,285,888 B</td>
+<td><strong>+22,608 B</strong> (SDP client and L2CAP now linked and used, the pairing state machine, the saved-headset module, the UI rows)</td>
+</tr>
+<tr>
+<td><code>data</code></td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>static RAM (<code>bss</code>)</td>
+<td>488,896 B</td>
+<td>489,340 B</td>
+<td><strong>+444 B</strong> (L2CAP and SDP client state, the link state machine, the saved-device candidate and the four-deep key-deletion queue)</td>
+</tr>
+<tr>
+<td>free SRAM (<code>__HeapLimit - __end__</code>)</td>
+<td>15,320 B</td>
+<td>14,876 B</td>
+<td><strong>-444 B</strong></td>
+</tr>
+</tbody>
+</table>
+<p>BTstack heap use: none. <code>HAVE_MALLOC</code> is not defined and every pool is a static array in <code>.bss</code>; the pool counts in <code>btstack_config.h</code> did not change (the 444 B above is everything that moved). The FreeRTOS heap and the task stacks are unchanged;
+the new code runs on the 6 KB radio-worker stack, so its high-water mark is on the bench list. No internal-flash write code is linked (<code>flash_safe_execute</code>, <code>pico_flash</code>, <code>btstack_tlv_flash_bank</code> are absent from the ELF). The core-1 closure check reports ok.</p>
+<p>BTstack pools (<code>btstack_config.h</code>) are sized for <strong>one</strong> headset: 1 HCI connection, 4 L2CAP channels, 1 AVDTP connection, 2 stream endpoints, 1 AVRCP connection,
+8 remembered link keys (the UI remembers one headset; the other seven slots are headroom); ACL buffers 1021 + 4 bytes. Stage 2a needs 1 HCI connection and 1 L2CAP channel (the SDP query), so they were not touched. Revisit them in 2b when the real stream is up.</p>
+<h2 id="licence">Licence<a class="headerlink" href="#licence" title="Permanent link">&para;</a></h2>
+<p>BTstack is <strong>not</strong> free for commercial use. Its own licence is non-commercial only; Raspberry Pi holds a grant that lets purchasers of its
+Pico W / Pico 2 W / RM2 products use it in their products. The details, and what is <strong>not</strong> settled, are in the third-party table of
+<a href="https://github.com/StuartF303/neuPod/blob/main/LICENSE.md"><code>LICENSE.md</code></a>. In short: fine on the Pico 2 W bench rig; a final board
+with a bare CYW43439 chip (or any non-Raspberry-Pi radio route) needs a written answer from BlueKitchen / Raspberry Pi, or a commercial
+BTstack licence, before anything is sold or distributed. The cyw43-driver has the same shape of licence (non-commercial, with a Raspberry Pi
+grant for use with its chips).</p>
+<h2 id="stage-2-design-notes-2a-built-2b-and-2c-not-built">Stage 2 design notes (2a built; 2b and 2c not built)<a class="headerlink" href="#stage-2-design-notes-2a-built-2b-and-2c-not-built" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Priority and RAM (<a href="../adr/0013-bluetooth-ram-psram/">ADR-0013</a>, amendment of 4 Nov 2026):</strong> stage 2 follows the Audio Pack tone test and MP3/ALAC playback. The original funding (sizing the codec arena, releasing LVGL's second render buffer)
+  no longer pays: the arena saving was already spent in #17, and free SRAM is now about 15 KB (15,320 B measured on <code>main</code>, 14,876 B with stage 2a). The <strong>core 1 to core 0 Bluetooth PCM ring reuses the 32 KB I2S PCM ring storage</strong>: the outputs are
+  exclusive (I2S or Bluetooth, never both), so the same bytes serve whichever sink is active. That adds <strong>no new static RAM</strong>; the SBC encoder state and working buffers are measured in 2b and come out of the free SRAM.</li>
+<li><strong>Hi-res audio to Bluetooth:</strong> decimated <strong>on core 1</strong> by a 2:1 or 4:1 half-band FIR to 44.1 / 48 kHz, with 24 to 16 bit TPDF dither, before the samples enter the core 1 to core 0 ring. SBC cannot carry more than 48 kHz / 16 bit.</li>
+<li><strong>Wi-Fi during A2DP:</strong> allowed (Stuart's decision, <strong>provisional</strong>, see <a href="#wi-fi-alongside-bluetooth-provisional">Wi-Fi alongside Bluetooth</a>: one policy macro, no interlock). The stage 2b bench test has to show an A2DP stream stable while Wi-Fi comes and goes.</li>
+<li>
+<p><strong>Final board radio:</strong> not a bare CYW43439 (assembly and licence, <a href="../adr/0007-bluetooth-audio-path/">ADR-0007</a>); the stage 2 code stays behind <code>hal_bt_*</code>.</p>
+</li>
+<li>
+<p><strong>Verify while Wi-Fi toggles:</strong> the Wi-Fi service switches the station on and off (playback pause, idle timeout) on the same radio worker that runs BTstack. Before relying on it, check on the board that an A2DP stream stays stable (no dropouts, no HCI resets) when Wi-Fi comes and goes, and with "Wi-Fi while playing" On.</p>
+</li>
+<li>
+<p><strong>Pairing and saved device (2a, built):</strong> see <a href="#pairing-and-the-connection-stage-2a">above</a>.</p>
+</li>
+<li><strong>A2DP source</strong>: BTstack's <code>a2dp_source</code> with one SBC stream endpoint; SBC at 44.1 kHz, joint stereo, 16 blocks, 8 subbands, bitpool 53 (about 328 kbit/s) as the
+  default and a high bitpool (SBC-XQ, up to what the headset's capabilities allow; the AirPods Pro 3 also offer AAC, which we do not do) when the sink accepts it.
+  The encoder is <code>pico_btstack_sbc_encoder</code> (Bluedroid, Apache-2.0).</li>
+<li><strong>Audio routing</strong>: today core 1's decoder fills a PCM ring that its own I2S/null sink drains. For Bluetooth, a new <strong>core 1 to core 0 PCM ring</strong> (single producer, single consumer, the
+  same <code>spsc_ring</code> rules, 16-bit stereo, roughly 150 to 250 ms) receives the decoded and volume-scaled samples; a core 0 "bt audio" task (or the BTstack worker itself) takes
+  them, encodes SBC frames and hands media packets to BTstack. Core 1 gains a "virtual sink" mode (the null sink's hardware alarm timing) so the decoder keeps its block cadence; nothing on
+  core 1 uses the RTOS, and the ring and its counters join the closure check.</li>
+<li><strong>Source-side pacing</strong>: a source must deliver samples at the sample rate, but the headset's clock is not ours. The ring is the buffer: the link's own flow control (the controller's ACL buffers, <code>can send now</code> events) slows the
+  encoder task when the headset consumes slowly, the ring then fills, and the decoder on core 1 (which only decodes when the ring has room) slows with it, so the
+  decoder is paced by the link. A fill-level target (about half the ring) with an occasional one-frame drop or repeat on drift keeps it steady; underruns on the Bluetooth path are
+  counted like the I2S ones. To be proven on the bench with the AirPods Pro 3.</li>
+<li><strong>AVRCP</strong>: target with absolute volume (volume changes on the headset move the software volume and the other way round), play/pause/next/previous from the headset's buttons, and track metadata for the headset display.</li>
+<li><strong>UI</strong> (2a built: pairing flow, saved device and state in the pane): still to come, negotiated codec and battery (if the headset reports it) in the pane; the Now Playing badge shows
+  the codec (<a href="../ui/">UI</a>).</li>
+</ul>
+<h2 id="what-to-check-on-the-board-stage-2a">What to check on the board (stage 2a)<a class="headerlink" href="#what-to-check-on-the-board-stage-2a" title="Permanent link">&para;</a></h2>
+<p>Only the hardware can confirm these; the host simulator and tests cover the state machine, the saved record and the UI.</p>
+<ol>
+<li><strong>Pair.</strong> Headset in pairing mode (AirPods Pro 3: case open, button held until the light flashes white). Settings &gt; Bluetooth &gt; Scan for devices &gt; Select the headset: busy dots, then "Paired, no audio yet" within a few seconds; UART shows <code>bt: pair</code>,
+   <code>bt: paired with</code>, <code>bt: connected to ... (A2DP sink found)</code>. Back on Settings &gt; Bluetooth the headset is listed, the right pane shows its name and state.</li>
+<li><strong>Never discoverable; connectable only while pairing, and only for the chosen headset.</strong> No phone ever sees "neuPod" in its Bluetooth list, before, during or after a Pair. During a Pair a second device (or the same phone) that tries to connect to neuPod by address is rejected, and no key is created for it; after Connected / Failed / Cancel nothing can connect.</li>
+<li><strong>Link key on the card, not in flash.</strong> After pairing, <code>/.neupod/settings.a</code> or <code>.b</code> has changed and no other path on the card; reboot: the headset is still listed. Nothing writes the internal flash (core 1 and the audio underrun counter unaffected during the Pair; <code>underruns=0</code>).</li>
+<li><strong>Connect / Disconnect / Forget.</strong> Disconnect, Connect: reaches Connected again with the stored key and <strong>without</strong> the headset being put in pairing mode (it must be on and not connected to something else). Forget (twice Select): the row disappears; Connect is gone; pair again works.
+   Key lost on the headset side (forget neuPod in its own settings or factory reset it): Connect shows "Failed: pairing refused", it does not silently re-pair.</li>
+<li><strong>Failures.</strong> Headset switched off: Connect shows "Failed: not found" within the 20 s limit. A phone as the target: "Failed: not a headset" and no saved device afterwards. Walk away from the headset until it drops: "Failed: link lost" (or "Not connected" if it closed an idle link).
+   Menu on the Devices screen during a Pair cancels it.</li>
+<li><strong>The idle link.</strong> Note how long "Paired, no audio yet" lasts (bench: the headset hangs up after 1 to 2 s; reported as Not connected, not as a failure). Stage 2b keeps it up.
+   Also: Connect with the key deleted from the card by hand fails at once with "pairing refused" and no radio traffic; and a headset that is busy with another phone during a Pair says "busy or not pairing".</li>
+<li><strong>Wi-Fi alongside (provisional policy).</strong> With Wi-Fi joined and a transfer running, Pair, Connect and Disconnect: no HCI reset, no Wi-Fi drop, no stalled transfer. Also with "Wi-Fi while playing" On and a file playing from the card (I2S path, no Bluetooth audio yet): <code>underruns=0</code>.</li>
+<li><strong>Memory.</strong> Monitor lines <code>heap: free=... min_free=...</code>, <code>lvgl_mem</code>, and the radio worker's stack minimum after several Pair / Connect / Forget cycles: the worker's free stack must stay clear of zero (the new code and its <code>printf</code>s run there).</li>
+<li><strong>Repeat Pair 10 times</strong> (Forget in between) and with a headset that connects back to us by itself right after pairing (we are connectable during the Pair for this): no stuck "Pairing...", no orphan key (Forget leaves the card with no <code>BTL</code> record (tag "BTL" + raw slot number 0..7) for it).</li>
+</ol>
+<h2 id="what-to-check-on-the-board-stage-1">What to check on the board (stage 1)<a class="headerlink" href="#what-to-check-on-the-board-stage-1" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Flash <code>neupod.elf</code> with the Pico 2 W, open the UART. Watch for the three <code>bt:</code> lines above after the splash, <code>boot: bluetooth ok</code> and <code>boot: wifi DEGRADED</code>.
+   The splash should show Bluetooth solid and Wi-Fi with a cross (that is intended in stage 1).</li>
+<li>Audio must be unaffected: play a file while the radio comes up; the <code>audio:</code> line must keep <code>underruns=0</code> and the <code>core1_stack_free=</code> value must not drop.</li>
+<li>Settings &gt; Bluetooth: Status "On", the same address as the UART, <strong>Scan for devices</strong> (opens Devices and scans at once) with a headset in pairing mode (AirPods Pro 3: case open, button held until the light flashes white): it
+   appears with a speaker symbol, a name after a few seconds and a signal value; other devices around you are greyed out. Select on it starts pairing (stage 2a; see its checklist above). Menu leaves and stops the scan.</li>
+<li>Change the backlight and Click feedback, switch the board off and on: both should come back. Change the volume to a quiet level and check it returns; set it loud and
+   check it comes back at -30 dB. A <code>/.neupod/settings.a</code> (and later <code>.b</code>) should be on the card; no other file or folder on the card may have changed.</li>
+<li>Boot once without a card: the UART shows <code>settings: no usable card ...</code> and the screens still work.</li>
+<li>Read the monitor's <code>heap: free=... min_free=...</code> and <code>lvgl_mem=.../...</code> lines (and <code>chk_radio</code> / the worker's stack figure) after using every menu and one scan, and keep the minimums.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,1931 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/wifi/">
+      
+      
+        <link rel="prev" href="../bluetooth/">
+      
+      
+        <link rel="next" href="../ui-input/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Wi-Fi (lwIP, clock, secrets) - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#wi-fi-lwip-the-wi-fi-service-the-clock-and-secrets-at-rest" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Wi-Fi (lwIP, clock, secrets)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bluetooth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#stack-and-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stack and memory
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-wi-fi-service-appruntimewifi_servicec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Wi-Fi service (app/runtime/wifi_service.c)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Wi-Fi service (app/runtime/wifi_service.c)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#coexistence-with-bluetooth-and-audio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coexistence with Bluetooth and audio
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-clock-appnetsys_clockc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The clock (app/net/sys_clock.c)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#boot-check-and-status-icon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Boot check and status icon
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#secrets-at-rest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secrets at rest
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Secrets at rest">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-this-does-not-protect-read-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this does NOT protect (read this)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#throughput-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Throughput test
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#staged-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Staged plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-to-check-on-the-board" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What to check on the board
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../i2c-peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-music-library-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#stack-and-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stack and memory
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-wi-fi-service-appruntimewifi_servicec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Wi-Fi service (app/runtime/wifi_service.c)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Wi-Fi service (app/runtime/wifi_service.c)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#coexistence-with-bluetooth-and-audio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coexistence with Bluetooth and audio
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-clock-appnetsys_clockc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The clock (app/net/sys_clock.c)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#boot-check-and-status-icon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Boot check and status icon
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#secrets-at-rest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secrets at rest
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Secrets at rest">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-this-does-not-protect-read-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this does NOT protect (read this)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#throughput-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Throughput test
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#staged-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Staged plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-to-check-on-the-board" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What to check on the board
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="wi-fi-lwip-the-wi-fi-service-the-clock-and-secrets-at-rest">Wi-Fi: lwIP, the Wi-Fi service, the clock and secrets at rest<a class="headerlink" href="#wi-fi-lwip-the-wi-fi-service-the-clock-and-secrets-at-rest" title="Permanent link">&para;</a></h1>
+<p>Stage W1 of the Wi-Fi work (ADR-0007 keeps the radio behind <code>hal_radio.h</code>). Bluetooth is described in <a href="../bluetooth/">Bluetooth</a>; the on-screen
+keyboard in <a href="../ui-input/">Wheel input widgets</a>. Not on the board yet: everything here was built and tested on the PC and compiled for the RP2350.</p>
+<h2 id="stack-and-memory">Stack and memory<a class="headerlink" href="#stack-and-memory" title="Permanent link">&para;</a></h2>
+<ul>
+<li>The CYW43 arch is now the SDK's <strong>lwIP + FreeRTOS</strong> variant (<code>pico_cyw43_arch_lwip_sys_freertos</code>). BTstack is unchanged and still runs on the same
+  async context (the radio worker task): <code>cyw43_arch_init()</code> starts the driver, lwIP, then BTstack, in that order. IPv4 only, no sockets, <strong>no TLS</strong>.</li>
+<li><code>platforms/rp2350/lwip/lwipopts.h</code>: static pools only (<code>MEM_LIBC_MALLOC</code> off), <code>MEM_SIZE</code> 6000, 12 pbufs, TCP window 4 x 1460, 16 TCP segments, 4 TCP and UDP
+  control blocks. lwIP callbacks (DHCP, DNS, SNTP, HTTP) run on <strong>lwIP's own tcpip thread</strong> (priority 3, 2 KB stack on the heap (lwIP's FreeRTOS port takes the size in bytes; 1 KB left only 312 B free after a join on the bench)), not on the CYW43 worker; the SDK's FreeRTOS arch serialises the two with the async-context lock. Both, and the wifi task, appear in the monitor's per-task stack-free line, which is the number to watch. Country code GB (channels 1 to 13).</li>
+<li><strong>Cost</strong> (<code>arm-none-eabi-size</code>, whole firmware): static RAM 436,480 B (end of the Bluetooth work) to 476,968 B, <strong>+40.5 KB</strong> (after the review fixes: 32 settings tags and a second staging array, +3.4 KB), of which lwIP is about 28.9 KB
+  (pbuf pool 18.4 KB, memory heap 6 KB, TCP and the rest), mbed TLS and the secrets code about 2.5 KB (arena 2 KB), larger settings tables about 2 KB, the rest the Wi-Fi service
+  and UI. Flash 1,120,532 B to 1,214,268 B, <strong>+94 KB</strong>: lwIP, the HTTP client, mbed TLS (AES-GCM, SHA-256, HKDF), the CYW43 Wi-Fi code, the Wi-Fi service, the UI widgets.
+  The heap is not measured on the board yet: new heap users are the <strong>tcpip thread (2 KB stack)</strong>, the "wifi" task (4 KB), and sockets-less lwIP objects; the radio worker is unchanged at 6 KB (<code>RT_STACK_RADIO</code>, checked against <code>CYW43_TASK_STACK_SIZE</code> at compile time). Stack overflow checking is on (<code>configCHECK_FOR_STACK_OVERFLOW 2</code>).
+  The monitor prints <code>heap: free= min_free=</code> every 10 s; compare with the Bluetooth figures.</li>
+</ul>
+<h2 id="the-wi-fi-service-appruntimewifi_servicec">The Wi-Fi service (<code>app/runtime/wifi_service.c</code>)<a class="headerlink" href="#the-wi-fi-service-appruntimewifi_servicec" title="Permanent link">&para;</a></h2>
+<p>One task, "wifi" (core 0, priority 1, 4 KB stack), owns the station side. It runs every 200 ms and handles requests from the UI (a queue, never blocking the UI).</p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>How</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>scan</td>
+<td><code>hal_wifi_scan_*</code>: SSID, RSSI, channel, security; one UART line per access point from the radio (<code>wifi: bss 'ssid' aa:bb:.. rssi=-48 ch=6 auth_bits=0x05</code>), one per network after merging (<code>wifi: scan: 'ssid' rssi=-48 sec=WPA2 ch=6</code>, strongest access point wins; never any password) and <code>wifi: scan done, N networks</code>. Names in log lines are printable ASCII only (anything else shows as <code>?</code>). The driver reports only three bits (4 = RSN element, 2 = WPA element, 1 = privacy) and cannot tell WPA3 from WPA2 (both carry an RSN element), so an RSN network shows "WPA2" (the join still tries WPA2, WPA2/WPA3 and WPA3-only in turn), WPA1-only and WEP show "secured" (<code>wifi_sec_from_scan_bits</code>, host tested);</td>
+</tr>
+<tr>
+<td>a scan that the user walked away from (Menu on Networks) is finished by the radio by itself, and a new scan waits up to 8 s for the radio to be free instead of showing an empty list; hidden networks do not appear and are added with "Other network..."</td>
+<td></td>
+</tr>
+<tr>
+<td>join</td>
+<td>WPA2-PSK, WPA2/WPA3 mixed and WPA3-SAE, open networks. The cyw43 driver supports all three; a join tries WPA2, then mixed, then WPA3-only, moving on when an attempt fails. Wrong password is reported as such and is not retried in a loop</td>
+</tr>
+<tr>
+<td>DHCP, DNS</td>
+<td>lwIP</td>
+</tr>
+<tr>
+<td>SNTP</td>
+<td>lwIP's client, default <code>pool.ntp.org</code> (setting <code>NPns</code>), resynchronises about hourly; the answer sets the wall clock</td>
+</tr>
+<tr>
+<td>remembered networks</td>
+<td>up to 4. SSID and a "has password" flag in the clear, the password <strong>sealed</strong> (see below). "Forget" in the network's action menu</td>
+</tr>
+<tr>
+<td>join deadline</td>
+<td>a join still "joining" or "no address" 60 s after it started (<code>RT_WIFI_JOIN_TIMEOUT_MS</code>, <code>wifi_join_timed_out()</code> host tested, wrap-safe) is abandoned: <code>hal_wifi_abort_join()</code> leaves the network, the service logs <code>wifi: join 'ssid' timed out (no IP after 60 s)</code> and counts a real failure, so the normal backoff and auto-join retry. The state shows as failed (not "wrong password"), also for a join the user started. Found on the bench: after a reset the radio sat in "joined, no address" for over 10 minutes; on a marginal link (−80 dBm and below) DHCP OFFER/ACK frames are lost and the exchange can take 20–40 s, hence 60 s. DHCP is started once when the station interface is created (cyw43 <code>dhcp_start</code>) and lwIP restarts it on every link-up; the HAL does not restart it per join</td>
+</tr>
+<tr>
+<td>reconnect</td>
+<td>after a failure or a lost link: 2, 4, 8 ... up to 120 s between attempts (<code>wifi_backoff_t</code>, host tested); a user request or a success resets it; saved networks are tried in turn. With nothing saved nothing is attempted: the service only looks again every 10 s, and that is not counted as a failure (<code>failures=</code> counts real join failures and lost links)</td>
+</tr>
+<tr>
+<td>power</td>
+<td><code>wifi_policy_decide()</code>: Wi-Fi is <strong>off while audio plays</strong> unless "Wi-Fi while playing" is On (default Off); the station is switched off after N idle minutes (default 10; setting); a scan, join, transfer or NTP resync counts as a need. The radio is shared with Bluetooth, and audio comes first</td>
+</tr>
+<tr>
+<td>diagnostics</td>
+<td>UART line every 10 s: <code>wifi: state=up ssid=.. rssi=.. ip=.. ntp=1 saved=n reconnects=n failures=n lwip mem=used/size (max) pbuf=used/size (max) errs=n</code>; Extras &gt; Network test</td>
+</tr>
+</tbody>
+</table>
+<p>The radio is switched with <code>hal_wifi_start()</code> / <code>hal_wifi_stop()</code>. <strong><code>hal_wifi_stop</code> means "radio idle"</strong>: the station interface is taken down (netif removed, link left) but the CYW43 chip itself stays powered, because Bluetooth runs on it; it is not a WLAN power-down and saves less current than the name suggests (measure it).</p>
+<p>Settings stored: <code>NPwf</code> (enabled, during playback, idle minutes, zone), <code>NPns</code> (NTP server), <code>NPtu</code> (test URL), <code>NPn0..3</code> (SSID records), <code>NPp0..3</code> (sealed passwords).</p>
+<h3 id="coexistence-with-bluetooth-and-audio">Coexistence with Bluetooth and audio<a class="headerlink" href="#coexistence-with-bluetooth-and-audio" title="Permanent link">&para;</a></h3>
+<p>Wi-Fi and Bluetooth share the CYW43439 and its bus, and lwIP, BTstack and the driver share the radio worker task. Mitigations: Wi-Fi is off during playback by default (the radio is then free for
+Bluetooth audio in stage 2); BTstack's controller flow control settings (<code>btstack_config.h</code>) limit what is in flight; the worker has a 6 KB stack. Core 1 (audio) never touches any of this. What to measure
+on the board: Bluetooth scan while joined, an HTTP transfer while a file plays (<code>audio:</code> <code>underruns=</code>), and the effect of "Wi-Fi while playing = On".</p>
+<h2 id="the-clock-appnetsys_clockc">The clock (<code>app/net/sys_clock.c</code>)<a class="headerlink" href="#the-clock-appnetsys_clockc" title="Permanent link">&para;</a></h2>
+<p><code>hal_millis()</code> stays the monotonic time for audio and timeouts. The wall clock is UTC (from SNTP, or set by hand in Settings &gt; Wi-Fi &gt; Time) as an offset from it.
+There is no time zone database: a zone is a base UTC offset plus "follows the EU rule". Presets: UTC, London (GMT/BST, the default), Central Europe (+1), Eastern Europe (+2). The EU rule: summer time
+runs from 01:00 UTC on the last Sunday of March to 01:00 UTC on the last Sunday of October. Tests check both edges to the second for 2024 to 2027 (<code>ctest -R wifi_logic</code>).
+The home pane shows <code>HH:MM  Mon 2 Nov</code> once the time is known and <code>--:--</code> before. There is no battery-backed RTC: after a power cycle the clock is unknown until the next NTP answer.</p>
+<h2 id="boot-check-and-status-icon">Boot check and status icon<a class="headerlink" href="#boot-check-and-status-icon" title="Permanent link">&para;</a></h2>
+<p>The "wifi" boot check is <strong>ok when the radio driver and lwIP are up</strong>, not when a network is joined. A degraded check means the driver itself failed. "No network saved" is
+shown in Settings &gt; Wi-Fi (status row and the right-hand pane), not as a boot failure. The status bar shows a Wi-Fi symbol: hidden when the station is off, grey while idle or connecting, green when up, red after a failure.</p>
+<h2 id="secrets-at-rest">Secrets at rest<a class="headerlink" href="#secrets-at-rest" title="Permanent link">&para;</a></h2>
+<p>What is stored: Wi-Fi passwords and Bluetooth link keys (and any later secret). How:</p>
+<ul>
+<li><strong>AES-256-GCM</strong> from the Pico SDK's <strong>mbed TLS 3.6</strong> (Apache-2.0 option of its Apache-2.0 / GPL-2.0-or-later licence). Chosen over BTstack's <code>rijndael</code> because that is AES block encryption only: GCM
+  (authenticated encryption) would have meant writing our own mode, which is the wrong thing to hand-roll. Only <code>aes</code>, <code>gcm</code>, <code>cipher</code>, <code>sha256</code>, <code>md</code>, <code>hkdf</code> and support files are compiled, with our own
+  configuration (<code>app/crypto/neupod_mbedtls_config.h</code>), about 10 KB of flash, and a 2 KB static arena as its allocator.</li>
+<li><strong>Key</strong>: <code>key_provider_get()</code> (<code>app/crypto/key_provider_chipid.c</code>) returns a 32-byte key = HKDF-SHA-256 over the RP2350's 64-bit unique chip ID with a fixed application salt. The ID is the OTP chip ID read by the
+  boot ROM before <code>main</code> (the SDK's <code>pico_get_unique_board_id</code>); <strong>it does not read the flash</strong> (on the RP2040 the same call talks to the flash chip, which would stall core 1; RP2350 does not). The host uses a fixed test ID.
+  <strong>This is the only place that knows where the key comes from</strong>: moving to OTP or a secure element means replacing that one file.</li>
+<li><strong>Record</strong>: version byte, 12-byte random nonce (new for every write), ciphertext, 16-byte tag; the record's settings tag is the authenticated data, so a record cannot be copied to another tag. A password of up to 63
+  characters fits. Anything that does not authenticate (another neuPod, a card edited on a PC, damage) reads as <strong>absent</strong>: the Wi-Fi screen shows "password needed" and asks again, BTstack pairs again.</li>
+<li>Existing plaintext Bluetooth link keys (from before encryption) are sealed on the first load. FAT does not scrub freed clusters, so the old plaintext may remain on the card in free space; the card is not safe for that old data.</li>
+<li>Plaintext copies (the sealed value's plaintext, typed passwords in the keyboard widget and its result) are wiped after use.</li>
+<li>NTP answers earlier than 2025-01-01 are rejected; the clock re-anchors hourly so the 49.7-day millisecond wrap is harmless.</li>
+</ul>
+<h3 id="what-this-does-not-protect-read-this">What this does NOT protect (read this)<a class="headerlink" href="#what-this-does-not-protect-read-this" title="Permanent link">&para;</a></h3>
+<p>The RP2350 has <strong>no EEPROM and no battery-backed NVRAM</strong>, and this firmware has no secure boot. The chip ID is <strong>not secret</strong>: it can be read with a debugger, and boards often show it as the USB serial number. So the
+encryption protects a <strong>lost or copied microSD card on its own</strong>; it does <strong>not</strong> protect against someone who has the card <strong>and</strong> the board (they can derive the same key). SSIDs are stored in the clear on purpose.</p>
+<p><strong>Production policy (design response, 3 Nov 2026; not built):</strong> on the RP2350 a random 256-bit key is written <strong>once</strong> to OTP at provisioning, using
+the OTP key page and page lock; the chip-ID HKDF above stays only as the pre-provisioning fallback. No secure element. An ESP32 / ESP32-S3 board uses an eFuse key
+and flash encryption under the same policy. Secure boot is a separate, later decision. All of this replaces <code>key_provider_get()</code> only. Writing OTP is
+irreversible: the provisioning step needs its own review before it runs on any board.</p>
+<h2 id="throughput-test">Throughput test<a class="headerlink" href="#throughput-test" title="Permanent link">&para;</a></h2>
+<p>Extras &gt; <strong>Network test</strong>: an HTTP GET (no TLS) of the URL in settings (default <code>http://192.168.1.10:8000/test.bin</code>, change it with Select on the URL row; serve a file with
+<code>python3 -m http.server 8000</code> on the PC), body discarded, KB/s reported. It runs on the radio worker while audio plays, so the check is the <code>audio:</code> line. <strong>Not built:</strong> the variant that writes the download to
+an SD scratch file under <code>/.neupod/tmp</code> through the scoped write window (needs a ring between the radio worker and the storage task); today the target is discard only.</p>
+<h2 id="staged-plan">Staged plan<a class="headerlink" href="#staged-plan" title="Permanent link">&para;</a></h2>
+<p>Order (design response, 3 Nov 2026): <strong>W2 → W4 → W3</strong>. Library sync is why Wi-Fi exists, then OTA, then podcasts.</p>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>W1 (done)</td>
+<td>lwIP, the Wi-Fi service, join/scan/forget with the wheel keyboard, SNTP and the clock, sealed secrets, diagnostics</td>
+</tr>
+<tr>
+<td>W2 (next)</td>
+<td>device HTTP API and a C# companion app for library sync (no TLS on the device)</td>
+</tr>
+<tr>
+<td>W4</td>
+<td>over-the-air updates: bootrom A/B partitions with TBYB, image staged on SD, flashed only with playback stopped and core 1 parked in SRAM (<a href="../adr/0014-ota-ab-partitions/">ADR-0014</a>)</td>
+</tr>
+<tr>
+<td>W3</td>
+<td>podcasts through the companion; polish: roaming, AP list caching, captive portal detection, Wi-Fi during playback measurements, SD-file throughput test</td>
+</tr>
+</tbody>
+</table>
+<h2 id="what-to-check-on-the-board">What to check on the board<a class="headerlink" href="#what-to-check-on-the-board" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Boot: <code>boot: wifi ok : driver and lwIP up</code>, <code>bt:</code> lines as before, Bluetooth still ok. Splash with both radios solid.</li>
+<li>Settings &gt; Wi-Fi &gt; Scan for networks (opens the Networks screen and scans at once): your networks appear with signal; Select your home network, type the password with the wheel (Select types, Menu deletes, the last key <code>show</code> unmasks, Play joins). The status
+   shows the address and the signal; <code>wifi: joined ...</code> on the UART.</li>
+<li>NTP: the home screen shows the time (and the right zone, BST in summer) a few seconds after joining. Reboot: it is <code>--:--</code> until the network is back.</li>
+<li>Power cycle: it reconnects by itself; the password is not asked again. Move the card to another board (or edit the file): "password needed".</li>
+<li>Play a file: the Wi-Fi symbol disappears (radio paused) unless "Wi-Fi while playing" is On. With it On, run the Network test and watch <code>audio:</code> for <code>underruns=0</code>.</li>
+<li>Settings &gt; Bluetooth &gt; Scan while joined: still finds the headset.</li>
+<li>Read <code>heap:</code>, <code>lvgl_mem=</code> and the <code>wifi:</code> line's lwIP figures after all that.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,2126 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/storage/">
+      
+      
+        <link rel="prev" href="../display-tests/">
+      
+      
+        <link rel="next" href="../i2c-peripherals/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>microSD storage and tests - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#microsd-storage-and-its-tests" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              microSD storage and tests
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bluetooth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wifi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#card-format-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Card format decision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wiring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wiring
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#library-and-resource-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Library and resource use
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rules-carried-into-the-final-board-3-nov-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rules carried into the final board (3 Nov 2026)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-allocation-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory allocation policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-the-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running the tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#confirmed-card-facts-stage-1-on-the-bench" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Confirmed card facts (stage 1, on the bench)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#measured-results-bench-2026-11-02-sandisk-su64g-phase-1-breadboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measured results (bench, 2026-11-02, SanDisk SU64G, Phase 1 breadboard)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failure-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failure checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../i2c-peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-music-library-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#card-format-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Card format decision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wiring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wiring
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#library-and-resource-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Library and resource use
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rules-carried-into-the-final-board-3-nov-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rules carried into the final board (3 Nov 2026)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-allocation-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory allocation policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-the-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running the tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#confirmed-card-facts-stage-1-on-the-bench" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Confirmed card facts (stage 1, on the bench)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#measured-results-bench-2026-11-02-sandisk-su64g-phase-1-breadboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measured results (bench, 2026-11-02, SanDisk SU64G, Phase 1 breadboard)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failure-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failure checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="microsd-storage-and-its-tests">microSD storage and its tests<a class="headerlink" href="#microsd-storage-and-its-tests" title="Permanent link">&para;</a></h1>
+<p>Phase 1 reads and writes the library on a microSD card over <strong>4-bit SDIO</strong>, driven from a PIO
+program (not SPI). The firmware talks to it through <code>hal_storage.h</code> (card, raw sectors, mount)
+and the portable file API <code>nfs.h</code> (files and directories); see
+<a href="../adr/0006-storage-microsd-sdio/">ADR-0006</a> and <a href="../adr/0008-card-format/">ADR-0008</a>.</p>
+<h2 id="card-format-decision">Card format decision<a class="headerlink" href="#card-format-decision" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Project format: exFAT, 128 KB clusters</strong>, aligned to the card's allocation unit. Reasons:
+  files over 4 GB, SDXC cards are exFAT natively, and large clusters keep the FAT small and
+  reads sequential.</li>
+<li><strong>FAT32 must mount as a fallback.</strong> The Phase 1 card arrived as FAT32 and every test except
+  the format test runs on it unchanged.</li>
+<li><strong>The layout</strong> is an MBR with one exFAT partition (type 07) starting at the card's allocation
+  unit and a data area aligned the same way, which is what the SD Association formatter makes.</li>
+<li><strong>Do not reformat the card on a PC or phone.</strong> Operating-system formatters pick their own
+  cluster size and ignore the card's alignment. If you must, use the SD Association's <em>SD
+  Memory Card Formatter</em>, which keeps the alignment. The firmware only formats when you ask
+  (test 9).</li>
+<li>128 KB clusters waste space on small files (cover art) but make audio-heavy libraries fast;
+  the numbers are in ADR-0008 and should be revisited with the measured results below.</li>
+</ul>
+<h2 id="wiring">Wiring<a class="headerlink" href="#wiring" title="Permanent link">&para;</a></h2>
+<p>From <code>wiring-phase1.md</code> (3.3 V, DAT0-DAT3 must be consecutive GPIOs, CLK is DAT0 - 2):</p>
+<table>
+<thead>
+<tr>
+<th>Signal</th>
+<th>GPIO</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CLK</td>
+<td>GP2</td>
+</tr>
+<tr>
+<td>CMD</td>
+<td>GP3</td>
+</tr>
+<tr>
+<td>DAT0</td>
+<td>GP4</td>
+</tr>
+<tr>
+<td>DAT1</td>
+<td>GP5</td>
+</tr>
+<tr>
+<td>DAT2</td>
+<td>GP6</td>
+</tr>
+<tr>
+<td>DAT3</td>
+<td>GP7</td>
+</tr>
+</tbody>
+</table>
+<h2 id="library-and-resource-use">Library and resource use<a class="headerlink" href="#library-and-resource-use" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Driver: carlk3's <code>no-OS-FatFS-SD-SDIO-SPI-RPi-Pico</code>, release <strong>v3.6.2</strong> (Apache-2.0), a git
+  submodule in <code>lib/</code>. After cloning run <code>git submodule update --init --recursive</code>. Its FatFs
+  is used on the RP2350 (the host build uses the vendored FatFs); the FatFs configuration is
+  <code>platforms/rp2350/ffconf/ffconf.h</code>, kept identical to the host's by a build-time check.</li>
+<li><strong>PIO / DMA:</strong> the SD driver owns <code>pio1</code> (two state machines), two DMA channels claimed
+  dynamically, and shares <code>DMA_IRQ_0</code>. The Wi-Fi chip and the click-wheel receiver land on
+  <code>pio2</code>. If something else has claimed a state machine on <code>pio1</code> the card refuses to start with
+  a clear error instead of misbehaving.</li>
+<li><strong>Clock:</strong> the PIO program needs 4 PIO cycles per SD clock, so the SDIO clock is
+  <code>clk_sys / (4 x divider)</code> = 125 MHz / (4 x 2) = <strong>15.625 MHz</strong> by default (an integer divider;
+  see the observations below). It can be changed at run time (<code>hal_storage_set_bus_clock</code>).</li>
+<li><strong>High Speed:</strong> the card says 25 MHz in default-speed mode (CSD TRAN_SPEED 0x32). Faster
+  clocks need the card switched to High Speed (command CMD6). The driver library never sends
+  it; the HAL does (<code>hal_storage_enable_high_speed</code>) using the library's low-level calls, and
+  refuses clocks above 25 MHz until it has succeeded.</li>
+<li><strong>Write safety:</strong> writes are locked by default. Only the tests that need them unlock writes,
+  for as long as they run, and always lock again and delete their files (even after a failure
+  or <code>q</code>). In the runtime firmware one other piece of code opens the lock: the settings save, for the length of one save and only for
+  paths under <code>/.neupod</code> (an nfs write scope; <a href="../bluetooth/">Bluetooth</a>). Before unlocking, a test reads 16 MB of the card twice and compares; test files are
+  created exclusively (an existing file is never overwritten; the test stops and tells you).</li>
+<li><strong>Write-fault latch:</strong> the driver library ignores the card's status after a write and can leave
+  the card waiting for data after a failed write. The HAL therefore checks the card status after
+  every write, and after any failure refuses all further writes until the card is re-initialised;
+  test cleanup re-initialises and remounts first, and if that is impossible it leaves writes
+  locked and lists the files to delete by hand.</li>
+<li><strong>Free space</strong> is computed with a full scan of the FAT (the stored FAT32 hint is not trusted),
+  so it is slow on a big FAT32 volume; the time is printed.</li>
+<li><strong>Stack:</strong> the main stack is 4 KB for the storage test (the most core 0's scratch RAM bank can
+  hold); the lowest free stack seen is printed after each test.</li>
+</ul>
+<h2 id="rules-carried-into-the-final-board-3-nov-2026">Rules carried into the final board (3 Nov 2026)<a class="headerlink" href="#rules-carried-into-the-final-board-3-nov-2026" title="Permanent link">&para;</a></h2>
+<ul>
+<li>SD clock from <strong>integer dividers only</strong>.</li>
+<li>Multi-block reads capped at <strong>128 blocks</strong> (<code>NEUPOD_SDIO_MAX_READ_BLOCKS</code>, <code>platforms/rp2350/hal/hal_storage.c</code>): in v3.6.2 a 256-block read
+  writes the DMA list terminator one entry past <code>dma_blocks[]</code>. To be reported upstream to carlk3 (<code>no-OS-FatFS-SD-SDIO-SPI-RPi-Pico</code>).</li>
+<li>A <strong>GPIO-controlled load switch on card VDD</strong> is a final-board requirement, so a card wedged mid-transfer can be power-cycled.</li>
+</ul>
+<h2 id="memory-allocation-policy">Memory allocation policy<a class="headerlink" href="#memory-allocation-policy" title="Permanent link">&para;</a></h2>
+<p>The newlib heap is only about 33 KB (static RAM fills the rest) and the Pico SDK's <code>malloc</code> wrapper <strong>panics</strong> on failure instead of returning NULL (to be replaced by a wrapper that returns NULL and logs, per the design response of 3 Nov 2026; not built). FatFs with <code>FF_USE_LFN 3</code> allocates scratch buffers as large as a cluster (<code>dir_clear</code>, up to 32 KB; 128 KB clusters on large exFAT cards) and relies on NULL to halve the request, so the first <code>mkdir</code> on the bench ended in "Out of memory".</p>
+<p><code>app/storage/ff_alloc.c</code> therefore replaces the library's <code>ffsystem.c</code> (the RP2350 build removes it from the library's source list in <code>platforms/rp2350/CMakeLists.txt</code>; <code>lib/</code> is untouched, the host build uses the same file). <code>ff_memalloc</code> returns NULL for anything above <code>NEUPOD_FF_ALLOC_MAX_BYTES</code> (4 KB, <code>app/storage/ff_alloc.h</code>) and otherwise calls the real, non-panicking <code>malloc</code>, so FatFs falls back to a 4 KB buffer or its window buffer. Mutex functions are not provided: <code>FF_FS_REENTRANT</code> is 0 and the build fails if it is turned on. Host test: <code>tests/test_fatfs.c</code>.</p>
+<p>Besides FatFs the only newlib-heap callers in the firmware image are the Bluetooth firmware download (about 1 KB, once at boot) and newlib's one-off stdio setup; core 1 never allocates (checked by <code>tools/check_core1_closure.py</code>).</p>
+<h2 id="running-the-tests">Running the tests<a class="headerlink" href="#running-the-tests" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>submodule<span class="w"> </span>update<span class="w"> </span>--init<span class="w"> </span>--recursive
+<span class="nb">export</span><span class="w"> </span><span class="nv">PICO_SDK_PATH</span><span class="o">=</span><span class="nv">$HOME</span>/pico/pico-sdk
+scripts/build.sh<span class="w"> </span>rp2350
+scripts/flash.sh<span class="w"> </span>rp2350<span class="w"> </span>storage_test
+scripts/console.sh<span class="w">      </span><span class="c1"># type the keys here (the PC's serial console), not on the Pico</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Test</th>
+<th>Writes?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>1</code></td>
+<td>Detect: card identification, CID/CSD/SD status, sector 0</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>2</code></td>
+<td>Mount: file system type, cluster size, label, serial, total/free space</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>3</code></td>
+<td>List: recursive listing of the root, depth 2, capped at 200 entries</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>4</code></td>
+<td>Integrity: 16 MB pseudo-random file round trip across a remount, then a 2 MB raw-sector round trip inside a file the test allocated</td>
+<td>Under <code>/neupod-test/</code></td>
+</tr>
+<tr>
+<td><code>5</code></td>
+<td>Sequential speed at 512 B, 4 KB, 32 KB, 128 KB blocks, read and write</td>
+<td>Under <code>/neupod-test/</code></td>
+</tr>
+<tr>
+<td><code>6</code></td>
+<td>2000 random 4 KB reads (latency average/min/max/p99), with and without fast seek</td>
+<td>Allocates under <code>/neupod-test/</code></td>
+</tr>
+<tr>
+<td><code>7</code></td>
+<td>Streaming: 32 KB every 20 ms for 10 s, counts missed deadlines</td>
+<td>Allocates under <code>/neupod-test/</code></td>
+</tr>
+<tr>
+<td><code>8</code></td>
+<td>Clock sweep: steps the SDIO clock up until an error, suggests a setting. Run it on its own; it needs <code>/neupod-test</code> not to exist beforehand</td>
+<td>Raw sectors inside one file under <code>/neupod-test/</code></td>
+</tr>
+<tr>
+<td><code>9</code></td>
+<td><strong>Format</strong> the card: MBR plus one exFAT partition (needs typing <code>YES</code>)</td>
+<td><strong>Erases everything</strong></td>
+</tr>
+<tr>
+<td><code>a</code></td>
+<td>Runs 1-7 and prints a summary; never runs 8 or 9</td>
+<td>as above</td>
+</tr>
+<tr>
+<td><code>q</code></td>
+<td>Stop the running test</td>
+<td></td>
+</tr>
+<tr>
+<td><code>c</code></td>
+<td>Clean up leftover test files: lists <code>/neupod-test/</code>, then (after <code>y</code>) deletes only <code>pattern.bin</code>, <code>raw.bin</code>, <code>speed.bin</code>, <code>sweep.bin</code> and the directory if empty; never part of <code>a</code></td>
+<td>Deletes under <code>/neupod-test/</code></td>
+</tr>
+</tbody>
+</table>
+<p>Before any write test the card must have at least the test's size plus 64 MB free. Everything is
+written under <code>/neupod-test/</code>, which is created if missing and removed again if it was created
+by the test. A full run of 1-8 takes a few minutes (estimates: test 4 about 15 s, test 5 about
+40 s, test 6 about 10 s, test 7 about 15 s, test 8 about 20 s); test 9 on a 64 GB card can take a
+minute or more.</p>
+<p>Test 8 allocates one contiguous file with the file system at the safe clock, then at each higher
+clock does only a read-only soak (4 MB read twice plus 100 status queries) followed by raw
+writes inside that file; the file system is not touched until the clock is back to normal. A
+failure at a test clock cannot damage the file system, only that file.</p>
+<p>Test 9 shows the card name and capacity, the current volume (type, label, space used), warns
+that all data will be erased, including other partitions such as a Linux root file system, and
+only continues if you type exactly <code>YES</code> and press Enter. It writes a partition table with one
+exFAT partition starting at the card's allocation-unit boundary, creates exFAT with 128 KB
+clusters aligned the same way, and labels it <code>NEUPOD</code>; then it remounts and shows test 2's
+output.</p>
+<p>On the PC, <code>scripts/build.sh host</code> builds the same menu as <code>build/host/hal/host/storage_test</code>
+over a disk image (<code>NEUPOD_DISK_IMAGE</code>) and a files directory (<code>NEUPOD_FS_ROOT</code>, default
+<code>build/host/fsroot</code>). Mount, raw-sector, clock and format tests are skipped there.</p>
+<h2 id="confirmed-card-facts-stage-1-on-the-bench">Confirmed card facts (stage 1, on the bench)<a class="headerlink" href="#confirmed-card-facts-stage-1-on-the-bench" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Card</td>
+<td>SanDisk SU64G, SDXC, 124,735,488 sectors (63.86 GB), writable</td>
+</tr>
+<tr>
+<td>CID</td>
+<td>MID 0x03, OID "SD", PRV 8.0, PSN 0x1AC15256, date 2012-07</td>
+</tr>
+<tr>
+<td>Bus</td>
+<td>4-bit at 12.5 MHz; CSD v2, TRAN_SPEED 0x32 (25 MHz)</td>
+</tr>
+<tr>
+<td>SD status</td>
+<td>Speed class C10, UHS U1, allocation unit 4096 KiB</td>
+</tr>
+<tr>
+<td>Layout</td>
+<td>MBR, partition 1 type 0x0C (FAT32)</td>
+</tr>
+<tr>
+<td>Seen by FatFs (before test 9)</td>
+<td>Raspberry Pi OS card: 256 MB FAT32 partition "bootfs" (2 KB clusters); the Linux root partition is invisible to FatFs</td>
+</tr>
+<tr>
+<td>After test 9 (2026-11-02)</td>
+<td>MBR, one partition type 0x07 at sector 8192; exFAT, 128 KB clusters, label NEUPOD, 63.85 GB free; format took 656 ms</td>
+</tr>
+<tr>
+<td>Timing</td>
+<td>init 122 ms, one sector read 6 ms</td>
+</tr>
+</tbody>
+</table>
+<h2 id="measured-results-bench-2026-11-02-sandisk-su64g-phase-1-breadboard">Measured results (bench, 2026-11-02, SanDisk SU64G, Phase 1 breadboard)<a class="headerlink" href="#measured-results-bench-2026-11-02-sandisk-su64g-phase-1-breadboard" title="Permanent link">&para;</a></h2>
+<p>MB = 1,000,000 bytes. Test 5 uses a pre-allocated 32 MB file; random reads are 2000 × 4 KB.</p>
+<table>
+<thead>
+<tr>
+<th>Measurement</th>
+<th>FAT32 "bootfs", 2 KB clusters, 12.5 MHz</th>
+<th>FAT32, 25 MHz</th>
+<th><strong>exFAT, 128 KB clusters, 15.625 MHz (current)</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Integrity (test 4): 16 MB file + 2 MB raw</td>
+<td>PASS, 0 mismatches</td>
+<td>PASS, 0 mismatches</td>
+<td>PASS, 0 mismatches</td>
+</tr>
+<tr>
+<td>Sequential write, best</td>
+<td>4.39 MB/s (32 KB)</td>
+<td>8.45 MB/s (32 KB)</td>
+<td>6.50 MB/s (128 KB)</td>
+</tr>
+<tr>
+<td>Sequential read, best</td>
+<td>2.84 MB/s</td>
+<td>3.82 MB/s</td>
+<td>7.28 MB/s (128 KB)</td>
+</tr>
+<tr>
+<td>Random 4 KB read, plain seek, avg</td>
+<td>21.0 ms</td>
+<td>18.7 ms</td>
+<td>1.27 ms (p99 1.59 ms)</td>
+</tr>
+<tr>
+<td>Random 4 KB read, fast seek, avg / p99</td>
+<td>1.47 / 2.00 ms</td>
+<td>—</td>
+<td>1.26 / 1.55 ms</td>
+</tr>
+<tr>
+<td>Streaming 32 KB / 20 ms, 10 s</td>
+<td>0 misses, headroom 20%</td>
+<td>0 misses, headroom 46%</td>
+<td><strong>0 misses, worst 4.9 ms, headroom 76%</strong></td>
+</tr>
+<tr>
+<td>Clock sweep (test 8)</td>
+<td>all steps to 31.25 MHz OK (HS)</td>
+<td>leaving HS failed; later run failed at 25 MHz on response CRC</td>
+<td>10.4 and 15.6 MHz OK; HS switch failed (response CRC)</td>
+</tr>
+</tbody>
+</table>
+<p>Observations and open items:</p>
+<ul>
+<li><strong>exFAT with 128 KB clusters fixed the slow reads.</strong> On FAT32 with 2 KB clusters FatFs splits
+  every transfer at cluster boundaries (at most 4 sectors per disk call), and the driver pays a
+  read command plus a stop command per call. With 128 KB clusters, reads went from 3.8 to
+  7.3 MB/s, and random reads no longer need fast seek (1.27 ms either way).</li>
+<li><strong>Streaming is comfortable:</strong> 32 KB every 20 ms (1.64 MB/s, about 2.7× FLAC 24/96) with 76 %
+  headroom.</li>
+<li><strong>Library bug, worked around:</strong> carlk3 v3.6.2 <code>rp2040_sdio_rx_start()</code> writes its DMA list
+  terminator one entry past <code>dma_blocks[SDIO_MAX_BLOCKS * 2]</code> for a 256-block read, wedging the
+  driver. FAT32 with 2 KB clusters never triggers it; exFAT with 128 KB clusters does on every
+  128 KB read. The HAL splits reads into chunks of at most 128 blocks (<code>guarded_read</code> in
+  <code>hal_storage.c</code>), and a failed read latches the write fault so the card is re-initialised
+  before any further write. Worth reporting upstream.</li>
+<li><strong>Command-response CRC errors (open):</strong> the same responses are misread identically every time:
+  CMD13 calculated 0x7c vs received 0x7e, CMD17 0xcc vs 0xce, CMD55 0x64 vs 0x66. They always
+  differ in the last CRC7 bit. They appear around clock changes and the CMD6 (High Speed)
+  sequence, at fractional dividers (12.5, 20.8, 25 MHz) and once at 15.625 MHz during CMD6. They
+  never appeared during data tests 4–7 at 15.625 MHz. They look deterministic (a response-sampling
+  or decoding issue in the PIO/driver path) rather than noise. Not yet root-caused. Because of
+  them, the default is 15.625 MHz in default-speed mode and High Speed is not used.</li>
+<li><strong>The 10 MB/s USB mass-storage target is not reachable</strong> at clk_sys 125 MHz with this PIO
+  program (4 PIO cycles per SD clock → 31.25 MHz maximum, High Speed only). Best measured:
+  6.5 MB/s write, 7.3 MB/s read. Open item, no decision (options: higher clk_sys, a different
+  SDIO PIO program, or accept a slower sync).</li>
+<li><strong>Leaving High Speed mode</strong> needs care: the card is quieted at the current clock (open write
+  closed, not busy), the clock lowered, and only then is the card reset and re-identified, with up
+  to three tries; the sweep test fails if the card cannot be brought back.</li>
+</ul>
+<h2 id="failure-checklist">Failure checklist<a class="headerlink" href="#failure-checklist" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely cause / action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Card ignores the first identification after a debugger reset</td>
+<td>A reset mid-transfer can leave the card in a data state; a power cycle always fixes it. <code>hal_storage_init()</code> makes up to three attempts; before the 2nd and 3rd it sends four CMD12 (stop transmission: no data, harmless to an idle card, ends an open read or write-multiple) at the 400 kHz identification clock, reads each response, waits 50 ms and logs <code>storage: card did not identify, wake-up attempt N</code>. Nothing is written. A missing card still fails in well under a second (about 0.65 s in all, 0.5 s more than with a single attempt); it is called once at boot, never in a loop</td>
+</tr>
+<tr>
+<td>Test 1: NO_CARD or init timeout</td>
+<td>Card not fully inserted, 3.3 V missing, CLK/CMD/DAT wiring (GP2-GP7), no pull-up on CMD, card not powered</td>
+</tr>
+<tr>
+<td>CRC errors, or tests pass at 12.5 MHz but fail higher</td>
+<td>Clock too fast for the wiring: lower the clock, shorten wires, check pull-ups on CMD and DAT0-3</td>
+</tr>
+<tr>
+<td>Test 2: NO_FILESYSTEM</td>
+<td>No FAT/exFAT volume (blank card, unusual partition layout), or the file system configuration is wrong (sector size not 512, exFAT disabled)</td>
+</tr>
+<tr>
+<td>Test 2 slow</td>
+<td>Free-space scan on a big FAT32 volume is slow by nature; it is printed separately</td>
+</tr>
+<tr>
+<td>Slow random reads (test 6)</td>
+<td>Small clusters or a fragmented file; compare plain and fast seek</td>
+</tr>
+<tr>
+<td>Streaming misses deadlines</td>
+<td>Read time varies: look at the worst read time; lower the clock only if errors appear, otherwise raise it</td>
+</tr>
+<tr>
+<td>Test 4 mismatches</td>
+<td>Bus errors that slipped past the CRC, or a bad card; repeat at a lower clock</td>
+</tr>
+<tr>
+<td>Test 8 stops at 25 MHz / "High Speed switch failed"</td>
+<td>The card refused High Speed, or a command response failed its CRC (see the open item above); keep the default</td>
+</tr>
+<tr>
+<td>SDIO "Timed out waiting for data block" on large reads</td>
+<td>The library's 256-block DMA bug: make sure reads go through the HAL's chunked <code>guarded_read</code></td>
+</tr>
+<tr>
+<td>Card unreadable on a PC after test 9</td>
+<td>Check the partition table with a PC tool: one partition, type 07, starting at the allocation-unit boundary; see ADR-0008</td>
+</tr>
+<tr>
+<td>"writes locked until re-init" or "write fault"</td>
+<td>A write failed or the card status after a write was bad; the card was reset, check wiring and clock</td>
+</tr>
+<tr>
+<td>A test says a file already exists</td>
+<td>An earlier run was interrupted; delete <code>/neupod-test</code> on a PC and run again</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>

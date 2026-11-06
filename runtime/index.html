@@ -1,0 +1,2360 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/runtime/">
+      
+      
+        <link rel="prev" href="../ui/">
+      
+      
+        <link rel="next" href="../audio/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Runtime (RTOS, tasks, boot) - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#runtime-rtos-audio-core-and-boot" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Runtime (RTOS, tasks, boot)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cores" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cores
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Cores">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-1-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core-1 rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hot-path-in-ram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hot path in RAM
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#core-0-core-1-communication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core 0 / core 1 communication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-audio-timing-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How audio timing works
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtos-tasks-core-0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RTOS tasks (core 0)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RTOS tasks (core 0)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#inter-task-data-core-0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inter-task data (core 0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ui-performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UI performance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-the-monitor-prints-about-audio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the monitor prints about audio
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bench-findings-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bench findings (history)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#boot-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Boot sequence
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Boot sequence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#capabilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Capabilities
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#input-sources-and-the-testbed-key-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input sources and the testbed key map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failure-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failure handling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#flashing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flashing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-stubbed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is stubbed
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bluetooth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wifi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../i2c-peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-music-library-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cores" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cores
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Cores">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-1-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core-1 rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hot-path-in-ram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hot path in RAM
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#core-0-core-1-communication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core 0 / core 1 communication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-audio-timing-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How audio timing works
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtos-tasks-core-0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RTOS tasks (core 0)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RTOS tasks (core 0)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#inter-task-data-core-0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inter-task data (core 0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ui-performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UI performance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-the-monitor-prints-about-audio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the monitor prints about audio
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bench-findings-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bench findings (history)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#boot-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Boot sequence
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Boot sequence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#capabilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Capabilities
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#input-sources-and-the-testbed-key-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input sources and the testbed key map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failure-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failure handling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#flashing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flashing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-stubbed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is stubbed
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="runtime-rtos-audio-core-and-boot">Runtime: RTOS, audio core and boot<a class="headerlink" href="#runtime-rtos-audio-core-and-boot" title="Permanent link">&para;</a></h1>
+<p>The <code>neupod</code> executable (RP2350 and host) is this runtime. Decisions: <a href="../adr/0011-bare-metal-audio-core/">ADR-0011</a>
+(single-core FreeRTOS on core 0, bare-metal audio core on core 1; amends
+<a href="../adr/0009-rtos-freertos-smp/">ADR-0009</a>) and <a href="../adr/0010-ui-lvgl/">ADR-0010</a> (LVGL). The RTOS task
+table lives in <code>app/include/runtime_config.h</code>; this page explains it.</p>
+<h2 id="cores">Cores<a class="headerlink" href="#cores" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Core</th>
+<th>Runs</th>
+<th>Rules</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>FreeRTOS (single-core kernel): UI, input, storage, monitor, CYW43 worker, boot checks</td>
+<td>normal RTOS code</td>
+</tr>
+<tr>
+<td>1</td>
+<td>the <strong>bare-metal audio core</strong>: a main loop (commands + "decoder": silence, test signals, WAV conversion) and the sink's block interrupt (the I2S DMA interrupt); no kernel</td>
+<td>the core-1 rules below</td>
+</tr>
+</tbody>
+</table>
+<h3 id="core-1-rules">Core-1 rules<a class="headerlink" href="#core-1-rules" title="Permanent link">&para;</a></h3>
+<p>Core 1 code (<code>app/audio/audio_core.c</code>, <code>audio_shared.c</code>, <code>audio_dsp.c</code>, <code>spsc_ring.c</code>, the headers they use, and
+<code>platforms/rp2350/hal/hal_audio.c</code> / <code>hal_audio_null.c</code>) must not use: FreeRTOS or <code>os.h</code>; stdio (<code>printf</code>); <code>malloc</code>;
+any SDK primitive the FreeRTOS interop reroutes to the kernel (mutex, semaphore, queue,
+critical section, <code>sleep_*</code>, <code>busy_wait_*</code>); <code>hal_delay_ms</code>. It talks to core 0 only through
+lock-free rings and a seqlock. Hardware registers, the 1 MHz timer reads (<code>time_us_64</code>, <code>hal_micros</code>)
+and the SDK's spin-lock-only alarm API are fine. The ctest <code>audio_core_rules</code>
+(<code>cmake/check_core1_rules.cmake</code>) fails the build on forbidden tokens in those files.</p>
+<h3 id="hot-path-in-ram">Hot path in RAM<a class="headerlink" href="#hot-path-in-ram" title="Permanent link">&para;</a></h3>
+<p><code>on_block</code>, the ring functions, the alarm interrupt (<code>block_isr</code>, driven straight from the timer registers,
+no SDK alarm code and no spin lock shared with core 0) and <code>hal_micros</code> run from RAM (<code>NEUPOD_RAM_FUNC</code>,
+<code>__not_in_flash_func</code>) so the audio core does not contend with the UI for the XIP flash cache. <code>memcpy</code> and
+<code>memset</code> (newlib, flash) are still used by the ring. Core 1's stack is painted at start and its high-water mark is
+printed in the audio line (<code>core1_stack_free=</code>).</p>
+<h3 id="core-0-core-1-communication">Core 0 / core 1 communication<a class="headerlink" href="#core-0-core-1-communication" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>From to</th>
+<th>Mechanism</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>core 0 to 1: commands</td>
+<td>ring of <code>audio_cmd_t</code> (open, close, statistics window, volume, tone, stream start, stream next, pause, stop); several core-0 tasks send, so <code>audio_ctl.c</code> serialises them with a mutex</td>
+</tr>
+<tr>
+<td>core 0 to 1: stream data</td>
+<td>byte ring, 32 KB, fed by the storage task while a file plays: raw WAV bytes, compressed FLAC / MP3 bytes, or length-prefixed ALAC packets</td>
+</tr>
+<tr>
+<td>core 0 to 1: stream slots</td>
+<td>two slots (<code>seq &amp; 1</code>) with the stream description and its byte length (published once its last byte is in the ring), plus <code>g_audio_next_valid</code> (the announced successor, cleared to cancel); see <a href="../audio/#gapless-playback-and-the-play-queue">Audio</a></td>
+</tr>
+<tr>
+<td>core 1 to 0: seek request</td>
+<td>request counter plus byte offset, acknowledged by core 0, flush acknowledged by core 1 (<code>stream_io.h</code>)</td>
+</tr>
+<tr>
+<td>core 1 to 0: handshake</td>
+<td>counters written only by core 1: streams set up / ended with nothing following (core 0 must not write data for a new stream before the first moves), the sequence number of the open decoder, and gapless handoffs completed (written by the block interrupt)</td>
+</tr>
+<tr>
+<td>core 1 to 0: events</td>
+<td>two rings (one per producer: the block interrupt, the main loop): stream opened/closed, underrun (at most ~1/s), end of track, command error</td>
+</tr>
+<tr>
+<td>core 1 to 0: statistics</td>
+<td>seqlock-published <code>audio_stats_t</code>, written only by the block interrupt</td>
+</tr>
+<tr>
+<td>inside core 1: decoder to sink</td>
+<td>PCM ring, 4096 stereo int32 frames (16 blocks, 93 ms at 44.1 kHz)</td>
+</tr>
+</tbody>
+</table>
+<p>Every ring has exactly one producer and one consumer (<code>spsc_ring.h</code>: acquire/release loads and
+stores only, no read-modify-write, so it is safe across the two cores).</p>
+<h3 id="how-audio-timing-works">How audio timing works<a class="headerlink" href="#how-audio-timing-works" title="Permanent link">&para;</a></h3>
+<p>With <code>NEUPOD_AUDIO_SINK=null</code> (or on the host) the sink arms a 1 MHz hardware alarm from core 1; its interrupt fires every 256 frames
+(5.8 ms at 44.1 kHz) on absolute deadlines (no drift) and runs <code>on_block</code>, which reads one block from the
+PCM ring (silence and an underrun if the decoder starved it), applies the volume ramp, hands it to the sink and
+updates the statistics and the amp mute line. The interrupt preempts the decoder (<code>-DNEUPOD_DECODER_LOAD_PCT=25</code>
+makes it busy-spend 25 % of a block period per block, as the old stub did, to prove it), so block timing does not
+depend on decoder time. The main loop sleeps with
+<code>WFI</code> when idle. Nothing on core 0 can delay it: no shared lock, no kernel, no shared interrupt.
+The I2S sink (default on the RP2350, see <a href="../audio/">Audio</a>) uses the same structure with the DMA block-complete interrupt (<code>DMA_IRQ_1</code>, core 1) instead of the alarm.</p>
+<h2 id="rtos-tasks-core-0">RTOS tasks (core 0)<a class="headerlink" href="#rtos-tasks-core-0" title="Permanent link">&para;</a></h2>
+<p>Priority 7 is the highest; the kernel idle task is 0.</p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Priority</th>
+<th>Stack</th>
+<th>Period / trigger</th>
+<th>Budget</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>kernel timer service</td>
+<td>6</td>
+<td>1.5 KB</td>
+<td>kernel timers</td>
+<td>microseconds</td>
+</tr>
+<tr>
+<td>storage</td>
+<td>5</td>
+<td>8 KB</td>
+<td>request queue; while a file streams, every 1 ms; otherwise every 500 ms</td>
+<td>directory listings and volume space for the UI (yields every 32 entries); streams the file from the card in 2 KB reads into the audio data ring; decodes the album art of the playing track in slices (2 ms of work, 1 ms sleep, audio top-ups between, aborts on any request; <a href="../ui/#now-playing-art">UI</a>); loads the settings store after the card mounts and saves it about 1.5 s after a change (<a href="../bluetooth/">Bluetooth</a>); later: library scan, track prefetch</td>
+</tr>
+<tr>
+<td>input</td>
+<td>4</td>
+<td>2 KB</td>
+<td>every 2 ms</td>
+<td>well under 1 % (the wheel FIFO overflows after ~4.8 ms)</td>
+</tr>
+<tr>
+<td>I2C users, while on the bus</td>
+<td>4 (lifted)</td>
+<td>n/a</td>
+<td>boot checks, the 5 s gauge read</td>
+<td>a few ms (see findings)</td>
+</tr>
+<tr>
+<td>CYW43 worker (SDK)</td>
+<td>3</td>
+<td>6 KB</td>
+<td>radio events; <strong>every BTstack callback and lwIP callback</strong></td>
+<td>LED; Bluetooth (BTstack's one thread); lwIP (via the SDK's FreeRTOS arch; lwIP also has its own 4 KB tcpip thread)</td>
+</tr>
+<tr>
+<td>wifi (policy)</td>
+<td>1</td>
+<td>4 KB</td>
+<td>every 200 ms</td>
+<td>requests from the UI, join/retry with backoff, power policy, SNTP, the 1 s snapshot for the UI (<a href="../wifi/">Wi-Fi</a>)</td>
+</tr>
+<tr>
+<td>haptic (click feedback)</td>
+<td>4</td>
+<td>2 KB</td>
+<td>click queue (2 deep, non-blocking for the UI)</td>
+<td>a few ms per click; back to standby after 2 s idle</td>
+</tr>
+<tr>
+<td>UI (LVGL)</td>
+<td>2</td>
+<td>12 KB</td>
+<td>5 to 30 ms, from LVGL's own timer</td>
+<td>frame strip render + 24-line blocking DMA</td>
+</tr>
+<tr>
+<td>monitor</td>
+<td>1</td>
+<td>3 KB</td>
+<td>100 ms tick: heartbeat 1 s, gauge 5 s, stats 10 s</td>
+<td>negligible</td>
+</tr>
+<tr>
+<td>boot checks (transient, 6)</td>
+<td>1</td>
+<td>3 to 5 KB</td>
+<td>once at boot</td>
+<td>bounded by per-check deadlines</td>
+</tr>
+</tbody>
+</table>
+<p>Core 1 has its own 16 KB stack array and a 116 KB codec arena (both static RAM). Heap: <code>heap_4</code>, 80 KB (<code>NEUPOD_RTOS_HEAP_BYTES</code>, <code>app/os/memory_budget.h</code>), holds task stacks and kernel objects; static RAM beyond that is the LVGL
+pool (72 KB, <code>NEUPOD_LVGL_POOL_BYTES</code>), the BTstack pools (about 7 KB), the settings store (about 5 KB), the two render buffers (30 KB), the album-art thumbnail (8 KB, <code>app/runtime/art_service.c</code>), the directory-listing buffer (about 19 KB) and the audio core's rings and block buffer (about 28 KB), the play queue (about 3.9 KB, plus a 264 B rollback snapshot) and two track contexts for the stream controller (2.8 KB).
+The monitor prints the heap low-water mark and each task's lowest free stack every 10 s. Input is above
+the UI so wheel frames are never lost while LVGL renders; the monitor is lowest; boot-check tasks sit
+below the UI so the splash keeps animating while they run.</p>
+<h3 id="inter-task-data-core-0">Inter-task data (core 0)<a class="headerlink" href="#inter-task-data-core-0" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>From to</th>
+<th>Mechanism</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>input to UI</td>
+<td>queue of <code>input_event_t</code> (16 deep; dropped if the UI lags)</td>
+</tr>
+<tr>
+<td>monitor / battery check to UI</td>
+<td>latest value in a mutex-guarded store (<code>battery_store</code>)</td>
+</tr>
+<tr>
+<td>boot checks to UI</td>
+<td><code>capabilities_t</code> (mutex-guarded; first result per subsystem wins)</td>
+</tr>
+<tr>
+<td>I2C bus</td>
+<td>one mutex (<code>rt_i2c_mutex</code>) around every battery / haptic transaction</td>
+</tr>
+<tr>
+<td>UI to haptic task</td>
+<td>2-deep byte queue, sent without waiting (<code>rt_haptic_click</code>)</td>
+</tr>
+<tr>
+<td>UI to player</td>
+<td><code>player.h</code>: a mutex-guarded state (what plays, volume) plus commands to the audio core; the storage task reports file start and errors; end of file and stream faults are read back from the audio core's counters and statistics</td>
+</tr>
+<tr>
+<td>radio worker to UI</td>
+<td><code>hal_bt_event_fn</code> callback turned into a 16-deep queue of <code>hal_bt_event_t</code> by <code>bt_service.c</code> (state, device found/named, scan done); non-blocking send, dropped if the UI lags. Link events (pairing, connection state) are not queued: the callback hands them to <code>bt_saved_on_event</code> (RAM-only settings write) and screens read <code>hal_bt_link_state()</code></td>
+</tr>
+<tr>
+<td>anyone to settings store</td>
+<td><code>settings_store.h</code>: RAM image behind a mutex; only the storage task reads or writes the card file</td>
+</tr>
+<tr>
+<td>UI to storage task</td>
+<td>request queue (list a directory, free space, settings load); results come back on a result queue and the UI polls it. The entries live in one static buffer that the UI reads only after the result for its latest request arrived. Why a task: an SD directory scan is hundreds of sector reads and the UI task must never stall</td>
+</tr>
+</tbody>
+</table>
+<h3 id="ui-performance">UI performance<a class="headerlink" href="#ui-performance" title="Permanent link">&para;</a></h3>
+<p>The monitor prints every 10 s <code>ui: frames=… frame_us avg/max=… lvgl_mem=used/total (max …, frag …%)</code>: passes of
+<code>lv_timer_handler</code> that rendered something (render plus the blocking strip flush), their average and worst time in
+the window, and LVGL pool use. Each list screen costs about 15 KB of the pool (its rows are a fixed pool of
+objects, whatever the item count), so the pool is 72 KB (it was 96 KB until the BTstack stack needed the room; the bench peak was about 38 KB) and the stack is limited to 8 screens. The host tour also
+prints <code>ui: screen '&lt;name&gt;' lvgl_mem=…</code> at every snapshot.</p>
+<h3 id="what-the-monitor-prints-about-audio">What the monitor prints about audio<a class="headerlink" href="#what-the-monitor-prints-about-audio" title="Permanent link">&para;</a></h3>
+<p>Every 10 s:</p>
+<div class="highlight"><pre><span></span><code>audio sink: i2s rate=44099.488 Hz (requested 44100 Hz, clkdiv=22+37/256) dma_underruns=0 muted=1 source=none audible=0 volume=-30dB pcm_frames=0
+audio: blocks=1861 underruns=0 sink_missed=0 period_us min/avg/max=5431/5804/6181 (nominal 5804) jitter_max_us=377 ring_min=1792/4096 decoded=1868 data_bytes=0 events_dropped=0
+cpu%(of one core)/stack-free-min: ... (core 0 tasks only)
+</code></pre></div>
+<p><code>blocks</code> rises by about 1723 per 10 s (172 per second); the period and jitter figures are for the last
+10 s window. Events (<code>audio event: stream opened (44100)</code>, <code>UNDERRUN</code>) are printed as they arrive.
+A log-only stall check prints <code>AUDIO CORE STALLED</code> if the block counter stops for a second; it is silent
+on a good run. The figures above are from the <strong>host</strong>, where the clock is a timer thread on a PC; the
+RP2350 numbers are measured on the board.
+<code>audio: stats unavailable</code> / <code>monitor: audio stats unavailable</code> means the seqlock read gave up (core 1 stopped
+mid-update); the reader is bounded so the monitor keeps running.</p>
+<h2 id="bench-findings-history">Bench findings (history)<a class="headerlink" href="#bench-findings-history" title="Permanent link">&para;</a></h2>
+<p>These led to ADR-0011; the details are kept because they are the reason for the architecture.</p>
+<ol>
+<li><strong>Event-list corruption.</strong> In the first design (SMP FreeRTOS, audio task woken by <code>xSemaphoreGiveFromISR</code>
+   from an alarm interrupt on core 1) the board hung within a second: core 1 spun in <code>vListInsert</code> holding
+   the kernel task lock, core 0 spun on it in PendSV, and the semaphore's wait list showed the audio
+   task's event-list item inserted twice.</li>
+<li><strong>Lost cross-core yield requests.</strong> With a polled audio wait, core 1 froze about 1.5 s in, in
+   <code>prvCheckForRunStateChange</code>, waiting for a yield doorbell that never arrived. A watchdog that re-sent the
+   doorbell recovered it every time ("AUDIO STALLED ... kicking core 1", "RECOVERED after 1 kick"), which proves the
+   doorbell requests were being lost; with that workaround audio ran with 2 s outliers and 89 % decoder load.
+   The kernel is the Raspberry Pi fork's SMP RP2350 port (its newest commit); upstream FreeRTOS-Kernel has no
+   RP2350 port and its core cannot be combined with the fork's port.</li>
+<li><strong>I2C timeouts in the haptic check.</strong> <code>hal_i2c</code> timeouts are wall-clock with a 2 ms floor and a
+   transaction takes about 0.5 ms; a check task at priority 1 is pre-empted by the UI (priority 2) for a
+   whole frame, so the transaction "timed out" on a healthy bus. The I2C users now run at priority 4
+   (<code>RT_PRIO_I2C</code>) while on the bus; the haptic check still leaves the DRV2605L in standby.</li>
+<li><strong>CPU percentages.</strong> FreeRTOS attributes run time only when a task is switched out, so a task that
+   runs uninterrupted is under-reported until it next switches; with the single-core kernel the idle
+   figure is now meaningful. The percentages are shares of core 0. UI load of 10 to 20 % during the
+   first 10 s is the splash (eight pulsing icons and the shimmer re-render two 24-line strips per frame
+   with a blocking DMA wait); it falls once the static home screen is up.</li>
+</ol>
+<h2 id="boot-sequence">Boot sequence<a class="headerlink" href="#boot-sequence" title="Permanent link">&para;</a></h2>
+<ol>
+<li><code>main()</code>: <code>hal_system_init()</code> (clocks, UART; unchanged order), then <code>neupod_runtime_run()</code>
+   launches the audio core (core 1), opens the stream, creates the RTOS tasks and starts the scheduler.</li>
+<li>The UI task initialises the display first, draws the <strong>splash</strong> (wordmark, firmware version and
+   git hash, one icon per subsystem) and only then switches the backlight on.</li>
+<li>It starts the boot checks, each in its own task with a deadline. <strong>All checks are read-only.</strong></li>
+<li>Each icon pulses while its check runs, becomes solid when it passes, and gets a <strong>red cross only
+   if the subsystem is not fully correct</strong>. The reason for each failure is printed on the UART
+   (<code>boot: storage DEGRADED: card init: NO_CARD</code>).</li>
+<li>The splash holds until every check is resolved, at least 1.5 s (<code>RT_SPLASH_MIN_MS</code>) and at most 5 s for
+   the checks themselves. <strong>If every check passed it fades to the home screen at once. If any icon has a
+   cross, the splash is held for another 8 s (<code>RT_SPLASH_HOLD_MS</code>) from the moment the checks are done</strong>,
+   with a thin bar along the bottom draining over the hold, and one failure reason at a time under the
+   icons (<code>[2/5] storage: card init: NO_CARD</code>, 1.6 s each; all of them do not fit at 320x240). <strong>Any input
+   event skips the hold</strong>: a wheel or button event, or any key on the UART console of the testbed
+   (<code>skip_on_console_key</code>, set by the RP2350 <code>main</code>). Then it fades to the placeholder <strong>home</strong> screen (status bar
+   with the battery percentage, list of unavailable features, last input event).</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Passes when</th>
+<th>Currently on the bench</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>display</td>
+<td>panel initialised</td>
+<td>passes</td>
+</tr>
+<tr>
+<td>storage</td>
+<td>card identified and the FAT/exFAT volume mounted; writes stay locked (the settings save opens them for <code>/.neupod</code> only, see <a href="../bluetooth/">Bluetooth</a>)</td>
+<td>passes with a card</td>
+</tr>
+<tr>
+<td>battery</td>
+<td>MAX17048 ACKs at 0x36, VERSION 0x001X, cell voltage 2.5 to 4.6 V</td>
+<td>passes with a cell</td>
+</tr>
+<tr>
+<td>haptics</td>
+<td>DRV2605L ACKs at 0x5A, device ID 7; left in <strong>standby</strong></td>
+<td>passes when fitted</td>
+</tr>
+<tr>
+<td>click wheel</td>
+<td>receiver starts, init packet sent, a valid frame arrives</td>
+<td><strong>degraded</strong> (not wired, init packet unimplemented)</td>
+</tr>
+<tr>
+<td>audio</td>
+<td>the sink's stream runs: the audio core published its rate and served blocks (cannot detect the DAC: I2S is one-way)</td>
+<td>passes with the I2S sink; <strong>degraded</strong> with the null sink</td>
+</tr>
+<tr>
+<td>Bluetooth</td>
+<td>the radio driver is up and BTstack's HCI reaches the working state (local address read)</td>
+<td>passes on the Pico 2 W (stage 1; not yet seen on the board)</td>
+</tr>
+<tr>
+<td>Wi-Fi</td>
+<td>radio driver and lwIP are up (not: joined a network)</td>
+<td>passes on the Pico 2 W (W1; not yet seen on the board)</td>
+</tr>
+</tbody>
+</table>
+<p>Deadlines: storage 4 s, battery and haptics 1.5 s, wheel 1.5 s, audio 0.5 s, radio 4.8 s (the radio check keeps waiting up to 12 s, so a slow Bluetooth start still upgrades its result). A check that
+misses its deadline is marked degraded and its later result is ignored (except that radio upgrade). I2C runs at 400 kHz.</p>
+<h3 id="capabilities">Capabilities<a class="headerlink" href="#capabilities" title="Permanent link">&para;</a></h3>
+<p><code>capabilities_t</code> (<code>app/include/capabilities.h</code>) holds a state (pending, ok, degraded) and a text per
+subsystem. The UI and later features read it (<code>caps_available(CAP_STORAGE)</code>); the input task, for
+instance, forwards wheel events only if the wheel check passed, so a floating unwired receiver
+cannot inject presses.</p>
+<h2 id="input-sources-and-the-testbed-key-map">Input sources and the testbed key map<a class="headerlink" href="#input-sources-and-the-testbed-key-map" title="Permanent link">&para;</a></h2>
+<p>All input reaches the UI as <code>input_event_t</code> through one queue, filled only by the input task (the sole
+caller of <code>hal_input_poll()</code> and of the console reader). Wheel-sourced events are forwarded only once the
+wheel passed its boot check (or when the wheel is a simulation, as on the host); other sources never depend
+on the wheel.</p>
+<table>
+<thead>
+<tr>
+<th>Source</th>
+<th>Keys</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UART console on the testbed (<code>console_keys</code>)</td>
+<td><code>w</code> / <code>k</code> scroll up (counter-clockwise), <code>s</code> / <code>j</code> scroll down (+/-4 wheel positions = one list step); Enter or <code>e</code> = Select; <code>a</code> = Left; <code>d</code> = Right; <code>p</code> or Space = Play/Pause; <code>m</code> or Backspace = Menu</td>
+</tr>
+<tr>
+<td>Host simulator window</td>
+<td>Up / Down arrows and the mouse wheel scroll; Enter = Select; Left / Right; Space or <code>p</code> = Play/Pause; Esc, Backspace or <code>m</code> = Menu</td>
+</tr>
+</tbody>
+</table>
+<p>Any input event also skips the splash hold. The UI screens and their keys are described in <a href="../ui/">UI</a>. <code>hal_input_reinit()</code> failing (the init packet is still
+<code>TODO(hw)</code>) is not fatal: the wheel check passes if valid frames arrive within about 1.1 s, otherwise it is
+degraded ("not connected").</p>
+<h2 id="failure-handling">Failure handling<a class="headerlink" href="#failure-handling" title="Permanent link">&para;</a></h2>
+<ul>
+<li>FreeRTOS stack overflow, malloc failure and <code>configASSERT</code> (also LVGL assertions) call
+  <code>neupod_panic()</code>: the message including the task name goes out on the UART through a lock-free
+  path, then the board halts, repeating the message and flashing the LED (2 = stack overflow,
+  3 = out of memory, 4 = assertion, 5 = other). On the Pico 2 W the only LED is behind the CYW43 chip,
+  whose driver needs the running scheduler, so the LED code shows only for task-context
+  failures; define <code>NEUPOD_PANIC_LED_GPIO=&lt;pin&gt;</code> for a board with a direct LED. A panic resets the audio
+  core (RP2350) so nothing keeps playing, and in task context freezes every other task (UI included) except
+  the idle task, the timer task and the radio worker, which the LED needs; tradeoff: the radio worker keeps
+  running. From an interrupt or inside the kernel nothing blocking is possible, so there it is the UART message
+  and a halt only.</li>
+<li>Failing to create a permanent task or runtime object (UI, input, storage, monitor, queues, the I2C mutex) is fatal
+  (<code>neupod_panic</code>, LED code 3); failing to create a boot-check task only degrades that capability.</li>
+</ul>
+<h2 id="running-it">Running it<a class="headerlink" href="#running-it" title="Permanent link">&para;</a></h2>
+<ul>
+<li>RP2350: <code>scripts/build.sh rp2350</code>, flash <code>neupod.elf</code>; the UART shows the boot lines, a
+  <code>neuPod alive</code> heartbeat every second and the 10 s statistics.</li>
+<li>Host: <code>scripts/build.sh host</code>, then <code>build/host/hal/host/neupod</code> (SDL window if available;
+  arrows/mouse wheel scroll, Enter/Space/Esc buttons) or
+  <code>neupod --run-ms 8000 --snapshots DIR</code> (headless, writes <code>splash.ppm</code> and <code>home.ppm</code>;
+  <code>--splash-hold-ms N</code> shortens the failure hold, the smoke test uses 1500).
+  <code>ctest --test-dir build/host</code> runs it as <code>runtime_smoke</code>, writing <code>build/host/snapshots/</code>.</li>
+</ul>
+<h2 id="flashing">Flashing<a class="headerlink" href="#flashing" title="Permanent link">&para;</a></h2>
+<p><code>scripts/flash.sh</code> programs, verifies, resets and then explicitly resumes both cores; see
+<code>scripts/README.md</code>. (OpenOCD's reset otherwise leaves core 1 halted, so the audio core would not run.)</p>
+<h2 id="what-is-stubbed">What is stubbed<a class="headerlink" href="#what-is-stubbed" title="Permanent link">&para;</a></h2>
+<p>AAC decoder (FLAC, MP3, ALAC and WAV play), prefetch (logs requests), home screen (placeholder), click-wheel receiver (pins
+unconfirmed), Bluetooth pairing and A2DP (stage 2, <a href="../bluetooth/">Bluetooth</a>). Not yet measured on hardware with this architecture: block jitter under UI load,
+the panic LED, stack margins.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>
