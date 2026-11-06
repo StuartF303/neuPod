@@ -129,3 +129,35 @@ int ui_signal_bars(int32_t rssi, const ui_signal_thr_t *thr, int prev, int32_t h
 int ui_signal_class(int bars) { return bars >= 3 ? 3 : bars == 2 ? 2 : 1; }
 
 const char *ui_signal_word(int bars) { return bars <= 0 ? "-" : bars >= 4 ? "Excellent" : bars == 3 ? "Good" : bars == 2 ? "Fair" : "Weak"; }
+
+/* ---- Backlight auto-dim -------------------------------------------------------------------------- */
+
+static const struct {
+    uint16_t sec;
+    const char *name;
+} k_autodim[UI_AUTODIM_STEPS] = {{10, "10 s"}, {15, "15 s"}, {30, "30 s"}, {60, "1 min"}, {120, "2 min"}, {300, "5 min"}};
+
+uint32_t ui_autodim_seconds(uint8_t idx) { return idx < UI_AUTODIM_STEPS ? k_autodim[idx].sec : 0u; }
+const char *ui_autodim_name(uint8_t idx) { return idx < UI_AUTODIM_STEPS ? k_autodim[idx].name : "-"; }
+
+void ui_idle_init(ui_idle_t *t, uint32_t now_ms) {
+    t->last_ms = now_ms;
+    t->dimmed = false;
+}
+
+bool ui_idle_activity(ui_idle_t *t, uint32_t now_ms) {
+    bool was = t->dimmed;
+    t->last_ms = now_ms;
+    t->dimmed = false;
+    return was;
+}
+
+bool ui_idle_tick(ui_idle_t *t, uint32_t now_ms, bool enabled, uint32_t timeout_ms) {
+    int32_t elapsed = (int32_t)(now_ms - t->last_ms); /* negative: the last input is ahead of this tick */
+    bool dim = enabled && elapsed >= 0 && (uint32_t)elapsed >= timeout_ms;
+    bool changed = dim != t->dimmed;
+    t->dimmed = dim;
+    return changed;
+}
+
+uint8_t ui_backlight_effective(uint8_t set_pct, bool dimmed) { return dimmed && set_pct > UI_DIM_PCT ? (uint8_t)UI_DIM_PCT : set_pct; }

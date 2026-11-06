@@ -68,6 +68,32 @@ const char *ui_signal_word(int bars);
 /** Colour class of a bar count: 3 = green (3 or 4 bars), 2 = yellow (2 bars), 1 = red (1 bar). */
 int ui_signal_class(int bars);
 
+/* ---- Backlight auto-dim: idle clock and effective level ------------------------------------------- */
+
+#define UI_DIM_PCT 10u          /**< the idle backlight level, absolute; a set level below it is left alone */
+#define UI_AUTODIM_STEPS 6u     /**< entries of the "Dim after" choice */
+#define UI_AUTODIM_DEFAULT_IDX 2u /**< 30 s */
+
+/** Seconds of the "Dim after" choice @p idx (0..UI_AUTODIM_STEPS-1: 10 s, 15 s, 30 s, 1 min, 2 min, 5 min); 0 if out of range. */
+uint32_t ui_autodim_seconds(uint8_t idx);
+/** Label of the "Dim after" choice @p idx ("30 s", "1 min"); "-" if out of range. */
+const char *ui_autodim_name(uint8_t idx);
+
+typedef struct {
+    uint32_t last_ms; /**< time of the last input (or of the start) */
+    bool dimmed;
+} ui_idle_t;
+
+/** Start the idle clock at @p now_ms (not at 0: a long boot must not count as idle). */
+void ui_idle_init(ui_idle_t *t, uint32_t now_ms);
+/** Input happened at @p now_ms (may be ahead of the tick clock in the host tour). True if that ended a dim. */
+bool ui_idle_activity(ui_idle_t *t, uint32_t now_ms);
+/** Re-evaluate: dimmed exactly when @p enabled and at least @p timeout_ms have passed since the last input (wrap-safe;
+ *  a last input in the future is not idle). True if the dimmed state changed. */
+bool ui_idle_tick(ui_idle_t *t, uint32_t now_ms, bool enabled, uint32_t timeout_ms);
+/** Level (percent) to show: the set level, capped at UI_DIM_PCT while dimmed. Never brighter than @p set_pct. */
+uint8_t ui_backlight_effective(uint8_t set_pct, bool dimmed);
+
 /* ---- Screen stack (opaque entries) ---------------------------------------------------------------- */
 
 #define UI_STACK_MAX 8

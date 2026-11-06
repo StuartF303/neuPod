@@ -16,19 +16,31 @@
 #include "hal_radio.h"
 #include "haptic_logic.h"
 #include "haptic_service.h"
+#include "os.h"
 #include "player.h"
 #include "runtime_config.h"
 #include "settings_store.h"
 #include "ui_internal.h"
 #include "wifi_service.h"
 
-ui_state_t g_ui_state = {.click_mode = CLICK_HAPTIC, .backlight_pct = 100};
+ui_state_t g_ui_state = {.click_mode = CLICK_HAPTIC, .backlight_pct = 100, .autodim = true, .dim_idx = UI_AUTODIM_DEFAULT_IDX};
 
-void ui_apply_backlight(void) { hal_display_backlight((uint8_t)((g_ui_state.backlight_pct * 255u + 50u) / 100u)); }
+static ui_idle_t g_idle;
+
+void ui_apply_backlight(void) {
+    hal_display_backlight((uint8_t)((ui_backlight_effective(g_ui_state.backlight_pct, g_idle.dimmed) * 255u + 50u) / 100u));
+}
+
+static void backlight_transition(void) {
+    ui_apply_backlight();
+    printf("ui: backlight %s %u%%\n", g_idle.dimmed ? "dim" : "wake", (unsigned)ui_backlight_effective(g_ui_state.backlight_pct, g_idle.dimmed));
+}
 
 void ui_state_persist(void) {
     settings_set_u8(SETTING_BACKLIGHT_PCT, g_ui_state.backlight_pct);
     settings_set_u8(SETTING_CLICK_FEEDBACK, (uint8_t)g_ui_state.click_mode);
+    settings_set_u8(SETTING_AUTODIM, g_ui_state.autodim ? 1u : 0u);
+    settings_set_u8(SETTING_AUTODIM_IDX, g_ui_state.dim_idx);
 }
 
 // The settings store is loaded from the card some time after boot (storage task): when its contents are replaced, take
@@ -48,6 +60,12 @@ static void sync_from_settings(void) {
     click_mode_t m;
     if (settings_get_u8(SETTING_CLICK_FEEDBACK, &v) && click_mode_from_stored(v, &m)) {
         g_ui_state.click_mode = m; /* an old stored 0 / 1 is Off / Haptic, as before */
+    }
+    if (settings_get_u8(SETTING_AUTODIM, &v) && v <= 1) {
+        g_ui_state.autodim = v == 1; /* the next tick dims or wakes as needed */
+    }
+    if (settings_get_u8(SETTING_AUTODIM_IDX, &v) && v < UI_AUTODIM_STEPS) {
+        g_ui_state.dim_idx = v;
     }
 }
 
@@ -111,6 +129,7 @@ void ui_frame_init(lv_obj_t *scr) {
 
     ui_stack_init(&g_stack);
     ui_accel_init(&g_accel);
+    ui_idle_init(&g_idle, os_tick_ms());
 }
 
 ui_screen_t *ui_screen_new(size_t size, const char *title) {
@@ -202,6 +221,9 @@ const char *ui_frame_top_title(void) {
 }
 
 void ui_frame_input(const input_event_t *ev, uint32_t now_ms) {
+    if (ui_idle_activity(&g_idle, now_ms)) {
+        backlight_transition(); /* before the screen sees the event: a slider handler re-applies the level */
+    }
     ui_screen_t *top = ui_stack_top(&g_stack);
     if (top == NULL) {
         return;
@@ -296,8 +318,10 @@ static void kick_haptics(void) {
 }
 
 void ui_frame_tick(uint32_t now_ms) {
-    (void)now_ms;
     sync_from_settings();
+    if (ui_idle_tick(&g_idle, now_ms, g_ui_state.autodim, ui_autodim_seconds(g_ui_state.dim_idx) * 1000u)) {
+        backlight_transition();
+    }
     kick_haptics();
     update_wifi();
     update_battery();
