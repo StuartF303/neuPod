@@ -42,7 +42,7 @@ extern "C" {
 #define SETTINGS_FILE_B SETTINGS_DIR "/settings.b"
 #define SETTINGS_FILE_OLD SETTINGS_DIR "/settings.old" /**< a file written by a NEWER firmware, kept aside instead of being wiped */
 
-#define SETTINGS_MAX_ITEMS 48u /**< distinct tags kept (settings, Wi-Fi networks, link keys, BT device records): worst case about 39 */
+#define SETTINGS_MAX_ITEMS 48u /**< distinct tags kept (settings, Wi-Fi networks, link keys, BT device records): worst case about 41 */
 #define SETTINGS_VALUE_MAX 96u /**< bytes per stored value; a sealed secret holds up to 96 - 29 = 67 bytes of plaintext (Wi-Fi passwords are at most 63) */
 #define SETTINGS_VERSION 2u /**< written; 1 (same layout, at most 32 items) is still read. Firmware older than 2 sets a version-2 file aside instead of reading it */
 #define SETTINGS_VERSION_V1 1u
@@ -61,6 +61,8 @@ extern "C" {
 #define SETTING_SHUFFLE SETTINGS_TAG('N', 'P', 's', 'h')       /**< u8, pq_shuffle_t: 0 off, 1 songs; absent = off */
 #define SETTING_REPEAT SETTINGS_TAG('N', 'P', 'r', 'p')        /**< u8, pq_repeat_t: 0 off, 1 one, 2 all; absent = off */
 #define SETTING_RESUME_PLAY SETTINGS_TAG('N', 'P', 'r', 'a')   /**< u8, 0 or 1: start playing at boot when the resume record says playing; absent = 0 (restore paused) */
+#define SETTING_AUTODIM SETTINGS_TAG('N', 'P', 'a', 'd')       /**< u8, 0 or 1: dim the backlight when idle; absent = 1 */
+#define SETTING_AUTODIM_IDX SETTINGS_TAG('N', 'P', 'a', 't')   /**< u8, 0..5: idle time before dimming (ui_logic.h: 10 s .. 5 min); absent = 2 (30 s) */
 #define SETTING_BT_DEVICE SETTINGS_TAG('N', 'P', 'b', 'd')     /**< the one remembered headset: version, address, class, name (bt_saved.h; 10..42 bytes) */
 #define SETTING_WIFI SETTINGS_TAG('N', 'P', 'w', 'f')            /**< 4 bytes: enabled, during playback, idle-off minutes, zone */
 #define SETTING_NTP_SERVER SETTINGS_TAG('N', 'P', 'n', 's')      /**< string */

@@ -219,6 +219,7 @@ static void backlight_change(void *ctx, const wi_value_t *v) {
 
 static void backlight_done(void *ctx, bool ok, const wi_value_t *v) {
     (void)ctx;
+    ui_idle_inhibit(false);
     if (ok) {
         g_ui_state.backlight_pct = (uint8_t)v->number;
         ui_apply_backlight();
@@ -226,11 +227,82 @@ static void backlight_done(void *ctx, bool ok, const wi_value_t *v) {
     }
 }
 
-static ui_screen_t *make_display(void) {
+static void open_backlight_slider(void) {
     /* never fully dark: you could not find the way back */
-    ui_input_open(&(wi_request_t){.kind = WI_K_SLIDER, .title = "Backlight", .done = backlight_done, .change = backlight_change,
-                                  .value = g_ui_state.backlight_pct, .min = 5, .max = 100, .step = 5, .unit = "%"});
-    return NULL; /* the modal pushed itself */
+    ui_idle_inhibit(true); /* the preview must stay at the live level */
+    if (!ui_input_open(&(wi_request_t){.kind = WI_K_SLIDER, .title = "Backlight", .done = backlight_done, .change = backlight_change,
+                                       .value = g_ui_state.backlight_pct, .min = 5, .max = 100, .step = 5, .unit = "%"})) {
+        ui_idle_inhibit(false);
+    }
+}
+
+/* Display: a two-level list like Haptics (Backlight opens the slider, the other two rows toggle in place) */
+
+typedef struct {
+    ui_screen_t base;
+    ui_list_t *list;
+} display_t;
+
+enum { D_BACKLIGHT, D_AUTODIM, D_DIM_AFTER, D_COUNT };
+
+static void display_get(void *ctx, int32_t i, ui_list_item_t *o) {
+    (void)ctx;
+    if (i == D_BACKLIGHT) {
+        put(o, "Backlight", "%u %%", (unsigned)g_ui_state.backlight_pct);
+        o->chevron = true;
+    } else if (i == D_AUTODIM) {
+        put(o, "Auto-dim", "%s", g_ui_state.autodim ? "On" : "Off");
+    } else {
+        put(o, "Dim after", "%s", ui_autodim_name(g_ui_state.dim_idx));
+        o->dim = !g_ui_state.autodim;
+    }
+}
+
+static void display_scroll(ui_screen_t *s, int32_t steps) { ui_list_move(((display_t *)s)->list, steps); }
+
+static bool display_button(ui_screen_t *b, uint8_t btn) {
+    display_t *s = (display_t *)b;
+    if (btn != HAL_BTN_SELECT) {
+        return false;
+    }
+    switch (ui_list_selected(s->list)) {
+    case D_BACKLIGHT:
+        open_backlight_slider();
+        return true;
+    case D_AUTODIM:
+        g_ui_state.autodim = !g_ui_state.autodim;
+        break;
+    default:
+        if (!g_ui_state.autodim) {
+            return true; /* greyed: nothing to change */
+        }
+        g_ui_state.dim_idx = (uint8_t)((g_ui_state.dim_idx + 1u) % UI_AUTODIM_STEPS);
+        break;
+    }
+    ui_state_persist();
+    ui_list_refresh(s->list);
+    return true;
+}
+
+static void display_destroy(ui_screen_t *b) { ui_list_destroy(((display_t *)b)->list); }
+static void display_suspend(ui_screen_t *b) { ui_list_suspend(((display_t *)b)->list); }
+static void display_resume(ui_screen_t *b) {
+    ui_list_resume(((display_t *)b)->list);
+    ui_list_refresh(((display_t *)b)->list); /* the slider may have changed the backlight value */
+}
+
+static ui_screen_t *make_display(void) {
+    display_t *s = (display_t *)ui_screen_new(sizeof *s, "Display");
+    if (s == NULL) {
+        return NULL;
+    }
+    s->base.on_scroll = display_scroll;
+    s->base.on_button = display_button;
+    s->base.destroy = display_destroy;
+    s->base.suspend = display_suspend;
+    s->base.resume = display_resume;
+    s->list = ui_list_create(s->base.root, UI_W, &(ui_list_model_t){.count = D_COUNT, .ctx = s, .get = display_get});
+    return &s->base;
 }
 
 /* ---- Haptics: actuator and calibration (the work is done by the haptic task, never here) ---- */
@@ -366,7 +438,13 @@ static void pane_text(int32_t g, char *out, size_t n) {
         break;
     }
     case G_DISPLAY:
-        snprintf(out, n, "Backlight\n%u %%", (unsigned)g_ui_state.backlight_pct);
+        if (g_ui_state.autodim) {
+            snprintf(out, n, "Backlight\n%u %%\n%s %u %% after %s", (unsigned)g_ui_state.backlight_pct,
+                     g_ui_state.backlight_pct > UI_DIM_PCT ? "Dims to" : "Stays at", (unsigned)ui_backlight_effective(g_ui_state.backlight_pct, true),
+                     ui_autodim_name(g_ui_state.dim_idx));
+        } else {
+            snprintf(out, n, "Backlight\n%u %%\nAuto-dim off", (unsigned)g_ui_state.backlight_pct);
+        }
         break;
     case G_CLICK:
         snprintf(out, n, "Click\n%s\n%s", click_mode_name(g_ui_state.click_mode),
@@ -527,7 +605,12 @@ static void settings_tick(ui_screen_t *b) {
 static void settings_destroy(ui_screen_t *b) { ui_list_destroy(((settings_t *)b)->list); }
 
 static void list_suspend(ui_screen_t *x) { ui_list_suspend(((settings_t *)x)->list); }
-static void list_resume(ui_screen_t *x) { ui_list_resume(((settings_t *)x)->list); }
+static void list_resume(ui_screen_t *x) {
+    settings_t *s = (settings_t *)x;
+    ui_list_resume(s->list);
+    ui_list_refresh(s->list); /* a detail screen may have changed a value */
+    settings_update_pane(s);
+}
 
 ui_screen_t *ui_screen_settings_create(void) {
     settings_t *s = (settings_t *)ui_screen_new(sizeof *s, "Settings");

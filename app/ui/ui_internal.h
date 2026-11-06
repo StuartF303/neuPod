@@ -69,10 +69,14 @@ struct ui_screen {
 typedef struct {
     click_mode_t click_mode; /* what answers every list step: piezo, haptic, both or nothing */
     uint8_t backlight_pct; /* 5..100 */
+    bool autodim;          /* dim the backlight after the idle time */
+    uint8_t dim_idx;       /* idle time, an index for ui_autodim_seconds() */
 } ui_state_t;
 extern ui_state_t g_ui_state;
-/** Show the stored backlight level on the panel. */
+/** Show the backlight level on the panel: the set level, or the dimmed one while idle. The only place that computes it. */
 void ui_apply_backlight(void);
+/** Hold the auto-dim off while a screen previews the backlight (the slider); the idle time restarts when it is released. */
+void ui_idle_inhibit(bool on);
 /** Remember a changed UI setting (RAM now, the card a moment later: settings_store.h). */
 void ui_state_persist(void);
 
