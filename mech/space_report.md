@@ -42,14 +42,14 @@ Pocket free volumes are board-rear-face to shell floor; a battery behind the rib
 
 ### Layout A — single 55×55 board, stock position, switches on the wheel face
 
-**Boards:** main_board = 55×43.5 donor outline → 23.4 cm² (total 23.4 cm²)  
+**Boards:** main_board = 55×43.5 donor outline → 24.6 cm² (total 24.6 cm²)  
 **Inter-board links:** none  
 
 **Circuit split and board fill (10.5 mm model):**
 
 | board | role | area | face | max h | used / usable mm² | fill | circuits |
 |---|---|---|---|---|---|---|---|
-| main_board | front | 23.4 cm² | rear | 5.4 | 763 / 1883 | 40 % | buttons, wheel_if, jack_if, usb_c, amoled_if, mcu, memory, microsd, radio, audio, charger, gauge, power, batt_conn, haptic_drv, haptic_conn |
+| main_board | front | 24.6 cm² | rear | 5.4 | 761 / 1883 | 40 % | buttons, wheel_if, jack_if, usb_c, amoled_if, mcu, memory, microsd, usb_mux, sd_bridge, sd_mux, radio, audio, charger, gauge, power, batt_conn, haptic_drv, haptic_conn |
 
 **Does not fit:** radio — no room ≥ 18.5×14.5 with 2.5 mm height on the front board; microsd — no room ≥ 15.0×14.5 with 1.85 mm height on the front board  (stated model: radio, microsd)
 
@@ -64,6 +64,7 @@ Pocket free volumes are board-rear-face to shell floor; a battery behind the rib
 
 **Best catalogue cell:** none fits = 0 mAh, — (derived); battery_405060 = 2000 mAh, behind the ribs, crossing under the divider (stated).  
 **Haptic:** haptic_taptic at bbox [-17.5, 81.9, -5.7, 17.5, 92.9, -1.2]  
+**USB-C:** on main_board, top-mount, rear face; receptacle centre -1.63 vs hole -1.50 → -0.13 mm (centred)  
 **Taptic lead:** connector on main_board, ≈ 42.9 mm to the actuator  
 **FPC runs (Manhattan, exit → connector):** wheel 17.6 mm, AMOLED 4.9 mm, jack 129.3 mm (donor flex ≈ 110 mm, so about right)  
 
@@ -74,19 +75,19 @@ Pocket free volumes are board-rear-face to shell floor; a battery behind the rib
 
 ### Layout B — A + second board in the HDD cavity, components toward the shell, mezzanine link
 
-**Boards:** main_board = 55×43.5 donor outline → 23.4 cm²; cavity_board = 54×42 behind the ribs → 22.6 cm² (total 46.0 cm²)  
-**Inter-board links:** 36-pin 0.4 mm board-to-board pair, stack 2.2 mm, at (20.5, 15.8)  
+**Boards:** main_board = 55×43.5 donor outline → 24.6 cm²; cavity_board = 54×39 behind the ribs → 21.0 cm² (total 45.6 cm²)  
+**Inter-board links:** 26-pin 0.4 mm board-to-board pair, stack 2.2 mm, at (20.5, 15.8)  
 
 **Circuit split and board fill (10.5 mm model):**
 
 | board | role | area | face | max h | used / usable mm² | fill | circuits |
 |---|---|---|---|---|---|---|---|
-| main_board | front | 23.4 cm² | rear | 1.9 | 630 / 1883 | 33 % | buttons, wheel_if, jack_if, usb_c, amoled_if, mcu, memory, audio, haptic_drv, haptic_conn |
-| cavity_board | second | 22.6 cm² | rear | 2.2 | 389 / 2162 | 18 % | microsd, radio, charger, gauge, power, batt_conn |
+| main_board | front | 24.6 cm² | rear | 1.9 | 620 / 1883 | 33 % | buttons, wheel_if, jack_if, usb_c, usb_mux, sd_bridge, sd_mux, microsd, amoled_if, mcu, memory, audio, haptic_drv, haptic_conn |
+| cavity_board | second | 21.0 cm² | rear | 2.2 | 172 / 2009 | 9 % | radio, charger, gauge, power, batt_conn |
 
-**Does not fit:** radio — no room ≥ 18.5×14.5 with 2.5 mm height on the second board  (stated model: all fit)
+**Does not fit:** radio — no room ≥ 18.5×14.5 with 2.5 mm height on the second board; microsd — no room ≥ 15.0×14.5 with 1.85 mm height on the front board  (stated model: microsd)
 
-**Link:** 36-pin 0.4 mm board-to-board pair, stack 2.2 mm, at (20.5, 15.8). 16 signals + 10 power + 9 ground = **36 pins**. Crossing: mcu ↔ microsd: SDIO 4-bit + detect (7); mcu ↔ radio: gSPI + WL_ON (4); charger ↔ usb_c: VBUS, CC1, CC2 (6); charger ↔ mcu: INT, CE (2); gauge ↔ mcu: ALERT (1); I2C bus (SDA, SCL) (2); 3V3 rail (2); VSYS rail (2).
+**Link:** 26-pin 0.4 mm board-to-board pair, stack 2.2 mm, at (20.5, 15.8). 9 signals + 10 power + 7 ground = **26 pins**. Crossing: mcu ↔ radio: gSPI + WL_ON (4); charger ↔ usb_c: VBUS, CC1, CC2 (6); charger ↔ mcu: INT, CE (2); gauge ↔ mcu: ALERT (1); I2C bus (SDA, SCL) (2); 3V3 rail (2); VSYS rail (2).
 
 **Max component height per zone (derived / stated):**
 
@@ -101,6 +102,7 @@ Pocket free volumes are board-rear-face to shell floor; a battery behind the rib
 **505060 check:** footprint does NOT fit; needs 6.0 mm, has 7.4 (derived) / 10.6 (stated) → no (derived), no (stated).  
 **Best catalogue cell:** battery_503040 = 650 mAh, under the LCD, left of the jack, below the Taptic (derived); battery_503040 = 650 mAh, under the LCD, left of the jack, below the Taptic (stated).  
 **Haptic:** haptic_taptic at bbox [-17.5, 81.9, -5.7, 17.5, 92.9, -1.2]  
+**USB-C:** on main_board, top-mount, rear face; receptacle centre -1.63 vs hole -1.50 → -0.13 mm (centred)  
 **Taptic lead:** connector on main_board, ≈ 42.9 mm to the actuator  
 **FPC runs (Manhattan, exit → connector):** wheel 17.6 mm, AMOLED 4.9 mm, jack 129.3 mm (donor flex ≈ 110 mm, so about right)  
 
@@ -111,14 +113,14 @@ Pocket free volumes are board-rear-face to shell floor; a battery behind the rib
 
 ### Layout C — L-shaped rigid board extending under the LCD backplate
 
-**Boards:** main_board_T = 55×43.5 + extension under the LCD → 41.2 cm² (total 41.2 cm²)  
+**Boards:** main_board_T = 55×43.5 + extension under the LCD → 42.3 cm² (total 42.3 cm²)  
 **Inter-board links:** none  
 
 **Circuit split and board fill (10.5 mm model):**
 
 | board | role | area | face | max h | used / usable mm² | fill | circuits |
 |---|---|---|---|---|---|---|---|
-| main_board_T | front | 41.2 cm² | rear | 5.4 | 1248 / 3407 | 37 % | buttons, wheel_if, jack_if, usb_c, amoled_if, mcu, memory, microsd, radio, audio, charger, gauge, power, batt_conn, haptic_drv, haptic_conn |
+| main_board_T | front | 42.3 cm² | rear | 5.4 | 1247 / 3407 | 37 % | buttons, wheel_if, jack_if, usb_c, amoled_if, mcu, memory, microsd, usb_mux, sd_bridge, sd_mux, radio, audio, charger, gauge, power, batt_conn, haptic_drv, haptic_conn |
 
 **Max component height per zone (derived / stated):**
 
@@ -131,6 +133,7 @@ Pocket free volumes are board-rear-face to shell floor; a battery behind the rib
 **Best catalogue cell:** none fits = 0 mAh, — (derived); battery_405060 = 2000 mAh, behind the ribs, crossing under the divider (stated).  
 **Haptic:** haptic_taptic at bbox [-17.5, 81.9, -5.7, 17.5, 92.9, -1.2]  
 **Antenna:** radio centre is 33.4 mm (Manhattan) from the RF window centre  
+**USB-C:** on main_board_T, top-mount, rear face; receptacle centre -1.63 vs hole -1.50 → -0.13 mm (centred)  
 **Taptic lead:** connector on main_board_T, ≈ 9.6 mm to the actuator  
 **FPC runs (Manhattan, exit → connector):** wheel 17.6 mm, AMOLED 4.9 mm, jack 129.3 mm (donor flex ≈ 110 mm, so about right)  
 
@@ -141,19 +144,19 @@ Pocket free volumes are board-rear-face to shell floor; a battery behind the rib
 
 ### Layout D1 — full-size front board (switches) + main board behind the ribs (mechanically = B)
 
-**Boards:** front_board = 55×43.5 donor outline → 23.4 cm²; main_board = 54×42 behind the ribs → 22.6 cm² (total 46.0 cm²)  
-**Inter-board links:** 36-pin 0.4 mm board-to-board pair, stack 2.2 mm, at (20.5, 15.8)  
+**Boards:** front_board = 55×43.5 donor outline → 24.6 cm²; main_board = 54×39 behind the ribs → 21.0 cm² (total 45.6 cm²)  
+**Inter-board links:** 26-pin 0.4 mm board-to-board pair, stack 2.2 mm, at (20.5, 15.8)  
 
 **Circuit split and board fill (10.5 mm model):**
 
 | board | role | area | face | max h | used / usable mm² | fill | circuits |
 |---|---|---|---|---|---|---|---|
-| front_board | front | 23.4 cm² | rear | 1.9 | 630 / 1883 | 33 % | buttons, wheel_if, jack_if, usb_c, amoled_if, mcu, memory, audio, haptic_drv, haptic_conn |
-| main_board | second | 22.6 cm² | rear | 2.2 | 389 / 2162 | 18 % | microsd, radio, charger, gauge, power, batt_conn |
+| front_board | front | 24.6 cm² | rear | 1.9 | 620 / 1883 | 33 % | buttons, wheel_if, jack_if, usb_c, usb_mux, sd_bridge, sd_mux, microsd, amoled_if, mcu, memory, audio, haptic_drv, haptic_conn |
+| main_board | second | 21.0 cm² | rear | 2.2 | 172 / 2009 | 9 % | radio, charger, gauge, power, batt_conn |
 
-**Does not fit:** radio — no room ≥ 18.5×14.5 with 2.5 mm height on the second board  (stated model: all fit)
+**Does not fit:** radio — no room ≥ 18.5×14.5 with 2.5 mm height on the second board; microsd — no room ≥ 15.0×14.5 with 1.85 mm height on the front board  (stated model: microsd)
 
-**Link:** 36-pin 0.4 mm board-to-board pair, stack 2.2 mm, at (20.5, 15.8). 16 signals + 10 power + 9 ground = **36 pins**. Crossing: mcu ↔ microsd: SDIO 4-bit + detect (7); mcu ↔ radio: gSPI + WL_ON (4); charger ↔ usb_c: VBUS, CC1, CC2 (6); charger ↔ mcu: INT, CE (2); gauge ↔ mcu: ALERT (1); I2C bus (SDA, SCL) (2); 3V3 rail (2); VSYS rail (2).
+**Link:** 26-pin 0.4 mm board-to-board pair, stack 2.2 mm, at (20.5, 15.8). 9 signals + 10 power + 7 ground = **26 pins**. Crossing: mcu ↔ radio: gSPI + WL_ON (4); charger ↔ usb_c: VBUS, CC1, CC2 (6); charger ↔ mcu: INT, CE (2); gauge ↔ mcu: ALERT (1); I2C bus (SDA, SCL) (2); 3V3 rail (2); VSYS rail (2).
 
 **Max component height per zone (derived / stated):**
 
@@ -168,6 +171,47 @@ Pocket free volumes are board-rear-face to shell floor; a battery behind the rib
 **505060 check:** footprint does NOT fit; needs 6.0 mm, has 7.4 (derived) / 10.6 (stated) → no (derived), no (stated).  
 **Best catalogue cell:** battery_503040 = 650 mAh, under the LCD, left of the jack, below the Taptic (derived); battery_503040 = 650 mAh, under the LCD, left of the jack, below the Taptic (stated).  
 **Haptic:** haptic_taptic at bbox [-17.5, 81.9, -5.7, 17.5, 92.9, -1.2]  
+**USB-C:** on front_board, top-mount, rear face; receptacle centre -1.63 vs hole -1.50 → -0.13 mm (centred)  
+**Taptic lead:** connector on front_board, ≈ 42.9 mm to the actuator  
+**FPC runs (Manhattan, exit → connector):** wheel 17.6 mm, AMOLED 4.9 mm, jack 129.3 mm (donor flex ≈ 110 mm, so about right)  
+
+**Clashes (derived model):** 0
+
+
+**Clashes (stated model):** 0
+
+### Layout D1-sd-lower — D1 with USB-C, USB mux, SD bridge and the card on the lower board
+
+**Boards:** front_board = 55×43.5 donor outline → 23.5 cm²; main_board = 54×42 behind the ribs → 23.2 cm² (total 46.7 cm²)  
+**Inter-board links:** 32-pin 0.4 mm board-to-board pair, stack 2.2 mm, at (20.5, 15.8)  
+
+**Circuit split and board fill (10.5 mm model):**
+
+| board | role | area | face | max h | used / usable mm² | fill | circuits |
+|---|---|---|---|---|---|---|---|
+| front_board | front | 23.5 cm² | rear | 1.9 | 625 / 1883 | 33 % | buttons, wheel_if, jack_if, amoled_if, mcu, memory, audio, haptic_drv, haptic_conn |
+| main_board | second | 23.2 cm² | rear | 2.2 | 389 / 2162 | 18 % | usb_c, usb_mux, sd_bridge, sd_mux, microsd, radio, charger, gauge, power, batt_conn |
+
+**Does not fit:** radio — no room ≥ 18.5×14.5 with 2.5 mm height on the second board  (stated model: all fit)
+
+**High-speed USB pairs crossing the link: 1** — keep the USB 2.0 HS path on one board where possible.
+
+**Link:** 32-pin 0.4 mm board-to-board pair, stack 2.2 mm, at (20.5, 15.8). 20 signals + 4 power + 8 ground = **32 pins**. Crossing: mcu ↔ sd_mux: SDIO 4-bit + detect (MCU side) (7); usb_mux ↔ mcu: USB HS D+/D− (MCU) (2); mcu ↔ usb_mux: mux select, SD mux select (2); mcu ↔ radio: gSPI + WL_ON (4); charger ↔ mcu: INT, CE (2); gauge ↔ mcu: ALERT (1); I2C bus (SDA, SCL) (2); 3V3 rail (2); VSYS rail (2).
+
+**Max component height per zone (derived / stated):**
+
+| zone | derived | stated |
+|---|---|---|
+| front board rear face, pockets | 1.9 | 1.9 |
+| front board rear face under ribs | 0.2 | 0.2 |
+| second board, shell side | 2.2 | 5.4 |
+| wheel face inside 37 mm ring | 0.8 | 0.8 |
+
+**Battery box reserved:** 45.5 × 34.6 × 7.4 (derived) / 10.6 deep (stated).  
+**505060 check:** footprint does NOT fit; needs 6.0 mm, has 7.4 (derived) / 10.6 (stated) → no (derived), no (stated).  
+**Best catalogue cell:** battery_503040 = 650 mAh, under the LCD, left of the jack, below the Taptic (derived); battery_503040 = 650 mAh, under the LCD, left of the jack, below the Taptic (stated).  
+**Haptic:** haptic_taptic at bbox [-17.5, 81.9, -5.7, 17.5, 92.9, -1.2]  
+**USB-C:** on main_board, top-mount, front face; receptacle centre -0.57 vs hole -1.50 → +0.93 mm (needs a sink/offset mount or spacer)  
 **Taptic lead:** connector on front_board, ≈ 42.9 mm to the actuator  
 **FPC runs (Manhattan, exit → connector):** wheel 17.6 mm, AMOLED 4.9 mm, jack 129.3 mm (donor flex ≈ 110 mm, so about right)  
 
@@ -178,17 +222,17 @@ Pocket free volumes are board-rear-face to shell floor; a battery behind the rib
 
 ### Layout D2 — full-size front board (switches) + main board under the LCD, battery behind the ribs
 
-**Boards:** front_board = 55×43.5 donor outline → 23.4 cm²; main_board = T under the LCD → 23.7 cm² (total 47.1 cm²)  
+**Boards:** front_board = 55×43.5 donor outline → 24.6 cm²; main_board = T under the LCD → 23.7 cm² (total 48.3 cm²)  
 **Inter-board links:** 50-pin 0.5 mm FPC connector (+ matching flex), flex ≈17 mm behind the divider  
 
 **Circuit split and board fill (10.5 mm model):**
 
 | board | role | area | face | max h | used / usable mm² | fill | circuits |
 |---|---|---|---|---|---|---|---|
-| front_board | front | 23.4 cm² | rear | 5.4 | 587 / 1883 | 31 % | buttons, wheel_if, jack_if, usb_c, mcu, memory, audio |
+| front_board | front | 24.6 cm² | rear | 5.4 | 585 / 1883 | 31 % | buttons, wheel_if, jack_if, usb_c, usb_mux, sd_bridge, sd_mux, mcu, memory, audio |
 | main_board | second | 23.7 cm² | rear | 6.1 | 913 / 2275 | 40 % | amoled_if, microsd, radio, charger, gauge, power, batt_conn, haptic_drv, haptic_conn |
 
-**Link:** 50-pin 0.5 mm FPC connector (+ matching flex), flex ≈17 mm behind the divider. 27 signals + 10 power + 13 ground = **50 pins**. Crossing: mcu ↔ microsd: SDIO 4-bit + detect (7); mcu ↔ radio: gSPI + WL_ON (4); mcu ↔ amoled_if: QSPI + RST/TE/EN (9); charger ↔ usb_c: VBUS, CC1, CC2 (6); charger ↔ mcu: INT, CE (2); gauge ↔ mcu: ALERT (1); haptic_drv ↔ mcu: EN, PWM (2); I2C bus (SDA, SCL) (2); 3V3 rail (2); VSYS rail (2).
+**Link:** 50-pin 0.5 mm FPC connector (+ matching flex), flex ≈17 mm behind the divider. 27 signals + 10 power + 13 ground = **50 pins**. Crossing: sd_mux ↔ microsd: SD bus to the card (7); mcu ↔ radio: gSPI + WL_ON (4); mcu ↔ amoled_if: QSPI + RST/TE/EN (9); charger ↔ usb_c: VBUS, CC1, CC2 (6); charger ↔ mcu: INT, CE (2); gauge ↔ mcu: ALERT (1); haptic_drv ↔ mcu: EN, PWM (2); I2C bus (SDA, SCL) (2); 3V3 rail (2); VSYS rail (2).
 
 **Max component height per zone (derived / stated):**
 
@@ -204,6 +248,7 @@ Pocket free volumes are board-rear-face to shell floor; a battery behind the rib
 **Best catalogue cell:** none fits = 0 mAh, — (derived); battery_405060 = 2000 mAh, behind the ribs, under the divider (stated).  
 **Haptic:** haptic_taptic at bbox [-17.5, 81.9, -5.7, 17.5, 92.9, -1.2]  
 **Antenna:** radio centre is 34.1 mm (Manhattan) from the RF window centre  
+**USB-C:** on front_board, top-mount, rear face; receptacle centre -1.63 vs hole -1.50 → -0.13 mm (centred)  
 **Taptic lead:** connector on main_board, ≈ 0.9 mm to the actuator  
 **FPC runs (Manhattan, exit → connector):** wheel 17.6 mm, AMOLED 7.8 mm, jack 129.3 mm (donor flex ≈ 110 mm, so about right)  
 
@@ -221,11 +266,14 @@ The split lives in `mech/circuits.py` (`SPLIT`); the placer packs each board fro
 | buttons | fixed | — | 5 × 6×6 tact switches, wheel face (fixed: donor centres) | front |
 | wheel_if | fixed | — | 13P 0.3 mm wheel FPC connector + ESD (fixed: donor position) | front |
 | jack_if | fixed | — | jack/hold flex connector + ESD (fixed: donor position) | front |
-| usb_c | fixed | — | USB-C mid-mount receptacle + ESD + CC resistors (fixed: dock aperture) | front |
+| usb_c | fixed | — | USB-C receptacle + ESD + CC resistors (fixed: centred on the shell's dock hole; mount follows the board) | front |
 | amoled_if | fixed | — | 30P 0.5 mm AMOLED FPC connector + panel supply (position set per board) | front (D2: second) |
 | mcu | 13.0×13.0 | 0.9 | RP2350B QFN-80 + 12 MHz crystal + decoupling | front |
 | memory | 13.0×6.5 | 1.0 | QSPI PSRAM + flash (2 × WSON-8) | front |
-| microsd | 15.0×14.5 | 1.85 | microSD push-push socket | second |
+| microsd | 15.0×14.5 | 1.85 | microSD push-push socket | front |
+| usb_mux | 3.5×3.5 | 0.6 | USB 2.0 HS 2:1 switch (TS3USB221 class): USB-C → MCU or SD bridge | front |
+| sd_bridge | 7.5×7.5 | 0.9 | USB 2.0 HS → SD card reader bridge (GL823K / USB2240 class) + crystal: card mounts on the PC at full speed | front |
+| sd_mux | 4.5×4.5 | 0.6 | SD bus switch, 6 lines (MCU SDIO ↔ bridge) | front |
 | radio | 18.5×14.5 | 2.5 | Raspberry Pi RM2 (CYW43439) module | second |
 | audio | 9.0×9.0 | 0.9 | codec + headphone amp + mic bias / TRRS detect | front |
 | charger | 9.0×8.0 | 1.2 | charger / power path (QFN 4×4 + low-profile 2.5×2 inductor) | second |
@@ -250,7 +298,14 @@ or ~48 (D2, flex — the display connector has to live on the main board under t
    instead. Follows where the cell ends up.
 4. **Buttons**: read by the wheel's PSoC (over the 13-pin flex) or by our MCU? Probe with the analyser; it only
    matters if the MCU ever moves off the front board (5 lines).
-5. **Haptic connector board.** Decided (6 Nov): iPhone 7/8 Taptic Engine on the back-shell floor at the top, beside the
+5. **USB-C and the SD card.** USB-C, the USB mux, the USB→SD bridge, the SD bus switch and the card belong on one
+   board so the 480 Mbit/s pair never crosses the link and the card mounts on the PC at full speed. The shell's dock
+   hole centre is ≈ 2 mm behind the front board's mid-plane, so on the **front board** a top-mount receptacle hung
+   from its rear face on a tab to the shell wall centres within 0.13 mm. On the **lower board** (D1-sd-lower) the best
+   is a top-mount on its front face, 0.9 mm off — needs a sink/offset mount or spacer. But on the front board the
+   microSD (15 × 14.5) only fits pocket UC, which the display connector occupies in B/D1: either move the display
+   connector, use a smaller socket, or take the SD chain to the lower board (one HS pair, MCU USB, then crosses).
+6. **Haptic connector board.** Decided (6 Nov): iPhone 7/8 Taptic Engine on the back-shell floor at the top, beside the
    jack/hold module, driven from a *new* connector (not the piezo contacts). In D2 the main board runs right over it
    (lead < 5 mm), so connector + driver go there; in A/B/C/D1 the connector is on the front board and the lead
    runs ≈ 43 mm up under the LCD.
@@ -356,6 +411,8 @@ except in D2).
 | JACK_CONN_OFS | (-21.9, 4.2) | photo | donor jack/hold connector centre X, and height above the dock edge; REAR face. FIXED: reused flex |
 | JACK_CONN_SIZE | (5.0, 3.0, 1.2) | estimate | jack/hold FPC connector body |
 | JACK_FLEX_L | 110.0 | estimate | donor jack/hold flex length, jack to connector |
+| USBC_TAB_W | 13.0 | estimate | board tab carrying the USB-C out to the shell wall through the frame's dock gap |
+| USBC_MOUNT_RESIDUAL_OK | 0.3 | estimate | max acceptable centre error between receptacle and hole before a different mount is needed |
 | BATT_FOAM | 0.5 | estimate | foam each side of a LiPo |
 | HAPTIC_CONN | (6.0, 4.0, 1.0) | estimate | board connector for the Taptic Engine lead (2-wire drive) |
 | FLEX_LINK_W | 8.0 | estimate | inter-board flex width |

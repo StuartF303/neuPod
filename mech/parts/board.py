@@ -9,14 +9,20 @@ PCB_NEW = (0.2, 0.3, 0.7)
 SWITCH = (0.9, 0.75, 0.2)
 
 
+def usbc_tab(z0, t):
+    """Tab that carries the USB-C out through the frame's dock gap to the shell wall."""
+    tw = p.USBC_TAB_W
+    return rounded_box(p.DOCK_AP_CX - tw / 2, p.INT_Y0 + p.CLEARANCE, z0, p.DOCK_AP_CX + tw / 2, p.BOARD_BOTTOM_Y + 1.0, z0 + t, 0.5)
+
+
 def usbc_cutout(z0, t):
-    """Slot for the mid-mount receptacle at the dock aperture."""
+    """Slot for a mid-mount receptacle (only when the chosen mount is mid-mount)."""
     w, l, _ = p.USBC
     c = p.CLEARANCE
-    return box(-w / 2 - c, p.BOARD_BOTTOM_Y - 1, z0 - 1, w / 2 + c, p.BOARD_BOTTOM_Y + l + c, z0 + t + 1)
+    return box(p.DOCK_AP_CX - w / 2 - c, p.INT_Y0, z0 - 1, p.DOCK_AP_CX + w / 2 + c, p.INT_Y0 + p.CLEARANCE + l + c, z0 + t + 1)
 
 
-def board_outline(z0=0.0, t=None, usbc=False):
+def board_outline(z0=0.0, t=None, usbc=False, usbc_mount=None):
     """Donor outline at the stock position (from the scan): 55 × 45 with the top-centre tab,
     pin holes, screw holes (shared with the wheel locating holes), top screw holes."""
     t = p.BOARD_T if t is None else t
@@ -35,7 +41,9 @@ def board_outline(z0=0.0, t=None, usbc=False):
     for hx, hy in holes:
         b = b.cut(cyl(hx, hy, z0 - 1, p.SCREW_D, t + 2))
     if usbc:
-        b = b.cut(usbc_cutout(z0, t))
+        b = b.union(usbc_tab(z0, t))
+        if usbc_mount == "mid-mount":
+            b = b.cut(usbc_cutout(z0, t))
     else:
         nw, nd = p.BOARD_DOCK_NOTCH
         b = b.cut(box(-nw / 2, y0 - 1, z0 - 1, nw / 2, y0 + nd, z0 + t + 1))
@@ -84,7 +92,7 @@ def switch_board(name, z0, t=1.0, notes=""):
     wheel locating holes and the USB-C slot."""
     cx, cy = p.WHEEL_CX, p.WHEEL_CY
     if p.SWITCH_BOARD_SHAPE == "full":
-        return Part(name, board_outline(z0, t, usbc=True), PCB_NEW, "board", fixed=False, notes=notes)
+        return Part(name, board_outline(z0, t, usbc=True, usbc_mount="top-mount, rear face"), PCB_NEW, "board", fixed=False, notes=notes)
     if p.SWITCH_BOARD_SHAPE == "round":
         b = cyl(cx, cy, z0, p.SWITCH_BOARD_D, t)
     else:
@@ -100,6 +108,6 @@ def switch_board(name, z0, t=1.0, notes=""):
 
 def l_board(name, z0, t, ext_y1, ext_x0, ext_x1, notes=""):
     """Donor outline plus a rectangular extension up to ext_y1 (layout C)."""
-    main = board_outline(z0, t, usbc=True)
+    main = board_outline(z0, t, usbc=True, usbc_mount="top-mount, rear face")
     ext = rounded_box(ext_x0, p.BOARD_TOP_Y - 2, z0, ext_x1, ext_y1, z0 + t, 1.0)
     return Part(name, main.union(ext), PCB_NEW, "board", fixed=False, notes=notes)

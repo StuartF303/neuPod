@@ -190,7 +190,7 @@ VIEWS = ("iso", "top", "section_side", "section_wheel", "exploded")
 
 if __name__ == "__main__":
     RENDERS.mkdir(exist_ok=True)
-    layouts = sys.argv[1:] or ["stock", "A", "B", "C", "D1", "D2"]
+    layouts = sys.argv[1:] or ["stock"] + list(__import__("mech.layouts", fromlist=["LAYOUTS"]).LAYOUTS)
     for lay in layouts:
         for v in VIEWS:
             out = RENDERS / f"{lay}_{v}.png"

@@ -20,10 +20,9 @@ def back_shell():
                         p.SHELL_CORNER_R - p.BACK_SHELL_WALL)
     shell = outer.cut(inner)
     # dock aperture in the bottom end wall
-    zc = p.BOARD_T / 2
     w, h = p.DOCK_AP_W, p.DOCK_AP_H
     slot = (cq.Workplane("XZ").slot2D(w, h).extrude(-(p.BACK_SHELL_WALL + 2.0))
-            .translate((0, y0 - 1.0, zc)))
+            .translate((p.DOCK_AP_CX, y0 - 1.0, p.DOCK_AP_ZC)))
     shell = shell.cut(slot)
     return Part("back_shell", shell, STEEL, "shell",
                 notes="stainless tray; dock aperture in the bottom end wall")

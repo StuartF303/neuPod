@@ -115,6 +115,7 @@ def run(depth_model):
         d["zones"] = meta["zones"]
         d["assemblies"] = meta.get("assemblies", {})
         d["haptic_lead"] = meta.get("haptic_lead")
+        d["usb"] = meta.get("usb")
         d["unplaced"] = meta.get("unplaced", [])
         d["link"] = meta.get("link", {})
         d["battery"] = meta.get("battery")
@@ -176,7 +177,14 @@ or ~48 (D2, flex — the display connector has to live on the main board under t
    instead. Follows where the cell ends up.
 4. **Buttons**: read by the wheel's PSoC (over the 13-pin flex) or by our MCU? Probe with the analyser; it only
    matters if the MCU ever moves off the front board (5 lines).
-5. **Haptic connector board.** Decided (6 Nov): iPhone 7/8 Taptic Engine on the back-shell floor at the top, beside the
+5. **USB-C and the SD card.** USB-C, the USB mux, the USB→SD bridge, the SD bus switch and the card belong on one
+   board so the 480 Mbit/s pair never crosses the link and the card mounts on the PC at full speed. The shell's dock
+   hole centre is ≈ 2 mm behind the front board's mid-plane, so on the **front board** a top-mount receptacle hung
+   from its rear face on a tab to the shell wall centres within 0.13 mm. On the **lower board** (D1-sd-lower) the best
+   is a top-mount on its front face, 0.9 mm off — needs a sink/offset mount or spacer. But on the front board the
+   microSD (15 × 14.5) only fits pocket UC, which the display connector occupies in B/D1: either move the display
+   connector, use a smaller socket, or take the SD chain to the lower board (one HS pair, MCU USB, then crosses).
+6. **Haptic connector board.** Decided (6 Nov): iPhone 7/8 Taptic Engine on the back-shell floor at the top, beside the
    jack/hold module, driven from a *new* connector (not the piezo contacts). In D2 the main board runs right over it
    (lead < 5 mm), so connector + driver go there; in A/B/C/D1 the connector is on the front board and the lead
    runs ≈ 43 mm up under the LCD.
@@ -223,7 +231,8 @@ def md(rep_d, rep_s):
             "B": "A + second board in the HDD cavity, components toward the shell, mezzanine link",
             "C": "L-shaped rigid board extending under the LCD backplate",
             "D1": "full-size front board (switches) + main board behind the ribs (mechanically = B)",
-            "D2": "full-size front board (switches) + main board under the LCD, battery behind the ribs"}
+            "D2": "full-size front board (switches) + main board under the LCD, battery behind the ribs",
+            "D1-sd-lower": "D1 with USB-C, USB mux, SD bridge and the card on the lower board"}
     for nm, d in rep_d["layouts"].items():
         ds = rep_s["layouts"][nm]
         o.append(f"### Layout {nm} — {desc[nm]}\n")
@@ -242,6 +251,8 @@ def md(rep_d, rep_s):
             o.append("\n**Does not fit:** " + "; ".join(f"{b} — {why}" for b, why in d["unplaced"])
                      + ("  (stated model: " + ("all fit" if not ds["unplaced"] else ", ".join(b for b, _ in ds["unplaced"])) + ")"))
         lk = d["link"]
+        if lk.get("totals", {}).get("hs_pairs"):
+            o.append(f"\n**High-speed USB pairs crossing the link: {lk['totals']['hs_pairs']}** — keep the USB 2.0 HS path on one board where possible.")
         if lk.get("pins"):
             o.append(f"\n**Link:** {lk['desc']}. {lk['totals']['signals']} signals + {lk['totals']['power']} power + "
                      f"{lk['totals']['ground']} ground = **{lk['pins']} pins**. Crossing: "
@@ -266,6 +277,10 @@ def md(rep_d, rep_s):
         if d.get("antenna"):
             o.append(f"**Antenna:** {d['antenna']['module']} centre is {d['antenna']['dist_to_window']} mm (Manhattan) from the RF window centre  ")
         f = d["fpc"]
+        if d.get("usb"):
+            u = d["usb"]
+            o.append(f"**USB-C:** on {u['board']}, {u['mount']}; receptacle centre {u['centre']:+.2f} vs hole {u['hole_zc']:+.2f} → "
+                     f"{u['residual']:+.2f} mm ({'centred' if u['ok'] else 'needs a sink/offset mount or spacer'})  ")
         if d.get("haptic_lead"):
             o.append(f"**Taptic lead:** connector on {d['haptic_lead']['board']}, ≈ {d['haptic_lead']['length']} mm to the actuator  ")
         o.append(f"**FPC runs (Manhattan, exit → connector):** wheel {f['wheel']} mm, AMOLED {f['amoled']} mm, "

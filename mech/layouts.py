@@ -93,8 +93,14 @@ def cavity_boxes(y_top_clear=None):
     hw = p.HDD_SIZE[0] / 2
     c = p.CLEARANCE
     y_hi = p.HDD_Y0 + p.HDD_SIZE[1] if y_top_clear is None else y_top_clear
-    return [("behind the ribs, below the divider", (-hw, p.HDD_Y0, p.Z_BACK_IN, hw, p.DIVIDER_Y0 - c, p.RIB_Z_BACK - c)),
-            ("behind the ribs, crossing under the divider", (-hw, p.HDD_Y0, p.Z_BACK_IN, hw, y_hi - c, p.FRAME_DIVIDER_Z_BACK - c))]
+    y_lo = max(p.HDD_Y0, usb_back_y() + c)
+    return [("behind the ribs, below the divider", (-hw, y_lo, p.Z_BACK_IN, hw, p.DIVIDER_Y0 - c, p.RIB_Z_BACK - c)),
+            ("behind the ribs, crossing under the divider", (-hw, y_lo, p.Z_BACK_IN, hw, y_hi - c, p.FRAME_DIVIDER_Z_BACK - c))]
+
+
+def usb_back_y():
+    """Inner end of the USB-C receptacle (it reaches past the board's dock edge into the cavity)."""
+    return p.INT_Y0 + p.CLEARANCE + p.USBC[1]
 
 
 def lcd_z_back():
@@ -148,13 +154,28 @@ def _owned(part, owner):
     return part
 
 
-def _usbc_part():
-    """Mid-mount receptacle straddling the front board, overhanging the dock edge so its mating face sits just
-    inside the shell aperture (keeps it clear of the wheel ring)."""
+def usbc_mount(z_rear, t=BOARD_T):
+    """Best way to mount the receptacle on a board whose rear face is at z_rear so it centres on the shell hole.
+    Returns dict(mount, centre, residual, face)."""
+    h = p.USBC[2]
+    cands = {"top-mount, rear face": (z_rear - h / 2, "rear"),
+             "mid-mount": (z_rear + t / 2, None),
+             "top-mount, front face": (z_rear + t + h / 2, "front")}
+    best = min(cands.items(), key=lambda kv: abs(kv[1][0] - p.DOCK_AP_ZC))
+    centre, face = best[1]
+    return dict(mount=best[0], centre=round(centre, 2), residual=round(centre - p.DOCK_AP_ZC, 2), face=face,
+                ok=abs(centre - p.DOCK_AP_ZC) <= p.USBC_MOUNT_RESIDUAL_OK)
+
+
+def _usbc_part(z_rear, owner):
+    """Receptacle on a tab reaching the shell wall, mating face just inside the dock hole, X on the hole centre."""
     w, l, h = p.USBC
+    m = usbc_mount(z_rear)
     y0 = p.INT_Y0 + p.CLEARANCE
-    return Part("usb_c", box_at(0.0, y0 + l / 2, BOARD_T / 2 - h / 2, (w, l), h), COMP, "candidate", fixed=False,
-                notes=f"USB-C mid-mount; overhangs the dock edge by {p.BOARD_BOTTOM_Y - y0:.1f} mm")
+    part = Part("usb_c", box_at(p.DOCK_AP_CX, y0 + l / 2, m["centre"] - h / 2, (w, l), h), COMP, "candidate", fixed=False,
+                notes=f"USB-C {m['mount']} on {owner}; centre {m['centre']:+.2f} vs hole {p.DOCK_AP_ZC:+.2f} "
+                      f"({'OK' if m['ok'] else 'needs an offset/sink mount or spacer'})", owner=owner)
+    return part, m
 
 
 def _front_faces(hmax):
@@ -176,9 +197,10 @@ def _front_fixed(front_name, where, amoled_xy=None):
         c = _owned(comp(name, size, *pos, 0.0, "rear", note), front_name)
         parts.append(c)
         occ.append(_rect_of(c))
-    u = _owned(_usbc_part(), front_name)
-    parts.append(u)
-    occ.append(_rect_of(u))
+    if where["usb_c"] == "front":
+        u, _ = _usbc_part(0.0, front_name)
+        parts.append(u)
+        occ.append(_rect_of(u))
     for sx, sy in p.SCREW_POS:                                     # screw bosses
         r = p.BOSS_D / 2 + 0.2
         occ.append((sx - r, sy - r, sx + r, sy + r))
@@ -280,6 +302,12 @@ def _finish(layout, boards, fixed_parts, occ, loose, targets, link, extra_meta):
     meta["boards"] = {bd["name"]: bd.get("desc", "") for bd in boards.values()}
     meta["links"] = [link["desc"]] if link else []
     meta["antenna"] = "radio" if "radio" in placed else None
+    u = next((q for q in parts if q.name == "usb_c"), None)
+    if u:
+        bd = next(b for b in boards.values() if b["name"] == u.owner)
+        z_rear = bd["part"].bbox[2]
+        m = usbc_mount(z_rear)
+        meta["usb"] = dict(board=u.owner, **m, hole_zc=p.DOCK_AP_ZC)
     meta["wheel_conn"] = (*p.WHEEL_CONN_POS, 0.0)
     meta["jack_conn"] = (*p.JACK_CONN_POS, 0.0)
     hc = next((q for q in parts if q.name == "haptic_conn"), None)
@@ -326,7 +354,7 @@ def _front_hmax(behind_top):
 def layout_A():
     """Single board, donor outline, stock position: switches on the wheel face, everything else in the pockets."""
     where = C.board_of("A")
-    front = Part("main_board", B.board_outline(0.0, BOARD_T, usbc=True), B.PCB_NEW, "board", fixed=False,
+    front = Part("main_board", B.board_outline(0.0, BOARD_T, usbc=where["usb_c"] == "front", usbc_mount=usbc_mount(0.0)["mount"]), B.PCB_NEW, "board", fixed=False,
                  notes="donor outline (scan): 55 × 43.5 + top tab", owner="main_board")
     bat, batt_box, blabel = best_cell(cavity_boxes())
     hmax = _front_hmax(bat.bbox[5] if bat else p.Z_BACK_IN)
@@ -343,25 +371,37 @@ def layout_A():
     return _finish("A", boards, fixed, occ, loose, _targets(bat, hap), None, meta)
 
 
-def _second_behind_ribs(name):
+def _second_behind_ribs(name, with_usb=False):
     t = BOARD_T
     z_top = p.RIB_Z_BACK - p.CLEARANCE
     z = z_top - t
     hw = p.HDD_SIZE[0] / 2
     y1 = p.DIVIDER_Y0 - p.CLEARANCE
-    part = B.rect_board(name, -hw, p.HDD_Y0, hw, y1, z, t, notes="behind the ribs, below the divider")
+    y0 = p.HDD_Y0 if with_usb else max(p.HDD_Y0, usb_back_y() + p.CLEARANCE)   # clear of a USB-C hung from the front board
+    part = B.rect_board(name, -hw, y0, hw, y1, z, t, notes="behind the ribs, below the divider")
+    if with_usb:                                                     # tab out to the shell wall under the dock gap
+        tw = p.USBC_TAB_W
+        part = Part(name, part.shape.union(B.rect_board("tab", p.DOCK_AP_CX - tw / 2, p.INT_Y0 + p.CLEARANCE,
+                                                         p.DOCK_AP_CX + tw / 2, p.HDD_Y0 + 1.0, z, t).shape),
+                    B.PCB_NEW, "board", fixed=False, notes="behind the ribs, with a tab to the dock hole")
     part.owner = name
-    face = dict(face="rear", z=z, regions=[(-hw + 0.5, p.HDD_Y0 + 0.5, hw - 0.5, y1 - 0.5, round(z - p.Z_BACK_IN - p.CLEARANCE, 2))])
+    face = dict(face="rear", z=z, regions=[(-hw + 0.5, y0 + 0.5, hw - 0.5, y1 - 0.5, round(z - p.Z_BACK_IN - p.CLEARANCE, 2))])
     front_face = dict(face="front", z=z_top, regions=[])          # touches the ribs: link connector only
-    return part, z, z_top, [face, front_face], f"54×{y1 - p.HDD_Y0:.0f} behind the ribs"
+    return part, z, z_top, [face, front_face], f"54×{y1 - y0:.0f} behind the ribs"
 
 
 def _layout_behind_ribs(layout, front_name, second_name):
     """B and D1: stock-position board + a second board behind the ribs, joined by a board-to-board pair."""
     where = C.board_of(layout)
-    front = Part(front_name, B.board_outline(0.0, BOARD_T, usbc=True), B.PCB_NEW, "board", fixed=False,
+    front = Part(front_name, B.board_outline(0.0, BOARD_T, usbc=where["usb_c"] == "front", usbc_mount=usbc_mount(0.0)["mount"]), B.PCB_NEW, "board", fixed=False,
                  notes="donor outline: switches + front-side circuits", owner=front_name)
-    second, z2, z2_top, faces2, desc2 = _second_behind_ribs(second_name)
+    second, z2, z2_top, faces2, desc2 = _second_behind_ribs(second_name, with_usb=where["usb_c"] == "second")
+    if where["usb_c"] == "second":                                # receptacle pokes up through the front board plane: notch it
+        w, l, _ = p.USBC
+        c = p.CLEARANCE
+        notch = box(p.DOCK_AP_CX - w / 2 - c, p.INT_Y0 - 1, -1, p.DOCK_AP_CX + w / 2 + c, usb_back_y() + c, 2)
+        front = Part(front_name, front.shape.cut(notch), B.PCB_NEW, "board", fixed=False,
+                     notes="donor outline, notched for the USB-C on the lower board", owner=front_name)
     hmax = _front_hmax(z2_top)
     boards = {"front": dict(name=front_name, part=front, faces=[_front_faces(hmax)], desc="55×43.5 donor outline"),
               "second": dict(name=second_name, part=second, faces=faces2, desc=desc2)}
@@ -370,6 +410,11 @@ def _layout_behind_ribs(layout, front_name, second_name):
     rows, tot = C.crossing(layout)
     link = _mezzanine(tot["total"], front_name, second_name, 0.0, z2_top, (rx, ry + 4.0))
     occ = {("front", 0): occ0 + [link["rect"]], ("second", 1): [link["rect"]]}
+    if where["usb_c"] == "second":
+        u, m = _usbc_part(z2, second_name)
+        fixed.append(u)
+        occ[("second", 0 if m["face"] == "rear" else 1)].append(_rect_of(u))
+        occ[("front", 0)].append(_rect_of(u))                     # nothing on the front board's rear face over it
     bat, batt_box, blabel = best_cell(under_lcd_boxes(lcd_z_back() - p.CLEARANCE))
     hap = taptic()
     loose = [q for q in (bat, hap) if q]
@@ -427,7 +472,7 @@ def layout_D2():
     joined by a flex that runs behind the divider."""
     where = C.board_of("D2")
     t = BOARD_T
-    front = Part("front_board", B.board_outline(0.0, t, usbc=True), B.PCB_NEW, "board", fixed=False,
+    front = Part("front_board", B.board_outline(0.0, t, usbc=where["usb_c"] == "front", usbc_mount=usbc_mount(0.0)["mount"]), B.PCB_NEW, "board", fixed=False,
                  notes="donor outline: switches + front-side circuits", owner="front_board")
     z_top = lcd_z_back() - p.CLEARANCE
     z = z_top - t
@@ -485,4 +530,9 @@ def layout_D2():
     return _finish("D2", boards, fixed, occ, loose, _targets(bat, hap), link, meta)
 
 
-LAYOUTS = {"A": layout_A, "B": layout_B, "C": layout_C, "D1": layout_D1, "D2": layout_D2}
+def layout_D1_sd_lower():
+    """D1 with the USB-C, USB mux, SD bridge and card on the lower board behind the ribs."""
+    return _layout_behind_ribs("D1-sd-lower", "front_board", "main_board")
+
+
+LAYOUTS = {"A": layout_A, "B": layout_B, "C": layout_C, "D1": layout_D1, "D1-sd-lower": layout_D1_sd_lower, "D2": layout_D2}
