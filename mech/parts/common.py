@@ -11,6 +11,7 @@ class Part:
     group: str              # 'shell' | 'frame' | 'board' | 'front' | 'cavity' | 'candidate' | 'region'
     fixed: bool = True      # stock geometry (True) or a candidate placement (False)
     notes: str = ""
+    owner: str = None       # board assembly this part belongs to (PCB + its components/connectors), or "link"
     bbox: tuple = field(default=None)
 
     def __post_init__(self):

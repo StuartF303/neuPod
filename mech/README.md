@@ -12,7 +12,9 @@ donor logic board's rear (component) face — the face that looks at the ribs.
 mech/
   params.py        every dimension, tagged measured / photo / datasheet / estimate / derived
   parts/           one builder per part (shell, midframe, board, front, cavity, scan_ref)
-  layouts.py       candidate layouts A, B, C, D1, D2 and the part toggles (OPTIONS)
+  circuits.py      circuit blocks, their interfaces and the SPLIT (which board each circuit goes on) — edit this
+  placer.py        packs each board's blocks into its usable regions (pockets / board faces, with height limits)
+  layouts.py       candidate layouts A, B, C, D1, D2: boards, cell, Taptic, inter-board link
   assembly.py      stock + layout assembly; `python -m mech.assembly` exports STEP to mech/out/
   space_study.py   free volumes, clash lists, per-layout metrics → space_report.md
   render.py        off-screen VTK renders → renders/<layout>_{iso,top,section_side,section_wheel,exploded}.png
@@ -26,7 +28,7 @@ mech/
 pip install cadquery cairosvg            # CadQuery 2.8 / OCP 7.9 tested; VTK comes with cadquery
 python -m mech.space_study               # ~15 s, both depth models, writes space_report.md
 xvfb-run -a python -m mech.render        # ~2 min for all layouts; omit xvfb-run on a desktop
-python -m mech.assembly D2               # STEP export for KiCad / FreeCAD
+python -m mech.assembly D2               # STEP export: whole device + one STEP per PCB assembly (board + its parts)
 NEUPOD_DEPTH_MODEL=stated python -m mech.render D2   # renders with the 7 mm cavity forced
 ```
 

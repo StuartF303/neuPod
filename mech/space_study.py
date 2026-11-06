@@ -49,7 +49,9 @@ def clashes(parts, min_vol=0.05):
                 continue
             if ("usbc" in c.name and o.group == "board") or ("usbc" in o.name and c.group == "board"):
                 continue                                      # mid-mount receptacle sits in its board slot by design
-            if any(k in o.name or k in c.name for k in ("fpc_stub", "flex_tail", "flex_link")):  # flexible, mates by design
+            if c.owner and c.owner == o.owner and ("link_conn" in c.name or "link_conn" in o.name):
+                continue                                      # connector halves mate by design
+            if any(k in o.name or k in c.name for k in ("fpc_stub", "flex_tail", "flex_link", "link_flex")):  # flexible, mates by design
                 continue
             v = _ivol(c, o)
             if v > min_vol:
@@ -111,6 +113,10 @@ def run(depth_model):
         d["board_desc"] = meta["boards"]
         d["links"] = meta["links"]
         d["zones"] = meta["zones"]
+        d["assemblies"] = meta.get("assemblies", {})
+        d["haptic_lead"] = meta.get("haptic_lead")
+        d["unplaced"] = meta.get("unplaced", [])
+        d["link"] = meta.get("link", {})
         d["battery"] = meta.get("battery")
         d["batt_where"] = meta.get("batt_where")
         bb = meta.get("batt_box")
@@ -140,6 +146,42 @@ def run(depth_model):
         rep["layouts"][nm] = d
         print(f"[{depth_model}] layout {nm}: {len(cl)} clashes, battery {d['battery']} ({d['battery_mah']} mAh)")
     return rep
+
+
+def split_section():
+    from mech import circuits as C
+    o = ["## 3a. Circuit split — which circuits go on which board\n",
+         "The split lives in `mech/circuits.py` (`SPLIT`); the placer packs each board from it, and the board fill, "
+         "link pin count and viewer follow. Footprints include each block's local passives.\n",
+         "| block | footprint mm | height | what | default board |", "|---|---|---|---|---|"]
+    for k, v in C.BLOCKS.items():
+        fp = "fixed" if v.get("fixed") else f"{v['fp'][0]}×{v['fp'][1]}"
+        side = "front" if k in C.SPLIT_DEFAULT["front"] else "second"
+        if k == "amoled_if":
+            side += " (D2: second)"
+        o.append(f"| {k} | {fp} | {v['h'] or '—'} | {v['desc']} | {side} |")
+    o.append("""
+**Proposed default (for discussion):** keep the MCU with everything fast or analog it talks to — QSPI memory,
+display (except in D2), codec/headphone amp, wheel and buttons — on the stock-position *front* board, so no
+high-speed or audio net crosses the link. The *second* board takes the tall and power parts: microSD (1.85),
+radio (2.5), charger + rails, gauge and the battery connector. That crosses ~36 pins (B/D1, board-to-board pair)
+or ~48 (D2, flex — the display connector has to live on the main board under the LCD).
+
+**Decisions needed:**
+1. **Radio height.** The RM2 (2.5 mm) does not fit on a second board behind the ribs in the 10.5 mm model (2.2 mm
+   there). Either chip-down CYW43439 + chip antenna (~1 mm), or D2, where it sits by the RF window with 6 mm.
+2. **Display connector**: front board (top of pocket UC, where the LCD ZIF was) in A/B/C/D1; in D2 it moves to the
+   main board, adding 9 QSPI/control lines to the link.
+3. **Charger side.** On the second board VBUS/CC cross the link (6 power pins); on the front board VBAT/VSYS cross
+   instead. Follows where the cell ends up.
+4. **Buttons**: read by the wheel's PSoC (over the 13-pin flex) or by our MCU? Probe with the analyser; it only
+   matters if the MCU ever moves off the front board (5 lines).
+5. **Haptic connector board.** Decided (6 Nov): iPhone 7/8 Taptic Engine on the back-shell floor at the top, beside the
+   jack/hold module, driven from a *new* connector (not the piezo contacts). In D2 the main board runs right over it
+   (lead < 5 mm), so connector + driver go there; in A/B/C/D1 the connector is on the front board and the lead
+   runs ≈ 43 mm up under the LCD.
+""")
+    return "\n".join(o)
 
 
 def md(rep_d, rep_s):
@@ -180,7 +222,7 @@ def md(rep_d, rep_s):
     desc = {"A": "single 55×55 board, stock position, switches on the wheel face",
             "B": "A + second board in the HDD cavity, components toward the shell, mezzanine link",
             "C": "L-shaped rigid board extending under the LCD backplate",
-            "D1": "full-size front board (switches) + main board behind the ribs (and on under the LCD)",
+            "D1": "full-size front board (switches) + main board behind the ribs (mechanically = B)",
             "D2": "full-size front board (switches) + main board under the LCD, battery behind the ribs"}
     for nm, d in rep_d["layouts"].items():
         ds = rep_s["layouts"][nm]
@@ -188,7 +230,23 @@ def md(rep_d, rep_s):
         o.append("**Boards:** " + "; ".join(f"{k} = {d['board_desc'].get(k, '')} → {v} cm²" for k, v in d["boards"].items())
                  + f" (total {sum(d['boards'].values()):.1f} cm²)  ")
         o.append("**Inter-board links:** " + (", ".join(d["links"]) if d["links"] else "none") + "  ")
-        o.append("**Max component height per zone (derived / stated):**\n")
+        o.append("\n**Circuit split and board fill (10.5 mm model):**\n")
+        o.append("| board | role | area | face | max h | used / usable mm² | fill | circuits |\n|---|---|---|---|---|---|---|---|")
+        for bn, a in d["assemblies"].items():
+            for f in a["faces"]:
+                if not f["avail"]:
+                    continue
+                o.append(f"| {bn} | {a['role']} | {a['area_cm2']} cm² | {f['face']} | {f['hmax']} | {f['used']} / {f['avail']} | {f['util']} % | "
+                         + ", ".join(a["blocks"]) + " |")
+        if d["unplaced"]:
+            o.append("\n**Does not fit:** " + "; ".join(f"{b} — {why}" for b, why in d["unplaced"])
+                     + ("  (stated model: " + ("all fit" if not ds["unplaced"] else ", ".join(b for b, _ in ds["unplaced"])) + ")"))
+        lk = d["link"]
+        if lk.get("pins"):
+            o.append(f"\n**Link:** {lk['desc']}. {lk['totals']['signals']} signals + {lk['totals']['power']} power + "
+                     f"{lk['totals']['ground']} ground = **{lk['pins']} pins**. Crossing: "
+                     + "; ".join(f"{r[0]} ({r[1]})" for r in lk["rows"]) + ".")
+        o.append("\n**Max component height per zone (derived / stated):**\n")
         o.append("| zone | derived | stated |\n|---|---|---|")
         for z, h in d["zones"].items():
             o.append(f"| {z} | {h:.1f} | {ds['zones'].get(z, h):.1f} |")
@@ -208,6 +266,8 @@ def md(rep_d, rep_s):
         if d.get("antenna"):
             o.append(f"**Antenna:** {d['antenna']['module']} centre is {d['antenna']['dist_to_window']} mm (Manhattan) from the RF window centre  ")
         f = d["fpc"]
+        if d.get("haptic_lead"):
+            o.append(f"**Taptic lead:** connector on {d['haptic_lead']['board']}, ≈ {d['haptic_lead']['length']} mm to the actuator  ")
         o.append(f"**FPC runs (Manhattan, exit → connector):** wheel {f['wheel']} mm, AMOLED {f['amoled']} mm, "
                  f"jack {f['jack']} mm (donor flex ≈ {f['jack_flex_len']:.0f} mm, so {'it must be folded/tucked' if f['jack'] < f['jack_flex_len'] * 0.6 else 'about right'})  ")
         o.append(f"\n**Clashes (derived model):** {len(d['clashes'])}\n")
@@ -219,6 +279,7 @@ def md(rep_d, rep_s):
                 o.append(f"| … | {len(d['clashes']) - 25} more | | |")
         o.append(f"\n**Clashes (stated model):** {len(ds['clashes'])}"
                  + ("" if not ds["clashes"] else " — " + ", ".join(f"{a}↔{b}" for a, b, _, _ in ds["clashes"][:8])) + "\n")
+    o.append(split_section())
     o.append(RECOMMENDATION)
     o.append("## 6. Parameters the scan must replace (estimate / photo)\n")
     o.append(p.table(("estimate", "photo")))
@@ -249,14 +310,17 @@ RECOMMENDATION = """## 4. What the scans changed (6 Nov 2026)
   window) runs across the rest of the top end, X −28.5…15. The old cell pocket (45 wide) is exactly the space left
   of the jack.
 - Back shell: rim 7.8 mm above the inner floor (outer scan 8.3 to the back face). The polished floor did not scan.
+- **Taptic Engine (decided):** 35 × 11 × 4.5 on the floor along the top end, against the jack/hold module, just inside
+  the plastic insert. It takes the top 11 mm of the under-LCD bay: in B/D1 the cell there drops from 40 × 40
+  (~1.1 Ah) to 30 × 40 (~650 mAh). Its steel body sits next to the RF window — keep the radio antenna at the
+  insert's left end and check detuning once the antenna is chosen.
 
-| layout | boards (cm²) | cell, 10.5 mm model | cell, 7 mm model | radio → RF window | clashes |
+| layout | boards (cm²) | link | cell, 10.5 mm model | cell, 7 mm model | does not fit (10.5 mm) |
 |---|---|---|---|---|---|
-| A | 24 | none | 405060 2.0 Ah behind the ribs | 115 mm | UC cannot take µSD + MCU + AMOLED connector |
-| B | 24 + 22 | 604040 1.1 Ah under the LCD | 704040 1.3 Ah | 70 mm | 0 |
-| C | 41 (T over the divider) | none | 405060 2.0 Ah behind the ribs | 43 mm | 0 |
-| D1 | 24 + 22 | 604040 1.1 Ah under the LCD | 704040 1.3 Ah | 82 mm | 0 |
-| D2 | 24 + 24 | none | 405060 2.0 Ah behind the ribs | 26 mm | 0 |
+| A | 23 | — | none | 405060 2.0 Ah behind the ribs | radio, microSD |
+| B / D1 | 23 + 23 | 36-pin board-to-board, 2.2 mm stack | 503040 650 mAh under the LCD | 503040 650 mAh | RM2 radio (2.5 > 2.2) |
+| C | 41 (T over the divider) | — | none | 405060 2.0 Ah behind the ribs | — |
+| D2 | 23 + 24 | 50-pin 0.5 mm flex behind the divider | none (2.0 mm behind the ribs) | 405060 2.0 Ah behind the ribs | — |
 
 Fixed in every layout: front board = donor outline with the five switches, the screw/locating holes, the wheel
 13P and jack/hold connectors at the donor positions (rear face), USB-C under the dock strap (overhanging the dock edge to clear the wheel ring), and the AMOLED
@@ -265,12 +329,15 @@ connector at the top of pocket UC (the tab above sits on the divider, so nothing
 ## 5. Recommendation
 
 **Lay out the front board now** — its outline, holes, switch pattern, both reused connectors and the USB-C position
-are all set by the scan and do not depend on the open depth question. It is the same part in B, D1 and D2.
+are all set by the scan and do not depend on the open depth question. Outline and fixed parts are the same in B, D1
+and D2; with the default split it also carries the MCU, memory, audio and haptic driver (and the display connector,
+except in D2).
 
 **The second board and the cell hinge on one number: rib rear face → back-shell floor.**
 - If it is ≈ 4 mm (what the 10.5 mm envelope implies with these front-tray numbers): **D1** — main board behind the
-  ribs below the divider (54 × 40), cell under the LCD left of the jack (≈ 40 × 40 × 6, ~1.1 Ah, 2× the donor).
-  The radio is far from the window, so it needs a short flex/coax antenna to the plastic insert.
+  ribs below the divider (54 × 40), cell under the LCD left of the jack, below the Taptic (≈ 30 × 40 × 5, ~650 mAh — the Taptic costs the 40 × 40 cell here).
+  The main board has only 2.2 mm on its shell side, so the RM2 (2.5) does not fit: use a chip-down CYW43439
+  (~1 mm) with a flex/coax antenna to the plastic insert. Link: 36-pin board-to-board pair through pocket LR.
 - If it is ≥ 6 mm (the 7 mm noted at the teardown): **D2** — main board under the LCD with the radio against the
   plastic insert, cell behind the ribs (405060 ~2 Ah), linked to the front board by a 4 mm flex over the divider.
   C (one T-shaped rigid board, same placement) is the cheaper variant if the AMOLED backplate clearance holds.

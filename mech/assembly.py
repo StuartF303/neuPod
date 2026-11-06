@@ -56,6 +56,15 @@ def to_cq_assembly(parts):
     return asm
 
 
+def board_assemblies(parts):
+    """owner -> list of parts (each PCB with its components and connectors, as one piece)."""
+    out = {}
+    for pt in parts:
+        if pt.owner and pt.owner != "link":
+            out.setdefault(pt.owner, []).append(pt)
+    return out
+
+
 if __name__ == "__main__":
     OUT.mkdir(exist_ok=True)
     names = sys.argv[1:] or ["stock"] + list(L.LAYOUTS)
@@ -63,3 +72,7 @@ if __name__ == "__main__":
         parts, _ = build(nm)
         to_cq_assembly(parts).save(str(OUT / f"neupod_{nm}.step"))
         print("wrote", OUT / f"neupod_{nm}.step", len(parts), "parts")
+        for owner, ps in board_assemblies(parts).items():      # one STEP per PCB assembly, for KiCad / enclosure work
+            f = OUT / f"neupod_{nm}_{owner}.step"
+            to_cq_assembly(ps).save(str(f))
+            print("   ", f.name, len(ps), "parts")

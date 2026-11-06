@@ -186,7 +186,8 @@ CELLS = P("CELLS", {
     "604045": (40.0, 45.0, 6.0, 1250),
     "704045": (40.0, 45.0, 7.0, 1450),
 }, "datasheet", "LiPo X × Y × T × mAh; 505060/605060 from vendor pages, others typical catalogue values (capacities estimate); 40×40/40×45 added for the under-LCD bay")
-HAPTIC_TAPTIC = P("HAPTIC_TAPTIC", (35.0, 11.0, 4.5), "datasheet", "iPhone 7/8 Taptic Engine")
+HAPTIC_TAPTIC = P("HAPTIC_TAPTIC", (35.0, 11.0, 4.5), "datasheet", "iPhone 7/8 Taptic Engine — CHOSEN haptic (6 Nov); driven from a new connector on one of the boards")
+HAPTIC_CONN = P("HAPTIC_CONN", (6.0, 4.0, 1.0), "estimate", "board connector for the Taptic Engine lead (2-wire drive)")
 HAPTIC_LRA = P("HAPTIC_LRA", (10.0, 10.0, 4.0), "datasheet", "rectangular LRA")
 HAPTIC_PIEZO = P("HAPTIC_PIEZO", (12.0, 12.0, 0.6), "datasheet", "piezo disc Ø12")
 B2B_CONN = P("B2B_CONN", (10.0, 4.0), "datasheet", "board-to-board mezzanine pair footprint; stack height is derived per layout")
@@ -262,6 +263,8 @@ JACK_POS = P("JACK_POS", (JACK_BOSS_F[0] - JACK_BOSS_F[2] / 2 - 0.5, YF(JACK_BOS
 INSERT_Y0 = P("INSERT_Y0", YF(PLASTIC_INSERT_YF), "derived", "inner edge of the plastic top insert")
 BATT_POCKET_Y1 = P("BATT_POCKET_Y1", INSERT_Y0, "derived", "old cell pocket ends at the plastic insert")
 BATT_POCKET_Y0 = P("BATT_POCKET_Y0", INSERT_Y0 - BATT_POCKET[1], "derived")
+TAPTIC_POS = P("TAPTIC_POS", (JACK_X0 - 0.5 - HAPTIC_TAPTIC[0] / 2, INSERT_Y0 - 0.3 - HAPTIC_TAPTIC[1] / 2), "derived",
+               "Taptic Engine centre: on the back-shell floor at the top end, long axis along X, right up against the jack/hold module (Stuart, 6 Nov)")
 
 def table(sources=("estimate", "photo")):
     """Markdown table of parameters filtered by source."""

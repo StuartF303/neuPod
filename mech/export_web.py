@@ -34,9 +34,11 @@ def main(out):
                 if not i:
                     continue
                 parts_db[key] = dict(name=pt.name, c=[round(x, 3) for x in pt.colour], g=pt.group,
-                                     fixed=pt.fixed, notes=pt.notes, v=v, i=i)
+                                     fixed=pt.fixed, notes=pt.notes, owner=pt.owner, v=v, i=i)
             keys.append(key)
-        layouts[nm] = dict(parts=keys, battery=meta.get("battery"), batt_where=meta.get("batt_where"), boards=meta.get("boards", {}),
+        layouts[nm] = dict(parts=keys, battery=meta.get("battery"), batt_where=meta.get("batt_where"),
+                           assemblies=meta.get("assemblies", {}), unplaced=meta.get("unplaced", []),
+                           link={k: v for k, v in (meta.get("link") or {}).items() if k in ("kind", "pins", "desc", "rows", "length")}, boards=meta.get("boards", {}),
                            links=meta.get("links", []))
     # datum-aligned scans as reference meshes (shared by every layout)
     import trimesh
