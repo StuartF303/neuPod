@@ -36,9 +36,24 @@ def main(out):
                 parts_db[key] = dict(name=pt.name, c=[round(x, 3) for x in pt.colour], g=pt.group,
                                      fixed=pt.fixed, notes=pt.notes, v=v, i=i)
             keys.append(key)
-        layouts[nm] = dict(parts=keys, battery=meta.get("battery"), boards=meta.get("boards", {}),
+        layouts[nm] = dict(parts=keys, battery=meta.get("battery"), batt_where=meta.get("batt_where"), boards=meta.get("boards", {}),
                            links=meta.get("links", []))
-    data = dict(parts=parts_db, layouts=layouts, depth_model=p.DEPTH_MODEL,
+    # datum-aligned scans as reference meshes (shared by every layout)
+    import trimesh
+    from pathlib import Path
+    scans = {}
+    sdir = Path(__file__).resolve().parent / "scans" / "aligned"
+    for f in (sorted(sdir.glob("*.stl")) if p.DEPTH_MODEL == "derived" else []):   # aligned with the derived stack
+        m = trimesh.load(f)
+        if len(m.faces) > 6000:
+            try:
+                m = m.simplify_quadric_decimation(face_count=6000)
+            except Exception:
+                pass
+        scans[f.stem] = dict(name="scan " + f.stem, c=[0.85, 0.45, 0.85], g="scan", fixed=True,
+                             notes="Metro X scan, datum-aligned (reference)",
+                             v=[round(float(x), 2) for x in m.vertices.ravel()], i=[int(k) for k in m.faces.ravel()])
+    data = dict(parts=parts_db, layouts=layouts, scans=scans, depth_model=p.DEPTH_MODEL,
                 z=dict(rib_back=p.RIB_Z_BACK, back_in=p.Z_BACK_IN, front_in=p.Z_FRONT_IN))
     with open(out, "w") as f:
         json.dump(data, f, separators=(",", ":"))

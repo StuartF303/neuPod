@@ -1,7 +1,12 @@
-"""Cast mid-frame: outer walls, LCD window divider, ribbed grid behind the board,
-locating pins, screw bosses, dock bar.  The grid is recessed: the board sits in
-FRONT of the ribs (rib top at -RIB_GAP), components in the pockets between them."""
-import cadquery as cq
+"""Cast mid-frame, built from the Metro X scans (frame-new1-btm = front face,
+1106_03frame_top = rear face).
+
+Front face (board side): the outer walls and the dock strap stand FRAME_WALL_FRONT_H
+proud of the rib front face, so the board, wheel and LCD sit in a shallow tray.
+Rear face: the ribs are flush with the walls; the divider stands DIVIDER_REAR_PROUD
+proud toward the back shell.  The vertical ribs step: ±LOWER_RIB_X below the screw
+rib (ending at the dock strap, where the locating pins are), UPPER_RIB_X above it.
+"""
 from .. import params as p
 from .common import Part, box, cyl
 
@@ -9,67 +14,67 @@ CAST = (0.62, 0.64, 0.66)
 PIN = (0.9, 0.2, 0.2)
 
 
-def _rib_y(y):
-    return box(-p.BOARD_W / 2, y - p.RIB_W / 2, p.RIB_Z_BACK, p.BOARD_W / 2, y + p.RIB_W / 2, p.RIB_Z_TOP)
-
-
-def _rib_x(x, y0, y1):
-    return box(x - p.RIB_W / 2, y0, p.RIB_Z_BACK, x + p.RIB_W / 2, y1, p.RIB_Z_TOP)
+def _xr(x, w):
+    return x - w / 2, x + w / 2
 
 
 def pocket_grid():
-    """Return dict name -> (x0, y0, x1, y1) of the six pockets (plan view, board rear face)."""
-    xl0 = -p.BOARD_W / 2
-    xl1 = p.VRIB_L_X - p.RIB_W / 2
-    xc0 = p.VRIB_L_X + p.RIB_W / 2
-    xc1 = p.VRIB_R_X - p.RIB_W / 2
-    xr0 = p.VRIB_R_X + p.RIB_W / 2
-    xr1 = p.BOARD_W / 2
-    yb = p.BOARD_BOTTOM_Y
-    ys0, ys1 = p.SCREW_RIB_Y - p.RIB_W / 2, p.SCREW_RIB_Y + p.RIB_W / 2
-    yc0, yc1 = p.CENTRE_SPLIT_Y - p.RIB_W / 2, p.CENTRE_SPLIT_Y + p.RIB_W / 2
-    yt = p.BOARD_TOP_Y
+    """name -> (x0, y0, x1, y1): pockets behind the board, clipped to the board outline."""
+    bx = p.BOARD_W / 2
+    hw = p.RIB_W / 2
+    yl0 = max(p.BOTTOM_WALL_Y, p.BOARD_BOTTOM_Y)
+    ys0, ys1 = p.SCREW_RIB_Y - p.SCREW_RIB_W / 2, p.SCREW_RIB_Y + p.SCREW_RIB_W / 2
+    yc0, yc1 = p.CENTRE_SPLIT_Y - p.CROSS_RIB_W / 2, p.CENTRE_SPLIT_Y + p.CROSS_RIB_W / 2
+    yt = min(p.DIVIDER_Y0, p.BOARD_TOP_Y)
+    lx = p.LOWER_RIB_X
+    ul, ur = p.UPPER_RIB_X
     return {
-        "UL": (xl0, ys1, xl1, yt),
-        "UC": (xc0, ys1, xc1, yt),
-        "UR": (xr0, ys1, xr1, yt),
-        "LL": (xl0, yb, xl1, ys0),
-        "LR": (xr0, yb, xr1, ys0),
-        "LC_upper": (xc0, yc1, xc1, ys0),
-        "LC_lower": (xc0, yb, xc1, yc0),
+        "UL": (-bx, ys1, ul - hw, yt),
+        "UC": (ul + hw, ys1, ur - hw, yt),
+        "UR": (ur + hw, ys1, bx, yt),
+        "LL": (-bx, yl0, -lx - hw, ys0),
+        "LR": (lx + hw, yl0, bx, ys0),
+        "LC_upper": (-lx + hw, yc1, lx - hw, ys0),
+        "LC_lower": (-lx + hw, yl0, lx - hw, yc0),
     }
 
 
 def midframe():
-    xo = p.INT_W / 2
-    y0, y1 = p.INT_Y0, p.INT_Y1
-    zb, zf = p.RIB_Z_BACK, p.Z_FRONT_IN
+    xo, y0, y1 = p.FRAME_X, p.FRAME_Y0, p.FRAME_Y1
+    wt = p.FRAME_WALL_T
+    zr, zf_rib, zt = p.RIB_Z_BACK, p.RIB_Z_TOP, p.Z_FRONT_IN
     zw = p.FRAME_Z_BACK
-    # outer walls (full depth to the shell floor if FRAME_WALLS_TO_FLOOR)
-    frame = box(-xo, y0, zw, xo, y1, zf).cut(
-        box(-xo + p.FRAME_WALL_T, y0 + p.FRAME_WALL_T, zw - 1, xo - p.FRAME_WALL_T, y1 - p.FRAME_WALL_T, zf + 1))
-    # bottom bar carrying the dock cut-out
-    bar = box(-xo, y0, zb, xo, p.BOARD_BOTTOM_Y, zf).cut(
-        box(-p.DOCK_AP_W / 2, y0 - 1, zb, p.DOCK_AP_W / 2, p.BOARD_BOTTOM_Y + 1, zb + p.DOCK_AP_H))
-    frame = frame.union(bar)
-    # divider between grid and LCD window (full depth assumed)
-    frame = frame.union(box(-xo, p.DIVIDER_Y0, p.FRAME_DIVIDER_Z_BACK, xo, p.DIVIDER_Y1, zf))
-    # ribbed grid behind the board
-    ribs = (_rib_y(p.SCREW_RIB_Y)
-            .union(_rib_x(p.VRIB_L_X, p.BOARD_BOTTOM_Y, p.BOARD_TOP_Y))
-            .union(_rib_x(p.VRIB_R_X, p.BOARD_BOTTOM_Y, p.BOARD_TOP_Y))
-            .union(box(p.VRIB_L_X, p.CENTRE_SPLIT_Y - p.RIB_W / 2, zb, p.VRIB_R_X,
-                       p.CENTRE_SPLIT_Y + p.RIB_W / 2, p.RIB_Z_TOP)))
-    # perimeter ledge of the grid (board edge support), thin
-    ledge = (box(-p.BOARD_W / 2 - 0.8, p.BOARD_BOTTOM_Y, zb, p.BOARD_W / 2 + 0.8, p.BOARD_TOP_Y, p.RIB_Z_TOP)
-             .cut(box(-p.BOARD_W / 2, p.BOARD_BOTTOM_Y - 1, zb - 1, p.BOARD_W / 2, p.BOARD_TOP_Y + 1, zf)))
-    frame = frame.union(ribs).union(ledge)
-    # screw bosses from rib top to the board rear face
-    for sx in (-p.SCREW_X, p.SCREW_X):
-        frame = frame.union(cyl(sx, p.SCREW_RIB_Y, p.RIB_Z_TOP, p.BOSS_D, p.RIB_GAP))
-        frame = frame.cut(cyl(sx, p.SCREW_RIB_Y, zb - 1, p.SCREW_D, 10))
+    # outer walls, open at the bottom between ±FRAME_DOCK_GAP_X
+    frame = box(-xo, y0, zw, xo, y1, zt).cut(box(-xo + wt, y0 + wt, zw - 1, xo - wt, y1 - wt, zt + 1))
+    frame = frame.cut(box(-p.FRAME_DOCK_GAP_X, y0 - 1, zw - 1, p.FRAME_DOCK_GAP_X, y0 + wt + 0.01, zt + 1))
+    # bottom wall inner edge (scan) — fill between the outer wall and BOTTOM_WALL_Y outside the dock gap
+    for sx in (-1, 1):
+        x_a, x_b = sorted((sx * p.FRAME_DOCK_GAP_X, sx * (xo - wt)))
+        frame = frame.union(box(x_a, y0 + wt, zw, x_b, p.BOTTOM_WALL_Y, zt))
+    # dock strap at wall-top height over the dock connector
+    dx0, dy0, dx1, dy1 = p.DOCK_STRAP
+    frame = frame.union(box(dx0, dy0, zt - p.DOCK_STRAP_T, dx1, dy1, zt))
+    # divider: from its rear face up to the rib front plane (flush with the ribs on the board side)
+    frame = frame.union(box(-xo + wt, p.DIVIDER_Y0, p.FRAME_DIVIDER_Z_BACK, xo - wt, p.DIVIDER_Y1, zf_rib))
+    # ribs
+    xi = xo - wt
+    ys0, ys1 = p.SCREW_RIB_Y - p.SCREW_RIB_W / 2, p.SCREW_RIB_Y + p.SCREW_RIB_W / 2
+    ribs = box(-xi, ys0, zr, xi, ys1, zf_rib)                                       # screw rib
+    for x in (-p.LOWER_RIB_X, p.LOWER_RIB_X):                                         # lower verticals
+        a, b = _xr(x, p.RIB_W)
+        ribs = ribs.union(box(a, p.BOTTOM_WALL_Y, zr, b, ys0, zf_rib))
+    ribs = ribs.union(box(-p.LOWER_RIB_X, p.CENTRE_SPLIT_Y - p.CROSS_RIB_W / 2, zr,
+                          p.LOWER_RIB_X, p.CENTRE_SPLIT_Y + p.CROSS_RIB_W / 2, zf_rib))  # cross rib
+    for x in p.UPPER_RIB_X:                                                           # upper verticals
+        a, b = _xr(x, p.RIB_W)
+        ribs = ribs.union(box(a, ys1, zr, b, p.DIVIDER_Y0, zf_rib))
+    frame = frame.union(ribs)
+    # screw bosses (rib front → board rear face) and holes
+    for sx, sy in p.SCREW_POS:
+        frame = frame.union(cyl(sx, sy, zf_rib, p.BOSS_D, p.RIB_GAP))
+        frame = frame.cut(cyl(sx, sy, zr - 1, p.SCREW_D, 10))
     return Part("midframe", frame, CAST, "frame",
-                notes="walls + divider + recessed ribbed grid; board sits in front of the ribs")
+                notes="from the scans: stepped ribs, dock strap, divider proud at the rear")
 
 
 def locating_pins():

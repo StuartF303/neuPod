@@ -8,13 +8,14 @@ Stacking the estimated front parts inside the 10.5 mm thin envelope leaves far l
 
 | | derived (envelope-consistent) | stated (7 mm cavity forced) |
 |---|---|---|
-| front plate inner face Z | 3.2 | 3.2 |
-| back-shell inner floor Z | -6.0 | -8.6 |
-| envelope thickness this implies | 10.5 | 13.1 |
-| cavity behind the ribs (lower half) | 4.4 | 7.0 |
-| cavity behind the stock backplate (upper half) | 6.6 | 9.2 |
-| cavity behind the AMOLED backplate | 7.7 | 10.3 |
-| board rear face → shell floor through a pocket | 6.0 | 8.6 |
+| front plate inner face Z | 3.5 | 3.5 |
+| back-shell inner floor Z | -5.7 | -8.9 |
+| envelope thickness this implies | 10.5 | 13.7 |
+| cavity behind the ribs (lower half) | 3.8 | 7.0 |
+| cell crossing under the divider (it stands 1.3 proud at the rear) | 2.5 | 5.7 |
+| cavity behind the stock backplate (upper half) | 6.6 | 9.8 |
+| cavity behind the AMOLED backplate | 7.7 | 10.9 |
+| board rear face → shell floor through a pocket | 5.7 | 8.9 |
 
 The truth is between the two columns: the 5 mm disk did live behind the ribs, so the real front stack (bezel + wheel + switch + board + rib gap + rib) is thinner than the estimates, or the ribs are thinner, or the shell is thicker than 10.5 mm. **The first scan measurement is the rib rear face to the back-shell floor** — every battery conclusion below hinges on it.
 
@@ -22,18 +23,18 @@ The truth is between the two columns: the 5 mm disk did live behind the ribs, so
 
 | region | X × Y × Z | nominal | free (derived) | free (stated) | notes |
 |---|---|---|---|---|---|
-| pocket_UL | 12.8 × 22.0 × 6.0 | 1686 | 1665 | 2395 | between ribs, board rear face to shell floor |
-| pocket_UC | 27.0 × 22.0 × 6.0 | 3556 | 3421 | 4962 | between ribs, board rear face to shell floor |
-| pocket_UR | 12.8 × 22.0 × 6.0 | 1686 | 1686 | 2416 | between ribs, board rear face to shell floor |
-| pocket_LL | 12.8 × 31.8 × 6.0 | 2446 | 2428 | 3488 | between ribs, board rear face to shell floor |
-| pocket_LR | 12.8 × 31.8 × 6.0 | 2446 | 2446 | 3506 | between ribs, board rear face to shell floor |
-| pocket_LC_upper | 27.0 × 14.7 × 6.0 | 2389 | 2387 | 3422 | between ribs, board rear face to shell floor |
-| pocket_LC_lower | 27.0 × 15.9 × 6.0 | 2576 | 2576 | 3692 | between ribs, board rear face to shell floor |
-| hdd_cavity | 54.0 × 71.0 × 6.0 | 23004 | 22525 | 32493 | HDD footprint, shell floor to board plane (ribs subtracted) |
-| under_lcd | 60.8 × 42.0 × 6.6 | 16854 | 14622 | 20530 | divider to shell top, behind the backplate |
-| battery_pocket | 45.0 × 20.0 × 5.0 | 4500 | 4046 | 4046 | donor battery pocket, freed |
-| front_ring | 37.0 × 37.0 × 1.5 | 1613 | 1309 | 1309 | inside the 37 mm ring: nothing taller than the switches |
-| front_outside_wheel | 55.0 × 55.0 × 2.2 | 3890 | 3881 | 3881 | wheel face outside the 40 mm wheel, up to the bezel |
+| pocket_UL | 10.4 × 16.2 × 5.7 | 965 | 944 | 1486 | between ribs, board rear face to shell floor |
+| pocket_UC | 29.8 × 16.2 × 5.7 | 2752 | 2617 | 4162 | between ribs, board rear face to shell floor |
+| pocket_UR | 10.6 × 16.2 × 5.7 | 974 | 974 | 1521 | between ribs, board rear face to shell floor |
+| pocket_LL | 14.0 × 25.1 × 5.7 | 2010 | 1992 | 3121 | between ribs, board rear face to shell floor |
+| pocket_LR | 14.0 × 25.1 × 5.7 | 2010 | 2010 | 3139 | between ribs, board rear face to shell floor |
+| pocket_LC_upper | 22.7 × 11.5 × 5.7 | 1488 | 1488 | 2323 | between ribs, board rear face to shell floor |
+| pocket_LC_lower | 22.7 × 11.4 × 5.7 | 1475 | 1475 | 2303 | between ribs, board rear face to shell floor |
+| hdd_cavity | 54.0 × 71.0 × 5.7 | 21854 | 20674 | 32942 | HDD footprint, shell floor to board plane (ribs subtracted) |
+| under_lcd | 60.8 × 51.8 × 6.6 | 20766 | 17643 | 27210 | divider to shell top, behind the backplate |
+| battery_pocket | 45.0 × 20.0 × 5.0 | 4500 | 4500 | 4500 | donor battery pocket, freed |
+| front_ring | 37.0 × 37.0 × 0.8 | 860 | 682 | 682 | inside the 37 mm ring: nothing taller than the switches |
+| front_outside_wheel | 55.0 × 45.0 × 2.5 | 3143 | 3064 | 3064 | wheel face outside the 40 mm wheel, up to the bezel |
 
 Pocket free volumes are board-rear-face to shell floor; a battery behind the ribs reduces them to the rib gap + rib thickness. The front-face regions are height-limited, not volume-limited.
 
@@ -41,200 +42,184 @@ Pocket free volumes are board-rear-face to shell floor; a battery behind the rib
 
 ### Layout A — single 55×55 board, stock position, switches on the wheel face
 
-**Boards:** main_board = 55x55 stock → 29.2 cm² (total 29.2 cm²)  
+**Boards:** main_board = 55x45 donor outline → 24.2 cm² (total 24.2 cm²)  
 **Inter-board links:** none  
 **Max component height per zone (derived / stated):**
 
 | zone | derived | stated |
 |---|---|---|
-| rear face under ribs | 0.5 | 0.5 |
-| rear face in pockets (battery behind) | 1.3 | 1.3 |
-| rear face in pockets (no battery) | 5.7 | 8.3 |
-| wheel face inside 37 mm ring | 1.5 | 1.5 |
+| rear face under ribs | 0.2 | 0.2 |
+| rear face in pockets (cell behind) | 1.6 | 1.6 |
+| rear face in pockets (no cell behind) | 5.4 | 8.6 |
+| wheel face inside 37 mm ring | 0.8 | 0.8 |
 | wheel face outside wheel (design limit) | 0.8 | 0.8 |
 
-**Battery box reserved:** 54.0 × 71.0 × 4.1 (derived) / 6.7 deep (stated).  
-**505060 check:** footprint OK; needs 6.0 mm, has 4.1 (derived) / 6.7 (stated) → no (derived), fits (stated).  
-**Best catalogue cell:** battery_305060 = 1400 mAh (derived); battery_505060 = 2500 mAh (stated).  
-**Haptic:** haptic_taptic at bbox [-12.0, 80.0, -6.0, 23.0, 91.0, -1.5]  
-**Antenna:** radio_rm2 centre is 93.8 mm (Manhattan) from the RF window centre  
-**FPC runs (Manhattan, exit → connector):** wheel 30.7 mm, AMOLED 4.7 mm, jack 89.4 mm (donor flex ≈ 110 mm, so about right)  
+**Best catalogue cell:** none fits = 0 mAh, — (derived); battery_405060 = 2000 mAh, behind the ribs, crossing under the divider (stated).  
+**Haptic:** haptic_taptic at bbox [-23.0, 75.8, -5.7, 12.0, 86.8, -1.2]  
+**Antenna:** radio_rm2 centre is 114.9 mm (Manhattan) from the RF window centre  
+**FPC runs (Manhattan, exit → connector):** wheel 17.3 mm, AMOLED 4.3 mm, jack 129.4 mm (donor flex ≈ 110 mm, so about right)  
 
-**Clashes (derived model):** 3
+**Clashes (derived model):** 2
 
 | candidate | against | overlap mm³ | min penetration mm |
 |---|---|---|---|
-| radio_rm2 | battery_305060 | 126.0 | 0.5 |
-| usbc_midmount | sw_adhesive_ring | 2.7 | 0.3 |
-| radio_rm2 | midframe | 1.3 | 2.5 |
+| microsd | amoled_conn | 25.8 | 1.0 |
+| microsd | midframe | 1.3 | 1.85 |
 
-**Clashes (stated model):** 2 — radio_rm2↔midframe, usbc_midmount↔sw_adhesive_ring
+**Clashes (stated model):** 2 — microsd↔midframe, microsd↔amoled_conn
 
 ### Layout B — A + second board in the HDD cavity, components toward the shell, mezzanine link
 
-**Boards:** main_board = 55x55 stock → 29.2 cm²; cavity_board = 54x51 behind the ribs → 27.5 cm² (total 56.7 cm²)  
-**Inter-board links:** b2b mezzanine, stack 1.9 mm  
+**Boards:** main_board = 55x45 donor outline → 24.2 cm²; cavity_board = 54x40 behind the ribs → 21.5 cm² (total 45.7 cm²)  
+**Inter-board links:** b2b mezzanine, stack 2.2 mm  
 **Max component height per zone (derived / stated):**
 
 | zone | derived | stated |
 |---|---|---|
-| rear face under ribs | 0.5 | 0.5 |
-| rear face in pockets (battery behind) | 1.3 | 1.3 |
-| rear face in pockets (no battery) | 5.7 | 8.3 |
-| wheel face inside 37 mm ring | 1.5 | 1.5 |
+| rear face under ribs | 0.2 | 0.2 |
+| rear face in pockets (cell behind) | 1.6 | 1.6 |
+| rear face in pockets (no cell behind) | 5.4 | 8.6 |
+| wheel face inside 37 mm ring | 0.8 | 0.8 |
 | wheel face outside wheel (design limit) | 0.8 | 0.8 |
-| cavity board, shell side | 2.8 | 5.4 |
+| cavity board, shell side | 2.2 | 5.4 |
 
-**Battery box reserved:** 56.2 × 32.4 × 7.4 (derived) / 10.0 deep (stated).  
-**505060 check:** footprint does NOT fit; needs 6.0 mm, has 7.4 (derived) / 10.0 (stated) → no (derived), no (stated).  
-**Best catalogue cell:** battery_603048 = 1000 mAh (derived); battery_703048 = 1150 mAh (stated).  
-**Haptic:** haptic_piezo at bbox [-27.0, 4.4, -0.6, -15.0, 16.4, 0.0]  
-**Antenna:** radio_rm2 centre is 60.4 mm (Manhattan) from the RF window centre  
-**FPC runs (Manhattan, exit → connector):** wheel 30.7 mm, AMOLED 4.7 mm, jack 89.4 mm (donor flex ≈ 110 mm, so about right)  
+**Battery box reserved:** 45.5 × 45.9 × 7.4 (derived) / 10.6 deep (stated).  
+**505060 check:** footprint does NOT fit; needs 6.0 mm, has 7.4 (derived) / 10.6 (stated) → no (derived), no (stated).  
+**Best catalogue cell:** battery_604040 = 1100 mAh, under the LCD, left of the jack up to the insert (derived); battery_704040 = 1300 mAh, under the LCD, left of the jack up to the insert (stated).  
+**Haptic:** haptic_piezo at bbox [10.0, 6.0, -3.8, 22.0, 18.0, -3.2]  
+**Antenna:** radio_rm2 centre is 69.5 mm (Manhattan) from the RF window centre  
+**FPC runs (Manhattan, exit → connector):** wheel 17.3 mm, AMOLED 4.3 mm, jack 129.4 mm (donor flex ≈ 110 mm, so about right)  
 
-**Clashes (derived model):** 2
+**Clashes (derived model):** 0
 
-| candidate | against | overlap mm³ | min penetration mm |
-|---|---|---|---|
-| usbc_midmount | sw_adhesive_ring | 2.7 | 0.3 |
-| inductor | cavity_board | 1.6 | 0.1 |
 
-**Clashes (stated model):** 2 — usbc_midmount↔sw_adhesive_ring, inductor↔cavity_board
+**Clashes (stated model):** 0
 
 ### Layout C — L-shaped rigid board extending under the LCD backplate
 
-**Boards:** main_board_L = 55x55 + 40x33 extension → 42.8 cm² (total 42.8 cm²)  
+**Boards:** main_board_T = 55x45 + 56x31 extension → 41.2 cm² (total 41.2 cm²)  
 **Inter-board links:** none  
 **Max component height per zone (derived / stated):**
 
 | zone | derived | stated |
 |---|---|---|
-| rear face under ribs | 0.5 | 0.5 |
-| rear face in pockets (battery behind) | 1.3 | 1.3 |
-| rear face in pockets (no battery) | 5.7 | 8.3 |
-| wheel face inside 37 mm ring | 1.5 | 1.5 |
+| rear face under ribs | 0.2 | 0.2 |
+| rear face in pockets (cell behind) | 1.6 | 1.6 |
+| rear face in pockets (no cell behind) | 5.4 | 8.6 |
+| wheel face inside 37 mm ring | 0.8 | 0.8 |
 | wheel face outside wheel (design limit) | 0.8 | 0.8 |
-| extension rear face | 5.7 | 8.3 |
-| extension front face (toward backplate) | 0.0 | 0.0 |
+| extension rear face | 5.4 | 8.6 |
+| extension front face (toward backplate) | 0.7 | 0.7 |
 
-**Battery box reserved:** 56.2 × 32.4 × 3.2 (derived) / 5.8 deep (stated).  
-**505060 check:** footprint does NOT fit; needs 6.0 mm, has 3.2 (derived) / 5.8 (stated) → no (derived), no (stated).  
-**Best catalogue cell:** none fits = 0 mAh (derived); battery_403030 = 400 mAh (stated).  
-**Haptic:** haptic_piezo at bbox [-27.0, 4.4, -0.6, -15.0, 16.4, 0.0]  
-**Antenna:** radio_rm2 centre is 37.2 mm (Manhattan) from the RF window centre  
-**FPC runs (Manhattan, exit → connector):** wheel 30.7 mm, AMOLED 4.7 mm, jack 89.4 mm (donor flex ≈ 110 mm, so about right)  
+**Best catalogue cell:** none fits = 0 mAh, — (derived); battery_405060 = 2000 mAh, behind the ribs, crossing under the divider (stated).  
+**Haptic:** haptic_taptic at bbox [-23.0, 75.8, -5.7, 12.0, 86.8, -1.2]  
+**Antenna:** radio_rm2 centre is 42.8 mm (Manhattan) from the RF window centre  
+**FPC runs (Manhattan, exit → connector):** wheel 17.3 mm, AMOLED 4.3 mm, jack 129.4 mm (donor flex ≈ 110 mm, so about right)  
 
-**Clashes (derived model):** 2
+**Clashes (derived model):** 0
 
-| candidate | against | overlap mm³ | min penetration mm |
-|---|---|---|---|
-| main_board_L | midframe | 60.0 | 1.0 |
-| usbc_midmount | sw_adhesive_ring | 2.7 | 0.3 |
 
-**Clashes (stated model):** 2 — main_board_L↔midframe, usbc_midmount↔sw_adhesive_ring
+**Clashes (stated model):** 0
 
 ### Layout D1 — full-size front board (switches) + main board behind the ribs (and on under the LCD)
 
-**Boards:** front_board = 55x55 full donor outline → 29.2 cm²; main_board = 54 x 70 behind ribs + under LCD → 38.1 cm² (total 67.3 cm²)  
-**Inter-board links:** flex, front board → main board (through pocket UC); carries USB-C from the front board  
+**Boards:** front_board = 55x45 full donor outline → 24.2 cm²; main_board = 54 x 40 behind the ribs → 21.5 cm² (total 45.7 cm²)  
+**Inter-board links:** flex, front board → main board (through pocket UC); USB-C, display and jack lines ride it  
 **Max component height per zone (derived / stated):**
 
 | zone | derived | stated |
 |---|---|---|
-| main board, shell side (lower half) | 2.8 | 5.4 |
-| main board, front side under LCD | 3.3 | 3.3 |
-| front board rear face | 0.5 | 0.5 |
-| wheel face inside 37 mm ring | 1.5 | 1.5 |
+| main board, shell side | 2.2 | 5.4 |
+| front board rear face | 0.2 | 0.2 |
+| wheel face inside 37 mm ring | 0.8 | 0.8 |
 
-**Battery box reserved:** 44.8 × 21.4 × 7.4 (derived) / 10.0 deep (stated).  
-**505060 check:** footprint does NOT fit; needs 6.0 mm, has 7.4 (derived) / 10.0 (stated) → no (derived), no (stated).  
-**Best catalogue cell:** battery_502040 = 400 mAh (derived); battery_502040 = 400 mAh (stated).  
-**Haptic:** haptic_piezo at bbox [-26.0, 20.0, -3.5, -14.0, 32.0, -2.9]  
-**Antenna:** radio_rm2 centre is 58.4 mm (Manhattan) from the RF window centre  
-**FPC runs (Manhattan, exit → connector):** wheel 30.7 mm, AMOLED 8.6 mm, jack 89.4 mm (donor flex ≈ 110 mm, so about right)  
+**Battery box reserved:** 45.5 × 45.9 × 7.4 (derived) / 10.6 deep (stated).  
+**505060 check:** footprint does NOT fit; needs 6.0 mm, has 7.4 (derived) / 10.6 (stated) → no (derived), no (stated).  
+**Best catalogue cell:** battery_604040 = 1100 mAh, under the LCD, left of the jack up to the insert (derived); battery_704040 = 1300 mAh, under the LCD, left of the jack up to the insert (stated).  
+**Haptic:** haptic_lra at bbox [18.0, 61.0, -5.7, 28.0, 71.0, -1.7]  
+**Antenna:** radio_rm2 centre is 82.0 mm (Manhattan) from the RF window centre  
+**FPC runs (Manhattan, exit → connector):** wheel 17.3 mm, AMOLED 4.3 mm, jack 129.4 mm (donor flex ≈ 110 mm, so about right)  
 
-**Clashes (derived model):** 1
+**Clashes (derived model):** 0
 
-| candidate | against | overlap mm³ | min penetration mm |
-|---|---|---|---|
-| usbc_midmount | sw_adhesive_ring | 2.7 | 0.3 |
 
-**Clashes (stated model):** 1 — usbc_midmount↔sw_adhesive_ring
+**Clashes (stated model):** 0
 
 ### Layout D2 — full-size front board (switches) + main board under the LCD, battery behind the ribs
 
-**Boards:** front_board = 55x55 full donor outline → 29.2 cm²; main_board = 56.2 x 32.4 under the LCD → 18.2 cm² (total 47.4 cm²)  
-**Inter-board links:** flex, front board → main board (behind the divider); carries USB-C from the front board  
+**Boards:** front_board = 55x45 full donor outline → 24.2 cm²; main_board = T under the LCD → 23.7 cm² (total 47.9 cm²)  
+**Inter-board links:** short flex over the divider front face; USB-C, wheel and jack lines ride it  
 **Max component height per zone (derived / stated):**
 
 | zone | derived | stated |
 |---|---|---|
-| main board, shell side | 6.1 | 8.7 |
+| main board, shell side | 6.1 | 9.3 |
 | main board, front side (toward backplate) | 0.0 | 0.0 |
-| front board rear face | 0.5 | 0.5 |
-| wheel face inside 37 mm ring | 1.5 | 1.5 |
+| front board rear face | 0.2 | 0.2 |
+| wheel face inside 37 mm ring | 0.8 | 0.8 |
 
-**Battery box reserved:** 54.0 × 62.7 × 4.0 (derived) / 6.6 deep (stated).  
-**505060 check:** footprint OK; needs 6.0 mm, has 4.0 (derived) / 6.6 (stated) → no (derived), fits (stated).  
-**Best catalogue cell:** battery_305060 = 1400 mAh (derived); battery_505060 = 2500 mAh (stated).  
-**Haptic:** haptic_lra at bbox [15.0, 83.2, -6.0, 25.0, 93.2, -2.0]  
-**Antenna:** radio_rm2 centre is 20.6 mm (Manhattan) from the RF window centre  
-**FPC runs (Manhattan, exit → connector):** wheel 30.7 mm, AMOLED 6.3 mm, jack 89.4 mm (donor flex ≈ 110 mm, so about right)  
+**Best catalogue cell:** none fits = 0 mAh, — (derived); battery_405060 = 2000 mAh, behind the ribs, crossing under the divider (stated).  
+**Haptic:** haptic_lra at bbox [-2.0, 67.6, -5.7, 8.0, 77.6, -1.7]  
+**Antenna:** radio_rm2 centre is 26.4 mm (Manhattan) from the RF window centre  
+**FPC runs (Manhattan, exit → connector):** wheel 17.3 mm, AMOLED 7.8 mm, jack 129.4 mm (donor flex ≈ 110 mm, so about right)  
 
-**Clashes (derived model):** 1
+**Clashes (derived model):** 0
 
-| candidate | against | overlap mm³ | min penetration mm |
-|---|---|---|---|
-| usbc_midmount | sw_adhesive_ring | 2.7 | 0.3 |
 
-**Clashes (stated model):** 1 — usbc_midmount↔sw_adhesive_ring
+**Clashes (stated model):** 0
 
-## 4. Reading the numbers
+## 4. What the scans changed (6 Nov 2026)
 
-| layout | boards | links | PCB area | cell (derived / stated) | radio → RF window | notes |
-|---|---|---|---|---|---|---|
-| A | 1 | 0 | 29 cm² | 1400 / 2500 mAh | ~95 mm, coax/flex antenna needed | pockets give ≤1.3 mm over a cell: no module (RM2 2.5, ESP32 3.1) fits a pocket once a cell is behind the ribs; RM2 also hits a screw boss in LC_upper |
-| B | 2 | mezzanine 1.9 mm | 29 + 28 cm² | 1000 / 1150 mAh | ~60 mm | cavity board steals the only 50×60 footprint; cell moves under the LCD where only a 30×48 class fits below the jack |
-| C | 1 (L) | 0 | 43 cm² | none / 400 mAh | ~40 mm | rigid L passes through the divider (1.0 mm into the casting) — needs the casting notched; with the AMOLED the backplate is clear, with the stock LCD it is not |
-| D1 | 2 | 1 flex | 29 + 38 cm² | 400 / 400 mAh | ~60 mm | main board eats the HDD cavity; only the 20 mm shell strip is left for a cell |
-| D2 | 2 | 1 flex | 29 + 18 cm² | 1400 / 2500 mAh | ~20 mm | cell behind the ribs passes under the divider; main board sits on the backplate with 5 mm clear behind it; short AMOLED run; wheel, jack/hold and USB-C stay on the front board at the donor positions, their signals ride the link flex |
+- **Board is 55 × 45 mm** (+ a 20 × 1.9 tab on the top-edge centre), not 55 × 55. The wheel/switch centre sits
+  27.8 mm above the dock edge and 17.2 mm below the top; switch radius 14.1 mm; switch tops ≈ 0.8 mm (centre 1.2).
+  Photo 18 is upside down; the board's wheel sits near the LCD end.
+- **Ribs step**: lower verticals at ±12.4 (dock strap → screw rib), upper at −16.0 / +15.9 (screw rib → divider);
+  screw rib 23.7 mm above the pins, cross rib 9.8. Pins sit at the lower rib ends: **pitch ≈ 24.8**.
+- The two "wheel-locating holes" (±4.5 at the wheel centre) land on the screw rib: they are very probably the
+  board screws. Modelled that way (SCREWS_ARE_WHEEL_HOLES).
+- **Divider is flush with the ribs on the board side** and stands 1.3 mm proud at the rear. A board can run straight
+  over it into the LCD bay (layout C and the D2 link); a cell behind the ribs that crosses it loses 1.3 mm.
+- **Frame front is a 4 mm tray**: walls and the dock strap stand 4.0 mm in front of the rib front face; the board,
+  wheel and LCD live in it. The dock connector tucks under the strap.
+- **Jack/hold module is top-RIGHT seen from the front** (10 × 13 block + Ø7 boss); the plastic top insert (the RF
+  window) runs across the rest of the top end, X −28.5…15. The old cell pocket (45 wide) is exactly the space left
+  of the jack.
+- Back shell: rim 7.8 mm above the inner floor (outer scan 8.3 to the back face). The polished floor did not scan.
 
-Fixed in every layout: the 13P wheel connector and the jack/hold connector sit at the donor positions on the
-rear face of the stock-position board (WHEEL_CONN_POS, JACK_CONN_POS), because both flexes are reused as they are.
+| layout | boards (cm²) | cell, 10.5 mm model | cell, 7 mm model | radio → RF window | clashes |
+|---|---|---|---|---|---|
+| A | 24 | none | 405060 2.0 Ah behind the ribs | 115 mm | UC cannot take µSD + MCU + AMOLED connector |
+| B | 24 + 22 | 604040 1.1 Ah under the LCD | 704040 1.3 Ah | 70 mm | 0 |
+| C | 41 (T over the divider) | none | 405060 2.0 Ah behind the ribs | 43 mm | 0 |
+| D1 | 24 + 22 | 604040 1.1 Ah under the LCD | 704040 1.3 Ah | 82 mm | 0 |
+| D2 | 24 + 24 | none | 405060 2.0 Ah behind the ribs | 26 mm | 0 |
 
-Common to all: the mid-mount USB-C body overlaps the 37 mm adhesive ring by ~1.5 mm at the wheel's bottom edge
-(WHEEL_CY_FROM_BOTTOM and the receptacle depth decide this — the donor's dock connector lived in the same spot,
-so the ring is probably relieved there already; check photo 18). The donor's wheel connector sat top-right on
-the wheel face; any layout keeps a 13P 0.3 mm connector on that face outside the 40 mm wheel.
+Fixed in every layout: front board = donor outline with the five switches, the screw/locating holes, the wheel
+13P and jack/hold connectors at the donor positions (rear face), USB-C under the dock strap, and the AMOLED
+connector at the top of pocket UC (the tab above sits on the divider, so nothing taller than ~0.2 mm goes behind it).
 
 ## 5. Recommendation
 
-**Take layout D2 forward**: a new *front board* with the full donor outline in the stock position (five switches,
-two wheel-locating holes, pin and screw holes, USB-C, wheel FPC connector, link connector, and low-profile parts
-on both faces — ≤ 1.3 mm in the pockets once a cell is behind the ribs) plus a *main board* under the LCD
-(≈ 56 × 32 mm, ~18 cm², 5 mm of height on its rear face) and the cell behind the ribs. It is the only layout that
-gives the best cell in **both** depth models, puts the radio within ~20 mm of the RF window, and keeps the
-AMOLED flex short. The reused wheel and jack/hold flexes plug in at the donor connector positions, unchanged. The front board reproduces the donor's mechanical interface exactly, so it can be
-laid out from the datum measurements alone. Cost: two boards and one 0.5 mm flex (or one rigid-flex panel).
-Fallback if the scan shows no gap behind the divider for the link flex: layout B (mezzanine through pocket UL),
-accepting the smaller cell.
+**Lay out the front board now** — its outline, holes, switch pattern, both reused connectors and the USB-C position
+are all set by the scan and do not depend on the open depth question. It is the same part in B, D1 and D2.
 
-If the scan shows ≥ 6 mm behind the ribs (Stuart's 7 mm), D2 takes a 505060/605060 (2.5–3 Ah); if it shows the
-~4 mm the envelope implies, a 3 mm cell (~1.4 Ah) — still 2–3× the donor's ~550 mAh.
+**The second board and the cell hinge on one number: rib rear face → back-shell floor.**
+- If it is ≈ 4 mm (what the 10.5 mm envelope implies with these front-tray numbers): **D1** — main board behind the
+  ribs below the divider (54 × 40), cell under the LCD left of the jack (≈ 40 × 40 × 6, ~1.1 Ah, 2× the donor).
+  The radio is far from the window, so it needs a short flex/coax antenna to the plastic insert.
+- If it is ≥ 6 mm (the 7 mm noted at the teardown): **D2** — main board under the LCD with the radio against the
+  plastic insert, cell behind the ribs (405060 ~2 Ah), linked to the front board by a 4 mm flex over the divider.
+  C (one T-shaped rigid board, same placement) is the cheaper variant if the AMOLED backplate clearance holds.
 
-**Scan first, in this order** (each replaces an `estimate`/`photo` line in params.py):
-
-1. The Z stack at the wheel centre: back-shell floor → rib rear face → rib top → board rear face → bezel inner
-   face (RIB_GAP, RIB_T, Z_BACK_IN, FRONT_PLATE_T, WHEEL_T, SWITCH_H). Every battery number depends on it.
-2. The divider: its rear-face Z and whether a 0.15–0.3 mm flex can pass behind it (FRAME_DIVIDER_Z_BACK) — this
-   decides D2 vs B.
-3. Datum: pin diameter and pitch, board outline and the four screw holes relative to the pins, switch centres
-   and the two wheel-locating holes (PIN_D, PIN_PITCH, BOARD_BOTTOM_Y, SCREW_X, SCREW_RIB_FRAC, SWITCH_RADIUS,
-   WHEEL_CY_FROM_BOTTOM).
-4. Rib positions, widths and the screw-boss diameters (LEFT_COL_W, CENTRE_COL_W, CENTRE_SPLIT_FRAC, BOSS_D).
-5. Under-LCD bay: backplate rear-face Z, bay length, jack module footprint and the RF-transparent area
-   (LCD_Z_BACK via LCD_MODULE, JACK_BODY, RF_WINDOW).
-6. Shell pocket width (BATT_POCKET) and the exact dock aperture.
+**Caliper these next (in this order):**
+1. Rib thickness, and frame total depth at a side wall (RIB_T, FRAME_WALL_FRONT_H) — and whether the board sits
+   directly on the ribs (RIB_GAP).
+2. Back-shell inside depth, floor to rim (BACK_SHELL_SIDE_H — the floor did not scan), and the assembled thickness
+   at the centre (SHELL_T).
+3. Front plate + wheel stack: bezel inner face to glass (FRONT_PLATE_T), wheel sub-assembly thickness.
+4. Pin centre-to-centre and diameter; pin centre to the board's dock edge (PIN_PITCH, PIN_D, BOARD_BOTTOM_Y).
+5. Board 55 × 45 and thickness; switch height (outer/centre); confirm the ±4.5 holes are the board screws.
+6. Dock strap thickness (DOCK_STRAP_T), and the AMOLED module outline from the datasheet.
 
 ## 6. Parameters the scan must replace (estimate / photo)
 
@@ -243,56 +228,34 @@ If the scan shows ≥ 6 mm behind the ribs (Stuart's 7 mm), D2 takes a 505060/60
 | DEPTH_MODEL | stated | estimate | 'derived' (envelope-consistent) or 'stated' (7 mm cavity forced) |
 | SHELL_CORNER_R | 7.0 | estimate | plan-view corner radius |
 | BACK_SHELL_WALL | 0.5 | estimate | stainless back shell wall |
-| BACK_SHELL_SIDE_H | 8.5 | estimate | height of the back-shell side wall from its inner floor (where it meets the front bezel) |
 | FRONT_PLATE_T | 0.8 | estimate | aluminium bezel + glass treated as one slab; measure at the wheel hole |
 | PIN_D | 1.5 | estimate | locating-pin diameter |
-| PIN_PITCH | 28.5 | photo | pin-to-pin centre distance: pins sit at the bottom ends of the two vertical ribs, flanking the dock bar (photo 16 ≈ 29–31, photo 18 holes ≈ 26); CALIPER THIS |
 | PIN_H | 2.5 | estimate | pin height above the rib plane (through the board) |
 | BOARD_T | 1.0 | estimate | donor board thickness; new board target 1.0–1.2 |
-| BOARD_BOTTOM_Y | -3.0 | photo | pin centre to board bottom edge (photo 18) |
 | BOARD_CORNER_R | 1.5 | estimate |  |
 | SCREW_D | 1.6 | estimate | board-to-frame screw hole dia (M1.4?) |
-| SCREW_X | 5.0 | photo | screw holes at ±SCREW_X on the screw rib (photo 16) |
-| TOP_SCREW_INSET | 3.0 | estimate | top-left/top-right screw holes inset from board edges |
-| FRAME_WALL_T | 2.0 | estimate | outer wall thickness of the casting |
-| FRAME_BOTTOM_BAR | 4.0 | estimate | casting bar below the board bottom edge (carries the dock cut-out) |
-| FRAME_DIVIDER_T | 1.5 | estimate | bar between the board grid and the LCD window (Y) |
-| FRAME_DIVIDER_Z_BACK | -1.6 | estimate | rear face of the divider bar (assumed level with the rib back; a flex can pass behind it) |
-| FRAME_WALLS_TO_FLOOR | True | estimate | outer walls of the casting reach the back-shell floor (photo 16 suggests full-depth walls) |
+| SCREW_X | 5.0 | photo | screw holes at ±SCREW_X on the screw rib (photo 16) — probably the same holes as the 'wheel locating holes' at ±4.5 |
+| TOP_SCREW_POS | (13.0, 40.0) | photo | top screw holes at ±X, Y (photo 18, which is upside down): either side of the top tab |
+| DOCK_STRAP_T | 1.0 | estimate | strap thickness (Z) |
 | ADHESIVE_STRIP_T | 0.3 | estimate | LCD adhesive strip on the divider |
-| RIB_GAP | 0.8 | estimate | board rear face to rib top (component clearance under a rib); Stuart: ≈1 by eye |
-| RIB_T | 0.8 | estimate | rib thickness (Z) |
-| RIB_W | 1.2 | photo | rib width in plan (photo 10) |
-| LEFT_COL_W | 12.8 | photo | left pocket column width; Stuart's note says 10–11 |
-| CENTRE_COL_W | 27.0 | photo | centre pocket column width; Stuart's note says ~23 |
-| SCREW_RIB_FRAC | 0.59 | photo | screw-rib centre as fraction of board length from the bottom (photo 10: 0.59; teardown text: ~1/3) |
-| CENTRE_SPLIT_FRAC | 0.3 | photo | second rib across the centre column, fraction from bottom |
-| BOSS_D | 3.0 | estimate | screw boss diameter (rib top to board rear face) |
-| WHEEL_WINDOW_D | 40.0 | estimate | round window in the frame front over the wheel area |
-| SWITCH_H | 1.5 | estimate | switch body height incl. actuator, to measure (1.5–2.5) |
-| SWITCH_RADIUS | 13.5 | photo | N/S/E/W switch centres from the centre switch |
-| WHEEL_CX | 0.0 | photo | wheel/switch pattern centre X (photo 18 ≈ board centre) |
-| WHEEL_CY_FROM_BOTTOM | 24.5 | photo | centre switch above board bottom edge (photo 18: 0.44 of 55) |
+| RIB_GAP | 0.5 | estimate | board rear face to rib front face (component height under a rib). CALIPER: does the board sit on the ribs? |
+| RIB_T | 1.4 | estimate | rib thickness Z; scan-derived if the dock strap is 1.0 thick (strap rear face sits 4.4 in front of the rib rear plane). CALIPER |
+| BOSS_D | 3.0 | estimate | screw boss diameter on the screw rib |
+| SCREWS_ARE_WHEEL_HOLES | True | estimate | the two 'wheel locating holes' (±4.5 at the wheel centre) land on the screw rib: treat them as the board screws. CHECK |
 | WHEEL_LOC_HOLE_D | 1.2 | estimate | wheel locating holes |
 | RING_TO_BOARD_GAP | 0.3 | estimate | adhesive ring thickness / wheel-flex-to-board gap |
 | FRONT_FACE_LOWPROFILE_H | 0.8 | estimate | design limit for parts on the wheel face outside the 37 mm ring (donor: 0402s, one QFN) |
-| WHEEL_T | 0.7 | estimate | sub-assembly thickness between switch tops and the bezel |
 | WHEEL_FLEX_W | 5.0 | photo | 13-pin 0.3 mm flex width (fingers ≈ 4 mm) |
-| WHEEL_CONN_POS | (-21.0, 48.7) | photo | donor wheel connector centre, REAR face; photo 12 top-right seen from the rear = top-left in this front-view frame. FIXED: reused flex |
-| LCD_MODULE | (55.0, 40.5, 2.3) | estimate | stock LCD module outline X × Y × T (must fit the 42 mm upper bay) |
+| WHEEL_CONN_POS | (-20.8, 39.3) | photo | donor wheel connector centre, REAR face, 2.7 below the top edge; photo 12 is a rear view (its top-right = top-left here). FIXED: reused flex |
+| LCD_MODULE | (55.0, 44.0, 2.3) | estimate | stock LCD module outline X × Y × T, centred in the 48.6 mm frame window |
 | LCD_BACKPLATE_T | 0.3 | estimate | steel backplate behind the LCD |
-| LCD_Y0_OFFSET | 0.5 | estimate | gap between the divider and the LCD module bottom edge |
-| LCD_ZIF_POS | (0.0, 50.0) | photo | donor wide LCD ZIF, board top centre |
+| LCD_ZIF_POS | (0.0, 38.5) | photo | donor wide LCD ZIF, rear face, top centre |
 | AMOLED_MODULE | (52.5, 41.5, 1.2) | estimate | module outline X × Y × T (datasheet drawing to replace) |
 | AMOLED_FPC_EXIT | bottom | estimate | FPC leaves the panel's bottom (divider) edge |
 | HDD_Y0 | 1.0 | photo | HDD bottom edge above the pins (photo 03: ≈ 8 mm above the shell inner bottom) |
-| BATT_POCKET_POS | (-17.0, None) | photo | pocket X0 (right-biased, beside the jack); Y set in derived block to the shell top |
-| JACK_BODY | (14.0, 9.0, 5.0) | estimate | headphone jack + hold switch module X × Y × T, top-left corner |
-| JACK_CONN_POS | (-22.0, 2.5) | photo | donor jack/hold flex connector centre, REAR face, beside the dock; photo 12 bottom-right seen from the rear = bottom-left here. FIXED: reused flex |
+| JACK_CONN_POS | (-21.9, 1.5) | photo | donor jack/hold connector centre, REAR face, beside the dock (photo 12 bottom-right, rear view). FIXED: reused flex |
 | JACK_CONN_SIZE | (5.0, 3.0, 1.2) | estimate | jack/hold FPC connector body |
 | JACK_FLEX_L | 110.0 | estimate | donor jack/hold flex length, jack to connector |
-| RF_WINDOW | (20.0, 10.0) | estimate | RF-transparent plastic window at the top-left of the back shell, X × Y footprint on the inner face |
-| RF_WINDOW_X0 | -30.0 | estimate | RF window left edge X |
 | BATT_FOAM | 0.5 | estimate | foam each side of a LiPo |
 | FLEX_LINK_W | 8.0 | estimate | inter-board flex width |
 | SWITCH_BOARD_D | 42.0 | estimate | round switch board diameter (40–45) |

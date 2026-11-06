@@ -92,7 +92,7 @@ def run(depth_model):
     from mech import layouts as L
 
     rep = {}
-    rep["params"] = dict(z_back_in=p.Z_BACK_IN, cav_ribs=p.CAVITY_T_BEHIND_RIBS, cav_lcd=p.CAVITY_T_UNDER_LCD,
+    rep["params"] = dict(z_back_in=p.Z_BACK_IN, cav_ribs=p.CAVITY_T_BEHIND_RIBS, cav_lcd=p.CAVITY_T_UNDER_LCD, cav_div=p.CAVITY_T_UNDER_DIVIDER,
                          cav_amoled=p.AMOLED_Z_BACK - p.Z_BACK_IN, env=p.ENVELOPE_T_ACTUAL, pocket_full=p.POCKET_T_FULL,
                          front_in=p.Z_FRONT_IN)
     stock, _ = build("stock")
@@ -102,7 +102,7 @@ def run(depth_model):
     rf_c = (p.RF_WINDOW_X0 + p.RF_WINDOW[0] / 2, p.INT_Y1 - p.RF_WINDOW[1] / 2, p.Z_BACK_IN)
     wheel_exit = (p.WHEEL_CX - p.WHEEL_D / 2, p.WHEEL_CY, p.BOARD_FRONT_Z + p.SWITCH_H)
     amoled_exit = (0.0, p.DIVIDER_Y0, p.AMOLED_Z_BACK)
-    jack_pt = (p.JACK_POS[0] + p.JACK_BODY[0] / 2, p.JACK_POS[1], p.Z_BACK_IN + 2.0)
+    jack_pt = ((p.JACK_BLOCK_F[0] + p.JACK_BLOCK_F[2]) / 2, p.YF(p.JACK_BLOCK_F[1]), p.Z_BACK_IN + 2.0)
     for nm in L.LAYOUTS:
         parts, meta = build(nm)
         d = {}
@@ -112,6 +112,7 @@ def run(depth_model):
         d["links"] = meta["links"]
         d["zones"] = meta["zones"]
         d["battery"] = meta.get("battery")
+        d["batt_where"] = meta.get("batt_where")
         bb = meta.get("batt_box")
         d["batt_box"] = bb
         if bb:
@@ -156,6 +157,7 @@ def md(rep_d, rep_s):
     o.append(f"| back-shell inner floor Z | {pd['z_back_in']:.1f} | {ps['z_back_in']:.1f} |")
     o.append(f"| envelope thickness this implies | {pd['env']:.1f} | {ps['env']:.1f} |")
     o.append(f"| cavity behind the ribs (lower half) | {pd['cav_ribs']:.1f} | {ps['cav_ribs']:.1f} |")
+    o.append(f"| cell crossing under the divider (it stands 1.3 proud at the rear) | {pd['cav_div']:.1f} | {ps['cav_div']:.1f} |")
     o.append(f"| cavity behind the stock backplate (upper half) | {pd['cav_lcd']:.1f} | {ps['cav_lcd']:.1f} |")
     o.append(f"| cavity behind the AMOLED backplate | {pd['cav_amoled']:.1f} | {ps['cav_amoled']:.1f} |")
     o.append(f"| board rear face → shell floor through a pocket | {pd['pocket_full']:.1f} | {ps['pocket_full']:.1f} |\n")
@@ -199,8 +201,8 @@ def md(rep_d, rep_s):
             o.append(f"**505060 check:** footprint {'OK' if c['footprint_ok'] else 'does NOT fit'}; needs {c['need_t']:.1f} mm, "
                      f"has {c['have_t']:.1f} (derived) / {cs['have_t']:.1f} (stated) → "
                      f"{'fits' if c['fits'] else 'no'} (derived), {'fits' if cs['fits'] else 'no'} (stated).  ")
-        o.append(f"**Best catalogue cell:** {d['battery'] or 'none fits'} = {d['battery_mah']} mAh (derived); "
-                 f"{ds['battery'] or 'none fits'} = {ds['battery_mah']} mAh (stated).  ")
+        o.append(f"**Best catalogue cell:** {d['battery'] or 'none fits'} = {d['battery_mah']} mAh, {d.get('batt_where') or '—'} (derived); "
+                 f"{ds['battery'] or 'none fits'} = {ds['battery_mah']} mAh, {ds.get('batt_where') or '—'} (stated).  ")
         if d["haptic"]:
             o.append(f"**Haptic:** {d['haptic'][0]} at bbox {d['haptic'][1]}  ")
         if d.get("antenna"):
@@ -224,52 +226,58 @@ def md(rep_d, rep_s):
     return "\n".join(o)
 
 
-RECOMMENDATION = """## 4. Reading the numbers
+RECOMMENDATION = """## 4. What the scans changed (6 Nov 2026)
 
-| layout | boards | links | PCB area | cell (derived / stated) | radio → RF window | notes |
-|---|---|---|---|---|---|---|
-| A | 1 | 0 | 29 cm² | 1400 / 2500 mAh | ~95 mm, coax/flex antenna needed | pockets give ≤1.3 mm over a cell: no module (RM2 2.5, ESP32 3.1) fits a pocket once a cell is behind the ribs; RM2 also hits a screw boss in LC_upper |
-| B | 2 | mezzanine 1.9 mm | 29 + 28 cm² | 1000 / 1150 mAh | ~60 mm | cavity board steals the only 50×60 footprint; cell moves under the LCD where only a 30×48 class fits below the jack |
-| C | 1 (L) | 0 | 43 cm² | none / 400 mAh | ~40 mm | rigid L passes through the divider (1.0 mm into the casting) — needs the casting notched; with the AMOLED the backplate is clear, with the stock LCD it is not |
-| D1 | 2 | 1 flex | 29 + 38 cm² | 400 / 400 mAh | ~60 mm | main board eats the HDD cavity; only the 20 mm shell strip is left for a cell |
-| D2 | 2 | 1 flex | 29 + 18 cm² | 1400 / 2500 mAh | ~20 mm | cell behind the ribs passes under the divider; main board sits on the backplate with 5 mm clear behind it; short AMOLED run; wheel, jack/hold and USB-C stay on the front board at the donor positions, their signals ride the link flex |
+- **Board is 55 × 45 mm** (+ a 20 × 1.9 tab on the top-edge centre), not 55 × 55. The wheel/switch centre sits
+  27.8 mm above the dock edge and 17.2 mm below the top; switch radius 14.1 mm; switch tops ≈ 0.8 mm (centre 1.2).
+  Photo 18 is upside down; the board's wheel sits near the LCD end.
+- **Ribs step**: lower verticals at ±12.4 (dock strap → screw rib), upper at −16.0 / +15.9 (screw rib → divider);
+  screw rib 23.7 mm above the pins, cross rib 9.8. Pins sit at the lower rib ends: **pitch ≈ 24.8**.
+- The two "wheel-locating holes" (±4.5 at the wheel centre) land on the screw rib: they are very probably the
+  board screws. Modelled that way (SCREWS_ARE_WHEEL_HOLES).
+- **Divider is flush with the ribs on the board side** and stands 1.3 mm proud at the rear. A board can run straight
+  over it into the LCD bay (layout C and the D2 link); a cell behind the ribs that crosses it loses 1.3 mm.
+- **Frame front is a 4 mm tray**: walls and the dock strap stand 4.0 mm in front of the rib front face; the board,
+  wheel and LCD live in it. The dock connector tucks under the strap.
+- **Jack/hold module is top-RIGHT seen from the front** (10 × 13 block + Ø7 boss); the plastic top insert (the RF
+  window) runs across the rest of the top end, X −28.5…15. The old cell pocket (45 wide) is exactly the space left
+  of the jack.
+- Back shell: rim 7.8 mm above the inner floor (outer scan 8.3 to the back face). The polished floor did not scan.
 
-Fixed in every layout: the 13P wheel connector and the jack/hold connector sit at the donor positions on the
-rear face of the stock-position board (WHEEL_CONN_POS, JACK_CONN_POS), because both flexes are reused as they are.
+| layout | boards (cm²) | cell, 10.5 mm model | cell, 7 mm model | radio → RF window | clashes |
+|---|---|---|---|---|---|
+| A | 24 | none | 405060 2.0 Ah behind the ribs | 115 mm | UC cannot take µSD + MCU + AMOLED connector |
+| B | 24 + 22 | 604040 1.1 Ah under the LCD | 704040 1.3 Ah | 70 mm | 0 |
+| C | 41 (T over the divider) | none | 405060 2.0 Ah behind the ribs | 43 mm | 0 |
+| D1 | 24 + 22 | 604040 1.1 Ah under the LCD | 704040 1.3 Ah | 82 mm | 0 |
+| D2 | 24 + 24 | none | 405060 2.0 Ah behind the ribs | 26 mm | 0 |
 
-Common to all: the mid-mount USB-C body overlaps the 37 mm adhesive ring by ~1.5 mm at the wheel's bottom edge
-(WHEEL_CY_FROM_BOTTOM and the receptacle depth decide this — the donor's dock connector lived in the same spot,
-so the ring is probably relieved there already; check photo 18). The donor's wheel connector sat top-right on
-the wheel face; any layout keeps a 13P 0.3 mm connector on that face outside the 40 mm wheel.
+Fixed in every layout: front board = donor outline with the five switches, the screw/locating holes, the wheel
+13P and jack/hold connectors at the donor positions (rear face), USB-C under the dock strap, and the AMOLED
+connector at the top of pocket UC (the tab above sits on the divider, so nothing taller than ~0.2 mm goes behind it).
 
 ## 5. Recommendation
 
-**Take layout D2 forward**: a new *front board* with the full donor outline in the stock position (five switches,
-two wheel-locating holes, pin and screw holes, USB-C, wheel FPC connector, link connector, and low-profile parts
-on both faces — ≤ 1.3 mm in the pockets once a cell is behind the ribs) plus a *main board* under the LCD
-(≈ 56 × 32 mm, ~18 cm², 5 mm of height on its rear face) and the cell behind the ribs. It is the only layout that
-gives the best cell in **both** depth models, puts the radio within ~20 mm of the RF window, and keeps the
-AMOLED flex short. The reused wheel and jack/hold flexes plug in at the donor connector positions, unchanged. The front board reproduces the donor's mechanical interface exactly, so it can be
-laid out from the datum measurements alone. Cost: two boards and one 0.5 mm flex (or one rigid-flex panel).
-Fallback if the scan shows no gap behind the divider for the link flex: layout B (mezzanine through pocket UL),
-accepting the smaller cell.
+**Lay out the front board now** — its outline, holes, switch pattern, both reused connectors and the USB-C position
+are all set by the scan and do not depend on the open depth question. It is the same part in B, D1 and D2.
 
-If the scan shows ≥ 6 mm behind the ribs (Stuart's 7 mm), D2 takes a 505060/605060 (2.5–3 Ah); if it shows the
-~4 mm the envelope implies, a 3 mm cell (~1.4 Ah) — still 2–3× the donor's ~550 mAh.
+**The second board and the cell hinge on one number: rib rear face → back-shell floor.**
+- If it is ≈ 4 mm (what the 10.5 mm envelope implies with these front-tray numbers): **D1** — main board behind the
+  ribs below the divider (54 × 40), cell under the LCD left of the jack (≈ 40 × 40 × 6, ~1.1 Ah, 2× the donor).
+  The radio is far from the window, so it needs a short flex/coax antenna to the plastic insert.
+- If it is ≥ 6 mm (the 7 mm noted at the teardown): **D2** — main board under the LCD with the radio against the
+  plastic insert, cell behind the ribs (405060 ~2 Ah), linked to the front board by a 4 mm flex over the divider.
+  C (one T-shaped rigid board, same placement) is the cheaper variant if the AMOLED backplate clearance holds.
 
-**Scan first, in this order** (each replaces an `estimate`/`photo` line in params.py):
-
-1. The Z stack at the wheel centre: back-shell floor → rib rear face → rib top → board rear face → bezel inner
-   face (RIB_GAP, RIB_T, Z_BACK_IN, FRONT_PLATE_T, WHEEL_T, SWITCH_H). Every battery number depends on it.
-2. The divider: its rear-face Z and whether a 0.15–0.3 mm flex can pass behind it (FRAME_DIVIDER_Z_BACK) — this
-   decides D2 vs B.
-3. Datum: pin diameter and pitch, board outline and the four screw holes relative to the pins, switch centres
-   and the two wheel-locating holes (PIN_D, PIN_PITCH, BOARD_BOTTOM_Y, SCREW_X, SCREW_RIB_FRAC, SWITCH_RADIUS,
-   WHEEL_CY_FROM_BOTTOM).
-4. Rib positions, widths and the screw-boss diameters (LEFT_COL_W, CENTRE_COL_W, CENTRE_SPLIT_FRAC, BOSS_D).
-5. Under-LCD bay: backplate rear-face Z, bay length, jack module footprint and the RF-transparent area
-   (LCD_Z_BACK via LCD_MODULE, JACK_BODY, RF_WINDOW).
-6. Shell pocket width (BATT_POCKET) and the exact dock aperture.
+**Caliper these next (in this order):**
+1. Rib thickness, and frame total depth at a side wall (RIB_T, FRAME_WALL_FRONT_H) — and whether the board sits
+   directly on the ribs (RIB_GAP).
+2. Back-shell inside depth, floor to rim (BACK_SHELL_SIDE_H — the floor did not scan), and the assembled thickness
+   at the centre (SHELL_T).
+3. Front plate + wheel stack: bezel inner face to glass (FRONT_PLATE_T), wheel sub-assembly thickness.
+4. Pin centre-to-centre and diameter; pin centre to the board's dock edge (PIN_PITCH, PIN_D, BOARD_BOTTOM_Y).
+5. Board 55 × 45 and thickness; switch height (outer/centre); confirm the ±4.5 holes are the board screws.
+6. Dock strap thickness (DOCK_STRAP_T), and the AMOLED module outline from the datasheet.
 """
 
 

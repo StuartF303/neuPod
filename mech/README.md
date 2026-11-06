@@ -16,7 +16,7 @@ mech/
   assembly.py      stock + layout assembly; `python -m mech.assembly` exports STEP to mech/out/
   space_study.py   free volumes, clash lists, per-layout metrics → space_report.md
   render.py        off-screen VTK renders → renders/<layout>_{iso,top,section_side,section_wheel,exploded}.png
-  scans/           Metro X scans (STL) and their alignment notes
+  scans/           align_scans.py + datum-aligned, decimated scan meshes (aligned/)
   space_report.md  the study output — read §1 and §5 first
 ```
 
@@ -33,15 +33,15 @@ NEUPOD_DEPTH_MODEL=stated python -m mech.render D2   # renders with the 7 mm cav
 Toggles: `layouts.OPTIONS` (`mcu`: RP2350B | ESP32S3, `radio`: RM2 | BT1026D, `display`: amoled | stock),
 `params.SWITCH_BOARD_SHAPE` (square | round), `params.DEPTH_MODEL` or the `NEUPOD_DEPTH_MODEL` env var.
 
-## Updating from the scans
+## Scans
 
-1. Drop `midframe.stl`, `back-shell.stl`, `front-assembly.stl`, `logic-board-top.stl`, `logic-board-bottom.stl`
-   into `mech/scans/` (see `scans/README.md`).
-2. Fit each scan to the datum in your mesh tool (pins → X axis and origin; board rear face → Z = 0) and put the
-   residual transform in `parts/scan_ref.SCAN_ALIGN`.
-3. `build(layout, scans=["midframe"])` overlays the scan as a translucent reference body; compare it with the
-   parametric part in a render and replace the `estimate` / `photo` values in `params.py`, one at a time,
-   re-running the study after each group (the order that matters is in `space_report.md` §5).
+Raw Metro X scans (6 Nov 2026) live in Stuart's OneDrive neuPod folder; they are not committed.
+`python mech/scans/align_scans.py <raw-folder>` squares each one up, levels it, places it on the datum using the
+current `params.py`, decimates it and writes `mech/scans/aligned/*.stl` (committed, ~0.6 MB each). The model
+loads them with `build(layout, scans=["frame_front", ...])`, and the web viewer shows them under "Scans".
+
+Values read off the scans carry the `scan` source tag in `params.py`; what still needs calipers is listed at the
+end of `space_report.md` §5.
 
 ## Conventions
 

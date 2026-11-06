@@ -1,28 +1,19 @@
-"""Load a Metro X scan (STL/OBJ) as a reference body next to the parametric part.
+"""Load a datum-aligned scan (mech/scans/aligned/<name>.stl, written by
+mech/scans/align_scans.py) as a reference body next to the parametric parts.
 
-Usage:
-    from mech.parts.scan_ref import load_scan
-    ref = load_scan("midframe")          # mech/scans/midframe.stl (or .obj)
+    from mech.parts.scan_ref import load_scan, SCANS
+    ref = load_scan("frame_front")
 
-Alignment: edit SCAN_ALIGN below once you have fitted the scan to the datum
-(the two locating pins define X and the origin; the board rear face is Z=0).
-Values are (dx, dy, dz, rx, ry, rz) — translation in mm, then rotations in
-degrees about the global axes.  The scan is treated as a mesh shell, so it is
-for visual overlay and bounding-box checks, not for booleans.
+Scans are mesh shells: use them for overlay and bounding-box checks, not booleans.
 """
 from pathlib import Path
 import cadquery as cq
 from .common import Part
 
-SCAN_DIR = Path(__file__).resolve().parents[1] / "scans"
+SCAN_DIR = Path(__file__).resolve().parents[1] / "scans" / "aligned"
+SCANS = ["frame_front", "frame_rear", "pcb_wheel_face", "back_shell_in", "back_shell_out"]
 
-SCAN_ALIGN = {
-    "midframe": (0, 0, 0, 0, 0, 0),
-    "back-shell": (0, 0, 0, 0, 0, 0),
-    "front-assembly": (0, 0, 0, 0, 0, 0),
-    "logic-board-top": (0, 0, 0, 0, 0, 0),
-    "logic-board-bottom": (0, 0, 0, 0, 0, 0),
-}
+SCAN_ALIGN = {n: (0, 0, 0, 0, 0, 0) for n in SCANS}   # residual fine-tune, applied after align_scans.py
 
 
 def _import_mesh(path: Path):

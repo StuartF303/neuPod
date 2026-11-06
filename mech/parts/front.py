@@ -41,8 +41,10 @@ def amoled():
 
 
 def jack_flex():
-    w, l, t = p.JACK_BODY
-    x0, y0 = p.JACK_POS
-    body = box(x0, y0, p.Z_BACK_IN, x0 + w, y0 + l, p.Z_BACK_IN + t)
-    return Part("jack_hold_module", body, (0.3, 0.3, 0.3), "shell",
-                notes="3.5 mm jack + hold switch on one flex, screwed to the shell top-left")
+    """Headphone jack + hold switch module, top-RIGHT seen from the front (back-shell scan)."""
+    x0, y0, x1, y1 = p.JACK_BLOCK_F
+    block = box(x0, p.YF(y0), p.Z_BACK_IN, x1, p.YF(y1), p.Z_RIM - p.JACK_BLOCK_DROP)
+    bx, by, bd = p.JACK_BOSS_F
+    boss = cyl(bx, p.YF(by), p.Z_BACK_IN, bd, p.BACK_SHELL_SIDE_H - p.JACK_BOSS_DROP)
+    return Part("jack_hold_module", block.union(boss), (0.3, 0.3, 0.3), "shell",
+                notes="3.5 mm jack + hold switch on one flex, screwed to the shell; scanned position")

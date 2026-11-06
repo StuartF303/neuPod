@@ -17,20 +17,23 @@ def usbc_cutout(z0, t):
 
 
 def board_outline(z0=0.0, t=None, usbc=False):
-    """Donor 55x55 outline at the stock position: pin holes, dock notch, screw holes."""
+    """Donor outline at the stock position (from the scan): 55 × 45 with the top-centre tab,
+    pin holes, screw holes (shared with the wheel locating holes), top screw holes."""
     t = p.BOARD_T if t is None else t
     x0, x1 = -p.BOARD_W / 2, p.BOARD_W / 2
     y0, y1 = p.BOARD_BOTTOM_Y, p.BOARD_TOP_Y
     b = rounded_box(x0, y0, z0, x1, y1, z0 + t, p.BOARD_CORNER_R)
+    tw, th = p.BOARD_TAB
+    b = b.union(rounded_box(-tw / 2, y1 - 1.0, z0, tw / 2, y1 + th, z0 + t, 0.8))
     for sx in (-p.PIN_PITCH / 2, p.PIN_PITCH / 2):
         b = b.cut(cyl(sx, 0.0, z0 - 1, p.PIN_D + 0.2, t + 2))
-    b = b.cut(box(-p.DOCK_AP_W / 2, y0 - 1, z0 - 1, p.DOCK_AP_W / 2, y0 + 1.5, z0 + t + 1))  # dock notch
-    for sx in (-p.SCREW_X, p.SCREW_X):
-        b = b.cut(cyl(sx, p.SCREW_RIB_Y, z0 - 1, p.SCREW_D, t + 2))
-    for sx in (x0 + p.TOP_SCREW_INSET, x1 - p.TOP_SCREW_INSET):
-        b = b.cut(cyl(sx, y1 - p.TOP_SCREW_INSET, z0 - 1, p.SCREW_D, t + 2))
-    for sx in (-p.WHEEL_LOC_HOLE_X, p.WHEEL_LOC_HOLE_X):
-        b = b.cut(cyl(p.WHEEL_CX + sx, p.WHEEL_CY, z0 - 1, p.WHEEL_LOC_HOLE_D, t + 2))
+    holes = list(p.SCREW_POS)
+    if not p.SCREWS_ARE_WHEEL_HOLES:
+        holes += [(p.WHEEL_CX - p.WHEEL_LOC_HOLE_X, p.WHEEL_CY), (p.WHEEL_CX + p.WHEEL_LOC_HOLE_X, p.WHEEL_CY)]
+    tx, ty = p.TOP_SCREW_POS
+    holes += [(-tx, ty), (tx, ty)]
+    for hx, hy in holes:
+        b = b.cut(cyl(hx, hy, z0 - 1, p.SCREW_D, t + 2))
     if usbc:
         b = b.cut(usbc_cutout(z0, t))
     return b
@@ -47,7 +50,8 @@ def switch_zone(z_face=None, name_prefix="sw"):
     cx, cy, r = p.WHEEL_CX, p.WHEEL_CY, p.SWITCH_RADIUS
     out = []
     for nm, (dx, dy) in {"C": (0, 0), "N": (0, r), "S": (0, -r), "E": (r, 0), "W": (-r, 0)}.items():
-        out.append(Part(f"{name_prefix}_{nm}", box_at(cx + dx, cy + dy, z, (p.SWITCH_BODY, p.SWITCH_BODY), p.SWITCH_H),
+        h = p.SWITCH_H_C if nm == "C" else p.SWITCH_H
+        out.append(Part(f"{name_prefix}_{nm}", box_at(cx + dx, cy + dy, z, (p.SWITCH_BODY, p.SWITCH_BODY), h),
                         SWITCH, "front", notes="6x6 SMD tact; must match donor centres"))
     ring = (cyl(cx, cy, z, p.ADHESIVE_RING_D, p.RING_TO_BOARD_GAP)
             .cut(cyl(cx, cy, z - 1, p.ADHESIVE_RING_D - 2.0, p.RING_TO_BOARD_GAP + 2)))

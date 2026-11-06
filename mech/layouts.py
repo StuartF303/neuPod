@@ -70,6 +70,39 @@ def cell_in_box(bx, notes="", prefer=None):
     return cell(nm, (x0 + x1) / 2, (y0 + y1) / 2, z0, o, notes)
 
 
+def best_cell(boxes):
+    """boxes: list of (label, box). Returns (Part or None, box, label) for the highest-capacity fit."""
+    best = (None, None, None, -1)
+    for label, bx in boxes:
+        nm, o = fit_cell(bx)
+        if nm and p.CELLS[nm][3] > best[3]:
+            x0, y0, z0, x1, y1, z1 = bx
+            best = (cell(nm, (x0 + x1) / 2, (y0 + y1) / 2, z0, o, label), bx, label, p.CELLS[nm][3])
+    return best[:3]
+
+
+def cavity_boxes(y_top_clear=None):
+    """Candidate battery boxes behind the board: below the divider (rib-rear limited) and crossing it
+    (divider-rear limited). y_top_clear trims the crossing box where rear-face parts above sit lower."""
+    hw = p.HDD_SIZE[0] / 2
+    c = p.CLEARANCE
+    y_hi = p.HDD_Y0 + p.HDD_SIZE[1] if y_top_clear is None else y_top_clear
+    return [("behind the ribs, below the divider", (-hw, p.HDD_Y0, p.Z_BACK_IN, hw, p.DIVIDER_Y0 - c, p.RIB_Z_BACK - c)),
+            ("behind the ribs, crossing under the divider", (-hw, p.HDD_Y0, p.Z_BACK_IN, hw, y_hi - c, p.FRAME_DIVIDER_Z_BACK - c))]
+
+
+def lcd_z_back():
+    return p.AMOLED_Z_BACK if OPTIONS["display"] == "amoled" else p.LCD_Z_BACK
+
+
+def under_lcd_boxes(z_top):
+    """Battery boxes under the LCD: full width below the jack module, or left of the jack up to the plastic insert."""
+    c = p.CLEARANCE
+    xi = p.FRAME_IN_W / 2 - c
+    return [("under the LCD, below the jack", (-xi, p.DIVIDER_Y1 + c, p.Z_BACK_IN, xi, p.JACK_POS[1] - c, z_top)),
+            ("under the LCD, left of the jack up to the insert", (-xi, p.DIVIDER_Y1 + c, p.Z_BACK_IN, p.JACK_POS[0] - c, p.INSERT_Y0 - c, z_top))]
+
+
 def haptic(kind, cx, cy, z_floor, orient="XY"):
     size = {"taptic": p.HAPTIC_TAPTIC, "lra": p.HAPTIC_LRA, "piezo": p.HAPTIC_PIEZO}[kind]
     w, l, t = size
@@ -125,53 +158,64 @@ def _common_small(z, face, pocket_for):
 
 
 # --------------------------------------------------------------------------- #
+AMOLED_CONN = (19.0, 4.5, 1.0)
+AMOLED_CONN_Y = 38.9   # rear face, top of pocket UC: the tab above sits on the divider (no rear-face height there)
+
+
+def _front_board_rear_common(z, with_radio=True, with_sd=True):
+    """Rear-face parts on the stock-position board, placed in the scanned pockets."""
+    out = []
+    ucx, ucy, _, _ = _pc("UC")
+    mname, msize = _mcu()
+    if OPTIONS["mcu"] == "ESP32S3":
+        out.append(comp(mname, (msize[1], msize[0], msize[2]), ucx, ucy, z, "rear", "pocket UC, rotated; antenna inside metal"))
+    else:
+        out.append(comp(mname, msize, ucx - 8.5, ucy - 1.45, z, "rear", "pocket UC, above the left screw boss"))
+        if with_sd:
+            out.append(comp("microsd", p.MICROSD, ucx + 6.5, ucy - 1.0, z, "rear", "pocket UC — the only pocket ≥ 14 mm both ways"))
+    if with_radio:
+        rname, rsize = _radio()
+        rx, ry, _, _ = _pc("LR")
+        out.append(comp(rname, (rsize[1], rsize[0], rsize[2]), rx, ry + 1.0, z, "rear", "pocket LR, rotated; antenna inside metal → flex antenna to the RF window"))
+    lx = _pc("LL")[0]
+    out.append(comp("codec", p.QFN_SMALL, lx, 17.5, z, "rear", "pocket LL"))
+    out.append(comp("haptic_drv", p.QFN_SMALL, lx, 11.5, z, "rear", "pocket LL"))
+    out.append(comp("charger", p.QFN_SMALL, -6.0, 16.5, z, "rear", "pocket LC_upper"))
+    out.append(comp("gauge", p.QFN_SMALL, 0.0, 16.5, z, "rear", "pocket LC_upper"))
+    out.append(comp("inductor", p.INDUCTOR, 6.5, 16.5, z, "rear", "pocket LC_upper"))
+    ulx = _pc("UL")[0]
+    out.append(comp("psram", p.PSRAM_FLASH, ulx, 28.5, z, "rear", "pocket UL"))
+    out.append(comp("flash", p.PSRAM_FLASH, ulx, 34.0, z, "rear", "pocket UL"))
+    return out
+
+
 def layout_A():
-    """Single 55x55 board in the stock position: switches on the wheel face, everything else on the rib face."""
+    """Single board, donor outline, stock position: switches on the wheel face, everything else in the pockets."""
     t = 1.0
-    parts = [B.rect_board("main_board", -p.BOARD_W / 2, p.BOARD_BOTTOM_Y, p.BOARD_W / 2, p.BOARD_TOP_Y, 0.0, t,
-                          notes="donor outline, stock position")]
-    parts[0] = Part("main_board", B.board_outline(0.0, t, usbc=True), B.PCB_NEW, "board", fixed=False, notes="donor outline, stock position")
+    parts = [Part("main_board", B.board_outline(0.0, t, usbc=True), B.PCB_NEW, "board", fixed=False,
+                  notes="donor outline (scan): 55 × 45 + top tab")]
     parts += _switch_set(t)
     z = 0.0
-    mname, msize = _mcu()
-    ucx, ucy, w, l = _pc("UC")
-    if OPTIONS["mcu"] == "ESP32S3":
-        parts.append(comp(mname, (msize[1], msize[0], msize[2]), ucx, ucy - 3, z, "rear", "rotated to fit UC; antenna fully enclosed by metal"))
-    else:
-        parts.append(comp(mname, msize, ucx - 8, ucy - 3, z, "rear", "pocket UC"))
-        parts.append(comp("microsd", p.MICROSD, ucx + 6.0, ucy - 2, z, "rear", "pocket UC — only UC/LC_upper are ≥14 mm wide"))
-    rname, rsize = _radio()
-    cx, cy, w, l = _pc("LC_upper")
-    parts.append(comp(rname, rsize, cx, cy, z, "rear", "pocket LC_upper; antenna enclosed by metal → coax/flex antenna to the RF window"))
+    parts += _front_board_rear_common(z)
     parts.append(_usbc(0.0, t))
-    lx, ly, _, _ = _pc("LL"); rx, ry, _, _ = _pc("LR"); ulx, uly, _, _ = _pc("UL")
-    parts.append(comp("codec", p.QFN_SMALL, lx, ly + 13, z, "rear", "pocket LL"))
-    parts.append(comp("haptic_drv", p.QFN_SMALL, lx, ly + 6, z, "rear", "pocket LL"))
-    parts.append(comp("charger", p.QFN_SMALL, rx, ry + 11, z, "rear", "pocket LR"))
-    parts.append(comp("gauge", p.QFN_SMALL, rx, ry + 4, z, "rear", "pocket LR"))
-    parts.append(comp("inductor", p.INDUCTOR, rx, ry - 4, z, "rear", "pocket LR"))
-    parts.append(comp("psram", p.PSRAM_FLASH, ulx, uly - 1, z, "rear", "pocket UL"))
-    parts.append(comp("flash", p.PSRAM_FLASH, ulx, uly - 8, z, "rear", "pocket UL"))
     parts += _donor_conns(z)
-    parts.append(comp("amoled_conn", (19.0, 4.5, 1.0), 0.0, 49.0, z, "rear", "30P 0.5 mm FPC, rear face top centre (where the LCD ZIF was)"))
-    # battery: HDD cavity behind the ribs (passes under the divider), best catalogue cell that fits
-    hw = p.HDD_SIZE[0] / 2
-    batt_box = (-hw, p.HDD_Y0, p.Z_BACK_IN, hw, p.HDD_Y0 + p.HDD_SIZE[1], p.RIB_Z_BACK - p.CLEARANCE)
-    bat = cell_in_box(batt_box, "HDD cavity, behind the ribs")
+    amo = (0.0, AMOLED_CONN_Y)
+    parts.append(comp("amoled_conn", AMOLED_CONN, *amo, z, "rear", "30P 0.5 mm FPC, rear face, top of pocket UC (where the LCD ZIF was)"))
+    bat, batt_box, blabel = best_cell(cavity_boxes())
     if bat:
         parts.append(bat)
-    # haptic in the freed shell pocket
     x0 = p.BATT_POCKET_POS[0]
     parts.append(haptic("taptic", x0 + 22.5, p.BATT_POCKET_Y0 + 10.0, p.Z_BACK_IN))
+    rname = _radio()[0]
     meta = dict(
-        boards={"main_board": "55x55 stock"},
-        links=[], batt_box=batt_box,
+        boards={"main_board": "55x45 donor outline"},
+        links=[], batt_box=batt_box, batt_where=blabel,
         battery=bat.name if bat else None, haptic="haptic_taptic", antenna=rname,
-        wheel_conn=(*p.WHEEL_CONN_POS, 0.0), amoled_conn=(0.0, 49.0, 0.0), jack_conn=(*p.JACK_CONN_POS, 0.0),
+        wheel_conn=(*p.WHEEL_CONN_POS, 0.0), amoled_conn=(*amo, 0.0), jack_conn=(*p.JACK_CONN_POS, 0.0),
         zones={
             "rear face under ribs": p.RIB_GAP - p.CLEARANCE,
-            "rear face in pockets (battery behind)": p.RIB_GAP + p.RIB_T - p.CLEARANCE,
-            "rear face in pockets (no battery)": p.POCKET_T_FULL - p.CLEARANCE,
+            "rear face in pockets (cell behind)": p.RIB_GAP + p.RIB_T - p.CLEARANCE,
+            "rear face in pockets (no cell behind)": p.POCKET_T_FULL - p.CLEARANCE,
             "wheel face inside 37 mm ring": p.SWITCH_H,
             "wheel face outside wheel (design limit)": p.FRONT_FACE_LOWPROFILE_H,
         })
@@ -179,63 +223,58 @@ def layout_A():
 
 
 def layout_B():
-    """A plus a second board in the HDD cavity, components on the cavity side, board-to-board through a pocket."""
+    """A plus a second board in the HDD cavity, components toward the shell, mezzanine through pocket LL."""
     parts, meta = layout_A()
-    # drop the big battery and the UC-only placements that move to board 2
     parts = [q for q in parts if not q.name.startswith("battery_") and q.name not in ("radio_rm2", "radio_bt1026d", "microsd", "psram", "flash", "haptic_taptic")]
-    parts.append(haptic("piezo", -21.0, 10.4, 0.0 - p.HAPTIC_PIEZO[2]))   # pocket LL, rear face: the top strip is too short for an LRA once a cell is under the LCD
     t2 = 1.0
     z2_top = p.RIB_Z_BACK - p.CLEARANCE
     z2 = z2_top - t2
     hw = p.HDD_SIZE[0] / 2
-    parts.append(B.rect_board("cavity_board", -hw, p.HDD_Y0, hw, p.BOARD_TOP_Y, z2, t2,
-                              notes="in the HDD cavity behind the ribs; components toward the shell floor"))
+    y_top = p.DIVIDER_Y0 - p.CLEARANCE            # stops below the divider (it stands proud at the rear)
+    parts.append(B.rect_board("cavity_board", -hw, p.HDD_Y0, hw, y_top, z2, t2,
+                              notes="behind the ribs, below the divider; components toward the shell floor"))
     rname, rsize = _radio()
-    parts.append(comp(rname, rsize, -12.0, 40.0, z2, "rear", "cavity side"))
-    parts.append(comp("microsd", p.MICROSD, 14.0, 40.0, z2, "rear", "cavity side"))
-    parts.append(comp("psram", p.PSRAM_FLASH, -18.0, 20.0, z2, "rear"))
-    parts.append(comp("flash", p.PSRAM_FLASH, -18.0, 12.0, z2, "rear"))
-    stack = 0.0 - z2_top  # main-board rear face to cavity-board front face
+    parts.append(comp(rname, rsize, -12.0, 31.0, z2, "rear", "cavity side"))
+    parts.append(comp("microsd", p.MICROSD, 12.0, 31.0, z2, "rear", "cavity side"))
+    parts.append(comp("psram", p.PSRAM_FLASH, -18.0, 14.0, z2, "rear"))
+    parts.append(comp("flash", p.PSRAM_FLASH, -18.0, 7.0, z2, "rear"))
+    parts.append(haptic("piezo", 16.0, 12.0, z2 - p.HAPTIC_PIEZO[2]))
+    stack = 0.0 - z2_top
     bw, bl = p.B2B_CONN
-    cx, cy, w, l = _pc("UL")
-    parts.append(Part("b2b_link", box_at(cx, cy - 8.5, z2_top, (bw, bl), stack), LINK, "candidate", fixed=False,
-                      notes=f"mezzanine pair, stack height {stack:.1f} mm, in pocket UL"))
-    # battery under the LCD (full-width band below the jack)
-    z_lim = (p.AMOLED_Z_BACK if OPTIONS["display"] == "amoled" else p.LCD_Z_BACK) - p.CLEARANCE
-    batt_box = (-p.FRAME_IN_W / 2 + p.CLEARANCE, p.DIVIDER_Y1 + p.CLEARANCE, p.Z_BACK_IN,
-                p.FRAME_IN_W / 2 - p.CLEARANCE, p.JACK_POS[1] - p.CLEARANCE, z_lim)
-    bat = cell_in_box(batt_box, "under the LCD, below the jack")
+    lx = _pc("LL")[0]
+    parts.append(Part("b2b_link", box_at(lx, 6.0, z2_top, (bw, bl), stack), LINK, "candidate", fixed=False,
+                      notes=f"mezzanine pair, stack {stack:.1f} mm, pocket LL"))
+    bat, batt_box, blabel = best_cell(under_lcd_boxes(lcd_z_back() - p.CLEARANCE))
     if bat:
         parts.append(bat)
-    meta.update(boards={"main_board": "55x55 stock", "cavity_board": "54x51 behind the ribs"},
-                links=[f"b2b mezzanine, stack {stack:.1f} mm"], battery=bat.name if bat else None, batt_box=batt_box, haptic="haptic_piezo")
+    meta.update(boards={"main_board": "55x45 donor outline", "cavity_board": f"54x{y_top - p.HDD_Y0:.0f} behind the ribs"},
+                links=[f"b2b mezzanine, stack {stack:.1f} mm"], battery=bat.name if bat else None, batt_box=batt_box,
+                batt_where=blabel, haptic="haptic_piezo")
     meta["zones"].update({"cavity board, shell side": (z2 - p.Z_BACK_IN) - p.CLEARANCE})
     return parts, meta
 
 
 def layout_C():
-    """L-shaped single rigid board: donor outline plus an extension up under the LCD backplate."""
+    """Single rigid board: donor outline plus an extension over the divider and under the LCD backplate.
+    The divider is flush with the ribs on the board side, so the board can run straight over it."""
     parts, meta = layout_A()
-    parts = [q for q in parts if q.name not in ("main_board", "radio_rm2", "radio_bt1026d", "microsd", "haptic_taptic") and not q.name.startswith("battery_")]
-    parts.append(haptic("piezo", -21.0, 10.4, 0.0 - p.HAPTIC_PIEZO[2]))
+    parts = [q for q in parts if q.name not in ("main_board", "radio_rm2", "radio_bt1026d", "microsd") and not q.name.startswith("battery_")]
     t = 1.0
     ext_y1 = p.JACK_POS[1] - p.CLEARANCE
-    parts.insert(0, B.l_board("main_board_L", 0.0, t, ext_y1, -20.0, 20.0,
-                              notes="extension passes through the divider and behind the backplate"))
+    parts.insert(0, B.l_board("main_board_T", 0.0, t, ext_y1, -p.FRAME_IN_W / 2 + p.CLEARANCE, p.FRAME_IN_W / 2 - p.CLEARANCE,
+                              notes="extension runs over the divider front and behind the backplate"))
     rname, rsize = _radio()
-    parts.append(comp(rname, rsize, -8.0, 70.0, 0.0, "rear", "on the extension, rear face"))
-    parts.append(comp("microsd", p.MICROSD, 10.0, 62.0, 0.0, "rear", "on the extension"))
-    z_lim = -max(rsize[2], p.MICROSD[2]) - p.CLEARANCE   # behind the extension's rear-face parts
-    batt_box = (-p.FRAME_IN_W / 2 + p.CLEARANCE, p.DIVIDER_Y1 + p.CLEARANCE, p.Z_BACK_IN,
-                p.FRAME_IN_W / 2 - p.CLEARANCE, p.JACK_POS[1] - p.CLEARANCE, z_lim)
-    bat = cell_in_box(batt_box, "behind the extension (what is left under the LCD)")
+    parts.append(comp(rname, rsize, -15.0, 64.0, 0.0, "rear", "on the extension, rear face, left — nearest the insert"))
+    parts.append(comp("microsd", p.MICROSD, 14.0, 60.0, 0.0, "rear", "on the extension"))
+    z_lim = -max(rsize[2], p.MICROSD[2]) - p.CLEARANCE
+    bat, batt_box, blabel = best_cell(under_lcd_boxes(z_lim) + cavity_boxes())
     if bat:
         parts.append(bat)
-    meta.update(boards={"main_board_L": "55x55 + 40x33 extension"}, links=[], battery=bat.name if bat else None, batt_box=batt_box, haptic="haptic_piezo")
+    meta.update(boards={"main_board_T": f"55x45 + {p.FRAME_IN_W:.0f}x{ext_y1 - p.BOARD_TOP_Y:.0f} extension"}, links=[],
+                battery=bat.name if bat else None, batt_box=batt_box, batt_where=blabel)
     meta["zones"].update({"extension rear face": (0.0 - p.Z_BACK_IN) - p.CLEARANCE,
-                          "extension front face (toward backplate)": max(0.0, p.LCD_Z_BACK - t - p.CLEARANCE)})
+                          "extension front face (toward backplate)": max(0.0, lcd_z_back() - t - p.CLEARANCE)})
     return parts, meta
-
 
 
 def _sb_desc():
@@ -247,94 +286,84 @@ def _sb_desc():
 
 
 def _switch_board(t=1.0):
-    sb = B.switch_board("front_board", 0.0, t, notes="full donor outline: five switches, wheel locating holes, wheel connector, USB-C, pin and screw holes")
-    parts = [sb] + _switch_set(t) + _donor_conns(0.0)
-    return parts
+    sb = B.switch_board("front_board", 0.0, t, notes="full donor outline: five switches, screw/locating holes, wheel and jack connectors, USB-C")
+    return [sb] + _switch_set(t) + _donor_conns(0.0)
 
 
 def layout_D1():
-    """Full-size front board (switches) in the stock position; main board in the HDD cavity behind the ribs (and under the LCD up to the shell pocket)."""
+    """Front board (donor outline) + main board in the HDD cavity behind the ribs, below the divider."""
     t = 1.0
     parts = _switch_board(t)
     z_top = p.RIB_Z_BACK - p.CLEARANCE
     z = z_top - t
     hw = p.HDD_SIZE[0] / 2
-    y1 = p.BATT_POCKET_Y0 - 4.0   # leave a ~21.5 mm strip at the top for a cell beside the jack
-    parts.append(B.rect_board("main_board", -hw, p.HDD_Y0, hw, y1, z, t, notes="behind the ribs and on under the LCD"))
+    y1 = p.DIVIDER_Y0 - p.CLEARANCE
+    parts.append(B.rect_board("main_board", -hw, p.HDD_Y0, hw, y1, z, t, notes="behind the ribs, below the divider"))
     mname, msize = _mcu()
     rname, rsize = _radio()
-    parts.append(comp(mname, msize, -12.0, 62.0, z, "rear"))
-    parts.append(comp(rname, rsize, -14.0, 68.0 if OPTIONS["mcu"] == "ESP32S3" else 40.0, z, "rear", "nearest the RF window on this board"))
-    parts.append(comp("microsd", p.MICROSD, 14.0, 62.0, z, "rear"))
-    parts.append(comp("psram", p.PSRAM_FLASH, 8.0, 44.0, z, "rear"))
-    parts.append(comp("flash", p.PSRAM_FLASH, 16.0, 44.0, z, "rear"))
-    for nm, (cx, cy) in {"codec": (-20, 14), "charger": (18, 20), "gauge": (18, 10), "haptic_drv": (-20, 6)}.items():
+    parts.append(comp(mname, msize, -12.0, 30.0, z, "rear"))
+    parts.append(comp(rname, rsize, 12.0, 32.0, z, "rear"))
+    parts.append(comp("microsd", p.MICROSD, 12.0, 14.0, z, "rear"))
+    parts.append(comp("psram", p.PSRAM_FLASH, -14.0, 18.0, z, "rear"))
+    parts.append(comp("flash", p.PSRAM_FLASH, -6.0, 18.0, z, "rear"))
+    for nm, (cx, cy) in {"codec": (-20, 10), "charger": (-12, 6), "gauge": (-6, 6), "haptic_drv": (-20, 4)}.items():
         parts.append(comp(nm, p.QFN_SMALL, cx, cy, z, "rear"))
-    parts.append(comp("inductor", p.INDUCTOR, 18.0, 28.0, z, "rear"))
-    parts.append(comp("amoled_conn", (19.0, 4.5, 1.0), 0.0, 57.0, z + t, "front", "FPC folds straight back onto the board front face"))
-    # USB-C: mid-mount cannot be on this board (it sits 2.9 mm behind the aperture) → on a tab/flex; show as a box at the aperture
-    parts.append(_usbc(0.0, t))   # mid-mount in the switch board's slot; wired on by flex/B2B
-    # flex link from the switch board rear face down behind the divider to the main board
-    parts.append(Part("flex_link", box(-p.FLEX_LINK_W / 2, p.WHEEL_CY + 15.0, z_top, p.FLEX_LINK_W / 2, p.WHEEL_CY + 19.0, 0.0),
-                      FLEX, "candidate", fixed=False, notes="switch board → main board, through pocket UC"))
-    z_lim = (p.AMOLED_Z_BACK if OPTIONS["display"] == "amoled" else p.LCD_Z_BACK) - p.CLEARANCE
-    x0 = p.BATT_POCKET_POS[0]
-    batt_box = (x0 + p.CLEARANCE, y1 + p.CLEARANCE, p.Z_BACK_IN, p.FRAME_IN_W / 2 - p.CLEARANCE, p.INT_Y1 - p.FRAME_WALL_T - p.CLEARANCE, z_lim)
-    bat = cell_in_box(batt_box, "shell pocket strip only (main board takes the cavity)")
+    parts.append(comp("inductor", p.INDUCTOR, 0.0, 6.0, z, "rear"))
+    parts.append(_usbc(0.0, t))
+    fy = AMOLED_CONN_Y - 9.0
+    parts.append(Part("flex_link", box(-p.FLEX_LINK_W / 2, fy, z_top, p.FLEX_LINK_W / 2, fy + 4.0, 0.0),
+                      FLEX, "candidate", fixed=False, notes="front board → main board, through pocket UC"))
+    parts.append(comp("amoled_conn", AMOLED_CONN, 0.0, AMOLED_CONN_Y, 0.0, "rear", "on the front board, top of pocket UC; display lines ride the link"))
+    bat, batt_box, blabel = best_cell(under_lcd_boxes(lcd_z_back() - p.CLEARANCE))
     if bat:
         parts.append(bat)
-    parts.append(haptic("piezo", -20.0, 26.0, z - p.HAPTIC_PIEZO[2]))
-    meta = dict(boards={"front_board": _sb_desc(), "main_board": f"54 x {y1 - p.HDD_Y0:.0f} behind ribs + under LCD"},
-                links=["flex, front board → main board (through pocket UC); carries USB-C from the front board"],
-                battery=bat.name if bat else None, batt_box=batt_box, haptic="haptic_piezo", antenna=rname,
-                wheel_conn=(*p.WHEEL_CONN_POS, 0.0), amoled_conn=(0.0, 57.0, z + t), jack_conn=(*p.JACK_CONN_POS, 0.0),
-                zones={"main board, shell side (lower half)": (z - p.Z_BACK_IN) - p.CLEARANCE,
-                       "main board, front side under LCD": (p.AMOLED_Z_BACK if OPTIONS["display"] == "amoled" else p.LCD_Z_BACK) - z_top - p.CLEARANCE,
+    parts.append(haptic("lra", 23.0, 66.0, p.Z_BACK_IN))
+    meta = dict(boards={"front_board": _sb_desc(), "main_board": f"54 x {y1 - p.HDD_Y0:.0f} behind the ribs"},
+                links=["flex, front board → main board (through pocket UC); USB-C, display and jack lines ride it"],
+                battery=bat.name if bat else None, batt_box=batt_box, batt_where=blabel, haptic="haptic_lra", antenna=rname,
+                wheel_conn=(*p.WHEEL_CONN_POS, 0.0), amoled_conn=(0.0, AMOLED_CONN_Y, 0.0), jack_conn=(*p.JACK_CONN_POS, 0.0),
+                zones={"main board, shell side": (z - p.Z_BACK_IN) - p.CLEARANCE,
                        "front board rear face": p.RIB_GAP - p.CLEARANCE,
                        "wheel face inside 37 mm ring": p.SWITCH_H})
     return parts, meta
 
 
 def layout_D2():
-    """Full-size front board (switches) in the stock position; main board under the LCD; battery behind the ribs."""
+    """Front board (donor outline) + main board under the LCD (T-shape round the jack), cell behind the ribs."""
     t = 1.0
     parts = _switch_board(t)
-    z_back_lim = p.AMOLED_Z_BACK if OPTIONS["display"] == "amoled" else p.LCD_Z_BACK
-    z_top = z_back_lim - p.CLEARANCE
+    z_top = lcd_z_back() - p.CLEARANCE
     z = z_top - t
-    hw = p.FRAME_IN_W / 2 - p.CLEARANCE
-    y0, y1 = p.DIVIDER_Y1 + p.CLEARANCE, p.JACK_POS[1] - p.CLEARANCE
-    parts.append(B.rect_board("main_board", -hw, y0, hw, y1, z, t, notes="under the LCD, below the jack"))
+    c = p.CLEARANCE
+    xi = p.FRAME_IN_W / 2 - c
+    y0, y1 = p.DIVIDER_Y1 + c, p.JACK_POS[1] - c
+    y2 = p.INSERT_Y0 - c
+    xj = p.JACK_POS[0] - c
+    mb = B.rect_board("main_board", -xi, y0, xi, y1, z, t).shape.union(B.rect_board("x", -xi, y1 - 2.0, xj, y2, z, t).shape)
+    parts.append(Part("main_board", mb, B.PCB_NEW, "board", fixed=False, notes="under the LCD; runs up beside the jack to the plastic insert"))
     mname, msize = _mcu()
     rname, rsize = _radio()
-    yc = (y0 + y1) / 2
-    y_clear = p.HDD_Y0 + p.HDD_SIZE[1] - 8.0   # rear-face parts stay above the battery's top edge (y ≥ 64)
-    parts.append(comp(rname, rsize, -17.0, 78.0, z, "rear", "top-left corner, nearest the RF window"))
-    parts.append(comp(mname, msize, -3.0, 70.0, z, "rear"))
-    parts.append(comp("psram", p.PSRAM_FLASH, -3.0, 79.0, z, "rear"))
-    parts.append(comp("flash", p.PSRAM_FLASH, 4.0, 79.0, z, "rear"))
-    parts.append(comp("microsd", p.MICROSD, 18.0, 75.0, z, "rear"))
-    for nm, (cx, cy) in {"haptic_drv": (6, 66), "codec": (12, 66), "charger": (18, 66), "gauge": (24, 66)}.items():
+    parts.append(comp(rname, rsize, -17.0, 83.0, z, "rear", "top-left, against the plastic insert (RF window)"))
+    parts.append(comp(mname, msize, -1.0, 62.0, z, "rear"))
+    parts.append(comp("psram", p.PSRAM_FLASH, -14.0, 54.0, z, "rear"))
+    parts.append(comp("flash", p.PSRAM_FLASH, -7.0, 54.0, z, "rear"))
+    parts.append(comp("microsd", p.MICROSD, 17.0, 62.0, z, "rear"))
+    for nm, (cx, cy) in {"haptic_drv": (-24, 58), "codec": (-24, 64), "charger": (14, 50), "gauge": (20, 50)}.items():
         parts.append(comp(nm, p.QFN_SMALL, cx, cy, z, "rear"))
-    parts.append(comp("inductor", p.INDUCTOR, -24.0, 67.0, z, "rear"))
-    parts.append(comp("amoled_conn", (19.0, 4.5, 1.0), 0.0, 57.0, z, "rear", "rear face: no room on the front; the FPC wraps the board's bottom edge"))
-    parts.append(_usbc(0.0, t))   # mid-mount in the switch board's slot; USB lines ride the link flex
+    parts.append(comp("inductor", p.INDUCTOR, -24.0, 70.0, z, "rear"))
+    parts.append(comp("amoled_conn", AMOLED_CONN, 0.0, y0 + 2.6, z, "rear", "rear face at the bottom edge; FPC wraps the edge"))
+    parts.append(_usbc(0.0, t))
     fw = p.FLEX_LINK_W / 2
-    zf = p.FRAME_DIVIDER_Z_BACK                     # flex (0.15 mm) lies directly behind the divider
-    flex = (box(-fw, p.WHEEL_CY + 15.0, zf - 0.15, fw, p.WHEEL_CY + 19.0, 0.0)         # drop through pocket UC
-            .union(box(-fw, p.WHEEL_CY + 15.0, zf - 0.15, fw, y0 + 4.0, zf))            # run behind the divider
-            .union(box(-fw, y0 + 2.0, zf - 0.15, fw, y0 + 4.0, z)))                     # rise to the main board
-    parts.append(Part("flex_link", flex, FLEX, "candidate", fixed=False, notes="switch board → main board, behind the divider"))
-    hw2 = p.HDD_SIZE[0] / 2
-    batt_box = (-hw2, p.HDD_Y0, p.Z_BACK_IN, hw2, y_clear - p.CLEARANCE, min(p.RIB_Z_BACK, zf - 0.15) - 0.25)
-    bat = cell_in_box(batt_box, "behind the ribs, passing under the divider; 605060 if the cavity really is 7 mm")
+    parts.append(Part("flex_link", box(-fw, p.BOARD_TOP_Y - 2.0, 1.0, fw, y0 + 2.0, 1.15), FLEX, "candidate", fixed=False,
+                      notes="front board → main board, a 4 mm hop across the divider front face"))
+    bat, batt_box, blabel = best_cell(cavity_boxes())
     if bat:
         parts.append(bat)
-    parts.append(haptic("lra", 20.0, p.INT_Y1 - p.FRAME_WALL_T - 5.3, p.Z_BACK_IN))
-    meta = dict(boards={"front_board": _sb_desc(), "main_board": f"{2*hw:.1f} x {y1-y0:.1f} under the LCD"},
-                links=["flex, front board → main board (behind the divider); carries USB-C from the front board"],
-                battery=bat.name if bat else None, batt_box=batt_box, haptic="haptic_lra", antenna=rname,
-                wheel_conn=(*p.WHEEL_CONN_POS, 0.0), amoled_conn=(0.0, 57.0, z), jack_conn=(*p.JACK_CONN_POS, 0.0),
+    parts.append(haptic("lra", 3.0, 72.6, p.Z_BACK_IN))
+    meta = dict(boards={"front_board": _sb_desc(), "main_board": "T under the LCD"},
+                links=["short flex over the divider front face; USB-C, wheel and jack lines ride it"],
+                battery=bat.name if bat else None, batt_box=batt_box, batt_where=blabel, haptic="haptic_lra", antenna=rname,
+                wheel_conn=(*p.WHEEL_CONN_POS, 0.0), amoled_conn=(0.0, y0 + 2.6, z), jack_conn=(*p.JACK_CONN_POS, 0.0),
                 zones={"main board, shell side": (z - p.Z_BACK_IN) - p.CLEARANCE,
                        "main board, front side (toward backplate)": 0.0,
                        "front board rear face": p.RIB_GAP - p.CLEARANCE,

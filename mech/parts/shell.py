@@ -19,8 +19,9 @@ def back_shell():
                         p.SHELL_CORNER_R - p.BACK_SHELL_WALL)
     shell = outer.cut(inner)
     # dock aperture in the bottom end wall
-    shell = shell.cut(box(-p.DOCK_AP_W / 2, y0 - 1, p.RIB_Z_BACK, p.DOCK_AP_W / 2, p.INT_Y0 + 1,
-                          p.RIB_Z_BACK + p.DOCK_AP_H))
+    zc = p.BOARD_T / 2
+    shell = shell.cut(box(-p.DOCK_AP_W / 2, y0 - 1, zc - p.DOCK_AP_H / 2, p.DOCK_AP_W / 2, p.INT_Y0 + 1,
+                          zc + p.DOCK_AP_H / 2))
     return Part("back_shell", shell, STEEL, "shell",
                 notes="stainless tray; dock aperture in the bottom end wall")
 
@@ -28,8 +29,8 @@ def back_shell():
 def rf_window():
     """RF-transparent plastic window region on the inner face of the back shell (keep-out marker)."""
     w, l = p.RF_WINDOW
-    s = box(p.RF_WINDOW_X0, p.INT_Y1 - l, p.Z_BACK_OUT, p.RF_WINDOW_X0 + w, p.INT_Y1, p.Z_BACK_IN)
-    return Part("rf_window", s, (0.2, 0.8, 0.3), "shell", notes="only RF-transparent patch (estimate)")
+    s = box(p.RF_WINDOW_X0, p.INSERT_Y0, p.Z_BACK_IN, p.RF_WINDOW_X0 + w, p.INT_Y1, p.Z_RIM)
+    return Part("rf_window", s, (0.2, 0.8, 0.3), "shell", notes="plastic top insert beside the jack = the RF-transparent window (scan)")
 
 
 def front_plate():
