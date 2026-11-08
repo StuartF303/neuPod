@@ -181,3 +181,76 @@ Panel candidates and specifications: [Requirements → Display](requirements.md#
 | Haptic wheel | Optional | LRA + DRV2605L |
 | Linux module (CM Zero / ESP32-P4) footprint | Optional, later | Streaming apps |
 | iFlash + Rockbox on stock board | Reference only | Fallback if the custom board stalls |
+
+## LCSC / JLCPCB availability survey (2 Nov 2026)
+
+Live stock and JLCPCB library class for every candidate part, checked on lcsc.com and the JLCPCB parts API. Prices are JLC USD unit price at the 10-off tier; stock moves daily — re-check in the JLC BOM tool at order time. **Verdict:** all connectors, power parts and the ESP32 modules are cleanly assemblable; the CYW43439/RM2 radio, the two displays, any Qualcomm Bluetooth module and the optical jack are not, and the CS43131 is marginal.
+
+| Function | Chosen part | LCSC # | Stock | Price @10 | JLC class | Verdict / alternative |
+| --- | --- | --- | --- | --- | --- | --- |
+| MCU | RP2350B QFN-80 | C42415655 | ~2–3k | ~$1.10 | Extended | OK |
+| MCU alt | RP2350A QFN-60 | C42411118 | ~5k | $1.21 | Extended | OK |
+| MCU alt | RP2354B (2 MB flash in-package) | C39843328 | 0–876, contradictory | $1.46 | Extended | Don't rely on it; use RP2350B + W25Q128 |
+| PSRAM | APS6404L-3SQR-SN SOP-8 | C5333729 | listed 4,329 but "not available" | $2.69 | ? | Design for APS6404L-3SQR-ZR WSON-8 C3040877 (1,291, $4.20) or -3SQN-SN C3028887 (575, $5.12) |
+| Flash | W25Q128JVSIQ | C97521 | ~20k | $1.66 | **Basic** | OK |
+| Crystal 12 MHz 3225 | YXC X322512MSB4SI (20 pF) | C9002 | ~155k | $0.10 | **Basic** | OK; set load caps for 20 pF |
+| Wi-Fi/BT | CYW43439KUBGT (bare WLBGA) | C5359496 | ~30 | $4.95 | Extended | **Not viable** at JLC; RM2 module not on LCSC (Pimoroni/Mouser, hand-place) |
+| Wi-Fi/BT | ESP32-S3-WROOM-1-N16R8 | C2913202 | ~29k | $3.56 | Extended | OK — the JLC-friendly host (BLE only, no Classic BT) |
+| BT classic co-processor | ESP32-WROOM-32E-N16 | C701343 | 1,533 | $3.56 | Extended | OK; A2DP source in ESP-IDF (SBC) |
+| BLE/Wi-Fi 6 co-processor | ESP32-C6-MINI-1-H4 | C6553337 | 438 | $2.81 | Extended | OK (N4 variant out of stock) |
+| BT audio module | Feasycom FSC-BT1026D (QCC3034) | — | not on LCSC | $6.90 direct | — | **Source direct, hand-solder**; Microchip BM64 on LCSC is 0–4 pcs |
+| Antenna | YAGEO ANT3216LL00R2400A chip | C293767 | ~19k | $0.14 | Extended | OK (Johanson 2450AT18 is out of stock); FPC: Kinghelm C4943394 |
+| RF π-match 0402 inductors | Sunlord SDCL1005 series | C279684 etc. | OK | — | Extended | Not Basic — 1–3 extra feeder fees |
+| DAC | CS43131-CNZR | C965907 | **42** | $4.76 | Extended | Marginal — buy ahead or choose another |
+| DAC alt | ES9018K2M | C2688377 | 705 | $3.05 | Extended | OK; needs HP amp |
+| DAC alt | PCM5102APWR | C107671 | 2,299 | $1.30 | Extended | OK; line-level only |
+| Codec with ADC | **Everest ES8311** (stereo DAC + mono ADC) | C962342 | ~100k | **$0.43** | Extended | Cheapest well-stocked codec with ADC |
+| Codec with ADC | Everest ES8388 (stereo ADC/DAC + HP driver) | C365736 | ~38k | $0.94 | Extended | Best stocked full codec |
+| Codec | WM8960 | C18752 | 0 | — | Extended | Unavailable |
+| ADC | PCM1808PWR | C55513 | ~45k | $0.53 | Extended | OK; needs 5 V analogue |
+| Haptic driver | DRV2605LDGSR | C527464 | 6,753 | $1.08 | Extended | OK |
+| LRA / ERM | LEADER LD0832AA LRA / LCM1027A ERM | C2682305 / C2759984 | 1,039 / 6,892 | $1.06 / $0.45 | Extended | Lead-wire types; no pad-mount coin motor stocked |
+| Piezo | Murata PKLCS1212E4001-R1 | C113159 | 7,207 | $0.74 | Extended | OK; clone C49246959 $0.36 |
+| 3.5 mm TRRS jack with switch | SHOU HAN PJ-342 | C668606 | ~69k | $0.18 | Extended | Breadboard only — final board reuses the donor flex (ADR-0018) |
+| Optical combo jack | Everlight PLT133/T10W | C133350 | 0 | — | — | Parked (ADR-0018); Mouser + hand-solder if it returns |
+| Charger | BQ25895RTWR | C80200 | 4,599 | $1.81 | Extended | OK |
+| Charger alt | BQ24074 | C54313 | 0 | — | Extended | Unavailable; MCP73871T-2CCI/ML C511310 (1,110, $1.81) is the simple alternative |
+| Fuel gauge | MAX17048G+T10 | C2682616 | ~24k | $1.76 | Extended | OK (BQ27441 C473374 969 pcs, dearer) |
+| Backlight boost | TPS61165DBVR / AP3031KTR | C58756 / C82636 | ~24k / ~10k | $0.64 / $0.24 | Extended | OK |
+| 3.3 V buck | TPS62825DMQR | C2650334 | 4,472 | $0.42 | Extended | OK; cheap high-stock: TLV62569 C141836 $0.07 |
+| Audio LDO | RT9080-33GJ5 | C841192 | ~36k | $0.12 | Extended | OK (TPS7A20 variants low stock) |
+| Qi receiver | BQ51013BRHLR | C55663 | 1,066 | $3.43 | Extended | OK |
+| USB ESD | USBLC6-2SC6 | C7519 | ~43k | $0.18 | Extended | OK; clones ~$0.05 |
+| USB-C mid-mount 16P | SHOU HAN TYPE-C 16P CB1.6 | C2906290 | ~28k | ~$0.08 | Extended | CB1.6 is for a 1.6 mm board; CB1.0 (HCTL C2894901) exists, unverified. Top-mount fallback SHOU HAN 2MD(073) C2765186, 1.2 M stock |
+| microSD push-push | Korean Hroparts TF-01A | C91145 | ~157k | $0.11 | Extended | OK, 1.85 mm high |
+| FPC 0.5 mm 30P (AMOLED) | XUNPU FPC-05F-30PH20 | C2856808 | ~27k | $0.07 | Extended | OK |
+| FPC 0.5 mm 50P (IPS panel) | XUNPU FPC-05F-50PH20 | C2856813 | ~11k | $0.13 | Extended | OK |
+| FPC 0.3 mm 13P (wheel, if 5G-style) | HDGC 0.3K-HX-13PWB | C2919524 | not verified | ~$0.10 | Extended | 0.3/0.4/0.5 mm pitches all stocked; confirm the 6G pitch first |
+| JST SH 1.0 mm 4P | SM04B-SRSS-TB | C160404 | ~54k | $0.13 | Extended | OK |
+| RTC | PCF85063AT/AAZ SO-8 | C2157792 | 4,384 | $0.86 | Extended | DFN variant C404360 is out of stock |
+| 32.768 kHz crystal | Seiko SC-32S 3215 | C97606 | ~153k | $0.10 | Extended | No Basic 32 kHz crystal exists |
+| Schottky | SS14 | C2480 | OK | — | **Basic** | OK |
+| 2.41" AMOLED RM690B0 | DisplayModule / TailorPixels | — | not on LCSC | ~$59 | — | **Source separately, fit by hand** via the 30P FPC |
+| 2.4" IPS ST7789V | ER-TFT024IPS-3 (BuyDisplay) | — | not on LCSC | $6.35 | — | **Source separately** via the 50P FPC |
+
+### JLCPCB cost model — 100 × 60 mm, 4-layer, 1.0 mm, ENIG, 5 boards, ~120 unique parts / ~250 placements
+
+| Item | Economic PCBA (single-side only) | Standard PCBA (double-side) |
+| --- | --- | --- |
+| Setup | $8.18 | $25.56 / $51.12 (two sides) |
+| Stencil | $1.53 | $8.21 / $16.42 |
+| SMT joints (~3,750 × $0.0016) | $6 | $6 |
+| Feeder fees | $3.07 per Extended part type (Basic free) → ~$169 for 55 Extended | $1.53 per part type, Basic or Extended → ~$184 |
+| Bare PCB 4L ENIG (est.) | ~$25 | ~$25 |
+| Components (est., ex-displays) | ~$160 | ~$160 |
+| DHL to UK (est.) + 20 % VAT | ~$25 + ~$80 | ~$25 + ~$95 |
+| **Landed, 5 boards** | **~$475 (≈ £360)** | **~$560 (≈ £430)** |
+
+Setup, stencil, joint and feeder fees are verified from JLC's help pages; PCB, components and shipping are estimates. Economic is single-side only, so a double-sided layout forces Standard (+£60–90 net). The feeder fees dominate: cut unique part types, prefer Basic/Preferred values, and the price falls faster than by any other lever.
+
+### Consequences for the design
+
+1. **Radio:** the Pico-W-style CYW43439 cannot be built at JLC. Final-board options are an ESP32-S3-WROOM host (Wi-Fi/BLE on-module, no Classic BT) or an ESP32-WROOM-32E co-processor for classic BT, both deep-stocked; the Qualcomm audio module is a hand-soldered extra either way. An RM2 module (grant-covered) is the hand-placed alternative.
+2. **Audio:** CS43131 is a 42-piece remnant. Given the recording requirement, ES8311/ES8388 are the manufacturable choices ([ADR-0012](adr/0012-audio-codec-final-board.md)).
+3. **Displays** are hand-fitted parts by design; everything else on the BOM is JLC-placeable today.
+4. **Mid-mount USB-C** needs the 1.0 mm (CB1.0) part verified or the board goes to 1.6 mm — which the thin shell cannot afford.

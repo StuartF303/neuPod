@@ -366,5 +366,80 @@ GND: header pins 3, 8, 13, 18, 23, 28, 33, 38. 3V3 out: pin 36. VSYS: pin 39. VB
 | 2026-10-27 | Phase 1 on Pico 2 W; LCD over SPI | Fits the 26-pin budget; drivers port to the final board unchanged |
 | 2026-10-27 | Display: ER-TFT024IPS-3 primary, stock panel as plan B | Fits window, documented, cheap |
 | 2026-10-27 | Radio decision deferred until A2DP source is proven on CYW43439 via BTstack | Determines whether final board copies the Pico W radio design or adds an ESP32 |
+| 2026-11-02 | Manufacturability rule: final-BOM parts must be LCSC/JLC-placeable or flagged hand-placed | LCSC survey: CYW43439 not buildable, CS43131 marginal, displays/QCC/optical hand-fitted |
+| 2026-11-04 | Reuse the donor headphone flex (TRRS + hold + Mikey); optical S/PDIF parked | Fits the case hole; mono mic + inline remote for free; combo jack body too big ([ADR-0018](adr/0018-headphone-jack-reuse.md)) |
+| 2026-11-04 | Testbed stays on Pico 2 W (SWD); AMOLED dev boards for panel driver and power path | RP2350 AMOLED board has no SWD header; ESP32-S3 board has USB-JTAG |
+| 2026-11-04 | "Play to…" DLNA/UPnP added as Wi-Fi stage W5 | Wi-Fi only; renderer pulls from our HTTP server |
 
 Each of these is, or will be, an [ADR](adr/index.md).
+
+## Development-board resource comparison (4 Nov 2026)
+
+Boards on the bench or on order, against the resources the firmware has found binding (RAM, Classic Bluetooth, SD throughput, debug access). Datasheet figures; Waveshare AMOLED entries from the published schematics (Altium PDFs on the Waveshare wiki).
+
+| | Pico 2 W (testbed) | Waveshare RP2350B-Plus-W | Waveshare RP2350-Touch-AMOLED-2.41 | Waveshare ESP32-S3-Touch-AMOLED-2.41 | ESP32-WROOM-32E (co-processor candidate) |
+| --- | --- | --- | --- | --- | --- |
+| SoC | RP2350A | RP2350B | RP2350B | ESP32-S3R8 + 16 MB flash | ESP32-D0WD-V3 |
+| Cores / clock | 2× Cortex-M33 (or Hazard3) 150 MHz | same | same | 2× Xtensa LX7 240 MHz + ULP | 2× Xtensa LX6 240 MHz + ULP |
+| FPU / DSP | FPU, DSP ext. | same | same | FPU, vector ext. | FPU |
+| SRAM | 520 KB | 520 KB | 520 KB | 512 KB + 16 KB RTC | 520 KB |
+| PSRAM | none (QMI CS1 on GP0/8/19/47; QSPI bus not broken out) | pads only — fit APS6404L 8 MB, CS1 on GPIO47 | **2 MB onboard** (CS GPIO47) | **8 MB octal onboard**, memory-mapped, DMA-capable | none (-32E) |
+| Flash | 4 MB | 16 MB | 16 MB W25Q128 | 16 MB | 4 MB |
+| DMA | 12 channels, any peripheral/PIO | 12 | 12 | GDMA 5 TX + 5 RX | SPI/I2S/SDMMC DMA |
+| Programmable I/O | 3 PIO × 4 SMs, HSTX | same | same | none | none |
+| Fixed peripherals | 2 SPI, 2 I²C, 2 UART, 24 PWM, 3 ADC, USB 1.1 FS | 2 SPI, 2 I²C, 2 UART, 6 ADC | as Plus | 4 SPI, 2 I²S, 3 UART, 2 I²C, **SDMMC host 4-bit**, LCD_CAM, USB OTG FS, USB-JTAG, 20 ADC | 4 SPI, 2 I²S, 3 UART, 2 I²C, SDMMC host, 18 ADC, 2 DAC |
+| GPIO total / free for us | 26 / ~22 | 48 / ~44 | 48 / ~10 on header (GPIO2, 26–29, 34, 38, 40, 46 + UART 0/1) | 45 / ~9 (1, 18, 38–42, 45, 46; +43/44 if console moves to USB-CDC) + 3 free EXIO | 34 / ~20 |
+| Wi-Fi | CYW43439 802.11n 2.4 GHz | RM2 (same chip) | none | 802.11n 2.4 GHz on-chip | 802.11n 2.4 GHz |
+| Bluetooth | 5.2 Classic + BLE (BTstack); A2DP source SBC/SBC-XQ only, CPU encode | same | none | **BLE 5.0 only — no Classic, no A2DP** | 4.2 Classic + BLE; A2DP source SBC in ESP-IDF |
+| SD interface | PIO SDIO 4-bit (15.6 MHz bench, ~25 MHz max) | PIO SDIO | TF slot, SDIO 4-bit via PIO | TF slot on **hardware SDMMC** up to 40 MHz (CLK GPIO4, CMD 5, D0 6, D3/CS 2; D1/D2 to verify) | hardware SDMMC |
+| Display on board | — | — | 2.41" AMOLED 450×600 RM690B0, QSPI 4-lane (CS 9, CLK 10, SIO 11–14, RST 15, TE 16, PWR_EN 17), FT6336 touch (I²C 6/7, INT 4, RST 5) | same panel (CS 9, CLK 10, D0–3 11–14, RST 21; TE/EN/TP_INT on EXIO0–2; I²C 47/48) | — |
+| Power / battery | VSYS diode, no charger | LDO, no charger | ETA6098 1 A charger, 2-pin MX1.25 battery, BAT ADC, power key | ETA6098 charger, battery connector, BAT ADC GPIO17, key GPIO15, BAT_Control GPIO16 | — |
+| Extras | — | — | PCF85063 RTC, QMI8658 IMU, buttons | PCF85063 RTC, QMI8658 IMU, TCA9554-class IO expander (EXIO), buttons | — |
+| USB | micro-B | USB-C | USB-C | USB-C | — |
+| Debug access | SWD 3-pin JST-SH (Debug Probe) | SWD pads/header (check board) | **no SWD header** — SWCLK/SWD go only to the chip; debug via USB (picotool/UF2) + UART0 on GPIO0/1 | **built-in USB-JTAG** over the USB-C (OpenOCD, no probe) | UART bootloader; JTAG on GPIO12–15 |
+| Deep sleep | ~0.2 mA (radio off) | same | same | ~10 µA | ~10 µA |
+| Licensing | BTstack/cyw43 grant covers Pico W / RM2 | grant covers RM2 | n/a | ESP-IDF Apache-2.0 | Apache-2.0 |
+
+**Consequences.** (1) The 477/520 KB RAM squeeze disappears on any PSRAM board; RP2350 PSRAM is memory-mapped through the XIP cache (~4× slower than SRAM), fine for audio rings, LVGL buffers and artwork. The Plus-W needs an APS6404L fitted (WSON-8 C3040877 is the stocked variant). (2) Bluetooth is the fork: RP2350 + CYW43439/RM2 gives Classic BT with SBC only; ESP32-S3 has no Classic BT, so the S3 AMOLED board cannot drive the AirPods without a QCC module; only the original ESP32 has Classic + A2DP source in a permissive stack. (3) ESP32-S3 and ESP32 have hardware SDMMC; RP2350 SD is PIO and clock-limited. (4) The RP2350 AMOLED board is the nearest thing to the final board (RP2350B + PSRAM + charger + RTC + SDIO slot + panel) minus a radio and minus SWD — it is the right place to develop the AMOLED driver and power path, with the Pico 2 W kept for anything that needs the Debug Probe. Testbed stays on the Pico 2 W until the AMOLED boards arrive.
+
+## Add-on components per development board (4 Nov 2026)
+
+What each AMOLED board already gives us (not on the list): AMOLED + touch, microSD slot, USB-C, ETA6098 charger + battery connector + battery ADC, PCF85063 RTC, QMI8658 IMU, 16 MB flash, PSRAM.
+
+### Common to both
+
+| Function | Options (★ = recommended for this stage) | Physical / fit notes | Source |
+| --- | --- | --- | --- |
+| Wired audio DAC | ★ Pico Audio Pack (PCM5100A, no MCLK) carried over; **ES8388 module** (adds ADC for recording, candidate final codec); PCM5102A module as no-MCLK fallback | I²S ×3 (+MCLK pad). Pack needs XSMT high | have / AliExpress ES8388 / Mouser PCM5102A |
+| 3.5 mm jack | ★ Donor headphone flex (TRRS + hold + Mikey) once the FPC pitch is measured ([ADR-0018](adr/0018-headphone-jack-reuse.md)); breadboard stand-in CUI SJ-43516-SMT (TRRS with detect) | 4-pole; the donor jack fits the case hole | have / Mouser |
+| Click wheel | FPC breakout for the wheel flex (pitch TBC — 0.3/0.4/0.5 mm), 18 kΩ pull-ups ×2 | 4 GPIO (3 if the 4th line proves unused) | Amazon/AliExpress breakout; Mouser connectors once pitch known |
+| Haptics | DRV2605L (have) + ★ **LRA Vybronics VG1040003D** (10 mm coin, 2 V rms, 170 Hz) vs ★ **piezo Murata PKLCS1212E4001-R1** + driver FET (stock iPod feel) — A/B both | LRA 3.6 mm thick coin; piezo 12 mm × 0.6 mm | Mouser |
+| Fuel gauge | MAX17048 breakout (have) — the on-board charger has no gauge | I²C shared bus | have |
+| Battery | ★ Reuse donor 6G thin cell (3.7 V ~550 mAh, 3-pin) via adapter, or new 1 000 mAh thick-shell cell | Board connector is 2-pin MX1.25 | eBay/iFixit |
+| Headphone/hold flex | donor flex: hold switch (1 GPIO), HP detect (jack switch), Mikey remote (I²C 0x72) | reuse | have |
+| Large card | 512 GB–1 TB exFAT card for the 2 TB-path test | — | Amazon |
+
+### Board-specific
+
+| | RP2350-Touch-AMOLED-2.41 | ESP32-S3-Touch-AMOLED-2.41 |
+| --- | --- | --- |
+| Wi-Fi/BT radio | **none** → add **Raspberry Pi RM2** (CYW43439; Wi-Fi + BT Classic, SBC; grant-covered) on 4 PIO-SPI lines, *or* skip Wi-Fi on this board | on-chip Wi-Fi + **BLE only** |
+| A2DP for AirPods (AAC) | ★ **Feasycom FSC-BT1026D (QCC3034) on FSC-DB200 eval** — AAC/aptX HD, needs A2DP-source firmware from Feasycom; I²S in + UART | **mandatory** (no Classic BT): same Feasycom module, *or* **ESP32-DevKitC-32E** as SBC-only A2DP source co-processor (I²S slave in, UART control) |
+| Choice note | RM2 = SBC only; Feasycom = AAC. Either, not both (GPIO) | Feasycom = AAC (AirPods); ESP32-32E = SBC, Apache-licensed, cheap |
+| Debug | none → UART0 on GPIO0/1 + picotool; Debug Probe UART side | built-in USB-JTAG, nothing to add |
+| GPIO verdict | I²S 3 + wheel 4 + module UART 2 = 9 → fits only with **one** radio and the wheel on ≤ 4 lines; RM2 (+4) does not also fit | I²S 3 + wheel 4 + UART 2 = 9 → fits using EXIO for enables/mute/HP-detect; MCLK needs a spare pin — tight |
+
+**Mouser list (5 Nov 2026):** SJ-43516-SMT ×3, ESP32-DevKitC-32E ×1; haptics — Vybronics VLV101040A ×1 (X-axis LRA), Vybronics VG1040003D ×2 (coin LRA), TDK PowerHap 0904H014 ×1 (1313H019 if unavailable), Boreas BOS1901 breakout or IC ×1, Murata PKLCS1212E4001-R1 ×3. Not Mouser: RM2 (Pimoroni/Pi Hut), Feasycom module + DB200 (direct), ES8388 module (AliExpress), iPhone 8 Taptic Engine ×1 (eBay, reference sample).
+
+### Click feedback — Taptic-class actuators (5 Nov 2026)
+
+A "Taptic Engine" is a large, well-damped X-axis LRA driven with short waveforms, first-half-cycle overdrive and active braking. The DRV2605L already on the bench does all three in LRA closed-loop mode; the ERM was buzzy because an ERM cannot brake. Candidates for the A/B against the stock piezo buzzer:
+
+| Option | Size | Drive | Feel / notes |
+| --- | --- | --- | --- |
+| Salvaged iPhone 7/8/SE2 Taptic Engine | ~35 × 11 × 4.5 mm | DRV2605L LRA mode (auto-cal finds the params) or DRV2624/2625 | The real thing; thick shell only; reference sample |
+| Off-the-shelf X-axis rectangular LRA (Vybronics VLV101040A class) | ~10 × 10 × 4 to 20 × 10 × 3.5 mm | DRV2605L LRA mode | 80 % of the Taptic feel, datasheeted, £1–3; best fit for the thin shell |
+| Piezo haptic: TDK PowerHap 0904H014 + Boreas BOS1901 | **9 × 4 × 1.4 mm**; BOS1901 boosts 3.3 V to ±95 V internally | BOS1901 (I²C + waveform in; senses presses) | Sharpest, fastest (<1 ms), thinnest, lowest power; "tick" rather than "thud" — ideal for a wheel detent |
+| Coin LRA (VG1040003D) | 10 × 3.6 mm | DRV2605L | Softer, slightly ringy — fallback |
+
+Decision after the A/B; the final board keeps a piezo-buzzer footprint plus whichever haptic wins.

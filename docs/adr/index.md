@@ -21,5 +21,6 @@ Format: [Michael Nygard](https://cognitect.com/blog/2011/11/15/documenting-archi
 | [0015](0015-clock-plan.md) | Clock plan | Accepted |
 | [0016](0016-gapless-playback-and-play-queue.md) | Gapless playback and the play queue | Accepted |
 | [0017](0017-music-library-index.md) | Music library index | Accepted |
+| [0018](0018-headphone-jack-reuse.md) | Reuse the donor headphone jack; optical S/PDIF parked | Accepted |
 
 Every feature ADR carries a **RAM budget** line in its Consequences (from 3 Nov 2026).

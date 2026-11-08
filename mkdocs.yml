@@ -49,6 +49,7 @@ nav:
       - microSD storage and tests: storage.md
       - I2C peripherals (fuel gauge, haptics): i2c-peripherals.md
       - Bench practice and test order: bench.md
+      - Donor teardown (photos, findings): teardown.md
   - Decisions:
       - adr/index.md
       - ADR-0001 RP2350 as Phase 1 platform: adr/0001-rp2350-phase1-platform.md
@@ -68,3 +69,4 @@ nav:
       - ADR-0015 Clock plan: adr/0015-clock-plan.md
       - ADR-0016 Gapless playback and the play queue: adr/0016-gapless-playback-and-play-queue.md
       - ADR-0017 Music library index: adr/0017-music-library-index.md
+      - ADR-0018 Headphone jack reuse: adr/0018-headphone-jack-reuse.md
