@@ -31,6 +31,7 @@ IMAGE="${IMAGE:-$BACKUP/partitions/RECOVERY.bin}"
 [[ -f $IMAGE ]] || die "image not found: $IMAGE"
 IMAGE="$(cd "$(dirname "$IMAGE")" && pwd)/$(basename "$IMAGE")"
 [[ $(stat -c %s "$IMAGE") -le $PART_SIZE ]] || die "image larger than RECOVERY (16 MiB)"
+validate_bootimg "$IMAGE" RECOVERY
 
 guard_backup
 
@@ -43,6 +44,8 @@ CMD=("$Y2FLASH" write --target RECOVERY --image "$IMAGE" "${EXPECT[@]}" --state 
 
 if ((DRY)); then
     echo
+    echo "image check: ANDROID! magic, sha1 OK, MTK headers; mtk-bootimg info:"; sed 's/^/  /' <<<"$BOOTINFO"
+    [[ -z $BOOTWARN ]] || echo "$BOOTWARN"
     # plan only: y2flash --dry-run never imports mtkclient, so system python is fine
     python3 -I "${CMD[@]}" --dry-run
     exit 0
@@ -59,6 +62,9 @@ echo " addressing    $CALTXT"
 echo "               raw read addr 0x3900000; raw write addr = 0x2d80000 + write base"
 echo " image         $IMAGE"
 echo " image sha256  $IMG_SHA"
+echo " image check   ANDROID! magic, sha1 OK, MTK KERNEL + ramdisk headers; mtk-bootimg info:"
+sed 's/^/                 /' <<<"$BOOTINFO"
+[[ -z $BOOTWARN ]] || echo " $BOOTWARN"
 echo " device must currently hold one of:"
 for ((i = 1; i < ${#EXPECT[@]}; i += 2)); do echo "   $(sha256sum "${EXPECT[i]}" | cut -d' ' -f1)  ${EXPECT[i]}"; done
 echo " canary limits: it only catches a base error of exactly +-0xb80000; any other mapping error is outside the"
@@ -76,11 +82,11 @@ set -e
 case $RC in
     0) RES="OK: pre-read matched, readback identical" ;;
     3) RES="REFUSED: pre-read mismatch, nothing written" ;;
-    2) RES="FAILED: device may be modified, run restore-stock.sh" ;;
+    2) RES="FAILED: device may be modified, run restore-stock.sh --target RECOVERY (--force-unknown-current if it refuses)" ;;
     6) RES="CANARY FAILED: the write address base does not hold for RECOVERY; no full write was done; see $LOG" ;;
     *) RES="ERROR (exit $RC), see $LOG" ;;
 esac
-partial_warning "$LOG" "$RC"
+partial_warning "$LOG" "$RC" RECOVERY
 log_row "flash RECOVERY, image sha256 \`$IMG_SHA\` ($(basename "$IMAGE"))" "$RES"
 echo "$RES"
 exit "$RC"

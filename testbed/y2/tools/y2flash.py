@@ -4,10 +4,13 @@
   y2flash.py probe   [--preloader P] [--calibration FILE] [--log FILE]      (measure the WRITE address base)
   y2flash.py write   --target RECOVERY --image IMG --expect-current FILE [--expect-current FILE ...]
                      [--calibration FILE] [--preloader P] [--state FILE] [--dry-run] [--log FILE]
+  y2flash.py write   --target USRDATA --image IMG --discard-current [...]     (see below)
   y2flash.py restore --job BOOTIMG=IMG [--job RECOVERY=IMG] --expect BOOTIMG=FILE [--expect ...]
+                     [--job USRDATA=IMG --discard-current USRDATA]
                      [--force-unknown-current] [--calibration FILE] [--preloader P] [--state FILE] [--dry-run]
   y2flash.py read    --target X --out FILE [--preloader P] [--log FILE]
   y2flash.py state-expect --state FILE --target X [--all]     (prints post-image paths, no device)
+  y2flash.py state-last   --state FILE --target X             (prints "STATUS IMAGE_SHA256" of the newest entry)
 
 Addressing. Targets are stored DEVICE-RELATIVE (the scatter-file address). mtkclient's legacy DA uses
 different commands for read (0xD6, no partition field) and write (SDMMC_WRITE_DATA_CMD, explicit parttype),
@@ -23,6 +26,15 @@ Hard rules enforced here (and again in the one function that calls mtkclient's w
   * mtkclient's partition-name commands (`w <name>`, needs a GPT; there is none) are never used;
   * the target is read first and must equal an acceptable known content, otherwise nothing is written;
   * after writing, the same range is read back and must equal what was written.
+
+--discard-current (USRDATA ONLY; a hard error for any other target, enforced in Job). USRDATA holds the stock
+Android user data, which changes whenever stock Android (or a running rootfs) touches it, so it can never be
+compared with a backup. With the flag the "current content must equal an expected file" check is skipped, and
+instead: (a) the first 1 MiB of USRDATA and the canary window are read and SAVED to the log directory
+(evidence), (b) the canary runs, (c) the image is written, (d) the full written length is read back and
+compared. No full-USRDATA pre-read is done. The image may not exceed USRDATA_USABLE (0x31f00000, the size LK
+reports for userdata; the scatter says 0x32000000); a restore of the full-size backup file is the one exception.
+flash-state.json keeps a REFERENCE (path + sha256 + length) for USRDATA writes instead of an 800 MiB copy.
 
 mtkclient is imported lazily (only when a session is opened) so the tests run without it.
 Exit codes: 0 ok; 1 refused/error before any write; 3 pre-read mismatch (nothing written);
@@ -57,6 +69,9 @@ READ_BASE = 0xB80000                  # read address = scatter address + READ_BA
 KNOWN_WRITE_BASES = (0, READ_BASE)    # the only values the probe result is auto-trusted for
 MAX_BASE = 0x1400000                  # probe guards hold for any base in [0, MAX_BASE]
 EMMC_PART_USER = 8                    # EmmcPartitionType.MTK_DA_EMMC_PART_USER (mtkclient Library/DA/storage.py:39)
+USRDATA_USABLE = 0x31F00000           # userdata size LK reports (scatter says 0x32000000): max image for `write`
+EVIDENCE_LEN = 1 << 20                # --discard-current saves this much of the start of USRDATA
+WRITE_BPS, READ_BPS = 4.8e6, 2.0e6    # measured: write ~4.8 MB/s, read ~2 MB/s (for the ETA only)
 MIN_RAW_WRITE = 0x400000              # no raw write address below this is ever sent (low addresses = preloader area)
 
 
@@ -113,7 +128,7 @@ class CanaryFailed(Y2Error):
     exit_code = 6
 
 
-_WRITES = {"started": 0, "done": 0, "canary": None}
+_WRITES = {"started": 0, "done": 0, "canary": None, "target": None}   # target: last write target (for hints)
 
 
 def say(msg=""):
@@ -196,21 +211,39 @@ def guarded_write(da, target, dev_addr, data, write_base):
     require(target.start <= dev_addr and dev_addr + len(data) <= target.end, "write outside target range")
     require(0 <= write_base <= MAX_BASE, "write base out of range")
     check_write_range(dev_addr, len(data))
+    _WRITES["target"] = target.name
     try:
         announced_write(da, f"{target.name} device {dev_addr:#x}", dev_addr + write_base, data)
     except Exception as e:
         raise WriteFailed(f"[{target.name}] write FAILED part-way ({e}). The device may be half-written. "
-                          f"{RESTORE_HINT}")
+                          f"{restore_hint(target.name)}")
 
 
 # ---------------------------------------------------------------- planning
 
-def plan_image(target, image):
+def max_image(target, restore=False):
+    """Largest image allowed. USRDATA: what LK reports as usable, unless restoring the full-size backup file."""
+    if target.name == "USRDATA" and not restore:
+        return USRDATA_USABLE
+    return target.size
+
+
+def fmt_secs(s):
+    s = int(round(s))
+    return f"{s} s" if s < 60 else f"{s} s ({s // 60} min {s % 60:02d} s)"
+
+
+def eta_text(nbytes):
+    return f"write ~{fmt_secs(nbytes / WRITE_BPS)}, readback ~{fmt_secs(nbytes / READ_BPS)}"
+
+
+def plan_image(target, image, restore=False):
     """Padded bytes to write: len(image) rounded up to 512, nothing else padded."""
     if len(image) == 0:
         raise Y2Error("image is empty")
-    if len(image) > target.size:
-        raise Y2Error(f"image is {len(image):#x} bytes, larger than {target.name} ({target.size:#x})")
+    if len(image) > max_image(target, restore):
+        raise Y2Error(f"image is {len(image):#x} bytes, larger than the {max_image(target, restore):#x} allowed "
+                      f"for {target.name} (target size {target.size:#x})")
     data = pad_sector(image)
     if len(data) != len(image):
         say(f"note: image is {len(image):#x} bytes, not a multiple of 512; zero-padding {len(data) - len(image)} "
@@ -221,12 +254,19 @@ def plan_image(target, image):
 class Job:
     """One target: image to write, plus acceptable current contents [(label, bytes of target.size)]."""
 
-    def __init__(self, target, image, expected, label=""):
+    def __init__(self, target, image, expected, label="", discard=False, restore=False):
         self.target = target
         self.image = image
-        self.expected = expected    # None = unchecked (only via --force-unknown-current)
+        self.expected = expected    # None = unchecked (--force-unknown-current, or discard)
         self.label = label or target.name
-        self.data = plan_image(target, image)
+        # --discard-current: skip the expected-content check, USRDATA only (enforced HERE, not in the wrappers)
+        if discard and target.name != "USRDATA":
+            raise Y2Error(f"refusing --discard-current for {target.name}: it is accepted for USRDATA only "
+                          "(BOOTIMG and RECOVERY must always match a known content before they are written)")
+        if discard and expected is not None:
+            raise Y2Error("--discard-current and an expected-current content are mutually exclusive")
+        self.discard = discard
+        self.data = plan_image(target, image, restore)
 
 
 def load_expected(target, paths):
@@ -287,6 +327,38 @@ def verify_current(da, job, bases, keep_dir=None):
     raise PreReadMismatch("\n".join(lines))
 
 
+def save_evidence(da, job, bases, keep_dir):
+    """--discard-current: read and SAVE the first 1 MiB of the target and the canary window (private user data,
+    mode 0600). Never writes to the device. Returns {"first": path, "window": path, "window_bytes": bytes,
+    "first_sha256": ..., "window_sha256": ...}."""
+    t = job.target
+    require(job.discard and t.name == "USRDATA", "evidence step is for --discard-current on USRDATA only")
+    if not keep_dir:
+        raise Y2Error(f"[{t.name}] --discard-current needs a log directory to save the evidence in (use --log). "
+                      "NOTHING WAS WRITTEN.")
+    c, ws, we = canary_window(t)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    say(f"[{t.name}] --discard-current: current content is NOT compared. Saving evidence instead "
+        f"(first {EVIDENCE_LEN:#x} bytes at device {t.start:#x}, canary window {ws:#x}..{we:#x}); "
+        "no full pre-read.")
+    out = {}
+    for name, addr, n in (("first", t.start, EVIDENCE_LEN), ("window", ws, we - ws)):
+        data = da.read(addr + bases.read, n)
+        if len(data) != n:
+            raise Y2Error(f"[{t.name}] evidence read at {addr:#x} returned {len(data):#x} bytes, wanted {n:#x}. "
+                          "NOTHING WAS WRITTEN.")
+        path = os.path.join(keep_dir, f"evidence-{t.name}-{'first1MiB' if name == 'first' else 'canarywindow'}-{stamp}.bin")
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        say(f"[{t.name}] evidence {name}: {path} sha256 {sha(data)}")
+        out[name] = path
+        out[name + "_sha256"] = sha(data)
+        if name == "window":
+            out["window_bytes"] = data
+    return out
+
+
 def write_and_verify(da, job, bases):
     """Write job.data, read it back, compare. Returns (image_sha, readback_sha)."""
     t, data = job.target, job.data
@@ -297,20 +369,31 @@ def write_and_verify(da, job, bases):
     try:
         back = da.read(t.start + bases.read, len(data))
     except Exception as e:
-        raise WriteFailed(f"[{t.name}] readback FAILED ({e}); the write is UNVERIFIED. {RESTORE_HINT}")
+        raise WriteFailed(f"[{t.name}] readback FAILED ({e}); the write is UNVERIFIED. {restore_hint(t.name)}")
     say(f"[{t.name}] image    sha256 {sha(data)}")
     say(f"[{t.name}] readback sha256 {sha(back)}")
     if back != data:
         off = first_diff(back, data)
         raise WriteFailed(f"[{t.name}] READBACK MISMATCH at offset {off:#x}. THE DEVICE HOLDS UNVERIFIED DATA. "
-                          f"{RESTORE_HINT}")
+                          f"{restore_hint(t.name)}")
     say(f"[{t.name}] readback matches")
     return sha(data), sha(back)
 
 
-RESTORE_HINT = ("DO NOT power-cycle into it blindly: re-enter BROM (hold Vol-, plug USB) and run "
-                "scripts/restore-stock.sh to write the backup back (add --force-unknown-current if it refuses "
-                "because the device content matches nothing known).")
+def restore_hint(target=None):
+    """Recovery advice that depends on the target (a wrong hint here could make things worse)."""
+    if target == "USRDATA":
+        return ("USRDATA may be half-written: re-enter BROM (hold Vol-, plug USB) and re-run "
+                "scripts/flash-rootfs.sh, or run scripts/restore-stock.sh --target USRDATA (re-running does NOT "
+                "refuse: USRDATA is never pre-read-compared). Do NOT run restore-stock.sh with no target or `all`: "
+                "that restores stock BOOTIMG, and stock Android would then mount the damaged ext4 as /data.")
+    cmd = f"scripts/restore-stock.sh --target {target}" if target else "scripts/restore-stock.sh --target <BOOTIMG|RECOVERY>"
+    return ("DO NOT power-cycle into it blindly: re-enter BROM (hold Vol-, plug USB) and run "
+            f"{cmd} to write the backup back (add --force-unknown-current if it refuses "
+            "because the device content matches nothing known).")
+
+
+RESTORE_HINT = restore_hint()
 
 
 def post_image(cur, job):
@@ -333,6 +416,11 @@ def canary_addr(t):
     return t.start + 0x1000000 if t.name == "USRDATA" else t.end - CANARY_LEN
 
 
+def canary_window(t):
+    c = canary_guards(t)
+    return c, c - READ_BASE - CANARY_LEN, c + READ_BASE + CANARY_LEN
+
+
 def canary_guards(t):
     c = canary_addr(t)
     require(t.start <= c and c + CANARY_LEN <= t.end and c % SECTOR == 0, f"canary for {t.name} outside the target")
@@ -352,26 +440,32 @@ def find_all(hay, needle):
     return out
 
 
-def run_canary(da, job, cur, bases, keep_dir=None, nonce=None, when=None):
+def run_canary(da, job, cur, bases, keep_dir=None, nonce=None, when=None, pre=None):
+    """cur = the whole target as pre-read, or None for a --discard-current job, where `pre` (the canary window
+    as just read and saved as evidence) provides the original bytes instead."""
     t = job.target
-    c = canary_guards(t)
-    ws, we = c - READ_BASE - CANARY_LEN, c + READ_BASE + CANARY_LEN
+    c, ws, we = canary_window(t)
     n, off = we - ws, c - ws
-    orig = cur[c - t.start:c - t.start + CANARY_LEN]
+    if cur is None:
+        require(job.discard and pre is not None and len(pre) == n, "canary without a pre-read needs the evidence window")
+        orig = pre[off:off + CANARY_LEN]
+    else:
+        orig = cur[c - t.start:c - t.start + CANARY_LEN]
     nonce = os.urandom(16) if nonce is None else nonce
     when = time.strftime("%Y-%m-%dT%H:%M:%S%z") if when is None else when
     marker = make_marker(nonce, when, prefix=b"Y2CANARY")
     say(f"[{t.name}] canary at device {c:#x} (raw write {c + bases.write:#x}); window {ws:#x}..{we:#x}")
-    pre = da.read(ws + bases.read, n)
-    if len(pre) != n or pre[off:off + CANARY_LEN] != orig:
-        raise Y2Error(f"[{t.name}] canary window changed since the pre-read (or short read). NOTHING WAS WRITTEN.")
+    if cur is not None:
+        pre = da.read(ws + bases.read, n)
+        if len(pre) != n or pre[off:off + CANARY_LEN] != orig:
+            raise Y2Error(f"[{t.name}] canary window changed since the pre-read (or short read). NOTHING WAS WRITTEN.")
     _WRITES["canary"] = (t.name, c, c + bases.write)    # for the interrupt message; cleared once resolved
     guarded_write(da, t, c, marker, bases.write)
     try:
         post = da.read(ws + bases.read, n)
     except Exception as e:
         raise CanaryFailed(f"[{t.name}] canary readback failed ({e}); the canary marker (Y2CANARY nonce "
-                           f"{nonce.hex()}) may be on the device. {RESTORE_HINT}")
+                           f"{nonce.hex()}) may be on the device. {restore_hint(t.name)}")
     hits = find_all(post, marker)
     clean = hits == [off] and post[:off] == pre[:off] and post[off + CANARY_LEN:] == pre[off + CANARY_LEN:]
     if clean:
@@ -379,7 +473,7 @@ def run_canary(da, job, cur, bases, keep_dir=None, nonce=None, when=None):
         back = da.read(c + bases.read, CANARY_LEN)
         if back != orig:
             raise CanaryFailed(f"[{t.name}] canary restore FAILED: device {c:#x} does not hold its original bytes. "
-                               f"{RESTORE_HINT}")
+                               f"{restore_hint(t.name)}")
         say(f"[{t.name}] canary landed exactly at {c:#x}; original bytes restored")
         _WRITES["canary"] = None
         return
@@ -405,10 +499,10 @@ def run_canary(da, job, cur, bases, keep_dir=None, nonce=None, when=None):
             raise CanaryFailed(head + " The stray canary was restored (window identical to before). The write base "
                                f"does not hold at {t.name}: do not flash; investigate." + saved)
         raise CanaryFailed(head + " The restore did NOT bring the window back: the device holds stray data."
-                           + saved + " " + RESTORE_HINT)
+                           + saved + " " + restore_hint(t.name))
     changed = post != pre
     raise CanaryFailed(head + (" The window changed in a way that is not one intact marker; NOT touching it. "
-                               "Compare the saved windows. " + RESTORE_HINT if changed else
+                               "Compare the saved windows. " + restore_hint(t.name) if changed else
                                " The window did not change at all (the write was dropped or landed outside it).")
                        + saved)
 
@@ -434,12 +528,23 @@ def run_jobs(da, jobs, bases, keep_dir=None, state=None):
         raise Y2Error("a target may appear only once per session")
     check_device(da)
     say(f"bases: read {bases.read:#x}, write {bases.write:#x}")
-    curs = [verify_current(da, j, bases, keep_dir) for j in jobs]
+    for j in jobs:
+        require(not j.discard or j.target.name == "USRDATA", "--discard-current outside USRDATA")
+    evid, curs = {}, []
+    for j in jobs:
+        if j.discard:
+            evid[j.target.name] = save_evidence(da, j, bases, keep_dir)
+            curs.append((None, "discarded (--discard-current)"))
+        else:
+            curs.append(verify_current(da, j, bases, keep_dir))
     for job, (cur, _) in zip(jobs, curs):
-        run_canary(da, job, cur, bases, keep_dir)
+        ev = evid.get(job.target.name)
+        run_canary(da, job, cur, bases, keep_dir, pre=ev["window_bytes"] if ev else None)
     results = []
     for job, (cur, matched) in zip(jobs, curs):
-        entry = state.begin(job, post_image(cur, job)) if state else None
+        ev = evid.get(job.target.name)
+        entry = state.begin(job, None if cur is None else post_image(cur, job),
+                            evidence={k: v for k, v in (ev or {}).items() if k != "window_bytes"}) if state else None
         try:
             img_sha, back_sha = write_and_verify(da, job, bases)
         except Y2Error:
@@ -529,6 +634,7 @@ def probe_write(da, raw, data, what):
     """The only way the probe writes: raw address confined to USRDATA for every base, announced, user area."""
     check_probe_range(raw, len(data))
     require(raw >= MIN_RAW_WRITE, "raw write address below the minimum")
+    _WRITES["target"] = "USRDATA"
     announced_write(da, f"probe-{what} USRDATA", raw, data)
 
 
@@ -726,7 +832,19 @@ class State:
             json.dump(doc, f, indent=1)
         os.replace(tmp, self.path)
 
-    def begin(self, job, post):
+    def begin(self, job, post, evidence=None):
+        if job.target.name == "USRDATA":
+            # 800 MiB per flash is too much to keep: store a REFERENCE (image path + sha256 + length). The
+            # rootfs is mounted rw by the running system, so its content never equals the image again anyway.
+            doc = self.load()
+            doc["history"].append({"time": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "target": job.target.name,
+                                   "image_sha256": sha(job.data), "image_len": len(job.data),
+                                   "image_path": os.path.abspath(job.label) if os.path.isfile(job.label) else None,
+                                   "post_image": None, "post_sha256": None, "post_kind": "reference",
+                                   "discard_current": job.discard, "evidence": evidence or None,
+                                   "status": "attempted"})
+            self.save(doc)
+            return len(doc["history"]) - 1
         os.makedirs(self.dir, exist_ok=True)
         stamp = time.strftime("%Y%m%d-%H%M%S")
         path = os.path.join(self.dir, f"{job.target.name}-{stamp}-{sha(job.data)[:12]}.post")
@@ -744,10 +862,16 @@ class State:
         doc["history"][idx]["status"] = status
         self.save(doc)
 
+    def last_entry(self, target):
+        hist = [e for e in self.load()["history"] if e["target"] == target]
+        return hist[-1] if hist else None
+
     def expected_paths(self, target, all_entries=False):
         """Post-images that the target may hold: the last ok write and everything attempted after it
-        (all entries with all_entries=True)."""
-        hist = [e for e in self.load()["history"] if e["target"] == target and os.path.exists(e["post_image"])]
+        (all entries with all_entries=True). Never lists anything for USRDATA (reference entries only)."""
+        # reference entries (USRDATA) have no post-image file and are skipped
+        hist = [e for e in self.load()["history"]
+                if e["target"] == target and e.get("post_image") and os.path.exists(e["post_image"])]
         if not all_entries:
             last_ok = max((i for i, e in enumerate(hist) if e["status"] == "ok"), default=-1)
             hist = hist[last_ok:] if last_ok >= 0 else hist
@@ -893,12 +1017,20 @@ def kv(s):
 def build_jobs(args):
     if args.cmd == "write":
         t = get_target(args.target)
-        pairs, expect = [(t, args.image)], {t.name: args.expect_current}
+        pairs, expect = [(t, args.image)], {t.name: args.expect_current or []}
+        discard = {t.name} if args.discard_current else set()
     else:
         pairs = [(get_target(k), v) for k, v in map(kv, args.job)]
         expect = {}
         for k, v in map(kv, args.expect or []):
             expect.setdefault(get_target(k).name, []).append(v)
+        discard = {get_target(n).name for n in args.discard_current or []}
+        for n in discard:
+            if n not in [t.name for t, _ in pairs]:
+                raise Y2Error(f"--discard-current {n}: there is no --job for {n}")
+    for n in sorted(discard):    # fail before anything else, and not only in the wrappers
+        if n != "USRDATA":
+            raise Y2Error(f"refusing --discard-current for {n}: it is accepted for USRDATA only")
     jobs = []
     for t, img in pairs:
         try:
@@ -906,13 +1038,21 @@ def build_jobs(args):
                 image = f.read()
         except OSError as e:
             raise Y2Error(f"cannot read image {img}: {e}")
-        if getattr(args, "force_unknown_current", False):
+        dis = t.name in discard
+        if dis and expect.get(t.name):
+            raise Y2Error(f"--discard-current replaces the expected-current check; do not give both for {t.name}")
+        if dis:
             exp = None
+        elif getattr(args, "force_unknown_current", False):
+            if t.name == "USRDATA":
+                dis, exp = True, None    # never an 800 MiB pre-read; evidence is saved instead
+            else:
+                exp = None
         else:
-            if t.name not in expect:
+            if not expect.get(t.name):
                 raise Y2Error(f"no --expect-current/--expect for {t.name}")
             exp = load_expected(t, expect[t.name])
-        jobs.append(Job(t, image, exp, label=img))
+        jobs.append(Job(t, image, exp, label=img, discard=dis, restore=args.cmd == "restore"))
     return jobs
 
 
@@ -930,14 +1070,18 @@ def print_plan(jobs, state, bases):
         say(f"    image {j.label}: {len(j.image):#x} bytes -> write {len(j.data):#x} bytes (512-aligned), "
             f"sha256 {sha(j.image)}")
         say(f"    written bytes sha256 {sha(j.data)}")
-        if j.expected is None:
+        say(f"    estimated time: {eta_text(len(j.data))}")
+        if j.discard:
+            say(f"    expected current: DISCARDED (--discard-current): the current {t.name} content is destroyed; "
+                f"only the first {EVIDENCE_LEN:#x} bytes and the canary window are read and saved first")
+        elif j.expected is None:
             say("    expected current: UNCHECKED (--force-unknown-current)")
         for label, b in j.expected or []:
             say(f"    expected current: {sha(b)}  {label}")
     say(f"  device must report eMMC user size {EXPECT_EMMC_USER_SIZE:#x}; "
         f"order: {' then '.join(j.target.name for j in jobs)}")
-    say("  steps: pre-read+compare all targets; a 4 KiB canary per target (written, located by read, restored); "
-        "then per target write + read back + compare")
+    say("  steps: pre-read+compare all targets (--discard-current targets: save evidence instead, no full pre-read); "
+        "a 4 KiB canary per target (written, located by read, restored); then per target write + read back + compare")
     for j in jobs:
         say(f"    canary {j.target.name}: device {canary_addr(j.target):#x}")
     if state:
@@ -956,11 +1100,17 @@ def main(argv=None):
     w = sub.add_parser("write", parents=[common])
     w.add_argument("--target", required=True)
     w.add_argument("--image", required=True)
-    w.add_argument("--expect-current", action="append", required=True, metavar="FILE",
-                   help="full-target-size file the device may currently hold; repeatable")
+    w.add_argument("--expect-current", action="append", metavar="FILE",
+                   help="full-target-size file the device may currently hold; repeatable (required unless "
+                        "--discard-current)")
+    w.add_argument("--discard-current", action="store_true",
+                   help="USRDATA only: do not compare the current content (it is destroyed); save evidence, "
+                        "canary, write, read back")
     r = sub.add_parser("restore", parents=[common], help="several targets, one session")
     r.add_argument("--job", action="append", required=True, metavar="TARGET=IMAGE", help="in write order")
     r.add_argument("--expect", action="append", metavar="TARGET=FILE")
+    r.add_argument("--discard-current", action="append", metavar="TARGET",
+                   help="USRDATA only (repeatable form kept per-target): skip the expected-content check for TARGET")
     r.add_argument("--force-unknown-current", action="store_true",
                    help="write even if the pre-read matches nothing known (recovery from a failed flash only)")
     for p in (w, r):
@@ -979,6 +1129,9 @@ def main(argv=None):
     se.add_argument("--state", required=True)
     se.add_argument("--target", required=True)
     se.add_argument("--all", action="store_true")
+    sl = sub.add_parser("state-last", parents=[common])
+    sl.add_argument("--state", required=True)
+    sl.add_argument("--target", required=True)
     args = ap.parse_args(argv)
 
     def on_signal(signum, frame):
@@ -988,11 +1141,11 @@ def main(argv=None):
     for sig in (signal.SIGTERM, signal.SIGHUP):
         with contextlib.suppress(ValueError):   # not in the main thread
             old_handlers[sig] = signal.signal(sig, on_signal)
-    _WRITES.update(started=0, done=0, canary=None)
+    _WRITES.update(started=0, done=0, canary=None, target=None)
     logf = None
     # mtkclient.Library.utils rebinds sys.stdout/stderr via .detach() at import time; a Tee has no
     # detach(), so import it BEFORE installing the Tee (real runs only; tests/dry-runs never load it).
-    if (not getattr(args, "dry_run", False) and getattr(args, "cmd", None) != "state-expect"
+    if (not getattr(args, "dry_run", False) and getattr(args, "cmd", None) not in ("state-expect", "state-last")
             and "mtkclient.Library.utils" not in sys.modules
             and isinstance(sys.stdout, io.TextIOWrapper) and isinstance(sys.stderr, io.TextIOWrapper)):
         with contextlib.suppress(ImportError):
@@ -1011,11 +1164,12 @@ def main(argv=None):
         if _WRITES["canary"]:
             name, c, raw = _WRITES["canary"]
             say(f"INTERRUPTED DURING THE CANARY for {name}: the 4 KiB at device {c:#x} (raw write addr {raw:#x}) "
-                "may still hold the canary marker (or the landing spot, if the base is wrong). Run "
-                "scripts/restore-stock.sh --force-unknown-current (re-running the flash will refuse at the "
-                "pre-read, which is expected). " + RESTORE_HINT)
+                "may still hold the canary marker (or the landing spot, if the base is wrong). "
+                + ("" if name == "USRDATA" else
+                   f"Run scripts/restore-stock.sh --target {name} --force-unknown-current (re-running the flash "
+                   "will refuse at the pre-read, which is expected). ") + restore_hint(name))
         elif _WRITES["started"] > _WRITES["done"]:
-            say("INTERRUPTED DURING A WRITE: DEVICE MAY BE PARTIALLY WRITTEN. " + RESTORE_HINT)
+            say("INTERRUPTED DURING A WRITE: DEVICE MAY BE PARTIALLY WRITTEN. " + restore_hint(_WRITES["target"]))
         else:
             say("interrupted (no write was in progress).")
         return 130
@@ -1032,6 +1186,10 @@ def _run(args):
         t = get_target(args.target)
         for p in State(args.state).expected_paths(t.name, args.all):
             say(p)
+        return 0
+    if args.cmd == "state-last":
+        e = State(args.state).last_entry(get_target(args.target).name)
+        say("none" if e is None else f"{e['status']} {e['image_sha256']}")
         return 0
     if args.cmd == "probe":
         keep = os.path.dirname(os.path.abspath(args.log)) if getattr(args, "log", None) else os.getcwd()
@@ -1100,7 +1258,7 @@ def _run(args):
             da.write_base = bases.write
             results = run_jobs(da, jobs, bases, keep_dir=keep, state=state)
     for name, img, back, matched in results:
-        say(f"OK {name}: image {img} == readback {back} (pre-read matched {matched})")
+        say(f"OK {name}: image {img} == readback {back} ({'current content ' if matched.startswith('discarded') else 'pre-read matched '}{matched})")
     say("Done. The device is still in download mode: unplug it before powering on.")
     return 0
 
