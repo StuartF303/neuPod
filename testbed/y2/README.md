@@ -25,8 +25,8 @@ tools/     setup-host.sh, udev/51-mediatek.rules, mtk-bootimg.py (+ tests/)
 scripts/   backup-all.sh, flash-*.sh, restore-stock.sh, usb-console.sh
 rescue/    y2-rescue initramfs
 buildroot/ external tree
-recon/     captures (images git-ignored)
-docs/      findings, decisions (y2-decisions.md), bench log (y2-log.md)
+recon/     captures — git-ignored, tiny + NAS only
+docs/      findings, decisions, bench log — git-ignored, tiny + NAS only
 ```
 
-Start with `docs/y2-host-setup.md`.
+Findings, logs and docs (`docs/`, `recon/`) are git-ignored: they live on the bench box and the NAS (`\\warrender2\public\y2-backup\notes\`), not in this public repo. Host setup: run `tools/setup-host.sh` (see its header).
