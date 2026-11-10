@@ -38,6 +38,7 @@ log directory (canary-*-pre/post-*.bin, probe-window-*.bin) contain SEC_RO / EXP
 Every write is announced with a "WRITE STARTED ..." line and closed with "WRITE DONE ..."; a log that has more
 STARTED than DONE lines means a write was interrupted and the device may be partially written.
 """
+import io
 import argparse
 import contextlib
 import hashlib
@@ -989,6 +990,13 @@ def main(argv=None):
             old_handlers[sig] = signal.signal(sig, on_signal)
     _WRITES.update(started=0, done=0, canary=None)
     logf = None
+    # mtkclient.Library.utils rebinds sys.stdout/stderr via .detach() at import time; a Tee has no
+    # detach(), so import it BEFORE installing the Tee (real runs only; tests/dry-runs never load it).
+    if (not getattr(args, "dry_run", False) and getattr(args, "cmd", None) != "state-expect"
+            and "mtkclient.Library.utils" not in sys.modules
+            and isinstance(sys.stdout, io.TextIOWrapper) and isinstance(sys.stderr, io.TextIOWrapper)):
+        with contextlib.suppress(ImportError):
+            import mtkclient.Library.utils  # noqa: F401
     old = sys.stdout, sys.stderr
     if getattr(args, "log", None):
         logf = open(args.log, "a", buffering=1)
