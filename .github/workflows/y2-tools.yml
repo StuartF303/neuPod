@@ -5,9 +5,9 @@ name: y2-tools
 on:
   push:
     branches: [main]
-    paths: ["testbed/y2/tools/**", ".github/workflows/y2-tools.yml"]
+    paths: ["testbed/y2/tools/**", "testbed/y2/rescue/**", "testbed/y2/buildroot/**", "testbed/y2/scripts/usb-console.sh", ".github/workflows/y2-tools.yml"]
   pull_request:
-    paths: ["testbed/y2/tools/**", ".github/workflows/y2-tools.yml"]
+    paths: ["testbed/y2/tools/**", "testbed/y2/rescue/**", "testbed/y2/buildroot/**", "testbed/y2/scripts/usb-console.sh", ".github/workflows/y2-tools.yml"]
   workflow_dispatch:
 
 jobs:
@@ -18,4 +18,7 @@ jobs:
       - name: Unit tests (mtk-bootimg)
         run: python3 -I -m unittest discover -s testbed/y2/tools/tests -v
       - name: Shell syntax
-        run: bash -n testbed/y2/tools/setup-host.sh
+        run: |
+          for f in testbed/y2/tools/setup-host.sh testbed/y2/rescue/build-rescue.sh testbed/y2/scripts/usb-console.sh; do
+            bash -n "$f"
+          done

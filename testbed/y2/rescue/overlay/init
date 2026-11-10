@@ -1,0 +1,264 @@
+#!/bin/sh
+# y2-rescue stage 1 (PID 1, busybox ash). Never uses `set -e`: PID 1 must survive failed steps.
+# Never writes to or formats any block device. USRDATA/SD are mounted read-only until a
+# hand-off decision has been made.
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin
+G=/sys/class/android_usb/android0
+USRDATA_START=2104320   # 0x40380000 / 512
+USRDATA_SECTORS=1638400 # 0x32000000 / 512
+HOLD_SECS=5
+
+log() {
+	echo "y2-rescue: $*" >>/tmp/rescue.log 2>/dev/null
+	echo "y2-rescue: $*" 2>/dev/null >/dev/kmsg # kernel >= 3.5 only; silently absent on 3.4
+	echo "y2-rescue: $*"
+}
+
+stage() { # N: progress row on the screen
+	fbtool status "$1" >/dev/null 2>&1
+	log "stage $1: $2"
+}
+
+# Last resort: keep PID 1 alive with a shell on the console (UART / whatever /dev/console is).
+panic() {
+	log "PANIC: $*"
+	fbtool fill ff0000 >/dev/null 2>&1
+	while :; do
+		sh -i </dev/console >/dev/console 2>&1
+		sleep 2
+	done
+}
+
+# ---- 1. pseudo filesystems and minimal /dev ----------------------------------------------
+mount -t proc proc /proc || panic "cannot mount /proc"
+echo "0 20 30" >/proc/wdk 2>/dev/null # in-kernel watchdog kicker, same as stock init.rc
+mount -t sysfs sysfs /sys || panic "cannot mount /sys"
+mount -t tmpfs -o mode=0755,size=2m tmpfs /dev || panic "cannot mount /dev"
+mkdir -p /tmp /mnt/sd /newroot /dev/pts /dev/input /dev/graphics /dev/block /tmp/www
+mknod -m 600 /dev/console c 5 1
+mknod -m 666 /dev/null c 1 3
+mknod -m 666 /dev/zero c 1 5
+mknod -m 666 /dev/tty c 5 0
+mknod -m 600 /dev/tty0 c 4 0
+mknod -m 666 /dev/ptmx c 5 2
+mknod -m 666 /dev/urandom c 1 9
+mknod -m 666 /dev/random c 1 8
+mknod -m 600 /dev/kmsg c 1 11
+mknod -m 660 /dev/fb0 c 29 0 # fbdev major 29: lets us draw before mdev has run
+ln -sf ../fb0 /dev/graphics/fb0
+mount -t devpts devpts /dev/pts
+if [ -c /dev/console ] && (: </dev/console) 2>/dev/null; then
+	exec </dev/console >/dev/console 2>&1
+fi
+echo 5 >/proc/sys/kernel/printk # dmesg level: warnings and worse on the console
+: >/tmp/rescue.log
+log "y2-rescue starting, $(cat /proc/version)"
+read -r CMDLINE </proc/cmdline
+
+for b in /sys/class/leds/lcd-backlight/brightness; do
+	[ -w "$b" ] && echo 128 >"$b"
+done
+fbtool bars >/dev/null 2>&1
+stage 1 "proc/sys/dev mounted"
+
+# ---- 2. mdev (no devtmpfs on this kernel) ----------------------------------------------
+echo /sbin/mdev >/proc/sys/kernel/hotplug
+mdev -s
+stage 2 "mdev populated /dev ($(ls /dev | wc -l) entries)"
+
+# ---- 3. USB gadget: ACM + RNDIS, with fallbacks ---------------------------------------
+gw() { # file value
+	if ! echo "$2" >"$G/$1" 2>>/tmp/rescue.log; then
+		log "gadget: write $1=$2 FAILED"
+		return 1
+	fi
+	return 0
+}
+
+gadget_try() { # functions bDeviceClass
+	log "gadget: trying functions=$1"
+	gw enable 0
+	gw idVendor 18d1
+	gw idProduct 4ee7
+	gw iManufacturer neuPod
+	gw iProduct y2-rescue
+	gw iSerial y2rescue0001
+	case $1 in *rndis*)
+		gw f_rndis/ethaddr 02:59:32:00:00:02
+		gw f_rndis/wceis 1
+		;;
+	esac
+	case $1 in *acm*) gw f_acm/instances 1 ;; esac # stock rc writes this BEFORE functions
+	gw bDeviceClass "$2"
+	gw functions "$1"
+	gw enable 1
+	got=$(cat $G/functions 2>/dev/null)
+	log "gadget: functions read back as '$got'"
+	ok=1
+	for want in $(echo "$1" | tr , ' '); do # every requested function must be listed
+		case ",$got," in *",$want,"*) ;; *) ok=0 ;; esac
+	done
+	[ $ok = 1 ]
+}
+
+GADGET=none
+if [ -d "$G" ]; then
+	if gadget_try rndis,acm 0; then
+		GADGET=rndis,acm
+	elif gadget_try acm 02; then
+		GADGET=acm
+	elif gadget_try mass_storage 0; then
+		GADGET=mass_storage
+	fi
+else
+	log "gadget: $G missing (no android_usb in this kernel?)"
+fi
+sleep 1
+mdev -s # ttyGS0 appears when the ACM function binds
+stage 3 "gadget=$GADGET"
+
+# ---- 4. serial console on the USB ACM port -------------------------------------------
+i=0
+while [ ! -c /dev/ttyGS0 ] && [ $i -lt 10 ]; do
+	mdev -s
+	sleep 1
+	i=$((i + 1))
+done
+if [ ! -c /dev/ttyGS0 ] && [ -r /sys/class/tty/ttyGS0/dev ]; then
+	IFS=: read -r maj min </sys/class/tty/ttyGS0/dev
+	mknod -m 660 /dev/ttyGS0 c "$maj" "$min"
+fi
+if [ -c /dev/ttyGS0 ]; then
+	setsid /bin/respawn acm-getty getty -n -L -l /bin/sh 115200 ttyGS0 vt100 </dev/null >/dev/null 2>&1 &
+	stage 4 "console on /dev/ttyGS0"
+else
+	log "no /dev/ttyGS0 after 10 s"
+fi
+
+# ---- 5. network over RNDIS ------------------------------------------------------------
+case $GADGET in *rndis*)
+	i=0
+	while [ ! -d /sys/class/net/usb0 ] && [ $i -lt 10 ]; do
+		sleep 1
+		i=$((i + 1))
+	done
+	if [ -d /sys/class/net/usb0 ]; then
+		ifconfig usb0 192.168.7.2 netmask 255.255.255.0 up
+		log "usb0: $(ifconfig usb0 | head -2 | tr '\n' ' ')"
+		# Unauthenticated root shell, reachable only on the point-to-point USB link.
+		setsid /bin/respawn telnetd telnetd -F -b 192.168.7.2 -l /bin/sh </dev/null >/dev/null 2>&1 &
+		ln -sf /tmp/rescue.log /tmp/www/rescue.log
+		ln -sf /tmp/diag.txt /tmp/www/diag.txt
+		setsid /bin/respawn httpd httpd -f -p 192.168.7.2:80 -h /tmp/www </dev/null >/dev/null 2>&1 &
+		stage 5 "usb0 up at 192.168.7.2 (telnet 23, http 80)"
+	else
+		log "usb0 did not appear"
+	fi
+	;;
+esac
+
+# ---- 6. hold window / hand-off decision -----------------------------------------------
+# Optional microSD (read-only) for the y2-hold marker.
+sd_mount() {
+	for dev in /dev/mmcblk1p1 /dev/mmcblk1; do
+		[ -b "$dev" ] || continue
+		for t in vfat exfat texfat sdfat ext4; do
+			o=ro
+			[ "$t" = ext4 ] && o=ro,noload
+			if mount -t "$t" -o "$o" "$dev" /mnt/sd 2>/dev/null; then
+				log "sd: $dev mounted ro as $t"
+				return 0
+			fi
+		done
+	done
+	return 1
+}
+
+# Key press on any input device during the window = stay. One reader per node.
+rm -f /tmp/key.*
+kpids=
+for ev in /dev/input/event*; do
+	[ -c "$ev" ] || continue
+	timeout $HOLD_SECS hexdump -n 16 "$ev" >"/tmp/key.${ev##*/}" 2>/dev/null &
+	kpids="$kpids $!"
+done
+HOLD=
+sd_mount && [ -e /mnt/sd/y2-hold ] && HOLD="y2-hold on SD"
+case " $CMDLINE " in *" y2.hold "*) HOLD="y2.hold on cmdline" ;; esac
+log "hold window: ${HOLD_SECS}s (press any key to stay in rescue)"
+sleep $HOLD_SECS
+# shellcheck disable=SC2086
+[ -n "$kpids" ] && wait $kpids 2>/dev/null
+for k in /tmp/key.*; do
+	[ -s "$k" ] && HOLD="key press (${k##*/})"
+done
+
+# Find USRDATA by geometry, not by a hard-coded partition number.
+usrdata_dev() {
+	cand=
+	for d in /sys/class/block/mmcblk0p*; do
+		[ -r "$d/size" ] || continue
+		[ "$(cat "$d/size")" = "$USRDATA_SECTORS" ] || continue
+		if [ "$(cat "$d/start" 2>/dev/null)" = "$USRDATA_START" ]; then
+			echo "/dev/${d##*/}"
+			return 0
+		fi
+		cand="/dev/${d##*/}"
+	done
+	[ -n "$cand" ] && log "usrdata: size matched but start differs, ignoring $cand" >&2
+	return 1
+}
+
+handoff_ok=
+if [ -z "$HOLD" ]; then
+	UD=$(usrdata_dev)
+	if [ -n "$UD" ] && [ -b "$UD" ]; then
+		# ro,noload: probing must not replay the journal (that would be a write).
+		if mount -t ext4 -o ro,noload "$UD" /newroot 2>/dev/null; then
+			if [ -x /newroot/sbin/init ] && [ -d /newroot/dev ] && [ -d /newroot/proc ] && [ -d /newroot/sys ]; then
+				handoff_ok=$UD
+			else
+				log "usrdata $UD has no /sbin/init or lacks dev/proc/sys dirs: staying in rescue"
+			fi
+			umount /newroot
+		else
+			log "usrdata $UD: ext4 mount failed: staying in rescue"
+		fi
+	else
+		log "usrdata not found: staying in rescue"
+	fi
+else
+	log "holding in rescue: $HOLD"
+fi
+
+if [ -n "$handoff_ok" ]; then
+	log "handing off to $handoff_ok:/sbin/init"
+	if mount -t ext4 -o rw "$handoff_ok" /newroot 2>/dev/null; then
+		killall respawn telnetd httpd getty 2>/dev/null
+		umount /mnt/sd 2>/dev/null
+		moved=
+		for m in dev proc sys; do
+			if mount --move "/$m" "/newroot/$m"; then
+				moved="$moved $m"
+			else
+				log "mount --move /$m failed; rolling back"
+				for r in $moved; do mount --move "/newroot/$r" "/$r"; done
+				moved=bad
+				break
+			fi
+		done
+		if [ "$moved" != bad ]; then
+			echo >/proc/sys/kernel/hotplug # mdev lives in the old root; stop calling it
+			exec switch_root /newroot /sbin/init
+		fi
+		log "hand-off aborted after failed mounts: staying in rescue"
+		umount /newroot 2>/dev/null
+	else
+		log "rw mount of $handoff_ok failed: staying in rescue"
+	fi
+fi
+
+# ---- 7. stay: busybox init keeps PID 1 sane (reaps zombies, handles reboot/poweroff) ----
+log "rescue shell ready"
+exec /sbin/init
+panic "exec /sbin/init failed"
