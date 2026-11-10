@@ -1,0 +1,21 @@
+name: y2-tools
+
+# Host-side tooling for the Innioasis Y2 testbed. Only the synthetic tests run here;
+# the factory-image round trips skip without ~/y2-firmware and are run on the bench box.
+on:
+  push:
+    branches: [main]
+    paths: ["testbed/y2/tools/**", ".github/workflows/y2-tools.yml"]
+  pull_request:
+    paths: ["testbed/y2/tools/**", ".github/workflows/y2-tools.yml"]
+  workflow_dispatch:
+
+jobs:
+  y2-tools:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Unit tests (mtk-bootimg)
+        run: python3 -I -m unittest discover -s testbed/y2/tools/tests -v
+      - name: Shell syntax
+        run: bash -n testbed/y2/tools/setup-host.sh

@@ -1,0 +1,7 @@
+# Device images and dumps never go in git (backups live in ~/y2-backup and on the NAS)
+*.img
+*.bin
+*.zip
+dump/
+recon/**/raw/
+.venv/
