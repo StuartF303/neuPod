@@ -68,6 +68,44 @@ class Overlay(unittest.TestCase):
         for k in ("fb[0-9]+", "mmcblk", "ttyGS", "input/.*"):
             self.assertIn(k, s)
 
+    def test_network_after_address_and_generic_iface(self):
+        s = self.read("init")
+        self.assertIn("usb0 | rndis0", s)
+        self.assertIn("*android_usb*", s)
+        net = s[s.index("# ---- 5."):s.index("# ---- 6.")]
+        order = [net.index(k) for k in ("ifconfig \"$NETIF\" 192.168.7.2", "udhcpd -f", "telnetd -F -b 192.168.7.2",
+                                         "httpd -f -p 192.168.7.2:80 -h /tmp")]
+        self.assertEqual(order, sorted(order))
+        self.assertNotIn("usb0 up", net)
+
+    def test_udhcpd_conf_offers_only_the_host_address(self):
+        c = self.read("etc/udhcpd.conf")
+        lines = [l.split() for l in c.splitlines() if l.strip() and not l.startswith("#")]
+        keys = {l[0] + (" " + l[1] if l[0] == "option" else "") for l in lines}
+        self.assertIn(["start", "192.168.7.1"], lines)
+        self.assertIn(["end", "192.168.7.1"], lines)
+        self.assertIn(["interface", "@IFACE@"], lines)
+        self.assertTrue(keys.isdisjoint({"option router", "option dns"}), keys)
+        self.assertIn("lease_file /tmp/", c)
+
+    def test_hold_uses_cat_on_event0_and_event2_only(self):
+        s = self.read("init")
+        hold = s[s.index("# Any key on event0"):s.index("# Find USRDATA")]
+        self.assertIn("/dev/input/event0 /dev/input/event2", hold)
+        self.assertIn('timeout $((HOLD_SECS + 1)) cat "$ev"', hold)
+        self.assertLess(hold.index("sd_mount &&"), hold.index("cat \"$ev\""))  # readers start after the SD probe
+        self.assertLess(hold.index("cat \"$ev\""), hold.index("sleep $HOLD_SECS"))
+        self.assertIn("udhcpd", s[s.index("killall"):s.index("killall") + 60])
+        self.assertNotIn("hexdump -", hold)
+
+    def test_diag_capture_and_flags(self):
+        s = self.read("bin/diag.sh")
+        self.assertIn("--no-capture | --no-input", s)
+        self.assertIn('timeout 10 cat "$ev"', s)
+        self.assertNotIn("hexdump -C \"$ev\"", s)
+        for k in ("h2w/state", "lcd-backlight"):
+            self.assertIn(k, s)
+
     def test_inittab_keeps_console(self):
         self.assertIn("::respawn:/bin/console-shell", self.read("etc/inittab"))
 
@@ -94,13 +132,15 @@ class Rootfs(unittest.TestCase):
             self.assertEqual(self.mode(n), "-rwxr-xr-x", n)
         self.assertTrue(self.mode("etc/mdev.conf").startswith("-rw"))
         self.assertTrue(self.mode("etc/inittab").startswith("-rw"))
+        self.assertTrue(self.mode("etc/udhcpd.conf").startswith("-rw"))
 
     def test_binaries(self):
         self.assertEqual(self.mode("usr/bin/fbtool"), "-rwxr-xr-x")
         self.assertEqual(self.mode("bin/busybox")[0], "-")
         # applets we call from init/diag are present (busybox symlinks)
         for n in ("mdev", "hexdump", "timeout", "telnetd", "getty", "httpd", "switch_root", "ifconfig", "mount",
-                  "init", "killall", "setsid", "blkid", "fbset", "devmem", "nc", "wget"):
+                  "init", "killall", "setsid", "blkid", "fbset", "devmem", "nc", "wget", "udhcpd", "od", "awk",
+                  "readlink", "sed", "cat"):
             self.assertTrue(any(f"{d}/{n}" in self.entries for d in ("bin", "sbin", "usr/bin", "usr/sbin")),
                             f"applet {n} missing")
 

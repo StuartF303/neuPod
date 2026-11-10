@@ -55,9 +55,7 @@ echo 5 >/proc/sys/kernel/printk # dmesg level: warnings and worse on the console
 log "y2-rescue starting, $(cat /proc/version)"
 read -r CMDLINE </proc/cmdline
 
-for b in /sys/class/leds/lcd-backlight/brightness; do
-	[ -w "$b" ] && echo 128 >"$b"
-done
+[ -w /sys/class/leds/lcd-backlight/brightness ] && echo 128 >/sys/class/leds/lcd-backlight/brightness
 fbtool bars >/dev/null 2>&1
 stage 1 "proc/sys/dev mounted"
 
@@ -136,23 +134,48 @@ else
 fi
 
 # ---- 5. network over RNDIS ------------------------------------------------------------
+# The netdev name depends on the kernel: this MTK 3.4 kernel calls it rndis0, others usb0.
+# Match by name, or by a /device link that lives under the android_usb gadget.
+find_rndis_if() {
+	for n in /sys/class/net/*; do
+		name=${n##*/}
+		case $name in usb0 | rndis0)
+			echo "$name"
+			return 0
+			;;
+		esac
+		case $(readlink -f "$n/device" 2>/dev/null) in *android_usb*)
+			echo "$name"
+			return 0
+			;;
+		esac
+	done
+	return 1
+}
+
 case $GADGET in *rndis*)
+	NETIF=
 	i=0
-	while [ ! -d /sys/class/net/usb0 ] && [ $i -lt 10 ]; do
+	while [ $i -lt 10 ]; do
+		NETIF=$(find_rndis_if)
+		[ -n "$NETIF" ] && break
 		sleep 1
 		i=$((i + 1))
 	done
-	if [ -d /sys/class/net/usb0 ]; then
-		ifconfig usb0 192.168.7.2 netmask 255.255.255.0 up
-		log "usb0: $(ifconfig usb0 | head -2 | tr '\n' ' ')"
+	if [ -n "$NETIF" ]; then
+		ifconfig "$NETIF" 192.168.7.2 netmask 255.255.255.0 up
+		log "$NETIF: $(ifconfig "$NETIF" | head -2 | tr '\n' ' ')"
+		# Hand the host exactly 192.168.7.1/24 (no router, no DNS) so its NetworkManager
+		# configures the link by itself, without sudo. Started only once the address exists.
+		sed "s/@IFACE@/$NETIF/" /etc/udhcpd.conf >/tmp/udhcpd.conf
+		setsid /bin/respawn udhcpd udhcpd -f /tmp/udhcpd.conf </dev/null >/dev/null 2>&1 &
 		# Unauthenticated root shell, reachable only on the point-to-point USB link.
 		setsid /bin/respawn telnetd telnetd -F -b 192.168.7.2 -l /bin/sh </dev/null >/dev/null 2>&1 &
-		ln -sf /tmp/rescue.log /tmp/www/rescue.log
-		ln -sf /tmp/diag.txt /tmp/www/diag.txt
-		setsid /bin/respawn httpd httpd -f -p 192.168.7.2:80 -h /tmp/www </dev/null >/dev/null 2>&1 &
-		stage 5 "usb0 up at 192.168.7.2 (telnet 23, http 80)"
+		# httpd serves /tmp, so rescue.log and diag.txt are fetchable.
+		setsid /bin/respawn httpd httpd -f -p 192.168.7.2:80 -h /tmp </dev/null >/dev/null 2>&1 &
+		stage 5 "$NETIF up at 192.168.7.2 (dhcp, telnet 23, http 80)"
 	else
-		log "usb0 did not appear"
+		log "no rndis0/usb0 interface appeared in 10 s"
 	fi
 	;;
 esac
@@ -174,18 +197,21 @@ sd_mount() {
 	return 1
 }
 
-# Key press on any input device during the window = stay. One reader per node.
+# Any key on event0 (mtk-kpd: vol/power) or event2 (mtk-tpd: wheel/ring) during the window = stay.
+# event1/event3 never produce key events. Reads must be 16-byte multiples (busybox hexdump
+# fails with EINVAL on evdev), so use cat: it writes the file only once an event arrives.
 rm -f /tmp/key.*
-kpids=
-for ev in /dev/input/event*; do
-	[ -c "$ev" ] || continue
-	timeout $HOLD_SECS hexdump -n 16 "$ev" >"/tmp/key.${ev##*/}" 2>/dev/null &
-	kpids="$kpids $!"
-done
 HOLD=
 sd_mount && [ -e /mnt/sd/y2-hold ] && HOLD="y2-hold on SD"
 case " $CMDLINE " in *" y2.hold "*) HOLD="y2.hold on cmdline" ;; esac
 log "hold window: ${HOLD_SECS}s (press any key to stay in rescue)"
+# Readers start right before the sleep (after the slow SD probe) so the whole window is covered.
+kpids=
+for ev in /dev/input/event0 /dev/input/event2; do
+	[ -c "$ev" ] || continue
+	timeout $((HOLD_SECS + 1)) cat "$ev" >"/tmp/key.${ev##*/}" 2>/dev/null &
+	kpids="$kpids $!"
+done
 sleep $HOLD_SECS
 # shellcheck disable=SC2086
 [ -n "$kpids" ] && wait $kpids 2>/dev/null
@@ -234,7 +260,7 @@ fi
 if [ -n "$handoff_ok" ]; then
 	log "handing off to $handoff_ok:/sbin/init"
 	if mount -t ext4 -o rw "$handoff_ok" /newroot 2>/dev/null; then
-		killall respawn telnetd httpd getty 2>/dev/null
+		killall respawn telnetd httpd udhcpd getty 2>/dev/null
 		umount /mnt/sd 2>/dev/null
 		moved=
 		for m in dev proc sys; do

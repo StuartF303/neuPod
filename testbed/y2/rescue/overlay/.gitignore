@@ -1,0 +1,2 @@
+# root .gitignore ignores bin/ (build output); the rescue overlay bin/ is source
+!bin/

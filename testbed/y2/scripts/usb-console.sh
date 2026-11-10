@@ -7,8 +7,9 @@
 #     --no-connect  only wait and configure the link, then print how to connect
 #     --wait N      give up after N seconds (default 120; 0 = wait forever)
 #
-# Link: host 192.168.7.1/24 <-> device 192.168.7.2/24 (usb0). Configured with NetworkManager (nmcli,
-# no sudo); if that is refused the exact `sudo ip` commands are printed instead.
+# Link: host 192.168.7.1/24 <-> device 192.168.7.2/24 (rndis0 or usb0 on the device). The device runs a
+# DHCP server that hands out exactly 192.168.7.1/24, so NetworkManager configures this side by itself
+# (no sudo). Only if that does not happen within 15 s: NetworkManager via nmcli, then printed `sudo ip` commands.
 # Leave picocom with Ctrl-A Ctrl-X. The telnet shell is unauthenticated root, USB link only.
 set -euo pipefail
 
@@ -17,7 +18,7 @@ HOST_IP=192.168.7.1 DEV_IP=192.168.7.2 CON=y2-rescue
 MODE=picocom WAIT=120
 
 die() { echo "error: $*" >&2; exit 1; }
-usage() { sed -n '2,12p' "$0"; }
+usage() { sed -n '2,14p' "$0"; }
 
 while (($#)); do
     case $1 in
@@ -76,10 +77,15 @@ EOF
 }
 
 configure_link() {
-    local ifc=$1
-    if ip -4 addr show dev "$ifc" | grep "inet $HOST_IP/24" >/dev/null; then
-        echo "$ifc already has $HOST_IP/24" >&2; return 0
-    fi
+    local ifc=$1 i
+    # Preferred: DHCP from the device. Poll for the address instead of configuring anything.
+    for ((i = 0; i < 15; i++)); do
+        if ip -4 addr show dev "$ifc" | grep "inet $HOST_IP/24" >/dev/null; then
+            echo "$ifc has $HOST_IP/24 (DHCP from the device)" >&2; return 0
+        fi
+        sleep 1
+    done
+    echo "no DHCP address after 15 s; falling back to a manual configuration" >&2
     command -v nmcli >/dev/null || { print_manual "$ifc"; return 1; }
     if nmcli -t -f NAME connection show | grep -x "$CON" >/dev/null; then
         nmcli connection modify "$CON" connection.interface-name "$ifc" \
@@ -112,6 +118,8 @@ fi
 case $MODE in
     picocom)
         command -v picocom >/dev/null || die "picocom not installed (sudo apt install picocom), or use --telnet"
+        # Stable name from the device's USB strings (manufacturer neuPod, product y2-rescue).
+        for p in /dev/serial/by-id/usb-neuPod_y2-rescue*; do [[ -e $p ]] && { TTY=$p; break; }; done
         [[ -r $TTY && -w $TTY ]] || die "cannot open $TTY (add yourself to the 'dialout' group, or check the udev rules)"
         exec picocom -b 115200 "$TTY" ;;
     telnet)
@@ -119,6 +127,6 @@ case $MODE in
         ((LINK)) || die "no usable network link; use the serial console (run without --telnet)"
         exec telnet "$DEV_IP" ;;
     none)
-        echo "serial: picocom -b 115200 $TTY"
+        echo "serial: picocom -b 115200 /dev/serial/by-id/usb-neuPod_y2-rescue*   (currently $TTY)"
         ((LINK)) && echo "network: telnet $DEV_IP   (logs: http://$DEV_IP/rescue.log)" ;;
 esac
