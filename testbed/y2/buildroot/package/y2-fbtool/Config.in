@@ -1,0 +1,5 @@
+config BR2_PACKAGE_Y2_FBTOOL
+	bool "y2-fbtool"
+	help
+	  Tiny framebuffer test tool for the Y2 rescue initramfs
+	  (info, colour bars, fill, progress row). No font.
