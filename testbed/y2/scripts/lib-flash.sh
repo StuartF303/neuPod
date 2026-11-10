@@ -1,4 +1,4 @@
-# Shared guards for the Y2 flash scripts. Sourced by flash-recovery.sh and restore-stock.sh; not run directly.
+# Shared guards for the Y2 flash scripts. Sourced by flash-recovery.sh, flash-boot.sh, flash-rootfs.sh and restore-stock.sh; not run directly.
 #
 # Hard rules enforced here before anything can reach the device:
 #   * the verified backup exists locally AND on the NAS, and its checksum files are identical in both places;
@@ -66,6 +66,40 @@ confirm() {
     [[ $ans == "$1" ]] || die "not confirmed: nothing was done"
 }
 
+# validate_bootimg <image> <ROOTFS|RECOVERY> : refuse anything that is not a sane MTK Android boot image BEFORE the
+# banner: "ANDROID!" at offset 0, mtk-bootimg.py info exits 0 with "sha1 OK", kernel MTK header named KERNEL and a
+# ramdisk MTK header. A ramdisk name other than the target's stock one is only a warning. Sets BOOTINFO.
+validate_bootimg() {
+    local img=$1 want=$2 rc=0 kl rl name
+    [[ $(head -c 8 "$img") == "ANDROID!" ]] || die "$img does not start with ANDROID! (not an Android boot image): refusing"
+    BOOTINFO=$(python3 -I "$Y2/tools/mtk-bootimg.py" info "$img" 2>&1) || rc=$?
+    ((rc == 0)) || { echo "$BOOTINFO" >&2; die "mtk-bootimg.py info failed (exit $rc) for $img: refusing"; }
+    grep -q '^sha1 OK' <<<"$BOOTINFO" || { echo "$BOOTINFO" >&2; die "$img: sha1 check is not OK: refusing"; }
+    kl=$(grep '^kernel:' <<<"$BOOTINFO" || true); rl=$(grep '^ramdisk:' <<<"$BOOTINFO" || true)
+    [[ $kl == *"MTK name='KERNEL'"* ]] || { echo "$BOOTINFO" >&2; die "$img: kernel has no MTK KERNEL header: refusing"; }
+    [[ $rl == *"MTK name='"* ]] || { echo "$BOOTINFO" >&2; die "$img: ramdisk has no MTK header: refusing"; }
+    name=${rl#*MTK name=\'}; name=${name%%\'*}
+    BOOTWARN=""
+    if [[ $name != "$want" ]]; then
+        BOOTWARN="WARNING: ramdisk MTK name is '$name', the stock name for this target is '$want'"
+        echo "$BOOTWARN" >&2
+    fi
+}
+
+# confirm_always <word> : like confirm, but --yes does NOT skip it (destructive, irrecoverable-by-this-script steps)
+confirm_always() {
+    local ans
+    ((${ASSUME_YES:-0})) && echo "(--yes given: this confirmation is still required)"
+    read -r -p "Type $1 to proceed: " ans
+    [[ $ans == "$1" ]] || die "not confirmed: nothing was done"
+}
+
+# usrdata_backup_guard : the stock USRDATA backup must be present and full size (restore and rootfs flash rely on it)
+usrdata_backup_guard() {
+    [[ $(stat -c %s "$BACKUP/partitions/USRDATA.bin" 2>/dev/null || echo 0) -eq $((0x32000000)) ]] \
+        || die "$BACKUP/partitions/USRDATA.bin missing or not 800 MiB: refusing"
+}
+
 arm_wait() {  # wait for the Y2 to leave the bus, then tell the human what to do
     command -v lsusb >/dev/null || die "lsusb not found (install usbutils)"
     echo "Waiting for the Y2 to leave the bus (unplug it)..."
@@ -92,13 +126,22 @@ print(f"read base {d['read_base']:#x}, write base {d['write_base']:#x}  (measure
 PY
 }
 
-# partial_warning <log> <rc> : after a failed/interrupted run, say loudly if a write was started but not finished
+# partial_warning <log> <rc> [target] : after a failed/interrupted run, say loudly if a write was started but not
+# finished. The advice depends on the target (USRDATA must never be "fixed" by restoring stock BOOTIMG).
 partial_warning() {
-    local st dn
+    local st dn t="${3:-}"
     st=$(grep -c 'WRITE STARTED' "$1" 2>/dev/null || true); dn=$(grep -c 'WRITE DONE' "$1" 2>/dev/null || true)
     if (( $2 != 0 )) && (( ${st:-0} > ${dn:-0} )); then
         echo "!!! DEVICE MAY BE PARTIALLY WRITTEN (a write was started and never finished) - see $1;" >&2
-        echo "!!! restore with: scripts/restore-stock.sh --force-unknown-current" >&2
+        case $t in
+            USRDATA)
+                echo "!!! re-run scripts/flash-rootfs.sh, or scripts/restore-stock.sh --target USRDATA" >&2
+                echo "!!! do NOT run restore-stock.sh with no target / all: that restores stock BOOTIMG, and stock Android" >&2
+                echo "!!! would then mount the damaged ext4 as /data" >&2 ;;
+            BOOTIMG|RECOVERY)
+                echo "!!! restore with: scripts/restore-stock.sh --target $t --force-unknown-current" >&2 ;;
+            *) echo "!!! restore with: scripts/restore-stock.sh --target <BOOTIMG|RECOVERY|USRDATA> --force-unknown-current (see $1)" >&2 ;;
+        esac
         return 0
     fi
     return 0

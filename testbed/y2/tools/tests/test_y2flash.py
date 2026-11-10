@@ -867,7 +867,7 @@ class FailClosedAndOrdering(Base):
         with self.assertRaises(y2.WriteFailed) as cm:
             quiet(y2.guarded_write, da, REC, REC.start, bytes(512), 0xB80000)
         self.assertNotIn("WRITE STARTED", cm.exception.output)
-        self.assertEqual(y2._WRITES, {"started": 0, "done": 0, "canary": None})
+        self.assertEqual({k: v for k, v in y2._WRITES.items() if k != "target"}, {"started": 0, "done": 0, "canary": None})
         self.assertEqual(da.events, [])
 
     def test_interrupt_during_canary_names_the_canary_address(self):
@@ -885,7 +885,7 @@ class FailClosedAndOrdering(Base):
         self.assertEqual(rc, 130)
         self.assertIn("INTERRUPTED DURING THE CANARY", out)
         self.assertIn("0x3d7f000", out)
-        self.assertIn("restore-stock.sh --force-unknown-current", out)
+        self.assertIn("restore-stock.sh --target RECOVERY --force-unknown-current", out)
 
     def test_limits_are_documented(self):
         self.assertIn("exactly +-0xb80000", y2.__doc__)
@@ -913,6 +913,286 @@ class Cli(Base):
                                   "--expect-current", "/dev/null", "--dry-run"])
         self.assertEqual(rc, 1)
         self.assertIn("refusing target", out)
+
+
+USR = y2.TARGETS["USRDATA"]
+
+
+class DiscardCurrent(Base):
+    """--discard-current (USRDATA only), evidence, size guard, reference state entries, USRDATA restore."""
+
+    def setUp(self):
+        super().setUp()
+        self.usr = rnd(0x2000000, 11)          # first 32 MiB of "stock user data": covers the canary window
+        self.fimg = rnd(0x40000, 12)           # rootfs stand-in
+
+    def uda(self, **k):
+        return FakeDa([(USR.start, self.usr), (BOOT.start, self.stock_boot), (REC.start, self.stock_rec)], **k)
+
+    def ujob(self, image=None):
+        return y2.Job(USR, self.fimg if image is None else image, None, discard=True)
+
+    def test_refused_for_bootimg_and_recovery_with_no_writes(self):
+        for t, stock in ((BOOT, self.stock_boot), (REC, self.stock_rec)):
+            with self.assertRaises(y2.Y2Error):
+                y2.Job(t, self.img, None, discard=True)
+            da = self.uda()
+            img, cal = Path(self.tmp.name) / "i.img", Path(self.tmp.name) / "cal.json"
+            img.write_bytes(self.img)
+            cal.write_text(json.dumps(good_cal()))
+            for extra in ([], ["--expect-current", str(img)]):
+                @contextlib.contextmanager
+                def fake_session(preloader, wd):
+                    yield da
+                with mock.patch.object(y2, "open_session", fake_session):
+                    rc, out = quiet(y2.main, ["write", "--target", t.name, "--image", str(img), "--discard-current",
+                                              "--calibration", str(cal), "--preloader", "x"] + extra)
+                self.assertEqual(rc, 1)
+                self.assertIn("USRDATA only", out)
+            self.assertEqual(da.events, [])
+            self.assertEqual(da.log, [])
+
+    def test_restore_discard_refused_for_other_targets(self):
+        img = Path(self.tmp.name) / "i.img"
+        img.write_bytes(self.img)
+        for t in ("BOOTIMG", "RECOVERY"):
+            rc, out = quiet(y2.main, ["restore", "--job", f"{t}={img}", "--expect", f"{t}={img}",
+                                      "--discard-current", t, "--dry-run"])
+            self.assertEqual(rc, 1)
+            self.assertIn("USRDATA only", out)
+
+    def test_discard_flow_evidence_canary_write_readback_no_full_preread(self):
+        da = self.uda()
+        res, out = self.go(da, [self.ujob()], keep_dir=self.tmp.name)
+        self.assertEqual(res[0][1], res[0][2])
+        self.assertEqual(da.device_bytes(USR.start, len(self.fimg)), self.fimg)
+        self.assertEqual(da.device_bytes(USR.start + len(self.fimg), 0x1000), self.usr[len(self.fimg):][:0x1000])
+        reads = [e[2] for e in da.events if e[0] == "read"]
+        self.assertNotIn(USR.size, reads)
+        self.assertLessEqual(max(reads), CANWIN)
+        self.assertEqual(reads[:2], [y2.EVIDENCE_LEN, CANWIN])          # evidence first
+        self.assertEqual(reads[-1], len(self.fimg))                     # full written length read back
+        c = y2.canary_addr(USR)
+        self.assertEqual([e[1] for e in da.events if e[0] == "write" and e[2] == 4096], [c + 0xB80000] * 2)
+        self.assertEqual(da.device_bytes(c, 4096), self.usr[c - USR.start:c - USR.start + 4096])   # canary undone
+        first_write = next(i for i, e in enumerate(da.events) if e[0] == "write")
+        self.assertTrue(all(e[0] == "read" for e in da.events[:first_write]))
+        self.assertIn("NOT compared", out)
+
+    def test_evidence_files_saved_private_and_correct(self):
+        da = self.uda()
+        self.go(da, [self.ujob()], keep_dir=self.tmp.name)
+        files = {f.split("-")[2]: f for f in os.listdir(self.tmp.name) if f.startswith("evidence-USRDATA")}
+        first = Path(self.tmp.name, files["first1MiB"])
+        win = Path(self.tmp.name, files["canarywindow"])
+        self.assertEqual(first.read_bytes(), self.usr[:y2.EVIDENCE_LEN])
+        c = y2.canary_addr(USR)
+        self.assertEqual(win.read_bytes(), self.usr[c - 0xB80000 - 4096 - USR.start:c + 0xB80000 + 4096 - USR.start])
+        self.assertEqual(os.stat(first).st_mode & 0o777, 0o600)
+
+    def test_evidence_needs_a_log_dir_and_nothing_is_written_without_it(self):
+        da = self.uda()
+        with self.assertRaises(y2.Y2Error):
+            self.go(da, [self.ujob()])
+        self.assertEqual(da.writes(), [])
+
+    def test_bad_canary_still_stops_a_discard_flash(self):
+        da = self.uda(write_base=0)
+        with self.assertRaises(y2.CanaryFailed):
+            self.go(da, [self.ujob()], keep_dir=self.tmp.name)
+        self.assertEqual([e for e in da.events if e[0] == "write" and e[2] == len(self.fimg)], [])
+
+    def test_readback_mismatch_detected_for_usrdata(self):
+        with self.assertRaises(y2.WriteFailed):
+            self.go(self.uda(corrupt_at=100), [self.ujob()], keep_dir=self.tmp.name)
+
+    def test_oversize_image_refused(self):
+        self.assertEqual(y2.USRDATA_USABLE, 0x31F00000)
+        with self.assertRaises(y2.Y2Error) as cm:
+            y2.Job(USR, b"\1" * (y2.USRDATA_USABLE + 512), None, discard=True)
+        self.assertIn("0x31f00000", cm.exception.args[0])
+        y2.Job(USR, b"\1" * y2.USRDATA_USABLE, None, discard=True)           # exactly the LK size is fine
+        with self.assertRaises(y2.Y2Error):
+            y2.Job(USR, b"\1" * (USR.size), None, discard=True)
+        y2.Job(USR, b"\1" * USR.size, None, discard=True, restore=True)      # the full-size backup (restore only)
+
+    def test_oversize_refused_by_cli_with_no_io(self):
+        big = Path(self.tmp.name) / "big.ext4"
+        with open(big, "wb") as f:
+            f.truncate(y2.USRDATA_USABLE + 512)
+        cal = Path(self.tmp.name) / "cal.json"
+        cal.write_text(json.dumps(good_cal()))
+        rc, out = quiet(y2.main, ["write", "--target", "USRDATA", "--image", str(big), "--discard-current",
+                                  "--calibration", str(cal), "--dry-run"])
+        self.assertEqual(rc, 1)
+        self.assertIn("larger than", out)
+
+    def test_discard_and_expected_are_mutually_exclusive(self):
+        with self.assertRaises(y2.Y2Error):
+            y2.Job(USR, self.fimg, [("x", b"")], discard=True)
+
+    def test_state_holds_a_reference_not_a_copy(self):
+        st = y2.State(os.path.join(self.tmp.name, "flash-state.json"))
+        img = Path(self.tmp.name) / "rootfs.ext4"
+        img.write_bytes(self.fimg)
+        job = y2.Job(USR, self.fimg, None, label=str(img), discard=True)
+        self.go(self.uda(), [job], keep_dir=self.tmp.name, state=st)
+        h = st.load()["history"]
+        self.assertEqual(len(h), 1)
+        e = h[0]
+        self.assertEqual((e["target"], e["status"], e["post_kind"], e["discard_current"]), ("USRDATA", "ok", "reference", True))
+        self.assertEqual((e["image_sha256"], e["image_len"], e["image_path"]), (y2.sha(self.fimg), len(self.fimg), str(img)))
+        self.assertIsNone(e["post_image"])
+        self.assertIn("first", e["evidence"])
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "flashed")))   # no 800 MiB (or any) copy
+        self.assertEqual(st.expected_paths("USRDATA"), [])
+        self.assertEqual(st.expected_paths("USRDATA", True), [])
+        self.assertEqual(st.last_entry("USRDATA")["image_sha256"], y2.sha(self.fimg))
+
+    def test_expected_paths_survive_reference_entries_among_normal_ones(self):
+        st = y2.State(os.path.join(self.tmp.name, "flash-state.json"))
+        self.go(self.uda(), [self.rec_job()], state=st)
+        self.go(self.uda(), [self.ujob()], keep_dir=self.tmp.name, state=st)
+        self.assertEqual(len(st.expected_paths("RECOVERY")), 1)
+        self.assertEqual(st.expected_paths("USRDATA", True), [])
+
+    def test_state_last_cli(self):
+        st = Path(self.tmp.name) / "s.json"
+        rc, out = quiet(y2.main, ["state-last", "--state", str(st), "--target", "BOOTIMG"])
+        self.assertEqual((rc, out.strip()), (0, "none"))
+        self.go(self.uda(), [self.boot_job()], state=y2.State(str(st)))
+        rc, out = quiet(y2.main, ["state-last", "--state", str(st), "--target", "BOOTIMG"])
+        self.assertTrue(out.startswith("ok ") and len(out.split()[1]) == 64)
+
+    def test_bootimg_flash_through_the_cli_uses_the_bootimg_canary(self):
+        d = Path(self.tmp.name)
+        img, exp, cal, log = d / "b.img", d / "stock.bin", d / "cal.json", d / "run.log"
+        img.write_bytes(rnd(0x5000, 13))
+        exp.write_bytes(self.stock_boot)
+        cal.write_text(json.dumps(good_cal(write_base=0xB80000)))
+        da = self.uda()
+
+        @contextlib.contextmanager
+        def fake_session(preloader, wd):
+            yield da
+        with mock.patch.object(y2, "open_session", fake_session):
+            rc, out = quiet(y2.main, ["write", "--target", "BOOTIMG", "--image", str(img), "--expect-current", str(exp),
+                                      "--calibration", str(cal), "--preloader", "x", "--log", str(log)])
+        self.assertEqual(rc, 0)
+        c = y2.canary_addr(BOOT)
+        self.assertEqual(c, 0x2D7F000)
+        self.assertEqual([e[1] for e in da.events if e[0] == "write" and e[2] == 4096], [c + 0xB80000] * 2)
+        self.assertEqual(da.device_bytes(BOOT.start, 0x5000), img.read_bytes())
+        self.assertEqual(dev(da, REC), self.stock_rec)
+
+    def test_restore_usrdata_writes_backup_with_discard_and_all_targets_in_order(self):
+        # backup stand-in sized to the fake: restore-mode jobs may be any size up to the full target
+        bak = rnd(0x30000, 14)
+        da = self.uda()
+        res, out = self.go(da, [y2.Job(BOOT, self.stock_boot, [("b", self.stock_boot)]),
+                                y2.Job(USR, bak, None, discard=True, restore=True)], keep_dir=self.tmp.name)
+        self.assertEqual([r[0] for r in res], ["BOOTIMG", "USRDATA"])
+        self.assertEqual(da.device_bytes(USR.start, len(bak)), bak)
+        self.assertEqual(len([e for e in da.events if e[0] == "read" and e[2] == BOOT.size]), 2)   # BOOTIMG pre-read + readback, in full
+        self.assertNotIn(USR.size, [e[2] for e in da.events if e[0] == "read"])
+
+    def test_restore_cli_force_on_usrdata_never_full_preread(self):
+        d = Path(self.tmp.name)
+        bak, cal, log = d / "USRDATA.bin", d / "cal.json", d / "r.log"
+        bak.write_bytes(rnd(0x20000, 15))
+        cal.write_text(json.dumps(good_cal(write_base=0xB80000)))
+        da = self.uda()
+
+        @contextlib.contextmanager
+        def fake_session(preloader, wd):
+            yield da
+        with mock.patch.object(y2, "open_session", fake_session):
+            rc, out = quiet(y2.main, ["restore", "--job", f"USRDATA={bak}", "--discard-current", "USRDATA",
+                                      "--calibration", str(cal), "--preloader", "x", "--log", str(log)])
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(da.device_bytes(USR.start, 0x20000), bak.read_bytes())
+        self.assertNotIn(USR.size, [e[2] for e in da.events if e[0] == "read"])
+        self.assertTrue(any(f.startswith("evidence-USRDATA") for f in os.listdir(d)))
+
+    def test_dry_run_plan_shows_discard_and_eta(self):
+        d = Path(self.tmp.name)
+        img, cal = d / "r.ext4", d / "cal.json"
+        with open(img, "wb") as f:
+            f.truncate(512 << 20)
+        cal.write_text(json.dumps(good_cal()))
+        rc, out = quiet(y2.main, ["write", "--target", "USRDATA", "--image", str(img), "--discard-current",
+                                  "--calibration", str(cal), "--dry-run"])
+        self.assertEqual(rc, 0)
+        self.assertIn("DISCARDED", out)
+        self.assertIn("write ~112 s", out)
+        self.assertIn("canary USRDATA: device 0x41380000", out)
+
+
+    def three_jobs(self):
+        return [y2.Job(BOOT, self.stock_boot, [("b", self.stock_boot)]),
+                y2.Job(REC, self.stock_rec, [("r", self.stock_rec)]), self.ujob()]
+
+    def test_all_data_evidence_read_failure_means_zero_writes(self):
+        da = self.uda()
+        real = da.read
+
+        def read(raw, n):
+            if n == y2.EVIDENCE_LEN:
+                raise y2.Y2Error("usb read failed")
+            return real(raw, n)
+        da.read = read
+        with self.assertRaises(y2.Y2Error):
+            self.go(da, self.three_jobs(), keep_dir=self.tmp.name)
+        self.assertEqual(da.writes(), [])
+        self.assertEqual(da.log, [])
+        self.assertIn(("read", BOOT.start + 0xB80000, BOOT.size), da.events)      # pre-reads had happened
+
+    def test_all_data_usrdata_canary_failure_means_no_full_write_and_canaries_undone(self):
+        da = self.uda(write_base_fn=lambda raw: 0 if raw >= USR.start + 0xB80000 else 0xB80000)
+        with self.assertRaises(y2.CanaryFailed):
+            self.go(da, self.three_jobs(), keep_dir=self.tmp.name)
+        self.assertEqual([w for w in da.writes() if w[2] > 4096], [])
+        self.assertEqual(dev(da, BOOT), self.stock_boot)
+        self.assertEqual(dev(da, REC), self.stock_rec)
+        self.assertEqual(da.device_bytes(USR.start, 0x2000000), self.usr)
+
+    def test_recovery_advice_depends_on_target(self):
+        u = y2.restore_hint("USRDATA")
+        self.assertIn("flash-rootfs.sh", u)
+        self.assertIn("--target USRDATA", u)
+        self.assertIn("Do NOT run restore-stock.sh with no target", u)
+        self.assertNotIn("refuse at the pre-read", u)
+        self.assertIn("restore-stock.sh --target BOOTIMG", y2.restore_hint("BOOTIMG"))
+        self.assertIn("--force-unknown-current", y2.restore_hint("RECOVERY"))
+        self.assertNotIn("Do NOT run restore-stock.sh", y2.restore_hint("RECOVERY"))
+        with self.assertRaises(y2.WriteFailed) as cm:
+            self.go(self.uda(corrupt_at=100), [self.ujob()], keep_dir=self.tmp.name)
+        self.assertIn("flash-rootfs.sh", cm.exception.args[0])
+        with self.assertRaises(y2.WriteFailed) as cm:
+            self.go(self.uda(corrupt_at=100), [self.boot_job()])
+        self.assertIn("--target BOOTIMG", cm.exception.args[0])
+
+    def test_interrupt_texts_depend_on_target(self):
+        d = Path(self.tmp.name)
+        img, cal, log = d / "r.img", d / "cal.json", d / "r.log"
+        img.write_bytes(self.fimg)
+        cal.write_text(json.dumps(good_cal(write_base=0xB80000)))
+
+        def run(da, extra):
+            @contextlib.contextmanager
+            def fake_session(preloader, wd):
+                yield da
+            with mock.patch.object(y2, "open_session", fake_session):
+                return quiet(y2.main, ["write", "--target", "USRDATA", "--image", str(img), "--discard-current",
+                                       "--calibration", str(cal), "--preloader", "x", "--log", str(log)])
+        rc, out = run(self.uda(interrupt_on_write=3), None)         # during the image write
+        self.assertEqual(rc, 130)
+        self.assertIn("flash-rootfs.sh", out)
+        self.assertIn("Do NOT run restore-stock.sh with no target", out)
+        rc, out = run(self.uda(interrupt_on_write=1), None)         # during the canary
+        self.assertEqual(rc, 130)
+        self.assertNotIn("refuse at the pre-read", out)
+        self.assertIn("flash-rootfs.sh", out)
 
 
 if __name__ == "__main__":
