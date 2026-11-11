@@ -4,7 +4,8 @@
  * @brief Pixel display: RGB565 window + blit, backlight.
  *
  * The model is a controller-side frame memory (ST7789-style): set a window, then stream
- * pixels into it row-major. Phase 1 panel is 320x240 landscape.
+ * pixels into it row-major. Phase 1 panel is 320x240 landscape; other HALs may report another size (the Y2 testbed
+ * is 480x360, the host simulator can be set to it with NEUPOD_DISPLAY_SIZE) and the UI adapts (docs/ui.md).
  */
 #ifndef NEUPOD_HAL_DISPLAY_H
 #define NEUPOD_HAL_DISPLAY_H
@@ -30,6 +31,9 @@ uint16_t hal_display_width(void);
 
 /** Panel height in pixels in the current orientation. */
 uint16_t hal_display_height(void);
+
+/** Short name of the display hardware for logs and the boot splash ("ST7789" on the RP2350 board, "host" in the simulator). */
+const char *hal_display_name(void);
 
 /**
  * Set the write window to the inclusive-exclusive rectangle [x, x+w) x [y, y+h).
@@ -90,7 +94,7 @@ void hal_display_backlight(uint8_t level);
 
 /**
  * Write MADCTL (orientation: MY/MX/MV; colour order: BGR bit). hal_display_width()/height()
- * keep reporting 320x240, so only values with MV set (landscape) are meaningful. The host
+ * keep reporting the panel size, so only values with MV set (landscape) are meaningful. The host
  * stores the value and emulates the BGR bit (red/blue swap) but not the mirroring bits.
  */
 void hal_display_set_madctl(uint8_t madctl);

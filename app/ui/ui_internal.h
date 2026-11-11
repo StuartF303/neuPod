@@ -10,9 +10,12 @@
 #include "lvgl.h"
 #include "ui.h"
 #include "ui_logic.h"
+#include "ui_metrics.h"
 
-#define UI_W 320
-#define UI_H 240
+/* Geometry comes from the active metrics profile (ui_metrics.h), chosen at UI init from the panel size. */
+#define UIM (ui_metrics())
+#define UI_W (UIM->w)
+#define UI_H (UIM->h)
 
 // Boot splash palette: deep blue-black ground, one cyan accent, red only for "not working".
 #define UI_COL_BG 0x0A1020
@@ -38,10 +41,17 @@
 #define UI_L_WARN 0xC77700
 #define UI_L_ERR 0xC62828
 
-#define UI_STATUS_H 24
-#define UI_CONTENT_H (UI_H - UI_STATUS_H)
-#define UI_ROW_H 24
-#define UI_ROWS_VISIBLE (UI_CONTENT_H / UI_ROW_H) // 9
+#define UI_STATUS_H (UIM->status_h)
+#define UI_CONTENT_H (UIM->content_h)
+#define UI_ROW_H (UIM->row_h)
+#define UI_ROWS_VISIBLE (UIM->rows)
+
+#ifdef NEUPOD_UI_HIRES
+/** Hosted builds only (ui_audit.c): count the visible widgets of the active screen that are cut by the panel or their container. */
+int ui_layout_audit(const char *screen);
+/** Marks the list's pool rows for the audit: rows outside the visible window are clipped away on purpose. */
+#define UI_OBJ_FLAG_POOL_ROW LV_OBJ_FLAG_USER_1
+#endif
 
 /* ---- Boot splash (ui_splash.c) -------------------------------------------------------------------- */
 

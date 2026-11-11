@@ -138,23 +138,25 @@ ui_screen_t *ui_screen_testtone_create(void) {
     t->base.destroy = tone_destroy;
     t->list = ui_list_create(t->base.root, UI_W, &(ui_list_model_t){.count = 3, .ctx = t, .get = tone_get});
     lv_obj_t *warn = ui_label(t->base.root, "Select: start / stop.  Left / Right: volume.", UI_L_DIM);
-    lv_obj_set_pos(warn, 10, 3 * UI_ROW_H + 14);
+    lv_obj_set_pos(warn, UIM->pad, 3 * UI_ROW_H + UIM->tt_y[0]);
     t->vol = ui_label(t->base.root, "", UI_L_TEXT);
-    lv_obj_set_pos(t->vol, 10, 3 * UI_ROW_H + 40);
+    lv_obj_set_pos(t->vol, UIM->pad, 3 * UI_ROW_H + UIM->tt_y[1]);
     t->level = ui_label(t->base.root, "", UI_L_DIM);
-    lv_obj_set_pos(t->level, 10, 3 * UI_ROW_H + 60);
+    lv_obj_set_pos(t->level, UIM->pad, 3 * UI_ROW_H + UIM->tt_y[2]);
     lv_obj_t *safe = ui_label(t->base.root, "Starts quiet (-30 dB). Leaving this screen stops the sound.", UI_L_FAINT);
-    lv_obj_set_width(safe, UI_W - 20);
-    lv_obj_set_pos(safe, 10, 3 * UI_ROW_H + 84);
+    lv_obj_set_width(safe, UI_W - 2 * UIM->pad);
+    lv_obj_set_pos(safe, UIM->pad, 3 * UI_ROW_H + UIM->tt_y[3]);
     tone_refresh(t, true);
     return &t->base;
 }
 
 /* ---- Now Playing ------------------------------------------------------------------------------------ */
 
-#define NP_BAR_W 292
-#define NP_VOL_X 140
-#define NP_VOL_W (320 - 14 - NP_VOL_X)
+/* Now Playing geometry is all in the metrics (np_*); the bars span the margins, the volume bar starts under the text column. */
+#define NP_BAR_W (UI_W - 2 * UIM->np_margin)
+#define NP_VOL_X (UIM->np_text_x)
+#define NP_VOL_W (UI_W - UIM->np_margin - NP_VOL_X)
+#define NP_TEXT_W NP_VOL_W /* the text column and the volume bar share their right edge */
 
 typedef struct {
     ui_screen_t base;
@@ -174,7 +176,7 @@ static void mmss(char *out, size_t n, const char *prefix, uint32_t s) {
 }
 
 /* Show the thumbnail while the art service has one for the playing track, the note otherwise. The 64 px thumbnail is scaled up by LVGL to
- * fit the 112 px box (aspect kept, the rest of the box stays the dark background). The ack tells the decoder that this screen no longer
+ * fit the art box (112 px at 320x240; aspect kept, the rest of the box stays the dark background). The ack tells the decoder that this screen no longer
  * points at the old pixels, so it may overwrite them. */
 static void np_art(np_t *p, const player_info_t *n) {
     art_view_t v;
@@ -191,7 +193,7 @@ static void np_art(np_t *p, const player_info_t *n) {
             p->art_dsc.data_size = (uint32_t)v.w * v.h * 2u;
             p->art_dsc.data = (const uint8_t *)v.px;
             lv_image_set_src(p->art_img, &p->art_dsc);
-            lv_obj_set_size(p->art_img, 112, 112);
+            lv_obj_set_size(p->art_img, UIM->np_art, UIM->np_art);
             lv_obj_invalidate(p->art_img);
             lv_obj_set_hidden(p->art_img, false);
             lv_obj_set_hidden(p->art_note, true);
@@ -338,53 +340,53 @@ ui_screen_t *ui_screen_nowplaying_create(void) {
         return NULL;
     }
     lv_obj_t *r = p->base.root;
-    lv_obj_t *art = ui_artwork(r, 14, 14, 112);
+    lv_obj_t *art = ui_artwork(r, UIM->np_margin, UIM->np_margin, UIM->np_art);
     lv_obj_clean(art); /* the ring of the shared placeholder is replaced by a note */
     p->art_img = lv_image_create(art);
-    lv_obj_set_size(p->art_img, 112, 112);
+    lv_obj_set_size(p->art_img, UIM->np_art, UIM->np_art);
     lv_image_set_inner_align(p->art_img, LV_IMAGE_ALIGN_CONTAIN);
     lv_obj_center(p->art_img);
     lv_obj_set_hidden(p->art_img, true);
     p->art_note = ui_label(art, LV_SYMBOL_AUDIO, 0xFFFFFF);
-    lv_obj_set_style_text_font(p->art_note, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_font(p->art_note, UIM->font_huge, 0);
     lv_obj_set_style_text_opa(p->art_note, LV_OPA_50, 0);
     lv_obj_center(p->art_note);
     p->title = ui_label(r, "", UI_L_TEXT);
-    lv_obj_set_style_text_font(p->title, &lv_font_montserrat_20, 0);
-    lv_obj_set_size(p->title, 166, 26);
+    lv_obj_set_style_text_font(p->title, UIM->font_large, 0);
+    lv_obj_set_size(p->title, NP_TEXT_W, UIM->np_title_h);
     lv_label_set_long_mode(p->title, LV_LABEL_LONG_DOT);
-    lv_obj_set_pos(p->title, 140, 12);
+    lv_obj_set_pos(p->title, UIM->np_text_x, UIM->np_title_y);
     p->artist = ui_label(r, "", UI_L_TEXT);
-    lv_obj_set_size(p->artist, 166, 18);
+    lv_obj_set_size(p->artist, NP_TEXT_W, UIM->line_h);
     lv_label_set_long_mode(p->artist, LV_LABEL_LONG_DOT);
-    lv_obj_set_pos(p->artist, 140, 42);
+    lv_obj_set_pos(p->artist, UIM->np_text_x, UIM->np_artist_y);
     p->album = ui_label(r, "", UI_L_DIM);
-    lv_obj_set_size(p->album, 166, 18);
+    lv_obj_set_size(p->album, NP_TEXT_W, UIM->line_h);
     lv_label_set_long_mode(p->album, LV_LABEL_LONG_DOT);
-    lv_obj_set_pos(p->album, 140, 62);
+    lv_obj_set_pos(p->album, UIM->np_text_x, UIM->np_album_y);
     p->badge = ui_label(r, "", UI_L_SEL_BOT);
-    lv_obj_set_pos(p->badge, 140, 84);
+    lv_obj_set_pos(p->badge, UIM->np_text_x, UIM->np_badge_y);
     p->state = ui_label(r, "", UI_L_DIM);
-    lv_obj_set_size(p->state, 166, 44);
+    lv_obj_set_size(p->state, NP_TEXT_W, UIM->np_state_h);
     lv_label_set_long_mode(p->state, LV_LABEL_LONG_WRAP);
-    lv_obj_set_pos(p->state, 140, 104);
+    lv_obj_set_pos(p->state, UIM->np_text_x, UIM->np_state_y);
 
-    bar_new(r, 14, 142, NP_BAR_W, 10, 0xE6E6E2);
-    p->prog_fill = bar_new(r, 14, 142, 1, 10, UI_L_SEL_BOT);
+    bar_new(r, UIM->np_margin, UIM->np_bar_y, NP_BAR_W, UIM->np_bar_h, 0xE6E6E2);
+    p->prog_fill = bar_new(r, UIM->np_margin, UIM->np_bar_y, 1, UIM->np_bar_h, UI_L_SEL_BOT);
     lv_obj_set_hidden(p->prog_fill, true);
     p->elapsed = ui_label(r, "0:00", UI_L_DIM);
-    lv_obj_set_pos(p->elapsed, 14, 158);
+    lv_obj_set_pos(p->elapsed, UIM->np_margin, UIM->np_time_y);
     p->remain = ui_label(r, "-:--", UI_L_DIM);
-    lv_obj_align(p->remain, LV_ALIGN_TOP_RIGHT, -14, 158);
+    lv_obj_align(p->remain, LV_ALIGN_TOP_RIGHT, -UIM->np_margin, UIM->np_time_y);
     p->icon = ui_label(r, "", UI_L_FAINT);
-    lv_obj_align(p->icon, LV_ALIGN_TOP_MID, 0, 158);
+    lv_obj_align(p->icon, LV_ALIGN_TOP_MID, 0, UIM->np_time_y);
 
     p->modes = ui_label(r, "", UI_L_FAINT);
-    lv_obj_align(p->modes, LV_ALIGN_TOP_MID, 46, 158);
+    lv_obj_align(p->modes, LV_ALIGN_TOP_MID, UIM->np_modes_dx, UIM->np_time_y);
     p->vol = ui_label(r, "", UI_L_TEXT);
-    lv_obj_set_pos(p->vol, 14, 184);
-    bar_new(r, NP_VOL_X, 190, NP_VOL_W, 6, 0xE6E6E2);
-    p->vol_fill = bar_new(r, NP_VOL_X, 190, 1, 6, UI_L_SEL_BOT);
+    lv_obj_set_pos(p->vol, UIM->np_margin, UIM->np_vol_y);
+    bar_new(r, NP_VOL_X, UIM->np_vol_bar_y, NP_VOL_W, UIM->np_vol_bar_h, 0xE6E6E2);
+    p->vol_fill = bar_new(r, NP_VOL_X, UIM->np_vol_bar_y, 1, UIM->np_vol_bar_h, UI_L_SEL_BOT);
     p->prog_w = -1;
     p->vol_w = -1;
     p->base.on_tick = np_tick;

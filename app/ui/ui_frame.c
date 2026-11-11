@@ -111,18 +111,18 @@ void ui_frame_init(lv_obj_t *scr) {
     lv_obj_set_style_border_side(bar, LV_BORDER_SIDE_BOTTOM, 0);
 
     g_title = ui_label(bar, "", UI_L_TEXT);
-    lv_obj_set_size(g_title, 190, 18);
+    lv_obj_set_size(g_title, UIM->title_w, UIM->title_h);
     lv_obj_set_style_text_align(g_title, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(g_title, LV_LABEL_LONG_DOT);
     lv_obj_align(g_title, LV_ALIGN_CENTER, 0, 0);
 
     g_play = ui_label(bar, play_glyph(), UI_L_DIM);
-    lv_obj_align(g_play, LV_ALIGN_LEFT_MID, 8, 0);
+    lv_obj_align(g_play, LV_ALIGN_LEFT_MID, UIM->bar_inset, 0);
     g_wifi = ui_label(bar, "", UI_L_DIM); /* Wi-Fi state: hidden when the station is off, dim while joining, green when up */
-    lv_obj_align(g_wifi, LV_ALIGN_LEFT_MID, 30, 0);
+    lv_obj_align(g_wifi, LV_ALIGN_LEFT_MID, UIM->wifi_x, 0);
 
     g_batt = ui_label(bar, LV_SYMBOL_BATTERY_EMPTY " --", UI_L_DIM);
-    lv_obj_align(g_batt, LV_ALIGN_RIGHT_MID, -8, 0);
+    lv_obj_align(g_batt, LV_ALIGN_RIGHT_MID, -UIM->bar_inset, 0);
 
     g_content = lv_obj_create(scr);
     lv_obj_remove_style_all(g_content);
@@ -346,8 +346,8 @@ void ui_feedback_step(void) {
 
 // Labels share styles instead of carrying their own: every local style property costs heap in LVGL's
 // 96 KB pool, and a list screen has dozens of labels. One font style, one style per colour in use.
-static lv_style_t g_font14;
-static bool g_font14_ready;
+static lv_style_t g_font_body; /* Montserrat 14 on the 320x240 profile */
+static bool g_font_body_ready;
 #define MAX_COLOUR_STYLES 16
 static struct {
     uint32_t colour;
@@ -371,14 +371,14 @@ static lv_style_t *colour_style(uint32_t colour) {
 }
 
 lv_obj_t *ui_label(lv_obj_t *parent, const char *text, uint32_t colour) {
-    if (!g_font14_ready) {
-        lv_style_init(&g_font14);
-        lv_style_set_text_font(&g_font14, &lv_font_montserrat_14);
-        g_font14_ready = true;
+    if (!g_font_body_ready) {
+        lv_style_init(&g_font_body);
+        lv_style_set_text_font(&g_font_body, UIM->font_body);
+        g_font_body_ready = true;
     }
     lv_obj_t *l = lv_label_create(parent);
     lv_label_set_text(l, text);
-    lv_obj_add_style(l, &g_font14, 0);
+    lv_obj_add_style(l, &g_font_body, 0);
     lv_obj_add_style(l, colour_style(colour), 0);
     return l;
 }
