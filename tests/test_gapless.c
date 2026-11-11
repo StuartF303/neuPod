@@ -698,6 +698,39 @@ static bool tail_exact(const char *path, uint32_t start) {
     return ok;
 }
 
+// Everything captured beyond the @p want frames of a stream must be silence, and not a lot of it: the sink plays the end out in whole blocks
+// and the volume ramp-down follows the end event, so how many silent frames trail depends on when the block interrupt thread is scheduled
+// (NEUPOD_TEST_JITTER delays it by up to 12 ms, a few blocks). A fixed slack (tail_exact's 1100) is too tight for that; audio there is a bug.
+// Lock held.
+static bool trailing_silence(uint32_t want) {
+    if (g_cap_frames < want || g_cap_frames > want + 8192u) {
+        printf("  length: captured %u frames, expected %u (+ silence)\n", g_cap_frames, want);
+        return false;
+    }
+    for (uint32_t k = want; k < g_cap_frames; k++) {
+        if (g_cap[2u * k] != 0 || g_cap[2u * k + 1u] != 0) {
+            printf("  audio beyond the end of the stream at output frame %u (want %u)\n", k, want);
+            return false;
+        }
+    }
+    return true;
+}
+// tail_exact() with the trailing silence judged by trailing_silence().
+static bool tail_exact_pad(const char *path, uint32_t start) {
+    const ref_t *r = ref_of(path);
+    uint32_t want = r->frames - start;
+    pthread_mutex_lock(&g_cap_mu);
+    bool ok = trailing_silence(want);
+    for (uint32_t k = 256; ok && k < g_cap_frames && k < want; k++) {
+        if (g_cap[2u * k] != r->pcm[2u * (start + k)] || g_cap[2u * k + 1u] != r->pcm[2u * (start + k) + 1u]) {
+            printf("  mismatch at output frame %u (track frame %u)\n", k, start + k);
+            ok = false;
+        }
+    }
+    pthread_mutex_unlock(&g_cap_mu);
+    return ok;
+}
+
 TEST(resume_wav_starts_on_the_exact_frame) {
     ASSERT_TRUE(play_from(P[7], 50000));
     ASSERT_EQ(50000, g_started_frame);
@@ -823,21 +856,21 @@ TEST(seek_in_a_playing_wav_lands_on_the_exact_frame) {
     bool exact;
     ASSERT_TRUE(seek_while_playing(P[7], 80000, &exact));
     ASSERT_TRUE(exact);
-    ASSERT_TRUE(tail_exact(P[7], 80000));
+    ASSERT_TRUE(tail_exact_pad(P[7], 80000));
     ASSERT_EQ(0, g_failed);
     ASSERT_EQ(0, g_ev.cmd_errors);
     ASSERT_TRUE(seek_while_playing(P[7], 3, &exact)); // backwards (the first part is played again), and the first frames of the file
     ASSERT_TRUE(exact);
-    ASSERT_TRUE(tail_exact(P[7], 3));
+    ASSERT_TRUE(tail_exact_pad(P[7], 3));
 }
 TEST(seek_in_a_playing_flac_with_a_seek_table_lands_on_the_exact_frame) {
     bool exact;
     ASSERT_TRUE(seek_while_playing(P[8], 9000, &exact)); // nearest earlier point 8192: the decoder drops 808 frames
     ASSERT_TRUE(exact);
-    ASSERT_TRUE(tail_exact(P[8], 9000));
+    ASSERT_TRUE(tail_exact_pad(P[8], 9000));
     ASSERT_TRUE(seek_while_playing(P[8], 4097, &exact)); // one past a point
     ASSERT_TRUE(exact);
-    ASSERT_TRUE(tail_exact(P[8], 4097));
+    ASSERT_TRUE(tail_exact_pad(P[8], 4097));
     ASSERT_EQ(0, g_failed);
     ASSERT_EQ(0, g_ev.cmd_errors);
 }
@@ -845,7 +878,7 @@ TEST(seek_to_the_last_frame_plays_that_frame_and_ends) {
     bool exact;
     ASSERT_TRUE(seek_while_playing(P[5], 4999, &exact)); // the 5000-frame WAV: end of track follows at once (the player never asks for the end itself)
     ASSERT_TRUE(exact);
-    ASSERT_TRUE(tail_exact(P[5], 4999));
+    ASSERT_TRUE(tail_exact_pad(P[5], 4999));
     ASSERT_EQ(1, g_ev.final_ends);
     ASSERT_EQ(0, g_failed);
 }
@@ -856,10 +889,7 @@ static bool compare_tail_then(const char *first, uint32_t from_a, const char *se
     uint32_t want = a->frames - from_a + b->frames;
     bool ok = true;
     pthread_mutex_lock(&g_cap_mu);
-    if (g_cap_frames < want || g_cap_frames > want + 1100u) {
-        printf("  length: captured %u frames, expected %u\n", g_cap_frames, want);
-        ok = false;
-    }
+    ok = trailing_silence(want);
     for (uint32_t k = 256; ok && k < want && k < g_cap_frames; k++) {
         const int32_t *r = k < a->frames - from_a ? a->pcm + 2u * (from_a + k) : b->pcm + 2u * (k - (a->frames - from_a));
         if (g_cap[2u * k] != r[0] || g_cap[2u * k + 1u] != r[1]) {
@@ -946,7 +976,7 @@ TEST(repeated_seeks_in_a_row_leave_only_the_last_one_playing) {
     usleep(20000);
     poll_events();
     ASSERT_TRUE(audio_pcm_ended_count() != e0);
-    ASSERT_TRUE(tail_exact(P[7], 90000));
+    ASSERT_TRUE(tail_exact_pad(P[7], 90000));
     ASSERT_EQ(0, g_ev.cmd_errors);
     ASSERT_EQ(0, g_ev.storms);
 }

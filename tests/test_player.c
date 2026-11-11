@@ -720,6 +720,24 @@ TEST(a_seek_that_cannot_be_requested_leaves_the_track_playing) {
     ASSERT_TRUE(player_seek(44100u * 20u));              // and a later seek works
 }
 
+TEST(a_refused_seek_keeps_the_announced_successor) {
+    // The restart cannot be requested ("Storage busy"): the old stream plays on with its successor announced, so the handoff must still
+    // move the queue (the seek must not have dropped the announcement).
+    start_seekable_album(0);
+    char path[300];
+    ASSERT_TRUE(player_next_track(path, sizeof path));
+    player_file_t n = seekable_file("second", 0);
+    player_next_announced(&n);
+    g_play_ok = false;
+    ASSERT_TRUE(player_seek(44100u * 20u));
+    g_play_ok = true;
+    g_changes++;                                         // the audio core hands over to the announced track
+    ASSERT_EQ(2, pos());
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(0, strcmp(i.tags.title, "second"));
+}
+
 TEST(skipping_during_a_seek_restart_starts_the_next_track_normally) {
     start_seekable_album(0);
     ASSERT_TRUE(player_seek(44100u * 20u));
@@ -780,6 +798,7 @@ int main(void) {
     RUN(seek_to_the_end_is_the_end_of_the_track);
     RUN(seek_to_the_end_under_repeat_one_restarts_the_track);
     RUN(a_seek_that_cannot_be_requested_leaves_the_track_playing);
+    RUN(a_refused_seek_keeps_the_announced_successor);
     RUN(skipping_during_a_seek_restart_starts_the_next_track_normally);
     RUN(a_verify_run_is_not_seekable);
     return RESULT();

@@ -453,3 +453,9 @@ add_executable(test_caps_rearm test_caps_rearm.c ${CMAKE_SOURCE_DIR}/app/runtime
 target_compile_definitions(test_caps_rearm PRIVATE NEUPOD_PLATFORM_Y2=1)
 target_include_directories(test_caps_rearm PRIVATE ${CMAKE_SOURCE_DIR}/app/include)
 add_test(NAME caps_rearm COMMAND test_caps_rearm)
+
+# ui_frame_input() routing of the transport keys (the real ui_frame.c with fakes for the player and services): consumed keys stay with the screen.
+add_executable(test_ui_frame_keys test_ui_frame_keys.c ${CMAKE_SOURCE_DIR}/app/ui/ui_metrics.c)
+target_include_directories(test_ui_frame_keys PRIVATE ${CMAKE_SOURCE_DIR}/app/ui ${CMAKE_SOURCE_DIR}/app/runtime)
+target_link_libraries(test_ui_frame_keys neupod_rt_core lvgl)
+add_test(NAME ui_frame_keys COMMAND test_ui_frame_keys)

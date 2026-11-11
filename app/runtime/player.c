@@ -551,14 +551,10 @@ bool player_seek(uint64_t frame) {
         } else {
             prev = g_seek_paused ? PLAYER_PAUSED : PLAYER_PLAYING; // a second seek before the first one started: the state to go back to is the original
         }
-        // Like a new start of the same track: an announced successor is void (the stream controller withdraws it), the ended / handoff
-        // counters are re-based, answers to earlier offers are ignored (g_gen).
-        g_next_valid = false;
-        g_offered = false;
-        g_gen++;
-        g_ended_base = audio_pcm_ended_count();
-        g_changes_seen = audio_track_change_count();
-        g_started_ms = os_tick_ms();
+        // Nothing else is reset here on purpose. service() above has just taken in the ended / handoff counts, so there is nothing to re-base;
+        // player_file_started() drops an announced successor and re-bases the handoff count when the restart is up (and an answer that arrives
+        // before that is cleared with it); and if the start cannot even be requested the old stream still plays with its successor announced,
+        // which must keep working (a_refused_seek_keeps_the_announced_successor).
         g_seeking = true;
         g_seek_to = frame;
         g_info.state = PLAYER_OPENING;
