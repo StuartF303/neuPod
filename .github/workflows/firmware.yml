@@ -92,9 +92,8 @@ jobs:
       - name: Fetch submodules
         run: git submodule update --init lib/FreeRTOS-Kernel lib/lvgl
       - name: Install toolchain
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends cmake ninja-build build-essential gcc-arm-linux-gnueabihf
+        timeout-minutes: 15
+        run: scripts/ci-apt.sh cmake ninja-build build-essential gcc-arm-linux-gnueabihf
       - name: Fetch mbed TLS (only that submodule of the Pico SDK; the secrets code needs it)
         run: |
           git clone --depth 1 --branch "$PICO_SDK_VERSION" https://github.com/raspberrypi/pico-sdk.git ~/pico-sdk

@@ -153,6 +153,7 @@ fail:
     return HAL_ENODEV;
 }
 
+const char *hal_display_name(void) { return "mtkfb"; }
 uint16_t hal_display_width(void) { return PANEL_W; }
 uint16_t hal_display_height(void) { return PANEL_H; }
 
