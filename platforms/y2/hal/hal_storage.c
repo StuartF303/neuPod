@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MPL-2.0
 /*
- * Y2 block storage: the microSD as a raw Linux block device (/dev/mmcblk1), read and written with pread/pwrite at
- * sector offsets under FatFs, the same layering as the Pico (diskio.c -> hal_storage). FatFs finds the partition
- * from the MBR (or mounts a card without one), exactly as on the Pico.
+ * Y2 block storage: the microSD as a raw Linux block device (/dev/mmcblkN, usually mmcblk1), read and written with
+ * pread/pwrite at sector offsets under FatFs, the same layering as the Pico (diskio.c -> hal_storage). FatFs finds the
+ * partition from the MBR (or mounts a card without one), exactly as on the Pico.
  *
- * SAFETY (y2_sd.h): this file can only ever open the device y2_sd_pick() returns, which is mmcblk1 or mmcblk1p<N>
- * of a disk whose sysfs type is SD, and every open re-checks the sysfs identity, the name and the node's major:minor.
+ * SAFETY (y2_sd.h): this file can only ever open the device y2_sd_pick() returns, which is mmcblk<N> or
+ * mmcblk<N>p<M> (N >= 1, on a host other than mmc0) of a disk whose sysfs type is SD. Every open re-checks the sysfs
+ * identity and the name, lstat()s the node (a real block device, not a symlink, major:minor equal to sysfs, not the
+ * eMMC's numbers) before open() and checks the opened descriptor again.
  * mmcblk0 is the internal eMMC with the boot chain and the rootfs; it is never opened. Fail closed: anything
  * doubtful means "no card".
  *
@@ -13,9 +15,9 @@
  * reopens it O_RDWR | O_SYNC (so a completed write is on the card) after validating it again; set_write_enabled(false)
  * fsyncs and goes back to O_RDONLY.
  *
- * Locking: g_fd and its flags are protected by one lock. It is taken with try-lock plus a scheduler sleep, never a blocking
- * pthread lock: under the FreeRTOS POSIX port a higher-priority task blocked natively on a lock held by a preempted
- * lower-priority task would never let that task run again. No FatFs call is made while the lock is held.
+ * Locking: g_fd and its flags are protected by one lock. It is taken with try-lock plus a scheduler sleep, never a
+ * blocking pthread lock: under the FreeRTOS POSIX port a higher-priority task blocked natively on a lock held by a
+ * preempted lower-priority task would never let that task run again. No FatFs call is made while the lock is held.
  */
 #define _POSIX_C_SOURCE 200809L
 #define _FILE_OFFSET_BITS 64
@@ -46,6 +48,7 @@ static bool g_write_fault;
 static bool g_read_only_media; // the card refused a read-write open (write-protect switch)
 static hal_card_info_t g_info;
 static y2_sd_pick_t g_pick;
+static y2_sd_snapshot_t g_snap; // identity of the card g_pick was opened for
 
 static FATFS g_fatfs;
 static bool g_mounted;
@@ -69,8 +72,9 @@ static void close_device(void) {
 }
 
 // Open the picked card device, read-only or read-write, and validate it: the sysfs identity is checked again (the same
-// disk must still be the card), the name rule once more, and the opened node must be a block device whose major:minor is
-// what sysfs says. Returns the fd, or -1 with errno-style reason in *why_errno (0 = refused by validation).
+// disk must still be the card), the name rule once more, the node is lstat()ed before the open (block device, not a
+// symlink, major:minor equal to sysfs, not the eMMC's numbers) and the opened descriptor is checked the same way.
+// Returns the fd, or -1 with errno-style reason in *why_errno (0 = refused by validation).
 // Lock held.
 static int open_validated(bool rw, y2_sd_pick_t *pick_out, int *why_errno) {
     char why[96] = {0};
@@ -87,12 +91,16 @@ static int open_validated(bool rw, y2_sd_pick_t *pick_out, int *why_errno) {
         printf("storage: REFUSED: %s\n", why);
         return -1;
     }
-    // Last check before the open, independent of the picker: the name rule is the safety property.
+    // Last checks before the open, independent of the picker: the name rule and the node are the safety property.
     if (!y2_sd_name_allowed(pick.name)) {
         printf("storage: REFUSED: '%s' is not an allowed card device\n", pick.name);
         return -1;
     }
-    int fd = open(pick.node, (rw ? (O_RDWR | O_SYNC) : O_RDONLY) | O_CLOEXEC);
+    if (!y2_sd_check_node(Y2_SYS_BLOCK, pick.node, pick.name, why, sizeof why)) {
+        printf("storage: REFUSED: %s: %s\n", pick.node, why);
+        return -1;
+    }
+    int fd = open(pick.node, (rw ? (O_RDWR | O_SYNC) : O_RDONLY) | O_CLOEXEC | O_NOFOLLOW);
     if (fd < 0) {
         *why_errno = errno;
         if (!(rw && (errno == EACCES || errno == EROFS))) {
@@ -101,14 +109,8 @@ static int open_validated(bool rw, y2_sd_pick_t *pick_out, int *why_errno) {
         return -1;
     }
     struct stat st;
-    if (fstat(fd, &st) != 0 || !S_ISBLK(st.st_mode)) {
-        printf("storage: REFUSED: %s is not a block device\n", pick.node);
-        close(fd);
-        return -1;
-    }
-    if (!y2_sd_devnum_matches(Y2_SYS_BLOCK, pick.name, major(st.st_rdev), minor(st.st_rdev))) {
-        printf("storage: REFUSED: %s is %u:%u, sysfs says that is not %s\n", pick.node, major(st.st_rdev), minor(st.st_rdev),
-               pick.name);
+    if (fstat(fd, &st) != 0 || !y2_sd_check_stat(Y2_SYS_BLOCK, pick.name, &st, why, sizeof why)) {
+        printf("storage: REFUSED: %s: %s\n", pick.node, why[0] ? why : "cannot be examined");
         close(fd);
         return -1;
     }
@@ -160,6 +162,11 @@ static bool reopen(bool rw) {
         close(fd);
         return false;
     }
+    if (y2_sd_held_state(Y2_SYS_BLOCK, Y2_DEV_DIR, &pick, &g_snap) != Y2_SD_HELD_SAME) {
+        printf("storage: the card changed, not reopening\n"); // a different card behind the same node
+        close(fd);
+        return false;
+    }
     close(g_fd);
     g_fd = fd;
     g_fd_rw = rw;
@@ -176,8 +183,15 @@ hal_storage_status_t hal_storage_init(void) {
     int fd = open_validated(false, &g_pick, &why);
     if (fd < 0) {
         unlock();
-        return why == ENODEV || why == ENOMEDIUM || why == ENXIO ? HAL_STORAGE_NO_CARD : why == 0 ? HAL_STORAGE_UNSUPPORTED : HAL_STORAGE_IO;
+        if (why == ENODEV || why == ENOMEDIUM || why == ENXIO) {
+            return HAL_STORAGE_NO_CARD;
+        }
+        return why == 0 ? HAL_STORAGE_UNSUPPORTED : HAL_STORAGE_IO;
     }
+    if (g_pick.qualifying > 1) {
+        printf("storage: %zu SD disks qualify, using the lowest: %s\n", g_pick.qualifying, g_pick.disk);
+    }
+    y2_sd_snapshot(Y2_SYS_BLOCK, g_pick.disk, &g_snap);
     off_t size = lseek(fd, 0, SEEK_END);
     if (size < (off_t)HAL_STORAGE_SECTOR_SIZE) {
         printf("storage: %s has no medium\n", g_pick.node);
@@ -215,11 +229,30 @@ bool hal_storage_ready(void) {
     return r;
 }
 
-// Is a card in the slot? A pure sysfs look (silent, no open): the hotplug poll calls it every couple of seconds, and it
-// must follow the physical card, not whether we still hold a descriptor.
+// Lock held. Is a card in the slot? A pure sysfs look (silent, no open). While a disk is held, "present" means that
+// same disk is still there and is the same card; a vanished or replaced card (a fast pull and re-insert, maybe under
+// another node) drops the descriptor so the next init opens the new one, rather than leaving the old handle failing.
+// With nothing held it means any qualifying card.
+static bool card_present_locked(void) {
+    if (g_fd < 0) {
+        y2_sd_pick_t p;
+        return y2_sd_pick(Y2_SYS_BLOCK, Y2_DEV_DIR, &p, NULL, 0) == Y2_SD_FOUND;
+    }
+    switch (y2_sd_held_state(Y2_SYS_BLOCK, Y2_DEV_DIR, &g_pick, &g_snap)) {
+    case Y2_SD_HELD_SAME: return true;
+    case Y2_SD_HELD_CHANGED: printf("storage: card replaced\n"); break;
+    case Y2_SD_HELD_GONE: break;
+    }
+    close_device();
+    return false;
+}
+
+// The hotplug poll calls this every couple of seconds; it follows the physical card, not the descriptor.
 bool hal_storage_card_present(void) {
-    y2_sd_pick_t p;
-    return y2_sd_pick(Y2_SYS_BLOCK, Y2_DEV_DIR, &p, NULL, 0) == Y2_SD_FOUND;
+    lock();
+    bool r = card_present_locked();
+    unlock();
+    return r;
 }
 
 uint32_t hal_storage_sector_count(void) { return g_sectors; }
@@ -237,10 +270,11 @@ hal_storage_status_t hal_storage_get_info(hal_card_info_t *out) {
     return ready ? HAL_STORAGE_OK : HAL_STORAGE_NOT_INIT;
 }
 
-// Lock held. A failed transfer: if the card is gone (the kernel says so, or EIO while its sysfs entry has vanished), drop the
-// descriptor. FatFs is NOT touched from here (we may be inside it); the next hal_storage_init() unmounts.
+// Lock held. A failed transfer: if the card is gone (the kernel says so, or EIO while the held disk has vanished or
+// been replaced), drop the descriptor. FatFs is NOT touched from here (we may be inside it); the next hal_storage_init()
+// unmounts.
 static hal_storage_status_t io_error(int err) {
-    bool gone = err == ENOMEDIUM || err == ENODEV || err == ENXIO || (err == EIO && !hal_storage_card_present());
+    bool gone = err == ENOMEDIUM || err == ENODEV || err == ENXIO || (err == EIO && !card_present_locked());
     if (gone) {
         printf("storage: card removed (%s)\n", strerror(err));
         close_device();
