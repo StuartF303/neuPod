@@ -40,6 +40,28 @@ typedef struct {
     art_ref_t art;                         /**< best embedded picture: a JPEG over a PNG, a front cover over other types */
 } audio_tags_t;
 
+/**
+ * The extra tags the music library index needs (docs/adr/0017-music-library-index.md). Kept out of audio_tags_t, which is copied into the
+ * player's and the track feed's statics and onto task stacks: these 232 bytes exist only while the scanner runs and supplies one
+ * (meta_set_tags_ext()). Sort tags and genre are shorter than the names: the sort key uses only a prefix of them.
+ */
+typedef struct {
+    char album_artist[64];                 /**< TPE2 / aART / ALBUMARTIST; empty if absent */
+    char genre[32];                        /**< TCON (ID3v1 "(n)" references resolved to names) / (c)gen / gnre / GENRE */
+    char sort_title[32], sort_artist[32], sort_album[32], sort_album_artist[32]; /**< TSOT TSOP TSOA TSO2 / sonm soar soal soaa / *SORT */
+    uint16_t disc;                         /**< 0 = unknown */
+    uint16_t year;                         /**< 0 = unknown */
+    bool compilation;                      /**< TCMP / cpil / COMPILATION says so */
+} audio_tags_ext_t;
+
+/**
+ * Ask the parsers (flac_parse, mp3_parse, mp4_parse) for the library tags as well: they clear @p ext at the start of each parse and fill
+ * it. NULL (the default) = not wanted, not parsed, nothing written. Like meta_set_scratch(): global, core 0 only, set around a scan.
+ */
+void meta_set_tags_ext(audio_tags_ext_t *ext);
+/** The block set with meta_set_tags_ext(), or NULL. For the parsers. */
+audio_tags_ext_t *meta_tags_ext(void);
+
 typedef enum {
     META_OK = 0,
     META_E_READ,
@@ -166,6 +188,16 @@ bool mp4_iter_seek(mp4_iter_t *it, meta_read_fn rd, void *ctx, uint32_t k);
 art_kind_t meta_art_sniff(meta_read_fn rd, void *ctx, uint64_t offset, uint32_t length);
 /** Keep @p cand in @p best if it is better: JPEG beats PNG beats other, then a front cover (type 3) beats other types; ties keep the first. */
 void meta_art_offer(art_ref_t *best, const art_ref_t *cand);
+/**
+ * Genre text for the library: resolves ID3v1 references. "(17)" and "(17)Rock" -> the name for 17 / the text after the reference
+ * (an ID3v2.3 refinement); with @p bare_number_ok a plain "17" too (ID3v2.4 TCON). Anything else is copied as is. Names cover the 80 ID3v1
+ * genres plus the Winamp extensions up to 147. @p src is UTF-8, NUL-terminated.
+ */
+void meta_genre_text(char *dst, size_t cap, const char *src, bool bare_number_ok);
+/** The year in "2019", "2019-05-04" ...: the first four digits; 0 if the text does not start with four digits. */
+uint16_t meta_year_text(const char *s);
+/** Name of ID3v1 genre @p n (0..147), or NULL. */
+const char *meta_genre_name(unsigned n);
 /** Copy @p n bytes of ISO-8859-1 / UTF-8 / UTF-16 text (ID3 encoding 0..3) to UTF-8 in @p dst (cap bytes incl. NUL). */
 void meta_text_to_utf8(char *dst, size_t cap, const uint8_t *src, size_t n, int id3_encoding);
 

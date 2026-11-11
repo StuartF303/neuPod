@@ -119,7 +119,8 @@ bool settings_dirty(void);
 /**
  * Write the image if it changed. Returns 0 when nothing needed writing or the save succeeded, otherwise an
  * nfs_err_t (never writes in RAM-only mode: returns NFS_ERR_NOT_MOUNTED). After SETTINGS_MAX_SAVE_FAILURES in a row the
- * store gives up on the card (RAM-only) until settings_attach_storage(true) is called again.
+ * store gives up on the card (RAM-only) until settings_attach_storage(true) is called again. NFS_ERR_BUSY (another task holds the nfs
+ * write scope, e.g. a library scan) is not a failure: the change stays dirty, nothing is counted, the caller retries later.
  */
 int settings_flush(void);
 #define SETTINGS_MAX_SAVE_FAILURES 3u

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 // Backend-independent parts of the portable file API: path normalisation and error names.
+#include <stdatomic.h>
 #include <string.h>
 
 #include "nfs.h"
@@ -20,6 +21,7 @@ const char *nfs_err_str(nfs_err_t e) {
     case NFS_ERR_NOT_MOUNTED: return "NOT_MOUNTED";
     case NFS_ERR_UNSUPPORTED: return "UNSUPPORTED";
     case NFS_ERR_NO_MEMORY: return "NO_MEMORY";
+    case NFS_ERR_BUSY: return "BUSY";
     }
     return "?";
 }
@@ -74,7 +76,8 @@ nfs_err_t nfs_path_normalize(const char *in, char *out, size_t cap) {
 // --- Write scope (see nfs.h) -----------------------------------------------------------------
 
 static char g_scope[NFS_PATH_MAX];
-static bool g_scope_active;
+static atomic_bool g_scope_claimed; // enter() won the race: g_scope is being (or has been) filled by that task only
+static atomic_bool g_scope_active;  // g_scope is complete and readable
 
 nfs_err_t nfs_write_scope_enter(const char *dir) {
     char norm[NFS_PATH_MAX];
@@ -82,23 +85,28 @@ nfs_err_t nfs_write_scope_enter(const char *dir) {
     if (e != NFS_OK) {
         return e;
     }
-    if (strcmp(norm, "/") == 0 || g_scope_active) {
-        return NFS_ERR_INVALID; // the whole volume is not a scope; scopes do not nest
+    if (strcmp(norm, "/") == 0) {
+        return NFS_ERR_INVALID; // the whole volume is not a scope
+    }
+    bool expected = false;
+    if (!atomic_compare_exchange_strong(&g_scope_claimed, &expected, true)) {
+        return NFS_ERR_BUSY; // scopes do not nest, and only one task can hold one
     }
     memcpy(g_scope, norm, strlen(norm) + 1);
-    g_scope_active = true;
+    atomic_store(&g_scope_active, true); // publish (release)
     return NFS_OK;
 }
 
 void nfs_write_scope_leave(void) {
-    g_scope_active = false;
+    atomic_store(&g_scope_active, false); // withdraw first, then release the claim
     g_scope[0] = '\0';
+    atomic_store(&g_scope_claimed, false);
 }
 
-bool nfs_write_scope_active(void) { return g_scope_active; }
+bool nfs_write_scope_active(void) { return atomic_load(&g_scope_active); }
 
 bool nfs_write_scope_allows(const char *path) {
-    if (!g_scope_active) {
+    if (!atomic_load(&g_scope_active)) {
         return true;
     }
     char norm[NFS_PATH_MAX];

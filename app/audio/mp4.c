@@ -133,10 +133,29 @@ static void ilst_item(pctx_t *p, const box_t *it) {
     uint8_t flags[4];
     if (n > sizeof v || p->rd(p->ctx, d.body, flags, 4) != 4 || p->rd(p->ctx, d.body + 8, v, n) != (int32_t)n) return;
     audio_tags_t *t = &p->out->tags;
+    audio_tags_ext_t *x = meta_tags_ext();
     if (it->type == FOURCC(0xA9, 'n', 'a', 'm')) meta_text_to_utf8(t->title, sizeof t->title, v, n, 3);
     else if (it->type == FOURCC(0xA9, 'A', 'R', 'T')) meta_text_to_utf8(t->artist, sizeof t->artist, v, n, 3);
     else if (it->type == FOURCC(0xA9, 'a', 'l', 'b')) meta_text_to_utf8(t->album, sizeof t->album, v, n, 3);
     else if (it->type == FOURCC('t', 'r', 'k', 'n') && n >= 4) t->track = (uint16_t)be16(v + 2);
+    else if (x != NULL && it->type == FOURCC('a', 'A', 'R', 'T')) meta_text_to_utf8(x->album_artist, sizeof x->album_artist, v, n, 3);
+    else if (x != NULL && it->type == FOURCC('s', 'o', 'n', 'm')) meta_text_to_utf8(x->sort_title, sizeof x->sort_title, v, n, 3);
+    else if (x != NULL && it->type == FOURCC('s', 'o', 'a', 'r')) meta_text_to_utf8(x->sort_artist, sizeof x->sort_artist, v, n, 3);
+    else if (x != NULL && it->type == FOURCC('s', 'o', 'a', 'l')) meta_text_to_utf8(x->sort_album, sizeof x->sort_album, v, n, 3);
+    else if (x != NULL && it->type == FOURCC('s', 'o', 'a', 'a')) meta_text_to_utf8(x->sort_album_artist, sizeof x->sort_album_artist, v, n, 3);
+    else if (x != NULL && it->type == FOURCC(0xA9, 'g', 'e', 'n')) {
+        char g[48];
+        meta_text_to_utf8(g, sizeof g, v, n, 3);
+        meta_genre_text(x->genre, sizeof x->genre, g, false);
+    } else if (x != NULL && it->type == FOURCC('g', 'n', 'r', 'e') && n >= 2) { // ID3v1 genre number + 1, 16-bit
+        const char *g = meta_genre_name(be16(v) - 1u); // (0 wraps to a huge number: NULL)
+        if (g != NULL) meta_genre_text(x->genre, sizeof x->genre, g, false);
+    } else if (x != NULL && it->type == FOURCC(0xA9, 'd', 'a', 'y')) {
+        char y[8] = {0};
+        memcpy(y, v, n < 4 ? n : 4);
+        x->year = meta_year_text(y);
+    } else if (x != NULL && it->type == FOURCC('d', 'i', 's', 'k') && n >= 4) x->disc = (uint16_t)be16(v + 2);
+    else if (x != NULL && it->type == FOURCC('c', 'p', 'i', 'l') && n >= 1) x->compilation = v[0] != 0;
 }
 
 static void walk(pctx_t *p, uint64_t pos, uint64_t end, int depth, uint32_t parent);
@@ -285,6 +304,7 @@ static bool scale_u64(uint64_t v, uint32_t mul, uint32_t div, uint64_t *out) {
 
 meta_err_t mp4_parse(meta_read_fn rd, void *ctx, uint64_t file_size, mp4_info_t *out) {
     memset(out, 0, sizeof *out);
+    if (meta_tags_ext() != NULL) memset(meta_tags_ext(), 0, sizeof(audio_tags_ext_t));
     pctx_t p = {.rd = rd, .ctx = ctx, .file_size = file_size, .out = out};
     uint8_t h[8];
     if (rd(ctx, 0, h, 8) != 8) return META_E_READ;

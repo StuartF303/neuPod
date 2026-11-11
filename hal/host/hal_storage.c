@@ -170,5 +170,7 @@ bool hal_storage_write_fault(void) { return false; }
 
 hal_storage_status_t hal_storage_mount(void) { return HAL_STORAGE_UNSUPPORTED; }
 void hal_storage_unmount(void) {}
-bool hal_storage_is_mounted(void) { return false; }
+static bool g_test_mounted;
+bool hal_storage_is_mounted(void) { return g_test_mounted; }
+void hal_host_storage_set_mounted(bool mounted) { g_test_mounted = mounted; }
 hal_fs_type_t hal_storage_fs_type(void) { return HAL_FS_NONE; }

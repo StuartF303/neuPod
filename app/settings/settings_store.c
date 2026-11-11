@@ -409,6 +409,8 @@ int settings_flush(void) {
         g_active = target;
         g_saves++;
         g_fail_streak = 0;
+    } else if (e == NFS_ERR_BUSY) {
+        g_dirty = true; /* someone else (the library scan) holds the write scope: nothing failed, try again next tick */
     } else {
         g_dirty = true;
         g_fail_total++;
