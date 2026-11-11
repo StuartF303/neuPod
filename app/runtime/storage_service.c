@@ -46,6 +46,8 @@ static bool post(req_kind_t kind, const char *path, uint32_t seq) {
     uint32_t wait = (kind == REQ_PLAY || kind == REQ_STOP || kind == REQ_VERIFY || kind == REQ_SETTINGS_LOAD) ? 50u : OS_NO_WAIT;
     return g_req_q != NULL && os_queue_send(g_req_q, &r, wait);
 }
+bool storage_service_idle(void) { return g_req_q != NULL && !os_queue_pending(g_req_q) && !nfs_write_scope_active(); }
+
 bool storage_play_request(const char *path) { return path != NULL && post(REQ_PLAY, path, 0); }
 bool storage_play_request_at(const char *path, uint32_t frame) { return path != NULL && post(REQ_PLAY, path, frame); }
 bool storage_stop_request(void) { return post(REQ_STOP, NULL, 0); }

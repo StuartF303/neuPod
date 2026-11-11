@@ -13,6 +13,19 @@
 
 #include "os.h"
 
+/* Run-time card hot-plug and orderly stop: only the Y2 has them (a Linux process with a removable card). Other targets do not
+ * compile that code at all (`#if NEUPOD_RT_HOTPLUG`, or `if (NEUPOD_RT_HOTPLUG && ...)` where the compiler drops it), so their
+ * images are unchanged. Only the y2 build, which the y2 CI job makes, compiles and links it. */
+#ifdef NEUPOD_PLATFORM_Y2
+#define NEUPOD_RT_HOTPLUG 1
+#define NEUPOD_RT_STORAGE_HOTPLUG() (rt_config()->storage_hotplug)
+#define NEUPOD_RT_STOP_REQUESTED() (rt_config()->stop_requested != NULL && rt_config()->stop_requested())
+#else
+#define NEUPOD_RT_HOTPLUG 0
+#define NEUPOD_RT_STORAGE_HOTPLUG() 0
+#define NEUPOD_RT_STOP_REQUESTED() 0
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -31,6 +44,19 @@ typedef struct {
     const char *ui_script;
     /** True where console keys are an input source (the UART testbed); the host uses its window. */
     bool console_keys;
+#if NEUPOD_RT_HOTPLUG /* Y2 only: not in the other targets' config struct (RAM) */
+    /**
+     * True where a microSD card can be inserted after boot and the HAL can notice (the Y2): while storage is unavailable the monitor
+     * polls hal_storage_card_present() and, when a card shows up, runs the storage boot check again. Never used on the RP2350.
+     */
+    bool storage_hotplug;
+    /**
+     * Optional: polled by the monitor every 100 ms. When it returns true the runtime shuts down in order (waits up to 2 s for the
+     * storage task to go idle, locks card writes, syncs and unmounts) and exits the process with status 0. The Y2's SIGTERM handler
+     * only sets the flag this reads. The program must not be killed while a card write is in flight.
+     */
+    bool (*stop_requested)(void);
+#endif
     /** Called from the UI task when a named screen is fully drawn ("splash", "home"). */
     void (*on_screen)(const char *name, void *ctx);
     /** Called from the monitor task when run_ms has elapsed. */

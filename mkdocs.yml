@@ -42,6 +42,7 @@ nav:
       - Bluetooth (BTstack, settings store): bluetooth.md
       - Wi-Fi (lwIP, clock, secrets): wifi.md
       - Wheel input widgets: ui-input.md
+      - Innioasis Y2 platform: y2.md
   - Hardware:
       - Phase 1 wiring: wiring-phase1.md
       - Click-wheel protocol: click-wheel-protocol.md

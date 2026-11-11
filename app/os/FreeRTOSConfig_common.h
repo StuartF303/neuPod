@@ -11,7 +11,9 @@
 #define configUSE_TIME_SLICING 1
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION 0
 #define configUSE_TICKLESS_IDLE 0
+#ifndef configTICK_RATE_HZ /* a platform config may pick another rate first (the Y2: 250 Hz, see below) */
 #define configTICK_RATE_HZ 1000 /* 1 ms tick; os_tick_ms() == ticks */
+#endif
 #define configMAX_PRIORITIES 8  /* 0 idle ... 7; see docs/runtime.md */
 #define configMINIMAL_STACK_SIZE 256 /* words */
 #define configMAX_TASK_NAME_LEN 12
@@ -45,7 +47,9 @@
 /* Safety nets (docs/runtime.md, "Failure handling"). Handlers live in app/runtime/panic.c. */
 #define configCHECK_FOR_STACK_OVERFLOW 2
 #define configUSE_MALLOC_FAILED_HOOK 1
+#ifndef configUSE_IDLE_HOOK /* a platform config may turn it on first (the Y2 sleeps in the idle task) */
 #define configUSE_IDLE_HOOK 0
+#endif
 #define configUSE_TICK_HOOK 0
 #define configUSE_DAEMON_TASK_STARTUP_HOOK 0
 
