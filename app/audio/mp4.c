@@ -137,6 +137,24 @@ static void ilst_item(pctx_t *p, const box_t *it) {
     else if (it->type == FOURCC(0xA9, 'A', 'R', 'T')) meta_text_to_utf8(t->artist, sizeof t->artist, v, n, 3);
     else if (it->type == FOURCC(0xA9, 'a', 'l', 'b')) meta_text_to_utf8(t->album, sizeof t->album, v, n, 3);
     else if (it->type == FOURCC('t', 'r', 'k', 'n') && n >= 4) t->track = (uint16_t)be16(v + 2);
+    else if (it->type == FOURCC('a', 'A', 'R', 'T')) meta_text_to_utf8(t->album_artist, sizeof t->album_artist, v, n, 3);
+    else if (it->type == FOURCC('s', 'o', 'n', 'm')) meta_text_to_utf8(t->sort_title, sizeof t->sort_title, v, n, 3);
+    else if (it->type == FOURCC('s', 'o', 'a', 'r')) meta_text_to_utf8(t->sort_artist, sizeof t->sort_artist, v, n, 3);
+    else if (it->type == FOURCC('s', 'o', 'a', 'l')) meta_text_to_utf8(t->sort_album, sizeof t->sort_album, v, n, 3);
+    else if (it->type == FOURCC('s', 'o', 'a', 'a')) meta_text_to_utf8(t->sort_album_artist, sizeof t->sort_album_artist, v, n, 3);
+    else if (it->type == FOURCC(0xA9, 'g', 'e', 'n')) {
+        char g[48];
+        meta_text_to_utf8(g, sizeof g, v, n, 3);
+        meta_genre_text(t->genre, sizeof t->genre, g, false);
+    } else if (it->type == FOURCC('g', 'n', 'r', 'e') && n >= 2) { // ID3v1 genre number + 1, 16-bit
+        const char *g = meta_genre_name(be16(v) - 1u); // (0 wraps to a huge number: NULL)
+        if (g != NULL) meta_genre_text(t->genre, sizeof t->genre, g, false);
+    } else if (it->type == FOURCC(0xA9, 'd', 'a', 'y')) {
+        char y[8] = {0};
+        memcpy(y, v, n < 4 ? n : 4);
+        t->year = meta_year_text(y);
+    } else if (it->type == FOURCC('d', 'i', 's', 'k') && n >= 4) t->disc = (uint16_t)be16(v + 2);
+    else if (it->type == FOURCC('c', 'p', 'i', 'l') && n >= 1) t->compilation = v[0] != 0;
 }
 
 static void walk(pctx_t *p, uint64_t pos, uint64_t end, int depth, uint32_t parent);

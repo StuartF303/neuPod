@@ -104,6 +104,15 @@ set(NEUPOD_RUNTIME_SOURCES
 set(NEUPOD_SETTINGS_SOURCES
   ${NEUPOD_APP_DIR}/settings/settings_store.c
 )
+# Music library index (docs/adr/0017-music-library-index.md): collation, scanner, reader. FatFs through ff.h (the host build's own
+# FatFs, the SD library's on the RP2350: platforms/rp2350/CMakeLists.txt adds these to its storage libraries).
+set(NEUPOD_LIBRARY_SOURCES
+  ${NEUPOD_APP_DIR}/library/lib_collate.c
+  ${NEUPOD_APP_DIR}/library/lib_store.c
+  ${NEUPOD_APP_DIR}/library/lib_esort.c
+  ${NEUPOD_APP_DIR}/library/lib_build.c
+  ${NEUPOD_APP_DIR}/library/lib_reader.c
+)
 set(NEUPOD_UI_SOURCES
   ${NEUPOD_APP_DIR}/ui/ui.c
   ${NEUPOD_APP_DIR}/ui/ui_splash.c

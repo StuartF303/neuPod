@@ -69,6 +69,13 @@ target_include_directories(neupod_settings PUBLIC ${NEUPOD_APP_DIR}/include ${NE
 target_compile_features(neupod_settings PUBLIC c_std_11)
 target_link_libraries(neupod_settings PUBLIC neupod_storage_tests neupod_crypto)
 
+# Music library index: collation, scanner (FatFs on the card or the host disk image), reader. Needs hal_storage's write lock (hal_host in tests).
+add_library(neupod_library STATIC ${NEUPOD_LIBRARY_SOURCES})
+target_include_directories(neupod_library PUBLIC ${NEUPOD_APP_DIR}/include ${NEUPOD_APP_DIR}/../hal/include)
+target_compile_features(neupod_library PUBLIC c_std_11)
+target_link_libraries(neupod_library PUBLIC neupod_fatfs neupod_rt_core)
+set_source_files_properties(${NEUPOD_LIBRARY_SOURCES} PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
 # MAX17048 / DRV2605L drivers: need hal_i2c + hal_system only.
 add_library(neupod_drivers STATIC ${NEUPOD_DRIVER_SOURCES})
 target_include_directories(neupod_drivers PUBLIC ${NEUPOD_APP_DIR}/include
