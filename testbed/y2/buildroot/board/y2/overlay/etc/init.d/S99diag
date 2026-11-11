@@ -1,0 +1,15 @@
+#!/bin/sh
+# Diagnostics at boot only if /etc/y2-diag-on-boot exists (absent by default). Output stays on tmpfs
+# (/tmp/diag.txt); copy it off by hand. Run `diag.sh` manually any time. Y2_DIAG_NO_SD=1 stops diag.sh
+# from remounting the SD read-write (post-build.sh patches that into the installed copy).
+start() {
+	[ -e /etc/y2-diag-on-boot ] || return 0
+	[ -x /usr/bin/diag.sh ] || return 0
+	( Y2_DIAG_NO_SD=1 /usr/bin/diag.sh --no-capture >/dev/null 2>&1 ) &
+}
+case "$1" in
+	start) start ;;
+	stop) : ;;
+	*) echo "Usage: $0 {start|stop}"; exit 1 ;;
+esac
+exit 0

@@ -1,0 +1,10 @@
+# y2 rootfs: busybox init. Root is already mounted rw by the y2-rescue hand-off; do not remount or fsck it.
+# All bring-up lives in /etc/init.d/S*, run in order by rcS.
+::sysinit:/etc/init.d/rcS
+
+# Login on the USB ACM serial port (waits for the gadget to create /dev/ttyGS0)
+::respawn:/usr/sbin/y2-console
+
+::ctrlaltdel:/sbin/reboot
+::shutdown:/etc/init.d/rcK
+::shutdown:/bin/umount -a -r

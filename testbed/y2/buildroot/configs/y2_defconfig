@@ -1,0 +1,86 @@
+# y2 rootfs (glibc) for the Innioasis Y2 (MT6582, stock Linux 3.4.67). Userland only; lives on USRDATA (ext4).
+# Booted via the y2-rescue initramfs hand-off (see testbed/y2/rescue/overlay/init).
+BR2_arm=y
+BR2_cortex_a7=y
+BR2_ARM_EABIHF=y
+BR2_ARM_FPU_NEON_VFPV4=y
+BR2_ARM_INSTRUCTIONS_THUMB2=y
+
+BR2_REPRODUCIBLE=y
+
+# Toolchain: glibc (for .NET), headers no newer than the stock 3.4.67 kernel, C++ for libstdc++
+BR2_TOOLCHAIN_BUILDROOT_GLIBC=y
+BR2_KERNEL_HEADERS_VERSION=y
+BR2_DEFAULT_KERNEL_VERSION="3.4.113"
+BR2_PACKAGE_HOST_LINUX_HEADERS_CUSTOM_3_4=y
+BR2_TOOLCHAIN_BUILDROOT_CXX=y
+BR2_PACKAGE_GLIBC_UTILS=y
+
+# System: busybox init, mdev (stock kernel has no devtmpfs), getty on the USB ACM port
+BR2_TARGET_GENERIC_HOSTNAME="y2"
+BR2_TARGET_GENERIC_ISSUE="neuPod y2"
+BR2_INIT_BUSYBOX=y
+BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_MDEV=y
+# No root password: the USB serial console is passwordless (same trust model as y2-rescue's telnet);
+# SSH is key-only (dropbear -s), key installed by board/y2/post-build.sh.
+BR2_TARGET_ENABLE_ROOT_LOGIN=y
+BR2_TARGET_GENERIC_ROOT_PASSWD=""
+BR2_TARGET_TZ_INFO=y
+BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_Y2_PATH)/board/y2/overlay"
+BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_Y2_PATH)/board/y2/post-build.sh"
+BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_Y2_PATH)/board/y2/post-image.sh"
+BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_Y2_PATH)/board/y2/busybox.fragment"
+
+# Packages (SHOW_OTHERS unhides less and i2c-tools)
+BR2_PACKAGE_BUSYBOX_SHOW_OTHERS=y
+BR2_PACKAGE_Y2_FBTOOL=y
+BR2_PACKAGE_DROPBEAR=y
+BR2_PACKAGE_UTIL_LINUX=y
+BR2_PACKAGE_UTIL_LINUX_BINARIES=y
+BR2_PACKAGE_E2FSPROGS=y
+BR2_PACKAGE_E2FSPROGS_RESIZE2FS=y
+BR2_PACKAGE_E2FSPROGS_DEBUGFS=y
+BR2_PACKAGE_EXFATPROGS=y
+BR2_PACKAGE_DOSFSTOOLS=y
+BR2_PACKAGE_DOSFSTOOLS_FATLABEL=y
+BR2_PACKAGE_DOSFSTOOLS_FSCK_FAT=y
+BR2_PACKAGE_DOSFSTOOLS_MKFS_FAT=y
+BR2_PACKAGE_ALSA_LIB=y
+BR2_PACKAGE_ALSA_UTILS=y
+BR2_PACKAGE_ALSA_UTILS_ALSACTL=y
+BR2_PACKAGE_ALSA_UTILS_ALSAMIXER=y
+BR2_PACKAGE_ALSA_UTILS_AMIXER=y
+BR2_PACKAGE_ALSA_UTILS_APLAY=y
+BR2_PACKAGE_ALSA_UTILS_SPEAKER_TEST=y
+BR2_PACKAGE_TINYALSA=y
+BR2_PACKAGE_TINYALSA_TOOLS=y
+BR2_PACKAGE_EVTEST=y
+BR2_PACKAGE_I2C_TOOLS=y
+BR2_PACKAGE_IW=y
+BR2_PACKAGE_WPA_SUPPLICANT=y
+BR2_PACKAGE_WPA_SUPPLICANT_NL80211=y
+BR2_PACKAGE_WPA_SUPPLICANT_CLI=y
+BR2_PACKAGE_WPA_SUPPLICANT_PASSPHRASE=y
+BR2_PACKAGE_CA_CERTIFICATES=y
+BR2_PACKAGE_TZDATA=y
+BR2_PACKAGE_ZLIB=y
+BR2_PACKAGE_OPENSSL=y
+BR2_PACKAGE_LIBOPENSSL=y
+BR2_PACKAGE_STRACE=y
+BR2_PACKAGE_HTOP=y
+BR2_PACKAGE_FILE=y
+BR2_PACKAGE_LESS=y
+BR2_PACKAGE_RSYNC=y
+# mpv with ALSA output (builds against 3.4 headers with y2-mpv-compat: DVB input off). Pulls ffmpeg, libass, libplacebo.
+BR2_PACKAGE_MPV=y
+# bluez5 / bluez-alsa deliberately absent: the stock kernel has no CONFIG_BT.
+
+# Output: ext4 image for USRDATA. LK reports 0x31f00000 usable bytes; 512 MiB stays well inside.
+BR2_TARGET_ROOTFS_EXT2=y
+BR2_TARGET_ROOTFS_EXT2_4=y
+BR2_TARGET_ROOTFS_EXT2_LABEL="y2root"
+BR2_TARGET_ROOTFS_EXT2_SIZE="512M"
+# Kernel 3.4 cannot mount metadata_csum (needs 3.6+), orphan_file (6.1+) or metadata_csum_seed (4.4+);
+# 64bit is turned off to keep the on-disk format conservative. uninit_bg (3.4-capable) replaces the
+# group-descriptor checksum role of metadata_csum. See rootfs/README.md.
+BR2_TARGET_ROOTFS_EXT2_MKFS_OPTIONS="-O ^metadata_csum,^64bit,^orphan_file,^metadata_csum_seed,uninit_bg"
