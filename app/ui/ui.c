@@ -149,16 +149,17 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
         end++;
     }
     if (strncmp(p, "wait:", 5) == 0) {
-        /* Tour only: hold the script (the step repeats every 300 ms) until the player / art service reach the state ("pause" presses Select until paused), so snapshots do
+        /* Tour only: hold the script (the step repeats every 300 ms) until the player / art service reach the state ("pause" presses Play until paused), so snapshots do
          * not depend on wall-clock timing. A wait that never ends runs into the tour's time limit and fails its snapshot count. */
         player_info_t pi;
         player_get(&pi);
         art_view_t av;
         art_view_get(&av);
         if (strncmp(p + 5, "pause", 5) == 0 && pi.state == PLAYER_PLAYING) {
-            /* Select pauses; a press that lands on a repeat-one restart is lost, so it is repeated until the player says paused */
+            /* Play / Pause pauses (Select is the seek-mode key on Now Playing); a press that lands on a repeat-one restart is lost, so it is
+             * repeated until the player says paused */
             input_event_t evs[2];
-            size_t cnt = input_events_from_key('\r', evs, 2);
+            size_t cnt = input_events_from_key('p', evs, 2);
             for (size_t i = 0; i < cnt; i++) {
                 ui_frame_input(&evs[i], now);
             }

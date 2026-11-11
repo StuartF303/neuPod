@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "ui_logic.h"
+
+#include <string.h>
+
+#include "hal_input.h"
 #include "runtime_config.h"
 
 static int32_t clamp_i32(int32_t v, int32_t lo, int32_t hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -165,3 +169,158 @@ bool ui_idle_tick(ui_idle_t *t, uint32_t now_ms, bool enabled, bool inhibit, uin
 }
 
 uint8_t ui_backlight_effective(uint8_t set_pct, bool dimmed) { return dimmed && set_pct > UI_DIM_PCT ? (uint8_t)UI_DIM_PCT : set_pct; }
+
+/* ---- Global transport keys ------------------------------------------------------------------------ */
+
+ui_key_action_t ui_global_key(uint8_t btn, bool queue_active) {
+    switch (btn) {
+    case HAL_BTN_MENU: return UI_KEY_BACK;
+    case HAL_BTN_PLAY: return UI_KEY_PAUSE;
+    case HAL_BTN_RIGHT: return queue_active ? UI_KEY_NEXT : UI_KEY_NONE;
+    case HAL_BTN_LEFT: return queue_active ? UI_KEY_PREV : UI_KEY_NONE;
+    default: return UI_KEY_NONE;
+    }
+}
+
+/* ---- Now Playing controls --------------------------------------------------------------------------- */
+
+static bool elapsed_ge(uint32_t now_ms, uint32_t since_ms, uint32_t ms) { return (uint32_t)(now_ms - since_ms) >= ms; }
+
+void ui_npc_init(ui_npc_t *c) { memset(c, 0, sizeof *c); }
+
+uint32_t ui_seek_step_s(uint64_t total_s) {
+    uint64_t s = total_s / 60u;
+    return s < 1u ? 1u : s > 30u ? 30u : (uint32_t)s;
+}
+
+uint64_t ui_npc_position(const ui_npc_t *c, const ui_npc_track_t *t) { return c->pending ? c->target : t->pos_frames; }
+
+// Move the target by @p delta_frames from where it is now (the playing position when none is pending), clamped to the track.
+static void move_target(ui_npc_t *c, const ui_npc_track_t *t, int64_t delta_frames, uint32_t now_ms) {
+    if (c->pending && c->id != t->id) {
+        c->pending = false; /* a scrub of the track before: it starts again from where this one plays */
+    }
+    int64_t base = (int64_t)ui_npc_position(c, t);
+    int64_t to = base + delta_frames;
+    if (to < 0) {
+        to = 0;
+    }
+    if (to > (int64_t)t->total_frames) {
+        to = (int64_t)t->total_frames; /* the end itself: applying it is the end of the track */
+    }
+    c->target = (uint64_t)to;
+    c->pending = true;
+    c->id = t->id;
+    c->move_ms = now_ms;
+}
+
+bool ui_npc_select(ui_npc_t *c, const ui_npc_track_t *t, uint32_t now_ms) {
+    if (c->mode == UI_WHEEL_SEEK) {
+        c->mode = UI_WHEEL_VOLUME; /* a scrub still waiting is applied by the next tick */
+        return true;
+    }
+    if (!t->seekable || t->rate == 0 || t->total_frames == 0) {
+        return false;
+    }
+    c->mode = UI_WHEEL_SEEK;
+    c->mode_ms = now_ms;
+    return true;
+}
+
+bool ui_npc_scroll(ui_npc_t *c, const ui_npc_track_t *t, int32_t steps, uint32_t now_ms) {
+    if (c->mode != UI_WHEEL_SEEK) {
+        return false;
+    }
+    c->mode_ms = now_ms;
+    if (t->seekable && t->rate != 0 && t->total_frames != 0) {
+        move_target(c, t, (int64_t)steps * ui_seek_step_s(t->total_frames / t->rate) * t->rate, now_ms);
+    }
+    return true;
+}
+
+void ui_npc_cancel_hold(ui_npc_t *c) {
+    if (c->holding) {
+        c->pending = false; /* the fast-forward was not finished by a release: nothing is applied */
+    }
+    c->hold_dir = 0;
+    c->holding = false;
+}
+
+bool ui_npc_commit_valid(const ui_npc_t *c, const ui_npc_track_t *t) { return c->pending && c->id == t->id; }
+
+void ui_npc_key_down(ui_npc_t *c, int dir, const ui_npc_track_t *t, uint32_t now_ms) {
+    ui_npc_cancel_hold(c); /* a second key while one is down: the first one's release may never be seen */
+    c->hold_id = t->id;
+    c->hold_dir = dir < 0 ? -1 : 1;
+    c->holding = false;
+    c->hold_ms = now_ms;
+    c->step_ms = now_ms;
+}
+
+uint32_t ui_npc_key_up(ui_npc_t *c, int dir, uint32_t now_ms) {
+    (void)now_ms;
+    int8_t d = dir < 0 ? -1 : 1;
+    if (c->hold_dir != d) {
+        return UI_NPC_NONE; /* its press was not seen here */
+    }
+    bool was_hold = c->holding;
+    c->hold_dir = 0;
+    c->holding = false;
+    if (!was_hold) {
+        return UI_NPC_SKIP;
+    }
+    return c->pending ? UI_NPC_COMMIT : UI_NPC_NONE;
+}
+
+uint32_t ui_npc_tick(ui_npc_t *c, const ui_npc_track_t *t, uint32_t now_ms) {
+    uint32_t ev = UI_NPC_NONE;
+    bool can = t->seekable && t->rate != 0 && t->total_frames != 0;
+    if (c->pending && c->id != t->id) {
+        c->pending = false; /* the track changed (a gapless handoff, a skip) under a scrub or a hold: it does not apply to the new one */
+    }
+    if (c->hold_dir != 0 && c->hold_id != t->id) {
+        ui_npc_cancel_hold(c); /* its release does nothing either: no skip, no seek */
+    }
+    if (c->hold_dir != 0 && !c->holding && elapsed_ge(now_ms, c->hold_ms, UI_HOLD_MS)) {
+        c->holding = true;
+        c->step_ms = now_ms;
+        if (!can) {
+            ev |= UI_NPC_UNAVAILABLE;
+        }
+    }
+    if (c->holding && can) {
+        uint32_t dt = (uint32_t)(now_ms - c->step_ms);
+        if (dt != 0) {
+            c->step_ms = now_ms;
+            move_target(c, t, (int64_t)c->hold_dir * (int64_t)((uint64_t)t->rate * UI_FF_SPEED * dt / 1000u), now_ms);
+        }
+        // The hold ends itself at the start or the end of the track (a fast-forward to the end is the end of the track) and after UI_HOLD_MAX_MS:
+        // what was reached is applied now, and the key's release (if it ever comes) does nothing.
+        if (c->pending && (c->target == 0 || c->target >= t->total_frames)) {
+            c->hold_dir = 0;
+            c->holding = false;
+            return ev | UI_NPC_COMMIT;
+        }
+    }
+    if (c->holding && elapsed_ge(now_ms, c->hold_ms, UI_HOLD_MAX_MS)) {
+        c->hold_dir = 0;
+        c->holding = false;
+        return ev | (c->pending ? UI_NPC_COMMIT : UI_NPC_NONE);
+    }
+    if (c->mode == UI_WHEEL_SEEK && (!can || (!c->holding && !c->pending && elapsed_ge(now_ms, c->mode_ms, UI_SEEK_IDLE_MS)))) {
+        c->mode = UI_WHEEL_VOLUME;
+        ev |= UI_NPC_TO_VOLUME;
+    }
+    if (c->pending && !c->holding && can && elapsed_ge(now_ms, c->move_ms, UI_SEEK_COMMIT_MS)) {
+        ev |= UI_NPC_COMMIT;
+    }
+    if (c->pending && !can) {
+        c->pending = false; /* the track changed under a scrub: drop it */
+    }
+    return ev;
+}
+
+void ui_npc_committed(ui_npc_t *c) {
+    c->pending = false;
+    c->mode_ms = c->move_ms; /* the idle clock counts from the last input, not from the commit */
+}

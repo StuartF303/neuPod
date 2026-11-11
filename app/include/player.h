@@ -54,6 +54,9 @@ typedef struct {
     uint32_t rate;
     uint64_t total_frames; /**< 0 for tones */
     uint32_t elapsed_s;    /**< from the audio core's own frame count */
+    uint64_t pos_frames;   /**< the same position in frames of the track (a seek in progress shows its target) */
+    uint32_t track_id;     /**< changes when another track plays (a start, a gapless handoff), not on a seek within the track */
+    bool seekable;         /**< playing or paused on a track player_seek() can move within (WAV, FLAC with a seek table) */
     uint32_t vol_att_db;
     bool muted;            /**< output stage mute line asserted */
     uint16_t queue_pos;    /**< file playback through a folder queue: 1-based position ("n of N"); 0 when there is no queue */
@@ -96,6 +99,14 @@ pq_shuffle_t player_shuffle(void);
 pq_repeat_t player_repeat(void);
 void player_set_shuffle(pq_shuffle_t mode);
 void player_set_repeat(pq_repeat_t mode);
+/**
+ * Move playback to PCM frame @p frame of the current track (exact for the seekable tracks, player_info_t.seekable). Done as a hard start of
+ * the same file at that frame (the resume path: a short mute, the announced gapless successor is withdrawn and offered again), so the audio
+ * core and its rings see an ordinary new stream. Paused stays paused. @p frame at or past the end of the track is the end of the track: the
+ * queue moves on as it does when a track ends by itself (repeat-one restarts it, the last track stops). False (nothing done) when the track
+ * is not seekable or nothing is playing.
+ */
+bool player_seek(uint64_t frame);
 /** Pause <-> resume. On a finished track (or a completed MD5 check) it plays the same file again from the start. Otherwise no-op. */
 void player_pause_toggle(void);
 void player_stop(void);
@@ -162,9 +173,18 @@ typedef struct {
     uint8_t md5[16];
     uint64_t file_size;
     uint64_t start_frame; /**< the stream starts at this frame of the track (resume), 0 normally */
+    bool seekable;        /**< track_info_t.seekable */
 } player_file_t;
 void player_file_started(const player_file_t *f);
 void player_file_failed(const char *msg);
+/**
+ * The stream that was playing broke (card read error mid-track). It is not the answer to a start request, so it never touches the count of
+ * outstanding starts: with a start outstanding (a seek, Next) the restart replaces the broken stream and the error is dropped; otherwise it is
+ * shown like any playback error.
+ */
+void player_stream_error(const char *msg);
+/** Start requests posted and not answered yet (player_file_started / player_file_failed). 0 when everything asked for has been answered. For tests. */
+uint32_t player_starts_outstanding(void);
 /**
  * Gapless: the path of the track after the one playing, if the audio core may be told about it ahead of time (setting on, queue
  * has a next track, a file is playing). False otherwise.

@@ -194,6 +194,35 @@ set_source_files_properties(test_art_snapshot.c PROPERTIES COMPILE_OPTIONS "${NE
 add_test(NAME art_snapshot COMMAND test_art_snapshot ${CMAKE_BINARY_DIR}/snapshots_art)
 set_tests_properties(art_snapshot PROPERTIES FIXTURES_REQUIRED art_snapshots)
 
+# Now Playing seek mode (UI-7): a fake card with an album of three silent 20 s WAVs (seekable) and one MP3 (not yet), the tour pauses a
+# track, enters seek mode, scrubs, lets the 3 s idle timeout run, then presses Select on the MP3. test_seek_snapshot checks the pixels of
+# the progress / volume bars in the snapshots at both metrics profiles (this 320x240 one and, in hosted hires builds, 480x360).
+# The WAV is a 44-byte header (printf, octal escapes: 44.1 kHz, 16 bit, stereo, 3528000 data bytes) and zeros from dd, made at configure time.
+function(neupod_seek_card NAME)
+  set(FS ${CMAKE_BINARY_DIR}/fsroot_${NAME})
+  file(MAKE_DIRECTORY "${FS}/Album" "${FS}/Other")
+  execute_process(COMMAND sh -c "printf 'RIFF\\144\\354\\065\\000WAVEfmt \\020\\000\\000\\000\\001\\000\\002\\000\\104\\254\\000\\000\\020\\261\\002\\000\\004\\000\\020\\000data\\100\\354\\065\\000' > '${FS}/Album/01.wav' && dd if=/dev/zero bs=1000 count=3528 status=none >> '${FS}/Album/01.wav' && cp '${FS}/Album/01.wav' '${FS}/Album/02.wav' && cp '${FS}/Album/01.wav' '${FS}/Album/03.wav'")
+  file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/mp3_44k_st.mp3 "${FS}/Other/track.mp3")
+  execute_process(COMMAND dd if=/dev/zero of=${CMAKE_BINARY_DIR}/disk_${NAME}.img bs=1024 count=2048 status=none)
+  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_${NAME})
+endfunction()
+add_executable(test_seek_snapshot test_seek_snapshot.c)
+set_source_files_properties(test_seek_snapshot.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+neupod_seek_card(seek)
+add_test(NAME seek_tour_reset COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/fsroot_seek/.neupod)
+set_tests_properties(seek_tour_reset PROPERTIES FIXTURES_SETUP seek_clean)
+add_test(NAME seek_tour
+  COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --tour-seek --snapshots ${CMAKE_BINARY_DIR}/snapshots_seek)
+set_tests_properties(seek_tour PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_seek;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_seek.img"
+  FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  FIXTURES_REQUIRED seek_clean
+  FIXTURES_SETUP seek_snapshots
+  TIMEOUT 120)
+add_test(NAME seek_snapshot COMMAND test_seek_snapshot ${CMAKE_BINARY_DIR}/snapshots_seek 320)
+set_tests_properties(seek_snapshot PROPERTIES FIXTURES_REQUIRED seek_snapshots)
+
 if(NEUPOD_UI_HIRES) # (the layout audit and the 480x360 profile exist only in hosted builds with the hires UI)
 # ---- 480x360 (the Y2 testbed panel, ADR-0018): the same tours on a host display set to 480x360 with the layout audit on --------------
 # NEUPOD_DISPLAY_SIZE makes the host HAL a 480x360 panel; the UI then selects its 1.5x metrics profile. NEUPOD_UI_AUDIT=1 makes every
@@ -250,6 +279,22 @@ set_tests_properties(hires_art_tour PROPERTIES
   FIXTURES_REQUIRED hires_art_clean
   FIXTURES_SETUP hires_art_snapshots
   TIMEOUT 120)
+# Seek mode at 480x360 (same tour, own card, the layout audit on every snapshot).
+neupod_seek_card(hires_seek)
+add_test(NAME hires_seek_tour_reset COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/fsroot_hires_seek/.neupod)
+set_tests_properties(hires_seek_tour_reset PROPERTIES FIXTURES_SETUP hires_seek_clean)
+add_test(NAME hires_seek_tour
+  COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --tour-seek --snapshots ${CMAKE_BINARY_DIR}/snapshots_hires_seek)
+set_tests_properties(hires_seek_tour PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_DISPLAY_SIZE=480x360;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_hires_seek;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_hires_seek.img"
+  PASS_REGULAR_EXPRESSION "${HIRES_PASS}"
+  FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  FIXTURES_REQUIRED hires_seek_clean
+  FIXTURES_SETUP hires_seek_snapshots
+  TIMEOUT 120)
+add_test(NAME hires_seek_snapshot COMMAND test_seek_snapshot ${CMAKE_BINARY_DIR}/snapshots_hires_seek 480)
+set_tests_properties(hires_seek_snapshot PROPERTIES FIXTURES_REQUIRED hires_seek_snapshots)
 add_executable(test_art_snapshot_hires test_art_snapshot_hires.c)
 set_source_files_properties(test_art_snapshot_hires.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 add_test(NAME hires_art_snapshot COMMAND test_art_snapshot_hires ${CMAKE_BINARY_DIR}/snapshots_hires_art)
@@ -423,3 +468,9 @@ target_link_libraries(test_library_big neupod_library neupod_storage_tests neupo
 add_test(NAME library_big COMMAND test_library_big)
 set_tests_properties(library_big PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} LABELS slow TIMEOUT 900)
 set_source_files_properties(test_library_big.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+# ui_frame_input() routing of the transport keys (the real ui_frame.c with fakes for the player and services): consumed keys stay with the screen.
+add_executable(test_ui_frame_keys test_ui_frame_keys.c ${CMAKE_SOURCE_DIR}/app/ui/ui_metrics.c)
+target_include_directories(test_ui_frame_keys PRIVATE ${CMAKE_SOURCE_DIR}/app/ui ${CMAKE_SOURCE_DIR}/app/runtime)
+target_link_libraries(test_ui_frame_keys neupod_rt_core lvgl)
+add_test(NAME ui_frame_keys COMMAND test_ui_frame_keys)

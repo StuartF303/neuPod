@@ -168,7 +168,7 @@ static void stream_seek(uint64_t off) {
 static void stream_error(const char *msg) {
     track_stream_stop();
     (void)audio_stop();
-    g_ops->failed(msg);
+    (g_ops->stream_failed != NULL ? g_ops->stream_failed : g_ops->failed)(msg);
 }
 
 // The current track is completely fed. With a successor announced its bytes follow at once; otherwise this was the last one.
