@@ -10,41 +10,25 @@ concurrency:
   group: firmware-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  PICO_SDK_VERSION: "2.3.1"
+# rp2350, host and y2 run in the toolchain image built from .github/ci/Dockerfile (Pico SDK included, PICO_SDK_PATH set).
+# To bump it: merge a Dockerfile change, copy the digest from the ci-image run summary into the three image: lines.
 
 jobs:
   rp2350:
     runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/stuartf303/neupod-ci@sha256:c0c5bbfc35037dc78a9897cf5104690fe53ab83d539054c5b7696217e2334f46 # 2026-11-11 first published image
     steps:
       - uses: actions/checkout@v7
       # Explicit, non-recursive: FreeRTOS-Kernel's own nested submodules (community ports) are not needed.
       - name: Fetch submodules
         run: git submodule update --init lib/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico lib/FreeRTOS-Kernel lib/lvgl
 
-      - name: Install toolchain
-        timeout-minutes: 15
-        run: |
-          scripts/ci-apt.sh cmake ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi \
-            libstdc++-arm-none-eabi-newlib build-essential python3
-
-      - name: Cache Pico SDK
-        id: pico-sdk-cache
-        uses: actions/cache@v6
-        with:
-          path: ~/pico-sdk
-          key: pico-sdk-${{ env.PICO_SDK_VERSION }}
-
-      - name: Fetch Pico SDK
-        if: steps.pico-sdk-cache.outputs.cache-hit != 'true'
-        run: |
-          git clone --depth 1 --branch "$PICO_SDK_VERSION" \
-            https://github.com/raspberrypi/pico-sdk.git ~/pico-sdk
-          git -C ~/pico-sdk submodule update --init --depth 1
+      - name: Toolchain versions
+        run: cat /etc/neupod-ci-versions
 
       - name: Build
         run: |
-          export PICO_SDK_PATH=$HOME/pico-sdk
           scripts/build.sh rp2350 --clean -- -DNEUPOD_REQUIRE_CRYPTO=ON
 
       - uses: actions/upload-artifact@v7
@@ -59,48 +43,40 @@ jobs:
       # Same script and flags as the Release build; after the upload so the artifact stays the Release image.
       - name: Build (Debug, core-1 closure check)
         run: |
-          export PICO_SDK_PATH=$HOME/pico-sdk
           scripts/build.sh rp2350 --clean -- -DNEUPOD_REQUIRE_CRYPTO=ON -DCMAKE_BUILD_TYPE=Debug
 
   host:
     runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/stuartf303/neupod-ci@sha256:c0c5bbfc35037dc78a9897cf5104690fe53ab83d539054c5b7696217e2334f46 # 2026-11-11 first published image
     steps:
       - uses: actions/checkout@v7
       - name: Fetch submodules
         run: git submodule update --init lib/FreeRTOS-Kernel lib/lvgl
-      - name: Install dependencies
-        timeout-minutes: 15
-        run: scripts/ci-apt.sh cmake ninja-build build-essential libsdl2-dev
-      - name: Fetch mbed TLS (only that submodule of the Pico SDK; the secrets code and its tests need it)
-        run: |
-          git clone --depth 1 --branch "$PICO_SDK_VERSION" https://github.com/raspberrypi/pico-sdk.git ~/pico-sdk
-          git -C ~/pico-sdk submodule update --init --depth 1 lib/mbedtls
+      - name: Toolchain versions
+        run: cat /etc/neupod-ci-versions
       - name: Build
         run: |
-          export PICO_SDK_PATH=$HOME/pico-sdk
           scripts/build.sh host --clean -- -DNEUPOD_REQUIRE_CRYPTO=ON
       - name: Test
         run: ctest --test-dir build/host --output-on-failure -j3
 
   # Compile check of the Innioasis Y2 target (docs/y2.md). The device binary is built with the Buildroot toolchain from the
-  # rootfs; CI cannot have that, so it cross-builds with Ubuntu's armhf gcc (a few seconds of apt) and only checks that the
+  # rootfs; CI cannot have that, so it cross-builds with Ubuntu's armhf gcc and only checks that the
   # result is a 32-bit ARM hard-float executable. The Y2's portable logic is unit-tested by the host job (ctest -R y2_).
   y2:
     runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/stuartf303/neupod-ci@sha256:c0c5bbfc35037dc78a9897cf5104690fe53ab83d539054c5b7696217e2334f46 # 2026-11-11 first published image
     steps:
       - uses: actions/checkout@v7
       - name: Fetch submodules
         run: git submodule update --init lib/FreeRTOS-Kernel lib/lvgl
-      - name: Install toolchain
-        timeout-minutes: 15
-        run: scripts/ci-apt.sh cmake ninja-build build-essential gcc-arm-linux-gnueabihf libc6-dev-armhf-cross
-      - name: Fetch mbed TLS (only that submodule of the Pico SDK; the secrets code needs it)
-        run: |
-          git clone --depth 1 --branch "$PICO_SDK_VERSION" https://github.com/raspberrypi/pico-sdk.git ~/pico-sdk
-          git -C ~/pico-sdk submodule update --init --depth 1 lib/mbedtls
+      - name: Toolchain versions
+        run: cat /etc/neupod-ci-versions
       - name: Cross-build
         run: |
-          export PICO_SDK_PATH=$HOME/pico-sdk NEUPOD_Y2_TOOLCHAIN=/usr NEUPOD_Y2_TRIPLE=arm-linux-gnueabihf
+          export NEUPOD_Y2_TOOLCHAIN=/usr NEUPOD_Y2_TRIPLE=arm-linux-gnueabihf
           scripts/build.sh y2 --clean -- -DCMAKE_BUILD_TYPE=Release -DNEUPOD_REQUIRE_CRYPTO=ON
       - name: Check the result is an armhf executable
         run: |
