@@ -182,7 +182,7 @@ typedef struct {
 #define NP_COL_TRACK 0xE6E6E2
 
 static ui_npc_track_t np_track(const player_info_t *n) {
-    return (ui_npc_track_t){.seekable = n->seekable, .pos_frames = n->pos_frames, .total_frames = n->total_frames, .rate = n->rate};
+    return (ui_npc_track_t){.seekable = n->seekable, .pos_frames = n->pos_frames, .total_frames = n->total_frames, .rate = n->rate, .id = n->track_id};
 }
 
 static void np_notice(np_t *p, const char *text) {
@@ -344,6 +344,13 @@ static void np_update(np_t *p) {
 
 /* Apply the scrub target: one restart of the track at that frame (player_seek). */
 static void np_commit(np_t *p) {
+    player_get(&p->info);
+    ui_npc_track_t trk = np_track(&p->info);
+    if (!ui_npc_commit_valid(&p->ctl, &trk)) { /* the scrub was made on another track (a handoff or a skip since): drop it */
+        ui_npc_committed(&p->ctl);
+        np_update(p);
+        return;
+    }
     uint64_t target = p->ctl.target;
     if (!player_seek(target)) {
         np_notice(p, "Seek not available"); /* the track changed under the scrub */
@@ -380,6 +387,7 @@ static void np_tick(ui_screen_t *s) {
 
 static void np_scroll(ui_screen_t *s, int32_t steps) {
     np_t *p = (np_t *)s;
+    ui_npc_cancel_hold(&p->ctl); /* the wheel moved while a key was down: that key's release may never be seen */
     player_get(&p->info); /* a scrub starts from the position as it is now */
     ui_npc_track_t trk = np_track(&p->info);
     if (!ui_npc_scroll(&p->ctl, &trk, steps, os_tick_ms())) {
@@ -390,6 +398,9 @@ static void np_scroll(ui_screen_t *s, int32_t steps) {
 
 static bool np_button(ui_screen_t *s, uint8_t btn) {
     np_t *p = (np_t *)s;
+    if (btn != HAL_BTN_RIGHT && btn != HAL_BTN_LEFT) {
+        ui_npc_cancel_hold(&p->ctl); /* another key while Left / Right is down */
+    }
     if (btn == HAL_BTN_SELECT) { /* wheel mode: volume <-> seek (pause is the Play button, which works on every screen) */
         player_get(&p->info);
         ui_npc_track_t trk = np_track(&p->info);
@@ -407,10 +418,19 @@ static bool np_button(ui_screen_t *s, uint8_t btn) {
     if (btn == HAL_BTN_RIGHT || btn == HAL_BTN_LEFT) {
         /* A short press skips (on release, so that a hold can be a fast-forward / rewind instead); a hold of UI_HOLD_MS scrubs. */
         player_get(&p->info);
-        ui_npc_key_down(&p->ctl, btn == HAL_BTN_RIGHT ? 1 : -1, os_tick_ms());
+        ui_npc_track_t trk = np_track(&p->info);
+        ui_npc_key_down(&p->ctl, btn == HAL_BTN_RIGHT ? 1 : -1, &trk, os_tick_ms());
         return true;
     }
     return false; // Menu = back; playback continues
+}
+
+/* Another screen was pushed over this one: its key releases will not arrive here, so a hold or a scrub in progress is dropped. */
+static void np_suspend(ui_screen_t *s) {
+    np_t *p = (np_t *)s;
+    ui_npc_cancel_hold(&p->ctl);
+    p->ctl.pending = false;
+    p->ctl.mode = UI_WHEEL_VOLUME;
 }
 
 static void np_button_up(ui_screen_t *s, uint8_t btn) {
@@ -490,6 +510,7 @@ ui_screen_t *ui_screen_nowplaying_create(void) {
     p->base.on_scroll = np_scroll;
     p->base.on_button = np_button;
     p->base.on_button_up = np_button_up;
+    p->base.suspend = np_suspend;
     ui_npc_init(&p->ctl);
     np_tick(&p->base);
     return &p->base;

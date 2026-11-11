@@ -49,8 +49,17 @@ static uint32_t g_rs_periodic_ms; // time of the last periodic attempt
 // Seek (player_seek): the same file is restarted at a frame. The state stays OPENING until the storage task reports the start; the UI is
 // handed the state from before the seek and the target as the position meanwhile.
 static bool g_seeking;
+// Start requests posted to the storage task that have not been answered yet (player_file_started() or player_file_failed()). The storage task
+// answers every REQ_PLAY / REQ_VERIFY exactly once and in order, so the answer that belongs to the LAST request is the one that leaves this at 0:
+// the earlier ones (a seek followed by another seek, Next, or a seek to the end) describe a stream that has already been replaced and are dropped.
+// (Matching on path and frame was the alternative: it cannot tell two starts of the same file apart when the frame is the same, and a resume
+// start of an MP3 lands on a different frame than the one asked for.)
+static uint32_t g_starts_out;
+// Identifies the track being played: moves on a new track (any start, a gapless handoff), not on a seek within it. The UI ties a scrub to it.
+static uint32_t g_track_id;
 static bool g_seek_paused;        // the seek was made while paused: the restarted track stays paused
 static uint64_t g_seek_to;
+static resume_state_t g_rs_tmp;    // scratch for the record written when a seek's restart is up
 static output_path_t g_out_path;  // see player.h
 static bool g_hp_at_boot;
 
@@ -153,6 +162,7 @@ static void reset_info(player_src_t src, player_state_t state, const char *name)
     g_resume_boot = false;
     g_resume_play = false;
     g_seeking = false;
+    g_track_id++;
     g_gen++;
     snprintf(g_info.name, sizeof g_info.name, "%s", name);
     g_started_ms = os_tick_ms();
@@ -255,10 +265,18 @@ static void run_action(const action_t *a) {
         storage_stop_request();
         (void)audio_stop();
     }
+    if (a->start) {
+        lock();
+        g_starts_out++; // before the request is posted: the answer can come at once
+        unlock();
+    }
     if (a->start && !(a->frame != 0 ? storage_play_request_at(a->path, a->frame) : storage_play_request(a->path))) {
         lock();
         if (a->seek_prev != PLAYER_IDLE && g_seeking && g_gen == a->gen) {
             g_seeking = false; // the old stream is untouched and still plays: nothing to report
+            if (g_starts_out > 0) {
+                g_starts_out--;
+            }
             g_info.state = a->seek_prev;
             unlock();
             return;
@@ -295,6 +313,7 @@ static void apply_next(void) {
         return;
     }
     g_next_valid = false;
+    g_track_id++;
     pq_move_t mv = pq_commit(&g_q, g_next_entry);
     if (mv == PQ_END) {
         return;
@@ -404,6 +423,7 @@ void player_get(player_info_t *out) {
     if (stop_feed) {
         g_error_stopped = true;
     }
+    g_info.track_id = g_track_id;
     g_info.pos_frames = have && g_info.rate != 0 && g_info.src == PLAYER_SRC_FILE ? g_base_frames + (uint64_t)st.pcm_frames : 0;
     g_info.queue_len = g_info.src == PLAYER_SRC_FILE ? g_q.count : 0;
     g_info.queue_pos = g_info.queue_len != 0 ? (uint16_t)(g_q.pos + 1u) : 0;
@@ -450,6 +470,7 @@ void player_play_file(const char *path, const char *name) {
     g_ended_base = audio_pcm_ended_count();
     g_changes_seen = audio_track_change_count();
     printf("player: track 1/1 '%s' (start)\n", name);
+    g_starts_out++;
     unlock();
     if (!storage_play_request(path)) {
         player_file_failed("Storage busy, try again");
@@ -551,10 +572,10 @@ bool player_seek(uint64_t frame) {
         } else {
             prev = g_seek_paused ? PLAYER_PAUSED : PLAYER_PLAYING; // a second seek before the first one started: the state to go back to is the original
         }
-        // Nothing else is reset here on purpose. service() above has just taken in the ended / handoff counts, so there is nothing to re-base;
-        // player_file_started() drops an announced successor and re-bases the handoff count when the restart is up (and an answer that arrives
-        // before that is cleared with it); and if the start cannot even be requested the old stream still plays with its successor announced,
-        // which must keep working (a_refused_seek_keeps_the_announced_successor).
+        // Nothing is reset here on purpose. service() above has just taken in the ended / handoff counts; player_file_started() re-bases both
+        // when the restart is up (the old stream's ramp-down can still end or cross a boundary in between) and drops an announced successor. If the
+        // start cannot even be requested the old stream still plays with its successor announced, which must keep working
+        // (a_refused_seek_keeps_the_announced_successor).
         g_seeking = true;
         g_seek_to = frame;
         g_info.state = PLAYER_OPENING;
@@ -608,6 +629,7 @@ void player_verify_file(const char *path, const char *name) {
     snprintf(g_path, sizeof g_path, "%s", path);
     reset_info(PLAYER_SRC_FILE, PLAYER_OPENING, name);
     g_ended_base = audio_pcm_ended_count();
+    g_starts_out++;
     unlock();
     if (!storage_verify_request(path)) {
         player_file_failed("Storage busy, try again");
@@ -724,7 +746,12 @@ void player_restore_volume(uint32_t att_db) {
 }
 
 void player_file_started(const player_file_t *f) {
+    bool save = false;
     lock();
+    if (g_starts_out > 0 && --g_starts_out > 0) {
+        unlock(); // the answer to a start that a later one has replaced
+        return;
+    }
     if (g_info.src == PLAYER_SRC_FILE && g_info.state == PLAYER_OPENING) {
         g_info.state = f->verify ? PLAYER_VERIFYING : PLAYER_PLAYING;
         if (g_seeking) { // the restart at the target: put the transport back as it was before
@@ -735,6 +762,7 @@ void player_file_started(const player_file_t *f) {
         // The audio core has flushed and restarted: handoffs counted until now (the old track's ramp-down could still have crossed a
         // boundary) are not ours.
         g_changes_seen = audio_track_change_count();
+        g_ended_base = audio_pcm_ended_count(); // ... and so is an end the old stream reported while it was being replaced
         apply_file(f);
         if (g_resume_boot && !g_resume_play && g_info.state == PLAYER_PLAYING) {
             // Boot resume: nothing has been fed yet, so pausing now keeps the track silent until the user presses play.
@@ -744,14 +772,31 @@ void player_file_started(const player_file_t *f) {
         if (g_seeking && g_info.state == PLAYER_PAUSED) {
             (void)audio_pause(true); // nothing has been fed yet: the restarted track stays silent
         }
+        if (g_seeking) { // the seek is done: the new position is what a power cut should resume at (once per seek, not per scrub step)
+            audio_stats_t none;
+            memset(&none, 0, sizeof none); // the restarted stream has played nothing yet: the position is its start frame
+            save = rs_snapshot(&g_rs_tmp, true, &none);
+            if (save) {
+                rs_queue(&g_rs_tmp, RESUME_EVENT);
+            }
+        }
         g_seeking = false;
         g_resume_boot = false; // the boot resume is open (paused or playing): later failures are ordinary ones
     }
     unlock();
+    if (save) {
+        rs_flush();
+    }
 }
 
 void player_file_failed(const char *msg) {
     lock();
+    if (g_starts_out > 0 && --g_starts_out > 0) {
+        unlock(); // a start that a later one has replaced failed: the later one decides
+        printf("player: %s (superseded start)\n", msg);
+        return;
+    }
+    g_seeking = false;
     if (g_resume_boot && g_info.src == PLAYER_SRC_FILE) {
         // The boot resume could not start (file unreadable): drop it quietly instead of greeting the user with an error.
         reset_info(PLAYER_SRC_NONE, PLAYER_IDLE, "");

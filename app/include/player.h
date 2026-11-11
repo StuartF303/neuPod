@@ -55,6 +55,7 @@ typedef struct {
     uint64_t total_frames; /**< 0 for tones */
     uint32_t elapsed_s;    /**< from the audio core's own frame count */
     uint64_t pos_frames;   /**< the same position in frames of the track (a seek in progress shows its target) */
+    uint32_t track_id;     /**< changes when another track plays (a start, a gapless handoff), not on a seek within the track */
     bool seekable;         /**< playing or paused on a track player_seek() can move within (WAV, FLAC with a seek table) */
     uint32_t vol_att_db;
     bool muted;            /**< output stage mute line asserted */

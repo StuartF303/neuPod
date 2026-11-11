@@ -389,11 +389,11 @@ TEST(seek_mode_ends_when_the_track_cannot_seek_any_more) {
 TEST(short_press_skips_on_release) {
     ui_npc_t c;
     ui_npc_init(&c);
-    ui_npc_key_down(&c, 1, 1000);
+    ui_npc_key_down(&c, 1, &k_wav, 1000);
     ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, 1000 + UI_HOLD_MS - 1));
     ASSERT_EQ(UI_NPC_SKIP, ui_npc_key_up(&c, 1, 1000 + UI_HOLD_MS - 1));
     ASSERT_EQ(UI_NPC_NONE, ui_npc_key_up(&c, 1, 1900)); /* a release without a press here does nothing */
-    ui_npc_key_down(&c, -1, 3000);
+    ui_npc_key_down(&c, -1, &k_wav, 3000);
     ASSERT_EQ(UI_NPC_NONE, ui_npc_key_up(&c, 1, 3010)); /* the other key */
     ASSERT_EQ(UI_NPC_SKIP, ui_npc_key_up(&c, -1, 3020));
 }
@@ -401,7 +401,7 @@ TEST(short_press_skips_on_release) {
 TEST(hold_right_fast_forwards_and_commits_on_release) {
     ui_npc_t c;
     ui_npc_init(&c);
-    ui_npc_key_down(&c, 1, 1000);
+    ui_npc_key_down(&c, 1, &k_wav, 1000);
     ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, 1000 + UI_HOLD_MS)); /* the hold starts: no movement yet */
     ASSERT_TRUE(c.holding);
     ASSERT_FALSE(c.pending);
@@ -419,19 +419,19 @@ TEST(hold_right_fast_forwards_and_commits_on_release) {
 TEST(hold_left_rewinds_and_stops_at_the_start) {
     ui_npc_t c;
     ui_npc_init(&c);
-    ui_npc_key_down(&c, -1, 0);
+    ui_npc_key_down(&c, -1, &k_wav, 0);
     (void)ui_npc_tick(&c, &k_wav, UI_HOLD_MS);
     (void)ui_npc_tick(&c, &k_wav, UI_HOLD_MS + 2000);
     ASSERT_EQ((60u - 2u * UI_FF_SPEED) * 44100u, c.target);
-    (void)ui_npc_tick(&c, &k_wav, UI_HOLD_MS + 60000);
+    ASSERT_EQ(UI_NPC_COMMIT, ui_npc_tick(&c, &k_wav, UI_HOLD_MS + 60000)); /* the start of the track: applied, the hold is over */
     ASSERT_EQ(0, c.target);
-    ASSERT_EQ(UI_NPC_COMMIT, ui_npc_key_up(&c, -1, UI_HOLD_MS + 60001));
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_key_up(&c, -1, UI_HOLD_MS + 60001));
 }
 
 TEST(hold_on_a_track_that_cannot_seek_says_so_and_does_not_skip) {
     ui_npc_t c;
     ui_npc_init(&c);
-    ui_npc_key_down(&c, 1, 0);
+    ui_npc_key_down(&c, 1, &k_wav, 0);
     ASSERT_EQ(UI_NPC_UNAVAILABLE, ui_npc_tick(&c, &k_mp3, UI_HOLD_MS));
     ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_mp3, UI_HOLD_MS + 500)); /* once */
     ASSERT_FALSE(c.pending);
@@ -446,6 +446,86 @@ TEST(seek_timers_survive_the_tick_wrap) {
     ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, 1, t0 + 10u));
     ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, t0 + 10u + UI_SEEK_COMMIT_MS - 1u));
     ASSERT_EQ(UI_NPC_COMMIT, ui_npc_tick(&c, &k_wav, t0 + 10u + UI_SEEK_COMMIT_MS)); /* across 2^32 */
+}
+
+static ui_npc_track_t with_id(ui_npc_track_t t, uint32_t id) {
+    t.id = id;
+    return t;
+}
+
+TEST(a_hold_through_a_track_change_does_not_seek_or_skip_the_new_track) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    ui_npc_track_t a = with_id(k_wav, 1), b = with_id(k_wav, 2);
+    ui_npc_key_down(&c, 1, &a, 1000);
+    (void)ui_npc_tick(&c, &a, 1000 + UI_HOLD_MS);
+    (void)ui_npc_tick(&c, &a, 1000 + UI_HOLD_MS + 2000);
+    ASSERT_TRUE(c.pending);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &b, 1000 + UI_HOLD_MS + 2100)); /* the gapless handoff happened */
+    ASSERT_FALSE(c.pending);
+    ASSERT_FALSE(c.holding);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_key_up(&c, 1, 1000 + UI_HOLD_MS + 2200)); /* neither a commit nor a skip */
+    ASSERT_FALSE(ui_npc_commit_valid(&c, &b));
+}
+
+TEST(a_scrub_made_on_another_track_is_not_applied) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    ui_npc_track_t a = with_id(k_wav, 1), b = with_id(k_wav, 2);
+    ASSERT_TRUE(ui_npc_select(&c, &a, 0));
+    ASSERT_TRUE(ui_npc_scroll(&c, &a, 5, 10));
+    ASSERT_TRUE(ui_npc_commit_valid(&c, &a));
+    ASSERT_FALSE(ui_npc_commit_valid(&c, &b)); /* what np_commit asks just before it seeks */
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &b, 20)); /* the tick drops it before the commit delay */
+    ASSERT_FALSE(c.pending);
+    ASSERT_TRUE(ui_npc_scroll(&c, &b, 1, 30)); /* a new scrub starts from the new track's position, not the old target */
+    ASSERT_EQ(b.pos_frames + 4u * 44100u, c.target);
+    ASSERT_EQ(2, c.id);
+}
+
+TEST(another_key_or_the_wheel_drops_a_hold_whose_release_may_be_lost) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    ui_npc_key_down(&c, 1, &k_wav, 0);
+    (void)ui_npc_tick(&c, &k_wav, UI_HOLD_MS);
+    (void)ui_npc_tick(&c, &k_wav, UI_HOLD_MS + 1000);
+    ASSERT_TRUE(c.pending);
+    ui_npc_cancel_hold(&c); /* Select / Play / the wheel / the screen going away */
+    ASSERT_FALSE(c.pending); /* a fast-forward that was never released is not applied */
+    ASSERT_EQ(0, c.hold_dir);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, UI_HOLD_MS + 5000));
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_key_up(&c, 1, UI_HOLD_MS + 5001));
+    ui_npc_key_down(&c, 1, &k_wav, 9000); /* a second key while one is down replaces it */
+    ui_npc_key_down(&c, -1, &k_wav, 9100);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_key_up(&c, 1, 9200));
+    ASSERT_EQ(UI_NPC_SKIP, ui_npc_key_up(&c, -1, 9250));
+}
+
+TEST(a_hold_whose_release_never_comes_ends_itself) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    ui_npc_track_t big = k_wav; /* a 10 h track: the end is not reached before the watchdog */
+    big.total_frames = 44100u * 36000u;
+    ui_npc_key_down(&c, 1, &big, 0);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &big, UI_HOLD_MS));
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &big, UI_HOLD_MAX_MS - 1));
+    ASSERT_TRUE(c.holding);
+    ASSERT_EQ(UI_NPC_COMMIT, ui_npc_tick(&c, &big, UI_HOLD_MAX_MS)); /* what was reached is applied */
+    ASSERT_FALSE(c.holding);
+    ASSERT_EQ(0, c.hold_dir);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_key_up(&c, 1, UI_HOLD_MAX_MS + 100)); /* the late release does nothing */
+}
+
+TEST(a_hold_that_reaches_the_end_of_the_track_applies_it_at_once) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    ui_npc_key_down(&c, 1, &k_wav, 0); /* 180 s left at 10x: 18 s of holding */
+    (void)ui_npc_tick(&c, &k_wav, UI_HOLD_MS);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, UI_HOLD_MS + 17000));
+    ASSERT_EQ(UI_NPC_COMMIT, ui_npc_tick(&c, &k_wav, UI_HOLD_MS + 19000)); /* the end: the player takes it as the end of the track */
+    ASSERT_EQ(k_wav.total_frames, c.target);
+    ASSERT_FALSE(c.holding);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_key_up(&c, 1, UI_HOLD_MS + 19500));
 }
 
 int main(void) {
@@ -484,5 +564,10 @@ int main(void) {
     RUN(hold_left_rewinds_and_stops_at_the_start);
     RUN(hold_on_a_track_that_cannot_seek_says_so_and_does_not_skip);
     RUN(seek_timers_survive_the_tick_wrap);
+    RUN(a_hold_through_a_track_change_does_not_seek_or_skip_the_new_track);
+    RUN(a_scrub_made_on_another_track_is_not_applied);
+    RUN(another_key_or_the_wheel_drops_a_hold_whose_release_may_be_lost);
+    RUN(a_hold_whose_release_never_comes_ends_itself);
+    RUN(a_hold_that_reaches_the_end_of_the_track_applies_it_at_once);
     return RESULT();
 }

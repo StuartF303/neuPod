@@ -281,6 +281,9 @@ announces it again for the restarted stream once its ring is full, so the handof
 paused stays paused (the restarted stream is paused before anything is fed). Only tracks whose `track_info_t.seekable` is set are offered it: WAV, and FLAC with a SEEKTABLE and a
 known length (it is exact; without a table the only way would be decoding from the start). A target at or past the last frame is the end of the track: the queue advances as it does
 when a track plays out (repeat-one restarts it, the last track stops). Scrubbing applies one restart per rest of the wheel (0.35 s), not one per step.
+The player counts the start requests it has posted (the storage task answers each exactly once, in order) and applies only the answer to the last one, so a seek followed by another seek,
+Next or a seek to the end never shows the replaced start's track data; the answer to a replaced start that fails is ignored too. When a seek's restart is up, the new position is saved
+for resume once (`RESUME_EVENT`), not per scrub step.
 
 ### Memory and CPU
 
