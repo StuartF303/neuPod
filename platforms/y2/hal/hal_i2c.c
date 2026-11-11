@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 /*
- * Y2 hal_i2c: a stub. The firmware does not use the Y2's I2C buses (battery comes from sysfs, there is no haptic
- * driver). init succeeds so the boot checks that run on the bus start normally; every transfer then reports that
- * nothing acknowledges (HAL_I2C_NACK_ADDR), so the haptic driver check ends as "absent" without special cases.
+ * Y2 hal_i2c: a stub. The firmware does not use the Y2's I2C buses (battery comes from sysfs, haptics are the
+ * timed_output vibrator, hal_haptic.c). init succeeds so the boot checks that run on the bus start normally; every
+ * transfer then reports that nothing acknowledges (HAL_I2C_NACK_ADDR).
  */
 #include "hal_i2c.h"
 

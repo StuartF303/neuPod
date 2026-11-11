@@ -189,7 +189,8 @@ static void check_haptics(void *arg) {
         caps_resolve(CAP_HAPTICS, false, BR_I2C_BUSY, "i2c bus busy");
         return;
     }
-    // hal_haptic_init() verifies the ACK at 0x5A and DEVICE_ID == 7, and is motor-safe.
+    // hal_haptic_init() verifies the ACK at 0x5A and DEVICE_ID == 7 (Y2: that the timed_output vibrator node can be opened
+    // for writing), and is motor-safe.
     hal_status_t st = hal_haptic_init();
     if (st == HAL_OK) {
         st = hal_haptic_standby(true); // never leave the driver (and so the motor) awake
@@ -199,10 +200,10 @@ static void check_haptics(void *arg) {
     }
     os_mutex_unlock(rt_i2c_mutex());
     if (st != HAL_OK) {
-        caps_resolve(CAP_HAPTICS, false, BR_HAPTIC, "driver (0x5A): %s", status_name(st));
+        caps_resolve(CAP_HAPTICS, false, BR_HAPTIC, HAPTIC_FAIL_FMT, status_name(st));
         return;
     }
-    caps_resolve(CAP_HAPTICS, true, NULL, "DRV2605L, standby");
+    caps_resolve(CAP_HAPTICS, true, NULL, HAPTIC_OK_MSG);
 }
 
 static void check_wheel(void *arg) {
