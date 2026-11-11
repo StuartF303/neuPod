@@ -36,6 +36,12 @@ typedef struct {
      * polls hal_storage_card_present() and, when a card shows up, runs the storage boot check again. Never used on the RP2350.
      */
     bool storage_hotplug;
+    /**
+     * Optional: polled by the monitor every 100 ms. When it returns true the runtime shuts down in order (waits up to 2 s for the
+     * storage task to go idle, locks card writes, syncs and unmounts) and exits the process with status 0. The Y2's SIGTERM handler
+     * only sets the flag this reads. The program must not be killed while a card write is in flight.
+     */
+    bool (*stop_requested)(void);
     /** Called from the UI task when a named screen is fully drawn ("splash", "home"). */
     void (*on_screen)(const char *name, void *ctx);
     /** Called from the monitor task when run_ms has elapsed. */

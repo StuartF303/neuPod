@@ -31,6 +31,15 @@ static uint32_t g_cursor; // pixels written into the window
 static uint8_t g_madctl = 0x60;
 static bool g_inversion = true;
 
+// What the panel would show for stored pixel p, as the host HAL emulates it: BGR order swaps red and blue; with inversion
+// OFF the (inversion-needing) panel shows colours inverted. Mirroring (MX/MY/MV) is not emulated.
+static uint16_t panel_pixel(uint16_t p) {
+    if (g_madctl & 0x08u) {
+        p = (uint16_t)(((p & 0x1Fu) << 11) | (p & 0x07E0u) | (p >> 11));
+    }
+    return g_inversion ? p : (uint16_t)~p;
+}
+
 static int g_fd = -1;
 static uint8_t *g_map;
 static size_t g_map_len;
@@ -56,14 +65,23 @@ static void backlight_apply(uint8_t level) {
     }
 }
 
+// The FreeRTOS POSIX port's 1 kHz SIGALRM tick can interrupt an ioctl (EINTR): retry, never count it as a failure.
+static int ioctl_retry(unsigned long req, void *arg) {
+    int r;
+    do {
+        r = ioctl(g_fd, req, arg);
+    } while (r != 0 && errno == EINTR);
+    return r;
+}
+
 static bool pan_to(unsigned page) {
     g_var.xoffset = 0;
     g_var.yoffset = page * PANEL_H;
-    if (ioctl(g_fd, FBIOPAN_DISPLAY, &g_var) != 0) {
+    if (ioctl_retry(FBIOPAN_DISPLAY, &g_var) != 0) {
         return false;
     }
     g_var.activate = FB_ACTIVATE_NOW;
-    return ioctl(g_fd, FBIOPUT_VSCREENINFO, &g_var) == 0;
+    return ioctl_retry(FBIOPUT_VSCREENINFO, &g_var) == 0;
 }
 
 hal_status_t hal_display_init(void) {
@@ -90,7 +108,7 @@ hal_status_t hal_display_init(void) {
         return HAL_ENODEV;
     }
     struct fb_fix_screeninfo fix;
-    if (ioctl(g_fd, FBIOGET_VSCREENINFO, &g_var) != 0 || ioctl(g_fd, FBIOGET_FSCREENINFO, &fix) != 0) {
+    if (ioctl_retry(FBIOGET_VSCREENINFO, &g_var) != 0 || ioctl_retry(FBIOGET_FSCREENINFO, &fix) != 0) {
         printf("display: FBIOGET_*SCREENINFO failed: %s\n", strerror(errno));
         goto fail;
     }
@@ -209,13 +227,28 @@ void hal_display_sleep(bool sleep) {
     printf("display: %s\n", sleep ? "sleep (backlight off)" : "wake");
 }
 
-void hal_display_set_madctl(uint8_t madctl) { g_madctl = madctl; } // stored only: the panel is fixed
+// Bring-up menus: BGR and inversion are emulated in the conversion (like the host HAL), so they look the same.
+void hal_display_set_madctl(uint8_t madctl) {
+    g_madctl = madctl;
+    y2_pager_mark_all(&g_pager);
+    g_dirty = true;
+    hal_display_present();
+}
 uint8_t hal_display_get_madctl(void) { return g_madctl; }
-void hal_display_set_inversion(bool on) { g_inversion = on; }
+void hal_display_set_inversion(bool on) {
+    g_inversion = on;
+    y2_pager_mark_all(&g_pager);
+    g_dirty = true;
+    hal_display_present();
+}
 bool hal_display_get_inversion(void) { return g_inversion; }
 
 void hal_display_wait(void) {}
-void hal_display_service(void) {}
+void hal_display_service(void) {
+    if (g_dirty) { // a flip that failed earlier (or a bring-up change): try again
+        hal_display_present();
+    }
+}
 
 void hal_display_present(void) {
     if (!g_dirty || g_map == NULL) {
@@ -228,17 +261,32 @@ void hal_display_present(void) {
         return;
     }
     uint8_t *dst = g_map + (size_t)page * PANEL_H * g_line_bytes;
+    const bool emulate = (g_madctl & 0x08u) != 0 || !g_inversion;
     for (uint32_t y = rows.lo; y < rows.hi; y++) {
-        y2_fb_convert_rgb565(&g_shadow[(size_t)y * PANEL_W], (uint32_t *)(void *)(dst + (size_t)y * g_line_bytes), PANEL_W);
-    }
-    if (!pan_to(page)) {
-        if (!g_pan_failed_logged) {
-            g_pan_failed_logged = true;
-            printf("display: page flip failed: %s\n", strerror(errno));
+        const uint16_t *src = &g_shadow[(size_t)y * PANEL_W];
+        uint32_t *row = (uint32_t *)(void *)(dst + (size_t)y * g_line_bytes);
+        if (emulate) {
+            uint16_t tmp[PANEL_W];
+            for (uint32_t x = 0; x < PANEL_W; x++) {
+                tmp[x] = panel_pixel(src[x]);
+            }
+            y2_fb_convert_rgb565(tmp, row, PANEL_W);
+        } else {
+            y2_fb_convert_rgb565(src, row, PANEL_W);
         }
-        y2_pager_mark_all(&g_pager); // what we drew may not be on screen: redo it all next time
-        g_dirty = true;
     }
+    if (pan_to(page)) {
+        y2_pager_commit(&g_pager, page); // only now is it the visible page
+        g_pan_failed_logged = false;
+        return;
+    }
+    // The flip failed: nothing was committed, so the same rows are converted again. Stay dirty; hal_display_service()
+    // (called every UI pass) retries without waiting for another LVGL flush.
+    if (!g_pan_failed_logged) {
+        g_pan_failed_logged = true;
+        printf("display: page flip failed: %s (will retry)\n", strerror(errno));
+    }
+    g_dirty = true;
 }
 
 void hal_display_backlight(uint8_t level) {

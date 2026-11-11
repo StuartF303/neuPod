@@ -83,14 +83,19 @@ void y2_pager_mark(y2_pager_t *p, uint16_t y0, uint16_t y1) {
 
 void y2_pager_mark_all(y2_pager_t *p) { y2_pager_mark(p, 0, p->height); }
 
-bool y2_pager_next(y2_pager_t *p, unsigned *page, y2_rows_t *rows) {
+bool y2_pager_next(const y2_pager_t *p, unsigned *page, y2_rows_t *rows) {
     unsigned n = y2_fb_next_page(p->visible, p->pages);
     if (p->stale[n].lo >= p->stale[n].hi) {
         return false;
     }
     *page = n;
     *rows = p->stale[n];
-    p->stale[n] = (y2_rows_t){0, 0};
-    p->visible = n;
     return true;
+}
+
+void y2_pager_commit(y2_pager_t *p, unsigned page) {
+    if (page < p->pages) {
+        p->stale[page] = (y2_rows_t){0, 0};
+        p->visible = page;
+    }
 }

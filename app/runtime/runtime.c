@@ -5,6 +5,7 @@
  * explains the choices.
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "audio_engine.h"
@@ -17,6 +18,7 @@
 #include "hal_audio.h"
 #include "hal_core.h"
 #include "hal_input.h"
+#include "hal_storage.h"
 #include "hal_system.h"
 #include "input_events.h"
 #include "neupod_version.h"
@@ -212,6 +214,26 @@ static void read_gauge(void) {
     }
 }
 
+#define SHUTDOWN_WAIT_MS 2000u
+
+// Orderly stop: no card write may be cut short. Bounded, so a stuck task cannot keep the process from stopping.
+static void shutdown_now(void) {
+    printf("runtime: stop requested, shutting down\n");
+    uint32_t t0 = os_tick_ms();
+    while (!storage_service_idle() && os_tick_ms() - t0 < SHUTDOWN_WAIT_MS) {
+        os_delay_ms(20);
+    }
+    if (!storage_service_idle()) {
+        printf("runtime: storage still busy after %u ms, stopping anyway\n", (unsigned)SHUTDOWN_WAIT_MS);
+    }
+    hal_storage_set_write_enabled(false); // reopens read-only: everything written is synced first
+    (void)hal_storage_sync();
+    hal_storage_unmount();
+    printf("runtime: stopped\n");
+    fflush(stdout);
+    exit(0);
+}
+
 static void monitor_task(void *arg) {
     (void)arg;
     uint32_t last = os_tick_ms();
@@ -225,6 +247,9 @@ static void monitor_task(void *arg) {
         drain_audio_events();
         if (g_cfg.storage_hotplug) {
             boot_storage_hotplug_poll();
+        }
+        if (g_cfg.stop_requested != NULL && g_cfg.stop_requested()) {
+            shutdown_now();
         }
         player_service(); // the queue moves on even when no screen is polling the player
         if (t >= next_beat) {

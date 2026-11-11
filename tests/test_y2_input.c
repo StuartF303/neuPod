@@ -121,6 +121,41 @@ TEST(ring_buttons_map_and_hold_duration_is_real) {
     }
 }
 
+TEST(a_tap_inside_one_poll_window_is_not_lost) {
+    y2_input_t s;
+    y2_input_init(&s);
+    hal_wheel_state prev = {0};
+    input_event_t ev[8];
+    step(&s, &prev, ev);
+    y2_event_t p = key(Y2_KEY_PLAYPAUSE, 1), r = key(Y2_KEY_PLAYPAUSE, 0);
+    y2_input_feed(&s, &p, 100); // press and release both arrive before the next take (an 8 ms poll period)
+    y2_input_feed(&s, &r, 105);
+    ASSERT_EQ(1, step(&s, &prev, ev));
+    ASSERT_EQ(INPUT_BUTTON_DOWN, ev[0].type);
+    ASSERT_EQ(HAL_BTN_PLAY, ev[0].button);
+    ASSERT_EQ(1, step(&s, &prev, ev)); // the release follows on the next poll
+    ASSERT_EQ(INPUT_BUTTON_UP, ev[0].type);
+    ASSERT_EQ(HAL_BTN_PLAY, ev[0].button);
+    ASSERT_EQ(0, step(&s, &prev, ev)); // and then it is quiet
+    // two taps of the same button in one window are still one down/up pair (they cannot be told apart here)
+    y2_input_feed(&s, &p, 200);
+    y2_input_feed(&s, &r, 201);
+    y2_input_feed(&s, &p, 202);
+    y2_input_feed(&s, &r, 203);
+    ASSERT_EQ(1, step(&s, &prev, ev));
+    ASSERT_EQ(INPUT_BUTTON_DOWN, ev[0].type);
+    ASSERT_EQ(1, step(&s, &prev, ev));
+    ASSERT_EQ(INPUT_BUTTON_UP, ev[0].type);
+    // a button still held is reported held, then released normally
+    y2_input_feed(&s, &p, 300);
+    ASSERT_EQ(1, step(&s, &prev, ev));
+    ASSERT_EQ(0, step(&s, &prev, ev));
+    ASSERT_EQ(HAL_BTN_PLAY, prev.buttons);
+    y2_input_feed(&s, &r, 400);
+    ASSERT_EQ(1, step(&s, &prev, ev));
+    ASSERT_EQ(INPUT_BUTTON_UP, ev[0].type);
+}
+
 TEST(release_without_press_is_ignored) {
     y2_input_t s;
     y2_input_init(&s);
@@ -130,11 +165,25 @@ TEST(release_without_press_is_ignored) {
     ASSERT_FALSE(s.dirty);
 }
 
+TEST(menu_and_play_do_not_suppress_the_wheel) {
+    static const uint16_t codes[] = {Y2_KEY_BACK, Y2_KEY_PLAYPAUSE};
+    for (size_t i = 0; i < 2; i++) {
+        y2_input_t s;
+        y2_input_init(&s);
+        y2_input_take(&s, NULL);
+        y2_event_t p = key(codes[i], 1), tick = key(Y2_KEY_DOWN, 1);
+        y2_input_feed(&s, &p, 1000);
+        y2_input_feed(&s, &tick, 1010); // Menu, then straight into the list that appears
+        ASSERT_EQ(4, s.position);
+        ASSERT_EQ(0, s.ticks_dropped);
+    }
+}
+
 TEST(wheel_tick_right_after_a_button_press_is_dropped) {
     y2_input_t s;
     y2_input_init(&s);
     y2_input_take(&s, NULL);
-    y2_event_t p = key(Y2_KEY_BACK, 1), tick = key(Y2_KEY_DOWN, 1);
+    y2_event_t p = key(Y2_KEY_ENTER, 1), tick = key(Y2_KEY_DOWN, 1);
     y2_input_feed(&s, &p, 10000);
     y2_input_take(&s, NULL);
     y2_input_feed(&s, &tick, 10000 + Y2_TICK_AFTER_PRESS_IGNORE_MS - 1);
@@ -236,7 +285,9 @@ int main(void) {
     RUN(first_frame_then_detents_scroll_by_four);
     RUN(position_wraps_the_ring);
     RUN(ring_buttons_map_and_hold_duration_is_real);
+    RUN(a_tap_inside_one_poll_window_is_not_lost);
     RUN(release_without_press_is_ignored);
+    RUN(menu_and_play_do_not_suppress_the_wheel);
     RUN(wheel_tick_right_after_a_button_press_is_dropped);
     RUN(debounce_survives_millisecond_clock_wrap);
     RUN(no_debounce_before_any_press);

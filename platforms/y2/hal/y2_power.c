@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #define _POSIX_C_SOURCE 200809L
 #include "y2_power.h"
+#include "y2_sysfs.h"
 
 #include <dirent.h>
 #include <stdio.h>
@@ -36,16 +37,7 @@ uint32_t y2_power_to_mv(long raw) {
 static bool read_line(const char *dir, const char *file, char *out, size_t cap) {
     char path[640];
     snprintf(path, sizeof path, "%s/%s", dir, file);
-    FILE *f = fopen(path, "r");
-    if (f == NULL) {
-        return false;
-    }
-    bool ok = fgets(out, (int)cap, f) != NULL;
-    fclose(f);
-    if (ok) {
-        out[strcspn(out, "\r\n")] = '\0';
-    }
-    return ok;
+    return y2_sysfs_read_line(path, out, cap);
 }
 
 static bool read_long(const char *dir, const char *file, long *out) {

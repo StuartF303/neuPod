@@ -6,7 +6,10 @@
 # Env: Y2_HOST (default root@192.168.7.2); NEUPOD_Y2_TOOLCHAIN / NEUPOD_Y2_TRIPLE (see cmake/toolchain-y2.cmake);
 #      PICO_SDK_PATH (the secrets code needs its mbed TLS; the build refuses a stub unless NEUPOD_ALLOW_CRYPTO_STUB=1).
 #   --select      also make the firmware the UI: stop the .NET demo, write /etc/neupod-ui = fw, start the firmware.
-#                 If the new build does not stay up, the previous build is restored and the demo is selected again.
+#                 Nothing on the device changes (demo still running, /etc/neupod-ui untouched) until the new build is staged,
+#                 its checksum matches and it passed a self-test. If the new build then does not stay up, the previous build
+#                 is restored; if the firmware was already the selected UI it stays selected with the old binary, otherwise
+#                 the previous selection (and the demo) come back.
 #   --no-restart  copy and stage only: the new build is left in /opt/neupod-fw.new and the init scripts are refreshed,
 #                 but nothing running is touched and the live install is not swapped.
 #   --no-build    use the existing build/y2 output.
@@ -99,6 +102,22 @@ else
 	fi
 fi
 
+# Self-test of the staged binary on the device: with an unknown option it must print its usage and exit 64 without touching
+# the display or the card (argument parsing comes first). Catches a wrong architecture, a missing library or a bad copy
+# before anything on the device is changed.
+echo "==> self-test the staged build"
+if [ "$DRY" = 1 ]; then
+	echo "DRY: ${SSH[*]} '/opt/neupod-fw.new/neupod --self-test; expect exit 64'"
+else
+	rc=0
+	"${SSH[@]}" '/opt/neupod-fw.new/neupod --self-test >/dev/null 2>&1; exit $?' || rc=$?
+	if [ "$rc" != 64 ]; then
+		echo "error: the staged build did not start properly on the device (exit $rc); not installing, nothing was changed" >&2
+		"${SSH[@]}" 'rm -rf /opt/neupod-fw.new' || true
+		exit 1
+	fi
+fi
+
 install_init() { # <local file> <remote path>
 	if [ "$DRY" = 1 ]; then
 		echo "DRY: ${SSH[*]} 'cat > $2.new && chmod 755 $2.new && mv $2.new $2' < $1"
@@ -127,21 +146,28 @@ NEW=/opt/neupod-fw.new; CUR=/opt/neupod-fw; OLD=/opt/neupod-fw.old
 FW=/etc/init.d/S91neupod-fw; DEMO=/etc/init.d/S90neupod-demo; UI=/etc/neupod-ui; LOG=/tmp/neupod-fw.log
 ui_now() { tr -d " \t\r\n" <"$UI" 2>/dev/null || true; }
 set_ui() { echo "$1" >"$UI.new"; mv "$UI.new" "$UI"; sync; }
+PREV_UI=$(ui_now)
+PREV_EXISTS=0; [ -e "$UI" ] && PREV_EXISTS=1
+FW_SEL=0; [ "$PREV_UI" = fw ] && FW_SEL=1
+restore_ui() { if [ "$PREV_EXISTS" = 1 ]; then set_ui "$PREV_UI"; else rm -f "$UI"; fi; }
 rollback() {
 	"$FW" stop || true
 	rm -rf "$CUR"
 	if [ -e "$OLD" ]; then mv "$OLD" "$CUR"; fi
-	if [ "$SELECT" = 1 ]; then
-		echo "restoring the demo as the selected UI" >&2
-		set_ui demo
-		"$DEMO" start || true
-	elif [ -e "$CUR" ] && [ "$(ui_now)" = fw ]; then
+	if [ "$FW_SEL" = 1 ] && [ -x "$CUR/neupod" ]; then
+		echo "the firmware was already selected: keeping it, with the previous build" >&2
 		"$FW" start || true
+	elif [ "$FW_SEL" = 1 ] || [ "$SELECT" = 1 ]; then
+		# nothing to fall back to in the firmware, or a selection that did not work out: the demo it was
+		echo "restoring the previous selection and the demo" >&2
+		if [ "$FW_SEL" = 1 ]; then set_ui demo; else restore_ui; fi
+		"$DEMO" start || true
 	fi
 }
-if [ "$SELECT" = 1 ]; then
+[ -x "$NEW/neupod" ] || { echo "no staged build in $NEW" >&2; exit 1; }
+# From here on the device is changed. Stop whichever UI owns the screen.
+if [ "$SELECT" = 1 ] && [ "$FW_SEL" != 1 ]; then
 	"$DEMO" stop || true
-	set_ui fw
 fi
 "$FW" stop
 rm -rf "$OLD"
@@ -152,6 +178,7 @@ if ! mv "$NEW" "$CUR"; then
 	exit 1
 fi
 sync
+if [ "$SELECT" = 1 ]; then set_ui fw; fi
 if [ "$(ui_now)" != fw ]; then
 	rm -rf "$OLD"
 	echo "installed in /opt/neupod-fw; the firmware is not the selected UI (use --select, or select-ui.sh fw)"

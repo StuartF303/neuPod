@@ -8,16 +8,23 @@ WRAP_PID=/run/neupod-demo.pid
 APP_PID=/run/neupod-demo.app.pid
 LOG=/tmp/neupod-demo.log
 UI_FILE=/etc/neupod-ui
+LOCK=/run/neupod-demo.start.lock
 
 alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
+group_alive() { [ -n "$1" ] && kill -0 -- "-$1" 2>/dev/null; }
 
 # Only "fw" hands /dev/fb0 to the C firmware; anything else keeps today's behaviour.
 selected() { [ "$(tr -d ' \t\r\n' <"$UI_FILE" 2>/dev/null)" != fw ]; }
 
+# The wrapper is started with setsid, so it leads its own process group and the app is in it; the init script records the
+# wrapper's pid itself (before start returns) and stop signals the whole group. No window exists in which a stop could
+# orphan the app, and a second start while the wrapper is alive does nothing (a mkdir lock keeps concurrent starts apart).
 start() {
 	[ -x "$APP" ] || return 0
 	selected || return 0
+	mkdir "$LOCK" 2>/dev/null || { echo "neupod-demo: another start is in progress"; return 0; }
 	if alive "$(cat "$WRAP_PID" 2>/dev/null)"; then
+		rmdir "$LOCK"
 		echo "neupod-demo already running"
 		return 0
 	fi
@@ -25,7 +32,6 @@ start() {
 	# No ICU on the device; the 3.4 kernel has no memfd_create (needed by W^X). profile.d only covers login shells.
 	setsid sh -c '
 		export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 DOTNET_EnableWriteXorExecute=0
-		echo $$ >"$0"
 		while :; do
 			# The log lives in RAM (tmpfs): empty it before it can grow past 256 KB. The shell holds it open
 			# O_APPEND, so truncating in place is safe.
@@ -38,24 +44,26 @@ start() {
 			echo "neupod-demo exited ($rc), restarting in 2 s" >&2
 			sleep 2
 		done
-	' "$WRAP_PID" "$APP" "$APP_PID" "$LOG" </dev/null >>"$LOG" 2>&1 &
+	' _ "$APP" "$APP_PID" "$LOG" </dev/null >>"$LOG" 2>&1 &
+	echo $! >"$WRAP_PID"
+	rmdir "$LOCK"
 }
 
 stop() {
 	wp=$(cat "$WRAP_PID" 2>/dev/null)
-	ap=$(cat "$APP_PID" 2>/dev/null)
-	# Wrapper first so it cannot respawn, then the app (SIGTERM makes it paint the dark splash and exit 0).
-	alive "$wp" && kill "$wp" 2>/dev/null
-	if alive "$ap"; then
-		kill "$ap" 2>/dev/null
+	if [ -n "$wp" ] && group_alive "$wp"; then
+		# Whole group at once: the wrapper (so it cannot respawn) and the app (SIGTERM makes it paint the dark splash and exit 0).
+		kill -TERM -- "-$wp" 2>/dev/null
 		i=0
-		while alive "$ap" && [ $i -lt 30 ]; do
+		while group_alive "$wp" && [ $i -lt 30 ]; do
 			sleep 0.1
 			i=$((i + 1))
 		done
-		alive "$ap" && kill -9 "$ap" 2>/dev/null
+		group_alive "$wp" && kill -KILL -- "-$wp" 2>/dev/null
 	fi
 	rm -f "$WRAP_PID" "$APP_PID"
+	rmdir "$LOCK" 2>/dev/null
+	return 0
 }
 
 case "$1" in

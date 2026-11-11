@@ -7,8 +7,8 @@
  * SAFETY: mmcblk0 is the Y2's internal eMMC (boot chain and our rootfs). Nothing in this firmware may open
  * it or any partition of it. The rule, enforced here and again by hal_storage.c right before open():
  *   - the name must be exactly mmcblk1 or mmcblk1p<N>   (mmcblk0*, mmcblk1boot0, mmcblk10 ... all refused);
- *   - the disk must say it is a removable card: /sys/block/<disk>/removable == 1, or
- *     /sys/block/<disk>/device/type == "SD";
+ *   - the disk must say it is an SD card: /sys/block/<disk>/device/type == "SD" (required); a removable attribute
+ *     that is present and not 1 contradicts it and refuses the disk;
  *   - after open, the node's major:minor must equal /sys/block/<disk>[/<part>]/dev, so a wrong or stale
  *     device node cannot redirect us to another disk.
  * Failure stance: fail closed. Anything doubtful is refused and logged, and the firmware runs without a card.

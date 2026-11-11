@@ -4,7 +4,9 @@
  * eMMC's CID, /dev/urandom, and the "no radio" answer of hal_system_late_init().
  */
 #define _POSIX_C_SOURCE 200809L
+#include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -39,7 +41,22 @@ hal_status_t hal_system_late_init(void) {
 // FreeRTOS idle hook (configUSE_IDLE_HOOK, see hal/host/freertos/FreeRTOSConfig.h). The POSIX port's idle task is an
 // ordinary thread that would spin at 100% of a core; sleeping here costs nothing in latency because the 1 ms tick
 // signal interrupts the sleep and runs the scheduler regardless.
+//
+// The first call also makes the tick signal restart interrupted system calls (SA_RESTART). The port installs its SIGALRM
+// handler without it, so any read/write/pread/pwrite/open that is in progress when a tick lands would fail with EINTR;
+// every call site here also retries EINTR itself, this removes the interruptions in the first place. It does not change what
+// the port relies on: nanosleep, poll and condition-variable waits are never restarted by SA_RESTART, so the port's own
+// sleeps and the idle hook below still return early on a tick, exactly as before.
 void vApplicationIdleHook(void) {
+    static bool restart_set;
+    if (!restart_set) {
+        restart_set = true;
+        struct sigaction sa;
+        if (sigaction(SIGALRM, NULL, &sa) == 0) {
+            sa.sa_flags |= SA_RESTART;
+            (void)sigaction(SIGALRM, &sa, NULL);
+        }
+    }
     struct timespec ts = {.tv_sec = 0, .tv_nsec = 5 * 1000 * 1000};
     nanosleep(&ts, NULL);
 }
@@ -102,11 +119,17 @@ bool hal_chip_id(uint8_t id[8]) {
 }
 
 void hal_random(void *buf, size_t n) {
-    int fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+    int fd;
+    do {
+        fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+    } while (fd < 0 && errno == EINTR);
     size_t got = 0;
     if (fd >= 0) {
         while (got < n) {
             ssize_t r = read(fd, (uint8_t *)buf + got, n - got);
+            if (r < 0 && errno == EINTR) {
+                continue; // the 1 kHz tick signal: not an error
+            }
             if (r <= 0) {
                 break;
             }

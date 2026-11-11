@@ -25,12 +25,14 @@ static bool g_logged;
 
 // hal_audio_idle() waits for the next block "interrupt" (the clock thread signals after every block), like the
 // RP2350's core 1 sleeping until its alarm. A timeout of one block keeps it prompt when the clock is not running.
+// The condition variable (monotonic clock, so a wrong or stepped wall clock cannot stall it) is initialised by a
+// constructor, before main() and before any thread exists: hal_audio_idle() can be called by core 1 before
+// hal_audio_open(), so lazy initialisation there would race the clock thread.
 static pthread_mutex_t g_idle_mu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t g_idle_cv;
-static pthread_once_t g_idle_once = PTHREAD_ONCE_INIT;
 static uint32_t g_block_seq;
 
-static void idle_init(void) {
+__attribute__((constructor)) static void idle_init(void) {
     pthread_condattr_t a;
     pthread_condattr_init(&a);
     pthread_condattr_setclock(&a, CLOCK_MONOTONIC);
@@ -104,7 +106,6 @@ hal_status_t hal_audio_open(const hal_audio_format *fmt) {
 uint32_t hal_audio_underruns(void) { return g_underruns; }
 
 void hal_audio_idle(void) {
-    pthread_once(&g_idle_once, idle_init);
     struct timespec until;
     clock_gettime(CLOCK_MONOTONIC, &until);
     until.tv_nsec += 6 * 1000 * 1000; // one block

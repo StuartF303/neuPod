@@ -49,6 +49,12 @@ typedef struct {
 void storage_service_init(void);
 bool storage_service_ready(void);
 
+/**
+ * True when the storage task has nothing queued and no settings write is in flight (nfs write scope closed). For an orderly
+ * shutdown: wait for it (bounded), then lock writes. Reading a file that is streaming does not count as busy.
+ */
+bool storage_service_idle(void);
+
 /** Task body. */
 void storage_task(void *arg);
 

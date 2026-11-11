@@ -37,7 +37,11 @@ extern "C" {
 #define Y2_KEY_BACK 158u
 
 #define Y2_POSITIONS_PER_DETENT 4
-/** A wheel tick this soon after a ring-button press is a finger brushing the wheel, not a turn. */
+/**
+ * A wheel tick this soon after a Centre, Prev or Next press is a finger brushing the wheel on its way to that button, not
+ * a turn. Menu and Play are not covered: they sit at the top and bottom of the ring, and the usual thing after Menu (back)
+ * is to scroll the list that appears, so suppressing there would swallow real turns.
+ */
 #define Y2_TICK_AFTER_PRESS_IGNORE_MS 150u
 
 /** struct input_event on a 32-bit kernel: timeval (2 x 32 bit), type, code, value. Reads must be multiples of this. */
@@ -59,6 +63,7 @@ size_t y2_evdev_decode(const uint8_t *buf, size_t len, y2_event_t *out, size_t m
 /** Mapping state: what the virtual wheel looks like to the app. */
 typedef struct {
     uint8_t buttons;        /**< HAL_BTN_* bits currently held */
+    uint8_t latched;        /**< HAL_BTN_* bits pressed since the last y2_input_take(), even if already released again */
     uint8_t position;       /**< virtual finger position 0..HAL_WHEEL_POSITIONS-1 */
     bool dirty;             /**< state changed since y2_input_take() */
     bool have_press;        /**< a ring button was pressed (last_press_ms is valid) */
@@ -73,7 +78,11 @@ void y2_input_init(y2_input_t *s);
 /** Feed one decoded event at monotonic time @p now_ms. Non-key events and unknown codes are ignored. */
 void y2_input_feed(y2_input_t *s, const y2_event_t *ev, uint32_t now_ms);
 
-/** Copy the current wheel state to @p out (always valid, finger always "on" the wheel) and clear dirty. True if it changed. */
+/**
+ * Copy the current wheel state to @p out (always valid, finger always "on" the wheel) and clear dirty. True if it changed.
+ * A button that was pressed and released again between two takes is still reported as held by this take (and as released
+ * by the next one), so a quick tap is never lost to the polling period.
+ */
 bool y2_input_take(y2_input_t *s, hal_wheel_state *out);
 
 /** Return and clear the pending volume steps. */

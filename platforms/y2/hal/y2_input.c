@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #define _POSIX_C_SOURCE 200809L
 #include "y2_input.h"
+#include "y2_sysfs.h"
 
 #include <dirent.h>
 #include <stdio.h>
@@ -58,8 +59,11 @@ void y2_input_feed(y2_input_t *s, const y2_event_t *ev, uint32_t now_ms) {
     if (btn != 0) {
         if (value == 1) {
             s->buttons = (uint8_t)(s->buttons | btn);
-            s->have_press = true;
-            s->last_press_ms = now_ms;
+            s->latched = (uint8_t)(s->latched | btn);
+            if (btn == HAL_BTN_SELECT || btn == HAL_BTN_LEFT || btn == HAL_BTN_RIGHT) {
+                s->have_press = true; // the brush filter's reference (not Menu / Play, see Y2_TICK_AFTER_PRESS_IGNORE_MS)
+                s->last_press_ms = now_ms;
+            }
             s->dirty = true;
         } else if (value == 0 && (s->buttons & btn) != 0) {
             s->buttons = (uint8_t)(s->buttons & ~btn);
@@ -96,11 +100,13 @@ void y2_input_feed(y2_input_t *s, const y2_event_t *ev, uint32_t now_ms) {
 }
 
 bool y2_input_take(y2_input_t *s, hal_wheel_state *out) {
+    uint8_t shown = (uint8_t)(s->buttons | s->latched);
     if (out != NULL) {
-        *out = (hal_wheel_state){.buttons = s->buttons, .position = s->position, .touched = true, .valid = true};
+        *out = (hal_wheel_state){.buttons = shown, .position = s->position, .touched = true, .valid = true};
     }
     bool was = s->dirty;
-    s->dirty = false;
+    s->dirty = (shown != s->buttons); // a tap that is already over: the next take must show the release
+    s->latched = 0;
     return was;
 }
 
@@ -123,18 +129,10 @@ bool y2_input_find_node(const char *class_dir, const char *dev_dir, const char *
         }
         char path[320];
         snprintf(path, sizeof path, "%s/%s/device/name", class_dir, e->d_name);
-        FILE *f = fopen(path, "r");
-        if (f == NULL) {
-            continue;
+        char line[96];
+        if (y2_sysfs_read_line(path, line, sizeof line) && strcmp(line, name) == 0) {
+            found = snprintf(out, cap, "%s/%s", dev_dir, e->d_name) < (int)cap;
         }
-        char line[96] = {0};
-        if (fgets(line, sizeof line, f) != NULL) {
-            line[strcspn(line, "\r\n")] = '\0';
-            if (strcmp(line, name) == 0) {
-                found = snprintf(out, cap, "%s/%s", dev_dir, e->d_name) < (int)cap;
-            }
-        }
-        fclose(f);
     }
     closedir(d);
     return found;

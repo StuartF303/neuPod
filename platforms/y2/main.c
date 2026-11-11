@@ -36,16 +36,17 @@ static void on_done(void *ctx) {
     exit(rc);
 }
 
+// SIGTERM only sets a flag: the monitor task sees it (stop_requested), lets the storage task finish, locks card writes and
+// exits in order. Doing that work in the handler could cut a card write in half.
+static volatile sig_atomic_t g_stop;
 static void on_term(int sig) {
     (void)sig;
-    static const char msg[] = "y2: terminated\n";
-    ssize_t r = write(STDOUT_FILENO, msg, sizeof msg - 1);
-    (void)r;
-    _exit(0);
+    g_stop = 1;
 }
+static bool stop_requested(void) { return g_stop != 0; }
 
 int main(int argc, char **argv) {
-    neupod_runtime_config_t cfg = {.console_keys = true, .storage_hotplug = true};
+    neupod_runtime_config_t cfg = {.console_keys = true, .storage_hotplug = true, .stop_requested = stop_requested};
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--run-ms") == 0 && i + 1 < argc) {
             cfg.run_ms = (uint32_t)strtoul(argv[++i], NULL, 10);
@@ -64,6 +65,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     signal(SIGTERM, on_term);
+    signal(SIGINT, on_term);
     signal(SIGPIPE, SIG_IGN); // a closed ssh session must not kill the player
     y2_set_delay_hook(os_delay_ms); // HAL sleeps go through the scheduler
     y2_input_set_volume_handler(on_volume);

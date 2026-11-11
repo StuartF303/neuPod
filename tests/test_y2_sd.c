@@ -93,14 +93,31 @@ TEST(sysfs_without_device_node_waits_for_mdev) {
     fs_destroy();
 }
 
-TEST(removable_or_sd_type_is_enough_either_way) {
+TEST(type_sd_is_required_removable_alone_is_not_enough) {
     tree();
-    insert_card("1\n", "MMC\n"); // removable flag alone
+    insert_card("1\n", "MMC\n"); // removable, but not an SD card: refused
     fs_write("dev/mmcblk1", "");
     y2_sd_pick_t p;
+    char why[96];
+    ASSERT_EQ(Y2_SD_REFUSED, y2_sd_pick(g_sys, g_dev, &p, why, sizeof why));
+    ASSERT_TRUE(strstr(why, "not type SD") != NULL);
+    insert_card("1\n", "SD\n");
     ASSERT_EQ(Y2_SD_FOUND, y2_sd_pick(g_sys, g_dev, &p, NULL, 0));
-    fs_write("sys/block/mmcblk1/removable", "0\n"); // type SD alone
-    fs_write("sys/block/mmcblk1/device/type", "SD\n");
+    fs_destroy();
+}
+
+TEST(removable_only_confirms_a_contradiction_refuses) {
+    tree();
+    insert_card("0\n", "SD\n"); // says SD but not removable: contradictory, refused
+    fs_write("dev/mmcblk1", "");
+    y2_sd_pick_t p;
+    char why[96];
+    ASSERT_EQ(Y2_SD_REFUSED, y2_sd_pick(g_sys, g_dev, &p, why, sizeof why));
+    ASSERT_TRUE(strstr(why, "not removable") != NULL);
+    // an absent removable attribute does not matter when the type says SD
+    char path[400];
+    snprintf(path, sizeof path, "%s/mmcblk1/removable", g_sys);
+    ASSERT_EQ(0, remove(path));
     ASSERT_EQ(Y2_SD_FOUND, y2_sd_pick(g_sys, g_dev, &p, NULL, 0));
     fs_destroy();
 }
@@ -118,7 +135,7 @@ TEST(a_fixed_non_sd_mmcblk1_is_refused) {
 
 TEST(missing_attributes_fail_closed) {
     tree();
-    fs_write("sys/block/mmcblk1/dev", "179:8\n"); // no removable, no device/type
+    fs_write("sys/block/mmcblk1/dev", "179:8\n"); // no device/type
     fs_write("dev/mmcblk1", "");
     y2_sd_pick_t p;
     ASSERT_EQ(Y2_SD_REFUSED, y2_sd_pick(g_sys, g_dev, &p, NULL, 0));
@@ -128,6 +145,7 @@ TEST(missing_attributes_fail_closed) {
 TEST(emmc_is_never_picked_even_when_it_looks_removable) {
     tree();
     fs_write("sys/block/mmcblk0/removable", "1\n"); // a lying sysfs
+    fs_write("sys/block/mmcblk0/device/type", "SD\n");
     y2_sd_pick_t p;
     ASSERT_EQ(Y2_SD_ABSENT, y2_sd_pick(g_sys, g_dev, &p, NULL, 0)); // only mmcblk1 is ever looked at
     fs_destroy();
@@ -168,7 +186,8 @@ int main(void) {
     RUN(card_found_prefers_whole_disk);
     RUN(partition_used_only_when_whole_disk_node_missing);
     RUN(sysfs_without_device_node_waits_for_mdev);
-    RUN(removable_or_sd_type_is_enough_either_way);
+    RUN(type_sd_is_required_removable_alone_is_not_enough);
+    RUN(removable_only_confirms_a_contradiction_refuses);
     RUN(a_fixed_non_sd_mmcblk1_is_refused);
     RUN(missing_attributes_fail_closed);
     RUN(emmc_is_never_picked_even_when_it_looks_removable);

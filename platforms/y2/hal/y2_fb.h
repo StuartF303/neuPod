@@ -63,10 +63,14 @@ void y2_pager_mark(y2_pager_t *p, uint16_t y0, uint16_t y1);
 void y2_pager_mark_all(y2_pager_t *p);
 
 /**
- * Choose the page to draw and show next. Returns false (and changes nothing) if nothing is stale on the next
- * page. On true: @p page is the page to convert @p rows into, then pan to; it becomes the visible page.
+ * Choose the page to draw and show next. Returns false if nothing is stale on the next page. On true: @p page is the
+ * page to convert @p rows into, then pan to. Changes nothing: call y2_pager_commit() only once the pan has succeeded,
+ * so a failed flip leaves the bookkeeping as it was and the same rows are converted again next time.
  */
-bool y2_pager_next(y2_pager_t *p, unsigned *page, y2_rows_t *rows);
+bool y2_pager_next(const y2_pager_t *p, unsigned *page, y2_rows_t *rows);
+
+/** The pan to @p page succeeded: it is now the visible page and holds the current rows. */
+void y2_pager_commit(y2_pager_t *p, unsigned page);
 
 #ifdef __cplusplus
 }

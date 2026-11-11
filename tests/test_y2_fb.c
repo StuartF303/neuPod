@@ -6,6 +6,15 @@
 
 static y2_fb_field_t f(uint32_t o, uint32_t l) { return (y2_fb_field_t){o, l}; }
 
+// next + commit: what the display HAL does when the pan succeeds
+static bool flip(y2_pager_t *p, unsigned *page, y2_rows_t *r) {
+    if (!y2_pager_next(p, page, r)) {
+        return false;
+    }
+    y2_pager_commit(p, *page);
+    return true;
+}
+
 TEST(expand_565_known_colours) {
     ASSERT_EQ(0xFF000000u, y2_fb_expand565(0x0000));
     ASSERT_EQ(0xFFFFFFFFu, y2_fb_expand565(0xFFFF)); // low bits replicate: white stays white
@@ -67,7 +76,7 @@ TEST(pager_first_present_draws_everything_to_the_next_page) {
     y2_pager_init(&p, 3, 0, 360); // pan-to-page-0 on open: page 0 is what we believe is visible
     unsigned page = 99;
     y2_rows_t r;
-    ASSERT_TRUE(y2_pager_next(&p, &page, &r));
+    ASSERT_TRUE(flip(&p, &page, &r));
     ASSERT_EQ(1, page);
     ASSERT_EQ(0, r.lo);
     ASSERT_EQ(360, r.hi);
@@ -80,28 +89,49 @@ TEST(pager_cycles_and_converts_only_what_changed) {
     unsigned page;
     y2_rows_t r;
     for (int i = 0; i < 3; i++) { // every page starts stale: bring each up to date once
-        ASSERT_TRUE(y2_pager_next(&p, &page, &r));
+        ASSERT_TRUE(flip(&p, &page, &r));
     }
     ASSERT_EQ(0, page); // 1, 2, 0
-    ASSERT_FALSE(y2_pager_next(&p, &page, &r)); // nothing stale: no flip needed
+    ASSERT_FALSE(flip(&p, &page, &r)); // nothing stale: no flip needed
     y2_pager_mark(&p, 100, 120);
-    ASSERT_TRUE(y2_pager_next(&p, &page, &r));
+    ASSERT_TRUE(flip(&p, &page, &r));
     ASSERT_EQ(1, page);
     ASSERT_EQ(100, r.lo);
     ASSERT_EQ(120, r.hi);
     y2_pager_mark(&p, 10, 20); // second change: page 2 must catch up on BOTH, page 1 only on the new one
-    ASSERT_TRUE(y2_pager_next(&p, &page, &r));
+    ASSERT_TRUE(flip(&p, &page, &r));
     ASSERT_EQ(2, page);
     ASSERT_EQ(10, r.lo);
     ASSERT_EQ(120, r.hi); // the union covers the earlier change too
-    ASSERT_TRUE(y2_pager_next(&p, &page, &r));
+    ASSERT_TRUE(flip(&p, &page, &r));
     ASSERT_EQ(0, page); // page 0 missed both changes
     ASSERT_EQ(10, r.lo);
     ASSERT_EQ(120, r.hi);
-    ASSERT_TRUE(y2_pager_next(&p, &page, &r));
+    ASSERT_TRUE(flip(&p, &page, &r));
     ASSERT_EQ(1, page); // page 1 was current for the first change: only the second is left
     ASSERT_EQ(10, r.lo);
     ASSERT_EQ(20, r.hi);
+}
+
+TEST(a_failed_pan_changes_nothing) {
+    y2_pager_t p;
+    y2_pager_init(&p, 3, 0, 360);
+    unsigned page = 99;
+    y2_rows_t r;
+    ASSERT_TRUE(y2_pager_next(&p, &page, &r)); // chosen, but the pan "fails": no commit
+    ASSERT_EQ(1, page);
+    ASSERT_EQ(0, p.visible);
+    unsigned again;
+    y2_rows_t r2;
+    ASSERT_TRUE(y2_pager_next(&p, &again, &r2)); // the same page and rows are offered again
+    ASSERT_EQ(1, again);
+    ASSERT_EQ(0, r2.lo);
+    ASSERT_EQ(360, r2.hi);
+    y2_pager_commit(&p, again);
+    ASSERT_EQ(1, p.visible);
+    ASSERT_EQ(0, p.stale[1].hi - p.stale[1].lo);
+    y2_pager_commit(&p, 9); // out of range: ignored
+    ASSERT_EQ(1, p.visible);
 }
 
 TEST(pager_clamps_and_ignores_empty_ranges) {
@@ -110,13 +140,13 @@ TEST(pager_clamps_and_ignores_empty_ranges) {
     unsigned page;
     y2_rows_t r;
     for (int i = 0; i < 3; i++) {
-        y2_pager_next(&p, &page, &r);
+        flip(&p, &page, &r);
     }
     y2_pager_mark(&p, 50, 50); // empty
     y2_pager_mark(&p, 70, 60); // inverted
-    ASSERT_FALSE(y2_pager_next(&p, &page, &r));
+    ASSERT_FALSE(flip(&p, &page, &r));
     y2_pager_mark(&p, 350, 9999); // clamped to the height
-    ASSERT_TRUE(y2_pager_next(&p, &page, &r));
+    ASSERT_TRUE(flip(&p, &page, &r));
     ASSERT_EQ(350, r.lo);
     ASSERT_EQ(360, r.hi);
 }
@@ -126,11 +156,11 @@ TEST(pager_single_page_redraws_in_place) {
     y2_pager_init(&p, 1, 0, 360);
     unsigned page;
     y2_rows_t r;
-    ASSERT_TRUE(y2_pager_next(&p, &page, &r));
+    ASSERT_TRUE(flip(&p, &page, &r));
     ASSERT_EQ(0, page);
-    ASSERT_FALSE(y2_pager_next(&p, &page, &r));
+    ASSERT_FALSE(flip(&p, &page, &r));
     y2_pager_mark(&p, 5, 6);
-    ASSERT_TRUE(y2_pager_next(&p, &page, &r));
+    ASSERT_TRUE(flip(&p, &page, &r));
     ASSERT_EQ(0, page);
     ASSERT_EQ(5, r.lo);
 }
@@ -152,6 +182,7 @@ int main(void) {
     RUN(round_robin_order);
     RUN(pager_first_present_draws_everything_to_the_next_page);
     RUN(pager_cycles_and_converts_only_what_changed);
+    RUN(a_failed_pan_changes_nothing);
     RUN(pager_clamps_and_ignores_empty_ranges);
     RUN(pager_single_page_redraws_in_place);
     RUN(pager_visible_page_out_of_range_falls_back_to_zero);

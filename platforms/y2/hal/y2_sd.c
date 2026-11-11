@@ -6,6 +6,8 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#include "y2_sysfs.h"
+
 #define Y2_SD_DISK "mmcblk1"
 
 bool y2_sd_name_allowed(const char *name) {
@@ -27,26 +29,10 @@ bool y2_sd_name_allowed(const char *name) {
     return true;
 }
 
-static void set_why(char *why, size_t cap, const char *fmt, const char *a) {
+static void set_why(char *why, size_t cap, const char *msg) {
     if (why != NULL && cap > 0) {
-        snprintf(why, cap, fmt, a);
+        snprintf(why, cap, "%s", msg);
     }
-}
-
-// First line of a small sysfs file, trailing whitespace removed. False if it cannot be read.
-static bool read_line(const char *path, char *out, size_t cap) {
-    FILE *f = fopen(path, "r");
-    if (f == NULL) {
-        return false;
-    }
-    bool ok = fgets(out, (int)cap, f) != NULL;
-    fclose(f);
-    if (ok) {
-        out[strcspn(out, "\r\n")] = '\0';
-    } else {
-        out[0] = '\0';
-    }
-    return ok;
 }
 
 static bool exists(const char *path) {
@@ -54,25 +40,28 @@ static bool exists(const char *path) {
     return stat(path, &st) == 0;
 }
 
+// The card must say it is an SD card: device/type == "SD". removable is only a second opinion: a disk that claims
+// removable == 0 is refused even if its type says SD; a missing removable file does not matter.
 static bool disk_is_card(const char *sys_block, char *why, size_t why_cap) {
     char path[160], v[32];
-    snprintf(path, sizeof path, "%s/%s/removable", sys_block, Y2_SD_DISK);
-    if (read_line(path, v, sizeof v) && strcmp(v, "1") == 0) {
-        return true;
-    }
     snprintf(path, sizeof path, "%s/%s/device/type", sys_block, Y2_SD_DISK);
-    if (read_line(path, v, sizeof v) && strcmp(v, "SD") == 0) {
-        return true;
+    if (!y2_sysfs_read_line(path, v, sizeof v) || strcmp(v, "SD") != 0) {
+        set_why(why, why_cap, "mmcblk1 is not type SD: refused");
+        return false;
     }
-    set_why(why, why_cap, "%s is neither removable nor type SD: refused", Y2_SD_DISK);
-    return false;
+    snprintf(path, sizeof path, "%s/%s/removable", sys_block, Y2_SD_DISK);
+    if (y2_sysfs_read_line(path, v, sizeof v) && strcmp(v, "1") != 0) {
+        set_why(why, why_cap, "mmcblk1 is type SD but not removable: refused");
+        return false;
+    }
+    return true;
 }
 
 y2_sd_result_t y2_sd_pick(const char *sys_block, const char *dev_dir, y2_sd_pick_t *out, char *why, size_t why_cap) {
     char path[160];
     snprintf(path, sizeof path, "%s/%s", sys_block, Y2_SD_DISK);
     if (!exists(path)) {
-        set_why(why, why_cap, "no %s (no card inserted)", Y2_SD_DISK);
+        set_why(why, why_cap, "no mmcblk1 (no card inserted)");
         return Y2_SD_ABSENT;
     }
     if (!disk_is_card(sys_block, why, why_cap)) {
@@ -93,7 +82,7 @@ y2_sd_result_t y2_sd_pick(const char *sys_block, const char *dev_dir, y2_sd_pick
             return Y2_SD_FOUND;
         }
     }
-    set_why(why, why_cap, "%s is in sysfs but has no device node yet", Y2_SD_DISK);
+    set_why(why, why_cap, "mmcblk1 is in sysfs but has no device node yet");
     return Y2_SD_NO_NODE;
 }
 
@@ -108,7 +97,7 @@ bool y2_sd_expected_devnum(const char *sys_block, const char *name, unsigned *ma
         snprintf(path, sizeof path, "%s/%s/%s/dev", sys_block, Y2_SD_DISK, name);
     }
     unsigned a, b;
-    if (!read_line(path, v, sizeof v) || sscanf(v, "%u:%u", &a, &b) != 2) {
+    if (!y2_sysfs_read_line(path, v, sizeof v) || sscanf(v, "%u:%u", &a, &b) != 2) {
         return false;
     }
     *major = a;
@@ -124,7 +113,7 @@ bool y2_sd_devnum_matches(const char *sys_block, const char *name, unsigned majo
 static void ident(const char *sys_block, const char *disk, const char *file, char *out, size_t cap) {
     char path[200];
     snprintf(path, sizeof path, "%s/%s/device/%s", sys_block, disk, file);
-    if (!read_line(path, out, cap)) {
+    if (!y2_sysfs_read_line(path, out, cap)) {
         out[0] = '\0';
     }
 }
