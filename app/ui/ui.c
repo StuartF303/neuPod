@@ -48,8 +48,19 @@ static void flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
 }
 
 static bool lvgl_setup(void) {
+#ifndef NEUPOD_RP2350 // the product panel is fixed hardware: nothing to select or warn about (and no flash spent on the messages)
+    const uint32_t pw = hal_display_width(), ph = hal_display_height();
+    ui_metrics_set(ui_metrics_select(pw, ph)); // the product build has the one 320x240 profile (compile-time constant)
+    printf("ui: profile %dx%d on %ux%u panel\n", (int)UI_W, (int)UI_H, (unsigned)pw, (unsigned)ph);
+    if (pw > (uint32_t)UI_W || ph > (uint32_t)UI_H) {
 #ifdef NEUPOD_UI_HIRES
-    ui_metrics_set(ui_metrics_select(hal_display_width(), hal_display_height())); // the product build has the one 320x240 profile
+        const char *hint = "";
+#else
+        const char *hint = " (this build has no hires profile: configure with -DNEUPOD_UI_HIRES=ON)";
+#endif
+        printf("ui: WARNING panel %ux%u is larger than the %dx%d profile: the UI fills the top-left corner only%s\n", (unsigned)pw, (unsigned)ph, (int)UI_W,
+               (int)UI_H, hint);
+    }
 #endif
     lv_init();
     lv_tick_set_cb(os_tick_ms);
@@ -206,7 +217,10 @@ static void screen_ready(const char *name) {
     printf("ui: screen '%s' lvgl_mem=%u/%uB depth=%d\n", name, (unsigned)g_perf.mem_used, (unsigned)g_perf.mem_total, ui_frame_depth());
 #ifdef NEUPOD_UI_HIRES
     if (getenv("NEUPOD_UI_AUDIT") != NULL) { // host tests: every snapshot is also a layout check
-        (void)ui_layout_audit(name);
+        int bad = ui_layout_audit(name);
+        if (bad != 0) {
+            printf("ui: AUDIT FAIL screen '%s': %d layout violation(s)\n", name, bad);
+        }
     }
 #endif
     const neupod_runtime_config_t *cfg = rt_config();
@@ -240,7 +254,7 @@ void ui_task(void *arg) {
     }
 
     ui_splash_create();
-    caps_resolve(CAP_DISPLAY, true, NULL, "ST7789 %ux%u", (unsigned)hal_display_width(),
+    caps_resolve(CAP_DISPLAY, true, NULL, "%s %ux%u", hal_display_name(), (unsigned)hal_display_width(),
                  (unsigned)hal_display_height());
     capabilities_t caps;
     caps_get(&caps);

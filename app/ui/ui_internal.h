@@ -49,6 +49,8 @@
 #ifdef NEUPOD_UI_HIRES
 /** Hosted builds only (ui_audit.c): count the visible widgets of the active screen that are cut by the panel or their container. */
 int ui_layout_audit(const char *screen);
+/** Marks the list's pool rows for the audit: rows outside the visible window are clipped away on purpose. */
+#define UI_OBJ_FLAG_POOL_ROW LV_OBJ_FLAG_USER_1
 #endif
 
 /* ---- Boot splash (ui_splash.c) -------------------------------------------------------------------- */

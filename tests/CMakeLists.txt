@@ -123,14 +123,24 @@ endforeach()
 add_test(NAME runtime_smoke
   COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --tour --snapshots ${CMAKE_BINARY_DIR}/snapshots)
 set_tests_properties(runtime_smoke PROPERTIES
-  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_fixture;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_fixture;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img;NEUPOD_UI_AUDIT=1"
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  RESOURCE_LOCK neupod_shared_card
   TIMEOUT 120)
+# The layout audit (app/ui/ui_audit.c, hosted builds) also runs on every snapshot of this 320x240 tour. Proof that it ran: PASS needs
+# its per-snapshot line and the clean end of the run (a PASS regex replaces the exit code check, so "status 0" stands in for it);
+# "ui: AUDIT FAIL" fails the test.
+if(NEUPOD_UI_HIRES)
+  set_tests_properties(runtime_smoke PROPERTIES
+    PASS_REGULAR_EXPRESSION "ui: audit '[^']*' 320x240 objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+    FAIL_REGULAR_EXPRESSION "AUDIT FAIL")
+endif()
 
 add_test(NAME input_tour
   COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --tour-input --snapshots ${CMAKE_BINARY_DIR}/snapshots_input)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_input)
 set_tests_properties(input_tour PROPERTIES
+  RESOURCE_LOCK neupod_shared_card
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_fixture;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   TIMEOUT 120)
@@ -139,6 +149,7 @@ add_test(NAME wifi_tour
   COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --tour-wifi --snapshots ${CMAKE_BINARY_DIR}/snapshots_wifi)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_wifi)
 set_tests_properties(wifi_tour PROPERTIES
+  RESOURCE_LOCK neupod_shared_card
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_wifi;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   TIMEOUT 120)
@@ -150,6 +161,7 @@ add_test(NAME bt_tour
   COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --tour-bt --snapshots ${CMAKE_BINARY_DIR}/snapshots_bt)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_bt)
 set_tests_properties(bt_tour PROPERTIES
+  RESOURCE_LOCK neupod_shared_card
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_bt;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   TIMEOUT 120)
@@ -171,6 +183,7 @@ set_tests_properties(art_tour_reset PROPERTIES FIXTURES_SETUP art_clean)
 add_test(NAME art_tour
   COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --tour-art --snapshots ${CMAKE_BINARY_DIR}/snapshots_art)
 set_tests_properties(art_tour PROPERTIES
+  RESOURCE_LOCK neupod_shared_card
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_FS_ROOT=${ART_FS};NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   FIXTURES_REQUIRED art_clean
@@ -186,41 +199,38 @@ if(NEUPOD_UI_HIRES) # (the layout audit and the 480x360 profile exist only in ho
 # NEUPOD_DISPLAY_SIZE makes the host HAL a 480x360 panel; the UI then selects its 1.5x metrics profile. NEUPOD_UI_AUDIT=1 makes every
 # snapshot also walk the widget tree: a widget cut by the panel or its container prints "ui: AUDIT FAIL" and fails the test.
 # Separate fixture folders (and snapshot folders) so the 320x240 tours' stored settings and PPMs are never reused.
-set(HIRES_FS ${CMAKE_BINARY_DIR}/fsroot_hires)
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/assets/fsroot/ DESTINATION ${HIRES_FS})
-file(MAKE_DIRECTORY ${HIRES_FS}/many)
-foreach(I RANGE 1 300)
-  file(WRITE ${HIRES_FS}/many/file_${I}.txt "x")
-endforeach()
-set(HIRES_ENV "SDL_VIDEODRIVER=dummy;NEUPOD_DISPLAY_SIZE=480x360;NEUPOD_UI_AUDIT=1;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img")
-foreach(T tour:snapshots_hires:fsroot_hires:tour tour-input:snapshots_hires_input:fsroot_hires:input_tour tour-wifi:snapshots_hires_wifi:fsroot_hires_wifi:wifi_tour tour-bt:snapshots_hires_bt:fsroot_hires_bt:bt_tour)
+# Every hires test has its own fake card (folder and disk image), so they share nothing with each other or with the 320x240 tours and
+# can run side by side (ctest -j; CI does).
+set(HIRES_PASS "ui: audit '[^']*' 480x360 objects=[1-9][0-9]* violations=0.*host: run finished, status 0")
+function(neupod_hires_card NAME)
+  set(FS ${CMAKE_BINARY_DIR}/fsroot_${NAME})
+  file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/assets/fsroot/ DESTINATION ${FS})
+  file(MAKE_DIRECTORY ${FS}/many)
+  foreach(I RANGE 1 300)
+    file(WRITE ${FS}/many/file_${I}.txt "x")
+  endforeach()
+  execute_process(COMMAND dd if=/dev/zero of=${CMAKE_BINARY_DIR}/disk_${NAME}.img bs=1024 count=2048 status=none)
+endfunction()
+foreach(T tour:hires:tour tour-input:hires_input:input_tour tour-wifi:hires_wifi:wifi_tour tour-bt:hires_bt:bt_tour)
   string(REPLACE ":" ";" TL "${T}")
   list(GET TL 0 T_FLAG)
-  list(GET TL 1 T_SNAP)
-  list(GET TL 2 T_FS)
-  list(GET TL 3 T_NAME)
-  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/${T_SNAP})
+  list(GET TL 1 T_CARD)
+  list(GET TL 2 T_NAME)
+  neupod_hires_card(${T_CARD})
+  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_${T_CARD})
   add_test(NAME hires_${T_NAME}
-    COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --${T_FLAG} --snapshots ${CMAKE_BINARY_DIR}/${T_SNAP})
+    COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --${T_FLAG} --snapshots ${CMAKE_BINARY_DIR}/snapshots_${T_CARD})
   set_tests_properties(hires_${T_NAME} PROPERTIES
-    ENVIRONMENT "${HIRES_ENV};NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/${T_FS}"
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_DISPLAY_SIZE=480x360;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_${T_CARD};NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_${T_CARD}.img"
+    PASS_REGULAR_EXPRESSION "${HIRES_PASS}"
     FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     TIMEOUT 120)
 endforeach()
 
-# The 320x240 default must stay layout-clean too: the main tour once more, audit on (its snapshots are the ones runtime_smoke wrote).
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_audit320)
-add_test(NAME audit_320_tour
-  COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --tour --snapshots ${CMAKE_BINARY_DIR}/snapshots_audit320)
-set_tests_properties(audit_320_tour PROPERTIES
-  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_fixture;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
-  FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-  TIMEOUT 120)
-
 # Album art at 480x360: its own fake card (settings wiped first, like art_tour), then the pixel checks of the 168 / 144 px art boxes.
 set(HIRES_ART_FS ${CMAKE_BINARY_DIR}/fsroot_hires_art)
+execute_process(COMMAND dd if=/dev/zero of=${CMAKE_BINARY_DIR}/disk_hires_art.img bs=1024 count=2048 status=none)
 file(MAKE_DIRECTORY "${HIRES_ART_FS}/Album A" "${HIRES_ART_FS}/Album B" "${HIRES_ART_FS}/Album C")
 file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/flac16_44k_st.flac "${HIRES_ART_FS}/Album A/track.flac")
 file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/art/q420_600x600.jpg "${HIRES_ART_FS}/Album A/Cover.JPG")
@@ -233,7 +243,8 @@ set_tests_properties(hires_art_tour_reset PROPERTIES FIXTURES_SETUP hires_art_cl
 add_test(NAME hires_art_tour
   COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --tour-art --snapshots ${CMAKE_BINARY_DIR}/snapshots_hires_art)
 set_tests_properties(hires_art_tour PROPERTIES
-  ENVIRONMENT "${HIRES_ENV};NEUPOD_FS_ROOT=${HIRES_ART_FS}"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_DISPLAY_SIZE=480x360;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${HIRES_ART_FS};NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_hires_art.img"
+  PASS_REGULAR_EXPRESSION "${HIRES_PASS}"
   FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   FIXTURES_REQUIRED hires_art_clean

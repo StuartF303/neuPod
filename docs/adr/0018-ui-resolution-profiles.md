@@ -31,8 +31,7 @@ scaler in the display path), or render natively at 480x360.
   allocation of the product build keep their sizes. Hosted builds: render buffers 2 x 34 KB, pool 192 KB (measured peak 69 KB across
   every tour at 480x360).
 * **Flash budget (RP2350):** the product build has one profile, defined as a header constant, so every field read folds into an
-  immediate and the metrics cost nothing; measured on 11 Nov 2026 (Release, `neupod.elf`): text 1,289,412 B before, 1,289,388 B
-  after (-24 B), .data 0 and .bss 489,348 B unchanged (the display, i2c and storage test images are byte-for-byte the same size).
+  immediate and the metrics cost nothing; measured on 11 Nov 2026 (Release, `neupod.elf`): text 1,289,412 B before and after (0 B), .data 0 and .bss 489,348 B unchanged (the display, i2c and storage test images are byte-for-byte the same size).
   Montserrat 28 is now compiled out of the product build; it was enabled but unreferenced, so the linker had already dropped it (no size effect, it just keeps the guarantee explicit). An earlier version with a run-time pointer to the
   table grew the image by 2.8 KB, which is why the product build does not select a profile at run time.
 * Layout is checked, not eyeballed: `tests/test_ui_metrics.c` (static invariants of every profile), the tours at 480x360 with the

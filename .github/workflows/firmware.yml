@@ -82,7 +82,7 @@ jobs:
           export PICO_SDK_PATH=$HOME/pico-sdk
           scripts/build.sh host --clean -- -DNEUPOD_REQUIRE_CRYPTO=ON
       - name: Test
-        run: ctest --test-dir build/host --output-on-failure
+        run: ctest --test-dir build/host --output-on-failure -j3
 
   esp32s3:
     runs-on: ubuntu-24.04

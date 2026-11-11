@@ -32,6 +32,9 @@ uint16_t hal_display_width(void);
 /** Panel height in pixels in the current orientation. */
 uint16_t hal_display_height(void);
 
+/** Short name of the display hardware for logs and the boot splash ("ST7789" on the RP2350 board, "host" in the simulator). */
+const char *hal_display_name(void);
+
 /**
  * Set the write window to the inclusive-exclusive rectangle [x, x+w) x [y, y+h).
  * Waits for any in-flight blit to finish first.

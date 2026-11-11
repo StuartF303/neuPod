@@ -231,6 +231,7 @@ hal_status_t hal_display_init(void) {
     return HAL_OK;
 }
 
+const char *hal_display_name(void) { return "ST7789"; }
 uint16_t hal_display_width(void) { return TFT_WIDTH; }
 uint16_t hal_display_height(void) { return TFT_HEIGHT; }
 

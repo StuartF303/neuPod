@@ -97,14 +97,17 @@ enough) and pins the 320x240 numbers to what the UI had before profiles existed.
 **What is compiled where.** `NEUPOD_UI_HIRES` (CMake option; default ON for `NEUPOD_PLATFORM=host` and `y2`, OFF for rp2350 and
 esp32s3) adds the 480x360 profile, Montserrat 28 (`lv_conf.h`), 480-wide render buffers (`UI_BUF_W_MAX`), a 192 KB LVGL pool
 (`memory_budget.h`) and the layout audit (`ui_audit.c`). Without it the product build has the one 320x240 profile as a compile-time constant, so
-the RP2350 image is unchanged (flash -24 B, RAM identical; see the ADR). A hosted build still picks its profile at run time,
+the RP2350 image is unchanged (flash and RAM identical in size; see the ADR). A hosted build still picks its profile at run time,
 so a host built with the option runs the 320x240 layout byte for byte as before unless told otherwise.
 
 **Host.** `NEUPOD_DISPLAY_SIZE=WxH` (read once; between 320x240 and 640x480, default 320x240) sets the simulated panel size.
 `NEUPOD_UI_AUDIT=1` makes every snapshot also walk the widget tree and print `ui: AUDIT FAIL ...` for a visible widget that
-the panel or its container cuts (widgets clipped away completely, like the list's off-window pool rows, are fine). ctest runs
+lies outside the panel or its container (one pixel over the container's far edge is tolerated; only the list's off-window pool rows
+may be clipped away) and for a label whose text does not fit its box (dots / scrolling labels are not measured). Each snapshot prints
+`ui: audit '<name>' WxH objects=N violations=V`; the tests require that line. At start-up the UI logs `ui: profile WxH on WxH panel`
+and warns when the panel is bigger than the profile (including a build without `NEUPOD_UI_HIRES` on a panel above 320x240). ctest runs
 the tours at 480x360 as `hires_tour`, `hires_input_tour`, `hires_wifi_tour`, `hires_bt_tour` and `hires_art_tour` (snapshots in
-`build/host/snapshots_hires*`, checked by `hires_art_snapshot`), and `audit_320_tour` audits the default size.
+`build/host/snapshots_hires*`, checked by `hires_art_snapshot`), and the default `runtime_smoke` tour runs the audit at 320x240. Each hires test has its own fake card, so `ctest -j3` (as CI runs it) is safe; the 320x240 tours share one card and hold a resource lock. `neupod` exits 3 when fewer snapshots were written than the tour promised (typically `--run-ms` too short), 2 when the audio task starved, 4 without audio stats.
 
 **Known limits at 480x360.** The album art is still decoded to a 64 x 64 thumbnail (`ART_MAX_DIM`, art.h; 8 KB of static RAM on
 the product build) and scaled up by LVGL, 2.6x into the 168 px box, so it is softer than at 320x240. The 48 pt splash wordmark and

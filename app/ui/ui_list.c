@@ -283,6 +283,9 @@ static void build(ui_list_t *l) {
         r->busy = false;
         r->bar = false; /* a rebuild after suspend() has new objects: no bar style on them yet */
         r->obj = lv_obj_create(l->box);
+#ifdef NEUPOD_UI_HIRES
+        lv_obj_add_flag(r->obj, UI_OBJ_FLAG_POOL_ROW);
+#endif
         lv_obj_remove_style_all(r->obj);
         lv_obj_set_size(r->obj, l->w, UI_ROW_H);
         lv_obj_set_scrollable(r->obj, false);

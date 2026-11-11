@@ -84,6 +84,8 @@ hal_status_t hal_display_init(void) {
     return HAL_OK;
 }
 
+const char *hal_display_name(void) { return "host"; }
+
 uint16_t hal_display_width(void) {
     read_size();
     return g_pw;
