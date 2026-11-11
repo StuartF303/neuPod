@@ -13,8 +13,9 @@
 
 #include "os.h"
 
-/* Run-time card hot-plug and orderly stop: only the Y2 has them (a Linux process with a removable card). Other targets keep
- * the code type-checked (`if (NEUPOD_RT_HOTPLUG && ...)`) but the compiler drops it, so their images do not carry it. */
+/* Run-time card hot-plug and orderly stop: only the Y2 has them (a Linux process with a removable card). Other targets do not
+ * compile that code at all (`#if NEUPOD_RT_HOTPLUG`, or `if (NEUPOD_RT_HOTPLUG && ...)` where the compiler drops it), so their
+ * images are unchanged. Only the y2 build, which the y2 CI job makes, compiles and links it. */
 #ifdef NEUPOD_PLATFORM_Y2
 #define NEUPOD_RT_HOTPLUG 1
 #define NEUPOD_RT_STORAGE_HOTPLUG() (rt_config()->storage_hotplug)

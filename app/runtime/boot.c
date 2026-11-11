@@ -76,9 +76,32 @@ static const char *fs_name(hal_fs_type_t t) {
 
 // --- Checks ----------------------------------------------------------------------------------
 
+#if NEUPOD_RT_HOTPLUG
 static os_mutex_t *g_storage_check_mu;         // one storage check at a time: the boot check and every hot-plug retry
 static volatile bool g_storage_check_active;   // a check holds the mutex (the hot-plug poll does not start another)
 static bool g_tried_this_card;                  // hot-plug: the card now in the slot already failed a check
+
+static void storage_check_begin(void) {
+    if (g_storage_check_mu != NULL) {
+        (void)os_mutex_lock(g_storage_check_mu, OS_WAIT_FOREVER);
+    }
+    g_storage_check_active = true;
+}
+
+// @p ok: the verdict of a boot check (a hot-plug re-run has its own bookkeeping).
+static void storage_check_end(bool ok) {
+    if (!ok && rt_config()->storage_hotplug) {
+        g_tried_this_card = hal_storage_card_present(); // a card that is there and failed is not retried until re-inserted
+    }
+    g_storage_check_active = false;
+    if (g_storage_check_mu != NULL) {
+        os_mutex_unlock(g_storage_check_mu);
+    }
+}
+#else
+static inline void storage_check_begin(void) {}
+static inline void storage_check_end(bool ok) { (void)ok; }
+#endif
 
 // Hot-plug builds (the Y2): a check that fails leaves no descriptor behind, so a card that is pulled and put back (or a
 // second attempt) starts from a clean HAL. Other targets keep the card initialised as before.
@@ -126,23 +149,10 @@ static bool check_storage_inner(bool retry) {
 
 static void check_storage(void *arg) {
     (void)arg;
-    if (NEUPOD_RT_HOTPLUG && g_storage_check_mu != NULL) {
-        (void)os_mutex_lock(g_storage_check_mu, OS_WAIT_FOREVER);
-    }
-    if (NEUPOD_RT_HOTPLUG) {
-        g_storage_check_active = true;
-    }
+    storage_check_begin();
     bool ok = check_storage_inner(false);
     settings_service_storage_result(ok); // after the verdict is posted: loading the settings must not delay the splash
-    if (!ok && NEUPOD_RT_STORAGE_HOTPLUG()) {
-        g_tried_this_card = hal_storage_card_present(); // a card that is there and failed is not retried until re-inserted
-    }
-    if (NEUPOD_RT_HOTPLUG) {
-        g_storage_check_active = false;
-    }
-    if (NEUPOD_RT_HOTPLUG && g_storage_check_mu != NULL) {
-        os_mutex_unlock(g_storage_check_mu);
-    }
+    storage_check_end(ok);
 }
 
 static void check_battery(void *arg) {
@@ -317,9 +327,11 @@ static const check_t k_checks[] = {
 };
 
 void boot_start(void) {
-    if (NEUPOD_RT_HOTPLUG && g_storage_check_mu == NULL) {
+#if NEUPOD_RT_HOTPLUG
+    if (g_storage_check_mu == NULL) {
         g_storage_check_mu = os_mutex_create(); // before the check tasks exist
     }
+#endif
     g_start_ms = os_tick_ms();
     g_started = true;
     // The bus is initialised once, here; the two I2C checks then take turns on it (rt_i2c_mutex).

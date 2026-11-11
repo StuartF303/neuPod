@@ -37,14 +37,16 @@ static bool resolve_v(cap_id_t id, bool ok, bool timeout, const char *brief, con
     char text[CAP_TEXT_LEN];
     vsnprintf(text, sizeof text, fmt, ap);
 
-    bool changed = false, late = false;
+    bool changed = false, late = false, late_ok = false;
     if (os_mutex_lock(g_lock, OS_WAIT_FOREVER)) {
         bool pending = g_caps.state[id] == CAP_PENDING;
         bool degraded = g_caps.state[id] == CAP_DEGRADED;
 #if NEUPOD_RT_HOTPLUG
         late = !pending && degraded && ((ok && g_timed_out[id]) || g_rearmed[id]);
+        late_ok = late && ok; // a re-armed check that failed again replaces the text but is not a "late result"
 #else
         late = !pending && ok && degraded && g_timed_out[id];
+        late_ok = late;
 #endif
         if (pending || late) {
 #if NEUPOD_RT_HOTPLUG
@@ -59,7 +61,7 @@ static bool resolve_v(cap_id_t id, bool ok, bool timeout, const char *brief, con
         os_mutex_unlock(g_lock);
     }
     if (changed) {
-        printf("boot: %-9s %s: %s%s\n", cap_name(id), ok ? "ok      " : "DEGRADED", (NEUPOD_RT_HOTPLUG ? (late && ok) : late) ? "(late result after timeout) " : "", text);
+        printf("boot: %-9s %s: %s%s\n", cap_name(id), ok ? "ok      " : "DEGRADED", late_ok ? "(late result after timeout) " : "", text);
     }
     return changed;
 }

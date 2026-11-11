@@ -30,7 +30,7 @@ void boot_start(void);
 bool boot_poll(void);
 
 /**
- * Only with rt_config()->storage_hotplug. Call regularly (the monitor does, every 100 ms; it rate-limits itself): when storage is
+ * Y2 only, and only with rt_config()->storage_hotplug. Call regularly (the monitor does, every 100 ms; it rate-limits itself): when storage is
  * unavailable and hal_storage_card_present() says a card has appeared, re-runs the storage check in its own task, which upgrades
  * the capability to OK and loads the settings. A card that fails the check is not retried until it has been removed and inserted again.
  */

@@ -402,3 +402,9 @@ foreach(T y2_input y2_sd y2_power y2_fb y2_sysfs y2_poweroff y2_charge)
   target_link_libraries(test_${T} neupod_y2_logic neupod_rt_core) # neupod_rt_core: input_events_diff (the real app mapping)
   add_test(NAME ${T} COMMAND test_${T})
 endforeach()
+
+# The Y2-only capability re-arm logic: capabilities.c compiled on its own with NEUPOD_PLATFORM_Y2 (the host build has it off).
+add_executable(test_caps_rearm test_caps_rearm.c ${CMAKE_SOURCE_DIR}/app/runtime/capabilities.c)
+target_compile_definitions(test_caps_rearm PRIVATE NEUPOD_PLATFORM_Y2=1)
+target_include_directories(test_caps_rearm PRIVATE ${CMAKE_SOURCE_DIR}/app/include)
+add_test(NAME caps_rearm COMMAND test_caps_rearm)
