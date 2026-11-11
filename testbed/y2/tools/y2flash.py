@@ -437,7 +437,8 @@ def canary_window(t):
 def canary_guards(t):
     c = canary_addr(t)
     require(t.start <= c and c + CANARY_LEN <= t.end and c % SECTOR == 0, f"canary for {t.name} outside the target")
-    landing = [(x.start, x.end) for x in TARGETS.values()] + [EXPDB]
+    # LOGO counts as a landing spot only for LOGO's own canary: the other targets keep their pre-LOGO landing set
+    landing = [(x.start, x.end) for x in TARGETS.values() if x.name != "LOGO" or t.name == "LOGO"] + [EXPDB]
     for shift in (-READ_BASE, READ_BASE):
         a = c + shift
         require(any(lo <= a and a + CANARY_LEN <= hi for lo, hi in landing),

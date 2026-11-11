@@ -40,7 +40,7 @@ see `scripts/flash-logo.sh`), `fbtool image /etc/splash.y2i` here and in the roo
 
 - `splash/neupod-splash-480x360-master.png` is the 8-bit master (the PNG described below, background smoothed).
 - LK can only show RGB565, and it expands a 565 pixel to the framebuffer by a **plain shift** (R = r5 << 3, G = g6 << 2, B = b5 << 3,
-  low bits zero; the 32 bpp branch of LK's pixel writer, `lk.bin` of v3.2.0 at file offset 0x1c314), not by bit replication. So the brightest
+  low bits zero; the 32 bpp branch of LK's pixel writer, `lk.bin` of v3.2.0 at file offset 0x1c314) - from the `lk.bin` disassembly, **unverified on hardware until the first LOGO flash**, not by bit replication. So the brightest
   value LK shows is (248, 252, 248), not 255.
 - `splash/neupod-splash-480x360.png` is the **canonical** splash: the master rounded once to RGB565 (`round(v * max / 255)`; the background gradient is ordered-dithered, the wordmark is not, which keeps it crisp) and expanded back by LK's shift. Every pixel has its low bits zero. A master that
   is already a bit-replicated 565 image (the host simulator's snapshots) is recovered exactly. `y2splash.py quantize` makes it.

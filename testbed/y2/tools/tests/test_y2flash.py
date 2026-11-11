@@ -1260,6 +1260,23 @@ class LogoTarget(Base):
         end_hi = LOGO.end - y2.CANARY_LEN + y2.READ_BASE
         self.assertFalse(y2.EXPDB[0] <= end_hi and end_hi + 4096 <= y2.EXPDB[1])
 
+    def test_no_other_targets_canary_may_land_in_logo_and_the_guard_would_reject_it(self):
+        for t in y2.TARGETS.values():
+            if t.name == "LOGO":
+                continue
+            c = y2.canary_addr(t)
+            for shift in (-y2.READ_BASE, y2.READ_BASE):
+                a = c + shift
+                self.assertFalse(LOGO.start <= a and a + y2.CANARY_LEN <= LOGO.end, (t.name, hex(a)))
+            y2.canary_guards(t)
+        # force a landing in LOGO: a BOOTIMG-like target whose canary + 0xb80000 falls inside LOGO must be rejected
+        fake = y2.Target("FAKE", LOGO.start - y2.READ_BASE, 0x100000)
+        with mock.patch.dict(y2.TARGETS, {"FAKE": fake}):
+            with self.assertRaises(y2.SafetyViolation):
+                y2.canary_guards(fake)
+        # and LOGO's own canary is still accepted
+        self.assertEqual(y2.canary_guards(LOGO), 0x45FF000)
+
     def test_oversize_and_empty_images_refused(self):
         for image in (b"\1" * (LOGO.size + 1), b""):
             with self.assertRaises(y2.Y2Error):

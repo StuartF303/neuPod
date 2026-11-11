@@ -22,6 +22,7 @@ import sys
 import zlib
 
 # ---- RGB565 as the stock LK shows it ------------------------------------------------------
+# (From lk.bin disassembly, unverified on hardware until the first LOGO flash.)
 # LK (lk.bin of y2_v3.2.0, thumb function at file offset 0x1c314, the 32 bpp branch of the pixel writer) expands a
 # 565 pixel x to the framebuffer word  0xff000000 | (x & 0xf800) << 8 | (x & 0x07e0) << 5 | (x << 3) & 0xff,
 # i.e. a PLAIN SHIFT: R = r5 << 3, G = g6 << 2, B = b5 << 3, low bits zero (no bit replication). So the
