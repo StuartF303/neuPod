@@ -57,6 +57,13 @@
     "x s s s s _ s s s s s s _ m w _ _ _ s _ wait:pause wait:art x snap:art-cover m m s _ _ wait:pause wait:art x snap:art-embedded "  \
     "m m m m wait:art x x snap:art-home _ _ s s _ s _ wait:pause x snap:art-none m"
 
+// Now Playing seek mode (UI-7): a 20 s WAV album (seekable) is paused, Select hands the wheel to seek, the wheel scrubs, 3 s of rest drops it back to
+// volume; then an MP3 (no frame index yet): Select answers "Seek not available". The tracks are paused at once (wait:pause) so the pictures do not
+// depend on the clock; the fixture is made by ctest (tests/CMakeLists.txt, seek card).
+#define TOUR_SEEK                                                                                  \
+    "x s s s _ _ _ _ x wait:pause snap:seek-volume _ snap:seek-mode 8*s snap:seek-scrub "          \
+    "x x x x x x x x x x x x snap:seek-timeout m m s _ _ x wait:pause _ snap:seek-unavailable m"
+
 static unsigned g_expect = 18;
 static const char *g_snapshot_dir;
 static unsigned g_snapshots;
@@ -120,6 +127,10 @@ int main(int argc, char **argv) {
             cfg.ui_script = TOUR_ART;
             cfgp_tour = true;
             g_expect = 4;
+        } else if (strcmp(argv[i], "--tour-seek") == 0) {
+            cfg.ui_script = TOUR_SEEK;
+            cfgp_tour = true;
+            g_expect = 7; // the splash, home and the five named snapshots
         } else if (strcmp(argv[i], "--script") == 0 && i + 1 < argc) {
             cfg.ui_script = argv[++i]; // ad-hoc key script, same tokens as the tour
         } else if (strcmp(argv[i], "--splash-hold-ms") == 0 && i + 1 < argc) {
@@ -127,7 +138,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--snapshots") == 0 && i + 1 < argc) {
             g_snapshot_dir = argv[++i];
         } else {
-            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art] [--script KEYS] [--snapshots DIR]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek] [--script KEYS] [--snapshots DIR]\n", argv[0]);
             return 64;
         }
     }

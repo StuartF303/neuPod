@@ -39,6 +39,9 @@ typedef struct {
     void (*track_changed)(const char *path, const track_info_t *info);
     /** It could not be started or fed (reason for the user). */
     void (*failed)(const char *msg);
+    /** The stream that was playing broke (card read error mid-track). Not the answer to a start request, so the owner must not count it as one.
+     *  Optional: failed() is used when it is NULL. */
+    void (*stream_failed)(const char *msg);
     uint32_t (*now_ms)(void);
     void (*delay_ms)(uint32_t ms);
 } track_stream_ops_t;

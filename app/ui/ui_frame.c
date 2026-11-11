@@ -223,6 +223,14 @@ const char *ui_frame_top_title(void) {
     return t != NULL && t->title != NULL ? t->title : "";
 }
 
+// A folder queue is playing (or opening / paused): Left / Right skip tracks on every screen that leaves them alone.
+static bool queue_active(void) {
+    player_info_t pi;
+    player_get(&pi);
+    return pi.src == PLAYER_SRC_FILE && pi.queue_len != 0 &&
+           (pi.state == PLAYER_PLAYING || pi.state == PLAYER_PAUSED || pi.state == PLAYER_OPENING);
+}
+
 void ui_frame_input(const input_event_t *ev, uint32_t now_ms) {
     if (ui_idle_activity(&g_idle, now_ms)) {
         backlight_transition(); /* before the screen sees the event: a slider handler re-applies the level */
@@ -243,13 +251,18 @@ void ui_frame_input(const input_event_t *ev, uint32_t now_ms) {
         if (top->on_button != NULL && top->on_button(top, ev->button)) {
             break;
         }
-        if (ev->button == HAL_BTN_MENU) {
-            ui_frame_pop(); // Menu = back (ignored on the home screen); playback continues
-        } else if (ev->button == HAL_BTN_PLAY) {
-            player_pause_toggle(); // Play/Pause works on every screen
+        switch (ui_global_key(ev->button, (ev->button == HAL_BTN_LEFT || ev->button == HAL_BTN_RIGHT) && queue_active())) {
+        case UI_KEY_BACK: ui_frame_pop(); break; // Menu = back (ignored on the home screen); playback continues
+        case UI_KEY_PAUSE: player_pause_toggle(); break; // Play/Pause works on every screen
+        case UI_KEY_NEXT: player_next(); break;          // Left / Right skip on every screen that did not use them
+        case UI_KEY_PREV: player_prev(); break;
+        case UI_KEY_NONE: break;
         }
         break;
     case INPUT_BUTTON_UP:
+        if (top->on_button_up != NULL) {
+            top->on_button_up(top, ev->button);
+        }
         break;
     }
 }

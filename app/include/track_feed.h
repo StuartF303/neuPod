@@ -39,6 +39,7 @@ typedef struct {
     uint8_t md5[16];
     uint64_t file_size;
     uint64_t start_frame;  /**< where the stream starts, in frames of the track (0 unless track_feed_seek() moved it) */
+    bool seekable;         /**< track_feed_seek() lands exactly on any frame: WAV, and FLAC with a seek table (the UI offers Seek only then) */
 } track_info_t;
 
 typedef enum { TRACK_FEED_BYTES, TRACK_FEED_M4A } track_feed_kind_t;
