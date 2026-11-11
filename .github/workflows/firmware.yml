@@ -23,10 +23,9 @@ jobs:
         run: git submodule update --init lib/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico lib/FreeRTOS-Kernel lib/lvgl
 
       - name: Install toolchain
+        timeout-minutes: 15
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            cmake ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi \
+          scripts/ci-apt.sh cmake ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi \
             libstdc++-arm-none-eabi-newlib build-essential python3
 
       - name: Cache Pico SDK
@@ -70,9 +69,8 @@ jobs:
       - name: Fetch submodules
         run: git submodule update --init lib/FreeRTOS-Kernel lib/lvgl
       - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends cmake ninja-build build-essential libsdl2-dev
+        timeout-minutes: 15
+        run: scripts/ci-apt.sh cmake ninja-build build-essential libsdl2-dev
       - name: Fetch mbed TLS (only that submodule of the Pico SDK; the secrets code and its tests need it)
         run: |
           git clone --depth 1 --branch "$PICO_SDK_VERSION" https://github.com/raspberrypi/pico-sdk.git ~/pico-sdk
