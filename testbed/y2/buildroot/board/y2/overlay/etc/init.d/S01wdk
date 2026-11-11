@@ -1,0 +1,6 @@
+#!/bin/sh
+# MTK in-kernel watchdog kicker (same write as the stock init.rc). Without it the SoC resets.
+case "$1" in
+	start) echo "0 20 30" >/proc/wdk 2>/dev/null ;;
+esac
+exit 0
