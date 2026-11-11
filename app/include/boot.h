@@ -14,6 +14,8 @@
 
 #include <stdbool.h>
 
+#include "runtime.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -32,7 +34,11 @@ bool boot_poll(void);
  * unavailable and hal_storage_card_present() says a card has appeared, re-runs the storage check in its own task, which upgrades
  * the capability to OK and loads the settings. A card that fails the check is not retried until it has been removed and inserted again.
  */
+#if NEUPOD_RT_HOTPLUG
 void boot_storage_hotplug_poll(void);
+#else
+static inline void boot_storage_hotplug_poll(void) {}
+#endif
 
 #ifdef __cplusplus
 }

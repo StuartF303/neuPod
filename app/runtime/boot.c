@@ -352,6 +352,7 @@ void boot_start(void) {
 }
 
 // --- Card inserted or removed after boot (Y2) -------------------------------------------------------------------------
+#if NEUPOD_RT_HOTPLUG
 
 #define HOTPLUG_POLL_MS 2000u
 static volatile bool g_hotplug_busy;
@@ -419,6 +420,8 @@ void boot_storage_hotplug_poll(void) {
         g_tried_this_card = false;
     }
 }
+
+#endif // NEUPOD_RT_HOTPLUG
 
 bool boot_poll(void) {
     if (!g_started) {
