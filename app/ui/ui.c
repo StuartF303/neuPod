@@ -5,6 +5,7 @@
  * checks resolved (min 1.5 s, max 5 s) -> fade to the home screen -> event loop.
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "battery_store.h"
@@ -26,9 +27,10 @@
 #define FADE_MS 400u
 #define HOME_SNAPSHOT_AFTER_MS 900u // after the fade has finished
 
-#define BUF_LINES 24 // two partial-render buffers of 320 x 24 RGB565 = 15 KB each
-static uint8_t g_buf1[UI_W * BUF_LINES * 2] __attribute__((aligned(4)));
-static uint8_t g_buf2[UI_W * BUF_LINES * 2] __attribute__((aligned(4)));
+// Two partial-render buffers of UI_BUF_W_MAX x UI_BUF_LINES_MAX RGB565: 320 x 24 = 15 KB each on the product build; the
+// hosted (NEUPOD_UI_HIRES) build sizes them for the 480x360 profile. Only the profile's own w x buf_lines is handed to LVGL.
+static uint8_t g_buf1[UI_BUF_W_MAX * UI_BUF_LINES_MAX * 2] __attribute__((aligned(4)));
+static uint8_t g_buf2[UI_BUF_W_MAX * UI_BUF_LINES_MAX * 2] __attribute__((aligned(4)));
 
 // Blocking flush: set the window, DMA the strip, wait. Async (render the next strip while the
 // previous one is on the wire) is possible later because there are two buffers.
@@ -46,6 +48,9 @@ static void flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
 }
 
 static bool lvgl_setup(void) {
+#ifdef NEUPOD_UI_HIRES
+    ui_metrics_set(ui_metrics_select(hal_display_width(), hal_display_height())); // the product build has the one 320x240 profile
+#endif
     lv_init();
     lv_tick_set_cb(os_tick_ms);
     lv_display_t *d = lv_display_create(UI_W, UI_H);
@@ -53,7 +58,7 @@ static bool lvgl_setup(void) {
         return false;
     }
     lv_display_set_color_format(d, LV_COLOR_FORMAT_RGB565);
-    lv_display_set_buffers(d, g_buf1, g_buf2, sizeof g_buf1, LV_DISPLAY_RENDER_MODE_PARTIAL);
+    lv_display_set_buffers(d, g_buf1, g_buf2, (uint32_t)(UI_W * UIM->buf_lines * 2), LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(d, flush_cb);
     return true;
 }
@@ -199,6 +204,11 @@ static void screen_ready(const char *name) {
     lv_refr_now(NULL); // make sure the screen's latest state is on the panel before anyone looks
     sample_lvgl_memory();
     printf("ui: screen '%s' lvgl_mem=%u/%uB depth=%d\n", name, (unsigned)g_perf.mem_used, (unsigned)g_perf.mem_total, ui_frame_depth());
+#ifdef NEUPOD_UI_HIRES
+    if (getenv("NEUPOD_UI_AUDIT") != NULL) { // host tests: every snapshot is also a layout check
+        (void)ui_layout_audit(name);
+    }
+#endif
     const neupod_runtime_config_t *cfg = rt_config();
     if (cfg->on_screen != NULL) {
         cfg->on_screen(name, cfg->ctx);

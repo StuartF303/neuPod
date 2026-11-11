@@ -181,6 +181,70 @@ set_source_files_properties(test_art_snapshot.c PROPERTIES COMPILE_OPTIONS "${NE
 add_test(NAME art_snapshot COMMAND test_art_snapshot ${CMAKE_BINARY_DIR}/snapshots_art)
 set_tests_properties(art_snapshot PROPERTIES FIXTURES_REQUIRED art_snapshots)
 
+if(NEUPOD_UI_HIRES) # (the layout audit and the 480x360 profile exist only in hosted builds with the hires UI)
+# ---- 480x360 (the Y2 testbed panel, ADR-0018): the same tours on a host display set to 480x360 with the layout audit on --------------
+# NEUPOD_DISPLAY_SIZE makes the host HAL a 480x360 panel; the UI then selects its 1.5x metrics profile. NEUPOD_UI_AUDIT=1 makes every
+# snapshot also walk the widget tree: a widget cut by the panel or its container prints "ui: AUDIT FAIL" and fails the test.
+# Separate fixture folders (and snapshot folders) so the 320x240 tours' stored settings and PPMs are never reused.
+set(HIRES_FS ${CMAKE_BINARY_DIR}/fsroot_hires)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/assets/fsroot/ DESTINATION ${HIRES_FS})
+file(MAKE_DIRECTORY ${HIRES_FS}/many)
+foreach(I RANGE 1 300)
+  file(WRITE ${HIRES_FS}/many/file_${I}.txt "x")
+endforeach()
+set(HIRES_ENV "SDL_VIDEODRIVER=dummy;NEUPOD_DISPLAY_SIZE=480x360;NEUPOD_UI_AUDIT=1;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img")
+foreach(T tour:snapshots_hires:fsroot_hires:tour tour-input:snapshots_hires_input:fsroot_hires:input_tour tour-wifi:snapshots_hires_wifi:fsroot_hires_wifi:wifi_tour tour-bt:snapshots_hires_bt:fsroot_hires_bt:bt_tour)
+  string(REPLACE ":" ";" TL "${T}")
+  list(GET TL 0 T_FLAG)
+  list(GET TL 1 T_SNAP)
+  list(GET TL 2 T_FS)
+  list(GET TL 3 T_NAME)
+  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/${T_SNAP})
+  add_test(NAME hires_${T_NAME}
+    COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --${T_FLAG} --snapshots ${CMAKE_BINARY_DIR}/${T_SNAP})
+  set_tests_properties(hires_${T_NAME} PROPERTIES
+    ENVIRONMENT "${HIRES_ENV};NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/${T_FS}"
+    FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    TIMEOUT 120)
+endforeach()
+
+# The 320x240 default must stay layout-clean too: the main tour once more, audit on (its snapshots are the ones runtime_smoke wrote).
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_audit320)
+add_test(NAME audit_320_tour
+  COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --tour --snapshots ${CMAKE_BINARY_DIR}/snapshots_audit320)
+set_tests_properties(audit_320_tour PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_fixture;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
+  FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  TIMEOUT 120)
+
+# Album art at 480x360: its own fake card (settings wiped first, like art_tour), then the pixel checks of the 168 / 144 px art boxes.
+set(HIRES_ART_FS ${CMAKE_BINARY_DIR}/fsroot_hires_art)
+file(MAKE_DIRECTORY "${HIRES_ART_FS}/Album A" "${HIRES_ART_FS}/Album B" "${HIRES_ART_FS}/Album C")
+file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/flac16_44k_st.flac "${HIRES_ART_FS}/Album A/track.flac")
+file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/art/q420_600x600.jpg "${HIRES_ART_FS}/Album A/Cover.JPG")
+file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/art/flac_with_jpeg.flac "${HIRES_ART_FS}/Album B/track.flac")
+file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/art/flac_with_png.flac "${HIRES_ART_FS}/Album C/track.flac")
+file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/art/qprog_300x300.jpg "${HIRES_ART_FS}/Album C/cover.jpg")
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_hires_art)
+add_test(NAME hires_art_tour_reset COMMAND ${CMAKE_COMMAND} -E remove_directory ${HIRES_ART_FS}/.neupod)
+set_tests_properties(hires_art_tour_reset PROPERTIES FIXTURES_SETUP hires_art_clean)
+add_test(NAME hires_art_tour
+  COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --tour-art --snapshots ${CMAKE_BINARY_DIR}/snapshots_hires_art)
+set_tests_properties(hires_art_tour PROPERTIES
+  ENVIRONMENT "${HIRES_ENV};NEUPOD_FS_ROOT=${HIRES_ART_FS}"
+  FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  FIXTURES_REQUIRED hires_art_clean
+  FIXTURES_SETUP hires_art_snapshots
+  TIMEOUT 120)
+add_executable(test_art_snapshot_hires test_art_snapshot_hires.c)
+set_source_files_properties(test_art_snapshot_hires.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+add_test(NAME hires_art_snapshot COMMAND test_art_snapshot_hires ${CMAKE_BINARY_DIR}/snapshots_hires_art)
+set_tests_properties(hires_art_snapshot PROPERTIES FIXTURES_REQUIRED hires_art_snapshots)
+endif()
+
 # The bare-metal audio core (core 1) may not use the RTOS, stdio, malloc or SDK blocking primitives.
 add_test(NAME audio_core_rules
   COMMAND ${CMAKE_COMMAND} -DSRC_DIR=${CMAKE_SOURCE_DIR} -P ${CMAKE_SOURCE_DIR}/cmake/check_core1_rules.cmake)
@@ -190,6 +254,13 @@ target_link_libraries(test_boot_briefs lvgl)
 target_include_directories(test_boot_briefs PRIVATE ${CMAKE_SOURCE_DIR}/app/runtime)
 add_test(NAME boot_briefs COMMAND test_boot_briefs)
 set_source_files_properties(test_boot_briefs.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+# UI metrics profiles (app/ui/ui_metrics.c): layout invariants of every compiled-in resolution profile, 320x240 pinned to its historic values.
+add_executable(test_ui_metrics test_ui_metrics.c ${CMAKE_SOURCE_DIR}/app/ui/ui_metrics.c)
+target_link_libraries(test_ui_metrics lvgl)
+target_include_directories(test_ui_metrics PRIVATE ${CMAKE_SOURCE_DIR}/app/runtime)
+add_test(NAME ui_metrics COMMAND test_ui_metrics)
+set_source_files_properties(test_ui_metrics.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
 add_executable(test_ui_logic test_ui_logic.c)
 target_include_directories(test_ui_logic PRIVATE ${CMAKE_SOURCE_DIR}/app/ui)

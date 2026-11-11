@@ -12,16 +12,13 @@
 #include "ui_internal.h"
 #include "ui_logic.h"
 
-#define POOL (UI_ROWS_VISIBLE + 2)
+#define POOL (UI_ROWS_MAX + 2)
 #define SCROLL_ANIM_MS 110
 
 /* Right-edge glyph: four little rectangles, drawn as a signal meter (rising bars) or as pulsing dots (busy). */
-#define GLYPH_N 4
-#define GLYPH_W 22 /* 4 x 4 px + 3 x 2 px gaps */
-#define GLYPH_GAP 6
-#define ROW_INSET 8      /* right inset of the rightmost item */
-#define ROW_CHEV_W 22    /* inset when the row has a chevron */
-static const int32_t k_bar_h[GLYPH_N] = {5, 8, 11, 14};
+#define GLYPH_N UI_METER_BARS
+/* Metrics: glyph_bar_w (4 px at 320x240), glyph_step (6), glyph_gap to the detail text, row_inset / chev_w (right insets). */
+static int32_t glyph_w(void) { return (GLYPH_N - 1) * UIM->glyph_step + UIM->glyph_bar_w; }
 
 enum { GS_GREEN, GS_YELLOW, GS_RED, GS_OFF, GS_OFF_SEL, GS_DOT0, GS_DOT1, GS_DOT2, GS_DOT0_SEL, GS_DOT1_SEL, GS_DOT2_SEL, GS_N };
 static lv_style_t g_gs[GS_N]; /* shared by every glyph rectangle: no per-object style memory */
@@ -122,7 +119,7 @@ static void glyph_apply(ui_list_t *l, row_t *r, bool restyle_only) {
         }
         return;
     }
-    int32_t x0 = l->w - (r->chevron ? ROW_CHEV_W : ROW_INSET) - GLYPH_W;
+    int32_t x0 = l->w - (r->chevron ? UIM->chev_w : UIM->row_inset) - glyph_w();
     bool on = r->sel && l->focus;
     for (int i = 0; i < GLYPH_N; i++) {
         if (r->g[i] == NULL) {
@@ -138,17 +135,17 @@ static void glyph_apply(ui_list_t *l, row_t *r, bool restyle_only) {
         if (r->busy) { /* a bright dot travelling left to right, with a short tail */
             int32_t d = (int32_t)((l->busy_phase + GLYPH_N) - (uint32_t)i) % GLYPH_N;
             gs = (d == 0 ? GS_DOT2 : d == 1 ? GS_DOT1 : GS_DOT0) + (on ? GS_DOT0_SEL - GS_DOT0 : 0);
-            h = 4;
-            y = UI_ROW_H / 2 - 2;
+            h = UIM->glyph_bar_w;
+            y = UI_ROW_H / 2 - h / 2;
         } else {
             int cls = ui_signal_class(r->bars);
-            h = k_bar_h[i];
-            y = UI_ROW_H / 2 + 7 - h;
+            h = UIM->meter_h[i];
+            y = UI_ROW_H / 2 + UIM->meter_h[GLYPH_N - 1] / 2 - h;
             gs = i < r->bars ? (cls == 3 ? GS_GREEN : cls == 2 ? GS_YELLOW : GS_RED) : (on ? GS_OFF_SEL : GS_OFF);
         }
         if (!restyle_only) { /* the busy timer only swaps styles: the geometry was set when the row was bound */
-            lv_obj_set_size(r->g[i], 4, h);
-            lv_obj_set_pos(r->g[i], x0 + i * 6, y);
+            lv_obj_set_size(r->g[i], UIM->glyph_bar_w, h);
+            lv_obj_set_pos(r->g[i], x0 + i * UIM->glyph_step, y);
         }
         glyph_set_style(r, i, gs);
     }
@@ -200,11 +197,11 @@ static void bind_row(ui_list_t *l, row_t *r, int32_t idx) {
     r->chevron = it.chevron;
     r->busy = it.busy;
     r->bars = it.bars > 4 ? 4 : it.bars;
-    int32_t glyph_w = (r->busy || r->bars != 0) ? GLYPH_W + GLYPH_GAP : 0;
-    int32_t detail_w = it.detail[0] ? (int32_t)strlen(it.detail) * 8 + 10 : 0; /* about 7.5 px per character */
-    int32_t label_w = l->w - 10 - (it.chevron ? ROW_CHEV_W : ROW_INSET) - glyph_w - detail_w;
+    int32_t gw = (r->busy || r->bars != 0) ? glyph_w() + UIM->glyph_gap : 0;
+    int32_t detail_w = it.detail[0] ? (int32_t)strlen(it.detail) * UIM->detail_char_w + UIM->detail_pad : 0; /* about 7.5 px per character at 14 pt */
+    int32_t label_w = l->w - UIM->pad - (it.chevron ? UIM->chev_w : UIM->row_inset) - gw - detail_w;
     lv_obj_set_width(r->label, label_w);
-    lv_obj_align(r->detail, LV_ALIGN_RIGHT_MID, -(it.chevron ? ROW_CHEV_W : ROW_INSET) - glyph_w, 0);
+    lv_obj_align(r->detail, LV_ALIGN_RIGHT_MID, -(it.chevron ? UIM->chev_w : UIM->row_inset) - gw, 0);
     style_row(l, r, it.dim);
     glyph_apply(l, r, false);
 }
@@ -218,8 +215,8 @@ static void update_scrollbar(ui_list_t *l) {
     }
     lv_obj_set_hidden(l->sb, false);
     int32_t h = view * view / total;
-    if (h < 14) {
-        h = 14;
+    if (h < UIM->sb_min_h) {
+        h = UIM->sb_min_h;
     }
     int32_t y = (view - h) * l->scroll_px / (total - view);
     lv_obj_set_height(l->sb, h);
@@ -293,18 +290,18 @@ static void build(ui_list_t *l) {
         r->c_detail = r->c_chev = UI_L_DIM;
         r->label = ui_label(r->obj, "", UI_L_TEXT);
         lv_label_set_long_mode(r->label, LV_LABEL_LONG_DOT);
-        lv_obj_set_height(r->label, 18); /* fixed height: "..." instead of wrapping onto a second line */
-        lv_obj_align(r->label, LV_ALIGN_LEFT_MID, 10, 0);
+        lv_obj_set_height(r->label, UIM->line_h); /* fixed height: "..." instead of wrapping onto a second line */
+        lv_obj_align(r->label, LV_ALIGN_LEFT_MID, UIM->pad, 0);
         r->detail = ui_label(r->obj, "", UI_L_DIM);
         r->chev = ui_label(r->obj, "", UI_L_DIM);
-        lv_obj_align(r->chev, LV_ALIGN_RIGHT_MID, -8, 0);
+        lv_obj_align(r->chev, LV_ALIGN_RIGHT_MID, -UIM->row_inset, 0);
         lv_obj_set_hidden(r->obj, true);
     }
     l->sb = lv_obj_create(l->box);
     lv_obj_remove_style_all(l->sb);
-    lv_obj_set_size(l->sb, 3, 20);
-    lv_obj_set_x(l->sb, l->w - 5);
-    lv_obj_set_style_radius(l->sb, 2, 0);
+    lv_obj_set_size(l->sb, UIM->sb_w, UIM->sb_min_h); /* hidden until update_scrollbar() sizes it */
+    lv_obj_set_x(l->sb, l->w - UIM->sb_w - UIM->sb_gap);
+    lv_obj_set_style_radius(l->sb, UIM->sb_radius, 0);
     lv_obj_set_style_bg_color(l->sb, lv_color_hex(UI_L_FAINT), 0);
     lv_obj_set_style_bg_opa(l->sb, LV_OPA_COVER, 0);
     lv_obj_set_hidden(l->sb, true);

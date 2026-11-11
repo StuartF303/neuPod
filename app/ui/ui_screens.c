@@ -93,7 +93,7 @@ lv_obj_t *ui_artwork(lv_obj_t *parent, int32_t x, int32_t y, int32_t size) {
     lv_obj_remove_style_all(a);
     lv_obj_set_size(a, size, size);
     lv_obj_set_pos(a, x, y);
-    lv_obj_set_style_radius(a, 3, 0);
+    lv_obj_set_style_radius(a, UIM->art_radius, 0);
     lv_obj_set_style_bg_color(a, lv_color_hex(0x5A6B8A), 0);
     lv_obj_set_style_bg_grad_color(a, lv_color_hex(0x1E2A44), 0);
     lv_obj_set_style_bg_grad_dir(a, LV_GRAD_DIR_VER, 0);
@@ -105,7 +105,7 @@ lv_obj_t *ui_artwork(lv_obj_t *parent, int32_t x, int32_t y, int32_t size) {
     lv_obj_set_style_radius(ring, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_border_color(ring, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_border_opa(ring, LV_OPA_40, 0);
-    lv_obj_set_style_border_width(ring, 3, 0);
+    lv_obj_set_style_border_width(ring, UIM->art_ring_w, 0);
     lv_obj_center(ring);
     lv_obj_t *dot = lv_obj_create(a);
     lv_obj_remove_style_all(dot);
@@ -129,12 +129,12 @@ ui_screen_t *ui_screen_placeholder_create(const char *title, const char *line1, 
         return NULL;
     }
     lv_obj_t *a = ui_label(p->base.root, line1, UI_L_TEXT);
-    lv_obj_set_style_text_font(a, &lv_font_montserrat_20, 0);
-    lv_obj_align(a, LV_ALIGN_CENTER, 0, -14);
+    lv_obj_set_style_text_font(a, UIM->font_large, 0);
+    lv_obj_align(a, LV_ALIGN_CENTER, 0, UIM->ph_dy1);
     lv_obj_t *b = ui_label(p->base.root, line2, UI_L_DIM);
-    lv_obj_set_width(b, UI_W - 40);
+    lv_obj_set_width(b, UI_W - 2 * UIM->ph_margin);
     lv_obj_set_style_text_align(b, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(b, LV_ALIGN_CENTER, 0, 18);
+    lv_obj_align(b, LV_ALIGN_CENTER, 0, UIM->ph_dy2);
     return &p->base;
 }
 
@@ -342,19 +342,20 @@ static void home_tick(ui_screen_t *s) {
 }
 
 ui_screen_t *ui_screen_home_create(void) {
-    menu_screen_t *m = menu_new("neuPod", k_home, (int32_t)(sizeof k_home / sizeof k_home[0]), 160);
+    const int32_t pane_w = UI_W - UIM->home_list_w;
+    menu_screen_t *m = menu_new("neuPod", k_home, (int32_t)(sizeof k_home / sizeof k_home[0]), UIM->home_list_w);
     if (m == NULL) {
         return NULL;
     }
-    lv_obj_t *pane = pane_new(m->base.root, 160, 160);
-    m->art_box = ui_artwork(pane, 32, 32, 96); /* keeps its ring and dot (children 0, 1) while idle */
+    lv_obj_t *pane = pane_new(m->base.root, UIM->home_list_w, pane_w);
+    m->art_box = ui_artwork(pane, UIM->home_art_off, UIM->home_art_off, UIM->home_art); /* keeps its ring and dot (children 0, 1) while idle */
     m->art_img = lv_image_create(m->art_box);
-    lv_obj_set_size(m->art_img, 96, 96);
+    lv_obj_set_size(m->art_img, UIM->home_art, UIM->home_art);
     lv_image_set_inner_align(m->art_img, LV_IMAGE_ALIGN_CONTAIN);
     lv_obj_center(m->art_img);
     lv_obj_set_hidden(m->art_img, true);
     m->art_note = ui_label(m->art_box, LV_SYMBOL_AUDIO, 0xFFFFFF);
-    lv_obj_set_style_text_font(m->art_note, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_font(m->art_note, UIM->font_huge, 0);
     lv_obj_set_style_text_opa(m->art_note, LV_OPA_50, 0);
     lv_obj_center(m->art_note);
     lv_obj_set_hidden(m->art_note, true);
@@ -362,12 +363,11 @@ ui_screen_t *ui_screen_home_create(void) {
     m->uptime = ui_label(pane, "", UI_L_TEXT);
     m->storage = ui_label(pane, "", UI_L_DIM);
     lv_obj_t *lines[3] = {m->line1, m->uptime, m->storage};
-    static const int32_t ys[3] = {140, 162, 182};
     for (int i = 0; i < 3; i++) {
-        lv_obj_set_width(lines[i], 160);
+        lv_obj_set_width(lines[i], pane_w);
         lv_label_set_long_mode(lines[i], LV_LABEL_LONG_DOT);
         lv_obj_set_style_text_align(lines[i], LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_pos(lines[i], 0, ys[i]);
+        lv_obj_set_pos(lines[i], 0, UIM->home_line_y[i]);
     }
     m->base.on_tick = home_tick;
     m->base.suspend = home_suspend;

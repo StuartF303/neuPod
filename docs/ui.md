@@ -67,10 +67,54 @@ Click-wheel vocabulary used below: **Menu** (top button, goes back), **Select** 
   actuator (ERM / LRA) and Calibrate rows; hardware decision in [Requirements → Reused parts and mechanical](requirements.md#reused-parts-and-mechanical).
 - "Output" chooses headphone / line / optical / USB when the jack detect cannot decide.
 
+## Resolution profiles
+
+The product panel is 320x240 and the mock-ups above are drawn at that size, but the firmware UI is resolution-independent
+([ADR-0018](adr/0018-ui-resolution-profiles.md)): every pixel size lives in one struct, `ui_metrics_t`
+(`app/ui/ui_metrics.h`, values in `app/ui/ui_metrics.c`), and `ui_task` picks the profile once, after `hal_display_init()`, from
+`hal_display_width()` / `hal_display_height()` (the largest profile that fits the panel; 320x240 when none does). Screens
+read `UIM->...` (the active profile); `UI_W`, `UI_H`, `UI_STATUS_H`, `UI_CONTENT_H`, `UI_ROW_H` and `UI_ROWS_VISIBLE` in
+`ui_internal.h` are shorthands for its first fields. Nothing outside `ui_metrics.c` scales a length.
+
+| | 320x240 (product panel) | 480x360 (Y2 testbed, host `NEUPOD_DISPLAY_SIZE=480x360`) |
+| --- | --- | --- |
+| Status bar / list row | 24 / 24 px | 36 / 36 px |
+| Content area, rows per page | 216 px, 9 | 324 px, 9 |
+| Fonts body / large / huge | Montserrat 14 / 20 / 48 | Montserrat 20 / 28 / 48 |
+| Home split (list / pane), art box | 160 / 160, 96 px | 240 / 240, 144 px |
+| Now Playing art box, text column | 112 px at (14, 14), x = 140 | 168 px at (21, 21), x = 210 |
+| Settings split (groups / summary) | 170 / 150 | 255 / 225 |
+| Splash icon, icon row, wordmark | 32 px, y = 142, 48 pt | 48 px, y = 213, 48 pt (the largest built-in Montserrat) |
+| LVGL partial-render buffers | 2 x 320 x 24 RGB565 (15 KB each) | 2 x 480 x 36 (34 KB each; hosted builds only) |
+
+The 480x360 profile is every length of the 320x240 one times 3/2 (the `S()` macro in `ui_metrics.c`, used only in that
+table), and fonts step to the next size (14 to 20, 20 to 28: 1.43x and 1.4x, a little under 1.5x, so text that fits at 320
+fits at 480). Row counts do not change: both profiles show 9 rows. Adding a profile is one more initialiser in
+`ui_metrics.c`; `tests/test_ui_metrics.c` checks every compiled-in profile (title bar and rows fit the height, art box fits
+above the progress bar, text lines stack without overlapping, splash captions fit one line, the static LVGL buffers are big
+enough) and pins the 320x240 numbers to what the UI had before profiles existed.
+
+**What is compiled where.** `NEUPOD_UI_HIRES` (CMake option; default ON for `NEUPOD_PLATFORM=host` and `y2`, OFF for rp2350 and
+esp32s3) adds the 480x360 profile, Montserrat 28 (`lv_conf.h`), 480-wide render buffers (`UI_BUF_W_MAX`), a 192 KB LVGL pool
+(`memory_budget.h`) and the layout audit (`ui_audit.c`). Without it the product build has the one 320x240 profile as a compile-time constant, so
+the RP2350 image is unchanged (flash -24 B, RAM identical; see the ADR). A hosted build still picks its profile at run time,
+so a host built with the option runs the 320x240 layout byte for byte as before unless told otherwise.
+
+**Host.** `NEUPOD_DISPLAY_SIZE=WxH` (read once; between 320x240 and 640x480, default 320x240) sets the simulated panel size.
+`NEUPOD_UI_AUDIT=1` makes every snapshot also walk the widget tree and print `ui: AUDIT FAIL ...` for a visible widget that
+the panel or its container cuts (widgets clipped away completely, like the list's off-window pool rows, are fine). ctest runs
+the tours at 480x360 as `hires_tour`, `hires_input_tour`, `hires_wifi_tour`, `hires_bt_tour` and `hires_art_tour` (snapshots in
+`build/host/snapshots_hires*`, checked by `hires_art_snapshot`), and `audit_320_tour` audits the default size.
+
+**Known limits at 480x360.** The album art is still decoded to a 64 x 64 thumbnail (`ART_MAX_DIM`, art.h; 8 KB of static RAM on
+the product build) and scaled up by LVGL, 2.6x into the 168 px box, so it is softer than at 320x240. The 48 pt splash wordmark and
+the note glyph do not grow (there is no larger built-in font). The bring-up scenes (`gfx_strip`, `now_playing_draw`, the display
+test menu) are 320x240 only.
+
 ## Implemented (stage 2: home menu)
 
 Firmware screens in `app/ui/` (LVGL, light theme as in the mock-ups above; all drawing is original). Rendering
-is partial (two 320x24 strip buffers); the list scrolls with one short animation, everything else is static.
+is partial (two 320x24 strip buffers at 320x240; see Resolution profiles); the list scrolls with one short animation, everything else is static.
 Nothing persists across a reboot yet (settings are RAM only).
 
 **Common frame.** A status bar on every screen: title in the middle, battery icon and percentage on the right

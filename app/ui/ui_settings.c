@@ -624,12 +624,14 @@ ui_screen_t *ui_screen_settings_create(void) {
     s->base.suspend = list_suspend;
     s->base.resume = list_resume;
     s->shown_sel = -1;
-    s->list = ui_list_create(s->base.root, 170, &(ui_list_model_t){.count = G_COUNT, .ctx = s, .get = settings_get});
+    s->list = ui_list_create(s->base.root, UIM->set_list_w, &(ui_list_model_t){.count = G_COUNT, .ctx = s, .get = settings_get});
+    const int32_t pane_w = UI_W - UIM->set_list_w;
+    const int32_t text_w = pane_w - 2 * UIM->set_pane_pad;
 
     lv_obj_t *pane = lv_obj_create(s->base.root);
     lv_obj_remove_style_all(pane);
-    lv_obj_set_size(pane, 150, UI_CONTENT_H);
-    lv_obj_set_pos(pane, 170, 0);
+    lv_obj_set_size(pane, pane_w, UI_CONTENT_H);
+    lv_obj_set_pos(pane, UIM->set_list_w, 0);
     lv_obj_set_scrollable(pane, false);
     lv_obj_set_style_bg_color(pane, lv_color_hex(UI_L_PANE), 0);
     lv_obj_set_style_bg_opa(pane, LV_OPA_COVER, 0);
@@ -637,14 +639,14 @@ ui_screen_t *ui_screen_settings_create(void) {
     lv_obj_set_style_border_width(pane, 1, 0);
     lv_obj_set_style_border_side(pane, LV_BORDER_SIDE_LEFT, 0);
     s->head = ui_label(pane, "", UI_L_TEXT);
-    lv_obj_set_width(s->head, 138);
+    lv_obj_set_width(s->head, text_w);
     lv_obj_set_style_text_align(s->head, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_pos(s->head, 6, 22);
+    lv_obj_set_pos(s->head, UIM->set_pane_pad, UIM->set_head_y);
     s->body = ui_label(pane, "", UI_L_DIM);
-    lv_obj_set_width(s->body, 138);
+    lv_obj_set_width(s->body, text_w);
     lv_obj_set_style_text_align(s->body, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_line_space(s->body, 6, 0);
-    lv_obj_set_pos(s->body, 6, 52);
+    lv_obj_set_style_text_line_space(s->body, UIM->set_body_line_space, 0);
+    lv_obj_set_pos(s->body, UIM->set_pane_pad, UIM->set_body_y);
     settings_update_pane(s);
     return &s->base;
 }

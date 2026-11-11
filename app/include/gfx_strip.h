@@ -17,7 +17,7 @@
 extern "C" {
 #endif
 
-#define GFX_STRIP_W 320u
+#define GFX_STRIP_W 320u /* bring-up renderer: 320x240 panels only (a wider panel gets HAL_EINVAL); the LVGL UI has no such limit */
 #define GFX_STRIP_H 16u
 
 /** Scene callback: draw the scene into @p strip (panel coordinates; clipped). */

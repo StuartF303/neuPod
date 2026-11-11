@@ -10,9 +10,9 @@
 #include "neupod_version.h"
 #include "ui_internal.h"
 
-#define ICON_SIZE 32
-#define ICON_GAP 6
-#define ICON_ROW_Y 142
+#define ICON_SIZE (UIM->sp_icon)
+#define ICON_GAP (UIM->sp_icon_gap)
+#define ICON_ROW_Y (UIM->sp_icon_row_y)
 #define OPA_PULSE_LO 60
 #define OPA_PULSE_HI 150
 
@@ -79,7 +79,7 @@ static lv_obj_t *shape(lv_obj_t *parent, int32_t w, int32_t h, int32_t radius, b
         lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
     } else {
         lv_obj_set_style_border_color(o, lv_color_hex(UI_COL_TEXT), 0);
-        lv_obj_set_style_border_width(o, 2, 0);
+        lv_obj_set_style_border_width(o, UIM->sp_shape_border, 0);
     }
     return o;
 }
@@ -87,25 +87,22 @@ static lv_obj_t *shape(lv_obj_t *parent, int32_t w, int32_t h, int32_t radius, b
 // Icons with no LVGL symbol: the click wheel (a ring with a centre button) and haptics (a body
 // with vibration strokes either side).
 static void draw_wheel_icon(lv_obj_t *box) {
-    lv_obj_t *ring = shape(box, 22, 22, LV_RADIUS_CIRCLE, false);
+    lv_obj_t *ring = shape(box, UIM->sp_ring, UIM->sp_ring, LV_RADIUS_CIRCLE, false);
     lv_obj_center(ring);
-    lv_obj_t *dot = shape(box, 7, 7, LV_RADIUS_CIRCLE, true);
+    lv_obj_t *dot = shape(box, UIM->sp_ring_dot, UIM->sp_ring_dot, LV_RADIUS_CIRCLE, true);
     lv_obj_center(dot);
 }
 
 static void draw_haptic_icon(lv_obj_t *box) {
-    lv_obj_t *body = shape(box, 9, 16, 3, false);
+    lv_obj_t *body = shape(box, UIM->sp_hap_w, UIM->sp_hap_h, UIM->sp_hap_radius, false);
     lv_obj_center(body);
     for (int side = -1; side <= 1; side += 2) {
-        lv_obj_t *near_bar = shape(box, 2, 10, 1, true);
-        lv_obj_align(near_bar, LV_ALIGN_CENTER, side * 9, 0);
-        lv_obj_t *far_bar = shape(box, 2, 6, 1, true);
-        lv_obj_align(far_bar, LV_ALIGN_CENTER, side * 13, 0);
+        lv_obj_t *near_bar = shape(box, UIM->sp_hap_near_w, UIM->sp_hap_near_h, 1, true);
+        lv_obj_align(near_bar, LV_ALIGN_CENTER, side * UIM->sp_hap_near_dx, 0);
+        lv_obj_t *far_bar = shape(box, UIM->sp_hap_near_w, UIM->sp_hap_far_h, 1, true);
+        lv_obj_align(far_bar, LV_ALIGN_CENTER, side * UIM->sp_hap_far_dx, 0);
     }
 }
-
-static const lv_point_precise_t k_diag_a[2] = {{7, 7}, {25, 25}};
-static const lv_point_precise_t k_diag_b[2] = {{25, 7}, {7, 25}};
 
 static lv_obj_t *stroke(lv_obj_t *box, const lv_point_precise_t *pts, int32_t width, uint32_t colour) {
     lv_obj_t *ln = lv_line_create(box);
@@ -123,7 +120,7 @@ static void icon_create(lv_obj_t *row, cap_id_t id) {
     lv_obj_t *box = lv_obj_create(row);
     lv_obj_remove_style_all(box);
     lv_obj_set_size(box, ICON_SIZE, ICON_SIZE);
-    lv_obj_set_style_radius(box, 8, 0);
+    lv_obj_set_style_radius(box, UIM->sp_icon_radius, 0);
     lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_BAR), 0);
     lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
     lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_DIM), 0);
@@ -133,13 +130,13 @@ static void icon_create(lv_obj_t *row, cap_id_t id) {
 
     switch (id) {
     case CAP_DISPLAY:
-        glyph(box, LV_SYMBOL_IMAGE, &lv_font_montserrat_20);
+        glyph(box, LV_SYMBOL_IMAGE, UIM->font_large);
         break;
     case CAP_STORAGE:
-        glyph(box, LV_SYMBOL_SD_CARD, &lv_font_montserrat_20);
+        glyph(box, LV_SYMBOL_SD_CARD, UIM->font_large);
         break;
     case CAP_BATTERY:
-        glyph(box, LV_SYMBOL_BATTERY_3, &lv_font_montserrat_20);
+        glyph(box, LV_SYMBOL_BATTERY_3, UIM->font_large);
         break;
     case CAP_HAPTICS:
         draw_haptic_icon(box);
@@ -148,22 +145,22 @@ static void icon_create(lv_obj_t *row, cap_id_t id) {
         draw_wheel_icon(box);
         break;
     case CAP_AUDIO:
-        glyph(box, LV_SYMBOL_AUDIO, &lv_font_montserrat_20);
+        glyph(box, LV_SYMBOL_AUDIO, UIM->font_large);
         break;
     case CAP_BLUETOOTH:
-        glyph(box, LV_SYMBOL_BLUETOOTH, &lv_font_montserrat_20);
+        glyph(box, LV_SYMBOL_BLUETOOTH, UIM->font_large);
         break;
     case CAP_WIFI:
-        glyph(box, LV_SYMBOL_WIFI, &lv_font_montserrat_20);
+        glyph(box, LV_SYMBOL_WIFI, UIM->font_large);
         break;
     default:
         break;
     }
     // The cross: a dark outline under a red stroke, so it reads on any icon.
-    ic->cross[0] = stroke(box, k_diag_a, 7, UI_COL_BG);
-    ic->cross[1] = stroke(box, k_diag_b, 7, UI_COL_BG);
-    ic->cross[2] = stroke(box, k_diag_a, 3, UI_COL_ERR);
-    ic->cross[3] = stroke(box, k_diag_b, 3, UI_COL_ERR);
+    ic->cross[0] = stroke(box, UIM->sp_diag_a, UIM->sp_cross_under_w, UI_COL_BG);
+    ic->cross[1] = stroke(box, UIM->sp_diag_b, UIM->sp_cross_under_w, UI_COL_BG);
+    ic->cross[2] = stroke(box, UIM->sp_diag_a, UIM->sp_cross_w, UI_COL_ERR);
+    ic->cross[3] = stroke(box, UIM->sp_diag_b, UIM->sp_cross_w, UI_COL_ERR);
 
     ic->shown = CAP_PENDING;
     ic->built = true;
@@ -196,13 +193,13 @@ void ui_splash_create(void) {
     lv_obj_set_size(word, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(word, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_column(word, 0, 0);
-    lv_obj_align(word, LV_ALIGN_TOP_MID, 0, 30);
+    lv_obj_align(word, LV_ALIGN_TOP_MID, 0, UIM->sp_wordmark_y);
     static const char *const parts[2] = {"neu", "Pod"};
     static const uint32_t cols[2] = {UI_COL_TEXT, UI_COL_ACCENT};
     for (int i = 0; i < 2; i++) {
         lv_obj_t *l = lv_label_create(word);
         lv_label_set_text(l, parts[i]);
-        lv_obj_set_style_text_font(l, &lv_font_montserrat_48, 0);
+        lv_obj_set_style_text_font(l, UIM->font_huge, 0);
         lv_obj_set_style_text_color(l, lv_color_hex(cols[i]), 0);
         lv_obj_set_style_opa(l, LV_OPA_TRANSP, 0);
         lv_anim_t fa;
@@ -218,20 +215,20 @@ void ui_splash_create(void) {
     // Shimmer: a short bright bar sliding back and forth along a faint track under the wordmark.
     lv_obj_t *track = lv_obj_create(scr);
     lv_obj_remove_style_all(track);
-    lv_obj_set_size(track, 150, 2);
+    lv_obj_set_size(track, UIM->sp_track_w, UIM->sp_track_h);
     lv_obj_set_style_bg_color(track, lv_color_hex(UI_COL_BAR), 0);
     lv_obj_set_style_bg_opa(track, LV_OPA_COVER, 0);
-    lv_obj_align(track, LV_ALIGN_TOP_MID, 0, 100);
+    lv_obj_align(track, LV_ALIGN_TOP_MID, 0, UIM->sp_track_y);
     lv_obj_t *bar = lv_obj_create(track);
     lv_obj_remove_style_all(bar);
-    lv_obj_set_size(bar, 44, 2);
+    lv_obj_set_size(bar, UIM->sp_shimmer_w, UIM->sp_track_h);
     lv_obj_set_style_bg_color(bar, lv_color_hex(UI_COL_ACCENT), 0);
     lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
     lv_anim_t sa;
     lv_anim_init(&sa);
     lv_anim_set_var(&sa, bar);
     lv_anim_set_exec_cb(&sa, bar_x_cb);
-    lv_anim_set_values(&sa, 0, 106);
+    lv_anim_set_values(&sa, 0, UIM->sp_track_w - UIM->sp_shimmer_w);
     lv_anim_set_duration(&sa, 1300);
     lv_anim_set_reverse_duration(&sa, 1300);
     lv_anim_set_repeat_count(&sa, LV_ANIM_REPEAT_INFINITE);
@@ -252,20 +249,20 @@ void ui_splash_create(void) {
 
     g_caption = lv_label_create(scr);
     // One line, fixed size, never wraps (long text would end in "..."): the vertical layout is
-    // icons 142..174, caption 182..200, version line from ~215, hold bar 238..240.
-    lv_obj_set_size(g_caption, UI_W - 20, 18);
+    // icons 142..174, caption 182..200, version line from ~215, hold bar 238..240 (320x240 profile).
+    lv_obj_set_size(g_caption, UI_W - 2 * UIM->pad, UIM->sp_caption_h);
     lv_obj_set_style_text_align(g_caption, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(g_caption, LV_LABEL_LONG_DOT);
     lv_label_set_text(g_caption, "Checking hardware...");
-    lv_obj_set_style_text_font(g_caption, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(g_caption, UIM->font_body, 0);
     lv_obj_set_style_text_color(g_caption, lv_color_hex(UI_COL_DIM), 0);
-    lv_obj_align(g_caption, LV_ALIGN_TOP_MID, 0, ICON_ROW_Y + ICON_SIZE + 8);
+    lv_obj_align(g_caption, LV_ALIGN_TOP_MID, 0, ICON_ROW_Y + ICON_SIZE + UIM->sp_caption_gap);
     g_caption_done = false;
     g_shown_reason = 0xFFFFFFFFu;
 
     g_hold_bar = lv_obj_create(scr);
     lv_obj_remove_style_all(g_hold_bar);
-    lv_obj_set_size(g_hold_bar, UI_W, 2);
+    lv_obj_set_size(g_hold_bar, UI_W, UIM->sp_hold_h);
     lv_obj_set_style_bg_color(g_hold_bar, lv_color_hex(UI_COL_ACCENT), 0);
     lv_obj_set_style_bg_opa(g_hold_bar, LV_OPA_COVER, 0);
     lv_obj_align(g_hold_bar, LV_ALIGN_BOTTOM_LEFT, 0, 0);
@@ -273,9 +270,9 @@ void ui_splash_create(void) {
 
     lv_obj_t *ver = lv_label_create(scr);
     lv_label_set_text_fmt(ver, "v%s  %s  %s", NEUPOD_VERSION, NEUPOD_GIT_HASH, hal_platform_name());
-    lv_obj_set_style_text_font(ver, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(ver, UIM->font_body, 0);
     lv_obj_set_style_text_color(ver, lv_color_hex(UI_COL_DIM), 0);
-    lv_obj_align(ver, LV_ALIGN_BOTTOM_MID, 0, -8);
+    lv_obj_align(ver, LV_ALIGN_BOTTOM_MID, 0, -UIM->sp_ver_inset);
 
     lv_screen_load(scr);
 }

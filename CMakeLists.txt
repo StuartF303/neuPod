@@ -5,6 +5,19 @@ cmake_minimum_required(VERSION 3.13)
 set(NEUPOD_PLATFORM "rp2350" CACHE STRING "Target platform: rp2350, esp32s3 or host")
 set_property(CACHE NEUPOD_PLATFORM PROPERTY STRINGS rp2350 esp32s3 host)
 
+# UI resolution profiles (docs/ui.md, ADR-0018). The product panel is 320x240; hosted builds (the host simulator and the
+# Y2 testbed) also carry the 480x360 profile and its larger fonts, which the RP2350 / ESP32-S3 images must not pay flash
+# for. ON by default for host and y2, OFF otherwise; override with -DNEUPOD_UI_HIRES=ON|OFF.
+if(NEUPOD_PLATFORM STREQUAL "host" OR NEUPOD_PLATFORM STREQUAL "y2")
+  set(NEUPOD_UI_HIRES_DEFAULT ON)
+else()
+  set(NEUPOD_UI_HIRES_DEFAULT OFF)
+endif()
+option(NEUPOD_UI_HIRES "Compile the 480x360 UI profile and its fonts (hosted builds)" ${NEUPOD_UI_HIRES_DEFAULT})
+if(NEUPOD_UI_HIRES)
+  add_compile_definitions(NEUPOD_UI_HIRES=1)
+endif()
+
 if(NEUPOD_PLATFORM STREQUAL "rp2350")
   # The Pico SDK must be imported before project() so it can set the toolchain.
   include(platforms/rp2350/sdk_import.cmake)
