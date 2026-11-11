@@ -57,6 +57,7 @@ typedef struct {
     FILINFO fno;
     FIL *fdirs, *fnames, *ftracks, *fstr, *fprov, *ffile;
     uint8_t *tagbuf;
+    audio_tags_ext_t *ext; /* the library tags the parsers fill (meta_set_tags_ext) */
     parse_t *parse;
     uint32_t n_dirs, names_len, str_len, en_len, n_tracks, n_playable, files_done;
     slot_t slot[PS_N];
@@ -307,6 +308,8 @@ static lib_err_t index_file(bctx_t *c, uint32_t dir_id, const char *leaf) {
     uint64_t frames = 0;
     static const audio_tags_t no_tags;
     memset(pp, 0, sizeof *pp);
+    memset(c->ext, 0, sizeof *c->ext);
+    const audio_tags_ext_t *x = c->ext;
     FIL *f = c->ffile;
     if (f_open(f, c->path, FA_READ) == FR_OK) {
         uint64_t size = f_size(f);
@@ -349,11 +352,11 @@ static lib_err_t index_file(bctx_t *c, uint32_t dir_id, const char *leaf) {
     char title[POOL_STR], artist[POOL_STR], aa[POOL_STR], album[POOL_STR], genre[POOL_STR];
     cut(title, sizeof title, t->title[0] ? t->title : name);
     cut(artist, sizeof artist, t->artist[0] ? t->artist : "Unknown Artist");
-    cut(aa, sizeof aa, t->album_artist[0] ? t->album_artist : artist);
+    cut(aa, sizeof aa, x->album_artist[0] ? x->album_artist : artist);
     cut(album, sizeof album, t->album[0] ? t->album : leaf);
-    cut(genre, sizeof genre, t->genre);
-    const char *sort_aa = t->sort_album_artist[0] ? t->sort_album_artist : (!t->album_artist[0] ? t->sort_artist : "");
-    bool comp = t->compilation || ieq_str(aa, "Various Artists"); // D4: compilations (flag or "Various Artists") are their own list
+    cut(genre, sizeof genre, x->genre);
+    const char *sort_aa = x->sort_album_artist[0] ? x->sort_album_artist : (!x->album_artist[0] ? x->sort_artist : "");
+    bool comp = x->compilation || ieq_str(aa, "Various Artists"); // D4: compilations (flag or "Various Artists") are their own list
 
     uint32_t o_title, o_artist, o_aa, o_album, o_genre = LIB_NONE, o_st = LIB_NONE, o_saa = LIB_NONE, o_sal = LIB_NONE;
     lib_err_t e = pool_add(c, -1, title, &o_title); // titles are not repeated: no cache
@@ -361,9 +364,9 @@ static lib_err_t index_file(bctx_t *c, uint32_t dir_id, const char *leaf) {
     if (e == LIB_OK) e = pool_add(c, PS_AA, aa, &o_aa);
     if (e == LIB_OK) e = pool_add(c, PS_ALBUM, album, &o_album);
     if (e == LIB_OK && genre[0]) e = pool_add(c, PS_GENRE, genre, &o_genre);
-    if (e == LIB_OK && t->sort_title[0]) e = pool_add(c, -1, t->sort_title, &o_st);
+    if (e == LIB_OK && x->sort_title[0]) e = pool_add(c, -1, x->sort_title, &o_st);
     if (e == LIB_OK && sort_aa[0]) e = pool_add(c, PS_SORT_AA, sort_aa, &o_saa);
-    if (e == LIB_OK && t->sort_album[0]) e = pool_add(c, PS_SORT_ALBUM, t->sort_album, &o_sal);
+    if (e == LIB_OK && x->sort_album[0]) e = pool_add(c, PS_SORT_ALBUM, x->sort_album, &o_sal);
     uint32_t o_name = 0;
     if (e == LIB_OK) e = names_add(c, name, &o_name);
     if (e != LIB_OK) return e;
@@ -386,9 +389,9 @@ static lib_err_t index_file(bctx_t *c, uint32_t dir_id, const char *leaf) {
     st32(tr + TR_MTIME, dos_to_unix(c->fno.fdate, c->fno.ftime));
     st32(tr + TR_DUR, rate != 0 ? (uint32_t)(frames / rate) : 0);
     st16(tr + TR_GENRE, LIB_GENRE_NONE);
-    st16(tr + TR_YEAR, t->year);
+    st16(tr + TR_YEAR, x->year);
     st16(tr + TR_TRACK, t->track);
-    tr[TR_DISC] = t->disc > 255 ? 255 : (uint8_t)t->disc;
+    tr[TR_DISC] = x->disc > 255 ? 255 : (uint8_t)x->disc;
     tr[TR_FLAGS] = comp ? 1 : 0;
     tr[TR_CODEC] = codec;
     tr[TR_BITS] = bits;
@@ -462,8 +465,9 @@ static lib_err_t stage_walk(bctx_t *c) {
     c->fprov = lib_arena_alloc(c->ar, sizeof(FIL));
     c->ffile = lib_arena_alloc(c->ar, sizeof(FIL));
     c->tagbuf = lib_arena_alloc(c->ar, TAG_SCRATCH);
+    c->ext = lib_arena_alloc(c->ar, sizeof *c->ext);
     c->parse = lib_arena_alloc(c->ar, sizeof(parse_t));
-    if (c->parse == NULL) {
+    if (c->parse == NULL || c->ext == NULL) {
         c->ar->used = mark;
         return LIB_E_SCRATCH;
     }
@@ -481,12 +485,14 @@ static lib_err_t stage_walk(bctx_t *c) {
     }
     if (e == LIB_OK) {
         meta_set_scratch(c->tagbuf, TAG_SCRATCH);
+        meta_set_tags_ext(c->ext);
         uint32_t root_id;
         FILINFO fi;
         snprintf(c->path, sizeof c->path, "%s", c->root);
         e = dir_add(c, LIB_NONE, c->root, &root_id);
         if (e == LIB_OK && f_stat(c->path, &fi) == FR_OK && (fi.fattrib & AM_DIR)) e = walk_dir(c, root_id, 0); // no folder = an empty library
         meta_set_scratch(NULL, 0);
+        meta_set_tags_ext(NULL);
     }
     lib_err_t e1 = close_f(c->fdirs), e2 = close_f(c->fnames), e3 = close_f(c->fstr), e4 = close_f(c->ftracks), e5 = close_f(c->fprov);
     if (e == LIB_OK) e = e1 != LIB_OK ? e1 : e2 != LIB_OK ? e2 : e3 != LIB_OK ? e3 : e4 != LIB_OK ? e4 : e5;

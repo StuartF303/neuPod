@@ -133,23 +133,49 @@ static const fx_tags_t k_full = {.title = "Song", .artist = "Perf", .album = "Al
                                  .s_title = "Song, The", .s_artist = "Perf, The", .s_album = "Alb, An", .s_aartist = "AlbPerf",
                                  .track = 7, .disc = 2, .year = 2019, .comp = true};
 
+static audio_tags_ext_t g_ext; /* what the parsers fill when the scanner asks for the library tags */
+
 static void check_new_fields(const audio_tags_t *t, const char *genre_expected) {
     ASSERT_EQ(0, strcmp(t->title, "Song"));
     ASSERT_EQ(0, strcmp(t->artist, "Perf"));
     ASSERT_EQ(0, strcmp(t->album, "Alb"));
-    ASSERT_EQ(0, strcmp(t->album_artist, "Album Perf"));
-    ASSERT_EQ(0, strcmp(t->genre, genre_expected));
-    ASSERT_EQ(0, strcmp(t->sort_title, "Song, The"));
-    ASSERT_EQ(0, strcmp(t->sort_artist, "Perf, The"));
-    ASSERT_EQ(0, strcmp(t->sort_album, "Alb, An"));
-    ASSERT_EQ(0, strcmp(t->sort_album_artist, "AlbPerf"));
+    ASSERT_EQ(0, strcmp(g_ext.album_artist, "Album Perf"));
+    ASSERT_EQ(0, strcmp(g_ext.genre, genre_expected));
+    ASSERT_EQ(0, strcmp(g_ext.sort_title, "Song, The"));
+    ASSERT_EQ(0, strcmp(g_ext.sort_artist, "Perf, The"));
+    ASSERT_EQ(0, strcmp(g_ext.sort_album, "Alb, An"));
+    ASSERT_EQ(0, strcmp(g_ext.sort_album_artist, "AlbPerf"));
     ASSERT_EQ(7, t->track);
-    ASSERT_EQ(2, t->disc);
-    ASSERT_EQ(2019, t->year);
-    ASSERT_TRUE(t->compilation);
+    ASSERT_EQ(2, g_ext.disc);
+    ASSERT_EQ(2019, g_ext.year);
+    ASSERT_TRUE(g_ext.compilation);
+}
+
+TEST(tags_without_ext_write_nothing) {
+    /* the player's parse: no extension block asked for, so nothing but title / artist / album / track is stored, and nothing is touched */
+    meta_set_scratch(g_tagscratch, sizeof g_tagscratch);
+    meta_set_tags_ext(NULL);
+    memset(&g_ext, 0xA5, sizeof g_ext);
+    mem_t m = {g_buf, fx_flac(g_buf, &k_full, 200)};
+    flac_info_t fi;
+    ASSERT_EQ(META_OK, flac_parse(mem_rd, &m, m.n, &fi));
+    ASSERT_EQ(0, strcmp(fi.tags.title, "Song"));
+    ASSERT_EQ(7, fi.tags.track);
+    m.n = fx_mp3(g_buf, &k_full, false);
+    mp3_info_t mi;
+    ASSERT_EQ(META_OK, mp3_parse(mem_rd, &m, m.n, &mi));
+    ASSERT_EQ(0, strcmp(mi.tags.album, "Alb"));
+    m.n = fx_m4a_aac(g_buf, &k_full);
+    mp4_info_t p4;
+    ASSERT_EQ(META_E_AAC, mp4_parse(mem_rd, &m, m.n, &p4));
+    ASSERT_EQ(0, strcmp(p4.tags.artist, "Perf"));
+    for (size_t i = 0; i < sizeof g_ext; i++) ASSERT_EQ(0xA5, ((uint8_t *)&g_ext)[i]);
+    meta_set_scratch(NULL, 0);
+    ASSERT_TRUE(sizeof(audio_tags_t) <= 224); /* the player's tags stay as small as before the library */
 }
 
 TEST(tags_flac) {
+    meta_set_tags_ext(&g_ext);
     meta_set_scratch(g_tagscratch, sizeof g_tagscratch);
     fx_tags_t t = k_full;
     t.genre = "Rock"; /* Vorbis genres are text */
@@ -163,14 +189,15 @@ TEST(tags_flac) {
     t.aartist = "";
     m.n = fx_flac(g_buf, &t, 200);
     ASSERT_EQ(META_OK, flac_parse(mem_rd, &m, m.n, &fi)); /* absent: empty / zero / false */
-    ASSERT_EQ(0, fi.tags.album_artist[0]);
-    ASSERT_EQ(0, fi.tags.disc);
-    ASSERT_EQ(0, fi.tags.year);
-    ASSERT_FALSE(fi.tags.compilation);
+    ASSERT_EQ(0, g_ext.album_artist[0]);
+    ASSERT_EQ(0, g_ext.disc);
+    ASSERT_EQ(0, g_ext.year);
+    ASSERT_FALSE(g_ext.compilation);
     meta_set_scratch(NULL, 0);
 }
 
 TEST(tags_flac_alt_keys) {
+    meta_set_tags_ext(&g_ext);
     /* "ALBUM ARTIST", "DISC", "YEAR" and a "DATE" with a full date, and a lower-case key */
     uint8_t vc[256];
     size_t v = 0, at;
@@ -195,13 +222,14 @@ TEST(tags_flac_alt_keys) {
     mem_t m = {f, n};
     flac_info_t fi;
     ASSERT_EQ(META_OK, flac_parse(mem_rd, &m, n, &fi));
-    ASSERT_EQ(0, strcmp(fi.tags.album_artist, "AA"));
-    ASSERT_EQ(3, fi.tags.disc);
-    ASSERT_EQ(2001, fi.tags.year);
+    ASSERT_EQ(0, strcmp(g_ext.album_artist, "AA"));
+    ASSERT_EQ(3, g_ext.disc);
+    ASSERT_EQ(2001, g_ext.year);
     meta_set_scratch(NULL, 0);
 }
 
 TEST(tags_mp3_v23_and_v24) {
+    meta_set_tags_ext(&g_ext);
     for (int v24 = 0; v24 < 2; v24++) {
         mem_t m = {g_buf, fx_mp3(g_buf, &k_full, v24 != 0)};
         mp3_info_t mi;
@@ -213,14 +241,15 @@ TEST(tags_mp3_v23_and_v24) {
     mem_t m = {g_buf, fx_mp3(g_buf, &t, false)};
     mp3_info_t mi;
     ASSERT_EQ(META_OK, mp3_parse(mem_rd, &m, m.n, &mi));
-    ASSERT_EQ(0, strcmp(mi.tags.genre, "Shoegaze"));
+    ASSERT_EQ(0, strcmp(g_ext.genre, "Shoegaze"));
     t.genre = "17"; /* v2.4 allows a bare number */
     m.n = fx_mp3(g_buf, &t, true);
     ASSERT_EQ(META_OK, mp3_parse(mem_rd, &m, m.n, &mi));
-    ASSERT_EQ(0, strcmp(mi.tags.genre, "Rock"));
+    ASSERT_EQ(0, strcmp(g_ext.genre, "Rock"));
 }
 
 TEST(tags_mp4_ilst) {
+    meta_set_tags_ext(&g_ext);
     mem_t m = {g_buf, fx_m4a_aac(g_buf, &k_full)};
     mp4_info_t mi;
     ASSERT_EQ(META_E_AAC, mp4_parse(mem_rd, &m, m.n, &mi)); /* tags are read even for a file the player cannot decode */
@@ -228,6 +257,7 @@ TEST(tags_mp4_ilst) {
 }
 
 TEST(tags_mp4_gnre_and_literal_genre) {
+    meta_set_tags_ext(&g_ext);
     /* gnre is the ID3v1 number plus one */
     uint8_t ilst[128], ib[160], meta[200], udta[240], moov[300], f[400];
     size_t n = 0;
@@ -247,7 +277,7 @@ TEST(tags_mp4_gnre_and_literal_genre) {
     mem_t m = {f, at};
     mp4_info_t mi;
     mp4_parse(mem_rd, &m, m.n, &mi);
-    ASSERT_EQ(0, strcmp(mi.tags.genre, "Rock"));
+    ASSERT_EQ(0, strcmp(g_ext.genre, "Rock"));
 }
 
 /* ---- a library on a disk image ------------------------------------------------------------------------------------- */
@@ -881,6 +911,7 @@ static size_t put_vc_block(uint8_t *f, const uint8_t *vc, size_t v) {
 }
 
 TEST(tags_hostile_vorbis_id3_mp4) {
+    meta_set_tags_ext(&g_ext);
     meta_set_scratch(g_tagscratch, sizeof g_tagscratch);
     flac_info_t fi;
     uint8_t f[600], vc[300];
@@ -892,7 +923,7 @@ TEST(tags_hostile_vorbis_id3_mp4) {
     v = 12;
     mem_t m = {f, put_vc_block(f, vc, v)};
     ASSERT_EQ(META_OK, flac_parse(mem_rd, &m, m.n, &fi));
-    ASSERT_EQ(0, fi.tags.album_artist[0]);
+    ASSERT_EQ(0, g_ext.album_artist[0]);
     /* keys without '=', empty values, absurd numbers and a date that is not a date */
     fx_le32(vc, 0);
     fx_le32(vc + 4, 6);
@@ -908,10 +939,10 @@ TEST(tags_hostile_vorbis_id3_mp4) {
     v += fx_vc(vc + v, "GENRE", "(17");
     m.n = put_vc_block(f, vc, v);
     ASSERT_EQ(META_OK, flac_parse(mem_rd, &m, m.n, &fi));
-    ASSERT_EQ(65535, fi.tags.disc); /* capped, not wrapped */
-    ASSERT_EQ(0, fi.tags.year);
-    ASSERT_FALSE(fi.tags.compilation);
-    ASSERT_EQ(0, strcmp(fi.tags.genre, "(17"));
+    ASSERT_EQ(65535, g_ext.disc); /* capped, not wrapped */
+    ASSERT_EQ(0, g_ext.year);
+    ASSERT_FALSE(g_ext.compilation);
+    ASSERT_EQ(0, strcmp(g_ext.genre, "(17"));
     meta_set_scratch(NULL, 0);
 
     /* ID3: odd genre text, no year */
@@ -919,11 +950,11 @@ TEST(tags_hostile_vorbis_id3_mp4) {
     mem_t id3 = {g_buf, fx_mp3(g_buf, &t, false)};
     mp3_info_t mi;
     ASSERT_EQ(META_OK, mp3_parse(mem_rd, &id3, id3.n, &mi));
-    ASSERT_EQ(0, strcmp(mi.tags.genre, "("));
+    ASSERT_EQ(0, strcmp(g_ext.genre, "("));
     t.genre = "(99999999999999999999)x";
     id3.n = fx_mp3(g_buf, &t, true);
     ASSERT_EQ(META_OK, mp3_parse(mem_rd, &id3, id3.n, &mi));
-    ASSERT_EQ(0, mi.tags.year);
+    ASSERT_EQ(0, g_ext.year);
 
     /* MP4: gnre 0 and 200 (no such genre), a one-byte trkn / disk, an empty cpil and an empty (c)day */
     uint8_t ilst[256], ib[300], meta[320], mb[340], udta[360], moov[400], file[500];
@@ -947,10 +978,10 @@ TEST(tags_hostile_vorbis_id3_mp4) {
     mem_t m4 = {file, at};
     mp4_info_t p4;
     mp4_parse(mem_rd, &m4, m4.n, &p4);
-    ASSERT_EQ(0, p4.tags.genre[0]);
-    ASSERT_EQ(0, p4.tags.year);
-    ASSERT_EQ(0, p4.tags.disc);
-    ASSERT_FALSE(p4.tags.compilation);
+    ASSERT_EQ(0, g_ext.genre[0]);
+    ASSERT_EQ(0, g_ext.year);
+    ASSERT_EQ(0, g_ext.disc);
+    ASSERT_FALSE(g_ext.compilation);
 }
 
 /* ---- the nfs write scope ------------------------------------------------------------------------------------------- */
@@ -1032,6 +1063,7 @@ int main(void) {
     RUN(collate_sort_tag_wins);
     RUN(collate_buckets);
     RUN(genre_references);
+    RUN(tags_without_ext_write_nothing);
     RUN(tags_flac);
     RUN(tags_flac_alt_keys);
     RUN(tags_mp3_v23_and_v24);

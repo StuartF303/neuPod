@@ -38,15 +38,29 @@ typedef struct {
     char title[64], artist[64], album[64]; /**< UTF-8, cut at a character boundary; empty if absent */
     uint16_t track;                        /**< 0 = unknown */
     art_ref_t art;                         /**< best embedded picture: a JPEG over a PNG, a front cover over other types */
-    /* Library fields (docs/adr/0017-music-library-index.md). Sort tags and genre are shorter than the names: the sort key only
-     * uses a prefix of them, and every player_info_t / track_info_t on a task stack carries a copy of this struct. */
+} audio_tags_t;
+
+/**
+ * The extra tags the music library index needs (docs/adr/0017-music-library-index.md). Kept out of audio_tags_t, which is copied into the
+ * player's and the track feed's statics and onto task stacks: these 232 bytes exist only while the scanner runs and supplies one
+ * (meta_set_tags_ext()). Sort tags and genre are shorter than the names: the sort key uses only a prefix of them.
+ */
+typedef struct {
     char album_artist[64];                 /**< TPE2 / aART / ALBUMARTIST; empty if absent */
     char genre[32];                        /**< TCON (ID3v1 "(n)" references resolved to names) / (c)gen / gnre / GENRE */
     char sort_title[32], sort_artist[32], sort_album[32], sort_album_artist[32]; /**< TSOT TSOP TSOA TSO2 / sonm soar soal soaa / *SORT */
     uint16_t disc;                         /**< 0 = unknown */
     uint16_t year;                         /**< 0 = unknown */
     bool compilation;                      /**< TCMP / cpil / COMPILATION says so */
-} audio_tags_t;
+} audio_tags_ext_t;
+
+/**
+ * Ask the parsers (flac_parse, mp3_parse, mp4_parse) for the library tags as well: they clear @p ext at the start of each parse and fill
+ * it. NULL (the default) = not wanted, not parsed, nothing written. Like meta_set_scratch(): global, core 0 only, set around a scan.
+ */
+void meta_set_tags_ext(audio_tags_ext_t *ext);
+/** The block set with meta_set_tags_ext(), or NULL. For the parsers. */
+audio_tags_ext_t *meta_tags_ext(void);
 
 typedef enum {
     META_OK = 0,
