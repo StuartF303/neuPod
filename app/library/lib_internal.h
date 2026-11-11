@@ -110,6 +110,8 @@ lib_err_t lib_map_fr(FRESULT fr);
  * nfs.h's four handles), but the permission to write is nfs's.
  */
 lib_err_t lib_fopen(FIL *f, const char *path, BYTE mode);
+/* NFS_MAX_OPEN_FILES (4) is deliberately bypassed for the content FILs: the scanner holds up to ~40 open at once, carved from its 32 KB
+ * scratch, where nfs's handles would cost ~1.6 KB of static RAM each. Directory-tree changes do go through nfs (lib_mkdir etc.). */
 /** True only while the library's nfs write scope is open and @p path lies inside it. */
 bool lib_write_allowed(const char *path);
 /** Path operations that change the card go through nfs.h (same gate as the settings store). EXISTS counts as success for mkdir. */
@@ -124,7 +126,7 @@ lib_err_t lib_rmtree(const char *dir);
 bool lib_exists(const char *path);
 
 /** "<base>/lib" ... into out (64 bytes). */
-void lib_path(char *out, size_t cap, const char *base, const char *leaf);
+bool lib_path(char *out, size_t cap, const char *base, const char *leaf); /**< false if it did not fit (out is then unusable) */
 
 /* ---- external sort ------------------------------------------------------------------------------------------------ */
 

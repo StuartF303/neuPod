@@ -64,6 +64,10 @@ static const char *trk_open(trk_t *t, const char *path, bool verify, uint64_t fr
     if (fail != NULL) {
         return fail;
     }
+    if (meta_tags_ext() != NULL) { // the library scanner has the parser hooks (meta_set_scratch / meta_set_tags_ext): never share them
+        g_ops->close(rctx);
+        return "Library is updating";
+    }
     meta_set_scratch(g_chunk, sizeof g_chunk); // header parsing borrows the chunk buffer: no feed step is running now
     fail = track_feed_open(&t->feed, path, size, rd, rctx, verify, &t->info);
     if (fail != NULL) {

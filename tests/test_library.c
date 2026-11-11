@@ -1029,6 +1029,34 @@ TEST(writes_outside_the_library_folder_are_refused) {
     hal_storage_set_write_enabled(true);
 }
 
+TEST(long_base_is_refused_and_the_live_library_survives) {
+    ASSERT_TRUE(fx_volume(16u << 20, 0));
+    ASSERT_TRUE(make_tree(false));
+    ASSERT_EQ(LIB_OK, build(0, NULL));
+    char longbase[128];
+    snprintf(longbase, sizeof longbase, "/.neupod/%0*d", 60, 7); /* well past LIB_BASE_MAX, inside the scope */
+    lib_build_cfg_t cfg = {.base = longbase};
+    ASSERT_EQ(LIB_E_RANGE, lib_build(&cfg, g_scratch, sizeof g_scratch, NULL));
+    ASSERT_EQ(LIB_E_RANGE, lib_recover(longbase));
+    ASSERT_EQ(LIB_E_RANGE, lib_open(&g_rd, longbase));
+    char edge[64]; /* exactly LIB_BASE_MAX characters is accepted */
+    memset(edge, 'e', sizeof edge);
+    memcpy(edge, "/.neupod/", 9);
+    edge[LIB_BASE_MAX] = '\0';
+    lib_build_cfg_t ok = {.base = edge};
+    ASSERT_EQ(LIB_OK, lib_build(&ok, g_scratch, sizeof g_scratch, NULL));
+    ASSERT_EQ(LIB_OK, lib_open(&g_rd, edge));
+    lib_close(&g_rd);
+    ASSERT_EQ(LIB_E_RANGE, lib_build(&(lib_build_cfg_t){.root = "/Music/0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"}, g_scratch, sizeof g_scratch, NULL));
+    expect_whole(1, 17); /* the live library is untouched */
+    /* the parser hooks belong to one scan at a time */
+    audio_tags_ext_t held;
+    meta_set_tags_ext(&held);
+    ASSERT_EQ(LIB_E_BUSY, build(0, NULL));
+    meta_set_tags_ext(NULL);
+    expect_whole(1, 17);
+}
+
 TEST(bad_base_cannot_delete_or_write) {
     static const char *const bases[] = {"/Music", "/", "/.neupod2", "/.neupod/../Music", "/Music/Abba", ""};
     ASSERT_TRUE(fx_volume(16u << 20, 0));
@@ -1051,7 +1079,7 @@ TEST(bad_base_cannot_delete_or_write) {
     ASSERT_TRUE(lib_exists("/.neupod/sub/lib/manifest.bin"));
     /* a scope held by someone else (the settings store mid-save): the build does not start, and writes nothing */
     ASSERT_EQ(NFS_OK, nfs_write_scope_enter("/.neupod"));
-    ASSERT_EQ(LIB_E_IO, build(0, NULL));
+    ASSERT_EQ(LIB_E_BUSY, build(0, NULL));
     nfs_write_scope_leave();
     expect_whole(1, 17);
 }
@@ -1069,6 +1097,7 @@ int main(void) {
     RUN(tags_mp3_v23_and_v24);
     RUN(tags_mp4_ilst);
     RUN(tags_mp4_gnre_and_literal_genre);
+    meta_set_tags_ext(NULL); /* (the tag tests leave their block installed) */
     RUN(build_and_browse);
     RUN(rebuild_bumps_generation_and_empty_library);
     RUN(cancel_leaves_old_library);
@@ -1082,7 +1111,9 @@ int main(void) {
     RUN(full_card_leaves_old_library);
     RUN(genre_text_hostile);
     RUN(tags_hostile_vorbis_id3_mp4);
+    meta_set_tags_ext(NULL);
     RUN(writes_outside_the_library_folder_are_refused);
+    RUN(long_base_is_refused_and_the_live_library_survives);
     RUN(bad_base_cannot_delete_or_write);
     fx_cleanup();
     return RESULT();

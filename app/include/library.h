@@ -36,6 +36,7 @@ typedef enum {
     LIB_E_RANGE,     /**< row / id out of range */
     LIB_E_SCRATCH,   /**< scratch buffer too small */
     LIB_E_DENIED,    /**< a write outside the library's folder was refused by the nfs write scope (or no scope was open) */
+    LIB_E_BUSY,      /**< another task holds the nfs write scope, or a scan / parse already has the tag hooks: try again later */
     LIB_E_CANCELLED, /**< the progress callback asked to stop; the old library is untouched */
 #ifdef NEUPOD_LIB_TEST_HOOKS
     LIB_E_TEST_STOP, /**< lib_build_cfg_t.test_stop_step reached (power-cut simulation in tests) */
@@ -68,6 +69,7 @@ unsigned lib_collate_bucket(const uint8_t *key);
 /* ---- what a build needs and returns ------------------------------------------------------------------------------- */
 
 #define LIB_BASE_DEFAULT "/.neupod"
+#define LIB_BASE_MAX 46u /**< longest base path (longer is LIB_E_RANGE): every path the library builds from it fits its buffers */
 #define LIB_ROOT_DEFAULT "/Music"
 /** Scratch the scanner needs at least (the ADR's 32 KB): run formation, merge fan-in and the open files all live in it. */
 #define LIB_SCRATCH_MIN (32u * 1024u)
@@ -96,6 +98,11 @@ typedef struct {
 } lib_build_stats_t;
 
 /**
+ * PRECONDITIONS (L2 wires the caller): call from the storage task only, with nothing playing and no other parse running. The scanner
+ * borrows the parsers' two process-wide hooks (meta_set_scratch, meta_set_tags_ext) for its whole run, so a concurrent track open would
+ * corrupt both; track_stream refuses to open a file while the tag hooks are held, and lib_build() returns LIB_E_BUSY if they already
+ * are. LIB_E_BUSY is also returned when another task holds the nfs write scope (a settings save): wait and call again.
+ *
  * Build the whole index from scratch and swap it in. @p scratch / @p scratch_n: at least LIB_SCRATCH_MIN bytes, 8-byte aligned
  * (the codec arena). Takes minutes on a big card: call it from the storage task with nothing playing. @p stats may be NULL.
  */

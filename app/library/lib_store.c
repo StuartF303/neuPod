@@ -37,6 +37,7 @@ const char *lib_err_str(lib_err_t e) {
     case LIB_E_RANGE: return "Out of range";
     case LIB_E_SCRATCH: return "Not enough working memory";
     case LIB_E_DENIED: return "Write refused";
+    case LIB_E_BUSY: return "Card busy, try later";
     case LIB_E_CANCELLED: return "Cancelled";
 #ifdef NEUPOD_LIB_TEST_HOOKS
     case LIB_E_TEST_STOP: return "Stopped (test)";
@@ -95,7 +96,12 @@ static lib_err_t map_nfs(nfs_err_t e) {
 }
 
 lib_err_t lib_fopen(FIL *f, const char *path, BYTE mode) {
-    if ((mode & (FA_WRITE | FA_CREATE_NEW | FA_CREATE_ALWAYS | FA_OPEN_APPEND)) && !lib_write_allowed(path)) return LIB_E_DENIED;
+    if (mode & (FA_WRITE | FA_CREATE_NEW | FA_CREATE_ALWAYS | FA_OPEN_APPEND)) {
+        // Normalise once, gate that string, open that same string: what is checked is what is opened.
+        char norm[NFS_PATH_MAX];
+        if (nfs_path_normalize(path, norm, sizeof norm) != NFS_OK || !lib_write_allowed(norm)) return LIB_E_DENIED;
+        return lib_map_fr(f_open(f, norm, mode));
+    }
     return lib_map_fr(f_open(f, path, mode));
 }
 
@@ -119,7 +125,9 @@ lib_err_t lib_rename_path(const char *from, const char *to) {
 
 // The scope is always LIB_BASE_DEFAULT, whatever base the caller names: a base outside it gets nothing written, nothing deleted.
 lib_err_t lib_write_begin(const char *base, bool *lock_was) {
-    if (nfs_write_scope_enter(LIB_BASE_DEFAULT) != NFS_OK) return LIB_E_IO; // scopes do not nest: someone else (settings) is writing
+    if (strlen(base) > LIB_BASE_MAX) return LIB_E_RANGE;
+    nfs_err_t ne = nfs_write_scope_enter(LIB_BASE_DEFAULT);
+    if (ne != NFS_OK) return ne == NFS_ERR_BUSY ? LIB_E_BUSY : LIB_E_IO; // busy: someone else (the settings service) is writing
     if (!nfs_write_scope_allows(base)) {
         nfs_write_scope_leave();
         return LIB_E_DENIED;
@@ -134,7 +142,10 @@ void lib_write_end(bool lock_was) {
     nfs_write_scope_leave();
 }
 
-void lib_path(char *out, size_t cap, const char *base, const char *leaf) { snprintf(out, cap, "%s/%s", base, leaf); }
+bool lib_path(char *out, size_t cap, const char *base, const char *leaf) {
+    int n = snprintf(out, cap, "%s/%s", base, leaf);
+    return n > 0 && (size_t)n < cap;
+}
 
 // A folder of plain files: take the first entry, close the folder, delete it, repeat (FatFs does not like deleting while a folder is open).
 lib_err_t lib_rmtree(const char *dir) {
@@ -313,9 +324,7 @@ lib_err_t lib_manifest_load(const char *dir, bool full, lib_manifest_t *out) {
 
 lib_err_t lib_swap_install(const char *base, int stop_step, int *step_done) {
     char lib[64], old[64], tmp[64];
-    lib_path(lib, sizeof lib, base, "lib");
-    lib_path(old, sizeof old, base, "lib.old");
-    lib_path(tmp, sizeof tmp, base, "lib.tmp");
+    if (!lib_path(lib, sizeof lib, base, "lib") || !lib_path(old, sizeof old, base, "lib.old") || !lib_path(tmp, sizeof tmp, base, "lib.tmp")) return LIB_E_RANGE;
     lib_err_t e = lib_rmtree(old); // a leftover from a build that was cut after the swap
     if (e != LIB_OK) return e;
     bool moved = false;
@@ -341,10 +350,10 @@ lib_err_t lib_swap_install(const char *base, int stop_step, int *step_done) {
 
 lib_err_t lib_recover_locked(const char *base) {
     char lib[64], old[64], tmp[64], work[64];
-    lib_path(lib, sizeof lib, base, "lib");
-    lib_path(old, sizeof old, base, "lib.old");
-    lib_path(tmp, sizeof tmp, base, "lib.tmp");
-    lib_path(work, sizeof work, base, "work");
+    if (!lib_path(lib, sizeof lib, base, "lib") || !lib_path(old, sizeof old, base, "lib.old") || !lib_path(tmp, sizeof tmp, base, "lib.tmp") ||
+        !lib_path(work, sizeof work, base, "work")) {
+        return LIB_E_RANGE;
+    }
     lib_err_t res;
     if (lib_manifest_load(lib, false, NULL) == LIB_OK) {
         res = LIB_OK;

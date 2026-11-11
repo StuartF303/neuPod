@@ -1227,10 +1227,12 @@ lib_err_t lib_build(const lib_build_cfg_t *cfg, void *scratch, size_t scratch_n,
     memset(c, 0, sizeof *c);
     c->cfg = cfg;
     c->ar = &ar;
-    snprintf(c->base, sizeof c->base, "%s", cfg->base != NULL ? cfg->base : LIB_BASE_DEFAULT);
-    snprintf(c->root, sizeof c->root, "%s", cfg->root != NULL ? cfg->root : LIB_ROOT_DEFAULT);
-    lib_path(c->tmp, sizeof c->tmp, c->base, "lib.tmp");
-    lib_path(c->work, sizeof c->work, c->base, "work");
+    const char *base = cfg->base != NULL ? cfg->base : LIB_BASE_DEFAULT, *root = cfg->root != NULL ? cfg->root : LIB_ROOT_DEFAULT;
+    if (strlen(base) > LIB_BASE_MAX || strlen(root) >= sizeof c->root) return LIB_E_RANGE; // (nothing has been touched)
+    if (meta_tags_ext() != NULL) return LIB_E_BUSY;                                       // another scan holds the parser hooks
+    snprintf(c->base, sizeof c->base, "%s", base);
+    snprintf(c->root, sizeof c->root, "%s", root);
+    if (!lib_path(c->tmp, sizeof c->tmp, c->base, "lib.tmp") || !lib_path(c->work, sizeof c->work, c->base, "work")) return LIB_E_RANGE;
 
     bool was = false;
     lib_err_t e = lib_write_begin(c->base, &was); // nfs write scope + hardware lock, only for the duration

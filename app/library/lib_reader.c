@@ -39,7 +39,9 @@ static void table_close(lib_table_t *t) {
 lib_err_t lib_open(lib_reader_t *r, const char *base) {
     memset(r, 0, sizeof *r);
     r->aux_which = -1;
-    snprintf(r->dir, sizeof r->dir, "%s/lib", base != NULL ? base : LIB_BASE_DEFAULT);
+    if (base == NULL) base = LIB_BASE_DEFAULT;
+    if (strlen(base) > LIB_BASE_MAX) return LIB_E_RANGE;
+    snprintf(r->dir, sizeof r->dir, "%s/lib", base);
     lib_err_t e = lib_manifest_load(r->dir, false, &r->m);
     if (e != LIB_OK) return e;
     for (unsigned i = 0; i < T_PERSISTENT && e == LIB_OK; i++) e = table_open(&r->t[i], r->dir, k_file[i]);
