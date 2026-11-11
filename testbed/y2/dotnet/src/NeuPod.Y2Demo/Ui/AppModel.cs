@@ -63,8 +63,8 @@ public sealed class AppModel
         GitHash = gitHash; RuntimeVersion = runtimeVersion;
         _persistedBacklight = backlight.Value;
         Menu = new ListState(MenuItems.Length, MenuRows);
-        Info = sys.Read();
-        _lastInfoMs = clock.NowMs;
+        Info = new SysInfoSnapshot();
+        RefreshInfo();
     }
 
     public string GitHash { get; }
@@ -203,9 +203,9 @@ public sealed class AppModel
 
     void SetPattern(int index)
     {
+        // Flip rate does not depend on the pattern, so cycling must not re-run the (blocking) measurement;
+        // it runs once on entering the screen and again on Centre.
         Pattern = (Pattern)index;
-        FlipFps = null;
-        BenchRequested = true;
         _redraw = true;
     }
 
@@ -267,7 +267,8 @@ public sealed class AppModel
 
     void RefreshInfo()
     {
-        Info = _sys.Read();
+        try { Info = _sys.Read(); }
+        catch (Exception) { /* keep the previous snapshot; a failing source must not take the UI down */ }
         _lastInfoMs = _clock.NowMs;
     }
 

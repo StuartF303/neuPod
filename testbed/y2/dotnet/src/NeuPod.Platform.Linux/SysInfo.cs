@@ -35,36 +35,42 @@ public sealed class SysInfoReader(string root = "/", Func<string, string?>? ipLo
 
     readonly Func<string, string?> _ip = ipLookup ?? DefaultIpLookup;
 
+    /// <summary>Never throws: each source is independent and best effort, so one bad file cannot take the UI down.</summary>
     public SysInfoSnapshot Read()
     {
-        var (l1, l5, l15) = ParseLoadavg(Text("proc/loadavg"));
-        var (total, avail) = ParseMeminfo(Text("proc/meminfo"));
-        var (pct, mv, status) = ReadBattery();
+        var (l1, l5, l15) = Safe(() => ParseLoadavg(Text("proc/loadavg")), (null, null, null));
+        var (total, avail) = Safe(() => ParseMeminfo(Text("proc/meminfo")), (null, null));
+        var (pct, mv, status) = Safe(ReadBattery, (null, null, null));
         return new SysInfoSnapshot
         {
-            Uptime = ParseUptime(Text("proc/uptime")),
+            Uptime = Safe(() => ParseUptime(Text("proc/uptime")), null),
             Load1 = l1, Load5 = l5, Load15 = l15,
             MemTotalKb = total, MemAvailableKb = avail,
-            OnlineCpus = ParseCpuList(Text("sys/devices/system/cpu/online")),
-            Kernel = Text("proc/sys/kernel/osrelease")?.Trim(),
-            Ipv4 = FirstIp(),
+            OnlineCpus = Safe(() => ParseCpuList(Text("sys/devices/system/cpu/online")), null),
+            Kernel = Safe(() => Text("proc/sys/kernel/osrelease")?.Trim(), null),
+            Ipv4 = Safe(FirstIp, null),
             BatteryPercent = pct, BatteryMillivolts = mv, BatteryStatus = status,
-            Jack = ParseJack(Text("sys/class/switch/h2w/state")),
+            Jack = Safe(() => ParseJack(Text("sys/class/switch/h2w/state")), JackState.Unknown),
         };
+    }
+
+    static T Safe<T>(Func<T> f, T fallback)
+    {
+        try { return f(); }
+        catch (Exception) { return fallback; } // deliberately broad: IO, permission, parse, network enumeration
     }
 
     string? Text(string rel)
     {
         try { return File.ReadAllText(Path.Combine(root, rel)); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+        catch (Exception) { return null; }
     }
 
     string? FirstIp()
     {
         foreach (var n in NetInterfaces)
         {
-            string? ip;
-            try { ip = _ip(n); } catch (Exception e) when (e is NetworkInformationException or InvalidOperationException) { ip = null; }
+            string? ip = Safe(() => _ip(n), null);
             if (!string.IsNullOrEmpty(ip)) return ip;
         }
         return null;
@@ -94,7 +100,7 @@ public sealed class SysInfoReader(string root = "/", Func<string, string?>? ipLo
         static string? Read(string p)
         {
             try { return File.ReadAllText(p); }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+            catch (Exception) { return null; }
         }
     }
 

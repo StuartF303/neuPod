@@ -195,15 +195,17 @@ public class InputTestScreenTests
 public class DisplayTestTests
 {
     [Fact]
-    public void Wheel_cycles_patterns_both_ways_with_wrap_and_requests_a_measurement()
+    public void Wheel_cycles_patterns_both_ways_with_wrap_without_remeasuring()
     {
         var h = new ModelHarness();
         h.Go(ScreenId.DisplayTest);
         Assert.True(h.Model.TakeBenchRequest());
         Assert.Equal(Pattern.ColorBars, h.Model.Pattern);
+        h.Model.SetFlipFps(40);
         h.Cw();
         Assert.Equal(Pattern.Red, h.Model.Pattern);
-        Assert.True(h.Model.TakeBenchRequest());
+        Assert.False(h.Model.TakeBenchRequest()); // cycling must not re-run the blocking measurement
+        Assert.Equal(40, h.Model.FlipFps);
         h.Ccw(); h.Ccw();
         Assert.Equal(Pattern.Checker, h.Model.Pattern);
     }

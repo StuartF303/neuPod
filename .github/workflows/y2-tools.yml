@@ -24,6 +24,8 @@ jobs:
         run: dotnet test testbed/y2/dotnet/NeuPod.Y2.slnx -c Release
       - name: Shell syntax
         run: |
-          for f in testbed/y2/tools/setup-host.sh testbed/y2/rescue/build-rescue.sh testbed/y2/scripts/usb-console.sh testbed/y2/scripts/deploy-demo.sh testbed/y2/buildroot/board/y2/overlay/etc/init.d/S90neupod-demo; do
+          for f in testbed/y2/tools/setup-host.sh testbed/y2/rescue/build-rescue.sh testbed/y2/scripts/usb-console.sh testbed/y2/scripts/deploy-demo.sh; do
             bash -n "$f"
           done
+          # Device scripts run under busybox ash; /bin/sh on the runner is dash, a POSIX-only parser.
+          sh -n testbed/y2/buildroot/board/y2/overlay/etc/init.d/S90neupod-demo

@@ -253,15 +253,126 @@ public class FbStructTests
         Assert.Equal(144, (int)Marshal.OffsetOf<FbVarScreenInfo>(nameof(FbVarScreenInfo.reserved0)));
     }
 
-    [Fact]
-    public void Fix_screeninfo_follows_pointer_width()
+    // fb_fix_screeninfo from <linux/fb.h>: (name, size, align-by-pointer?) in declaration order.
+    static readonly (string Name, int Size, bool IsLong)[] FixFields =
+    [
+        ("id", 16, false), ("smem_start", 0, true), ("smem_len", 4, false), ("type", 4, false), ("type_aux", 4, false),
+        ("visual", 4, false), ("xpanstep", 2, false), ("ypanstep", 2, false), ("ywrapstep", 2, false),
+        ("line_length", 4, false), ("mmio_start", 0, true), ("mmio_len", 4, false), ("accel", 4, false),
+        ("capabilities", 2, false), ("reserved0", 2, false), ("reserved1", 2, false),
+    ];
+
+    /// <summary>Natural-alignment layout of the table above for a given sizeof(unsigned long).</summary>
+    static (Dictionary<string, int> Offsets, int Size) ComputeFixLayout(int longSize)
     {
-        // armhf (the Y2): unsigned long is 4 bytes, struct is 68 bytes, line_length at 44.
-        // 64-bit host: 80 bytes, line_length at 48. Both come out of the same definition.
-        bool is32 = IntPtr.Size == 4;
-        Assert.Equal(is32 ? 68 : 80, Unsafe.SizeOf<FbFixScreenInfo>());
-        Assert.Equal(is32 ? 44 : 48, (int)Marshal.OffsetOf<FbFixScreenInfo>(nameof(FbFixScreenInfo.line_length)));
-        Assert.Equal(is32 ? 20 : 24, (int)Marshal.OffsetOf<FbFixScreenInfo>(nameof(FbFixScreenInfo.smem_len)));
+        var offsets = new Dictionary<string, int>();
+        int off = 0, maxAlign = 1;
+        foreach (var (name, size0, isLong) in FixFields)
+        {
+            int size = isLong ? longSize : size0;
+            int align = name == "id" ? 1 : size;
+            maxAlign = Math.Max(maxAlign, align);
+            off = (off + align - 1) / align * align;
+            offsets[name] = off;
+            off += size;
+        }
+        return (offsets, (off + maxAlign - 1) / maxAlign * maxAlign);
+    }
+
+    [Fact]
+    public void Fix_screeninfo_32bit_layout_is_what_armhf_expects()
+    {
+        // Hard-coded armhf values (unsigned long = 4): the layout the Y2's kernel uses.
+        var (o, size) = ComputeFixLayout(4);
+        Assert.Equal(68, size);
+        Assert.Equal(16, o["smem_start"]);
+        Assert.Equal(20, o["smem_len"]);
+        Assert.Equal(36, o["xpanstep"]);
+        Assert.Equal(44, o["line_length"]);
+        Assert.Equal(48, o["mmio_start"]);
+        Assert.Equal(60, o["capabilities"]);
+    }
+
+    [Fact]
+    public void Fix_screeninfo_struct_matches_the_computed_layout_for_this_pointer_width()
+    {
+        var (o, size) = ComputeFixLayout(IntPtr.Size);
+        Assert.Equal(size, Unsafe.SizeOf<FbFixScreenInfo>());
+        foreach (var (name, off) in o)
+            Assert.Equal(off, (int)Marshal.OffsetOf<FbFixScreenInfo>(name));
+    }
+
+    [Theory]
+    [InlineData(2119680u, 1104u, 1920u, 360u, 3)]
+    [InlineData(2119680u, 360u, 1920u, 360u, 1)]
+    [InlineData(1000u, 360u, 1920u, 360u, 1)]   // mapping smaller than one page: never 0
+    [InlineData(2119680u, 1104u, 0u, 360u, 1)]
+    public void Max_pages_for_mtkfb_geometry(uint mapLen, uint yv, uint line, uint yres, int pages) =>
+        Assert.Equal(pages, Framebuffer.ComputeMaxPages(mapLen, yv, line, yres));
+}
+
+public class PresenterTests
+{
+    sealed class FakeTarget(int pages) : IFrameTarget
+    {
+        readonly byte[] _mem = new byte[4 * 2 * 4 * 3];
+        public int Width => 4;
+        public int Height => 2;
+        public int StrideBytes => 16;
+        public int PageCount { get; set; } = pages;
+        public PixelLayout Layout => PixelLayout.Xrgb8888;
+        public List<int> Presented { get; } = [];
+        public int FailOnCall { get; set; } = -1;
+        public List<int> DrawnPages { get; } = [];
+        public Span<byte> Page(int index) { DrawnPages.Add(index); return _mem.AsSpan(index * 32, 32); }
+        public bool Present(int index)
+        {
+            Presented.Add(index);
+            if (Presented.Count - 1 == FailOnCall) { PageCount = 1; return false; } // driver refused: single page from now on
+            return true;
+        }
+        public void Dispose() { }
+    }
+
+    static NeuPod.Y2Demo.Ui.Canvas C() { var c = new NeuPod.Y2Demo.Ui.Canvas(4, 2); c.Clear(0x112233); return c; }
+
+    [Fact]
+    public void Cycles_round_robin_over_all_three_pages()
+    {
+        var t = new FakeTarget(3);
+        var p = new NeuPod.Y2Demo.Host.FramePresenter(t);
+        for (int i = 0; i < 7; i++) p.Show(C());
+        Assert.Equal([0, 1, 2, 0, 1, 2, 0], t.Presented);
+    }
+
+    [Fact]
+    public void Single_page_target_always_uses_page_zero()
+    {
+        var t = new FakeTarget(1);
+        var p = new NeuPod.Y2Demo.Host.FramePresenter(t);
+        for (int i = 0; i < 3; i++) p.Show(C());
+        Assert.Equal([0, 0, 0], t.Presented);
+    }
+
+    [Fact]
+    public void Refused_flip_redraws_onto_page_zero_instead_of_freezing()
+    {
+        var t = new FakeTarget(3) { FailOnCall = 1 };
+        var p = new NeuPod.Y2Demo.Host.FramePresenter(t);
+        p.Show(C());  // page 0 ok
+        p.Show(C());  // page 1 refused -> redraw + present page 0
+        Assert.Equal([0, 1, 0], t.Presented);
+        Assert.Equal(1, t.PageCount);
+        p.Show(C());
+        Assert.Equal([0, 1, 0, 0], t.Presented);
+    }
+
+    [Fact]
+    public void Fill_also_recovers_from_a_refused_flip()
+    {
+        var t = new FakeTarget(3) { FailOnCall = 0 };
+        new NeuPod.Y2Demo.Host.FramePresenter(t).Fill(0x202020);
+        Assert.Equal([0, 0], t.Presented);
     }
 }
 

@@ -40,6 +40,14 @@ On the device: log at `/tmp/neupod-demo.log` (tmpfs), PID files `/run/neupod-dem
 `/run/neupod-demo.app.pid` (app). The wrapper restarts a crashed app after 2 s. `stop` kills by PID, never by name;
 SIGTERM/SIGINT make the app paint the screen dark grey (0x202020) and exit 0.
 
+If the deploy refuses to connect with "REMOTE HOST IDENTIFICATION HAS CHANGED", the Y2's ssh host key was regenerated
+(normal after a reflash or new rootfs). Check it is your device, run `ssh-keygen -R <host>`, connect once to accept the new
+key, and re-run. The script never disables host-key checking.
+
+`--no-restart` only stages: the new build is copied to `/opt/neupod-demo.new` and the init script refreshed, but the live
+install is not swapped (replacing files under a running .NET process can crash it on a lazy assembly load). A normal run
+stops the app, swaps, starts it, checks it stays up for 4 s, and otherwise restores the previous build.
+
 The init script exports `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1` and `DOTNET_EnableWriteXorExecute=0` itself, because
 `/etc/profile.d/dotnet.sh` only covers login shells. The csproj also sets InvariantGlobalization (no ICU on device).
 
@@ -58,8 +66,9 @@ Screens: Input test (last 8 events with ms deltas, per-key counters, wheel ticks
 grey ramp, 1 px grid, 1 px checker, with measured fps), Backlight (bar, wheel adjusts, floor at 8), System (1 Hz: uptime,
 load, memory, CPUs, kernel, IPv4 of rndis0/usb0, battery, jack, .NET), About (git hash, "testbed, not shipping").
 
-Backlight persistence: `/etc/neupod-demo.conf` (`backlight=N`), written atomically and only if the value changed, when
-leaving the Backlight screen and at shutdown (so Vol+/- changes made elsewhere are saved when the app stops, not before).
+Backlight persistence: `/etc/neupod-demo.conf` (`backlight=N`), written atomically (fsync, then rename) and only if the value
+changed. It is written only when leaving the Backlight screen or on SIGTERM/SIGINT; Vol+/- changes made on other screens
+persist only on SIGTERM/SIGINT, so a power cut loses them.
 
 Input details: devices are found by name under `/sys/class/input/event*/device/name` (`mtk-tpd`, `mtk-kpd`). The wheel
 sends KEY_DOWN (clockwise) / KEY_UP (anticlockwise) press+release per detent; one tick is emitted per press. A wheel tick
@@ -97,5 +106,6 @@ within 150 ms after a ring-button press is dropped (a finger brushing the wheel 
 
 ## Font
 
-Spleen 8x16 and 12x24 BDF by Frederic Cambus, BSD-2-Clause (licence text in
-`src/NeuPod.Y2Demo/Fonts/LICENSE-spleen.txt`), embedded in the assembly and parsed at start-up.
+Spleen 8x16 and 12x24 BDF by Frederic Cambus. These two files are BSD-2-Clause, which is different from the rest of the
+repo's licence; keep the licence text with them (in
+`src/NeuPod.Y2Demo/Fonts/LICENSE-spleen.txt`). They are embedded in the assembly and parsed at start-up.

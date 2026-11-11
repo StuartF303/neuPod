@@ -7,7 +7,7 @@ namespace NeuPod.Y2Demo.Host;
 
 public sealed class SystemClock : IClock
 {
-    public long NowMs => Stopwatch.GetTimestamp() * 1000 / Stopwatch.Frequency;
+    public long NowMs => Environment.TickCount64; // monotonic ms; no multiply that could overflow
     public DateTime LocalNow => DateTime.Now;
 }
 
@@ -82,7 +82,12 @@ public sealed class ConfFile(string path) : ISettingsStore
         string tmp = Path + ".tmp";
         try
         {
-            File.WriteAllText(tmp, "backlight=" + value.ToString(CultureInfo.InvariantCulture) + "\n");
+            using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write))
+            {
+                var bytes = System.Text.Encoding.ASCII.GetBytes("backlight=" + value.ToString(CultureInfo.InvariantCulture) + "\n");
+                fs.Write(bytes);
+                fs.Flush(flushToDisk: true); // fsync before the rename so a power cut leaves the old or the new file, not a torn one
+            }
             File.Move(tmp, Path, overwrite: true);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -92,7 +97,10 @@ public sealed class ConfFile(string path) : ISettingsStore
     }
 }
 
-/// <summary>Blits the canvas to a frame target, alternating pages when the target supports double buffering.</summary>
+/// <summary>
+/// Blits the canvas to a frame target, round-robin over every page the target offers (mtkfb flips may complete
+/// asynchronously and there is no vsync wait, so cycling all pages keeps us off the page being scanned out).
+/// </summary>
 public sealed class FramePresenter(IFrameTarget target)
 {
     readonly PixelPacker _packer = new(target.Layout);
@@ -102,21 +110,29 @@ public sealed class FramePresenter(IFrameTarget target)
 
     public void Show(Canvas c)
     {
-        int page = Target.PageCount > 1 ? _next : 0;
+        int page = Next();
         FrameBlit.Blit(c.Pixels, c.Width, c.Height, Target, page, _packer);
-        Target.Present(page);
-        if (Target.PageCount > 1) _next = (page + 1) % 2; // two pages are enough for flipping
+        if (Target.Present(page)) { _next = (page + 1) % Math.Max(1, Target.PageCount); return; }
+        // The target refused the flip and dropped to a single page; redraw onto that page so the screen is not left stale.
+        _next = 0;
+        FrameBlit.Blit(c.Pixels, c.Width, c.Height, Target, 0, _packer);
+        Target.Present(0);
     }
 
     public void Fill(uint rgb)
     {
-        int page = Target.PageCount > 1 ? _next : 0;
+        int page = Next();
         FrameBlit.Fill(Target, page, rgb, _packer);
-        Target.Present(page);
+        if (Target.Present(page)) { _next = (page + 1) % Math.Max(1, Target.PageCount); return; }
+        _next = 0;
+        FrameBlit.Fill(Target, 0, rgb, _packer);
+        Target.Present(0);
     }
 
+    int Next() => _next < Target.PageCount ? _next : 0;
+
     /// <summary>Full-frame blit+present rate over up to <paramref name="frames"/> frames or <paramref name="budgetMs"/>.</summary>
-    public double MeasureFps(Canvas c, int frames = 30, int budgetMs = 1500)
+    public double MeasureFps(Canvas c, int frames = 30, int budgetMs = 1000)
     {
         var sw = Stopwatch.StartNew();
         int n = 0;

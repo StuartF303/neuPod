@@ -21,13 +21,18 @@ start() {
 		export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 DOTNET_EnableWriteXorExecute=0
 		echo $$ >"$0"
 		while :; do
+			# The log lives in RAM (tmpfs): empty it before it can grow past 256 KB. The shell holds it open
+			# O_APPEND, so truncating in place is safe.
+			[ "$(wc -c <"$3")" -gt 262144 ] && : >"$3"
 			"$1" &
 			echo $! >"$2"
 			wait $!
-			echo "neupod-demo exited ($?), restarting in 2 s" >&2
+			rc=$?
+			rm -f "$2"
+			echo "neupod-demo exited ($rc), restarting in 2 s" >&2
 			sleep 2
 		done
-	' "$WRAP_PID" "$APP" "$APP_PID" </dev/null >>"$LOG" 2>&1 &
+	' "$WRAP_PID" "$APP" "$APP_PID" "$LOG" </dev/null >>"$LOG" 2>&1 &
 }
 
 stop() {

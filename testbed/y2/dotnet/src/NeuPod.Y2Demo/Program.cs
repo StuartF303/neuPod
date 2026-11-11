@@ -16,20 +16,59 @@ public static class Program
 
     public static string RuntimeVersion => Environment.Version.ToString();
 
+    const string Usage = """
+        usage: NeuPod.Y2Demo [--conf <path>] [--fb-mode writeonly|pan|panput]
+               NeuPod.Y2Demo --render-png <dir>    render every screen to PNG files (no framebuffer)
+               NeuPod.Y2Demo --fb-bench            measure fps of each framebuffer present mode
+               NeuPod.Y2Demo --help
+        """;
+
+    public sealed record Options(string? RenderPngDir, string Conf, FbPresentMode Mode, bool Bench, bool Help);
+
+    /// <summary>Strict parser: unknown arguments, missing values and bad --fb-mode values are errors.</summary>
+    public static Options ParseArgs(string[] args)
+    {
+        string? png = null, conf = null;
+        var mode = FbPresentMode.PanPut;
+        bool bench = false, help = false;
+        for (int i = 0; i < args.Length; i++)
+        {
+            string Value(string name) => i + 1 < args.Length ? args[++i] : throw new ArgumentException($"{name} needs a value");
+            switch (args[i])
+            {
+                case "--render-png": png = Value("--render-png"); break;
+                case "--conf": conf = Value("--conf"); break;
+                case "--fb-mode":
+                    mode = Value("--fb-mode").ToLowerInvariant() switch
+                    {
+                        "writeonly" => FbPresentMode.WriteOnly,
+                        "pan" => FbPresentMode.Pan,
+                        "panput" => FbPresentMode.PanPut,
+                        var v => throw new ArgumentException($"unknown --fb-mode '{v}' (writeonly, pan, panput)"),
+                    };
+                    break;
+                case "--fb-bench": bench = true; break;
+                case "--help" or "-h": help = true; break;
+                default: throw new ArgumentException($"unknown argument '{args[i]}'");
+            }
+        }
+        return new Options(png, conf ?? DefaultConf, mode, bench, help);
+    }
+
     public static int Main(string[] args)
     {
-        string? Opt(string name) => Array.IndexOf(args, name) is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;
-
-        if (Opt("--render-png") is { } dir) return RenderPng(dir);
-        string conf = Opt("--conf") ?? DefaultConf;
-        var mode = (Opt("--fb-mode") ?? "panput").ToLowerInvariant() switch
+        Options o;
+        try { o = ParseArgs(args); }
+        catch (ArgumentException e)
         {
-            "writeonly" => FbPresentMode.WriteOnly,
-            "pan" => FbPresentMode.Pan,
-            _ => FbPresentMode.PanPut,
-        };
-        if (args.Contains("--fb-bench")) return FbBench();
-        return Run(conf, mode);
+            Console.Error.WriteLine(e.Message);
+            Console.Error.WriteLine(Usage);
+            return 2;
+        }
+        if (o.Help) { Console.WriteLine(Usage); return 0; }
+        if (o.RenderPngDir is { } dir) return RenderPng(dir);
+        if (o.Bench) return FbBench();
+        return Run(o.Conf, o.Mode);
     }
 
     // ---- device run ----
@@ -44,46 +83,61 @@ public static class Program
         Console.WriteLine($"fb {fb.Width}x{fb.Height} stride {fb.StrideBytes} pages {fb.PageCount}/{fb.MaxPages} mode {fb.Mode} " +
                           $"layout {fb.Layout.BitsPerPixel}bpp r{fb.Layout.Red.Offset} g{fb.Layout.Green.Offset} b{fb.Layout.Blue.Offset} a{fb.Layout.Alpha.Offset}");
         var presenter = new FramePresenter(fb);
-
-        var backlight = new Backlight();
-        var cf = new ConfFile(confPath);
-        if (cf.LoadBacklight() is { } saved) backlight.Set(saved);
-        var clock = new SystemClock();
-        var model = new AppModel(clock, new SysInfoReader(), backlight, cf, GitHash, RuntimeVersion);
-        var renderer = Renderer.CreateDefault();
-        var canvas = new Canvas(Renderer.Width, Renderer.Height);
-
-        using var input = EvdevInput.OpenDefault();
-        input.Start();
-        var reader = input.Events;
-        Console.WriteLine($"neuPod Y2 demo {GitHash} running, .NET {RuntimeVersion}");
+        int exit = 0;
 
         try
         {
-            while (!cts.IsCancellationRequested)
+            var backlight = new Backlight();
+            var cf = new ConfFile(confPath);
+            if (cf.LoadBacklight() is { } saved) backlight.Set(saved);
+            var clock = new SystemClock();
+            var model = new AppModel(clock, new SysInfoReader(), backlight, cf, GitHash, RuntimeVersion);
+            var renderer = Renderer.CreateDefault();
+            var canvas = new Canvas(Renderer.Width, Renderer.Height);
+
+            using var input = EvdevInput.OpenDefault(log: m => Console.Error.WriteLine(m));
+            input.Start();
+            var reader = input.Events;
+            Console.WriteLine($"neuPod Y2 demo {GitHash} running, .NET {RuntimeVersion}");
+
+            try
             {
-                if (model.TakeBenchRequest())
+                while (!cts.IsCancellationRequested)
                 {
-                    Patterns.Draw(canvas, model.Pattern);
-                    model.SetFlipFps(presenter.MeasureFps(canvas));
+                    if (model.TakeBenchRequest())
+                    {
+                        Patterns.Draw(canvas, model.Pattern);
+                        model.SetFlipFps(presenter.MeasureFps(canvas));
+                    }
+                    if (model.TakeRedraw())
+                    {
+                        renderer.Render(model, canvas);
+                        presenter.Show(canvas);
+                    }
+                    WaitForInput(reader, model.NextWakeMs(), cts.Token);
+                    while (reader.TryRead(out var e)) model.Handle(e);
+                    model.Tick();
+                    if (reader.Completion.IsCompleted && !reader.TryPeek(out _))
+                    {
+                        // Every input device failed; waiting again would spin. Exit non-zero so the wrapper restarts us.
+                        Console.Error.WriteLine("all input devices lost; exiting");
+                        exit = 1;
+                        break;
+                    }
                 }
-                if (model.TakeRedraw())
-                {
-                    renderer.Render(model, canvas);
-                    presenter.Show(canvas);
-                }
-                WaitForInput(reader, model.NextWakeMs(), cts.Token);
-                while (reader.TryRead(out var e)) model.Handle(e);
-                model.Tick();
+            }
+            finally
+            {
+                model.PersistBacklight();
             }
         }
         finally
         {
-            model.PersistBacklight();
+            // Independent of the settings write above: the screen is always cleared, even if saving threw.
             presenter.Fill(0x202020);
-            Console.WriteLine("shutdown: screen cleared");
+            Console.WriteLine("shutdown: screen cleared to 0x202020");
         }
-        return 0;
+        return exit;
     }
 
     static void WaitForInput(ChannelReader<InputEvent> reader, int timeoutMs, CancellationToken ct)
