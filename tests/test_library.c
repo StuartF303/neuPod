@@ -3,6 +3,7 @@
 // and read round trip on a FatFs disk image, and the swap surviving a power cut at every step. The 100k-entry build is test_library_big.c.
 #include "library_fixture.h"
 
+#include "../app/library/lib_internal.h" /* lib_crc32, st32: the tests that forge a manifest */
 #include "library.h"
 #include "meta.h"
 #include "unit.h"
@@ -308,11 +309,6 @@ static lib_err_t build(int stop, lib_build_stats_t *st) {
 }
 
 static lib_reader_t g_rd;
-
-static bool lib_exists(const char *path) {
-    FILINFO fi;
-    return f_stat(path, &fi) == FR_OK;
-}
 
 static uint32_t find_artist(const char *name) {
     for (uint32_t i = 0; i < lib_manifest(&g_rd)->artists; i++) {
@@ -690,6 +686,272 @@ TEST(small_scratch_still_builds_with_more_merging) {
     lib_close(&g_rd);
 }
 
+/* ---- hostile input ------------------------------------------------------------------------------------------------- */
+
+static bool poke(const char *path, uint32_t off, const uint8_t *v, uint32_t n) {
+    FIL f;
+    UINT w = 0;
+    if (f_open(&f, path, FA_READ | FA_WRITE) != FR_OK) return false;
+    bool ok = f_lseek(&f, off) == FR_OK && f_write(&f, v, n, &w) == FR_OK && w == n;
+    return f_close(&f) == FR_OK && ok;
+}
+
+// Change one 32-bit word of the manifest payload and fix its CRC, so only the plausibility checks can catch it.
+static bool manifest_set(unsigned word, uint32_t value) {
+    uint8_t m[2048];
+    FIL f;
+    UINT n = 0;
+    if (f_open(&f, "/.neupod/lib/manifest.bin", FA_READ) != FR_OK) return false;
+    FRESULT fr = f_read(&f, m, sizeof m, &n);
+    f_close(&f);
+    if (fr != FR_OK || n <= LIB_HDR) return false;
+    st32(m + LIB_HDR + 4 * word, value);
+    st32(m + 12, lib_crc32(0, m + LIB_HDR, n - LIB_HDR));
+    return poke("/.neupod/lib/manifest.bin", 0, m, n);
+}
+
+static bool fresh_library(void) { return fx_volume(16u << 20, 0) && make_tree(false) && build(0, NULL) == LIB_OK; }
+
+TEST(hostile_manifest_is_refused) {
+    enum { W_TRACKS = 4, W_PLAYABLE = 5, W_ARTISTS = 6, W_ALBUMS = 7, W_COMP_FIRST = 10, W_LINKS = 11, W_JUMP = 12 + 2 * LIB_FILES };
+    static const struct {
+        unsigned word;
+        uint32_t value;
+    } bad[] = {
+        {W_COMP_FIRST, 13}, /* beyond the 12 albums: the Compilations count would wrap to 4 billion */
+        {W_COMP_FIRST, 0xFFFFFFFFu},
+        {W_PLAYABLE, 18}, /* more playable than tracks */
+        {W_TRACKS, 1u << 30}, /* a count the file cannot hold */
+        {W_ARTISTS, 11},
+        {W_ALBUMS, 0},
+        {W_LINKS, 7},
+        {W_JUMP + 5, 11}, /* artists jump table pointing past the last row */
+        {W_JUMP + 3, 0xFFFFFFFFu},
+    };
+    for (unsigned i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+        ASSERT_TRUE(fresh_library());
+        ASSERT_TRUE(manifest_set(bad[i].word, bad[i].value));
+        ASSERT_EQ(LIB_E_FORMAT, lib_open(&g_rd, NULL));
+    }
+    ASSERT_TRUE(fresh_library());
+    ASSERT_TRUE(manifest_set(W_COMP_FIRST, 10)); /* control: a valid rewrite with a good CRC is accepted */
+    ASSERT_EQ(LIB_OK, lib_open(&g_rd, NULL));
+    ASSERT_EQ(2, lib_list_count(&g_rd, LIB_LIST_COMPILATIONS));
+    lib_close(&g_rd);
+}
+
+TEST(truncated_and_stuffed_tables) {
+    FIL f;
+    ASSERT_TRUE(fresh_library());
+    /* a truncated table: the size no longer matches the manifest */
+    ASSERT_EQ(FR_OK, f_open(&f, "/.neupod/lib/albums.bin", FA_READ | FA_WRITE));
+    ASSERT_EQ(FR_OK, f_lseek(&f, 100));
+    ASSERT_EQ(FR_OK, f_truncate(&f));
+    f_close(&f);
+    ASSERT_EQ(LIB_E_FORMAT, lib_open(&g_rd, NULL));
+    ASSERT_EQ(LIB_E_FORMAT, lib_manifest_load("/.neupod/lib", false, NULL));
+    ASSERT_TRUE(fresh_library());
+    ASSERT_EQ(FR_OK, f_open(&f, "/.neupod/lib/names.str", FA_READ | FA_WRITE)); /* shorter than a header */
+    ASSERT_EQ(FR_OK, f_lseek(&f, 5));
+    ASSERT_EQ(FR_OK, f_truncate(&f));
+    f_close(&f);
+    ASSERT_EQ(LIB_E_FORMAT, lib_manifest_load("/.neupod/lib", true, NULL));
+
+    /* right size, rubbish inside (the manifest cannot know): every call must end in an error or a bounded answer, never a wild read */
+    static const char *const files[] = {"tracks.bin", "artists.bin", "albums.bin", "genres.bin", "by_album.u32", "by_title.u32",
+                                        "by_album_name.u32", "genre_artists.u32", "dirs.bin", "strings.str", "names.str", "enames.str"};
+    for (unsigned k = 0; k < sizeof files / sizeof files[0]; k++) {
+        for (unsigned fill = 0; fill < 3; fill++) { /* 0x00, 0xFF, 0x7F */
+            ASSERT_TRUE(fresh_library());
+            char p[64];
+            snprintf(p, sizeof p, "/.neupod/lib/%s", files[k]);
+            FILINFO fi;
+            ASSERT_EQ(FR_OK, f_stat(p, &fi));
+            uint8_t row[256];
+            memset(row, fill == 0 ? 0x00 : fill == 1 ? 0xFF : 0x7F, sizeof row);
+            for (uint32_t off = LIB_HDR; off < fi.fsize; off += sizeof row) {
+                uint32_t n = (uint32_t)(fi.fsize - off < sizeof row ? fi.fsize - off : sizeof row);
+                ASSERT_TRUE(poke(p, off, row, n));
+            }
+            ASSERT_EQ(LIB_OK, lib_open(&g_rd, NULL));
+            for (unsigned l = 0; l < LIB_LISTS; l++) {
+                uint32_t n = lib_list_count(&g_rd, (lib_list_t)l);
+                ASSERT_TRUE(n <= 17);
+                for (uint32_t i = 0; i < n; i++) {
+                    lib_row_t r;
+                    lib_err_t e = lib_list_row(&g_rd, (lib_list_t)l, i, &r);
+                    ASSERT_TRUE(e == LIB_OK || e == LIB_E_RANGE || e == LIB_E_FORMAT || e == LIB_E_IO);
+                }
+            }
+            for (uint32_t i = 0; i < 17; i++) {
+                char path[128];
+                lib_entity_t e;
+                uint32_t id;
+                lib_track_path(&g_rd, i, path, sizeof path);
+                lib_artist(&g_rd, i, &e);
+                lib_album(&g_rd, i, &e);
+                lib_genre(&g_rd, i, &e);
+                lib_by_album_at(&g_rd, i, &id);
+                lib_genre_artist_at(&g_rd, i, &id);
+            }
+            lib_close(&g_rd);
+        }
+    }
+}
+
+/* ---- failures during the swap, and a full card -------------------------------------------------------------------- */
+
+TEST(failing_rename_keeps_a_library) {
+    for (int fail = 1; fail <= 2; fail++) { /* 1 = lib -> lib.old, 2 = lib.tmp -> lib (the old library must be put back) */
+        ASSERT_TRUE(fresh_library());
+        ASSERT_TRUE(put("/Music/Extra/01.flac", F_FLAC, &(fx_tags_t){.title = "Extra", .artist = "Extra", .album = "Extra"}));
+        lib_test_fail_rename = fail;
+        ASSERT_EQ(LIB_E_IO, build(0, NULL));
+        lib_test_fail_rename = 0;
+        expect_whole(1, 17); /* reachable at once, no recovery run */
+        ASSERT_FALSE(lib_exists("/.neupod/lib.old"));
+        ASSERT_EQ(LIB_OK, build(0, NULL)); /* and the next build is fine */
+        expect_whole(2, 18);
+    }
+    /* lib is lib.old (a cut swap) and restoring it fails: reported, nothing deleted; the next boot restores it */
+    ASSERT_TRUE(fresh_library());
+    ASSERT_TRUE(put("/Music/Extra/01.flac", F_FLAC, &(fx_tags_t){.title = "Extra", .artist = "Extra", .album = "Extra"}));
+    ASSERT_EQ(LIB_E_TEST_STOP, build(3, NULL));
+    lib_test_fail_rename = 1;
+    ASSERT_EQ(LIB_E_IO, lib_recover(NULL));
+    ASSERT_TRUE(lib_exists("/.neupod/lib.old"));
+    lib_test_fail_rename = 1;
+    ASSERT_EQ(LIB_E_IO, build(0, NULL)); /* a build refuses to go on while the last swap cannot be settled */
+    ASSERT_TRUE(lib_exists("/.neupod/lib.old"));
+    lib_test_fail_rename = 0;
+    ASSERT_EQ(LIB_OK, lib_recover(NULL));
+    expect_whole(1, 17);
+}
+
+TEST(full_card_leaves_old_library) {
+    ASSERT_TRUE(fx_volume(4u << 20, 512));
+    ASSERT_TRUE(make_tree(false));
+    ASSERT_EQ(LIB_OK, build(0, NULL));
+    /* fill the volume, then give back 8 KB: enough for a file, far too little for a rebuild */
+    FIL f;
+    static uint8_t chunk[4096];
+    ASSERT_EQ(FR_OK, f_open(&f, "/filler.bin", FA_CREATE_ALWAYS | FA_WRITE));
+    for (;;) {
+        UINT w = 0;
+        FRESULT fr = f_write(&f, chunk, sizeof chunk, &w);
+        if (fr != FR_OK || w < sizeof chunk) break;
+    }
+    FSIZE_t size = f_tell(&f);
+    ASSERT_EQ(FR_OK, f_lseek(&f, size > 8192 ? size - 8192 : 0));
+    ASSERT_EQ(FR_OK, f_truncate(&f));
+    f_close(&f);
+    ASSERT_TRUE(put("/Music/Extra/01.flac", F_FLAC, &(fx_tags_t){.title = "Extra", .artist = "Extra", .album = "Extra"}));
+    ASSERT_EQ(LIB_E_FULL, build(0, NULL));
+    expect_whole(1, 17);
+    ASSERT_FALSE(lib_exists("/.neupod/lib.tmp"));
+    ASSERT_FALSE(lib_exists("/.neupod/work"));
+    ASSERT_FALSE(lib_exists("/.neupod/lib.old"));
+}
+
+/* ---- hostile tags -------------------------------------------------------------------------------------------------- */
+
+TEST(genre_text_hostile) {
+    static const char *const in[] = {"(", "()", "(17", "(99999999999)Foo", "(((", "(RX", "(RX)", "(CR)(17)", ")", "(-1)", "( 17)", "17)", "", "\xC3"};
+    static const char *const out[] = {"(", "()", "(17", "(99999999999)Foo", "((", "(RX", "", "", ")", "(-1)", "( 17)", "17)", "", "\xC3"};
+    for (unsigned i = 0; i < sizeof in / sizeof in[0]; i++) {
+        ASSERT_EQ(0, strcmp(out[i], genre(in[i], true)));
+        ASSERT_EQ(0, strcmp(out[i], genre(in[i], false)));
+    }
+    char one[1] = {'x'};
+    meta_genre_text(one, sizeof one, "(17)", false);
+    ASSERT_EQ(0, one[0]);
+    meta_genre_text(one, 0, "(17)", false); /* a zero-size buffer is left alone */
+}
+
+static size_t put_vc_block(uint8_t *f, const uint8_t *vc, size_t v) {
+    fx_flac(f, &(fx_tags_t){0}, 10);
+    size_t at = 4 + 4 + 34;
+    f[at] = 0x80 | 4;
+    f[at + 1] = (uint8_t)(v >> 16);
+    f[at + 2] = (uint8_t)(v >> 8);
+    f[at + 3] = (uint8_t)v;
+    memcpy(f + at + 4, vc, v);
+    return at + 4 + v;
+}
+
+TEST(tags_hostile_vorbis_id3_mp4) {
+    meta_set_scratch(g_tagscratch, sizeof g_tagscratch);
+    flac_info_t fi;
+    uint8_t f[600], vc[300];
+    /* comment length and count that point far outside the block */
+    size_t v;
+    fx_le32(vc, 0);
+    fx_le32(vc + 4, 0xFFFFFFFFu);
+    fx_le32(vc + 8, 0xFFFFFFF0u);
+    v = 12;
+    mem_t m = {f, put_vc_block(f, vc, v)};
+    ASSERT_EQ(META_OK, flac_parse(mem_rd, &m, m.n, &fi));
+    ASSERT_EQ(0, fi.tags.album_artist[0]);
+    /* keys without '=', empty values, absurd numbers and a date that is not a date */
+    fx_le32(vc, 0);
+    fx_le32(vc + 4, 6);
+    v = 8;
+    v += fx_vc(vc + v, "DISCNUMBER", "99999999999999999999");
+    v += fx_vc(vc + v, "DATE", "20x4");
+    fx_le32(vc + v, 11);
+    memcpy(vc + v + 4, "COMPILATION", 11); /* no '=' */
+    v += 15;
+    fx_le32(vc + v, 12);
+    memcpy(vc + v + 4, "COMPILATION=", 12); /* an empty value */
+    v += 16;
+    v += fx_vc(vc + v, "GENRE", "(17");
+    m.n = put_vc_block(f, vc, v);
+    ASSERT_EQ(META_OK, flac_parse(mem_rd, &m, m.n, &fi));
+    ASSERT_EQ(65535, fi.tags.disc); /* capped, not wrapped */
+    ASSERT_EQ(0, fi.tags.year);
+    ASSERT_FALSE(fi.tags.compilation);
+    ASSERT_EQ(0, strcmp(fi.tags.genre, "(17"));
+    meta_set_scratch(NULL, 0);
+
+    /* ID3: odd genre text, no year */
+    fx_tags_t t = {.title = "T", .artist = "A", .genre = "("};
+    mem_t id3 = {g_buf, fx_mp3(g_buf, &t, false)};
+    mp3_info_t mi;
+    ASSERT_EQ(META_OK, mp3_parse(mem_rd, &id3, id3.n, &mi));
+    ASSERT_EQ(0, strcmp(mi.tags.genre, "("));
+    t.genre = "(99999999999999999999)x";
+    id3.n = fx_mp3(g_buf, &t, true);
+    ASSERT_EQ(META_OK, mp3_parse(mem_rd, &id3, id3.n, &mi));
+    ASSERT_EQ(0, mi.tags.year);
+
+    /* MP4: gnre 0 and 200 (no such genre), a one-byte trkn / disk, an empty cpil and an empty (c)day */
+    uint8_t ilst[256], ib[300], meta[320], mb[340], udta[360], moov[400], file[500];
+    size_t n = 0;
+    static const uint8_t g0[2] = {0, 0}, g200[2] = {0, 200}, one[1] = {7};
+    n += fx_ilst_data(ilst + n, "gnre", g0, 2);
+    n += fx_ilst_data(ilst + n, "gnre", g200, 2);
+    n += fx_ilst_data(ilst + n, "trkn", one, 1);
+    n += fx_ilst_data(ilst + n, "disk", one, 1);
+    n += fx_ilst_data(ilst + n, "cpil", one, 0);
+    char dayk[5] = {(char)0xA9, 'd', 'a', 'y', 0};
+    n += fx_ilst_data(ilst + n, dayk, one, 0);
+    size_t k = fx_box(ib, "ilst", ilst, n);
+    memset(meta, 0, 4);
+    memcpy(meta + 4, ib, k);
+    size_t mk = fx_box(mb, "meta", meta, 4 + k), uk = fx_box(udta, "udta", mb, mk), ok = fx_box(moov, "moov", udta, uk);
+    uint8_t ftyp[8] = {'M', '4', 'A', ' ', 0, 0, 0, 0};
+    size_t at = fx_box(file, "ftyp", ftyp, 8);
+    memcpy(file + at, moov, ok);
+    at += ok;
+    mem_t m4 = {file, at};
+    mp4_info_t p4;
+    mp4_parse(mem_rd, &m4, m4.n, &p4);
+    ASSERT_EQ(0, p4.tags.genre[0]);
+    ASSERT_EQ(0, p4.tags.year);
+    ASSERT_EQ(0, p4.tags.disc);
+    ASSERT_FALSE(p4.tags.compilation);
+}
+
 int main(void) {
     RUN(collate_case_and_the);
     RUN(collate_diacritics);
@@ -709,6 +971,12 @@ int main(void) {
     RUN(first_build_power_cut);
     RUN(damaged_manifest_falls_back_to_old);
     RUN(small_scratch_still_builds_with_more_merging);
+    RUN(hostile_manifest_is_refused);
+    RUN(truncated_and_stuffed_tables);
+    RUN(failing_rename_keeps_a_library);
+    RUN(full_card_leaves_old_library);
+    RUN(genre_text_hostile);
+    RUN(tags_hostile_vorbis_id3_mp4);
     fx_cleanup();
     return RESULT();
 }

@@ -91,11 +91,24 @@ static inline size_t lib_arena_free(const lib_arena_t *a) { return a->cap - a->u
 /* ---- paths and FatFs helpers -------------------------------------------------------------------------------------- */
 
 lib_err_t lib_map_fr(FRESULT fr);
+/* Test hooks (NEUPOD_LIB_TEST_HOOKS, defined only for the test library): a simulated power cut after a swap step. Production builds have none. */
+#ifdef NEUPOD_LIB_TEST_HOOKS
+#define LIB_TEST_STEP(cfg) ((cfg)->test_stop_step)
+#define LIB_STOP_AT(stop, n) ((stop) == (n))
+#define LIB_IS_STOP(e) ((e) == LIB_E_TEST_STOP)
+#define LIB_E_TEST_STOP_ LIB_E_TEST_STOP
+#else
+#define LIB_TEST_STEP(cfg) 0
+#define LIB_STOP_AT(stop, n) ((void)(stop), 0)
+#define LIB_IS_STOP(e) ((void)(e), 0)
+#define LIB_E_TEST_STOP_ LIB_E_IO
+#endif
+
+/** f_open with FatFs' "denied" (full volume or directory) reported as LIB_E_FULL. */
+static inline lib_err_t lib_fopen(FIL *f, const char *path, BYTE mode) { return lib_map_fr(f_open(f, path, mode)); }
 /** Delete every file in @p dir and the directory itself; fine if it does not exist. */
 lib_err_t lib_rmtree(const char *dir);
 bool lib_exists(const char *path);
-/** Absolute offset of a file's payload byte 0 is LIB_HDR. Read exactly n bytes at file offset off. */
-lib_err_t lib_read_at(FIL *f, uint32_t off, void *dst, uint32_t n);
 
 /** "<base>/lib" ... into out (64 bytes). */
 void lib_path(char *out, size_t cap, const char *base, const char *leaf);

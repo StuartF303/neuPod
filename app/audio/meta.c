@@ -133,7 +133,7 @@ static uint16_t track_from(const char *s) {
         v = v * 10 + (uint32_t)(*s - '0');
         s++;
     }
-    return (uint16_t)v;
+    return (uint16_t)(v > 0xFFFFu ? 0xFFFFu : v); // (the loop stops once v reaches 10000, so up to 99999)
 }
 
 uint16_t meta_year_text(const char *s) { // "2019", "2019-05-04", "2019-05-04T08:00:00Z": the first four digits

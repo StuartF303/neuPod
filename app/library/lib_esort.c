@@ -39,7 +39,8 @@ static void run_path(char *out, size_t cap, const char *dir, uint32_t id) { snpr
 
 static lib_err_t touch_empty(const char *path) {
     FIL f;
-    if (f_open(&f, path, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK) return LIB_E_IO;
+    lib_err_t e = lib_fopen(&f, path, FA_CREATE_ALWAYS | FA_WRITE);
+    if (e != LIB_OK) return e;
     return f_close(&f) == FR_OK ? LIB_OK : LIB_E_IO;
 }
 
@@ -142,7 +143,7 @@ lib_err_t lib_esort(lib_arena_t *ar, const char *work_dir, const char *src, cons
             if (f_read(&in[i], heads + (size_t)i * rs, rs, &got) != FR_OK) res = LIB_E_IO;
             else if (got == rs) alive |= 1ull << i;
         }
-        if (res == LIB_OK && f_open(fout, path2, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK) res = LIB_E_IO;
+        if (res == LIB_OK) res = lib_fopen(fout, path2, FA_CREATE_ALWAYS | FA_WRITE);
         bool out_open = res == LIB_OK;
         while (res == LIB_OK && alive != 0) {
             uint32_t m = 64;

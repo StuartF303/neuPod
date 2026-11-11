@@ -411,7 +411,7 @@ add_test(NAME caps_rearm COMMAND test_caps_rearm)
 
 # Music library index (ADR-0017, L1): collation, new tag fields, scanner + reader on a FatFs disk image, swap crash safety.
 add_executable(test_library test_library.c)
-target_link_libraries(test_library neupod_library neupod_fatfs neupod_rt_core hal_host) # hal_host last: diskio references hal_storage
+target_link_libraries(test_library neupod_library_test neupod_fatfs neupod_rt_core hal_host) # hal_host last: diskio references hal_storage
 add_test(NAME library COMMAND test_library)
 set_tests_properties(library PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_source_files_properties(test_library.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")

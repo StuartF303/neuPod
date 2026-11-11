@@ -103,6 +103,7 @@ size_t lib_collate_key(const char *name, const char *sort, uint8_t *key, size_t 
             n = put(key, cap, n, (uint8_t)(0x80 | (cp & 0x3F)));
         }
     }
+    if (n < cap) key[n] = 0; // a key always ends in a zero byte when it fits: lib_collate_bucket() of an empty name is 0
     return n < cap ? n : cap;
 }
 

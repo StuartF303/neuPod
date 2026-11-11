@@ -11,7 +11,7 @@ size_t lib_manifest_bytes(void);
 void lib_manifest_encode(const lib_manifest_t *m, uint8_t *out);
 /**
  * The swap: delete a leftover lib.old, lib -> lib.old (if lib exists), lib.tmp -> lib, delete lib.old. @p stop_step (tests): return
- * LIB_E_TEST_STOP after that step (3, 4 or 5). *step_done tells how far it got.
+ * LIB_E_TEST_STOP after that step (3, 4 or 5; test builds only). *step_done tells how far it got.
  */
 lib_err_t lib_swap_install(const char *base, int stop_step, int *step_done);
 

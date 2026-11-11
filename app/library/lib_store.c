@@ -36,7 +36,9 @@ const char *lib_err_str(lib_err_t e) {
     case LIB_E_RANGE: return "Out of range";
     case LIB_E_SCRATCH: return "Not enough working memory";
     case LIB_E_CANCELLED: return "Cancelled";
+#ifdef NEUPOD_LIB_TEST_HOOKS
     case LIB_E_TEST_STOP: return "Stopped (test)";
+#endif
     }
     return "?";
 }
@@ -78,14 +80,6 @@ bool lib_exists(const char *path) {
 }
 
 void lib_path(char *out, size_t cap, const char *base, const char *leaf) { snprintf(out, cap, "%s/%s", base, leaf); }
-
-lib_err_t lib_read_at(FIL *f, uint32_t off, void *dst, uint32_t n) {
-    UINT got = 0;
-    FRESULT fr = f_lseek(f, off);
-    if (fr == FR_OK) fr = f_read(f, dst, n, &got);
-    if (fr != FR_OK) return LIB_E_IO;
-    return got == n ? LIB_OK : LIB_E_FORMAT;
-}
 
 // A folder of plain files: take the first entry, close the folder, delete it, repeat (FatFs does not like deleting while a folder is open).
 lib_err_t lib_rmtree(const char *dir) {
@@ -149,6 +143,45 @@ void lib_manifest_encode(const lib_manifest_t *m, uint8_t *out) {
     st32(out + 12, lib_crc32(0, p, MF_BYTES));
 }
 
+// A manifest whose CRC is right can still come from a bug or a hostile card: nothing in it may point outside what it describes. Every
+// count must agree with the size of the file that holds it, and the reader relies on that (it never reads past a table it has counted).
+static uint32_t list_rows(const lib_manifest_t *m, unsigned l) {
+    switch (l) {
+    case LIB_LIST_ARTISTS: return m->artists;
+    case LIB_LIST_ALBUMS: return m->albums;
+    case LIB_LIST_SONGS: return m->tracks;
+    case LIB_LIST_GENRES: return m->genres;
+    default: return m->albums - m->comp_first;
+    }
+}
+
+static bool manifest_consistent(const lib_manifest_t *m) {
+    if (m->playable > m->tracks || m->comp_first > m->albums) return false;
+    static const int8_t kind[LIB_FILES] = {[LF_DIRS] = 1, [LF_TRACKS] = 2, [LF_ARTISTS] = 3, [LF_ALBUMS] = 4, [LF_GENRES] = 5, [LF_BY_ALBUM] = 2,
+                                           [LF_BY_TITLE] = 2, [LF_BY_ALBUM_NAME] = 4, [LF_GENRE_ARTISTS] = 6}; // which count sizes each file; 0 = a pool
+    for (unsigned i = 0; i < LIB_FILES; i++) {
+        uint64_t n;
+        switch (kind[i]) {
+        case 1: n = m->dirs; break;
+        case 2: n = m->tracks; break;
+        case 3: n = m->artists; break;
+        case 4: n = m->albums; break;
+        case 5: n = m->genres; break;
+        case 6: n = m->genre_artist_links; break;
+        default: if (m->file_size[i] < LIB_HDR) return false; continue;
+        }
+        if ((uint64_t)m->file_size[i] != LIB_HDR + (uint64_t)lib_files[i].rec * (n + lib_files[i].sentinel)) return false;
+    }
+    for (unsigned l = 0; l < LIB_LISTS; l++) {
+        uint32_t rows = list_rows(m, l), prev = 0;
+        for (unsigned b = 0; b < LIB_BUCKETS; b++) {
+            if (m->jump[l][b] > rows || m->jump[l][b] < prev) return false;
+            prev = m->jump[l][b];
+        }
+    }
+    return true;
+}
+
 static bool manifest_decode(const uint8_t *in, size_t n, lib_manifest_t *m) {
     if (n != LIB_HDR + MF_BYTES || ld32(in) != lib_magic(LF_MANIFEST) || ld32(in + 4) != LIB_VERSION || ld32(in + 8) != 1) return false;
     const uint8_t *p = in + LIB_HDR;
@@ -176,7 +209,7 @@ static bool manifest_decode(const uint8_t *in, size_t n, lib_manifest_t *m) {
     for (unsigned l = 0; l < LIB_LISTS; l++) {
         for (unsigned b = 0; b < LIB_BUCKETS; b++) m->jump[l][b] = w[k++];
     }
-    return true;
+    return manifest_consistent(m);
 }
 
 lib_err_t lib_manifest_load(const char *dir, bool full, lib_manifest_t *out) {
@@ -202,6 +235,10 @@ lib_err_t lib_manifest_load(const char *dir, bool full, lib_manifest_t *out) {
         uint8_t h[LIB_HDR], blk[512];
         if (f_open(&f, path, FA_READ) != FR_OK) return LIB_E_IO;
         fr = f_read(&f, h, LIB_HDR, &got);
+        if (fr == FR_OK && got != LIB_HDR) {
+            f_close(&f);
+            return LIB_E_FORMAT;
+        }
         uint32_t crc = 0;
         while (fr == FR_OK) {
             fr = f_read(&f, blk, sizeof blk, &got);
@@ -218,6 +255,16 @@ lib_err_t lib_manifest_load(const char *dir, bool full, lib_manifest_t *out) {
 
 /* ---- swap and recovery -------------------------------------------------------------------------------------------- */
 
+#ifdef NEUPOD_LIB_TEST_HOOKS
+int lib_test_fail_rename; // fail the Nth rename made from now on (1 = the next one); 0 = never
+static FRESULT lib_rename(const char *from, const char *to) {
+    if (lib_test_fail_rename > 0 && --lib_test_fail_rename == 0) return FR_DISK_ERR;
+    return f_rename(from, to);
+}
+#else
+#define lib_rename f_rename
+#endif
+
 lib_err_t lib_swap_install(const char *base, int stop_step, int *step_done) {
     char lib[64], old[64], tmp[64];
     lib_path(lib, sizeof lib, base, "lib");
@@ -225,18 +272,22 @@ lib_err_t lib_swap_install(const char *base, int stop_step, int *step_done) {
     lib_path(tmp, sizeof tmp, base, "lib.tmp");
     lib_err_t e = lib_rmtree(old); // a leftover from a build that was cut after the swap
     if (e != LIB_OK) return e;
+    bool moved = false;
     if (lib_exists(lib)) {
-        if (f_rename(lib, old) != FR_OK) return LIB_E_IO;
+        if (lib_rename(lib, old) != FR_OK) return LIB_E_IO; // nothing has changed
+        moved = true;
         *step_done = 3;
-        if (stop_step == 3) return LIB_E_TEST_STOP;
+        if (LIB_STOP_AT(stop_step, 3)) return LIB_E_TEST_STOP_;
     }
-    if (f_rename(tmp, lib) != FR_OK) return LIB_E_IO;
+    if (lib_rename(tmp, lib) != FR_OK) {
+        if (moved) f_rename(old, lib); // put the old library back: the card must not be left without one (lib_recover would too)
+        return LIB_E_IO;
+    }
     *step_done = 4;
-    if (stop_step == 4) return LIB_E_TEST_STOP;
-    e = lib_rmtree(old);
-    if (e != LIB_OK) return e;
+    if (LIB_STOP_AT(stop_step, 4)) return LIB_E_TEST_STOP_;
+    lib_rmtree(old); // the new library is live: a failure here only leaves a stray folder, which the next build or lib_recover() removes
     *step_done = 5;
-    if (stop_step == 5) return LIB_E_TEST_STOP;
+    if (LIB_STOP_AT(stop_step, 5)) return LIB_E_TEST_STOP_;
     return LIB_OK;
 }
 
@@ -254,10 +305,10 @@ lib_err_t lib_recover(const char *base) {
         res = LIB_OK;
     } else if (lib_manifest_load(old, false, NULL) == LIB_OK) { // the swap was cut after lib moved aside: put the old library back
         res = lib_rmtree(lib);
-        if (res == LIB_OK && f_rename(old, lib) != FR_OK) res = LIB_E_IO;
+        if (res == LIB_OK && lib_rename(old, lib) != FR_OK) res = LIB_E_IO;
     } else if (lib_manifest_load(tmp, false, NULL) == LIB_OK) { // first build, cut just before the final rename: the new one is complete
         res = lib_rmtree(lib);
-        if (res == LIB_OK && f_rename(tmp, lib) != FR_OK) res = LIB_E_IO;
+        if (res == LIB_OK && lib_rename(tmp, lib) != FR_OK) res = LIB_E_IO;
     } else {
         res = LIB_E_NONE;
         lib_rmtree(tmp); // an unfinished build is of no use

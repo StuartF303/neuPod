@@ -42,6 +42,7 @@ enum { PS_ARTIST, PS_AA, PS_ALBUM, PS_GENRE, PS_SORT_AA, PS_SORT_ALBUM, PS_N };
 /* read access to strings.str while sorting: two slots, for the two operands of a comparison */
 typedef struct {
     FIL *f;
+    bool open;
     uint32_t off[2];
     char s[2][POOL_STR];
     bool valid[2];
@@ -128,8 +129,8 @@ static lib_err_t open_out(const bctx_t *c, FIL *f, const char *leaf) { // header
     char p[96];
     uint8_t zero[LIB_HDR] = {0};
     tpath(c, p, leaf);
-    if (f_open(f, p, FA_CREATE_ALWAYS | FA_WRITE | FA_READ) != FR_OK) return LIB_E_IO;
-    return wr(f, zero, LIB_HDR);
+    lib_err_t e = lib_fopen(f, p, FA_CREATE_ALWAYS | FA_WRITE | FA_READ);
+    return e != LIB_OK ? e : wr(f, zero, LIB_HDR);
 }
 
 static lib_err_t close_f(FIL *f) {
@@ -179,11 +180,10 @@ static void key24(uint8_t *key, const char *name, const char *sort) {
 }
 
 // Keys equal over their 24-byte prefix: when the prefix is full the names may differ beyond it, so compare the full keys from the pool.
-static int key_tie(const uint8_t *ka, uint32_t src_a, const uint8_t *kb, uint32_t src_b, pool_t *p) {
+static int key_tie(const uint8_t *ka, uint32_t src_a, uint32_t src_b, pool_t *p) {
     if (ka[LIB_KEY_PREFIX - 1] == 0 || src_a == src_b) return 0;
     uint8_t fa[LIB_KEY_MAX], fb[LIB_KEY_MAX];
     size_t na = lib_collate_key(pool_get(p, 0, src_a), NULL, fa, sizeof fa), nb = lib_collate_key(pool_get(p, 1, src_b), NULL, fb, sizeof fb);
-    (void)kb;
     size_t n = na < nb ? na : nb;
     int r = memcmp(fa, fb, n);
     if (r != 0) return r < 0 ? -1 : 1;
@@ -198,7 +198,7 @@ static int ent_cmp_key(const uint8_t *a, const uint8_t *b, pool_t *p) {
     if (r != 0) return r;
     r = memcmp(a + 4, b + 4, LIB_KEY_PREFIX);
     if (r != 0) return r < 0 ? -1 : 1;
-    return key_tie(a + 4, ld32(a + 28), b + 4, ld32(b + 28), p);
+    return key_tie(a + 4, ld32(a + 28), ld32(b + 28), p);
 }
 static int ent_cmp(const void *a, const void *b, void *ctx) {
     int r = ent_cmp_key(a, b, ctx);
@@ -208,7 +208,7 @@ static int key_cmp(const void *a, const void *b, void *ctx) { // KEY_REC: key, s
     const uint8_t *x = a, *y = b;
     int r = memcmp(x, y, LIB_KEY_PREFIX);
     if (r != 0) return r < 0 ? -1 : 1;
-    r = key_tie(x, ld32(x + 24), y, ld32(y + 24), ctx);
+    r = key_tie(x, ld32(x + 24), ld32(y + 24), ctx);
     return r != 0 ? r : cmp_u32(ld32(x + 28), ld32(y + 28));
 }
 static int alb_cmp(const void *a, const void *b, void *ctx) { // ALB_REC: album, disc/track, key, src, id
@@ -219,7 +219,7 @@ static int alb_cmp(const void *a, const void *b, void *ctx) { // ALB_REC: album,
         r = memcmp(x + 8, y + 8, LIB_KEY_PREFIX);
         r = r < 0 ? -1 : r > 0 ? 1 : 0;
     }
-    if (r == 0) r = key_tie(x + 8, ld32(x + 32), y + 8, ld32(y + 32), ctx);
+    if (r == 0) r = key_tie(x + 8, ld32(x + 32), ld32(y + 32), ctx);
     return r != 0 ? r : cmp_u32(ld32(x + 36), ld32(y + 36));
 }
 static int pair_cmp(const void *a, const void *b, void *ctx) {
@@ -473,11 +473,11 @@ static lib_err_t stage_walk(bctx_t *c) {
     if (e == LIB_OK) e = open_out(c, c->fstr, lib_files[LF_STRINGS].name);
     if (e == LIB_OK) {
         wpath(c, p, "tracks.pre"); // work files have no header
-        if (f_open(c->ftracks, p, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK) e = LIB_E_IO;
+        e = lib_fopen(c->ftracks, p, FA_CREATE_ALWAYS | FA_WRITE);
     }
     if (e == LIB_OK) {
         wpath(c, p, "prov");
-        if (f_open(c->fprov, p, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK) e = LIB_E_IO;
+        e = lib_fopen(c->fprov, p, FA_CREATE_ALWAYS | FA_WRITE);
     }
     if (e == LIB_OK) {
         meta_set_scratch(c->tagbuf, TAG_SCRATCH);
@@ -570,7 +570,14 @@ static lib_err_t pool_open(bctx_t *c, pool_t *p) {
     p->f = lib_arena_alloc(c->ar, sizeof(FIL));
     if (p->f == NULL) return LIB_E_SCRATCH;
     tpath(c, path, lib_files[LF_STRINGS].name);
-    return f_open(p->f, path, FA_READ) == FR_OK ? LIB_OK : LIB_E_IO;
+    lib_err_t e = lib_fopen(p->f, path, FA_READ);
+    p->open = e == LIB_OK;
+    return e;
+}
+
+static void pool_close(pool_t *p) {
+    if (p != NULL && p->open) f_close(p->f);
+    if (p != NULL) p->open = false;
 }
 
 static void ent_fill(uint8_t *rec, uint32_t group, uint32_t name_off, uint32_t sort_off, pool_t *p, uint32_t seq) {
@@ -602,14 +609,17 @@ static lib_err_t stage_entity(bctx_t *c, ekind_t kind) {
     FIL *fo = lib_arena_alloc(c->ar, sizeof(FIL));
     walk_in_t *w = lib_arena_alloc(c->ar, sizeof(walk_in_t));
     occ_t *self = lib_arena_alloc(c->ar, sizeof(occ_t)), *art = lib_arena_alloc(c->ar, sizeof(occ_t));
-    if (self == NULL || art == NULL) {
+    if (pool == NULL || fo == NULL || w == NULL || self == NULL || art == NULL) {
+        pool_close(pool);
         c->ar->used = mark;
         return LIB_E_SCRATCH;
     }
+    pool->open = false; // (pool_close() before pool_open() must be harmless)
     memset(self, 0, sizeof *self);
     e = pool_open(c, pool);
     if (e == LIB_OK) e = walk_in_open(c, w);
     if (e != LIB_OK) {
+        pool_close(pool);
         c->ar->used = mark;
         return e;
     }
@@ -618,7 +628,7 @@ static lib_err_t stage_entity(bctx_t *c, ekind_t kind) {
         e = open_replay(c, art, "artist.map.sorted");
         art_open = e == LIB_OK;
     }
-    if (e == LIB_OK && f_open(fo, occ_p, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK) e = LIB_E_IO;
+    if (e == LIB_OK) e = lib_fopen(fo, occ_p, FA_CREATE_ALWAYS | FA_WRITE);
     bool fo_open = e == LIB_OK;
     while (e == LIB_OK) {
         bool eof = false;
@@ -667,6 +677,7 @@ static lib_err_t stage_entity(bctx_t *c, ekind_t kind) {
     if (art_open) f_close(art->map);
     walk_in_close(w);
     if (e != LIB_OK) {
+        pool_close(pool);
         c->ar->used = mark;
         return e;
     }
@@ -679,9 +690,9 @@ static lib_err_t stage_entity(bctx_t *c, ekind_t kind) {
     if (fkey == NULL) e = LIB_E_SCRATCH;
     if (e == LIB_OK) e = open_out(c, ftab, lib_files[files[kind]].name);
     bool ftab_open = e == LIB_OK;
-    if (e == LIB_OK && f_open(fin, sorted_p, FA_READ) != FR_OK) e = LIB_E_IO;
+    if (e == LIB_OK) e = lib_fopen(fin, sorted_p, FA_READ);
     bool fin_open = e == LIB_OK;
-    if (e == LIB_OK && f_open(fmap, map_p, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK) e = LIB_E_IO;
+    if (e == LIB_OK) e = lib_fopen(fmap, map_p, FA_CREATE_ALWAYS | FA_WRITE);
     bool fmap_open = e == LIB_OK;
     FIL *fen = lib_arena_alloc(c->ar, sizeof(FIL)); // enames.str: the names of each kind in sorted order (artists, then albums, then genres)
     bool fen_open = false;
@@ -690,14 +701,14 @@ static lib_err_t stage_entity(bctx_t *c, ekind_t kind) {
         char pn[96];
         tpath(c, pn, lib_files[LF_ENAMES].name);
         if (kind == K_ARTIST) e = open_out(c, fen, lib_files[LF_ENAMES].name);
-        else e = f_open(fen, pn, FA_WRITE | FA_OPEN_APPEND) == FR_OK ? LIB_OK : LIB_E_IO;
+        else e = lib_fopen(fen, pn, FA_WRITE | FA_OPEN_APPEND);
         fen_open = e == LIB_OK;
     }
     char key_p[96];
     wpath(c, key_p, "albname.rec");
     bool fkey_open = false;
     if (e == LIB_OK && kind == K_ALBUM) {
-        e = f_open(fkey, key_p, FA_CREATE_ALWAYS | FA_WRITE) == FR_OK ? LIB_OK : LIB_E_IO;
+        e = lib_fopen(fkey, key_p, FA_CREATE_ALWAYS | FA_WRITE);
         fkey_open = e == LIB_OK;
     }
     uint8_t prev[ENT_REC], cur[ENT_REC];
@@ -777,6 +788,7 @@ static lib_err_t stage_entity(bctx_t *c, ekind_t kind) {
         e = lib_esort(c->ar, c->work, map_p, mapsorted_p, 8, map_cmp, NULL, &c->sst);
         f_unlink(map_p);
     }
+    pool_close(pool);
     c->ar->used = mark;
     return e;
 }
@@ -794,13 +806,16 @@ static lib_err_t stage_tracks(bctx_t *c) {
     occ_t *oa = lib_arena_alloc(c->ar, sizeof(occ_t)), *ob = lib_arena_alloc(c->ar, sizeof(occ_t)), *og = lib_arena_alloc(c->ar, sizeof(occ_t));
     FIL *ft = lib_arena_alloc(c->ar, sizeof(FIL)), *fti = lib_arena_alloc(c->ar, sizeof(FIL)), *fal = lib_arena_alloc(c->ar, sizeof(FIL)),
         *fpa = lib_arena_alloc(c->ar, sizeof(FIL));
-    if (fpa == NULL) {
+    if (pool == NULL || w == NULL || oa == NULL || ob == NULL || og == NULL || ft == NULL || fti == NULL || fal == NULL || fpa == NULL) {
+        pool_close(pool);
         c->ar->used = mark;
         return LIB_E_SCRATCH;
     }
+    pool->open = false;
     lib_err_t e = pool_open(c, pool);
     if (e == LIB_OK) e = walk_in_open(c, w);
     if (e != LIB_OK) {
+        pool_close(pool);
         c->ar->used = mark;
         return e;
     }
@@ -814,11 +829,11 @@ static lib_err_t stage_tracks(bctx_t *c) {
     if (e == LIB_OK) e = open_out(c, ft, lib_files[LF_TRACKS].name);
     bool ft_o = e == LIB_OK;
     bool fti_o = false, fal_o = false, fpa_o = false;
-    if (e == LIB_OK && f_open(fti, p_title, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK) e = LIB_E_IO;
+    if (e == LIB_OK) e = lib_fopen(fti, p_title, FA_CREATE_ALWAYS | FA_WRITE);
     fti_o = e == LIB_OK;
-    if (e == LIB_OK && f_open(fal, p_alb, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK) e = LIB_E_IO;
+    if (e == LIB_OK) e = lib_fopen(fal, p_alb, FA_CREATE_ALWAYS | FA_WRITE);
     fal_o = e == LIB_OK;
-    if (e == LIB_OK && f_open(fpa, p_pair, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK) e = LIB_E_IO;
+    if (e == LIB_OK) e = lib_fopen(fpa, p_pair, FA_CREATE_ALWAYS | FA_WRITE);
     fpa_o = e == LIB_OK;
     uint32_t id = 0, last_g = LIB_NONE, last_a = LIB_NONE;
     while (e == LIB_OK) {
@@ -880,6 +895,7 @@ static lib_err_t stage_tracks(bctx_t *c) {
     if (ob_o) f_close(ob->map);
     if (og_o) f_close(og->map);
     walk_in_close(w);
+    pool_close(pool);
     c->ar->used = mark;
     return e;
 }
@@ -900,7 +916,7 @@ static lib_err_t finish_idlist(bctx_t *c, const char *sorted_p, unsigned lf, lib
     if (fo == NULL) return LIB_E_SCRATCH;
     lib_err_t e = open_out(c, fo, lib_files[lf].name);
     bool fo_o = e == LIB_OK, fin_o = false;
-    if (e == LIB_OK) e = f_open(fin, sorted_p, FA_READ) == FR_OK ? LIB_OK : LIB_E_IO;
+    if (e == LIB_OK) e = lib_fopen(fin, sorted_p, FA_READ);
     fin_o = e == LIB_OK;
     uint32_t row = 0;
     uint8_t* buf = lib_arena_alloc(c->ar, 2048);
@@ -943,9 +959,14 @@ static lib_err_t stage_orders(bctx_t *c) {
     wpath(c, s_pair, "pair.sorted");
     wpath(c, an, "albname.rec");
     wpath(c, s_an, "albname.sorted");
-    if (pool == NULL) return LIB_E_SCRATCH;
+    if (pool == NULL) {
+        pool_close(pool);
+        c->ar->used = mark;
+        return LIB_E_SCRATCH;
+    }
     lib_err_t e = pool_open(c, pool);
     if (e != LIB_OK) {
+        pool_close(pool);
         c->ar->used = mark;
         return e;
     }
@@ -969,9 +990,9 @@ static lib_err_t stage_orders(bctx_t *c) {
         if (fa == NULL) e = LIB_E_SCRATCH;
         if (e == LIB_OK) e = open_out(c, fo, lib_files[LF_BY_ALBUM].name);
         bool fo_o = e == LIB_OK, fin_o = false, fa_o = false;
-        if (e == LIB_OK) e = f_open(fin, s_alb, FA_READ) == FR_OK ? LIB_OK : LIB_E_IO;
+        if (e == LIB_OK) e = lib_fopen(fin, s_alb, FA_READ);
         fin_o = e == LIB_OK;
-        if (e == LIB_OK) e = f_open(fa, pa, FA_READ | FA_WRITE) == FR_OK ? LIB_OK : LIB_E_IO;
+        if (e == LIB_OK) e = lib_fopen(fa, pa, FA_READ | FA_WRITE);
         fa_o = e == LIB_OK;
         uint32_t pos = 0, last = LIB_NONE;
         while (e == LIB_OK) {
@@ -1010,9 +1031,9 @@ static lib_err_t stage_orders(bctx_t *c) {
         if (fg == NULL) e = LIB_E_SCRATCH;
         if (e == LIB_OK) e = open_out(c, fo, lib_files[LF_GENRE_ARTISTS].name);
         bool fo_o = e == LIB_OK, fin_o = false, fg_o = false;
-        if (e == LIB_OK) e = f_open(fin, s_pair, FA_READ) == FR_OK ? LIB_OK : LIB_E_IO;
+        if (e == LIB_OK) e = lib_fopen(fin, s_pair, FA_READ);
         fin_o = e == LIB_OK;
-        if (e == LIB_OK) e = f_open(fg, pg, FA_READ | FA_WRITE) == FR_OK ? LIB_OK : LIB_E_IO;
+        if (e == LIB_OK) e = lib_fopen(fg, pg, FA_READ | FA_WRITE);
         fg_o = e == LIB_OK;
         uint32_t pos = 0, next_g = 0, last_g = LIB_NONE, last_a = LIB_NONE;
         while (e == LIB_OK) {
@@ -1054,9 +1075,9 @@ static lib_err_t stage_orders(bctx_t *c) {
         tpath(c, pa, lib_files[LF_ARTISTS].name);
         tpath(c, pr, lib_files[LF_ALBUMS].name);
         if (fr == NULL) e = LIB_E_SCRATCH;
-        if (e == LIB_OK) e = f_open(fa, pa, FA_READ | FA_WRITE) == FR_OK ? LIB_OK : LIB_E_IO;
+        if (e == LIB_OK) e = lib_fopen(fa, pa, FA_READ | FA_WRITE);
         bool fa_o = e == LIB_OK, fr_o = false;
-        if (e == LIB_OK) e = f_open(fr, pr, FA_READ) == FR_OK ? LIB_OK : LIB_E_IO;
+        if (e == LIB_OK) e = lib_fopen(fr, pr, FA_READ);
         fr_o = e == LIB_OK;
         if (e == LIB_OK) e = f_lseek(fr, LIB_HDR) == FR_OK ? LIB_OK : LIB_E_IO;
         uint32_t last = LIB_NONE;
@@ -1076,6 +1097,7 @@ static lib_err_t stage_orders(bctx_t *c) {
             if (e == LIB_OK) e = ec;
         }
     }
+    pool_close(pool);
     c->ar->used = mark;
     return e;
 }
@@ -1135,7 +1157,7 @@ static lib_err_t write_manifest(bctx_t *c) {
     lib_manifest_encode(&c->m, buf);
     char p[96];
     tpath(c, p, lib_files[LF_MANIFEST].name);
-    lib_err_t e = f_open(f, p, FA_CREATE_ALWAYS | FA_WRITE) == FR_OK ? LIB_OK : LIB_E_IO;
+    lib_err_t e = lib_fopen(f, p, FA_CREATE_ALWAYS | FA_WRITE);
     if (e == LIB_OK) {
         e = wr(f, buf, (uint32_t)n);
         lib_err_t ec = close_f(f);
@@ -1149,13 +1171,17 @@ static lib_err_t write_manifest(bctx_t *c) {
 
 static lib_err_t build_inner(bctx_t *c, int *step) {
     // A swap cut by a power loss must be settled first: the swap deletes lib.old, which may still be the only valid library.
-    lib_recover(c->base);
+    lib_err_t r = lib_recover(c->base);
+    if (r != LIB_OK && r != LIB_E_NONE) return r; // could not settle the last swap: building now could delete the only good library
     lib_err_t e = lib_rmtree(c->tmp);
     if (e == LIB_OK) e = lib_rmtree(c->work);
     if (e != LIB_OK) return e;
     FRESULT fr = f_mkdir(c->base);
     if (fr != FR_OK && fr != FR_EXIST) return lib_map_fr(fr);
-    if (f_mkdir(c->tmp) != FR_OK || f_mkdir(c->work) != FR_OK) return LIB_E_IO;
+    fr = f_mkdir(c->tmp);
+    if (fr != FR_OK) return lib_map_fr(fr);
+    fr = f_mkdir(c->work);
+    if (fr != FR_OK) return lib_map_fr(fr);
 
     char lib[64];
     lib_path(lib, sizeof lib, c->base, "lib");
@@ -1180,12 +1206,12 @@ static lib_err_t build_inner(bctx_t *c, int *step) {
     c->m.decoder_version = c->cfg->decoder_version != 0 ? c->cfg->decoder_version : LIB_DECODER_SET_VERSION;
     c->m.fingerprint = c->cfg->fingerprint;
     *step = 1;
-    if (c->cfg->test_stop_step == 1) return LIB_E_TEST_STOP;
+    if (LIB_STOP_AT(LIB_TEST_STEP(c->cfg), 1)) return LIB_E_TEST_STOP_;
     e = write_manifest(c);
     if (e != LIB_OK) return e;
     *step = 2;
-    if (c->cfg->test_stop_step == 2) return LIB_E_TEST_STOP;
-    return lib_swap_install(c->base, c->cfg->test_stop_step, step);
+    if (LIB_STOP_AT(LIB_TEST_STEP(c->cfg), 2)) return LIB_E_TEST_STOP_;
+    return lib_swap_install(c->base, LIB_TEST_STEP(c->cfg), step);
 }
 
 lib_err_t lib_build(const lib_build_cfg_t *cfg, void *scratch, size_t scratch_n, lib_build_stats_t *stats) {
@@ -1207,7 +1233,7 @@ lib_err_t lib_build(const lib_build_cfg_t *cfg, void *scratch, size_t scratch_n,
     lib_err_t e = build_inner(c, &step);
     // Failure stance: nothing but lib.tmp / work has been touched before the swap, so a failed or cancelled build only needs those
     // removed; a simulated power cut (tests) leaves everything as it was, for lib_recover().
-    if (e != LIB_OK && e != LIB_E_TEST_STOP && step < 3) {
+    if (e != LIB_OK && !LIB_IS_STOP(e) && step < 3) {
         lib_rmtree(c->tmp);
         lib_rmtree(c->work);
     }

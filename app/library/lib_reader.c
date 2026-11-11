@@ -15,6 +15,10 @@ static lib_err_t table_open(lib_table_t *t, const char *dir, unsigned file) {
     char path[96];
     snprintf(path, sizeof path, "%s/%s", dir, lib_files[file].name);
     if (f_open(&t->f, path, FA_READ) != FR_OK) return LIB_E_IO;
+    if (f_size(&t->f) < LIB_HDR) {
+        f_close(&t->f);
+        return LIB_E_FORMAT;
+    }
     t->open = true;
     t->payload = (uint32_t)f_size(&t->f) - LIB_HDR;
     t->fast = false;
@@ -210,7 +214,7 @@ uint32_t lib_list_count(const lib_reader_t *r, lib_list_t l) {
     case LIB_LIST_ALBUMS: return r->m.albums;
     case LIB_LIST_SONGS: return r->m.tracks;
     case LIB_LIST_GENRES: return r->m.genres;
-    case LIB_LIST_COMPILATIONS: return r->m.albums - r->m.comp_first;
+    case LIB_LIST_COMPILATIONS: return r->m.albums > r->m.comp_first ? r->m.albums - r->m.comp_first : 0;
     default: return 0;
     }
 }

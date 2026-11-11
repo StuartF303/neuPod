@@ -75,6 +75,12 @@ target_include_directories(neupod_library PUBLIC ${NEUPOD_APP_DIR}/include ${NEU
 target_compile_features(neupod_library PUBLIC c_std_11)
 target_link_libraries(neupod_library PUBLIC neupod_fatfs neupod_rt_core)
 set_source_files_properties(${NEUPOD_LIBRARY_SOURCES} PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+# The same sources with the power-cut / failing-rename hooks the crash tests need (library.h, NEUPOD_LIB_TEST_HOOKS). Never linked into firmware.
+add_library(neupod_library_test STATIC ${NEUPOD_LIBRARY_SOURCES})
+target_include_directories(neupod_library_test PUBLIC ${NEUPOD_APP_DIR}/include ${NEUPOD_APP_DIR}/../hal/include)
+target_compile_features(neupod_library_test PUBLIC c_std_11)
+target_compile_definitions(neupod_library_test PUBLIC NEUPOD_LIB_TEST_HOOKS=1)
+target_link_libraries(neupod_library_test PUBLIC neupod_fatfs neupod_rt_core)
 
 # MAX17048 / DRV2605L drivers: need hal_i2c + hal_system only.
 add_library(neupod_drivers STATIC ${NEUPOD_DRIVER_SOURCES})

@@ -36,7 +36,9 @@ typedef enum {
     LIB_E_RANGE,     /**< row / id out of range */
     LIB_E_SCRATCH,   /**< scratch buffer too small */
     LIB_E_CANCELLED, /**< the progress callback asked to stop; the old library is untouched */
+#ifdef NEUPOD_LIB_TEST_HOOKS
     LIB_E_TEST_STOP, /**< lib_build_cfg_t.test_stop_step reached (power-cut simulation in tests) */
+#endif
 } lib_err_t;
 
 const char *lib_err_str(lib_err_t e);
@@ -58,7 +60,8 @@ const char *lib_err_str(lib_err_t e);
 size_t lib_collate_key(const char *name, const char *sort, uint8_t *key, size_t cap);
 /** Compare two names / sort tags the way the library orders them (a key comparison). */
 int lib_collate_cmp(const char *a, const char *sa, const char *b, const char *sb);
-/** Letter-jump bucket (0..26) of a key: the class of its first character. */
+/** Letter-jump bucket (0..26) of a key: the class of its first character. @p key must hold at least one byte; an empty name's key is just the
+ *  zero lib_collate_key() stores after it (cap >= 1), which is bucket 0. */
 unsigned lib_collate_bucket(const uint8_t *key);
 
 /* ---- what a build needs and returns ------------------------------------------------------------------------------- */
@@ -78,8 +81,10 @@ typedef struct {
     /** Called after every audio file: files done so far. Return false to cancel (the old library is untouched). May be NULL. */
     bool (*progress)(void *user, uint32_t files_done);
     void *user;
-    int test_stop_step;       /**< tests only: stop with LIB_E_TEST_STOP after this step (1 = tables written, before the manifest;
-                                   2 = tmp complete; 3 = lib moved to lib.old; 4 = tmp moved to lib; 5 = lib.old deleted); 0 = run on */
+#ifdef NEUPOD_LIB_TEST_HOOKS /* only in the test library (neupod_library_test): production code carries none of this */
+    int test_stop_step; /**< stop with LIB_E_TEST_STOP after this step (1 = tables written, before the manifest; 2 = tmp complete;
+                             3 = lib moved to lib.old; 4 = tmp moved to lib; 5 = lib.old deleted); 0 = run on */
+#endif
 } lib_build_cfg_t;
 
 typedef struct {
@@ -100,6 +105,9 @@ lib_err_t lib_build(const lib_build_cfg_t *cfg, void *scratch, size_t scratch_n,
  * lib.old / lib.tmp / work folder is deleted once lib is valid. LIB_OK when a valid library is in place, LIB_E_NONE if there is none.
  */
 lib_err_t lib_recover(const char *base);
+#ifdef NEUPOD_LIB_TEST_HOOKS
+extern int lib_test_fail_rename; /**< tests: make the Nth rename of the swap / recovery fail (1 = the next); 0 = off */
+#endif
 
 /* ---- manifest ----------------------------------------------------------------------------------------------------- */
 
