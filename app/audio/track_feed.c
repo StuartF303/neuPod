@@ -72,6 +72,7 @@ const char *track_feed_open(track_feed_t *t, const char *path, uint64_t size, me
             t->kind = TRACK_FEED_BYTES;
             t->base = w.data_offset;
             t->data_len = w.data_bytes;
+            pf->seekable = !verify; // the byte of any frame
         }
     } else if (ext_is(path, ".flac")) {
         flac_info_t fi;
@@ -98,6 +99,9 @@ const char *track_feed_open(track_feed_t *t, const char *path, uint64_t size, me
             t->hdr_len = flac_make_header(&fi, t->hdr);
             t->base = fi.audio_offset;
             t->data_len = size > fi.audio_offset ? size - fi.audio_offset : 0;
+            // Without a seek table the only way to a frame is decoding from the start (seconds of silence): not offered.
+            uint64_t sp_sample, sp_off;
+            pf->seekable = !verify && fi.total_frames != 0 && flac_seek_point(rd, rctx, size, fi.total_frames, &sp_sample, &sp_off);
         }
     } else if (ext_is(path, ".mp3") && !verify) {
         mp3_info_t mi;

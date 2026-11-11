@@ -67,6 +67,7 @@ struct ui_screen {
     lv_obj_t *root;                                   /* child of the content area, UI_W x UI_CONTENT_H */
     void (*on_scroll)(ui_screen_t *s, int32_t steps); /* list steps (already accelerated) */
     bool (*on_button)(ui_screen_t *s, uint8_t btn);   /* HAL_BTN_*, on press; true = handled (else Menu pops) */
+    void (*on_button_up)(ui_screen_t *s, uint8_t btn); /* optional: HAL_BTN_*, on release (hold detection); no return value */
     void (*on_tick)(ui_screen_t *s);                  /* every UI pass while on top (rate-limit inside) */
     void (*destroy)(ui_screen_t *s);                  /* release resources (the object itself is freed after) */
     void (*suspend)(ui_screen_t *s);                  /* optional: another screen was pushed over this one (free what can be rebuilt) */

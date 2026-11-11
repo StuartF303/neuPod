@@ -18,12 +18,11 @@ request with the date, bench = seen on the testbed). **Needs** is what blocks it
 
 | ID | Item | Source | Needs | Notes |
 | --- | --- | --- | --- | --- |
-| UI-2 | **Left / Right skip tracks from any screen** (background), like Play/Pause already does. | spec (Main menu) | — | `ui_frame.c` handles `HAL_BTN_PLAY` globally; add Left/Right when a queue is playing and the top screen did not consume the key. Files browser uses Right for MD5 verify, Now Playing for next: screens that handle it keep it. |
 | UI-3 | **Shuffle Songs** plays the whole card shuffled (walk `/Music` for playable files) instead of the placeholder. | spec | — | Interim until the library exists; the queue already has shuffle (#22). Cap the queue size; say how many were found. |
 | UI-4 | **Fast-scroll letter overlay** on long lists (first letter of the row under the bar while scrolling fast). | spec (Library) | — | Scroll bar exists (`ui_list.c update_scrollbar`). Only useful once lists are long: Files on a big folder today, library later. |
 | UI-5 | **Backlight auto-dim and off** after inactivity (dim within seconds, off within ~15 s; any key wakes), Display setting for the timeout. | requirements (power) | dim half done | Dim half done: Settings > Display > Auto-dim (default On) and Dim after (10 s to 5 min, default 30 s) drop the backlight to 10 % (never above the set level); any input restores it at once and is delivered to the screen as normal. 10 % is still quite readable on the panel (bench, 6 Nov). Still open, for the power-management work: a second stage that turns the backlight fully off after a further configurable period (default 3 min after the dim), perhaps depending on the hold switch state. There the waking key must not be delivered to the screen. This replaces the ~15 s off in the requirements power budget, so recheck that budget when it is built. |
 | UI-6 | **Rapid repeated button presses are dropped** (seen with Menu from Now Playing over UART; later keys land in a different screen). Decide whether the input queue is too shallow or the screen pop is slow, and fix or document. | bench 2026-11-03 | wheel fitted to confirm | Memory note: send one key per step on the bench until fixed. |
-| UI-7 | **Now Playing: Select cycles wheel between volume and seek**; scrub by scrolling, bar highlights. Hold Right = fast-forward. | spec (Now playing) | decoder seek (WAV/FLAC easy, MP3/ALAC need frame index) | Split: UI first with WAV/FLAC, others show `Seek not available`. |
+| UI-7 | **Seek for MP3 and ALAC** (Now Playing seek mode, scrub and hold-to-fast-forward exist for WAV and FLAC with a seek table; other tracks answer `Seek not available`). | spec (Now playing) | MP3 frame index | ALAC already lands on the exact frame through `track_feed_seek()` (resume) and could be switched on with `track_info_t.seekable`; MP3 lands within a frame (CBR) to about 1 % (VBR), which a scrub bar would show as jumps. FLAC without a SEEKTABLE needs a decode-from-start fallback (seconds of silence) or a frame scan. Hold = fast-forward currently moves a target and applies it on release (no audible fast-forward). |
 | UI-8 | **Status-bar icons** for Bluetooth link state and Wi-Fi joined, next to the battery. | spec (common frame) | signal thresholds from #27 | Keep to one glyph each; the detail lives in Settings. |
 
 ## UI — blocked on other work
@@ -37,7 +36,7 @@ request with the date, bench = seen on the testbed). **Needs** is what blocks it
 | UI-13 | **Settings → Output** (headphone / line / optical / USB) when jack detect cannot decide. | spec | final board jack detect |
 | UI-14 | **Click: Piezo** actually clicks (setting exists, shows `Piezo not fitted yet`). | #23 | piezo driver + part on the testbed |
 | UI-15 | **Photos** browser. | spec | PSRAM, JPEG decode at screen size |
-| UI-16 | **Now Playing: rating / shuffle / repeat page** on a further Select (spec says "not drawn"). | spec | UI-7 (Select is taken by pause today) |
+| UI-16 | **Now Playing: rating / shuffle / repeat page** on a further Select (spec says "not drawn"). | spec | UI-7 (Select now toggles volume / seek; pause is the Play button) |
 
 ## Non-UI, tracked elsewhere
 
