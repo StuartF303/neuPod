@@ -26,6 +26,13 @@ const char *meta_err_str(meta_err_t e) {
 
 static uint8_t *g_scratch;
 static size_t g_scratch_n;
+static audio_tags_ext_t *g_ext;
+void meta_set_tags_ext(audio_tags_ext_t *ext) { g_ext = ext; }
+audio_tags_ext_t *meta_tags_ext(void) { return g_ext; }
+static void ext_clear(void) {
+    if (g_ext != NULL) memset(g_ext, 0, sizeof *g_ext);
+}
+
 void meta_set_scratch(void *buf, size_t bytes) {
     g_scratch = buf;
     g_scratch_n = bytes;
@@ -133,7 +140,78 @@ static uint16_t track_from(const char *s) {
         v = v * 10 + (uint32_t)(*s - '0');
         s++;
     }
-    return (uint16_t)v;
+    return (uint16_t)(v > 0xFFFFu ? 0xFFFFu : v); // (the loop stops once v reaches 10000, so up to 99999)
+}
+
+uint16_t meta_year_text(const char *s) { // "2019", "2019-05-04", "2019-05-04T08:00:00Z": the first four digits
+    for (int i = 0; i < 4; i++) {
+        if (s[i] < '0' || s[i] > '9') return 0;
+    }
+    return (uint16_t)((s[0] - '0') * 1000 + (s[1] - '0') * 100 + (s[2] - '0') * 10 + (s[3] - '0'));
+}
+
+static bool flag_from(const char *s) { return s[0] == '1' || s[0] == 'y' || s[0] == 'Y' || s[0] == 't' || s[0] == 'T'; }
+
+// ---- genres (ID3v1 numbers: the 80 standard ones, then the Winamp extensions) --------------------------------
+
+static const char *const k_genres[148] = {
+    "Blues", "Classic Rock", "Country", "Dance", "Disco", "Funk", "Grunge", "Hip-Hop", "Jazz", "Metal", "New Age", "Oldies", "Other",
+    "Pop", "R&B", "Rap", "Reggae", "Rock", "Techno", "Industrial", "Alternative", "Ska", "Death Metal", "Pranks", "Soundtrack",
+    "Euro-Techno", "Ambient", "Trip-Hop", "Vocal", "Jazz+Funk", "Fusion", "Trance", "Classical", "Instrumental", "Acid", "House",
+    "Game", "Sound Clip", "Gospel", "Noise", "AlternRock", "Bass", "Soul", "Punk", "Space", "Meditative", "Instrumental Pop",
+    "Instrumental Rock", "Ethnic", "Gothic", "Darkwave", "Techno-Industrial", "Electronic", "Pop-Folk", "Eurodance", "Dream",
+    "Southern Rock", "Comedy", "Cult", "Gangsta", "Top 40", "Christian Rap", "Pop/Funk", "Jungle", "Native American", "Cabaret",
+    "New Wave", "Psychedelic", "Rave", "Showtunes", "Trailer", "Lo-Fi", "Tribal", "Acid Punk", "Acid Jazz", "Polka", "Retro",
+    "Musical", "Rock & Roll", "Hard Rock",
+    /* 80.. Winamp */
+    "Folk", "Folk-Rock", "National Folk", "Swing", "Fast Fusion", "Bebop", "Latin", "Revival", "Celtic", "Bluegrass", "Avantgarde",
+    "Gothic Rock", "Progressive Rock", "Psychedelic Rock", "Symphonic Rock", "Slow Rock", "Big Band", "Chorus", "Easy Listening",
+    "Acoustic", "Humour", "Speech", "Chanson", "Opera", "Chamber Music", "Sonata", "Symphony", "Booty Bass", "Primus", "Porn Groove",
+    "Satire", "Slow Jam", "Club", "Tango", "Samba", "Folklore", "Ballad", "Power Ballad", "Rhythmic Soul", "Freestyle", "Duet",
+    "Punk Rock", "Drum Solo", "A Cappella", "Euro-House", "Dance Hall", "Goa", "Drum & Bass", "Club-House", "Hardcore Techno",
+    "Terror", "Indie", "BritPop", "Afro-Punk", "Polsk Punk", "Beat", "Christian Gangsta Rap", "Heavy Metal", "Black Metal",
+    "Crossover", "Contemporary Christian", "Christian Rock", "Merengue", "Salsa", "Thrash Metal", "Anime", "JPop", "Synthpop",
+};
+
+const char *meta_genre_name(unsigned n) { return n < sizeof k_genres / sizeof k_genres[0] ? k_genres[n] : NULL; }
+
+static const char *genre_ref(const char *s, const char **end) { // "17" at s -> name; *end after the digits
+    unsigned v = 0;
+    const char *p = s;
+    while (*p >= '0' && *p <= '9' && v < 1000) v = v * 10 + (unsigned)(*p++ - '0');
+    *end = p;
+    return p == s ? NULL : meta_genre_name(v);
+}
+
+static void copy_cut(char *dst, size_t cap, const char *s) { // UTF-8 copy, cut at a character boundary
+    size_t n = strlen(s);
+    if (n > cap - 1) {
+        n = cap - 1;
+        while (n > 0 && ((uint8_t)s[n] & 0xC0) == 0x80) n--;
+    }
+    memcpy(dst, s, n);
+    dst[n] = '\0';
+}
+
+void meta_genre_text(char *dst, size_t cap, const char *src, bool bare_number_ok) {
+    if (cap == 0) return;
+    const char *out = src, *e;
+    if (src[0] == '(' && src[1] == '(') {
+        out = src + 1; // "((" is a literal "("
+    } else if (src[0] == '(') {
+        const char *g = genre_ref(src + 1, &e);
+        bool rx = strncmp(src, "(RX)", 4) == 0 || strncmp(src, "(CR)", 4) == 0; // Remix / Cover: not genres
+        if (rx) e = src + 3;
+        if (rx || (e != src + 1 && *e == ')')) {
+            const char *rest = e + 1;
+            bool more = rest[0] == '(' && rest[1] != '('; // "(17)(18)": the first reference stands
+            out = rest[0] != '\0' && !more ? rest : (g != NULL && !rx ? g : "");
+        }
+    } else if (bare_number_ok) {
+        const char *g = genre_ref(src, &e);
+        if (g != NULL && *e == '\0') out = g;
+    }
+    copy_cut(dst, cap, out);
 }
 
 // ---- embedded pictures (position only; see art_ref_t) ------------------------------------------------------
@@ -157,6 +235,54 @@ void meta_art_offer(art_ref_t *best, const art_ref_t *cand) {
 
 // ---- FLAC ------------------------------------------------------------------------------------------------
 
+static void vorbis_text(char *dst, size_t cap, const uint8_t *v, size_t vl) { meta_text_to_utf8(dst, cap, v, vl, 3); }
+
+// One KEY=value comment (the key is not NUL-terminated: s[0..k)).
+static void vorbis_field(audio_tags_t *t, const char *s, size_t k, const uint8_t *v, size_t vl) {
+    static const struct {
+        const char *key;
+        uint8_t len;
+        uint8_t id;
+    } keys[] = {
+        {"TITLE", 5, 0},       {"ARTIST", 6, 1},         {"ALBUM", 5, 2},          {"TRACKNUMBER", 11, 3},   {"ALBUMARTIST", 11, 4},
+        {"ALBUM ARTIST", 12, 4}, {"GENRE", 5, 5},        {"DISCNUMBER", 10, 6},    {"DISC", 4, 6},           {"DATE", 4, 7},
+        {"YEAR", 4, 7},        {"COMPILATION", 11, 8},   {"TITLESORT", 9, 9},      {"ARTISTSORT", 10, 10},   {"ALBUMSORT", 9, 11},
+        {"ALBUMARTISTSORT", 15, 12},
+    };
+    audio_tags_ext_t *x = g_ext;
+    for (size_t i = 0; i < sizeof keys / sizeof keys[0]; i++) {
+        if (k != keys[i].len || !ieq(s, keys[i].key, k)) continue;
+        if (keys[i].id >= 4 && x == NULL) return; // library tags: not wanted
+        char tmp[12];
+        if (keys[i].id >= 3 && keys[i].id <= 8 && keys[i].id != 4 && keys[i].id != 5) { // numbers and flags: only the head matters
+            size_t m = vl < 11 ? vl : 11;
+            memcpy(tmp, v, m);
+            tmp[m] = 0;
+        }
+        switch (keys[i].id) {
+        case 0: vorbis_text(t->title, sizeof t->title, v, vl); break;
+        case 1: vorbis_text(t->artist, sizeof t->artist, v, vl); break;
+        case 2: vorbis_text(t->album, sizeof t->album, v, vl); break;
+        case 3: t->track = track_from(tmp); break;
+        case 4: vorbis_text(x->album_artist, sizeof x->album_artist, v, vl); break;
+        case 5: {
+            char g[48];
+            meta_text_to_utf8(g, sizeof g, v, vl, 3);
+            meta_genre_text(x->genre, sizeof x->genre, g, false);
+            break;
+        }
+        case 6: x->disc = track_from(tmp); break;
+        case 7: x->year = meta_year_text(tmp); break;
+        case 8: x->compilation = flag_from(tmp); break;
+        case 9: vorbis_text(x->sort_title, sizeof x->sort_title, v, vl); break;
+        case 10: vorbis_text(x->sort_artist, sizeof x->sort_artist, v, vl); break;
+        case 11: vorbis_text(x->sort_album, sizeof x->sort_album, v, vl); break;
+        default: vorbis_text(x->sort_album_artist, sizeof x->sort_album_artist, v, vl); break;
+        }
+        return;
+    }
+}
+
 static void vorbis_comments(const uint8_t *b, uint32_t n, audio_tags_t *t) {
     uint32_t p = 0;
     if (n < 8) return;
@@ -175,16 +301,7 @@ static void vorbis_comments(const uint8_t *b, uint32_t n, audio_tags_t *t) {
             size_t k = (size_t)(eq - s);
             const uint8_t *v = (const uint8_t *)eq + 1;
             size_t vl = len - k - 1;
-            if (k == 5 && ieq(s, "TITLE", 5)) meta_text_to_utf8(t->title, sizeof t->title, v, vl, 3);
-            else if (k == 6 && ieq(s, "ARTIST", 6)) meta_text_to_utf8(t->artist, sizeof t->artist, v, vl, 3);
-            else if (k == 5 && ieq(s, "ALBUM", 5)) meta_text_to_utf8(t->album, sizeof t->album, v, vl, 3);
-            else if (k == 11 && ieq(s, "TRACKNUMBER", 11)) {
-                char tmp[12];
-                size_t m = vl < 11 ? vl : 11;
-                memcpy(tmp, v, m);
-                tmp[m] = 0;
-                t->track = track_from(tmp);
-            }
+            vorbis_field(t, s, k, v, vl);
         }
         p += len;
     }
@@ -218,6 +335,7 @@ static uint64_t id3v2_size(meta_read_fn rd, void *ctx, uint8_t hdr[10]) {
 
 meta_err_t flac_parse(meta_read_fn rd, void *ctx, uint64_t file_size, flac_info_t *out) {
     memset(out, 0, sizeof *out);
+    ext_clear();
     uint8_t h10[10];
     uint64_t pos = id3v2_size(rd, ctx, h10); // some files carry an ID3v2 tag in front
     uint8_t b[4];
@@ -289,13 +407,36 @@ static void id3_text_frame(const char *id, const uint8_t *d, uint32_t n, audio_t
     int enc = d[0] > 3 ? 0 : d[0];
     const uint8_t *s = d + 1;
     uint32_t sl = n - 1;
+    audio_tags_ext_t *x = g_ext;
+    // v2.3/2.4 four-letter ids and their v2.2 three-letter twins
     if (!strcmp(id, "TIT2") || !strcmp(id, "TT2")) meta_text_to_utf8(t->title, sizeof t->title, s, sl, enc);
     else if (!strcmp(id, "TPE1") || !strcmp(id, "TP1")) meta_text_to_utf8(t->artist, sizeof t->artist, s, sl, enc);
     else if (!strcmp(id, "TALB") || !strcmp(id, "TAL")) meta_text_to_utf8(t->album, sizeof t->album, s, sl, enc);
-    else if (!strcmp(id, "TRCK") || !strcmp(id, "TRK")) {
+    else if (x != NULL && (!strcmp(id, "TPE2") || !strcmp(id, "TP2"))) meta_text_to_utf8(x->album_artist, sizeof x->album_artist, s, sl, enc);
+    else if (x != NULL && (!strcmp(id, "TSOT") || !strcmp(id, "TST"))) meta_text_to_utf8(x->sort_title, sizeof x->sort_title, s, sl, enc);
+    else if (x != NULL && (!strcmp(id, "TSOP") || !strcmp(id, "TSP"))) meta_text_to_utf8(x->sort_artist, sizeof x->sort_artist, s, sl, enc);
+    else if (x != NULL && (!strcmp(id, "TSOA") || !strcmp(id, "TSA"))) meta_text_to_utf8(x->sort_album, sizeof x->sort_album, s, sl, enc);
+    else if (x != NULL && (!strcmp(id, "TSO2") || !strcmp(id, "TS2"))) meta_text_to_utf8(x->sort_album_artist, sizeof x->sort_album_artist, s, sl, enc);
+    else if (x != NULL && (!strcmp(id, "TCON") || !strcmp(id, "TCO"))) {
+        char g[48];
+        meta_text_to_utf8(g, sizeof g, s, sl, enc);
+        meta_genre_text(x->genre, sizeof x->genre, g, true);
+    } else if (!strcmp(id, "TRCK") || !strcmp(id, "TRK")) {
         char tmp[16] = {0};
         meta_text_to_utf8(tmp, sizeof tmp, s, sl, enc);
         t->track = track_from(tmp);
+    } else if (x != NULL && (!strcmp(id, "TPOS") || !strcmp(id, "TPA"))) {
+        char tmp[16] = {0};
+        meta_text_to_utf8(tmp, sizeof tmp, s, sl, enc);
+        x->disc = track_from(tmp);
+    } else if (x != NULL && (!strcmp(id, "TDRC") || !strcmp(id, "TYER") || !strcmp(id, "TYE"))) {
+        char tmp[16] = {0};
+        meta_text_to_utf8(tmp, sizeof tmp, s, sl, enc);
+        x->year = meta_year_text(tmp);
+    } else if (x != NULL && (!strcmp(id, "TCMP") || !strcmp(id, "TCP"))) {
+        char tmp[8] = {0};
+        meta_text_to_utf8(tmp, sizeof tmp, s, sl, enc);
+        x->compilation = flag_from(tmp);
     }
 }
 
@@ -379,6 +520,7 @@ static void id3v2_tags(meta_read_fn rd, void *ctx, const uint8_t h[10], uint64_t
 
 meta_err_t mp3_parse(meta_read_fn rd, void *ctx, uint64_t file_size, mp3_info_t *out) {
     memset(out, 0, sizeof *out);
+    ext_clear();
     uint8_t h10[10];
     uint64_t start = id3v2_size(rd, ctx, h10);
     if (start != 0) id3v2_tags(rd, ctx, h10, start, &out->tags);

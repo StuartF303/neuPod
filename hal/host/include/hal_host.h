@@ -36,6 +36,12 @@ void hal_host_bt_drop_link(void);
  */
 void hal_host_bt_remote_hangup(void);
 
+/**
+ * Tests only: say that a FatFs volume is mounted (the host's file API is POSIX and reports "not mounted"). Lets a test link the FatFs
+ * backend of nfs.h (app/storage/nfs_fatfs.c) and run it on a disk image it mounted itself.
+ */
+void hal_host_storage_set_mounted(bool mounted);
+
 /** Write the panel's current contents to @p path as a binary PPM (P6). False on I/O error. */
 bool hal_host_display_dump_ppm(const char *path);
 

@@ -418,7 +418,7 @@ TEST(test_write_scope_confines_writes) {
     ASSERT_TRUE(nfs_write_scope_allows("/anything")); // no scope: no restriction (the hardware lock still applies)
     ASSERT_EQ(NFS_ERR_INVALID, nfs_write_scope_enter("/")); // the whole volume is not a scope
     ASSERT_EQ(NFS_OK, nfs_write_scope_enter("/.neupod"));
-    ASSERT_EQ(NFS_ERR_INVALID, nfs_write_scope_enter("/.neupod")); // no nesting
+    ASSERT_EQ(NFS_ERR_BUSY, nfs_write_scope_enter("/.neupod")); // no nesting
     ASSERT_TRUE(nfs_write_scope_allows("/.neupod"));
     ASSERT_TRUE(nfs_write_scope_allows("/.neupod/settings.tmp"));
     ASSERT_TRUE(nfs_write_scope_allows("/.neupod/sub/../x"));
@@ -448,6 +448,27 @@ TEST(test_write_scope_confines_writes) {
     ASSERT_EQ(NFS_OK, nfs_open(&f, "/outside.txt", NFS_O_WRITE | NFS_O_CREATE)); // outside the scope again
     ASSERT_EQ(NFS_OK, nfs_close(f));
     ASSERT_EQ(NFS_OK, nfs_unlink("/outside.txt"));
+}
+
+TEST(test_busy_write_scope_is_not_a_save_failure) {
+    rm_state();
+    ASSERT_EQ(SETTINGS_LOAD_FRESH, boot(true));
+    ASSERT_TRUE(settings_put(0x41424344u, "x", 1));
+    ASSERT_EQ(NFS_OK, nfs_write_scope_enter("/.neupod")); // another task (a library scan) holds the scope
+    for (unsigned i = 0; i < SETTINGS_MAX_SAVE_FAILURES + 3u; i++) {
+        ASSERT_EQ(NFS_ERR_BUSY, settings_flush());
+    }
+    settings_status_t st;
+    settings_get_status(&st);
+    ASSERT_TRUE(st.persistent); // not given up on the card
+    ASSERT_TRUE(st.dirty);      // still waiting to be written
+    ASSERT_EQ(0, st.save_failures);
+    nfs_write_scope_leave();
+    ASSERT_EQ(0, settings_flush()); // the next tick succeeds
+    settings_get_status(&st);
+    ASSERT_FALSE(st.dirty);
+    ASSERT_EQ(1, st.saves);
+    ASSERT_EQ(0, st.save_failures);
 }
 
 TEST(test_store_only_touches_its_directory) {
@@ -618,6 +639,7 @@ int main(void) {
     RUN(test_io_error_on_the_winner_reread_goes_ram_only_and_never_writes);
     RUN(test_newer_version_file_is_kept);
     RUN(test_write_scope_confines_writes);
+    RUN(test_busy_write_scope_is_not_a_save_failure);
     RUN(test_store_only_touches_its_directory);
     RUN(test_hardware_lock_state_is_restored);
     RUN(test_capacity_and_limits);

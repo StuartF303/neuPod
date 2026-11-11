@@ -454,6 +454,21 @@ target_compile_definitions(test_caps_rearm PRIVATE NEUPOD_PLATFORM_Y2=1)
 target_include_directories(test_caps_rearm PRIVATE ${CMAKE_SOURCE_DIR}/app/include)
 add_test(NAME caps_rearm COMMAND test_caps_rearm)
 
+# Music library index (ADR-0017, L1): collation, new tag fields, scanner + reader on a FatFs disk image, swap crash safety.
+# nfs.h on FatFs (the backend the Pico and the Y2 use) instead of the host's POSIX one: the library's writes go through its write scope.
+add_executable(test_library test_library.c ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c)
+target_link_libraries(test_library neupod_library_test neupod_storage_tests neupod_fatfs neupod_rt_core hal_host) # hal_host last: diskio references hal_storage
+add_test(NAME library COMMAND test_library)
+set_tests_properties(library PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_source_files_properties(test_library.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+# The same at scale: 100,000 files on a disk image, 32 KB of scratch. About a minute; label "slow" (ctest -LE slow skips it).
+add_executable(test_library_big test_library_big.c ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c)
+target_link_libraries(test_library_big neupod_library neupod_storage_tests neupod_fatfs neupod_rt_core hal_host)
+add_test(NAME library_big COMMAND test_library_big)
+set_tests_properties(library_big PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} LABELS slow TIMEOUT 900)
+set_source_files_properties(test_library_big.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
 # ui_frame_input() routing of the transport keys (the real ui_frame.c with fakes for the player and services): consumed keys stay with the screen.
 add_executable(test_ui_frame_keys test_ui_frame_keys.c ${CMAKE_SOURCE_DIR}/app/ui/ui_metrics.c)
 target_include_directories(test_ui_frame_keys PRIVATE ${CMAKE_SOURCE_DIR}/app/ui ${CMAKE_SOURCE_DIR}/app/runtime)

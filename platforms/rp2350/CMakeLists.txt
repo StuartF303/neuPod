@@ -145,12 +145,19 @@ list(FILTER NEUPOD_SD_SOURCES EXCLUDE REGEX "/ffsystem\\.c$")
 list(APPEND NEUPOD_SD_SOURCES ${CMAKE_SOURCE_DIR}/app/storage/ff_alloc.c)
 set_property(TARGET no-OS-FatFS-SD-SDIO-SPI-RPi-Pico PROPERTY INTERFACE_SOURCES ${NEUPOD_SD_SOURCES})
 
+set(NEUPOD_LIBRARY_SRC
+  ${CMAKE_SOURCE_DIR}/app/library/lib_collate.c
+  ${CMAKE_SOURCE_DIR}/app/library/lib_store.c
+  ${CMAKE_SOURCE_DIR}/app/library/lib_esort.c
+  ${CMAKE_SOURCE_DIR}/app/library/lib_build.c
+  ${CMAKE_SOURCE_DIR}/app/library/lib_reader.c)
 function(neupod_add_storage_lib name)
   add_library(${name} STATIC
     hal/hal_storage.c
     hal/hw_config.c
     ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c
     ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c   # portable file API on the library's FatFs
+    ${NEUPOD_LIBRARY_SRC}                          # music library index (ADR-0017): FatFs through the library's ff.h; linked only when used
   )
   target_include_directories(${name} PUBLIC ${CMAKE_SOURCE_DIR}/hal/include
                                             ${CMAKE_SOURCE_DIR}/app/include
@@ -164,7 +171,7 @@ neupod_add_storage_lib(hal_rp2350_storage)
 # pico_sync mutexes in its structs, whose layout changes with the adapter, so one copy cannot serve both.
 neupod_add_storage_lib(hal_rp2350_storage_rtos neupod_freertos)
 set_source_files_properties(hal/hal_storage.c hal/hw_config.c storage_test_main.c
-  ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c
+  ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c ${NEUPOD_LIBRARY_SRC}
   PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
 # microSD test menu (flash with: scripts/flash.sh rp2350 storage_test)

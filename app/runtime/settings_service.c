@@ -102,6 +102,11 @@ void settings_service_poll(bool quiet_now) {
         retry_armed = false;
         return;
     }
+    if (e == NFS_ERR_BUSY) { /* the card is being written by another task (library scan): not a failure, just later */
+        retry_at = now + 1000u;
+        retry_armed = true;
+        return;
+    }
     printf("settings: save failed (%s)\n", nfs_err_str((nfs_err_t)e));
     retry_at = now + RETRY_MS;
     retry_armed = true;
