@@ -57,6 +57,15 @@ fi
 
 echo "== configuring"
 make -C "$SRC" O="$OUT" BR2_EXTERNAL="$Y2/buildroot" y2_rescue_defconfig
+# Buildroot rsyncs a local-source package (SITE_METHOD = local) only on its first build, so later edits to our own
+# packages would be silently ignored (2026-11-11: a stale fbtool shipped without its new `image` command). Clean them
+# every time; they are tiny.
+for mk in "$Y2"/buildroot/package/*/*.mk; do
+    grep -q '_SITE_METHOD *= *local' "$mk" || continue
+    pkg=$(basename "$mk" .mk)
+    echo "== forcing a rebuild of local package $pkg"
+    make -C "$OUT" "$pkg-dirclean"
+done
 echo "== building"
 make -C "$OUT" -j"$(nproc)"
 

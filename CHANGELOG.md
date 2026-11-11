@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Host tests `gapless` (real core-1 loop and core-0 stream controller against a fake sink: sample-exact concatenation across WAV/FLAC/MP3/ALAC, track-change timing, rate-change fallback, skip and stop during a pending handoff) and `play_queue`; trim vectors via `tools/gen_trim_vectors.py`.
 
 ### Fixed
+- Y2 Buildroot builds (`build-rescue.sh`, `build-rootfs.sh`) now force a rebuild of our local-source packages (`y2-fbtool`): Buildroot only copies a local package's source on its first build, so the first splash image shipped a stale fbtool without the `image` command and still showed the colour bars.
 - Gapless review fixes: album art retargeted by a track change in the middle of a decode no longer publishes the old cover; a late gapless announcement after a skip no longer blocks gapless for the rest of the album; handoffs counted while a skip ramps down no longer advance the queue; a refused start request puts the queue position back; iTunSMPB length cannot wrap the fit check, and a misfit edit list falls back to iTunSMPB.
 - MP3 files without an ID3v2 tag lost their first frame (and the Xing/LAME header): the frame scan treated offset 0 as "not found".
 
@@ -35,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - RAM budget: FreeRTOS heap 112 to 80 KB and LVGL pool 96 to 72 KB (named constants in `app/os/memory_budget.h`); static RAM 481,588 to 436,480 bytes with BTstack and the settings store included (476,968 with Wi-Fi, secrets and the input widgets). The CYW43 worker task has 6 KB of stack. `md5.h` renamed `neupod_md5.h` (clash with BTstack's `md5.h`).
 
 ### Fixed
+- Y2 Buildroot builds (`build-rescue.sh`, `build-rootfs.sh`) now force a rebuild of our local-source packages (`y2-fbtool`): Buildroot only copies a local package's source on its first build, so the first splash image shipped a stale fbtool without the `image` command and still showed the colour bars.
 - I2S sink restart after a sample-rate change could leave the audio core stalled (DMA armed and busy, PIO requesting, no transfer): teardown now disables both DMA channels before aborting them and waits for the abort, clears the interrupt flags, and resets the state machine and FIFOs; open starts from a clean state and clears stale interrupt flags; a late interrupt no longer leaves the sibling channel at a zero count (`hal_audio.c`, `docs/audio.md`). Bench: 12 rate switches while playing plus paused and ALAC-to-WAV switches, no stall, `dma_underruns` 0 after reopen (was 2). Abort-bound expiry is counted and refuses the open; the late-interrupt re-arm restarts the sibling if both channels went idle.
 - Out of memory panic on the first settings save: FatFs scratch memory is now capped at 4 KB and never panics (`app/storage/ff_alloc.c`, `docs/storage.md`); the lwIP tcpip thread stack is 2 KB (was 1 KB, 312 B free after a join); the `wifi:` monitor line shows the network being joined.
 - Wi-Fi review fixes: no HAL calls under the service mutex (deadlock), link loss now detected, 32-bit deadline wrap, clock without reader spin and with NTP sanity, settings saved in two alternating files (no rename/unlink) and never while audio plays, 32 settings tags, secrets wiped after use, modal lifetime fixes, CI builds with mbed TLS.
@@ -112,6 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   within 0.04 % of a meter, click 84 µs call-to-GO, 60 s soak with zero errors.
 
 ### Fixed
+- Y2 Buildroot builds (`build-rescue.sh`, `build-rootfs.sh`) now force a rebuild of our local-source packages (`y2-fbtool`): Buildroot only copies a local package's source on its first build, so the first splash image shipped a stale fbtool without the `image` command and still showed the colour bars.
 - Worked around a carlk3 v3.6.2 bug where 256-block SDIO reads overrun the DMA descriptor table.
 
 ### Changed
