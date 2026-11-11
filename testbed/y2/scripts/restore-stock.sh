@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Write the backed-up stock BOOTIMG and/or RECOVERY back to the Y2 (guarded; see lib-flash.sh).
+# Write the backed-up stock BOOTIMG, RECOVERY, LOGO and/or USRDATA back to the Y2 (guarded; see lib-flash.sh).
 #
-#   testbed/y2/scripts/restore-stock.sh [--target BOOTIMG|RECOVERY|USRDATA|all|all+data] [--yes] [--dry-run] [--force-unknown-current]
-#     default target: all = BOOTIMG then RECOVERY, ONE DA session (USRDATA is NEVER included in "all")
+#   testbed/y2/scripts/restore-stock.sh [--target BOOTIMG|RECOVERY|LOGO|USRDATA|all|all+data] [--yes] [--dry-run] [--force-unknown-current]
+#     default target: all = BOOTIMG then RECOVERY, ONE DA session (USRDATA and LOGO are NEVER included in "all")
+#     LOGO: writes the backup's 3 MiB LOGO.bin (the stock power-on and charging pictures); pre-read compared like BOOTIMG
 #     all+data = BOOTIMG, RECOVERY, then USRDATA (800 MiB: write ~175 s, readback ~420 s)
 #     USRDATA: writes the backup's USRDATA.bin with y2flash --discard-current (the current content is destroyed,
 #              first 1 MiB + canary window saved as evidence, no full pre-read). Needs typing RESTORE-USRDATA
@@ -22,7 +23,7 @@ while (($#)); do
         --dry-run) DRY=1 ;;
         --force-unknown-current) FORCE=1 ;;
         --target) WHICH="${2:?--target needs a value}"; shift ;;
-        -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
         *) die "unknown option $1" ;;
     esac
     shift
@@ -32,14 +33,15 @@ env_overrides "$DRY"
 case $WHICH in
     all) TARGETS=(BOOTIMG RECOVERY) ;;
     all+data) TARGETS=(BOOTIMG RECOVERY USRDATA) ;;
-    BOOTIMG|RECOVERY|USRDATA) TARGETS=("$WHICH") ;;
-    *) die "--target must be BOOTIMG, RECOVERY, USRDATA, all (BOOTIMG+RECOVERY) or all+data (got $WHICH)" ;;
+    BOOTIMG|RECOVERY|LOGO|USRDATA) TARGETS=("$WHICH") ;;
+    *) die "--target must be BOOTIMG, RECOVERY, LOGO, USRDATA, all (BOOTIMG+RECOVERY) or all+data (got $WHICH)" ;;
 esac
-HAS_DATA=0; HAS_BOOTREC=0
-for t in "${TARGETS[@]}"; do if [[ $t == USRDATA ]]; then HAS_DATA=1; else HAS_BOOTREC=1; fi; done
+HAS_DATA=0; HAS_BOOTREC=0; HAS_LOGO=0
+for t in "${TARGETS[@]}"; do if [[ $t == USRDATA ]]; then HAS_DATA=1; else HAS_BOOTREC=1; fi; [[ $t == LOGO ]] && HAS_LOGO=1; done
 
 guard_backup
 ((HAS_DATA)) && usrdata_backup_guard
+((HAS_LOGO)) && logo_backup_guard
 
 ARGS=()
 for t in "${TARGETS[@]}"; do
