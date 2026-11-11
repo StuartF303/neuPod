@@ -35,8 +35,11 @@ The previous build stays in `/opt/neupod-fw.old` until the new one has run 5 s w
 a partition or the internal eMMC. A first install without `--select` leaves the screen with whatever UI it had.
 
 Both UIs want `/dev/fb0`, so `/etc/neupod-ui` (`fw` or `demo`; missing = `demo`) says which one the init scripts start.
-`--select` (or `select-ui.sh fw`) stops the demo, writes `fw` and starts the firmware; `select-ui.sh demo` switches back. If a
-`--select` deploy fails, the demo is selected again. `deploy-demo.sh` only stages while `fw` is selected.
+`--select` (or `select-ui.sh fw`) stops the demo, writes `fw` and starts the firmware; `select-ui.sh demo` switches back, and
+checks the new UI is still running after 5 s, restoring the previous selection if not. `deploy-fw.sh` changes nothing on the
+device until the staged build matches its checksum and passes a self-test; if a `--select` deploy then fails, the previous
+build is restored, and the previous selection with it unless the firmware was already selected (then it stays, with the old build).
+`stop` signals the whole process group (the firmware shuts down in order, up to 2 s, `stop` waits up to 5 s) and removes the FIFO. `deploy-demo.sh` only stages while `fw` is selected.
 
 On the device: log `/tmp/neupod-fw.log` (tmpfs, emptied past 256 KB), PID files `/run/neupod-fw.pid` (respawn wrapper, 2 s pause)
 and `/run/neupod-fw.app.pid`, keys from ssh with `echo s > /run/neupod.keys` (`w s` scroll, `e` select, `m` menu, `a d`, `p`).
