@@ -4,6 +4,8 @@
  * FreeRTOS POSIX port. Usage:
  *   neupod                        run until the window is closed (SDL build) or interrupted
  *   neupod --run-ms N             stop after N ms (exit status 0 if the run looked healthy)
+ *                                 exit status: 0 healthy; 2 audio task starved; 3 fewer snapshots than the tour or the splash+home
+ *                                 pair promised (typically --run-ms too short for the script); 4 no audio stats
  *   neupod --splash-hold-ms N     shorten the splash hold shown when a boot check failed (default 8000)
  *   neupod --tour                 walk through the screens by script (with --snapshots: PPMs of each)
  *   neupod --script "s s s _ ..."  feed keys like the tour does (snap:NAME writes a snapshot)
@@ -86,7 +88,7 @@ static void on_done(void *ctx) {
         rc = 2;
     }
     if (g_snapshot_dir != NULL && g_snapshots < (cfgp_tour ? g_expect : 2u)) {
-        fprintf(stderr, "host: FAIL expected splash and home snapshots, got %u\n", g_snapshots);
+        fprintf(stderr, "host: FAIL expected %u snapshots, got %u (the script did not finish before --run-ms ran out?)\n", cfgp_tour ? g_expect : 2u, g_snapshots);
         rc = 3;
     }
     printf("host: run finished, status %d\n", rc);

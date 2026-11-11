@@ -204,40 +204,40 @@ bool ui_input_open(const wi_request_t *r) {
         wi_text_init(&s->m.text, r->initial, r->max_chars, r->charset, r->masked, r->search);
         wi_text_set_byte_limit(&s->m.text, r->max_bytes);
         s->value = ui_label(root, "", UI_L_TEXT);
-        lv_obj_set_style_text_font(s->value, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_font(s->value, UIM->font_large, 0);
         lv_label_set_long_mode(s->value, LV_LABEL_LONG_DOT);
-        lv_obj_set_width(s->value, UI_W - 20);
-        lv_obj_set_pos(s->value, 10, 30);
+        lv_obj_set_width(s->value, UI_W - 2 * UIM->pad);
+        lv_obj_set_pos(s->value, UIM->pad, UIM->in_text_value_y);
         for (int i = 0; i < CELLS; i++) {
             s->cell[i] = ui_label(root, "", i == CELLS / 2 ? UI_L_SEL_BOT : UI_L_DIM);
-            lv_obj_set_style_text_font(s->cell[i], i == CELLS / 2 ? &lv_font_montserrat_20 : &lv_font_montserrat_14, 0);
-            lv_obj_set_width(s->cell[i], 60);
+            lv_obj_set_style_text_font(s->cell[i], i == CELLS / 2 ? UIM->font_large : UIM->font_body, 0);
+            lv_obj_set_width(s->cell[i], UIM->in_cell_w);
             lv_obj_set_style_text_align(s->cell[i], LV_TEXT_ALIGN_CENTER, 0);
-            lv_obj_set_pos(s->cell[i], 160 - 30 + (i - CELLS / 2) * 60, 110);
+            lv_obj_set_pos(s->cell[i], UI_W / 2 - UIM->in_cell_w / 2 + (i - CELLS / 2) * UIM->in_cell_w, UIM->in_cell_y);
         }
         s->hint = ui_label(root, "", UI_L_FAINT);
-        lv_obj_set_width(s->hint, UI_W - 10);
+        lv_obj_set_width(s->hint, UI_W - 2 * UIM->in_text_hint_x);
         lv_obj_set_style_text_align(s->hint, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_pos(s->hint, 5, 180);
+        lv_obj_set_pos(s->hint, UIM->in_text_hint_x, UIM->in_hint_y);
         break;
     case WI_K_NUMBER:
     case WI_K_SLIDER:
         wi_number_init(&s->m.num, r->value, r->min, r->max, r->step, r->decimals, r->unit);
         s->value = ui_label(root, "", UI_L_TEXT);
-        lv_obj_set_style_text_font(s->value, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_font(s->value, UIM->font_large, 0);
         lv_obj_set_width(s->value, UI_W);
         lv_obj_set_style_text_align(s->value, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_pos(s->value, 0, 60);
+        lv_obj_set_pos(s->value, 0, UIM->in_num_value_y);
         if (r->kind == WI_K_SLIDER) {
             s->bar = lv_bar_create(root);
-            lv_obj_set_size(s->bar, 240, 14);
-            lv_obj_set_pos(s->bar, 40, 120);
+            lv_obj_set_size(s->bar, UI_W - 2 * UIM->in_bar_x, UIM->in_bar_h);
+            lv_obj_set_pos(s->bar, UIM->in_bar_x, UIM->in_bar_y);
             lv_bar_set_range(s->bar, r->min, r->max);
             lv_obj_set_style_bg_color(s->bar, lv_color_hex(UI_L_BAR_BOT), 0);
             lv_obj_set_style_bg_color(s->bar, lv_color_hex(UI_L_SEL_BOT), LV_PART_INDICATOR);
         }
         s->hint = ui_label(root, "Scroll: adjust  Play: ok  Menu: cancel", UI_L_FAINT);
-        lv_obj_set_pos(s->hint, 12, 180);
+        lv_obj_set_pos(s->hint, UIM->in_hint_x, UIM->in_hint_y);
         break;
     case WI_K_PICKER: {
         wi_picker_init(&s->m.pick, r->count, r->sel, r->multi, false);
@@ -246,16 +246,15 @@ bool ui_input_open(const wi_request_t *r) {
     }
     case WI_K_DATETIME: {
         wi_datetime_init(&s->m.dt, r->has_date, r->has_time, r->y, r->mo, r->d, r->h, r->mi);
-        static const int xs[5] = {40, 82, 124, 190, 232};
         for (int i = 0; i < 5; i++) {
             if ((i < 3 && r->has_date) || (i >= 3 && r->has_time)) {
                 s->field[i] = ui_label(root, "", UI_L_TEXT);
-                lv_obj_set_style_text_font(s->field[i], &lv_font_montserrat_20, 0);
-                lv_obj_set_pos(s->field[i], r->has_date ? xs[i] : xs[i] - 90 + 20, 80);
+                lv_obj_set_style_text_font(s->field[i], UIM->font_large, 0);
+                lv_obj_set_pos(s->field[i], r->has_date ? UIM->in_dt_x[i] : UIM->in_dt_x[i] + UIM->in_dt_time_shift, UIM->in_dt_y);
             }
         }
         s->hint = ui_label(root, "Left/Right: field   Scroll: change   Play: ok", UI_L_FAINT);
-        lv_obj_set_pos(s->hint, 12, 180);
+        lv_obj_set_pos(s->hint, UIM->in_hint_x, UIM->in_hint_y);
         break;
     }
     }
@@ -281,14 +280,14 @@ ui_letter_overlay_t *ui_letter_overlay_create(void *parent) {
     memset(o, 0, sizeof *o);
     o->box = lv_obj_create(parent);
     lv_obj_remove_style_all(o->box);
-    lv_obj_set_size(o->box, 64, 64);
+    lv_obj_set_size(o->box, UIM->in_overlay, UIM->in_overlay);
     lv_obj_align(o->box, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_style_bg_color(o->box, lv_color_hex(UI_COL_BG2), 0);
     lv_obj_set_style_bg_opa(o->box, LV_OPA_80, 0);
-    lv_obj_set_style_radius(o->box, 10, 0);
+    lv_obj_set_style_radius(o->box, UIM->in_overlay_radius, 0);
     lv_obj_set_hidden(o->box, true);
     o->lbl = ui_label(o->box, "A", UI_COL_TEXT);
-    lv_obj_set_style_text_font(o->lbl, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(o->lbl, UIM->font_large, 0);
     lv_obj_center(o->lbl);
     return o;
 }

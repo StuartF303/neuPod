@@ -256,7 +256,7 @@ ui_screen_t *ui_screen_files_create(void) {
     lv_obj_set_size(f->toast, UI_W, UI_ROW_H);
     lv_obj_set_style_bg_color(f->toast, lv_color_hex(0xFFF3CD), 0);
     lv_obj_set_style_bg_opa(f->toast, LV_OPA_COVER, 0);
-    lv_obj_set_style_pad_all(f->toast, 4, 0);
+    lv_obj_set_style_pad_all(f->toast, UIM->toast_pad, 0);
     lv_obj_set_pos(f->toast, 0, UI_CONTENT_H - UI_ROW_H);
     lv_label_set_long_mode(f->toast, LV_LABEL_LONG_DOT);
     lv_obj_set_hidden(f->toast, true);

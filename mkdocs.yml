@@ -68,3 +68,4 @@ nav:
       - ADR-0015 Clock plan: adr/0015-clock-plan.md
       - ADR-0016 Gapless playback and the play queue: adr/0016-gapless-playback-and-play-queue.md
       - ADR-0017 Music library index: adr/0017-music-library-index.md
+      - ADR-0018 UI resolution profiles: adr/0018-ui-resolution-profiles.md

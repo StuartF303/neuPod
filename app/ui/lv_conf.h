@@ -1031,8 +1031,12 @@
 /** Montserrat 26 */
 #define LV_FONT_MONTSERRAT_26 0
 
-/** Montserrat 28 */
+/** Montserrat 28: the 480x360 profile's large font (app/ui/ui_metrics.c); compiled only for hosted builds (NEUPOD_UI_HIRES), the RP2350 / ESP32-S3 panel never uses it. */
+#ifdef NEUPOD_UI_HIRES
 #define LV_FONT_MONTSERRAT_28 1
+#else
+#define LV_FONT_MONTSERRAT_28 0
+#endif
 
 /** Montserrat 30 */
 #define LV_FONT_MONTSERRAT_30 0
