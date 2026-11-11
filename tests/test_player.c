@@ -34,15 +34,17 @@ bool audio_set_volume(uint32_t v) { g_audio_vol = v; return true; }
 bool audio_pause(bool p) { g_pause_calls++; g_paused = p; return true; }
 bool audio_stop(void) { return true; }
 bool audio_tone(uint32_t m) { (void)m; return true; }
+static uint32_t g_last_frame;
 bool storage_play_request(const char *path) {
+    g_last_frame = 0; // a plain start begins at the beginning
     g_play_calls++;
     snprintf(g_last_path, sizeof g_last_path, "%s", path);
     return g_play_ok;
 }
-static uint32_t g_last_frame;
 bool storage_play_request_at(const char *path, uint32_t frame) {
+    bool ok = storage_play_request(path);
     g_last_frame = frame;
-    return storage_play_request(path);
+    return ok;
 }
 bool storage_verify_request(const char *p) { (void)p; return true; }
 bool storage_stop_request(void) { return true; }
@@ -562,6 +564,188 @@ TEST(an_unplayable_last_track_wraps_under_repeat_all_and_an_all_broken_queue_end
     ASSERT_EQ(4, pos());
 }
 
+// ---- seek (player_seek) --------------------------------------------------------------------------------------------------
+
+static player_file_t seekable_file(const char *title, uint64_t start) {
+    player_file_t f = file(title);
+    f.seekable = true;
+    f.start_frame = start;
+    return f;
+}
+static void start_seekable_album(uint32_t index) {
+    g_play_ok = true;
+    g_pcm_frames = 44100u * 10u; // the fake audio core has played 10 s of the stream
+    player_play_folder("/Album", g_dir, 4, index);
+    player_file_t f = seekable_file("t", 0);
+    player_file_started(&f);
+}
+
+TEST(seek_restarts_the_same_file_at_the_frame_and_the_queue_stays_put) {
+    start_seekable_album(1);
+    player_info_t i;
+    player_get(&i);
+    ASSERT_TRUE(i.seekable);
+    ASSERT_EQ(44100u * 10u, i.pos_frames);              // the fake audio core has played 10 s
+    int calls = g_play_calls;
+    ASSERT_TRUE(player_seek(44100u * 30u));
+    ASSERT_EQ(calls + 1, g_play_calls);
+    ASSERT_EQ(0, strcmp(g_last_path, "/Album/02.flac")); // the same file ...
+    ASSERT_EQ(44100u * 30u, g_last_frame);               // ... at the target
+    ASSERT_EQ(2, pos());
+    player_get(&i);                                      // until the restart is up the screen sees the target
+    ASSERT_EQ(PLAYER_PLAYING, i.state);
+    ASSERT_EQ(44100u * 30u, i.pos_frames);
+    ASSERT_EQ(30, i.elapsed_s);
+    ASSERT_TRUE(i.seekable);
+    g_pcm_frames = 0;                                    // the new stream starts counting from 0
+    player_file_t f = seekable_file("t", 44100u * 30u);
+    player_file_started(&f);
+    player_get(&i);
+    ASSERT_EQ(PLAYER_PLAYING, i.state);
+    ASSERT_EQ(30, i.elapsed_s);
+    ASSERT_EQ(44100u * 30u, i.pos_frames);
+    ASSERT_EQ(2, pos());
+    g_pcm_frames = 44100u * 10u;
+}
+
+TEST(seek_on_a_track_that_cannot_seek_does_nothing) {
+    start_album(0);                                      // file() is not seekable (MP3 / ALAC / FLAC without a table)
+    player_info_t i;
+    player_get(&i);
+    ASSERT_FALSE(i.seekable);
+    int calls = g_play_calls;
+    ASSERT_FALSE(player_seek(44100u * 30u));
+    ASSERT_EQ(calls, g_play_calls);
+    player_get(&i);
+    ASSERT_EQ(PLAYER_PLAYING, i.state);
+    player_stop();
+    ASSERT_FALSE(player_seek(1000));                     // nothing playing at all
+}
+
+TEST(seek_while_paused_stays_paused) {
+    start_seekable_album(0);
+    player_pause_toggle();
+    ASSERT_TRUE(g_paused);
+    ASSERT_TRUE(player_seek(44100u * 5u));
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(PLAYER_PAUSED, i.state);                   // the screen never flashes "Playing"
+    g_paused = false;
+    player_file_t f = seekable_file("t", 44100u * 5u);
+    player_file_started(&f);
+    ASSERT_TRUE(g_paused);                               // the restarted stream is paused again
+    player_get(&i);
+    ASSERT_EQ(PLAYER_PAUSED, i.state);
+}
+
+TEST(play_pause_during_the_restart_of_a_seek_is_applied_when_it_is_up) {
+    start_seekable_album(0);
+    ASSERT_TRUE(player_seek(44100u * 5u));
+    g_paused = false;
+    player_pause_toggle();                               // pressed while the storage task is restarting the stream
+    player_file_t f = seekable_file("t", 44100u * 5u);
+    player_file_started(&f);
+    ASSERT_TRUE(g_paused);
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(PLAYER_PAUSED, i.state);
+    player_pause_toggle();
+    player_get(&i);
+    ASSERT_EQ(PLAYER_PLAYING, i.state);
+}
+
+TEST(seek_voids_an_announced_gapless_successor_and_offers_it_again) {
+    start_seekable_album(0);
+    char path[300];
+    ASSERT_TRUE(player_next_track(path, sizeof path));   // track 2 is offered ...
+    ASSERT_TRUE(player_seek(44100u * 40u));              // ... the user seeks before it answers
+    player_file_t late = seekable_file("late", 0);
+    player_next_announced(&late);                        // the late answer belongs to the old stream
+    g_changes++;                                         // (and a boundary crossed while the old stream ramped down)
+    player_file_t f = seekable_file("t", 44100u * 40u);
+    player_file_started(&f);
+    ASSERT_EQ(1, pos());                                 // still track 1: neither the answer nor the count moved the queue
+    ASSERT_TRUE(player_next_track(path, sizeof path));   // gapless continues for the restarted stream
+    ASSERT_EQ(0, strcmp(path, "/Album/02.flac"));
+    player_file_t n = seekable_file("second", 0);
+    player_next_announced(&n);
+    g_changes++;
+    ASSERT_EQ(2, pos());
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(0, strcmp(i.tags.title, "second"));
+    ASSERT_EQ(0, i.pos_frames - 44100u * 10u);           // the new track counts from its own start
+}
+
+TEST(seek_to_the_end_is_the_end_of_the_track) {
+    start_seekable_album(1);                             // track 2 of 4
+    int calls = g_play_calls;
+    ASSERT_TRUE(player_seek(44100u * 100u));             // total_frames of file(): exactly the end
+    ASSERT_EQ(calls + 1, g_play_calls);
+    ASSERT_EQ(3, pos());                                 // the queue moved on, as for a track that played out
+    ASSERT_EQ(0, strcmp(g_last_path, "/Album/03.flac"));
+    ASSERT_EQ(0, g_last_frame);                          // from its start
+    player_file_t f = seekable_file("t", 0);
+    player_file_started(&f);
+    ASSERT_TRUE(player_seek(44100u * 100u + 12345u));    // past the end: the same
+    ASSERT_EQ(4, pos());
+    f = seekable_file("t", 0);
+    player_file_started(&f);
+    ASSERT_TRUE(player_seek(44100u * 500u));             // the last track: the queue ends, Now Playing goes idle
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(PLAYER_IDLE, i.state);
+}
+
+TEST(seek_to_the_end_under_repeat_one_restarts_the_track) {
+    start_seekable_album(1);
+    player_set_repeat(PQ_REPEAT_ONE);
+    ASSERT_TRUE(player_seek(44100u * 100u));
+    ASSERT_EQ(2, pos());
+    ASSERT_EQ(0, strcmp(g_last_path, "/Album/02.flac"));
+    ASSERT_EQ(0, g_last_frame);
+    player_set_repeat(PQ_REPEAT_OFF);
+}
+
+TEST(a_seek_that_cannot_be_requested_leaves_the_track_playing) {
+    start_seekable_album(0);
+    g_play_ok = false;                                   // "Storage busy": the old stream is untouched
+    ASSERT_TRUE(player_seek(44100u * 20u));
+    g_play_ok = true;
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(PLAYER_PLAYING, i.state);                  // not an error screen
+    ASSERT_EQ(44100u * 10u, i.pos_frames);               // the real position again, not the target
+    ASSERT_TRUE(i.seekable);
+    ASSERT_TRUE(player_seek(44100u * 20u));              // and a later seek works
+}
+
+TEST(skipping_during_a_seek_restart_starts_the_next_track_normally) {
+    start_seekable_album(0);
+    ASSERT_TRUE(player_seek(44100u * 20u));
+    player_next();                                       // Next before the restart reported
+    ASSERT_EQ(2, pos());
+    player_file_t f = seekable_file("t2", 0);
+    player_file_started(&f);
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(PLAYER_PLAYING, i.state);
+    ASSERT_EQ(0, strcmp(g_last_path, "/Album/02.flac"));
+    ASSERT_EQ(0, g_last_frame);
+}
+
+TEST(a_verify_run_is_not_seekable) {
+    player_verify_file("/Album/01.flac", "01.flac");
+    player_file_t f = seekable_file("v", 0);
+    f.verify = true;
+    player_file_started(&f);
+    player_info_t i;
+    player_get(&i);
+    ASSERT_FALSE(i.seekable);
+    ASSERT_FALSE(player_seek(1000));
+    player_stop();
+}
+
 int main(void) {
     player_init();
     RUN(volume_policy_cases);
@@ -588,5 +772,15 @@ int main(void) {
     RUN(failed_start_after_a_shuffled_wrap_restores_the_whole_queue);
     RUN(an_unplayable_last_track_wraps_under_repeat_all_and_an_all_broken_queue_ends);
     RUN(shuffle_toggled_mid_play_keeps_the_track_and_the_handoff_already_announced);
+    RUN(seek_restarts_the_same_file_at_the_frame_and_the_queue_stays_put);
+    RUN(seek_on_a_track_that_cannot_seek_does_nothing);
+    RUN(seek_while_paused_stays_paused);
+    RUN(play_pause_during_the_restart_of_a_seek_is_applied_when_it_is_up);
+    RUN(seek_voids_an_announced_gapless_successor_and_offers_it_again);
+    RUN(seek_to_the_end_is_the_end_of_the_track);
+    RUN(seek_to_the_end_under_repeat_one_restarts_the_track);
+    RUN(a_seek_that_cannot_be_requested_leaves_the_track_playing);
+    RUN(skipping_during_a_seek_restart_starts_the_next_track_normally);
+    RUN(a_verify_run_is_not_seekable);
     return RESULT();
 }

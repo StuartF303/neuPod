@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #include <string.h>
 
+#include "hal_input.h"
 #include "runtime_config.h"
 #include "ui_logic.h"
 #include "unit.h"
@@ -280,6 +281,173 @@ TEST(backlight_effective_level) {
     ASSERT_EQ(5, ui_backlight_effective(5, false));
 }
 
+/* ---- Global keys ------------------------------------------------------------------------------------ */
+
+TEST(global_keys_route_by_queue_state) {
+    ASSERT_EQ(UI_KEY_BACK, ui_global_key(HAL_BTN_MENU, false));
+    ASSERT_EQ(UI_KEY_BACK, ui_global_key(HAL_BTN_MENU, true));
+    ASSERT_EQ(UI_KEY_PAUSE, ui_global_key(HAL_BTN_PLAY, false));
+    ASSERT_EQ(UI_KEY_NEXT, ui_global_key(HAL_BTN_RIGHT, true));
+    ASSERT_EQ(UI_KEY_PREV, ui_global_key(HAL_BTN_LEFT, true));
+    ASSERT_EQ(UI_KEY_NONE, ui_global_key(HAL_BTN_RIGHT, false)); /* nothing queued: Right / Left stay free */
+    ASSERT_EQ(UI_KEY_NONE, ui_global_key(HAL_BTN_LEFT, false));
+    ASSERT_EQ(UI_KEY_NONE, ui_global_key(HAL_BTN_SELECT, true)); /* Select belongs to the screens */
+}
+
+/* ---- Now Playing: wheel mode, scrub, hold ---------------------------------------------------------- */
+
+static const ui_npc_track_t k_wav = {.seekable = true, .pos_frames = 44100u * 60u, .total_frames = 44100u * 240u, .rate = 44100u};
+static const ui_npc_track_t k_mp3 = {.seekable = false, .pos_frames = 44100u * 60u, .total_frames = 44100u * 240u, .rate = 44100u};
+
+TEST(select_cycles_volume_and_seek) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    ASSERT_EQ(UI_WHEEL_VOLUME, c.mode);
+    ASSERT_FALSE(ui_npc_scroll(&c, &k_wav, 1, 1000)); /* volume mode: the caller changes the volume */
+    ASSERT_TRUE(ui_npc_select(&c, &k_wav, 1000));
+    ASSERT_EQ(UI_WHEEL_SEEK, c.mode);
+    ASSERT_TRUE(ui_npc_select(&c, &k_wav, 1500)); /* a second Select goes back */
+    ASSERT_EQ(UI_WHEEL_VOLUME, c.mode);
+}
+
+TEST(select_on_a_track_that_cannot_seek_stays_on_volume) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    ASSERT_FALSE(ui_npc_select(&c, &k_mp3, 1000)); /* the screen says "Seek not available" */
+    ASSERT_EQ(UI_WHEEL_VOLUME, c.mode);
+    ASSERT_FALSE(ui_npc_scroll(&c, &k_mp3, 3, 1100)); /* the wheel still sets the volume */
+    ui_npc_track_t zero = k_wav;
+    zero.total_frames = 0;
+    ASSERT_FALSE(ui_npc_select(&c, &zero, 1200)); /* unknown length: no seek either */
+}
+
+TEST(seek_mode_scrubs_and_commits_after_the_wheel_rests) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    ASSERT_TRUE(ui_npc_select(&c, &k_wav, 1000));
+    ASSERT_EQ(4, ui_seek_step_s(240)); /* a 4 min track: 4 s per step */
+    ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, 3, 1100));
+    ASSERT_TRUE(c.pending);
+    ASSERT_EQ((60u + 12u) * 44100u, c.target);
+    ASSERT_EQ(c.target, ui_npc_position(&c, &k_wav));
+    ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, -1, 1200)); /* the next step starts from the target, not the playing position */
+    ASSERT_EQ((60u + 8u) * 44100u, c.target);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, 1200 + UI_SEEK_COMMIT_MS - 1)); /* still scrubbing */
+    ASSERT_EQ(UI_NPC_COMMIT, ui_npc_tick(&c, &k_wav, 1200 + UI_SEEK_COMMIT_MS));
+    ui_npc_committed(&c);
+    ASSERT_FALSE(c.pending);
+    ASSERT_EQ(k_wav.pos_frames, ui_npc_position(&c, &k_wav)); /* back to the playing position */
+    ASSERT_EQ(UI_WHEEL_SEEK, c.mode);                          /* still seek mode: more scrubbing is possible */
+}
+
+TEST(scrub_clamps_to_the_track) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    ASSERT_TRUE(ui_npc_select(&c, &k_wav, 0));
+    ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, -1000, 10));
+    ASSERT_EQ(0, c.target);
+    ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, 100000, 20));
+    ASSERT_EQ(k_wav.total_frames, c.target); /* the end itself: the player treats it as the end of the track */
+    ASSERT_EQ(1, ui_seek_step_s(10));
+    ASSERT_EQ(30, ui_seek_step_s(3600 * 10));
+}
+
+TEST(seek_mode_drops_back_to_volume_after_three_seconds_idle) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    ASSERT_EQ(3000, UI_SEEK_IDLE_MS);
+    ASSERT_TRUE(ui_npc_select(&c, &k_wav, 5000));
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, 5000 + UI_SEEK_IDLE_MS - 1));
+    ASSERT_EQ(UI_WHEEL_SEEK, c.mode);
+    ASSERT_EQ(UI_NPC_TO_VOLUME, ui_npc_tick(&c, &k_wav, 5000 + UI_SEEK_IDLE_MS));
+    ASSERT_EQ(UI_WHEEL_VOLUME, c.mode);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, 20000)); /* once */
+}
+
+TEST(wheel_input_restarts_the_idle_clock) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    ASSERT_TRUE(ui_npc_select(&c, &k_wav, 0));
+    ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, 1, 2500));
+    ASSERT_EQ(UI_NPC_COMMIT, ui_npc_tick(&c, &k_wav, 2500 + UI_SEEK_COMMIT_MS));
+    ui_npc_committed(&c);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, 2500 + UI_SEEK_IDLE_MS - 1)); /* 3 s after the LAST turn, not after Select */
+    ASSERT_EQ(UI_WHEEL_SEEK, c.mode);
+    ASSERT_EQ(UI_NPC_TO_VOLUME, ui_npc_tick(&c, &k_wav, 2500 + UI_SEEK_IDLE_MS));
+}
+
+TEST(seek_mode_ends_when_the_track_cannot_seek_any_more) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    ASSERT_TRUE(ui_npc_select(&c, &k_wav, 0));
+    ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, 1, 100));
+    ASSERT_EQ(UI_NPC_TO_VOLUME, ui_npc_tick(&c, &k_mp3, 200)); /* a gapless handoff to an MP3: the scrub is dropped */
+    ASSERT_FALSE(c.pending);
+    ASSERT_EQ(UI_WHEEL_VOLUME, c.mode);
+}
+
+TEST(short_press_skips_on_release) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    ui_npc_key_down(&c, 1, 1000);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, 1000 + UI_HOLD_MS - 1));
+    ASSERT_EQ(UI_NPC_SKIP, ui_npc_key_up(&c, 1, 1000 + UI_HOLD_MS - 1));
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_key_up(&c, 1, 1900)); /* a release without a press here does nothing */
+    ui_npc_key_down(&c, -1, 3000);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_key_up(&c, 1, 3010)); /* the other key */
+    ASSERT_EQ(UI_NPC_SKIP, ui_npc_key_up(&c, -1, 3020));
+}
+
+TEST(hold_right_fast_forwards_and_commits_on_release) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    ui_npc_key_down(&c, 1, 1000);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, 1000 + UI_HOLD_MS)); /* the hold starts: no movement yet */
+    ASSERT_TRUE(c.holding);
+    ASSERT_FALSE(c.pending);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, 1000 + UI_HOLD_MS + 1000)); /* a second held: 10 s further, nothing applied meanwhile */
+    ASSERT_TRUE(c.pending);
+    ASSERT_EQ((60u + UI_FF_SPEED) * 44100u, c.target);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, 1000 + UI_HOLD_MS + 5000));
+    ASSERT_EQ((60u + 5u * UI_FF_SPEED) * 44100u, c.target);
+    ASSERT_EQ(UI_NPC_COMMIT, ui_npc_key_up(&c, 1, 1000 + UI_HOLD_MS + 5000)); /* not a skip */
+    ASSERT_FALSE(c.holding);
+    ASSERT_EQ(0, c.hold_dir);
+    ui_npc_committed(&c);
+}
+
+TEST(hold_left_rewinds_and_stops_at_the_start) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    ui_npc_key_down(&c, -1, 0);
+    (void)ui_npc_tick(&c, &k_wav, UI_HOLD_MS);
+    (void)ui_npc_tick(&c, &k_wav, UI_HOLD_MS + 2000);
+    ASSERT_EQ((60u - 2u * UI_FF_SPEED) * 44100u, c.target);
+    (void)ui_npc_tick(&c, &k_wav, UI_HOLD_MS + 60000);
+    ASSERT_EQ(0, c.target);
+    ASSERT_EQ(UI_NPC_COMMIT, ui_npc_key_up(&c, -1, UI_HOLD_MS + 60001));
+}
+
+TEST(hold_on_a_track_that_cannot_seek_says_so_and_does_not_skip) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    ui_npc_key_down(&c, 1, 0);
+    ASSERT_EQ(UI_NPC_UNAVAILABLE, ui_npc_tick(&c, &k_mp3, UI_HOLD_MS));
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_mp3, UI_HOLD_MS + 500)); /* once */
+    ASSERT_FALSE(c.pending);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_key_up(&c, 1, UI_HOLD_MS + 600)); /* neither a skip nor a seek */
+}
+
+TEST(seek_timers_survive_the_tick_wrap) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    uint32_t t0 = 0xFFFFFF00u;
+    ASSERT_TRUE(ui_npc_select(&c, &k_wav, t0));
+    ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, 1, t0 + 10u));
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, t0 + 10u + UI_SEEK_COMMIT_MS - 1u));
+    ASSERT_EQ(UI_NPC_COMMIT, ui_npc_tick(&c, &k_wav, t0 + 10u + UI_SEEK_COMMIT_MS)); /* across 2^32 */
+}
+
 int main(void) {
     RUN(signal_bars_unknown_rssi);
     RUN(signal_bars_thresholds);
@@ -303,5 +471,18 @@ int main(void) {
     RUN(idle_inhibit_holds_and_restarts);
     RUN(idle_future_stamp_window);
     RUN(backlight_effective_level);
+    RUN(global_keys_route_by_queue_state);
+    RUN(select_cycles_volume_and_seek);
+    RUN(select_on_a_track_that_cannot_seek_stays_on_volume);
+    RUN(seek_mode_scrubs_and_commits_after_the_wheel_rests);
+    RUN(scrub_clamps_to_the_track);
+    RUN(seek_mode_drops_back_to_volume_after_three_seconds_idle);
+    RUN(wheel_input_restarts_the_idle_clock);
+    RUN(seek_mode_ends_when_the_track_cannot_seek_any_more);
+    RUN(short_press_skips_on_release);
+    RUN(hold_right_fast_forwards_and_commits_on_release);
+    RUN(hold_left_rewinds_and_stops_at_the_start);
+    RUN(hold_on_a_track_that_cannot_seek_says_so_and_does_not_skip);
+    RUN(seek_timers_survive_the_tick_wrap);
     return RESULT();
 }

@@ -191,6 +191,7 @@ static void to_player_file(const track_info_t *i, player_file_t *pf) {
     memcpy(pf->md5, i->md5, 16);
     pf->file_size = i->file_size;
     pf->start_frame = i->start_frame;
+    pf->seekable = i->seekable;
 }
 
 static void ts_started(const char *path, const track_info_t *i) {

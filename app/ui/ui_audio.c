@@ -3,7 +3,8 @@
  * Extras -> Test tone, and the Now Playing screen (docs/ui.md, docs/audio.md).
  *
  * Both read the player (player.h) every 200 ms and only touch LVGL when a value changed. Volume is
- * software attenuation: on Now Playing the wheel sets it; on Test tone use Left / Right.
+ * software attenuation: on Now Playing the wheel sets it (Select hands the wheel to seek for a few seconds: ui_logic.h, ui_npc_*);
+ * on Test tone use Left / Right.
  */
 #include <stdio.h>
 #include <string.h>
@@ -160,7 +161,7 @@ ui_screen_t *ui_screen_testtone_create(void) {
 
 typedef struct {
     ui_screen_t base;
-    lv_obj_t *title, *artist, *album, *badge, *state, *elapsed, *remain, *icon, *vol, *prog_fill, *vol_fill, *modes;
+    lv_obj_t *title, *artist, *album, *badge, *state, *elapsed, *remain, *icon, *vol, *prog_fill, *prog_track, *vol_fill, *modes;
     lv_obj_t *art_img, *art_note; /* album art (hidden unless the decoder has a picture) and the note shown otherwise */
     lv_image_dsc_t art_dsc;       /* points at the art service's thumbnail; nothing is copied */
     uint32_t art_gen;
@@ -169,7 +170,25 @@ typedef struct {
     uint32_t last_ms;
     bool have;
     int32_t prog_w, vol_w;
+    ui_npc_t ctl;          /* wheel mode (volume / seek), scrub target, Left / Right hold */
+    bool seek_shown;       /* the bars are drawn in seek colours */
+    const char *msg;       /* a short notice shown on the status line until msg_until ("Seek not available") */
+    uint32_t msg_until;
 } np_t;
+
+#define NP_NOTICE_MS 2000u
+#define NP_COL_SEEK UI_L_WARN       /* progress bar while the wheel seeks */
+#define NP_COL_SEEK_TRACK 0xFFE2B8  /* its unfilled part */
+#define NP_COL_TRACK 0xE6E6E2
+
+static ui_npc_track_t np_track(const player_info_t *n) {
+    return (ui_npc_track_t){.seekable = n->seekable, .pos_frames = n->pos_frames, .total_frames = n->total_frames, .rate = n->rate};
+}
+
+static void np_notice(np_t *p, const char *text) {
+    p->msg = text;
+    p->msg_until = os_tick_ms() + NP_NOTICE_MS;
+}
 
 static void mmss(char *out, size_t n, const char *prefix, uint32_t s) {
     snprintf(out, n, "%s%u:%02u", prefix, (unsigned)(s / 60u), (unsigned)(s % 60u));
@@ -252,6 +271,11 @@ static void np_update(np_t *p) {
         snprintf(stq, sizeof stq, "%s - %u of %u", st, (unsigned)n.queue_pos, (unsigned)n.queue_len); /* queue position on the status line */
         st = stq;
     }
+    if (p->msg != NULL && (int32_t)(p->msg_until - os_tick_ms()) > 0) {
+        st = p->msg; /* a notice replaces the status line for a moment */
+    } else {
+        p->msg = NULL;
+    }
     set_text(p->state, st);
     /* shuffle / repeat indicators: only while a queue is playing; repeat-one carries a 1 */
     snprintf(b, sizeof b, "%s%s%s%s", n.shuffle ? LV_SYMBOL_SHUFFLE : "", n.shuffle && n.repeat ? " " : "",
@@ -260,6 +284,17 @@ static void np_update(np_t *p) {
     lv_obj_set_style_text_color(p->state, lv_color_hex(n.state == PLAYER_ERROR || (n.state == PLAYER_VERIFIED && n.verify == AUDIO_VERIFY_MISMATCH) ? UI_L_ERR : n.state == PLAYER_VERIFIED && n.verify == AUDIO_VERIFY_OK ? UI_L_OK : UI_L_DIM), 0);
     set_text(p->icon, n.state == PLAYER_PLAYING ? LV_SYMBOL_PLAY : n.state == PLAYER_PAUSED ? LV_SYMBOL_PAUSE : "");
     uint32_t el = n.state == PLAYER_ENDED && n.rate != 0 ? (uint32_t)(n.total_frames / n.rate) : n.elapsed_s;
+    ui_npc_track_t trk = np_track(&n);
+    bool seek_mode = p->ctl.mode == UI_WHEEL_SEEK;
+    if (p->ctl.pending && n.rate != 0) {
+        el = (uint32_t)(ui_npc_position(&p->ctl, &trk) / n.rate); /* a scrub in progress: show where it will land */
+    }
+    if (seek_mode != p->seek_shown) { /* the progress bar is the thing the wheel moves: highlighted; the volume bar greys out */
+        p->seek_shown = seek_mode;
+        lv_obj_set_style_bg_color(p->prog_fill, lv_color_hex(seek_mode ? NP_COL_SEEK : UI_L_SEL_BOT), 0);
+        lv_obj_set_style_bg_color(p->prog_track, lv_color_hex(seek_mode ? NP_COL_SEEK_TRACK : NP_COL_TRACK), 0);
+        lv_obj_set_style_bg_color(p->vol_fill, lv_color_hex(seek_mode ? UI_L_FAINT : UI_L_SEL_BOT), 0);
+    }
     int32_t pw = 0;
     if (n.src == PLAYER_SRC_FILE && n.rate != 0 && n.total_frames != 0 &&
         (n.state == PLAYER_PLAYING || n.state == PLAYER_PAUSED || n.state == PLAYER_ENDED || n.state == PLAYER_VERIFYING || n.state == PLAYER_VERIFIED)) {
@@ -269,6 +304,9 @@ static void np_update(np_t *p) {
         mmss(b, sizeof b, n.estimated ? "-~" : "-", total > el ? total - el : 0);
         set_text(p->remain, b);
         pw = (int32_t)((uint64_t)NP_BAR_W * (n.state == PLAYER_ENDED || n.state == PLAYER_VERIFIED ? n.total_frames : (uint64_t)el * n.rate) / n.total_frames);
+        if (p->ctl.pending && n.state != PLAYER_ENDED) {
+            pw = (int32_t)((uint64_t)NP_BAR_W * ui_npc_position(&p->ctl, &trk) / n.total_frames); /* frame-accurate target */
+        }
         if (pw > NP_BAR_W) {
             pw = NP_BAR_W;
         }
@@ -285,7 +323,11 @@ static void np_update(np_t *p) {
             lv_obj_set_hidden(p->prog_fill, false);
         }
     }
-    vol_text(b, sizeof b, n.vol_att_db);
+    if (seek_mode) {
+        mmss(b, sizeof b, "Seek ", el);
+    } else {
+        vol_text(b, sizeof b, n.vol_att_db);
+    }
     set_text(p->vol, b);
     uint32_t span = AUDIO_VOL_OFF_DB;
     int32_t vw = n.vol_att_db >= span ? 0 : (int32_t)((span - n.vol_att_db) * NP_VOL_W / span);
@@ -300,9 +342,34 @@ static void np_update(np_t *p) {
     }
 }
 
+/* Apply the scrub target: one restart of the track at that frame (player_seek). */
+static void np_commit(np_t *p) {
+    uint64_t target = p->ctl.target;
+    if (!player_seek(target)) {
+        np_notice(p, "Seek not available"); /* the track changed under the scrub */
+    }
+    ui_npc_committed(&p->ctl);
+    np_update(p);
+}
+
+static void np_events(np_t *p, uint32_t ev) {
+    if ((ev & UI_NPC_UNAVAILABLE) != 0) {
+        np_notice(p, "Seek not available");
+    }
+    if ((ev & UI_NPC_COMMIT) != 0) {
+        np_commit(p);
+    } else if (ev != UI_NPC_NONE) {
+        np_update(p);
+    }
+}
+
 static void np_tick(ui_screen_t *s) {
     np_t *p = (np_t *)s;
     uint32_t now = os_tick_ms();
+    if (p->have) { /* the wheel-mode clock, scrub commit and hold run on every pass; the poll below is rate-limited */
+        ui_npc_track_t trk = np_track(&p->info);
+        np_events(p, ui_npc_tick(&p->ctl, &trk, now));
+    }
     if (now - p->last_ms < POLL_MS && p->have) {
         return;
     }
@@ -312,26 +379,56 @@ static void np_tick(ui_screen_t *s) {
 }
 
 static void np_scroll(ui_screen_t *s, int32_t steps) {
-    (void)player_volume_step(steps); // clockwise = louder; the wheel is the volume control here
-    np_update((np_t *)s);
+    np_t *p = (np_t *)s;
+    player_get(&p->info); /* a scrub starts from the position as it is now */
+    ui_npc_track_t trk = np_track(&p->info);
+    if (!ui_npc_scroll(&p->ctl, &trk, steps, os_tick_ms())) {
+        (void)player_volume_step(steps); // clockwise = louder
+    }
+    np_update(p);
 }
 
 static bool np_button(ui_screen_t *s, uint8_t btn) {
-    if (btn == HAL_BTN_SELECT || btn == HAL_BTN_PLAY) {
-        player_pause_toggle();
-        np_update((np_t *)s);
+    np_t *p = (np_t *)s;
+    if (btn == HAL_BTN_SELECT) { /* wheel mode: volume <-> seek (pause is the Play button, which works on every screen) */
+        player_get(&p->info);
+        ui_npc_track_t trk = np_track(&p->info);
+        if (!ui_npc_select(&p->ctl, &trk, os_tick_ms()) && p->info.src == PLAYER_SRC_FILE) {
+            np_notice(p, "Seek not available"); /* MP3 / ALAC (no frame index yet), FLAC without a seek table, MD5 check */
+        }
+        np_update(p);
         return true;
     }
-    if (btn == HAL_BTN_RIGHT || btn == HAL_BTN_LEFT) { /* next / previous track of the queue (Previous restarts after 3 s) */
-        if (btn == HAL_BTN_RIGHT) {
+    if (btn == HAL_BTN_PLAY) {
+        player_pause_toggle();
+        np_update(p);
+        return true;
+    }
+    if (btn == HAL_BTN_RIGHT || btn == HAL_BTN_LEFT) {
+        /* A short press skips (on release, so that a hold can be a fast-forward / rewind instead); a hold of UI_HOLD_MS scrubs. */
+        player_get(&p->info);
+        ui_npc_key_down(&p->ctl, btn == HAL_BTN_RIGHT ? 1 : -1, os_tick_ms());
+        return true;
+    }
+    return false; // Menu = back; playback continues
+}
+
+static void np_button_up(ui_screen_t *s, uint8_t btn) {
+    np_t *p = (np_t *)s;
+    if (btn != HAL_BTN_RIGHT && btn != HAL_BTN_LEFT) {
+        return;
+    }
+    int dir = btn == HAL_BTN_RIGHT ? 1 : -1;
+    uint32_t ev = ui_npc_key_up(&p->ctl, dir, os_tick_ms());
+    if ((ev & UI_NPC_SKIP) != 0) { /* next / previous track of the queue (Previous restarts after 3 s) */
+        if (dir > 0) {
             player_next();
         } else {
             player_prev();
         }
-        np_update((np_t *)s);
-        return true;
+        np_update(p);
     }
-    return false; // Menu = back; playback continues
+    np_events(p, ev & ~UI_NPC_SKIP);
 }
 
 ui_screen_t *ui_screen_nowplaying_create(void) {
@@ -371,7 +468,7 @@ ui_screen_t *ui_screen_nowplaying_create(void) {
     lv_label_set_long_mode(p->state, LV_LABEL_LONG_WRAP);
     lv_obj_set_pos(p->state, UIM->np_text_x, UIM->np_state_y);
 
-    bar_new(r, UIM->np_margin, UIM->np_bar_y, NP_BAR_W, UIM->np_bar_h, 0xE6E6E2);
+    p->prog_track = bar_new(r, UIM->np_margin, UIM->np_bar_y, NP_BAR_W, UIM->np_bar_h, NP_COL_TRACK);
     p->prog_fill = bar_new(r, UIM->np_margin, UIM->np_bar_y, 1, UIM->np_bar_h, UI_L_SEL_BOT);
     lv_obj_set_hidden(p->prog_fill, true);
     p->elapsed = ui_label(r, "0:00", UI_L_DIM);
@@ -392,6 +489,8 @@ ui_screen_t *ui_screen_nowplaying_create(void) {
     p->base.on_tick = np_tick;
     p->base.on_scroll = np_scroll;
     p->base.on_button = np_button;
+    p->base.on_button_up = np_button_up;
+    ui_npc_init(&p->ctl);
     np_tick(&p->base);
     return &p->base;
 }
