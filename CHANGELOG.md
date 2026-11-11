@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Host tests `gapless` (real core-1 loop and core-0 stream controller against a fake sink: sample-exact concatenation across WAV/FLAC/MP3/ALAC, track-change timing, rate-change fallback, skip and stop during a pending handoff) and `play_queue`; trim vectors via `tools/gen_trim_vectors.py`.
 
 ### Fixed
+- Y2 Buildroot builds (`build-rescue.sh`, `build-rootfs.sh`) now force a rebuild of our local-source packages (`y2-fbtool`): Buildroot only copies a local package's source on its first build, so the first splash image shipped a stale fbtool without the `image` command and still showed the colour bars.
 - Gapless review fixes: album art retargeted by a track change in the middle of a decode no longer publishes the old cover; a late gapless announcement after a skip no longer blocks gapless for the rest of the album; handoffs counted while a skip ramps down no longer advance the queue; a refused start request puts the queue position back; iTunSMPB length cannot wrap the fit check, and a misfit edit list falls back to iTunSMPB.
 - MP3 files without an ID3v2 tag lost their first frame (and the Xing/LAME header): the frame scan treated offset 0 as "not found".
 
