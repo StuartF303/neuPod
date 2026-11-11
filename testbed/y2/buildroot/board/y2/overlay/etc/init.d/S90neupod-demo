@@ -11,7 +11,7 @@ UI_FILE=/etc/neupod-ui
 LOCK=/run/neupod-demo.start.lock
 
 alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
-group_alive() { [ -n "$1" ] && kill -0 -- "-$1" 2>/dev/null; }
+group_alive() { [ -n "$1" ] && kill -0 "-$1" 2>/dev/null; }
 
 # Only "fw" hands /dev/fb0 to the C firmware; anything else keeps today's behaviour.
 selected() { [ "$(tr -d ' \t\r\n' <"$UI_FILE" 2>/dev/null)" != fw ]; }
@@ -53,13 +53,13 @@ stop() {
 	wp=$(cat "$WRAP_PID" 2>/dev/null)
 	if [ -n "$wp" ] && group_alive "$wp"; then
 		# Whole group at once: the wrapper (so it cannot respawn) and the app (SIGTERM makes it paint the dark splash and exit 0).
-		kill -TERM -- "-$wp" 2>/dev/null
+		kill -TERM "-$wp" 2>/dev/null
 		i=0
 		while group_alive "$wp" && [ $i -lt 30 ]; do
 			sleep 0.1
 			i=$((i + 1))
 		done
-		group_alive "$wp" && kill -KILL -- "-$wp" 2>/dev/null
+		group_alive "$wp" && kill -KILL "-$wp" 2>/dev/null
 	fi
 	rm -f "$WRAP_PID" "$APP_PID"
 	rmdir "$LOCK" 2>/dev/null
