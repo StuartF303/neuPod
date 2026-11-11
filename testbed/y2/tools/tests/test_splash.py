@@ -74,6 +74,20 @@ class Generator(unittest.TestCase):
         self.assertEqual(sp.decode(blob), (w, h, rgb))  # the asset is exactly the PNG
         self.assertEqual(blob, sp.encode(w, h, rgb))  # and is reproducible from it
 
+    def test_background_is_one_smooth_gradient(self):
+        w, h, rgb = sp.read_png(PNG.read_bytes())
+        top, bot = rgb[:3], rgb[(h - 1) * w * 3:(h - 1) * w * 3 + 3]
+        prev = None
+        for y in range(h):
+            row = rgb[y * w * 3:(y + 1) * w * 3]
+            bg = row[:3]
+            for c in range(3):  # linear ramp from the top to the bottom colour, within rounding
+                self.assertLessEqual(abs(bg[c] - (top[c] + (bot[c] - top[c]) * y / (h - 1))), 1, (y, c))
+            if prev:  # no step bigger than one level per channel between neighbouring rows
+                self.assertLessEqual(max(abs(a - b) for a, b in zip(bg, prev)), 1, y)
+            prev = bg
+        self.assertEqual(sp.smooth_background(w, h, rgb), rgb)  # idempotent: wordmark untouched
+
     def test_cli_convert(self):
         with tempfile.TemporaryDirectory() as d:
             out = Path(d) / "x.y2i"

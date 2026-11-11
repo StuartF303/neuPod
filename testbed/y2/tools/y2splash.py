@@ -3,6 +3,7 @@
 
     python3 -I testbed/y2/tools/y2splash.py convert in.png out.y2i
     python3 -I testbed/y2/tools/y2splash.py info file.y2i
+    python3 -I testbed/y2/tools/y2splash.py smooth in.png out.png
 
 Y2I1 layout (little endian):
     "Y2I1"  u16 width  u16 height  u16 palette_size (1..256)
@@ -153,6 +154,23 @@ def write_png(width, height, rgb):
             + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
 
 
+def smooth_background(width, height, rgb):
+    """Replace the vertical background gradient by one smooth linear ramp between the first and last
+    row's colours. A pixel is background if it equals its row's left-edge pixel; every other pixel
+    (the wordmark and its anti-aliased edge) is kept exactly. Idempotent."""
+    top, bot = rgb[:3], rgb[(height - 1) * width * 3:(height - 1) * width * 3 + 3]
+    out = bytearray(rgb)
+    for y in range(height):
+        base = y * width * 3
+        old = rgb[base:base + 3]
+        new = bytes((t * (height - 1) + (b - t) * y + (height - 1) // 2) // (height - 1)
+                    for t, b in zip(top, bot)) if height > 1 else old
+        for x in range(width):
+            if rgb[base + x * 3:base + x * 3 + 3] == old:
+                out[base + x * 3:base + x * 3 + 3] = new
+    return bytes(out)
+
+
 def main(argv):
     if len(argv) == 4 and argv[1] == "convert":
         with open(argv[2], "rb") as fh:
@@ -162,6 +180,12 @@ def main(argv):
         with open(argv[3], "wb") as fh:
             fh.write(blob)
         print(f"{argv[3]}: {w}x{h}, {len(blob)} bytes")
+        return 0
+    if len(argv) == 4 and argv[1] == "smooth":
+        with open(argv[2], "rb") as fh:
+            w, h, rgb = read_png(fh.read())
+        with open(argv[3], "wb") as fh:
+            fh.write(write_png(w, h, smooth_background(w, h, rgb)))
         return 0
     if len(argv) == 3 and argv[1] == "info":
         with open(argv[2], "rb") as fh:

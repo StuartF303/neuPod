@@ -43,7 +43,9 @@ run-length format with a `Y2I1` header) is generated from it and committed. The 
 
 The PNG came from the host simulator on the `feat/ui-resolution` branch (`NEUPOD_DISPLAY_SIZE=480x360`,
 `--snapshots`, `splash.ppm`). The boot checks fail on the host (no battery gauge, wheel or haptics), so the
-dynamic parts were removed and only the gradient and the neuPod wordmark kept; the pixels are otherwise unmodified.
+dynamic parts were removed and only the gradient and the neuPod wordmark kept. The captured gradient is stepped (a visible band
+about halfway down), so the background was then replaced by one linear top-to-bottom ramp between the captured top and bottom
+colours (`y2splash.py smooth`); the wordmark pixels are unchanged.
 `fbtool check FILE [OUT.ppm]` validates an image without a panel (exit 3 on a bad file).
 
 ## Build
