@@ -58,7 +58,12 @@ TEST(spawn_runs_the_override_in_its_own_session_with_default_signals) {
     fclose(f);
     ASSERT_EQ((long)pid, p);   // sh exec'd in place, same pid
     ASSERT_EQ((long)pid, sid); // session leader: the init script's group kill cannot reach it
-    ASSERT_TRUE(strcmp(sig, "SigIgn:0000000000000000") == 0); // SIGPIPE (ignored here) is default again in the child
+    // SIGPIPE (ignored here) is default again in the child. Signals 32 and 33 (glibc's internal real-time signals,
+    // bits 31/32) are masked out: under Docker's default seccomp profile (CI container jobs) they can show as
+    // ignored in the child, and poweroff never uses them.
+    unsigned long long ign = ~0ULL;
+    ASSERT_EQ(1, sscanf(sig, "SigIgn:%llx", &ign));
+    ASSERT_EQ(0ULL, ign & ~0x180000000ULL);
     unlink(script);
     unlink(out);
     rmdir(dir);
