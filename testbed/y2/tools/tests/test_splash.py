@@ -15,7 +15,8 @@ from pathlib import Path
 
 Y2 = Path(__file__).resolve().parents[2]
 FBTOOL_C = Y2 / "buildroot" / "package" / "y2-fbtool" / "src" / "fbtool.c"
-PNG = Y2 / "rescue" / "splash" / "neupod-splash-480x360.png"
+PNG = Y2 / "rescue" / "splash" / "neupod-splash-480x360.png"                  # canonical: RGB565-exact, LK's expansion
+MASTER = Y2 / "rescue" / "splash" / "neupod-splash-480x360-master.png"       # 8-bit master it was quantised from
 ASSET = Y2 / "rescue" / "overlay" / "etc" / "splash.y2i"
 
 _spec = importlib.util.spec_from_file_location("y2splash", Y2 / "tools" / "y2splash.py")
@@ -70,12 +71,12 @@ class Generator(unittest.TestCase):
         self.assertEqual((w, h), (480, 360))
         self.assertEqual(sp.read_png(sp.write_png(w, h, rgb)), (w, h, rgb))
         blob = ASSET.read_bytes()
-        self.assertLess(len(blob), 50 * 1024)
+        self.assertLess(len(blob), 512 * 1024)   # fbtool refuses 1 MiB and more; the dithered background is ~290 KB
         self.assertEqual(sp.decode(blob), (w, h, rgb))  # the asset is exactly the PNG
         self.assertEqual(blob, sp.encode(w, h, rgb))  # and is reproducible from it
 
     def test_background_is_one_smooth_gradient(self):
-        w, h, rgb = sp.read_png(PNG.read_bytes())
+        w, h, rgb = sp.read_png(MASTER.read_bytes())   # the master; the canonical PNG is stepped by 565
         top, bot = rgb[:3], rgb[(h - 1) * w * 3:(h - 1) * w * 3 + 3]
         prev = None
         for y in range(h):
@@ -87,6 +88,82 @@ class Generator(unittest.TestCase):
                 self.assertLessEqual(max(abs(a - b) for a, b in zip(bg, prev)), 1, y)
             prev = bg
         self.assertEqual(sp.smooth_background(w, h, rgb), rgb)  # idempotent: wordmark untouched
+
+    def test_canonical_png_is_the_quantised_master_and_lk_exact(self):
+        w, h, master = sp.read_png(MASTER.read_bytes())
+        _, _, canon = sp.read_png(PNG.read_bytes())
+        self.assertEqual(canon, sp.quantize_dithered(w, h, master))        # regenerate: y2splash.py quantize MASTER PNG
+        vals = sp.exact_565(canon)                              # raises if any pixel is not LK-exact
+        self.assertEqual(sp.expand_565(vals), canon)
+        self.assertLessEqual(max(abs(a - b) for a, b in zip(master, canon)), 12)   # within about one 565 step (dither plus the shift expansion)
+
+    def test_quantiser_rounds_expands_by_plain_shift_and_does_not_dither(self):
+        # LK's pixel writer: R = r5 << 3, G = g6 << 2, B = b5 << 3 (lk.bin 0x1c314); white is (248, 252, 248)
+        self.assertEqual(sp.expand_565([0xFFFF, 0x0000, 0xF800, 0x07E0, 0x001F]),
+                         bytes((248, 252, 248, 0, 0, 0, 248, 0, 0, 0, 252, 0, 0, 0, 248)))
+        self.assertEqual(sp.rgb_to_565(bytes((255, 255, 255))), [0xFFFF])
+        self.assertEqual(sp.rgb_to_565(bytes((3, 1, 3))), [0])                # rounds, not truncates
+        self.assertEqual(sp.rgb_to_565(bytes((8, 4, 8)))[0], 1 << 11 | 1 << 5 | 1)
+        # a bit-replicated 565 source (the host simulator's snapshots) comes back exactly
+        for q in range(32):
+            v = q << 3 | q >> 2
+            self.assertEqual(sp.quantize_channel(v, 5), q)
+        for q in range(64):
+            self.assertEqual(sp.quantize_channel(q << 2 | q >> 4, 6), q)
+        # every 565 value survives expand -> exact_565
+        allv = list(range(0, 65536, 257)) + [0xFFFF]
+        self.assertEqual(sp.exact_565(sp.expand_565(allv)), allv)
+        # same input, same output (no dithering / no state), and a flat colour stays flat
+        flat = bytes((17, 35, 59)) * 64
+        q = sp.quantize_rgb(flat)
+        self.assertEqual(len(set(q[i:i + 3] for i in range(0, len(q), 3))), 1)
+        self.assertEqual(sp.quantize_rgb(flat), q)
+
+    def test_dither_touches_only_the_background_and_is_deterministic(self):
+        w, h, master = sp.read_png(MASTER.read_bytes())
+        d = sp.quantize_dithered(w, h, master)
+        self.assertEqual(d, sp.quantize_dithered(w, h, master))
+        plain = sp.quantize_rgb(master)
+        wordmark = dithered_bg = 0
+        for y in range(h):
+            edge = master[y * w * 3:y * w * 3 + 3]
+            for x in range(w):
+                i = (y * w + x) * 3
+                if master[i:i + 3] != edge:
+                    wordmark += 1
+                    self.assertEqual(d[i:i + 3], plain[i:i + 3], (x, y))   # crisp: exactly the undithered value
+                elif d[i:i + 3] != plain[i:i + 3]:
+                    dithered_bg += 1
+        self.assertGreater(wordmark, 1000)
+        self.assertGreater(dithered_bg, 1000)
+
+    def test_dithered_background_has_no_step_over_one_565_level_per_dither_cell(self):
+        w, h, rgb = sp.read_png(PNG.read_bytes())
+        cols = range(0, 100)           # left of the wordmark (x 148..332): pure background
+        def cell_mean(y0):             # mean of the 4 rows y0..y0+3 x the 100 columns, per channel
+            return [sum(rgb[(y * w + x) * 3 + c] for y in range(y0, y0 + 4) for x in cols) / (4 * len(cols))
+                    for c in range(3)]
+        prev = cell_mean(0)
+        for y0 in range(1, h - 3):
+            cur = cell_mean(y0)
+            for c, step in enumerate((8, 4, 8)):                       # one 565 level per channel
+                self.assertLessEqual(abs(cur[c] - prev[c]), step, (y0, c))
+            # and it is much smoother than a flat band: well under a full level per row
+            self.assertLessEqual(max(abs(cur[c] - prev[c]) for c in range(3)), 2.5, y0)
+            prev = cur
+
+    def test_exact_565_rejects_colours_lk_cannot_show(self):
+        for px in ((1, 0, 0), (0, 1, 0), (0, 0, 1), (255, 255, 255)):
+            with self.assertRaises(sp.FormatError):
+                sp.exact_565(bytes(px))
+
+    def test_cli_quantize(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "q.png"
+            r = subprocess.run(["python3", "-I", str(Y2 / "tools" / "y2splash.py"), "quantize", str(MASTER), str(out)],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(out.read_bytes(), PNG.read_bytes())
 
     def test_cli_convert(self):
         with tempfile.TemporaryDirectory() as d:

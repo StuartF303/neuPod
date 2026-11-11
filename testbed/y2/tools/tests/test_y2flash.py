@@ -1,4 +1,4 @@
-import contextlib, importlib.util, io, json, os, random, signal, tempfile, unittest
+import contextlib, importlib.util, io, json, os, random, shutil, signal, subprocess, tempfile, unittest
 from types import SimpleNamespace
 from unittest import mock
 from pathlib import Path
@@ -129,13 +129,14 @@ def dev(da, t, n=None):
 
 
 class Allowlist(Base):
-    def test_only_three_targets_with_exact_device_ranges(self):
+    def test_only_four_targets_with_exact_device_ranges(self):
+        # LOGO joined the allowlist on 2026-11-11 (scatter physical 0x4400000, size 0x300000)
         self.assertEqual({n: (t.start, t.size) for n, t in y2.TARGETS.items()},
                          {"BOOTIMG": (0x1D80000, 0x1000000), "RECOVERY": (0x2D80000, 0x1000000),
-                          "USRDATA": (0x40380000, 0x32000000)})
+                          "USRDATA": (0x40380000, 0x32000000), "LOGO": (0x4400000, 0x300000)})
         # the DA (read) addresses given in the task: scatter + 0xb80000
         self.assertEqual([t.start + y2.READ_BASE for t in y2.TARGETS.values()],
-                         [0x2900000, 0x3900000, 0x40F00000])
+                         [0x2900000, 0x3900000, 0x40F00000, 0x4F80000])
 
     def test_unknown_targets_refused(self):
         for name in ("NVRAM", "PRELOADER", "UBOOT", "SECCFG", "ANDROID", "recovery", ""):
@@ -1193,6 +1194,255 @@ class DiscardCurrent(Base):
         self.assertEqual(rc, 130)
         self.assertNotIn("refuse at the pre-read", out)
         self.assertIn("flash-rootfs.sh", out)
+
+LOGO = y2.TARGETS["LOGO"]
+SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+# one modelled stretch of the device from RECOVERY to the end of EXPDB: everything a LOGO canary can land in
+SPAN_LO, SPAN_HI = 0x2D80000, 0x5180000
+
+
+class LogoTarget(Base):
+    """LOGO (scatter physical 0x4400000, 3 MiB) joined the allowlist on 2026-11-11."""
+
+    def setUp(self):
+        super().setUp()
+        self.span = bytearray(rnd(SPAN_HI - SPAN_LO, 21))
+        self.stock_logo = bytes(self.span[LOGO.start - SPAN_LO:LOGO.end - SPAN_LO])
+        self.limg = rnd(0x17B23, 22)                      # a realistic, unaligned logo.bin size (97,059 bytes)
+
+    def ldev(self, **k):
+        return FakeDa([(SPAN_LO, bytes(self.span))], **k)
+
+    def ljob(self, image=None, expected=None):
+        return y2.Job(LOGO, self.limg if image is None else image,
+                      [("backup", self.stock_logo)] if expected is None else expected)
+
+    def _file(self, data):
+        p = Path(self.tmp.name) / f"f{len(data)}.bin"
+        p.write_bytes(data)
+        return str(p)
+
+    def test_logo_is_allowlisted_with_its_scatter_range_and_reads_at_read_base(self):
+        self.assertIs(y2.get_target("LOGO"), LOGO)
+        self.assertEqual((LOGO.start, LOGO.size, LOGO.end), (0x4400000, 0x300000, 0x4700000))
+        self.assertEqual(LOGO.start + y2.READ_BASE, 0x4F80000)
+
+    def test_write_gate_neighbours_of_logo_are_refused(self):
+        for addr, n in ((LOGO.start - 512, 512), (LOGO.end, 512), (LOGO.start - 512, 1024), (LOGO.end - 512, 1024),
+                        (LOGO.start + 1, 512), (0x4380000, 0x80000), (0x4780000, 512)):   # MISC, EBR2, EXPDB
+            with self.assertRaises(y2.Y2Error, msg=hex(addr)):
+                y2.check_write_range(addr, n)
+        self.assertIs(y2.check_write_range(LOGO.start, LOGO.size), LOGO)
+        self.assertIs(y2.check_write_range(LOGO.end - 512, 512), LOGO)
+
+    def test_other_partitions_are_still_refused(self):
+        for name in ("MISC", "EBR2", "EXPDB", "SEC_RO", "UBOOT", "NVRAM", "PRO_INFO", "PROTECT_F", "SECCFG",
+                     "PRELOADER", "ANDROID", "CACHE", "logo", "LOGO ", ""):
+            with self.assertRaises(y2.Y2Error, msg=name):
+                y2.get_target(name)
+        da = self.ldev()
+        copy = y2.Target("LOGO", LOGO.start, LOGO.size)               # equal values, but not the allowlist object
+        with self.assertRaises(y2.SafetyViolation):
+            y2.guarded_write(da, copy, LOGO.start, b"\0" * 512, 0xB80000)
+        with self.assertRaises(y2.SafetyViolation):                   # EBR2, just after LOGO
+            y2.guarded_write(da, LOGO, LOGO.end, b"\0" * 512, 0xB80000)
+        self.assertEqual(da.events, [])
+
+    def test_canary_is_inside_logo_and_lands_in_recovery_or_expdb_when_the_base_is_off(self):
+        c = y2.canary_addr(LOGO)
+        self.assertEqual(c, 0x45FF000)
+        self.assertEqual(y2.canary_guards(LOGO), c)
+        self.assertTrue(LOGO.start <= c and c + y2.CANARY_LEN <= LOGO.end)
+        lo, hi = c - y2.READ_BASE, c + y2.READ_BASE
+        self.assertTrue(REC.start <= lo and lo + 4096 <= REC.end)          # 0x3a7f000: RECOVERY
+        self.assertTrue(y2.EXPDB[0] <= hi and hi + 4096 <= y2.EXPDB[1])    # 0x517f000: the last sector of EXPDB
+        # the last sector of LOGO would land in ANDROID at +0xb80000, which is why it is not used
+        end_hi = LOGO.end - y2.CANARY_LEN + y2.READ_BASE
+        self.assertFalse(y2.EXPDB[0] <= end_hi and end_hi + 4096 <= y2.EXPDB[1])
+
+    def test_no_other_targets_canary_may_land_in_logo_and_the_guard_would_reject_it(self):
+        for t in y2.TARGETS.values():
+            if t.name == "LOGO":
+                continue
+            c = y2.canary_addr(t)
+            for shift in (-y2.READ_BASE, y2.READ_BASE):
+                a = c + shift
+                self.assertFalse(LOGO.start <= a and a + y2.CANARY_LEN <= LOGO.end, (t.name, hex(a)))
+            y2.canary_guards(t)
+        # force a landing in LOGO: a BOOTIMG-like target whose canary + 0xb80000 falls inside LOGO must be rejected
+        fake = y2.Target("FAKE", LOGO.start - y2.READ_BASE, 0x100000)
+        with mock.patch.dict(y2.TARGETS, {"FAKE": fake}):
+            with self.assertRaises(y2.SafetyViolation):
+                y2.canary_guards(fake)
+        # and LOGO's own canary is still accepted
+        self.assertEqual(y2.canary_guards(LOGO), 0x45FF000)
+
+    def test_oversize_and_empty_images_refused(self):
+        for image in (b"\1" * (LOGO.size + 1), b""):
+            with self.assertRaises(y2.Y2Error):
+                self.ljob(image=image)
+        self.assertEqual(len(self.ljob(image=b"\1" * LOGO.size).data), LOGO.size)
+        with self.assertRaises(y2.Y2Error):
+            y2.load_expected(LOGO, [self._file(b"x" * 100)])          # expected file must be the full 3 MiB
+
+    def test_flash_writes_only_logo_pads_to_a_sector_and_reads_back(self):
+        da = self.ldev(write_base=0xB80000)
+        res, out = self.go(da, [self.ljob()])
+        self.assertEqual(res[0][0], "LOGO")
+        padded = y2.pad_sector(self.limg)
+        want = bytearray(self.span)       # everything else is exactly what it was: MISC side, EBR2, RECOVERY, EXPDB
+        want[LOGO.start - SPAN_LO:LOGO.start - SPAN_LO + len(padded)] = padded
+        self.assertEqual(da.device_bytes(SPAN_LO, SPAN_HI - SPAN_LO), bytes(want))
+        self.assertEqual([e[1] for e in da.events if e[0] == "write" and e[2] == 4096],
+                         [y2.canary_addr(LOGO) + 0xB80000] * 2)
+        self.assertEqual([e for e in da.events if e[0] == "write" and e[2] > 4096],
+                         [("write", LOGO.start + 0xB80000, len(padded))])
+        self.assertEqual(len([e for e in da.events if e[0] == "read" and e[2] == LOGO.size]), 1)   # the pre-read
+
+    def test_preread_mismatch_writes_nothing(self):
+        da = self.ldev(write_base=0xB80000)
+        with self.assertRaises(y2.PreReadMismatch):
+            self.go(da, [self.ljob(expected=[("other", rnd(LOGO.size, 23))])])
+        self.assertEqual(da.writes(), [])
+
+    def test_last_flashed_result_is_an_acceptable_current_content(self):
+        st = y2.State(str(Path(self.tmp.name) / "s.json"))
+        da = self.ldev(write_base=0xB80000)
+        self.go(da, [self.ljob()], state=st)
+        again = rnd(0x2000, 24)
+        paths = st.expected_paths("LOGO")
+        self.assertEqual(len(paths), 1)
+        self.go(da, [y2.Job(LOGO, again, y2.load_expected(LOGO, paths))], state=st)
+        self.assertEqual(da.device_bytes(LOGO.start, 0x2000), again)
+
+    def test_readback_mismatch_is_exit_2_and_advises_restoring_logo_only(self):
+        with self.assertRaises(y2.WriteFailed) as cm:
+            self.go(self.ldev(write_base=0xB80000, corrupt_at=100), [self.ljob()])
+        msg = cm.exception.args[0]
+        self.assertIn("READBACK MISMATCH", msg)
+        self.assertIn("restore-stock.sh --target LOGO", msg)
+        self.assertNotIn("BOOTIMG", msg)
+
+    def test_wrong_base_canary_in_recovery_or_expdb_is_exit_6_and_is_undone(self):
+        for true_wb in (0, 2 * 0xB80000):       # the canary lands in EXPDB (its last sector) / in RECOVERY
+            da = self.ldev(write_base=true_wb)
+            with self.assertRaises(y2.CanaryFailed, msg=hex(true_wb)):
+                self.go(da, [self.ljob()], keep_dir=self.tmp.name)
+            self.assertEqual(da.device_bytes(SPAN_LO, SPAN_HI - SPAN_LO), bytes(self.span), hex(true_wb))
+            self.assertEqual([e for e in da.events if e[0] == "write" and e[2] > 4096], [])
+
+    def test_restore_hint_for_logo(self):
+        h = y2.restore_hint("LOGO")
+        self.assertIn("restore-stock.sh --target LOGO", h)
+        self.assertIn("--force-unknown-current", h)
+        self.assertNotIn("Do NOT run restore-stock.sh", h)
+        self.assertIn("LOGO", y2.restore_hint())
+
+    def test_cli_write_logo_uses_the_logo_canary_and_dry_run_connects_to_nothing(self):
+        d = Path(self.tmp.name)
+        img, exp, cal, log = d / "l.bin", d / "stock.bin", d / "cal.json", d / "run.log"
+        img.write_bytes(self.limg)
+        exp.write_bytes(self.stock_logo)
+        cal.write_text(json.dumps(good_cal(write_base=0xB80000)))
+        argv = ["write", "--target", "LOGO", "--image", str(img), "--expect-current", str(exp),
+                "--calibration", str(cal), "--preloader", "x"]
+        with mock.patch.object(y2, "open_session", side_effect=AssertionError("dry run connected")):
+            rc, out = quiet(y2.main, argv + ["--dry-run"])
+        self.assertEqual(rc, 0)
+        self.assertIn("target LOGO: device (scatter) 0x4400000, size 0x300000", out)
+        self.assertIn("canary LOGO: device 0x45ff000", out)
+        da = self.ldev(write_base=0xB80000)
+
+        @contextlib.contextmanager
+        def fake_session(preloader, wd):
+            yield da
+        with mock.patch.object(y2, "open_session", fake_session):
+            rc, out = quiet(y2.main, argv + ["--log", str(log)])
+        self.assertEqual(rc, 0)
+        self.assertEqual(da.device_bytes(LOGO.start, len(y2.pad_sector(self.limg))), y2.pad_sector(self.limg))
+        self.assertEqual(out.count("WRITE STARTED"), 3)
+
+    def test_cli_refuses_an_oversize_logo_and_other_partitions_with_no_io(self):
+        d = Path(self.tmp.name)
+        big, exp, cal = d / "big.bin", d / "stock.bin", d / "cal.json"
+        big.write_bytes(b"\1" * (LOGO.size + 1))
+        exp.write_bytes(self.stock_logo)
+        cal.write_text(json.dumps(good_cal(write_base=0xB80000)))
+        with mock.patch.object(y2, "open_session", side_effect=AssertionError("connected")):
+            for target, img in (("LOGO", big), ("MISC", big), ("EBR2", exp), ("EXPDB", exp), ("SEC_RO", exp)):
+                rc, out = quiet(y2.main, ["write", "--target", target, "--image", str(img), "--expect-current",
+                                          str(exp), "--calibration", str(cal), "--preloader", "x"])
+                self.assertEqual(rc, 1, target)
+                self.assertIn("error:", out)
+            rc, out = quiet(y2.main, ["write", "--target", "LOGO", "--image", str(exp), "--discard-current",
+                                      "--calibration", str(cal), "--preloader", "x"])
+            self.assertEqual(rc, 1)                           # --discard-current stays USRDATA-only
+            self.assertIn("USRDATA only", out)
+
+
+@unittest.skipUnless(shutil.which("bash"), "no bash")
+class LogoScripts(unittest.TestCase):
+    """The shell side: refusals that happen before any backup or device access, and the partial-write advice."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.d = Path(self.tmp.name)
+
+    def run_sh(self, *args):
+        env = {"PATH": os.environ["PATH"], "HOME": self.tmp.name}    # a HOME with no backup: nothing real is reachable
+        return subprocess.run(["bash", *map(str, args)], capture_output=True, text=True, env=env)
+
+    def test_scripts_parse(self):
+        for n in ("flash-logo.sh", "build-logo.sh", "restore-stock.sh", "lib-flash.sh"):
+            r = subprocess.run(["bash", "-n", str(SCRIPTS / n)], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, f"{n}: {r.stderr}")
+
+    def test_flash_logo_refuses_missing_empty_oversize_or_bad_container_before_the_backup_guards(self):
+        cases = {"missing": None, "empty": b"", "too large": b"\0" * (0x300000 + 1),
+                 "not a logo": b"ANDROID!" + b"\0" * 4000,
+                 "right magic only": bytes.fromhex("88168858") + b"\0" * 4000}
+        for name, data in cases.items():
+            p = self.d / "x.bin"
+            p.unlink(missing_ok=True)
+            if data is not None:
+                p.write_bytes(data)
+            r = self.run_sh(SCRIPTS / "flash-logo.sh", "--dry-run", p)
+            self.assertEqual(r.returncode, 1, name)
+            self.assertNotIn("guard:", r.stdout, name)             # refused before the backup guards ran
+            self.assertIn("error:", r.stderr, name)
+            if name == "too large":
+                self.assertIn("larger than LOGO", r.stderr)
+
+    def test_flash_logo_has_the_typed_word_and_the_guards_of_flash_boot(self):
+        src = (SCRIPTS / "flash-logo.sh").read_text()
+        for needle in ("guard_backup", "logo_backup_guard", "confirm LOGO", '--target LOGO)',
+                       '"--expect-current" "$BACKUP/partitions/LOGO.bin"', 'env_overrides "$DRY"',
+                       '--calibration "$CAL"', "cal_summary", "arm_wait", 'partial_warning "$LOG" "$RC" LOGO',
+                       "log_row", 'y2logo.py" info'):
+            self.assertIn(needle, src, needle)
+        self.assertLess(src.index('y2logo.py" info'), src.index("guard_backup"))    # validation first
+        self.assertLess(src.index("guard_backup"), src.index("confirm LOGO"))
+        self.assertLess(src.index("confirm LOGO"), src.index("arm_wait"))
+
+    def test_restore_stock_accepts_logo_and_still_refuses_others(self):
+        r = self.run_sh(SCRIPTS / "restore-stock.sh", "--target", "NVRAM", "--dry-run")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("--target must be BOOTIMG, RECOVERY, LOGO, USRDATA", r.stderr)
+        src = (SCRIPTS / "restore-stock.sh").read_text()
+        self.assertIn("BOOTIMG|RECOVERY|LOGO|USRDATA) TARGETS=", src)
+        self.assertIn("all) TARGETS=(BOOTIMG RECOVERY) ;;", src)                 # LOGO is never part of "all"
+        self.assertIn("all+data) TARGETS=(BOOTIMG RECOVERY USRDATA) ;;", src)
+
+    def test_partial_warning_for_logo(self):
+        log = self.d / "run.log"
+        log.write_text("WRITE STARTED LOGO device 0x4400000\n")
+        code = f'source "{SCRIPTS}/lib-flash.sh"; partial_warning "{log}" 2 LOGO'
+        r = self.run_sh("-c", code)
+        self.assertIn("PARTIALLY WRITTEN", r.stderr)
+        self.assertIn("restore-stock.sh --target LOGO --force-unknown-current", r.stderr)
+        log.write_text("WRITE STARTED x\nWRITE DONE x\n")
+        self.assertEqual(self.run_sh("-c", code).stderr, "")                # a finished write: silent
 
 
 if __name__ == "__main__":

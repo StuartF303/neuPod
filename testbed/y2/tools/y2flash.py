@@ -22,7 +22,8 @@ A readback goes through the READ command, so it cannot detect a write that lande
 that is why the probe exists.
 
 Hard rules enforced here (and again in the one function that calls mtkclient's write):
-  * only BOOTIMG, RECOVERY, USRDATA may be written, and only inside their exact device range;
+  * only BOOTIMG, RECOVERY, USRDATA and LOGO may be written, and only inside their exact device range
+    (LOGO allowed 2026-11-11 by Stuart; scatter physical 0x4400000, size 0x300000);
   * mtkclient's partition-name commands (`w <name>`, needs a GPT; there is none) are never used;
   * the target is read first and must equal an acceptable known content, otherwise nothing is written;
   * after writing, the same range is read back and must equal what was written.
@@ -96,6 +97,7 @@ TARGETS = {t.name: t for t in (
     Target("BOOTIMG", 0x1D80000, 0x1000000),
     Target("RECOVERY", 0x2D80000, 0x1000000),
     Target("USRDATA", 0x40380000, 0x32000000),
+    Target("LOGO", 0x4400000, 0x300000),
 )}
 
 # Canary-landing-only region: crash-dump scratch (EXPDB). Never a write target, never in TARGETS.
@@ -262,7 +264,7 @@ class Job:
         # --discard-current: skip the expected-content check, USRDATA only (enforced HERE, not in the wrappers)
         if discard and target.name != "USRDATA":
             raise Y2Error(f"refusing --discard-current for {target.name}: it is accepted for USRDATA only "
-                          "(BOOTIMG and RECOVERY must always match a known content before they are written)")
+                          "(BOOTIMG, RECOVERY and LOGO must always match a known content before they are written)")
         if discard and expected is not None:
             raise Y2Error("--discard-current and an expected-current content are mutually exclusive")
         self.discard = discard
@@ -387,7 +389,8 @@ def restore_hint(target=None):
                 "scripts/flash-rootfs.sh, or run scripts/restore-stock.sh --target USRDATA (re-running does NOT "
                 "refuse: USRDATA is never pre-read-compared). Do NOT run restore-stock.sh with no target or `all`: "
                 "that restores stock BOOTIMG, and stock Android would then mount the damaged ext4 as /data.")
-    cmd = f"scripts/restore-stock.sh --target {target}" if target else "scripts/restore-stock.sh --target <BOOTIMG|RECOVERY>"
+    cmd = (f"scripts/restore-stock.sh --target {target}" if target
+           else "scripts/restore-stock.sh --target <BOOTIMG|RECOVERY|LOGO>")
     return ("DO NOT power-cycle into it blindly: re-enter BROM (hold Vol-, plug USB) and run "
             f"{cmd} to write the backup back (add --force-unknown-current if it refuses "
             "because the device content matches nothing known).")
@@ -411,9 +414,19 @@ def post_image(cur, job):
 #   RECOVERY (C=0x3D7F000): lands inside RECOVERY (0x31FF000) or in EXPDB (0x48FF000, crash-dump scratch)
 #   BOOTIMG  (C=0x2D7F000): lands inside BOOTIMG (0x21FF000) or inside RECOVERY (0x38FF000)
 #   USRDATA  (C=start+16 MiB): lands inside USRDATA. Never in a protected partition.
+#   LOGO     (C=start+0x1FF000=0x45FF000, 2 MiB in; the last sector would land beyond EXPDB in ANDROID at +0xb80000):
+#            lands inside RECOVERY (0x3A7F000) or ends exactly at the end of EXPDB (0x517F000). The image itself is
+#            far smaller than 2 MiB, so the canary sits in the unused tail of the partition.
+
+LOGO_CANARY_OFFSET = 0x1FF000
+
 
 def canary_addr(t):
-    return t.start + 0x1000000 if t.name == "USRDATA" else t.end - CANARY_LEN
+    if t.name == "USRDATA":
+        return t.start + 0x1000000
+    if t.name == "LOGO":
+        return t.start + LOGO_CANARY_OFFSET
+    return t.end - CANARY_LEN
 
 
 def canary_window(t):
@@ -424,7 +437,8 @@ def canary_window(t):
 def canary_guards(t):
     c = canary_addr(t)
     require(t.start <= c and c + CANARY_LEN <= t.end and c % SECTOR == 0, f"canary for {t.name} outside the target")
-    landing = [(x.start, x.end) for x in TARGETS.values()] + [EXPDB]
+    # LOGO counts as a landing spot only for LOGO's own canary: the other targets keep their pre-LOGO landing set
+    landing = [(x.start, x.end) for x in TARGETS.values() if x.name != "LOGO" or t.name == "LOGO"] + [EXPDB]
     for shift in (-READ_BASE, READ_BASE):
         a = c + shift
         require(any(lo <= a and a + CANARY_LEN <= hi for lo, hi in landing),
