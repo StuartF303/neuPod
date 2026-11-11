@@ -86,8 +86,8 @@ within 150 ms after a ring-button press is dropped (a finger brushing the wheel 
   | mode | fps | notes |
   | --- | --- | --- |
   | writeonly (no ioctl, page 0) | 132 | this is just the managed blit cost (~7.5 ms/frame) |
-  | pan (FBIOPAN_DISPLAY, 2 pages) | 36.9 | driver accepts it; yoffset reads back as 360 afterwards |
-  | panput (PAN then FBIOPUT_VSCREENINFO, 2 pages) | 48.5 | what fbtool does; default |
+  | pan (FBIOPAN_DISPLAY, round-robin over 3 pages) | 49.2 | driver accepts it; yoffset reads back as 720 after 60 frames |
+  | panput (PAN then FBIOPUT_VSCREENINFO, 3 pages) | 46.1 | what fbtool does; default |
 
 - The pan offset persists across process exits (we found yoffset=360 left over after a run), so write-only mode first pans
   back to page 0. Reading `/dev/fb0` back shows what the app wrote, so readback proves our writes and that the driver
@@ -95,7 +95,7 @@ within 150 ms after a ring-button press is dropped (a finger brushing the wheel 
   write without a pan. That needs eyes on the screen: run `--fb-bench` with the app stopped and watch for red/blue flashing
   in each mode. Until that is checked, the app uses `panput`, the path fbtool already proved on the panel.
 - Double buffering: the app renders into a managed 480x360 buffer, blits into the hidden page, then pans to it
-  (pages 0 and 1 alternate). If the driver ever refuses a pan the framebuffer degrades to write-only instead of crashing.
+  (round-robin over all three pages: flips may complete asynchronously and there is no vsync wait). If the driver ever refuses a pan the framebuffer degrades to write-only instead of crashing.
 
 ## Measured on the device
 
