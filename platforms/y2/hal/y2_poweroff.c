@@ -13,7 +13,12 @@ const char *y2_poweroff_command(void) {
     return (e != NULL && e[0] != '\0') ? e : Y2_POWEROFF_CMD;
 }
 
-bool y2_poweroff_spawn(pid_t *pid) {
+const char *y2_reboot_command(void) {
+    const char *e = getenv(Y2_REBOOT_ENV);
+    return (e != NULL && e[0] != '\0') ? e : Y2_REBOOT_CMD;
+}
+
+bool y2_spawn_detached(const char *cmd, pid_t *pid) {
     posix_spawnattr_t at;
     if (posix_spawnattr_init(&at) != 0) {
         return false;
@@ -28,7 +33,7 @@ bool y2_poweroff_spawn(pid_t *pid) {
               posix_spawnattr_setflags(&at, POSIX_SPAWN_SETSID | POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF) == 0;
     pid_t p = 0;
     if (ok) {
-        char *const argv[] = {(char *)y2_poweroff_command(), NULL};
+        char *const argv[] = {(char *)cmd, NULL};
         ok = posix_spawn(&p, argv[0], NULL, &at, argv, environ) == 0;
     }
     posix_spawnattr_destroy(&at);
@@ -37,3 +42,7 @@ bool y2_poweroff_spawn(pid_t *pid) {
     }
     return ok;
 }
+
+bool y2_poweroff_spawn(pid_t *pid) { return y2_spawn_detached(y2_poweroff_command(), pid); }
+
+bool y2_reboot_spawn(pid_t *pid) { return y2_spawn_detached(y2_reboot_command(), pid); }

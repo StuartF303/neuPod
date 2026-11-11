@@ -33,8 +33,34 @@ TEST(truncates_to_the_buffer_and_fails_cleanly) {
     fs_destroy();
 }
 
+TEST(boot_mode_detection) {
+    fs_new();
+    char p[400];
+    fs_write("m8", "8\n");
+    fs_write("m9", "9");
+    fs_write("m0", "0\n");
+    fs_write("junk", "charger\n");
+    fs_write("empty", "");
+    ASSERT_EQ(8, y2_boot_mode_read(fs_path("m8", p, sizeof p)));
+    ASSERT_TRUE(y2_boot_mode_is_charging(8));
+    ASSERT_EQ(9, y2_boot_mode_read(fs_path("m9", p, sizeof p)));
+    ASSERT_TRUE(y2_boot_mode_is_charging(9));
+    ASSERT_EQ(0, y2_boot_mode_read(fs_path("m0", p, sizeof p)));
+    ASSERT_FALSE(y2_boot_mode_is_charging(0));
+    ASSERT_FALSE(y2_boot_mode_is_charging(1)); // other modes (factory, recovery ...) are not charging
+    ASSERT_FALSE(y2_boot_mode_is_charging(7));
+    ASSERT_FALSE(y2_boot_mode_is_charging(10));
+    // absent, empty or not a number: -1, which is a normal boot
+    ASSERT_EQ(-1, y2_boot_mode_read(fs_path("junk", p, sizeof p)));
+    ASSERT_EQ(-1, y2_boot_mode_read(fs_path("empty", p, sizeof p)));
+    ASSERT_EQ(-1, y2_boot_mode_read("/nonexistent/boot_mode"));
+    ASSERT_FALSE(y2_boot_mode_is_charging(-1));
+    fs_destroy();
+}
+
 int main(void) {
     RUN(reads_first_line_and_strips_newline);
     RUN(truncates_to_the_buffer_and_fails_cleanly);
+    RUN(boot_mode_detection);
     return RESULT();
 }

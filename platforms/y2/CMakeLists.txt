@@ -12,6 +12,7 @@ set(NEUPOD_Y2_LOGIC_SOURCES
   ${Y2_HAL}/y2_fb.c
   ${Y2_HAL}/y2_sysfs.c
   ${Y2_HAL}/y2_poweroff.c
+  ${Y2_HAL}/y2_charge.c
 )
 set(NEUPOD_Y2_HAL_SOURCES
   ${NEUPOD_Y2_LOGIC_SOURCES}
@@ -30,9 +31,9 @@ set(NEUPOD_Y2_HAL_SOURCES
   ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c             # the file API on FatFs, as on the Pico (the host uses nfs_posix.c)
 )
 
-add_executable(neupod main.c ${NEUPOD_Y2_HAL_SOURCES})
+add_executable(neupod main.c charging.c ${NEUPOD_Y2_HAL_SOURCES})
 target_include_directories(neupod PRIVATE ${Y2_HAL} ${CMAKE_SOURCE_DIR}/hal/include ${CMAKE_SOURCE_DIR}/hal/common)
-set_source_files_properties(main.c ${NEUPOD_Y2_HAL_SOURCES} PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+set_source_files_properties(main.c charging.c ${NEUPOD_Y2_HAL_SOURCES} PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 # neupod_fatfs: FatFs + diskio over hal_storage (the raw block device). Libraries after the HAL objects.
 target_link_libraries(neupod PRIVATE neupod_runtime neupod_drivers neupod_fatfs)
 

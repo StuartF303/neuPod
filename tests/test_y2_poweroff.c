@@ -69,9 +69,36 @@ TEST(spawn_reports_a_missing_command) {
     ASSERT_FALSE(y2_poweroff_spawn(NULL));
 }
 
+TEST(reboot_command_is_overridable_and_spawns_the_override) {
+    unsetenv(Y2_REBOOT_ENV);
+    ASSERT_TRUE(strcmp(y2_reboot_command(), "/sbin/reboot") == 0);
+    char dir[] = "/tmp/y2rbXXXXXX";
+    ASSERT_TRUE(mkdtemp(dir) != NULL);
+    char script[96], out[96];
+    snprintf(script, sizeof script, "%s/reboot.sh", dir);
+    snprintf(out, sizeof out, "%s/out", dir);
+    char body[256];
+    snprintf(body, sizeof body, "#!/bin/sh\necho rebooted > %s\n", out);
+    make_script(script, body);
+    setenv(Y2_REBOOT_ENV, script, 1);
+    ASSERT_TRUE(strcmp(y2_reboot_command(), script) == 0);
+    pid_t pid = 0;
+    ASSERT_TRUE(y2_reboot_spawn(&pid));
+    int st = -1;
+    ASSERT_EQ(pid, waitpid(pid, &st, 0));
+    ASSERT_TRUE(access(out, F_OK) == 0);
+    setenv(Y2_REBOOT_ENV, "/nonexistent/reboot", 1);
+    ASSERT_FALSE(y2_reboot_spawn(NULL));
+    unsetenv(Y2_REBOOT_ENV);
+    unlink(script);
+    unlink(out);
+    rmdir(dir);
+}
+
 int main(void) {
     RUN(default_command_is_sbin_poweroff_and_env_overrides);
     RUN(spawn_runs_the_override_in_its_own_session_with_default_signals);
     RUN(spawn_reports_a_missing_command);
+    RUN(reboot_command_is_overridable_and_spawns_the_override);
     return RESULT();
 }

@@ -9,12 +9,19 @@ APP_PID=/run/neupod-demo.app.pid
 LOG=/tmp/neupod-demo.log
 UI_FILE=/etc/neupod-ui
 LOCK=/run/neupod-demo.start.lock
+# Charging-only mode: the bootloader powered the device on because USB was attached while it was "off" (MediaTek boot mode
+# 8 = KERNEL_POWER_OFF_CHARGING, 9 = LOW_POWER_OFF_CHARGING). NEUPOD_BOOT_MODE_FILE overrides the path, for tests.
+BOOT_MODE_FILE=${NEUPOD_BOOT_MODE_FILE:-/sys/class/BOOT/BOOT/boot/boot_mode}
+FW_APP=/opt/neupod-fw/neupod # S91neupod-fw's binary
+charging() { local m; m=$(tr -d ' \t\r\n' 2>/dev/null <"$BOOT_MODE_FILE"); [ "$m" = 8 ] || [ "$m" = 9 ]; }
 
 alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
 group_alive() { [ -n "$1" ] && kill -0 "-$1" 2>/dev/null; }
 
-# Only "fw" hands /dev/fb0 to the C firmware; anything else keeps today's behaviour.
-selected() { [ "$(tr -d ' \t\r\n' <"$UI_FILE" 2>/dev/null)" != fw ]; }
+# Only "fw" hands /dev/fb0 to the C firmware; anything else keeps today's behaviour. In charging-only mode the demo does not
+# run, whatever /etc/neupod-ui says, PROVIDED the C firmware is installed (S91neupod-fw then runs its dark charging loop);
+# on a demo-only device there is no firmware, so the demo behaves as before and something is still running.
+selected() { charging && [ -x "$FW_APP" ] && return 1; [ "$(tr -d ' \t\r\n' <"$UI_FILE" 2>/dev/null)" != fw ]; }
 
 # The wrapper is started with setsid, so it leads its own process group and the app is in it; the init script records the
 # wrapper's pid itself (before start returns) and stop signals the whole group. No window exists in which a stop could

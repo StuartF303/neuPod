@@ -9,6 +9,8 @@
 # Needs the selected UI to be installed (deploy-fw.sh / deploy-demo.sh); if it is not, nothing is changed. After starting it,
 # the script waits 5 s and checks the new UI is still running; if it is not, the previous selection (file and running UI) is
 # restored and the script exits non-zero.
+# In charging-only mode (boot_mode 8/9) S90 never starts the demo and S91 runs the firmware's charging loop whatever the file
+# says, so a switch to demo there is rolled back by the stay-up check below.
 # Touches only /etc/neupod-ui and the two init scripts' start/stop. No flashing, no partition writes.
 set -euo pipefail
 

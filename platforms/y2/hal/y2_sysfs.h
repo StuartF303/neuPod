@@ -21,6 +21,21 @@ extern "C" {
  */
 bool y2_sysfs_read_line(const char *path, char *out, size_t cap);
 
+/** Where the kernel publishes the bootloader's boot mode (MediaTek BOOT driver). */
+#define Y2_BOOT_MODE_PATH "/sys/class/BOOT/BOOT/boot/boot_mode"
+/** MediaTek boot modes that mean "powered on by the charger, not by the user". */
+#define Y2_BOOT_MODE_KERNEL_POWER_OFF_CHARGING 8
+#define Y2_BOOT_MODE_LOW_POWER_OFF_CHARGING 9
+
+/**
+ * Read the boot mode number from @p path. Returns -1 if the file is absent, unreadable, empty or not a number (a normal
+ * boot on a kernel without the node, or a host): callers treat that as a normal boot.
+ */
+int y2_boot_mode_read(const char *path);
+
+/** True for the two power-off-charging boot modes (8 and 9). */
+bool y2_boot_mode_is_charging(int mode);
+
 #ifdef __cplusplus
 }
 #endif

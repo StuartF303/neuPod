@@ -27,6 +27,20 @@ extern "C" {
 /** The command that would be run: the environment override if set and non-empty, else Y2_POWEROFF_CMD. */
 const char *y2_poweroff_command(void);
 
+#ifndef Y2_REBOOT_CMD
+#define Y2_REBOOT_CMD "/sbin/reboot"
+#endif
+#define Y2_REBOOT_ENV "NEUPOD_Y2_REBOOT"
+
+/** The reboot command that would be run: the environment override if set and non-empty, else Y2_REBOOT_CMD. */
+const char *y2_reboot_command(void);
+
+/** Start @p cmd (an absolute path, no arguments) detached, as for poweroff. True if started; never waits. */
+bool y2_spawn_detached(const char *cmd, pid_t *pid);
+
+/** Start the reboot command detached (charging mode: Power held 2 s). Same rules as y2_poweroff_spawn(). */
+bool y2_reboot_spawn(pid_t *pid);
+
 /** Start the poweroff command detached. True if it was started (@p pid, may be NULL, gets its pid). Never waits. */
 bool y2_poweroff_spawn(pid_t *pid);
 

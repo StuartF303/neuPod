@@ -4,6 +4,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -46,4 +47,21 @@ bool y2_sysfs_read_line(const char *path, char *out, size_t cap) {
     }
     out[strcspn(out, "\r\n")] = '\0';
     return true;
+}
+
+int y2_boot_mode_read(const char *path) {
+    char v[16];
+    if (!y2_sysfs_read_line(path, v, sizeof v)) {
+        return -1;
+    }
+    char *end = NULL;
+    long n = strtol(v, &end, 10);
+    if (end == v || n < 0 || n > 1000) {
+        return -1;
+    }
+    return (int)n;
+}
+
+bool y2_boot_mode_is_charging(int mode) {
+    return mode == Y2_BOOT_MODE_KERNEL_POWER_OFF_CHARGING || mode == Y2_BOOT_MODE_LOW_POWER_OFF_CHARGING;
 }

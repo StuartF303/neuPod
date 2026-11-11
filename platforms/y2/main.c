@@ -15,12 +15,14 @@
 #include <unistd.h>
 
 #include "audio_engine.h"
+#include "charging.h"
 #include "hal_system.h"
 #include "os.h"
 #include "player.h"
 #include "runtime.h"
 #include "y2_hal.h"
 #include "y2_poweroff.h"
+#include "y2_sysfs.h"
 
 static void on_volume(int32_t steps) { (void)player_volume_step(steps); }
 
@@ -85,6 +87,21 @@ int main(int argc, char **argv) {
             fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--script KEYS]\n", argv[0]);
             return 64;
         }
+    }
+    // Powered on by the charger while "off" (boot mode 8/9): charging-only mode, nothing of the player starts. Absent or
+    // unreadable means a normal boot. Decided before any HAL init so no storage, audio or RTOS is touched.
+    int boot_mode = y2_boot_mode_read(Y2_BOOT_MODE_PATH);
+    if (boot_mode < 0) {
+        printf("y2: boot_mode unavailable (%s), normal start\n", Y2_BOOT_MODE_PATH);
+    } else {
+        printf("y2: boot_mode %d (%s)\n", boot_mode, y2_boot_mode_is_charging(boot_mode) ? "charging" : "normal");
+    }
+    fflush(stdout);
+    if (y2_boot_mode_is_charging(boot_mode)) {
+        if (argc > 1) {
+            printf("y2: charging mode ignores the command line arguments (--run-ms, --script, ...)\n");
+        }
+        return y2_charging_main();
     }
     if (hal_system_init() != HAL_OK) {
         fprintf(stderr, "neuPod: hal_system_init failed\n");
