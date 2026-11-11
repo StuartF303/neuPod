@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/NeuPod.Platform.Linux/NeuPod.Platform.Linux.csproj" />
+    <Project Path="src/NeuPod.Y2Demo/NeuPod.Y2Demo.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/NeuPod.Y2.Tests/NeuPod.Y2.Tests.csproj" />
+  </Folder>
+</Solution>

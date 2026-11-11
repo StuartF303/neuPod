@@ -16,7 +16,7 @@ MAX_IMAGE = 0x31F00000
 # Not mountable by the stock 3.4.67 kernel.
 FORBIDDEN = {"metadata_csum", "64bit", "orphan_file", "metadata_csum_seed", "inline_data", "encrypt",
              "casefold", "ea_inode", "large_dir", "project", "quota", "verity", "stable_inodes", "bigalloc"}
-INIT_SCRIPTS = ["S00dev", "S01mounts", "S01wdk", "S10usb-gadget", "S20display", "S50dropbear", "S99diag"]
+INIT_SCRIPTS = ["S00dev", "S01mounts", "S01wdk", "S10usb-gadget", "S20display", "S50dropbear", "S90neupod-demo", "S99diag"]
 # Buildroot scripts that stay in the image (S02sysctl only if /etc/sysctl.conf has content).
 KEPT_BR_SCRIPTS = {"S01seedrng"}
 

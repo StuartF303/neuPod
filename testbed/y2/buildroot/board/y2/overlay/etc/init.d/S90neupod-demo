@@ -1,0 +1,61 @@
+#!/bin/sh
+# neuPod .NET demo (testbed/y2/dotnet). No-op unless /opt/neupod-demo/NeuPod.Y2Demo exists, which
+# testbed/y2/scripts/deploy-demo.sh puts there. Runs under a respawn wrapper (2 s pause so a crash cannot
+# spin); the log is on tmpfs, not eMMC. stop kills by PID file only, never by name.
+APP=/opt/neupod-demo/NeuPod.Y2Demo
+WRAP_PID=/run/neupod-demo.pid
+APP_PID=/run/neupod-demo.app.pid
+LOG=/tmp/neupod-demo.log
+
+alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
+
+start() {
+	[ -x "$APP" ] || return 0
+	if alive "$(cat "$WRAP_PID" 2>/dev/null)"; then
+		echo "neupod-demo already running"
+		return 0
+	fi
+	: >"$LOG"
+	# No ICU on the device; the 3.4 kernel has no memfd_create (needed by W^X). profile.d only covers login shells.
+	setsid sh -c '
+		export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 DOTNET_EnableWriteXorExecute=0
+		echo $$ >"$0"
+		while :; do
+			# The log lives in RAM (tmpfs): empty it before it can grow past 256 KB. The shell holds it open
+			# O_APPEND, so truncating in place is safe.
+			[ "$(wc -c <"$3")" -gt 262144 ] && : >"$3"
+			"$1" &
+			echo $! >"$2"
+			wait $!
+			rc=$?
+			rm -f "$2"
+			echo "neupod-demo exited ($rc), restarting in 2 s" >&2
+			sleep 2
+		done
+	' "$WRAP_PID" "$APP" "$APP_PID" "$LOG" </dev/null >>"$LOG" 2>&1 &
+}
+
+stop() {
+	wp=$(cat "$WRAP_PID" 2>/dev/null)
+	ap=$(cat "$APP_PID" 2>/dev/null)
+	# Wrapper first so it cannot respawn, then the app (SIGTERM makes it paint the dark splash and exit 0).
+	alive "$wp" && kill "$wp" 2>/dev/null
+	if alive "$ap"; then
+		kill "$ap" 2>/dev/null
+		i=0
+		while alive "$ap" && [ $i -lt 30 ]; do
+			sleep 0.1
+			i=$((i + 1))
+		done
+		alive "$ap" && kill -9 "$ap" 2>/dev/null
+	fi
+	rm -f "$WRAP_PID" "$APP_PID"
+}
+
+case "$1" in
+	start) start ;;
+	stop) stop ;;
+	restart) stop; start ;;
+	*) echo "Usage: $0 {start|stop|restart}"; exit 1 ;;
+esac
+exit 0
