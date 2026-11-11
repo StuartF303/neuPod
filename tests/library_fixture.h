@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include "ff.h"
+#include "hal_host.h"
 #include "hal_storage.h"
 
 /* ---- volume ------------------------------------------------------------------------------------------------------ */
@@ -22,6 +23,7 @@ static char g_image[] = "neupod_library_test_XXXXXX";
 static inline bool fx_volume(uint64_t bytes, uint32_t au) {
     static FATFS fs;
     static BYTE work[FF_MAX_SS * 8];
+    hal_host_storage_set_mounted(false);
     f_mount(NULL, "", 0);
     hal_storage_deinit();
     static bool named;
@@ -37,10 +39,13 @@ static inline bool fx_volume(uint64_t bytes, uint32_t au) {
     if (hal_storage_init() != HAL_STORAGE_OK) return false;
     MKFS_PARM opt = {FM_EXFAT, 1, 0, 0, au};
     if (f_mkfs("", &opt, work, sizeof work) != FR_OK) return false;
-    return f_mount(&fs, "", 1) == FR_OK;
+    if (f_mount(&fs, "", 1) != FR_OK) return false;
+    hal_host_storage_set_mounted(true); /* nfs_fatfs.c (linked into the test) checks it */
+    return true;
 }
 
 static inline void fx_cleanup(void) {
+    hal_host_storage_set_mounted(false);
     f_mount(NULL, "", 0);
     hal_storage_deinit();
     unlink(g_image);

@@ -55,7 +55,7 @@ lib_err_t lib_esort(lib_arena_t *ar, const char *work_dir, const char *src, cons
         ar->used = mark;
         return LIB_E_SCRATCH;
     }
-    f_unlink(dst);
+    lib_unlink(dst);
 
     /* pass 1: runs */
     size_t chunk_recs = (lib_arena_free(ar) & ~(size_t)7u) / rs;
@@ -86,10 +86,11 @@ lib_err_t lib_esort(lib_arena_t *ar, const char *work_dir, const char *src, cons
         heapsort(buf, rs, n, cmp, ctx, tmp);
         run_path(path, sizeof path, work_dir, nruns);
         UINT wr = 0;
-        fr = f_open(fout, path, FA_CREATE_ALWAYS | FA_WRITE);
-        if (fr == FR_OK) fr = f_write(fout, buf, (UINT)(n * rs), &wr);
+        res = lib_fopen(fout, path, FA_CREATE_ALWAYS | FA_WRITE);
+        if (res != LIB_OK) break;
+        fr = f_write(fout, buf, (UINT)(n * rs), &wr);
         if (fr == FR_OK && wr != n * rs) fr = FR_DENIED;
-        FRESULT fc = fr == FR_OK ? f_close(fout) : (f_close(fout), fr);
+        FRESULT fc = f_close(fout);
         if (fr != FR_OK || fc != FR_OK) {
             res = lib_map_fr(fr != FR_OK ? fr : fc);
             break;
@@ -169,7 +170,7 @@ lib_err_t lib_esort(lib_arena_t *ar, const char *work_dir, const char *src, cons
         if (res == LIB_OK) {
             for (uint32_t i = 0; i < g; i++) {
                 run_path(path, sizeof path, work_dir, head + i);
-                f_unlink(path);
+                lib_unlink(path);
             }
         }
         ar->used = mark2;
@@ -180,7 +181,7 @@ lib_err_t lib_esort(lib_arena_t *ar, const char *work_dir, const char *src, cons
     }
     if (res == LIB_OK && nruns == 1) { // a single run is the result
         run_path(path, sizeof path, work_dir, 0);
-        if (f_rename(path, dst) != FR_OK) res = LIB_E_IO;
+        res = lib_rename_path(path, dst);
     }
     ar->used = mark;
     return res;

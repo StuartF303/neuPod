@@ -104,8 +104,21 @@ lib_err_t lib_map_fr(FRESULT fr);
 #define LIB_E_TEST_STOP_ LIB_E_IO
 #endif
 
-/** f_open with FatFs' "denied" (full volume or directory) reported as LIB_E_FULL. */
-static inline lib_err_t lib_fopen(FIL *f, const char *path, BYTE mode) { return lib_map_fr(f_open(f, path, mode)); }
+/**
+ * f_open with FatFs' "denied" (full volume or directory) reported as LIB_E_FULL. Anything that can write (FA_WRITE) is first checked
+ * against the nfs write scope (lib_write_allowed): the FIL objects are ours (they live in the scratch, there are far more of them than
+ * nfs.h's four handles), but the permission to write is nfs's.
+ */
+lib_err_t lib_fopen(FIL *f, const char *path, BYTE mode);
+/** True only while the library's nfs write scope is open and @p path lies inside it. */
+bool lib_write_allowed(const char *path);
+/** Path operations that change the card go through nfs.h (same gate as the settings store). EXISTS counts as success for mkdir. */
+lib_err_t lib_mkdir(const char *path);
+lib_err_t lib_unlink(const char *path);
+lib_err_t lib_rename_path(const char *from, const char *to);
+/** Open the nfs write scope on LIB_BASE_DEFAULT and the hardware write lock; lib_write_end() closes both (lock first, then scope). */
+lib_err_t lib_write_begin(const char *base, bool *lock_was);
+void lib_write_end(bool lock_was);
 /** Delete every file in @p dir and the directory itself; fine if it does not exist. */
 lib_err_t lib_rmtree(const char *dir);
 bool lib_exists(const char *path);

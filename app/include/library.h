@@ -35,6 +35,7 @@ typedef enum {
     LIB_E_FORMAT,    /**< a file of the index is damaged or of another version */
     LIB_E_RANGE,     /**< row / id out of range */
     LIB_E_SCRATCH,   /**< scratch buffer too small */
+    LIB_E_DENIED,    /**< a write outside the library's folder was refused by the nfs write scope (or no scope was open) */
     LIB_E_CANCELLED, /**< the progress callback asked to stop; the old library is untouched */
 #ifdef NEUPOD_LIB_TEST_HOOKS
     LIB_E_TEST_STOP, /**< lib_build_cfg_t.test_stop_step reached (power-cut simulation in tests) */

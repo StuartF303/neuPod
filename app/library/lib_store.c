@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "hal_storage.h"
+#include "nfs.h"
 #include "lib_internal.h"
 #include "lib_store.h"
 
@@ -35,6 +36,7 @@ const char *lib_err_str(lib_err_t e) {
     case LIB_E_FORMAT: return "Library damaged";
     case LIB_E_RANGE: return "Out of range";
     case LIB_E_SCRATCH: return "Not enough working memory";
+    case LIB_E_DENIED: return "Write refused";
     case LIB_E_CANCELLED: return "Cancelled";
 #ifdef NEUPOD_LIB_TEST_HOOKS
     case LIB_E_TEST_STOP: return "Stopped (test)";
@@ -79,6 +81,59 @@ bool lib_exists(const char *path) {
     return f_stat(path, &fi) == FR_OK;
 }
 
+// ---- writes: the nfs write scope --------------------------------------------------------------------------------------------
+
+bool lib_write_allowed(const char *path) { return nfs_write_scope_active() && nfs_write_scope_allows(path); }
+
+static lib_err_t map_nfs(nfs_err_t e) {
+    switch (e) {
+    case NFS_OK: return LIB_OK;
+    case NFS_ERR_NO_SPACE: return LIB_E_FULL;
+    case NFS_ERR_NOT_FOUND: return LIB_E_NONE;
+    default: return LIB_E_IO; // (including the gate's refusal: nfs reports it as NFS_ERR_IO; lib_fopen tells it apart for files)
+    }
+}
+
+lib_err_t lib_fopen(FIL *f, const char *path, BYTE mode) {
+    if ((mode & (FA_WRITE | FA_CREATE_NEW | FA_CREATE_ALWAYS | FA_OPEN_APPEND)) && !lib_write_allowed(path)) return LIB_E_DENIED;
+    return lib_map_fr(f_open(f, path, mode));
+}
+
+lib_err_t lib_mkdir(const char *path) {
+    nfs_err_t e = nfs_mkdir(path);
+    return e == NFS_ERR_EXISTS ? LIB_OK : map_nfs(e);
+}
+
+lib_err_t lib_unlink(const char *path) { return map_nfs(nfs_unlink(path)); }
+
+#ifdef NEUPOD_LIB_TEST_HOOKS
+int lib_test_fail_rename; // fail the Nth rename made from now on (1 = the next one); 0 = never
+#endif
+
+lib_err_t lib_rename_path(const char *from, const char *to) {
+#ifdef NEUPOD_LIB_TEST_HOOKS
+    if (lib_test_fail_rename > 0 && --lib_test_fail_rename == 0) return LIB_E_IO;
+#endif
+    return map_nfs(nfs_rename(from, to));
+}
+
+// The scope is always LIB_BASE_DEFAULT, whatever base the caller names: a base outside it gets nothing written, nothing deleted.
+lib_err_t lib_write_begin(const char *base, bool *lock_was) {
+    if (nfs_write_scope_enter(LIB_BASE_DEFAULT) != NFS_OK) return LIB_E_IO; // scopes do not nest: someone else (settings) is writing
+    if (!nfs_write_scope_allows(base)) {
+        nfs_write_scope_leave();
+        return LIB_E_DENIED;
+    }
+    *lock_was = hal_storage_get_write_enabled();
+    hal_storage_set_write_enabled(true);
+    return LIB_OK;
+}
+
+void lib_write_end(bool lock_was) {
+    hal_storage_set_write_enabled(lock_was); // lock first, then the scope
+    nfs_write_scope_leave();
+}
+
 void lib_path(char *out, size_t cap, const char *base, const char *leaf) { snprintf(out, cap, "%s/%s", base, leaf); }
 
 // A folder of plain files: take the first entry, close the folder, delete it, repeat (FatFs does not like deleting while a folder is open).
@@ -98,11 +153,12 @@ lib_err_t lib_rmtree(const char *dir) {
         if (fi.fattrib & AM_DIR) {
             lib_err_t e = lib_rmtree(path);
             if (e != LIB_OK) return e;
-        } else if (f_unlink(path) != FR_OK) {
-            return LIB_E_IO;
+        } else {
+            lib_err_t ue = lib_unlink(path);
+            if (ue != LIB_OK) return ue;
         }
     }
-    return f_unlink(dir) == FR_OK ? LIB_OK : LIB_E_IO;
+    return lib_unlink(dir);
 }
 
 /* ---- manifest ----------------------------------------------------------------------------------------------------- */
@@ -255,16 +311,6 @@ lib_err_t lib_manifest_load(const char *dir, bool full, lib_manifest_t *out) {
 
 /* ---- swap and recovery -------------------------------------------------------------------------------------------- */
 
-#ifdef NEUPOD_LIB_TEST_HOOKS
-int lib_test_fail_rename; // fail the Nth rename made from now on (1 = the next one); 0 = never
-static FRESULT lib_rename(const char *from, const char *to) {
-    if (lib_test_fail_rename > 0 && --lib_test_fail_rename == 0) return FR_DISK_ERR;
-    return f_rename(from, to);
-}
-#else
-#define lib_rename f_rename
-#endif
-
 lib_err_t lib_swap_install(const char *base, int stop_step, int *step_done) {
     char lib[64], old[64], tmp[64];
     lib_path(lib, sizeof lib, base, "lib");
@@ -274,14 +320,16 @@ lib_err_t lib_swap_install(const char *base, int stop_step, int *step_done) {
     if (e != LIB_OK) return e;
     bool moved = false;
     if (lib_exists(lib)) {
-        if (lib_rename(lib, old) != FR_OK) return LIB_E_IO; // nothing has changed
+        e = lib_rename_path(lib, old);
+        if (e != LIB_OK) return e; // nothing has changed
         moved = true;
         *step_done = 3;
         if (LIB_STOP_AT(stop_step, 3)) return LIB_E_TEST_STOP_;
     }
-    if (lib_rename(tmp, lib) != FR_OK) {
-        if (moved) f_rename(old, lib); // put the old library back: the card must not be left without one (lib_recover would too)
-        return LIB_E_IO;
+    e = lib_rename_path(tmp, lib);
+    if (e != LIB_OK) {
+        if (moved) lib_rename_path(old, lib); // put the old library back: the card must not be left without one (lib_recover would too)
+        return e;
     }
     *step_done = 4;
     if (LIB_STOP_AT(stop_step, 4)) return LIB_E_TEST_STOP_;
@@ -291,24 +339,21 @@ lib_err_t lib_swap_install(const char *base, int stop_step, int *step_done) {
     return LIB_OK;
 }
 
-lib_err_t lib_recover(const char *base) {
-    if (base == NULL) base = LIB_BASE_DEFAULT;
+lib_err_t lib_recover_locked(const char *base) {
     char lib[64], old[64], tmp[64], work[64];
     lib_path(lib, sizeof lib, base, "lib");
     lib_path(old, sizeof old, base, "lib.old");
     lib_path(tmp, sizeof tmp, base, "lib.tmp");
     lib_path(work, sizeof work, base, "work");
-    bool was = hal_storage_get_write_enabled();
-    hal_storage_set_write_enabled(true);
     lib_err_t res;
     if (lib_manifest_load(lib, false, NULL) == LIB_OK) {
         res = LIB_OK;
     } else if (lib_manifest_load(old, false, NULL) == LIB_OK) { // the swap was cut after lib moved aside: put the old library back
         res = lib_rmtree(lib);
-        if (res == LIB_OK && lib_rename(old, lib) != FR_OK) res = LIB_E_IO;
+        if (res == LIB_OK && (res = lib_rename_path(old, lib)) != LIB_OK) {}
     } else if (lib_manifest_load(tmp, false, NULL) == LIB_OK) { // first build, cut just before the final rename: the new one is complete
         res = lib_rmtree(lib);
-        if (res == LIB_OK && lib_rename(tmp, lib) != FR_OK) res = LIB_E_IO;
+        if (res == LIB_OK && (res = lib_rename_path(tmp, lib)) != LIB_OK) {}
     } else {
         res = LIB_E_NONE;
         lib_rmtree(tmp); // an unfinished build is of no use
@@ -319,6 +364,15 @@ lib_err_t lib_recover(const char *base) {
         lib_rmtree(tmp);
         lib_rmtree(work);
     }
-    hal_storage_set_write_enabled(was);
     return res;
+}
+
+lib_err_t lib_recover(const char *base) {
+    if (base == NULL) base = LIB_BASE_DEFAULT;
+    bool was = false;
+    lib_err_t e = lib_write_begin(base, &was);
+    if (e != LIB_OK) return e;
+    e = lib_recover_locked(base);
+    lib_write_end(was);
+    return e;
 }

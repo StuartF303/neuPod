@@ -15,4 +15,7 @@ void lib_manifest_encode(const lib_manifest_t *m, uint8_t *out);
  */
 lib_err_t lib_swap_install(const char *base, int stop_step, int *step_done);
 
+/** lib_recover() for a caller that has the write scope open already (lib_build). */
+lib_err_t lib_recover_locked(const char *base);
+
 #endif

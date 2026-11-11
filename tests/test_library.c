@@ -6,6 +6,7 @@
 #include "../app/library/lib_internal.h" /* lib_crc32, st32: the tests that forge a manifest */
 #include "library.h"
 #include "meta.h"
+#include "nfs.h"
 #include "unit.h"
 
 /* ---- collation ----------------------------------------------------------------------------------------------------- */
@@ -952,6 +953,78 @@ TEST(tags_hostile_vorbis_id3_mp4) {
     ASSERT_FALSE(p4.tags.compilation);
 }
 
+/* ---- the nfs write scope ------------------------------------------------------------------------------------------- */
+
+static int g_probe_denied, g_probe_total;
+
+// Runs inside a build (the scope is open): everything outside /.neupod must be refused, whoever asks.
+static bool probe_scope(void *user, uint32_t done) {
+    (void)user;
+    if (done != 2) return true;
+    nfs_file_t *f = NULL;
+    g_probe_total += 6;
+    g_probe_denied += nfs_open(&f, "/Music/x.bin", NFS_O_WRITE | NFS_O_CREATE) != NFS_OK;
+    if (f != NULL) nfs_close(f);
+    g_probe_denied += nfs_mkdir("/Music/evil") != NFS_OK;
+    g_probe_denied += nfs_unlink("/Music/readme.txt") != NFS_OK;
+    g_probe_denied += nfs_rename("/Music/readme.txt", "/Music/readme2.txt") != NFS_OK;
+    FIL fil;
+    g_probe_denied += lib_fopen(&fil, "/Music/y.bin", FA_CREATE_ALWAYS | FA_WRITE) == LIB_E_DENIED;
+    g_probe_denied += lib_unlink("/Music/Abba/Gold/a.mp3") != LIB_OK;
+    ASSERT_TRUE(nfs_write_scope_active());
+    nfs_stat_t st;
+    ASSERT_EQ(NFS_OK, nfs_stat("/Music/readme.txt", &st)); /* reads are not gated */
+    return true;
+}
+
+static bool music_intact(void) {
+    FILINFO fi;
+    return f_stat("/Music/Abba/Gold/a.mp3", &fi) == FR_OK && f_stat("/Music/readme.txt", &fi) == FR_OK && f_stat("/Music/x.bin", &fi) != FR_OK &&
+           f_stat("/Music/y.bin", &fi) != FR_OK && f_stat("/Music/evil", &fi) != FR_OK && f_stat("/Music/readme2.txt", &fi) != FR_OK;
+}
+
+TEST(writes_outside_the_library_folder_are_refused) {
+    ASSERT_TRUE(fx_volume(16u << 20, 0));
+    ASSERT_TRUE(make_tree(false));
+    hal_storage_set_write_enabled(false);
+    ASSERT_FALSE(nfs_write_scope_active());
+    lib_build_cfg_t cfg = {.progress = probe_scope};
+    ASSERT_EQ(LIB_OK, lib_build(&cfg, g_scratch, sizeof g_scratch, NULL));
+    ASSERT_EQ(6, g_probe_total);
+    ASSERT_EQ(g_probe_total, g_probe_denied); /* nfs refused all six while the build held its scope */
+    ASSERT_TRUE(music_intact());
+    ASSERT_FALSE(nfs_write_scope_active()); /* the scope and the hardware lock are released again */
+    ASSERT_FALSE(hal_storage_get_write_enabled());
+    hal_storage_set_write_enabled(true);
+}
+
+TEST(bad_base_cannot_delete_or_write) {
+    static const char *const bases[] = {"/Music", "/", "/.neupod2", "/.neupod/../Music", "/Music/Abba", ""};
+    ASSERT_TRUE(fx_volume(16u << 20, 0));
+    ASSERT_TRUE(make_tree(false));
+    ASSERT_EQ(LIB_OK, build(0, NULL)); /* a real library, which a bad base must not be able to remove either */
+    for (unsigned i = 0; i < sizeof bases / sizeof bases[0]; i++) {
+        lib_build_cfg_t cfg = {.base = bases[i]};
+        lib_err_t e = lib_build(&cfg, g_scratch, sizeof g_scratch, NULL);
+        ASSERT_EQ(LIB_E_DENIED, e);
+        ASSERT_EQ(LIB_E_DENIED, lib_recover(bases[i]));
+        ASSERT_TRUE(music_intact());
+        FILINFO fi;
+        ASSERT_EQ(FR_OK, f_stat("/Music/Abba/Gold/b.mp3", &fi));
+        ASSERT_FALSE(nfs_write_scope_active());
+    }
+    expect_whole(1, 17); /* and the real library is untouched */
+    /* a base inside the folder is fine */
+    lib_build_cfg_t ok = {.base = "/.neupod/sub"};
+    ASSERT_EQ(LIB_OK, lib_build(&ok, g_scratch, sizeof g_scratch, NULL));
+    ASSERT_TRUE(lib_exists("/.neupod/sub/lib/manifest.bin"));
+    /* a scope held by someone else (the settings store mid-save): the build does not start, and writes nothing */
+    ASSERT_EQ(NFS_OK, nfs_write_scope_enter("/.neupod"));
+    ASSERT_EQ(LIB_E_IO, build(0, NULL));
+    nfs_write_scope_leave();
+    expect_whole(1, 17);
+}
+
 int main(void) {
     RUN(collate_case_and_the);
     RUN(collate_diacritics);
@@ -977,6 +1050,8 @@ int main(void) {
     RUN(full_card_leaves_old_library);
     RUN(genre_text_hostile);
     RUN(tags_hostile_vorbis_id3_mp4);
+    RUN(writes_outside_the_library_folder_are_refused);
+    RUN(bad_base_cannot_delete_or_write);
     fx_cleanup();
     return RESULT();
 }

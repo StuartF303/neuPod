@@ -684,7 +684,7 @@ static lib_err_t stage_entity(bctx_t *c, ekind_t kind) {
 
     // sort the occurrences, then collapse equal keys into table rows
     e = lib_esort(c->ar, c->work, occ_p, sorted_p, ENT_REC, ent_cmp, pool, &c->sst);
-    f_unlink(occ_p);
+    (void)lib_unlink(occ_p);
     FIL *fin = lib_arena_alloc(c->ar, sizeof(FIL)), *fmap = lib_arena_alloc(c->ar, sizeof(FIL)), *ftab = lib_arena_alloc(c->ar, sizeof(FIL));
     FIL *fkey = lib_arena_alloc(c->ar, sizeof(FIL));
     if (fkey == NULL) e = LIB_E_SCRATCH;
@@ -774,7 +774,7 @@ static lib_err_t stage_entity(bctx_t *c, ekind_t kind) {
         lib_err_t ec = close_f(ftab);
         if (e == LIB_OK) e = ec;
     }
-    f_unlink(sorted_p);
+    (void)lib_unlink(sorted_p);
     if (e == LIB_OK) {
         if (kind == K_ARTIST) c->m.artists = id;
         if (kind == K_GENRE) c->m.genres = id;
@@ -786,7 +786,7 @@ static lib_err_t stage_entity(bctx_t *c, ekind_t kind) {
         if (kind == K_ARTIST) jump_done(c, LIB_LIST_ARTISTS);
         if (kind == K_GENRE) jump_done(c, LIB_LIST_GENRES);
         e = lib_esort(c->ar, c->work, map_p, mapsorted_p, 8, map_cmp, NULL, &c->sst);
-        f_unlink(map_p);
+        (void)lib_unlink(map_p);
     }
     pool_close(pool);
     c->ar->used = mark;
@@ -972,17 +972,17 @@ static lib_err_t stage_orders(bctx_t *c) {
     }
     /* songs by title */
     e = lib_esort(c->ar, c->work, p_title, s_title, KEY_REC, key_cmp, pool, &c->sst);
-    f_unlink(p_title);
+    (void)lib_unlink(p_title);
     if (e == LIB_OK) e = finish_idlist(c, s_title, LF_BY_TITLE, LIB_LIST_SONGS);
-    f_unlink(s_title);
+    (void)lib_unlink(s_title);
     /* albums by name */
     if (e == LIB_OK) e = lib_esort(c->ar, c->work, an, s_an, KEY_REC, key_cmp, pool, &c->sst);
-    f_unlink(an);
+    (void)lib_unlink(an);
     if (e == LIB_OK) e = finish_idlist(c, s_an, LF_BY_ALBUM_NAME, LIB_LIST_ALBUMS);
-    f_unlink(s_an);
+    (void)lib_unlink(s_an);
     /* tracks in album order; patches each album's first position */
     if (e == LIB_OK) e = lib_esort(c->ar, c->work, p_alb, s_alb, ALB_REC, alb_cmp, pool, &c->sst);
-    f_unlink(p_alb);
+    (void)lib_unlink(p_alb);
     if (e == LIB_OK) {
         FIL *fin = lib_arena_alloc(c->ar, sizeof(FIL)), *fo = lib_arena_alloc(c->ar, sizeof(FIL)), *fa = lib_arena_alloc(c->ar, sizeof(FIL));
         char pa[96];
@@ -1020,10 +1020,10 @@ static lib_err_t stage_orders(bctx_t *c) {
             if (e == LIB_OK) e = ec;
         }
     }
-    f_unlink(s_alb);
+    (void)lib_unlink(s_alb);
     /* genre -> artists */
     if (e == LIB_OK) e = lib_esort(c->ar, c->work, p_pair, s_pair, 8, pair_cmp, NULL, &c->sst);
-    f_unlink(p_pair);
+    (void)lib_unlink(p_pair);
     if (e == LIB_OK) {
         FIL *fin = lib_arena_alloc(c->ar, sizeof(FIL)), *fo = lib_arena_alloc(c->ar, sizeof(FIL)), *fg = lib_arena_alloc(c->ar, sizeof(FIL));
         char pg[96];
@@ -1067,7 +1067,7 @@ static lib_err_t stage_orders(bctx_t *c) {
             if (e == LIB_OK) e = ec;
         }
     }
-    f_unlink(s_pair);
+    (void)lib_unlink(s_pair);
     /* artists' first album: albums are in artist order */
     if (e == LIB_OK) {
         FIL *fa = lib_arena_alloc(c->ar, sizeof(FIL)), *fr = lib_arena_alloc(c->ar, sizeof(FIL));
@@ -1111,9 +1111,10 @@ static lib_err_t finalize_file(bctx_t *c, unsigned idx) {
     uint8_t *buf = lib_arena_alloc(c->ar, 2048);
     if (buf == NULL) return LIB_E_SCRATCH;
     tpath(c, p, lib_files[idx].name);
-    if (f_open(f, p, FA_READ | FA_WRITE) != FR_OK) {
+    lib_err_t oe = lib_fopen(f, p, FA_READ | FA_WRITE);
+    if (oe != LIB_OK) {
         c->ar->used = mark;
-        return LIB_E_IO;
+        return oe;
     }
     FSIZE_t size = f_size(f);
     lib_err_t e = size >= LIB_HDR ? LIB_OK : LIB_E_FORMAT;
@@ -1171,17 +1172,15 @@ static lib_err_t write_manifest(bctx_t *c) {
 
 static lib_err_t build_inner(bctx_t *c, int *step) {
     // A swap cut by a power loss must be settled first: the swap deletes lib.old, which may still be the only valid library.
-    lib_err_t r = lib_recover(c->base);
+    lib_err_t r = lib_recover_locked(c->base);
     if (r != LIB_OK && r != LIB_E_NONE) return r; // could not settle the last swap: building now could delete the only good library
     lib_err_t e = lib_rmtree(c->tmp);
     if (e == LIB_OK) e = lib_rmtree(c->work);
     if (e != LIB_OK) return e;
-    FRESULT fr = f_mkdir(c->base);
-    if (fr != FR_OK && fr != FR_EXIST) return lib_map_fr(fr);
-    fr = f_mkdir(c->tmp);
-    if (fr != FR_OK) return lib_map_fr(fr);
-    fr = f_mkdir(c->work);
-    if (fr != FR_OK) return lib_map_fr(fr);
+    e = lib_mkdir(c->base);
+    if (e == LIB_OK) e = lib_mkdir(c->tmp);
+    if (e == LIB_OK) e = lib_mkdir(c->work);
+    if (e != LIB_OK) return e;
 
     char lib[64];
     lib_path(lib, sizeof lib, c->base, "lib");
@@ -1227,17 +1226,18 @@ lib_err_t lib_build(const lib_build_cfg_t *cfg, void *scratch, size_t scratch_n,
     lib_path(c->tmp, sizeof c->tmp, c->base, "lib.tmp");
     lib_path(c->work, sizeof c->work, c->base, "work");
 
-    bool was = hal_storage_get_write_enabled();
-    hal_storage_set_write_enabled(true);
+    bool was = false;
+    lib_err_t e = lib_write_begin(c->base, &was); // nfs write scope + hardware lock, only for the duration
+    if (e != LIB_OK) return e;
     int step = 0;
-    lib_err_t e = build_inner(c, &step);
+    e = build_inner(c, &step);
     // Failure stance: nothing but lib.tmp / work has been touched before the swap, so a failed or cancelled build only needs those
     // removed; a simulated power cut (tests) leaves everything as it was, for lib_recover().
     if (e != LIB_OK && !LIB_IS_STOP(e) && step < 3) {
         lib_rmtree(c->tmp);
         lib_rmtree(c->work);
     }
-    hal_storage_set_write_enabled(was);
+    lib_write_end(was);
     if (stats != NULL) {
         stats->tracks = c->m.tracks;
         stats->playable = c->m.playable;
