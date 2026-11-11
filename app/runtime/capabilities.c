@@ -4,12 +4,15 @@
 #include <string.h>
 
 #include "capabilities.h"
+#include "runtime.h"
 #include "os.h"
 
 static capabilities_t g_caps;
 static os_mutex_t *g_lock;
 static bool g_timed_out[CAP_COUNT]; // DEGRADED only because the deadline passed: may still turn OK
+#if NEUPOD_RT_HOTPLUG
 static bool g_rearmed[CAP_COUNT];   // DEGRADED, and a check that is run again on purpose may overwrite it (OK or a new reason)
+#endif
 
 static const char *const k_names[CAP_COUNT] = {"display", "storage",   "battery", "haptics",
                                                "wheel",   "audio",     "bluetooth", "wifi"};
@@ -19,7 +22,9 @@ const char *cap_name(cap_id_t id) { return id < CAP_COUNT ? k_names[id] : "?"; }
 void caps_init(void) {
     memset(&g_caps, 0, sizeof g_caps);
     memset(g_timed_out, 0, sizeof g_timed_out);
+#if NEUPOD_RT_HOTPLUG
     memset(g_rearmed, 0, sizeof g_rearmed);
+#endif
     if (g_lock == NULL) {
         g_lock = os_mutex_create();
     }
@@ -36,9 +41,15 @@ static bool resolve_v(cap_id_t id, bool ok, bool timeout, const char *brief, con
     if (os_mutex_lock(g_lock, OS_WAIT_FOREVER)) {
         bool pending = g_caps.state[id] == CAP_PENDING;
         bool degraded = g_caps.state[id] == CAP_DEGRADED;
+#if NEUPOD_RT_HOTPLUG
         late = !pending && degraded && ((ok && g_timed_out[id]) || g_rearmed[id]);
+#else
+        late = !pending && ok && degraded && g_timed_out[id];
+#endif
         if (pending || late) {
+#if NEUPOD_RT_HOTPLUG
             g_rearmed[id] = false;
+#endif
             g_caps.state[id] = ok ? CAP_OK : CAP_DEGRADED;
             memcpy(g_caps.text[id], text, sizeof text);
             snprintf(g_caps.brief[id], sizeof g_caps.brief[id], "%s", brief != NULL ? brief : "");
@@ -48,7 +59,7 @@ static bool resolve_v(cap_id_t id, bool ok, bool timeout, const char *brief, con
         os_mutex_unlock(g_lock);
     }
     if (changed) {
-        printf("boot: %-9s %s: %s%s\n", cap_name(id), ok ? "ok      " : "DEGRADED", late && ok ? "(late result after timeout) " : "", text);
+        printf("boot: %-9s %s: %s%s\n", cap_name(id), ok ? "ok      " : "DEGRADED", (NEUPOD_RT_HOTPLUG ? (late && ok) : late) ? "(late result after timeout) " : "", text);
     }
     return changed;
 }
@@ -69,6 +80,7 @@ bool caps_resolve_timeout(cap_id_t id, const char *brief, const char *fmt, ...) 
     return r;
 }
 
+#if NEUPOD_RT_HOTPLUG
 void caps_allow_late_ok(cap_id_t id) {
     if (id < CAP_COUNT && os_mutex_lock(g_lock, OS_WAIT_FOREVER)) {
         if (g_caps.state[id] == CAP_DEGRADED) {
@@ -103,6 +115,8 @@ void caps_force_degraded(cap_id_t id, const char *brief, const char *fmt, ...) {
         printf("boot: %-9s DEGRADED: %s\n", cap_name(id), text);
     }
 }
+
+#endif // NEUPOD_RT_HOTPLUG
 
 void caps_get(capabilities_t *out) {
     if (os_mutex_lock(g_lock, OS_WAIT_FOREVER)) {

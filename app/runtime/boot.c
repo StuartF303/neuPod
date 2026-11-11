@@ -83,7 +83,7 @@ static bool g_tried_this_card;                  // hot-plug: the card now in the
 // Hot-plug builds (the Y2): a check that fails leaves no descriptor behind, so a card that is pulled and put back (or a
 // second attempt) starts from a clean HAL. Other targets keep the card initialised as before.
 static void storage_check_failed(void) {
-    if (rt_config()->storage_hotplug) {
+    if (NEUPOD_RT_STORAGE_HOTPLUG()) {
         hal_storage_deinit();
     }
 }
@@ -92,7 +92,7 @@ static void storage_check_failed(void) {
 // @p retry: not the boot check but a hot-plug re-run. It must not touch the write lock (nothing may be unmounted or locked
 // underneath a settings write that is in flight) and reports a failure through caps_resolve() too (the capability was re-armed).
 static bool check_storage_inner(bool retry) {
-    if (!retry) {
+    if (!NEUPOD_RT_HOTPLUG || !retry) {
         hal_storage_set_write_enabled(false); // read-only boot: the lock is the default, make it explicit
     }
     hal_storage_status_t st = hal_storage_init();
@@ -103,7 +103,7 @@ static bool check_storage_inner(bool retry) {
     }
     hal_card_info_t info;
     if (hal_storage_get_info(&info) != HAL_STORAGE_OK) {
-        caps_resolve(CAP_STORAGE, false, BR_SD_INFO, "card unreadable");
+        caps_resolve(CAP_STORAGE, false, BR_SD_INFO, "card info unreadable");
         storage_check_failed();
         return false;
     }
@@ -126,17 +126,21 @@ static bool check_storage_inner(bool retry) {
 
 static void check_storage(void *arg) {
     (void)arg;
-    if (g_storage_check_mu != NULL) {
+    if (NEUPOD_RT_HOTPLUG && g_storage_check_mu != NULL) {
         (void)os_mutex_lock(g_storage_check_mu, OS_WAIT_FOREVER);
     }
-    g_storage_check_active = true;
+    if (NEUPOD_RT_HOTPLUG) {
+        g_storage_check_active = true;
+    }
     bool ok = check_storage_inner(false);
     settings_service_storage_result(ok); // after the verdict is posted: loading the settings must not delay the splash
-    if (!ok && rt_config()->storage_hotplug) {
+    if (!ok && NEUPOD_RT_STORAGE_HOTPLUG()) {
         g_tried_this_card = hal_storage_card_present(); // a card that is there and failed is not retried until re-inserted
     }
-    g_storage_check_active = false;
-    if (g_storage_check_mu != NULL) {
+    if (NEUPOD_RT_HOTPLUG) {
+        g_storage_check_active = false;
+    }
+    if (NEUPOD_RT_HOTPLUG && g_storage_check_mu != NULL) {
         os_mutex_unlock(g_storage_check_mu);
     }
 }
@@ -313,7 +317,7 @@ static const check_t k_checks[] = {
 };
 
 void boot_start(void) {
-    if (g_storage_check_mu == NULL) {
+    if (NEUPOD_RT_HOTPLUG && g_storage_check_mu == NULL) {
         g_storage_check_mu = os_mutex_create(); // before the check tasks exist
     }
     g_start_ms = os_tick_ms();

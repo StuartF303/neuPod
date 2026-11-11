@@ -245,10 +245,10 @@ static void monitor_task(void *arg) {
         os_delay_until_ms(&last, 100);
         uint32_t t = os_tick_ms() - start;
         drain_audio_events();
-        if (g_cfg.storage_hotplug) {
+        if (NEUPOD_RT_STORAGE_HOTPLUG()) {
             boot_storage_hotplug_poll();
         }
-        if (g_cfg.stop_requested != NULL && g_cfg.stop_requested()) {
+        if (NEUPOD_RT_STOP_REQUESTED()) {
             shutdown_now();
         }
         player_service(); // the queue moves on even when no screen is polling the player
