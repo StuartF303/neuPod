@@ -6,8 +6,8 @@
     python3 -I testbed/y2/tools/y2splash.py smooth in.png out.png
     python3 -I testbed/y2/tools/y2splash.py quantize in.png out.png
 
-`quantize` is the colour step shared with the LK logo (tools/y2logo.py): every pixel is rounded ONCE to the nearest
-colour RGB565 can hold, as LK expands it (see below), with no dithering. The result is the canonical splash: it is
+`quantize` is the colour step shared with the LK logo (tools/y2logo.py): every pixel is rounded ONCE to RGB565 as LK
+expands it (see below). The background gradient gets a 4x4 ordered (Bayer) dither; the wordmark is not dithered. The result is the canonical splash: it is
 both what the stock LK shows from the LOGO partition and what fbtool draws.
 
 Y2I1 layout (little endian):
@@ -67,8 +67,34 @@ def expand_565(values):
 
 
 def quantize_rgb(rgb):
-    """The canonical colour step: any RGB888 -> the RGB888 LK would show (quantize, then LK's plain-shift expand)."""
+    """The plain colour step: any RGB888 -> the RGB888 LK would show (quantize, then LK's plain-shift expand). No dither."""
     return expand_565(rgb_to_565(rgb))
+
+
+# 4x4 Bayer matrix (ordered dither, deterministic: depends only on x % 4, y % 4)
+BAYER4 = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
+
+
+def quantize_dithered(width, height, rgb):
+    """The canonical splash step. Background pixels (equal to their row's left-edge pixel, as in smooth_background)
+    are ordered-dithered to RGB565: q = floor(v * max / 255 + (bayer + 0.5) / 16), clipped. Every other pixel (the
+    wordmark and its anti-aliased edge) is quantised exactly as quantize_rgb does, so it stays crisp."""
+    plain = rgb_to_565(rgb)
+    out = list(plain)
+    for y in range(height):
+        base = y * width
+        edge = rgb[base * 3:base * 3 + 3]
+        for x in range(width):
+            i = (base + x) * 3
+            if rgb[i:i + 3] != edge:
+                continue
+            m = BAYER4[y & 3][x & 3]
+            q = []
+            for v, bits in ((rgb[i], 5), (rgb[i + 1], 6), (rgb[i + 2], 5)):
+                top = (1 << bits) - 1
+                q.append(min(top, (32 * v * top + (2 * m + 1) * 255) // 8160))
+            out[base + x] = q[0] << 11 | q[1] << 5 | q[2]
+    return expand_565(out)
 
 
 MAGIC = b"Y2I1"
@@ -245,7 +271,7 @@ def main(argv):
     if len(argv) == 4 and argv[1] == "quantize":
         with open(argv[2], "rb") as fh:
             w, h, rgb = read_png(fh.read())
-        q = quantize_rgb(rgb)
+        q = quantize_dithered(w, h, rgb)
         with open(argv[3], "wb") as fh:
             fh.write(write_png(w, h, q))
         print(f"{argv[3]}: {w}x{h}, {len({q[i:i + 3] for i in range(0, len(q), 3)})} colours")

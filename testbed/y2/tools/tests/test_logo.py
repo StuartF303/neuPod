@@ -268,7 +268,7 @@ class Colour(unittest.TestCase):
 
     def test_canonical_png_regenerates_from_the_master(self):
         _, _, master = sp.read_png(MASTER.read_bytes())
-        self.assertEqual(sp.read_png(PNG.read_bytes())[2], sp.quantize_rgb(master))
+        self.assertEqual(sp.read_png(PNG.read_bytes())[2], sp.quantize_dithered(480, 360, master))
 
     @unittest.skipUnless(CC, "no C compiler")
     def test_fbtool_output_equals_lk_pixels(self):
@@ -288,15 +288,6 @@ class Colour(unittest.TestCase):
             raw = lg.raw_image(lg.parse(out)[1][0])
             lk = b"".join(bytes(lk_expand(v)) for v in struct.unpack(f"<{len(raw) // 2}H", raw))
             self.assertEqual(drawn, lk)
-
-    def test_banding_is_known_and_small(self):
-        """565 cannot show the smooth gradient: the background moves in whole 565 steps. Documented, not hidden."""
-        w, h, rgb = sp.read_png(PNG.read_bytes())
-        rows = [rgb[y * w * 3:y * w * 3 + 3] for y in range(h)]
-        steps = [y for y in range(1, h) if rows[y] != rows[y - 1]]
-        self.assertLessEqual(len(steps), 12)
-        for a, b in zip(rows, rows[1:]):
-            self.assertLessEqual(max(abs(x - y) for x, y in zip(a, b)), 8)   # never more than one 5-bit step per channel
 
 
 @unittest.skipUnless((FW / "logo.bin").is_file(), "factory firmware not present")

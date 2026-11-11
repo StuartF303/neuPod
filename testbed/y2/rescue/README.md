@@ -42,8 +42,7 @@ see `scripts/flash-logo.sh`), `fbtool image /etc/splash.y2i` here and in the roo
 - LK can only show RGB565, and it expands a 565 pixel to the framebuffer by a **plain shift** (R = r5 << 3, G = g6 << 2, B = b5 << 3,
   low bits zero; the 32 bpp branch of LK's pixel writer, `lk.bin` of v3.2.0 at file offset 0x1c314), not by bit replication. So the brightest
   value LK shows is (248, 252, 248), not 255.
-- `splash/neupod-splash-480x360.png` is the **canonical** splash: the master rounded once to RGB565 (`round(v * max / 255)`, no
-  dithering, which keeps the wordmark crisp) and expanded back by LK's shift. Every pixel has its low bits zero. A master that
+- `splash/neupod-splash-480x360.png` is the **canonical** splash: the master rounded once to RGB565 (`round(v * max / 255)`; the background gradient is ordered-dithered, the wordmark is not, which keeps it crisp) and expanded back by LK's shift. Every pixel has its low bits zero. A master that
   is already a bit-replicated 565 image (the host simulator's snapshots) is recovered exactly. `y2splash.py quantize` makes it.
 - `overlay/etc/splash.y2i` is generated from the canonical PNG, so fbtool's output on the 32 bpp panel (it writes the 8-bit values as they
   are) equals LK's pixels. `y2logo.py replace` takes the canonical PNG and stores it as RGB565 in LOGO images 0 and 38 without any
@@ -56,10 +55,12 @@ Regenerate (the first line only when the master changes):
     python3 -I testbed/y2/tools/y2splash.py convert testbed/y2/rescue/splash/neupod-splash-480x360.png testbed/y2/rescue/overlay/etc/splash.y2i
     testbed/y2/scripts/build-logo.sh --out /some/dir/y2-logo.bin
 
-Banding: the background is a gradient from about (8,16,32) to (16,36,56). RGB565 has 8 levels per step in red and blue and 4 in green,
-so the gradient shows as 9 flat bands (the steps are at rows 45, 68, 117, 187, 189, 202, 261, 307 and 333). Each step is one 565 level in one
-channel. The firmware's own LVGL splash is rendered in 565 too and bands the same way, but at different rows (66, 93, 131, 180, 186, 197,
-262, 278, 326): 119 of the 360 rows differ from the canonical splash by one level in one channel (up to 8/255 of a channel).
+Banding and dither: RGB565 has 8 levels per step in red and blue and 4 in green, so a plain rounding of the background gradient
+(about (8,16,32) to (16,36,56)) shows as 9 flat bands. The canonical splash therefore applies a deterministic 4x4 ordered (Bayer) dither
+to the background only: a pixel counts as background if it equals its row's left-edge pixel in the master. The wordmark and its
+anti-aliased edge are not dithered (they equal the plain quantisation). The cost is size: `splash.y2i` grows from 4 KB to about 288 KB
+(fbtool's limit is 1 MiB) because the runs get short. The firmware's own LVGL splash is rendered in 565 without dither and bands at rows
+66, 93, 131, 180, 186, 197, 262, 278, 326, so its background differs from the canonical one by up to one 565 level in one channel.
 The wordmark is identical to the firmware's, pixel for pixel in 565, and sits at the same place (x 148 to 332, y 52 to 87; LVGL top-centred at 45 px, 48 pt
 Montserrat). The firmware splash adds a shimmer track, icon row, caption and version line, which the canonical splash leaves out; its
 top and bottom colours are the same. On the real panel the firmware's 565 would be expanded by whatever the Y2 display path does
