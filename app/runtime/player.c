@@ -68,6 +68,7 @@ typedef struct {
     bool start;
     bool stop;
     bool snap;         // g_snap holds the queue as it was before a move that may have re-shuffled it (repeat-all wrap)
+    uint64_t seek_prev_to;    // ... and the target of the seek that was under way
     player_state_t seek_prev; // a seek: the state to give back if the start cannot even be requested (PLAYER_IDLE = not a seek)
     bool rollback;     // the queue position was advanced for this start: put it back if the start cannot even be requested
     uint16_t prev_pos;
@@ -273,11 +274,15 @@ static void run_action(const action_t *a) {
     if (a->start && !(a->frame != 0 ? storage_play_request_at(a->path, a->frame) : storage_play_request(a->path))) {
         lock();
         if (a->seek_prev != PLAYER_IDLE && g_seeking && g_gen == a->gen) {
-            g_seeking = false; // the old stream is untouched and still plays: nothing to report
             if (g_starts_out > 0) {
                 g_starts_out--;
             }
-            g_info.state = a->seek_prev;
+            if (g_starts_out == 0) {
+                g_seeking = false; // the old stream is untouched and still plays: nothing to report
+                g_info.state = a->seek_prev;
+            } else {
+                g_seek_to = a->seek_prev_to; // an earlier seek's start is still on its way: its answer finishes the job, at its target
+            }
             unlock();
             return;
         }
@@ -313,11 +318,11 @@ static void apply_next(void) {
         return;
     }
     g_next_valid = false;
-    g_track_id++;
     pq_move_t mv = pq_commit(&g_q, g_next_entry);
     if (mv == PQ_END) {
         return;
     }
+    g_track_id++;
     snprintf(g_info.name, sizeof g_info.name, "%s", pq_name(&g_q, g_q.pos));
     (void)pq_path(&g_q, g_q.pos, g_path, sizeof g_path);
     g_info.state = PLAYER_PLAYING;
@@ -576,6 +581,7 @@ bool player_seek(uint64_t frame) {
         // when the restart is up (the old stream's ramp-down can still end or cross a boundary in between) and drops an announced successor. If the
         // start cannot even be requested the old stream still plays with its successor announced, which must keep working
         // (a_refused_seek_keeps_the_announced_successor).
+        a.seek_prev_to = g_seek_to;
         g_seeking = true;
         g_seek_to = frame;
         g_info.state = PLAYER_OPENING;
@@ -789,13 +795,8 @@ void player_file_started(const player_file_t *f) {
     }
 }
 
-void player_file_failed(const char *msg) {
-    lock();
-    if (g_starts_out > 0 && --g_starts_out > 0) {
-        unlock(); // a start that a later one has replaced failed: the later one decides
-        printf("player: %s (superseded start)\n", msg);
-        return;
-    }
+// Show a failure. Lock held on entry, released here.
+static void fail_current(const char *msg) {
     g_seeking = false;
     if (g_resume_boot && g_info.src == PLAYER_SRC_FILE) {
         // The boot resume could not start (file unreadable): drop it quietly instead of greeting the user with an error.
@@ -814,6 +815,33 @@ void player_file_failed(const char *msg) {
     }
     unlock();
     printf("player: %s\n", msg);
+}
+
+void player_file_failed(const char *msg) {
+    lock();
+    if (g_starts_out > 0 && --g_starts_out > 0) {
+        unlock(); // a start that a later one has replaced failed: the later one decides
+        printf("player: %s (superseded start)\n", msg);
+        return;
+    }
+    fail_current(msg);
+}
+
+void player_stream_error(const char *msg) {
+    lock();
+    if (g_starts_out > 0) {
+        unlock(); // a start is on its way and replaces the broken stream; it is not this error's to answer, and the count is not ours
+        printf("player: %s (replaced by a new start)\n", msg);
+        return;
+    }
+    fail_current(msg);
+}
+
+uint32_t player_starts_outstanding(void) {
+    lock();
+    uint32_t n = g_starts_out;
+    unlock();
+    return n;
 }
 
 uint32_t player_file_generation(void) { return g_ended_base; }

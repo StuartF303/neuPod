@@ -85,6 +85,16 @@ bool os_mutex_lock(os_mutex_t *m, uint32_t t) { (void)m; (void)t; return true; }
 void os_mutex_unlock(os_mutex_t *m) { (void)m; }
 uint32_t os_tick_ms(void) { static uint32_t t; return t += 1000; } // always "long after" the start grace
 
+// The player counts the start requests it has posted and takes the LAST answer as the one that counts (player_file_started / _failed: the
+// answers to replaced starts are dropped). The real storage task answers every request exactly once; a test answers the ones it cares about and
+// every test must end with none outstanding: RUN_T checks it, and a test that deliberately leaves starts unanswered calls settle() at its end.
+static void settle(void) {
+    player_tone_toggle(TONE_OFF);
+    for (int guard = 0; player_starts_outstanding() > 0 && guard < 16; guard++) { // (bounded: a broken count must fail a test, not hang it)
+        player_file_failed("settle"); // with nothing playing this changes nothing but the count
+    }
+}
+
 // ---- helpers -----------------------------------------------------------------------------------------------------------
 static file_entry_t g_dir[] = {{.name = "01.flac"}, {.name = "02.flac"}, {.name = "03.flac"}, {.name = "04.flac"}};
 static player_file_t file(const char *title) {
@@ -161,6 +171,7 @@ TEST(failed_start_request_rolls_the_queue_position_back) {
     g_play_ok = false;
     player_prev();
     ASSERT_EQ(3, pos());
+    settle();                                            // this test leaves starts unanswered on purpose
 }
 
 TEST(setting_off_offers_nothing) {
@@ -326,6 +337,7 @@ TEST(repeat_all_never_clears_the_record_at_the_album_end) {
     ASSERT_EQ(0, strcmp(g_rs_last.path, "/Album/01.flac"));
     player_set_repeat(PQ_REPEAT_OFF);
     player_stop();
+    settle();                                            // this test leaves starts unanswered on purpose
 }
 
 TEST(resume_autoplay_setting_defaults_off_and_round_trips) {
@@ -456,6 +468,7 @@ TEST(repeat_one_replays_the_track_at_its_end_and_offers_it_gaplessly) {
     player_next();                                // the button still moves on
     ASSERT_EQ(3, pos());
     player_set_repeat(PQ_REPEAT_OFF);
+    settle();                                            // this test leaves starts unanswered on purpose
 }
 
 TEST(repeat_all_wraps_instead_of_ending) {
@@ -482,6 +495,7 @@ TEST(repeat_all_wraps_instead_of_ending) {
     player_info_t i;
     player_get(&i);
     ASSERT_EQ(PLAYER_IDLE, i.state);
+    settle();                                            // this test leaves starts unanswered on purpose
 }
 
 TEST(shuffle_toggled_mid_play_keeps_the_track_and_the_handoff_already_announced) {
@@ -532,6 +546,7 @@ TEST(failed_start_after_a_shuffled_wrap_restores_the_whole_queue) {
     ASSERT_EQ(0, strcmp(g_last_path, slot3));
     player_set_repeat(PQ_REPEAT_OFF);
     player_set_shuffle(PQ_SHUFFLE_OFF);
+    settle();                                            // this test leaves starts unanswered on purpose
 }
 
 TEST(an_unplayable_last_track_wraps_under_repeat_all_and_an_all_broken_queue_ends) {
@@ -708,6 +723,7 @@ TEST(seek_to_the_end_under_repeat_one_restarts_the_track) {
     ASSERT_EQ(0, strcmp(g_last_path, "/Album/02.flac"));
     ASSERT_EQ(0, g_last_frame);
     player_set_repeat(PQ_REPEAT_OFF);
+    settle();                                            // this test leaves starts unanswered on purpose
 }
 
 TEST(a_seek_that_cannot_be_requested_leaves_the_track_playing) {
@@ -721,6 +737,7 @@ TEST(a_seek_that_cannot_be_requested_leaves_the_track_playing) {
     ASSERT_EQ(44100u * 10u, i.pos_frames);               // the real position again, not the target
     ASSERT_TRUE(i.seekable);
     ASSERT_TRUE(player_seek(44100u * 20u));              // and a later seek works
+    settle();                                            // this test leaves starts unanswered on purpose
 }
 
 TEST(a_refused_seek_keeps_the_announced_successor) {
@@ -894,6 +911,76 @@ TEST(the_track_id_moves_with_the_track_not_with_a_seek) {
     ASSERT_TRUE(i.track_id != id);
 }
 
+TEST(a_mid_stream_error_with_a_start_outstanding_is_replaced_by_that_start) {
+    start_seekable_album(0);
+    player_next();                                       // a start request is on its way
+    ASSERT_EQ(1, player_starts_outstanding());
+    player_stream_error("Card read error during playback"); // the old stream broke meanwhile
+    ASSERT_EQ(1, player_starts_outstanding());           // not the answer to the start: the count is untouched
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(PLAYER_OPENING, i.state);                  // no error screen for a stream that is being replaced
+    player_file_t f = seekable_file("t2", 0);
+    player_file_started(&f);                             // the start's own answer still applies
+    player_get(&i);
+    ASSERT_EQ(PLAYER_PLAYING, i.state);
+    ASSERT_EQ(0, strcmp(i.tags.title, "t2"));
+}
+
+TEST(a_mid_stream_error_with_two_starts_outstanding_does_not_swallow_the_real_answers) {
+    start_seekable_album(0);
+    player_next();
+    player_next();
+    ASSERT_EQ(2, player_starts_outstanding());
+    player_stream_error("Card read error during playback");
+    ASSERT_EQ(2, player_starts_outstanding());
+    player_file_t a = seekable_file("track two", 0);
+    player_file_started(&a);                             // the replaced start's answer: dropped
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(PLAYER_OPENING, i.state);                  // (before the fix the error had eaten a count and this stale answer was applied)
+    player_file_t b = seekable_file("track three", 0);
+    player_file_started(&b);
+    player_get(&i);
+    ASSERT_EQ(PLAYER_PLAYING, i.state);
+    ASSERT_EQ(0, strcmp(i.tags.title, "track three"));
+}
+
+TEST(a_mid_stream_error_with_nothing_outstanding_is_shown) {
+    start_seekable_album(0);
+    player_stream_error("Card read error during playback");
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(PLAYER_ERROR, i.state);
+    ASSERT_EQ(0, strcmp(i.msg, "Card read error during playback"));
+    ASSERT_EQ(0, player_starts_outstanding());
+}
+
+TEST(a_refused_seek_behind_an_earlier_seek_leaves_that_seeks_answer_in_charge) {
+    start_seekable_album(0);
+    player_pause_toggle();                               // paused
+    ASSERT_TRUE(player_seek(44100u * 20u));              // seek A is queued
+    g_play_ok = false;                                   // the queue is full for seek B
+    ASSERT_TRUE(player_seek(44100u * 60u));
+    g_play_ok = true;
+    ASSERT_EQ(1, player_starts_outstanding());           // only A is outstanding
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(PLAYER_PAUSED, i.state);                   // still opening, shown as paused at A's target (not B's)
+    ASSERT_EQ(44100u * 20u, i.pos_frames);
+    g_pcm_frames = 0;
+    g_paused = false;
+    player_file_t a = seekable_file("t", 44100u * 20u);
+    player_file_started(&a);                             // A's answer finishes the job
+    player_get(&i);
+    ASSERT_EQ(PLAYER_PAUSED, i.state);
+    ASSERT_TRUE(g_paused);
+    ASSERT_EQ(44100u * 20u, i.pos_frames);
+    ASSERT_EQ(20, i.elapsed_s);
+    ASSERT_EQ(0, player_starts_outstanding());
+    g_pcm_frames = 44100u * 10u;
+}
+
 TEST(a_verify_run_is_not_seekable) {
     player_verify_file("/Album/01.flac", "01.flac");
     player_file_t f = seekable_file("v", 0);
@@ -906,16 +993,8 @@ TEST(a_verify_run_is_not_seekable) {
     player_stop();
 }
 
-// The player counts the start requests it has posted and takes the LAST answer as the one that counts (player_file_started / _failed: the
-// answers to replaced starts are dropped). The real storage task answers every request exactly once; these tests answer only the ones they care
-// about, so each test begins by settling what the previous one left unanswered (failures with nothing playing change nothing else).
-static void settle(void) {
-    player_tone_toggle(TONE_OFF);
-    for (int i = 0; i < 16; i++) {
-        player_file_failed("settle");
-    }
-}
-#define RUN_T(name) do { settle(); RUN(name); } while (0)
+
+#define RUN_T(name) do { RUN(name); ASSERT_EQ(0, player_starts_outstanding()); } while (0)
 
 int main(void) {
     player_init();
@@ -960,6 +1039,10 @@ int main(void) {
     RUN_T(an_end_the_old_stream_reports_during_the_seek_window_is_not_a_track_end);
     RUN_T(a_finished_seek_saves_the_new_position_for_resume);
     RUN_T(the_track_id_moves_with_the_track_not_with_a_seek);
+    RUN_T(a_mid_stream_error_with_a_start_outstanding_is_replaced_by_that_start);
+    RUN_T(a_mid_stream_error_with_two_starts_outstanding_does_not_swallow_the_real_answers);
+    RUN_T(a_mid_stream_error_with_nothing_outstanding_is_shown);
+    RUN_T(a_refused_seek_behind_an_earlier_seek_leaves_that_seeks_answer_in_charge);
     RUN_T(a_verify_run_is_not_seekable);
     return RESULT();
 }

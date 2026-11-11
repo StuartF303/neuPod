@@ -216,7 +216,7 @@ static uint32_t ts_now(void) { return os_tick_ms(); }
 
 static const track_stream_ops_t k_stream_ops = {.open = ts_open, .close = ts_close, .next_track = player_next_track,
                                                 .next_announced = ts_next_announced, .started = ts_started, .track_changed = ts_track_changed,
-                                                .failed = player_file_failed, .now_ms = ts_now, .delay_ms = os_delay_ms};
+                                                .failed = player_file_failed, .stream_failed = player_stream_error, .now_ms = ts_now, .delay_ms = os_delay_ms};
 
 // Boot resume (resume.h): runs on this task right after the settings load. Lists the saved folder (into g_entries, so only while the UI has
 // not listed anything yet), checks the file against what was saved and hands the folder to the player, paused (or playing: setting "Resume playing on power-up" on and the record was playing).

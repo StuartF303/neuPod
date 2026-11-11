@@ -178,6 +178,14 @@ typedef struct {
 void player_file_started(const player_file_t *f);
 void player_file_failed(const char *msg);
 /**
+ * The stream that was playing broke (card read error mid-track). It is not the answer to a start request, so it never touches the count of
+ * outstanding starts: with a start outstanding (a seek, Next) the restart replaces the broken stream and the error is dropped; otherwise it is
+ * shown like any playback error.
+ */
+void player_stream_error(const char *msg);
+/** Start requests posted and not answered yet (player_file_started / player_file_failed). 0 when everything asked for has been answered. For tests. */
+uint32_t player_starts_outstanding(void);
+/**
  * Gapless: the path of the track after the one playing, if the audio core may be told about it ahead of time (setting on, queue
  * has a next track, a file is playing). False otherwise.
  */
