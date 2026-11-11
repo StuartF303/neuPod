@@ -4,6 +4,11 @@
     python3 -I testbed/y2/tools/y2splash.py convert in.png out.y2i
     python3 -I testbed/y2/tools/y2splash.py info file.y2i
     python3 -I testbed/y2/tools/y2splash.py smooth in.png out.png
+    python3 -I testbed/y2/tools/y2splash.py quantize in.png out.png
+
+`quantize` is the colour step shared with the LK logo (tools/y2logo.py): every pixel is rounded ONCE to the nearest
+colour RGB565 can hold, as LK expands it (see below), with no dithering. The result is the canonical splash: it is
+both what the stock LK shows from the LOGO partition and what fbtool draws.
 
 Y2I1 layout (little endian):
     "Y2I1"  u16 width  u16 height  u16 palette_size (1..256)
@@ -15,6 +20,56 @@ The decoder here is as strict as fbtool's and is the reference the tests compare
 import struct
 import sys
 import zlib
+
+# ---- RGB565 as the stock LK shows it ------------------------------------------------------
+# LK (lk.bin of y2_v3.2.0, thumb function at file offset 0x1c314, the 32 bpp branch of the pixel writer) expands a
+# 565 pixel x to the framebuffer word  0xff000000 | (x & 0xf800) << 8 | (x & 0x07e0) << 5 | (x << 3) & 0xff,
+# i.e. a PLAIN SHIFT: R = r5 << 3, G = g6 << 2, B = b5 << 3, low bits zero (no bit replication). So the
+# brightest value LK can show is (248, 252, 248), never 255.
+# Two separate steps, so the result is stable:
+#   1. quantize (8-bit master -> 565): q = round(v * max / 255), the usual scaling. A master that was itself rendered
+#      as 565 and expanded by bit replication (the host simulator's snapshots) comes back EXACTLY, so nothing is lost.
+#   2. expand_565 (565 -> the canonical 8-bit PNG): LK's plain shift. Every pixel of the canonical PNG has its low
+#      bits zero, and `exact_565` reads it back losslessly (no second rounding).
+def quantize_channel(v, bits):
+    top = (1 << bits) - 1
+    return (v * top + 127) // 255
+
+
+def exact_565(rgb):
+    """canonical RGB888 (low bits zero, i.e. a shift-expanded 565 image) -> list of 565 values. Raises FormatError for
+    any pixel LK could not show exactly (the caller must quantize first)."""
+    out = []
+    for i in range(0, len(rgb), 3):
+        r, g, b = rgb[i], rgb[i + 1], rgb[i + 2]
+        if r & 7 or g & 3 or b & 7:
+            raise FormatError(f"pixel {i // 3} ({r},{g},{b}) is not an RGB565 colour as LK expands it; "
+                              "run `y2splash.py quantize` (or pass --quantize) first")
+        out.append(r >> 3 << 11 | g >> 2 << 5 | b >> 3)
+    return out
+
+
+def rgb_to_565(rgb):
+    """bytes RGB888 (any 8-bit image) -> list of 565 values, rounded, no dithering."""
+    out = []
+    for i in range(0, len(rgb), 3):
+        out.append(quantize_channel(rgb[i], 5) << 11 | quantize_channel(rgb[i + 1], 6) << 5
+                   | quantize_channel(rgb[i + 2], 5))
+    return out
+
+
+def expand_565(values):
+    """list of 565 values -> RGB888 bytes, the way LK expands them (plain shift)."""
+    out = bytearray()
+    for v in values:
+        out += bytes(((v >> 11 & 31) << 3, (v >> 5 & 63) << 2, (v & 31) << 3))
+    return bytes(out)
+
+
+def quantize_rgb(rgb):
+    """The canonical colour step: any RGB888 -> the RGB888 LK would show (quantize, then LK's plain-shift expand)."""
+    return expand_565(rgb_to_565(rgb))
+
 
 MAGIC = b"Y2I1"
 MAX_DIM = 4096
@@ -186,6 +241,14 @@ def main(argv):
             w, h, rgb = read_png(fh.read())
         with open(argv[3], "wb") as fh:
             fh.write(write_png(w, h, smooth_background(w, h, rgb)))
+        return 0
+    if len(argv) == 4 and argv[1] == "quantize":
+        with open(argv[2], "rb") as fh:
+            w, h, rgb = read_png(fh.read())
+        q = quantize_rgb(rgb)
+        with open(argv[3], "wb") as fh:
+            fh.write(write_png(w, h, q))
+        print(f"{argv[3]}: {w}x{h}, {len({q[i:i + 3] for i in range(0, len(q), 3)})} colours")
         return 0
     if len(argv) == 3 and argv[1] == "info":
         with open(argv[2], "rb") as fh:

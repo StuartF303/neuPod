@@ -35,13 +35,38 @@ a dim grey dot = not yet (`fbtool status N` lights the first N):
 
 A solid red screen means PID 1 hit a fatal error; a shell is then left on the kernel console (UART).
 
-Splash asset: `splash/neupod-splash-480x360.png` is the source; `overlay/etc/splash.y2i` (about 4 KB, a palette plus
-run-length format with a `Y2I1` header) is generated from it and committed. The rootfs build copies the same file
-(`board/y2/post-build.sh`). Regenerate with:
+Splash asset and colour pipeline. Three things show this picture and they must look identical: stock LK (from the LOGO partition,
+see `scripts/flash-logo.sh`), `fbtool image /etc/splash.y2i` here and in the rootfs, and the firmware's own LVGL splash.
 
+- `splash/neupod-splash-480x360-master.png` is the 8-bit master (the PNG described below, background smoothed).
+- LK can only show RGB565, and it expands a 565 pixel to the framebuffer by a **plain shift** (R = r5 << 3, G = g6 << 2, B = b5 << 3,
+  low bits zero; the 32 bpp branch of LK's pixel writer, `lk.bin` of v3.2.0 at file offset 0x1c314), not by bit replication. So the brightest
+  value LK shows is (248, 252, 248), not 255.
+- `splash/neupod-splash-480x360.png` is the **canonical** splash: the master rounded once to RGB565 (`round(v * max / 255)`, no
+  dithering, which keeps the wordmark crisp) and expanded back by LK's shift. Every pixel has its low bits zero. A master that
+  is already a bit-replicated 565 image (the host simulator's snapshots) is recovered exactly. `y2splash.py quantize` makes it.
+- `overlay/etc/splash.y2i` is generated from the canonical PNG, so fbtool's output on the 32 bpp panel (it writes the 8-bit values as they
+  are) equals LK's pixels. `y2logo.py replace` takes the canonical PNG and stores it as RGB565 in LOGO images 0 and 38 without any
+  further rounding (it refuses a PNG that is not 565-exact unless `--quantize` is given). Tests compare fbtool's framebuffer with
+  LK's expansion of the logo pixels.
+
+Regenerate (the first line only when the master changes):
+
+    python3 -I testbed/y2/tools/y2splash.py quantize testbed/y2/rescue/splash/neupod-splash-480x360-master.png testbed/y2/rescue/splash/neupod-splash-480x360.png
     python3 -I testbed/y2/tools/y2splash.py convert testbed/y2/rescue/splash/neupod-splash-480x360.png testbed/y2/rescue/overlay/etc/splash.y2i
+    testbed/y2/scripts/build-logo.sh --out /some/dir/y2-logo.bin
 
-The PNG came from the host simulator on the `feat/ui-resolution` branch (`NEUPOD_DISPLAY_SIZE=480x360`,
+Banding: the background is a gradient from about (8,16,32) to (16,36,56). RGB565 has 8 levels per step in red and blue and 4 in green,
+so the gradient shows as 9 flat bands (the steps are at rows 45, 68, 117, 187, 189, 202, 261, 307 and 333). Each step is one 565 level in one
+channel. The firmware's own LVGL splash is rendered in 565 too and bands the same way, but at different rows (66, 93, 131, 180, 186, 197,
+262, 278, 326): 119 of the 360 rows differ from the canonical splash by one level in one channel (up to 8/255 of a channel).
+The wordmark is identical to the firmware's, pixel for pixel in 565, and sits at the same place (x 148 to 332, y 52 to 87; LVGL top-centred at 45 px, 48 pt
+Montserrat). The firmware splash adds a shimmer track, icon row, caption and version line, which the canonical splash leaves out; its
+top and bottom colours are the same. On the real panel the firmware's 565 would be expanded by whatever the Y2 display path does
+(replication gives white 239/247 instead of LK's 232/240); that driver is not written yet. If the firmware ever needs the pixels to match LK exactly, its
+565 to 888 step has to be the same plain shift.
+
+The master PNG came from the host simulator on the `feat/ui-resolution` branch (`NEUPOD_DISPLAY_SIZE=480x360`,
 `--snapshots`, `splash.ppm`). The boot checks fail on the host (no battery gauge, wheel or haptics), so the
 dynamic parts were removed and only the gradient and the neuPod wordmark kept. The captured gradient is stepped (a visible band
 about halfway down), so the background was then replaced by one linear top-to-bottom ramp between the captured top and bottom

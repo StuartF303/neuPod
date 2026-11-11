@@ -15,7 +15,8 @@ from pathlib import Path
 
 Y2 = Path(__file__).resolve().parents[2]
 FBTOOL_C = Y2 / "buildroot" / "package" / "y2-fbtool" / "src" / "fbtool.c"
-PNG = Y2 / "rescue" / "splash" / "neupod-splash-480x360.png"
+PNG = Y2 / "rescue" / "splash" / "neupod-splash-480x360.png"                  # canonical: RGB565-exact, LK's expansion
+MASTER = Y2 / "rescue" / "splash" / "neupod-splash-480x360-master.png"       # 8-bit master it was quantised from
 ASSET = Y2 / "rescue" / "overlay" / "etc" / "splash.y2i"
 
 _spec = importlib.util.spec_from_file_location("y2splash", Y2 / "tools" / "y2splash.py")
@@ -75,7 +76,7 @@ class Generator(unittest.TestCase):
         self.assertEqual(blob, sp.encode(w, h, rgb))  # and is reproducible from it
 
     def test_background_is_one_smooth_gradient(self):
-        w, h, rgb = sp.read_png(PNG.read_bytes())
+        w, h, rgb = sp.read_png(MASTER.read_bytes())   # the master; the canonical PNG is stepped by 565
         top, bot = rgb[:3], rgb[(h - 1) * w * 3:(h - 1) * w * 3 + 3]
         prev = None
         for y in range(h):
@@ -87,6 +88,49 @@ class Generator(unittest.TestCase):
                 self.assertLessEqual(max(abs(a - b) for a, b in zip(bg, prev)), 1, y)
             prev = bg
         self.assertEqual(sp.smooth_background(w, h, rgb), rgb)  # idempotent: wordmark untouched
+
+    def test_canonical_png_is_the_quantised_master_and_lk_exact(self):
+        w, h, master = sp.read_png(MASTER.read_bytes())
+        _, _, canon = sp.read_png(PNG.read_bytes())
+        self.assertEqual(canon, sp.quantize_rgb(master))        # regenerate: y2splash.py quantize MASTER PNG
+        vals = sp.exact_565(canon)                              # raises if any pixel is not LK-exact
+        self.assertEqual(sp.expand_565(vals), canon)
+        self.assertEqual(max(abs(a - b) for a, b in zip(master, canon)), 7)   # at most one 5-bit step
+
+    def test_quantiser_rounds_expands_by_plain_shift_and_does_not_dither(self):
+        # LK's pixel writer: R = r5 << 3, G = g6 << 2, B = b5 << 3 (lk.bin 0x1c314); white is (248, 252, 248)
+        self.assertEqual(sp.expand_565([0xFFFF, 0x0000, 0xF800, 0x07E0, 0x001F]),
+                         bytes((248, 252, 248, 0, 0, 0, 248, 0, 0, 0, 252, 0, 0, 0, 248)))
+        self.assertEqual(sp.rgb_to_565(bytes((255, 255, 255))), [0xFFFF])
+        self.assertEqual(sp.rgb_to_565(bytes((3, 1, 3))), [0])                # rounds, not truncates
+        self.assertEqual(sp.rgb_to_565(bytes((8, 4, 8)))[0], 1 << 11 | 1 << 5 | 1)
+        # a bit-replicated 565 source (the host simulator's snapshots) comes back exactly
+        for q in range(32):
+            v = q << 3 | q >> 2
+            self.assertEqual(sp.quantize_channel(v, 5), q)
+        for q in range(64):
+            self.assertEqual(sp.quantize_channel(q << 2 | q >> 4, 6), q)
+        # every 565 value survives expand -> exact_565
+        allv = list(range(0, 65536, 257)) + [0xFFFF]
+        self.assertEqual(sp.exact_565(sp.expand_565(allv)), allv)
+        # same input, same output (no dithering / no state), and a flat colour stays flat
+        flat = bytes((17, 35, 59)) * 64
+        q = sp.quantize_rgb(flat)
+        self.assertEqual(len(set(q[i:i + 3] for i in range(0, len(q), 3))), 1)
+        self.assertEqual(sp.quantize_rgb(flat), q)
+
+    def test_exact_565_rejects_colours_lk_cannot_show(self):
+        for px in ((1, 0, 0), (0, 1, 0), (0, 0, 1), (255, 255, 255)):
+            with self.assertRaises(sp.FormatError):
+                sp.exact_565(bytes(px))
+
+    def test_cli_quantize(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "q.png"
+            r = subprocess.run(["python3", "-I", str(Y2 / "tools" / "y2splash.py"), "quantize", str(MASTER), str(out)],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(out.read_bytes(), PNG.read_bytes())
 
     def test_cli_convert(self):
         with tempfile.TemporaryDirectory() as d:
