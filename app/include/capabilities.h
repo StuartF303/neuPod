@@ -13,6 +13,8 @@
 
 #include <stdbool.h>
 
+#include "runtime.h" // NEUPOD_RT_HOTPLUG
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -63,6 +65,17 @@ bool caps_resolve(cap_id_t id, bool ok, const char *brief, const char *fmt, ...)
  */
 bool caps_resolve_timeout(cap_id_t id, const char *brief, const char *fmt, ...)
     __attribute__((format(printf, 3, 4)));
+
+#if NEUPOD_RT_HOTPLUG
+/**
+ * For a check that is deliberately run again later (the Y2's microSD hot-plug): the next caps_resolve() for a DEGRADED capability
+ * replaces its state and text, whether it now says OK or gives a new reason. One-shot. No-op unless DEGRADED.
+ */
+void caps_allow_late_ok(cap_id_t id);
+
+/** An OK capability stopped being usable at run time (the card was pulled): mark it DEGRADED with @p brief / text and re-arm it as above. No-op unless OK. */
+void caps_force_degraded(cap_id_t id, const char *brief, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
+#endif
 
 /** Copy of the current state. */
 void caps_get(capabilities_t *out);

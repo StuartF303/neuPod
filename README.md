@@ -62,7 +62,8 @@ neuPod/
 │   └── host/            SDL2 desktop implementation
 ├── platforms/
 │   ├── rp2350/          Pico SDK build entry + RP2350 HAL
-│   └── esp32s3/         ESP-IDF project skeleton + ESP32-S3 HAL
+│   ├── esp32s3/         ESP-IDF project skeleton + ESP32-S3 HAL
+│   └── y2/              Innioasis Y2 testbed (Linux, armv7): same firmware as a process, Y2 HALs
 ├── lib/                 submodules: SD driver, FreeRTOS-Kernel (RP2350 SMP port), LVGL
 ├── tests/               host unit tests + headless runtime smoke test
 ├── tools/               PC-side utilities (C#/.NET welcome)
@@ -94,6 +95,11 @@ Host build and tests (SDL2 optional — `sudo apt install libsdl2-dev` for the w
 
     scripts/build.sh host
     ctest --test-dir build/host --output-on-failure
+
+Innioasis Y2 testbed (cross-build, then copy to the device over ssh; see [docs/y2.md](docs/y2.md)):
+
+    scripts/build.sh y2
+    testbed/y2/scripts/deploy-fw.sh --select
 
 ## Documentation
 

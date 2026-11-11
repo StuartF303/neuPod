@@ -1,9 +1,14 @@
 cmake_minimum_required(VERSION 3.13)
 
-# Select the target with -DNEUPOD_PLATFORM=rp2350|esp32s3|host (default rp2350).
-# Use a separate build directory per platform, e.g. build/rp2350, build/host.
-set(NEUPOD_PLATFORM "rp2350" CACHE STRING "Target platform: rp2350, esp32s3 or host")
-set_property(CACHE NEUPOD_PLATFORM PROPERTY STRINGS rp2350 esp32s3 host)
+# Select the target with -DNEUPOD_PLATFORM=rp2350|esp32s3|host|y2 (default rp2350).
+# Use a separate build directory per platform, e.g. build/rp2350, build/host, build/y2.
+set(NEUPOD_PLATFORM "rp2350" CACHE STRING "Target platform: rp2350, esp32s3, host or y2")
+set_property(CACHE NEUPOD_PLATFORM PROPERTY STRINGS rp2350 esp32s3 host y2)
+
+# The Y2 is cross-built; the toolchain must be known before project().
+if(NEUPOD_PLATFORM STREQUAL "y2" AND NOT CMAKE_TOOLCHAIN_FILE)
+  set(CMAKE_TOOLCHAIN_FILE ${CMAKE_CURRENT_LIST_DIR}/cmake/toolchain-y2.cmake)
+endif()
 
 # UI resolution profiles (docs/ui.md, ADR-0018). The product panel is 320x240; hosted builds (the host simulator and the
 # Y2 testbed) also carry the 480x360 profile and its larger fonts, which the RP2350 / ESP32-S3 images must not pay flash
@@ -46,6 +51,17 @@ elseif(NEUPOD_PLATFORM STREQUAL "host")
     add_subdirectory(tests)
   endif()
 
+elseif(NEUPOD_PLATFORM STREQUAL "y2")
+  # Innioasis Y2 testbed: the host build's FreeRTOS POSIX port and portable app, with the Y2 HALs (docs/y2.md).
+  project(neupod C)
+  set(CMAKE_C_STANDARD 11)
+  find_package(Threads REQUIRED)
+  add_compile_definitions(NEUPOD_PLATFORM_Y2=1)
+
+  add_subdirectory(hal/host/freertos) # FreeRTOS POSIX port, before app/ which links it
+  add_subdirectory(app)
+  add_subdirectory(platforms/y2)
+
 elseif(NEUPOD_PLATFORM STREQUAL "esp32s3")
   # ESP-IDF owns the CMake project for its targets and cannot be nested under another
   # project(); its project lives in platforms/esp32s3 and pulls in the same app/ sources.
@@ -55,5 +71,5 @@ elseif(NEUPOD_PLATFORM STREQUAL "esp32s3")
     "or: scripts/build.sh esp32s3")
 
 else()
-  message(FATAL_ERROR "Unknown NEUPOD_PLATFORM '${NEUPOD_PLATFORM}' (rp2350, esp32s3, host)")
+  message(FATAL_ERROR "Unknown NEUPOD_PLATFORM '${NEUPOD_PLATFORM}' (rp2350, esp32s3, host, y2)")
 endif()

@@ -14,6 +14,8 @@
 
 #include <stdbool.h>
 
+#include "runtime.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -26,6 +28,17 @@ void boot_start(void);
  * Returns true once every capability is resolved.
  */
 bool boot_poll(void);
+
+/**
+ * Y2 only, and only with rt_config()->storage_hotplug. Call regularly (the monitor does, every 100 ms; it rate-limits itself): when storage is
+ * unavailable and hal_storage_card_present() says a card has appeared, re-runs the storage check in its own task, which upgrades
+ * the capability to OK and loads the settings. A card that fails the check is not retried until it has been removed and inserted again.
+ */
+#if NEUPOD_RT_HOTPLUG
+void boot_storage_hotplug_poll(void);
+#else
+static inline void boot_storage_hotplug_poll(void) {}
+#endif
 
 #ifdef __cplusplus
 }

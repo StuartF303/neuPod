@@ -381,3 +381,30 @@ add_executable(test_haptic_logic test_haptic_logic.c)
 target_link_libraries(test_haptic_logic neupod_rt_core)
 add_test(NAME haptic_logic COMMAND test_haptic_logic)
 set_source_files_properties(test_haptic_logic.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+# Innioasis Y2 portable logic (platforms/y2/hal/y2_*.c), built with the PC compiler: evdev decoding and the wheel mapping,
+# SD device selection against a fake sysfs, power_supply parsing, RGB565 -> XRGB8888 and the page flipper.
+add_library(neupod_y2_logic STATIC
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_input.c
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_sd.c
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_power.c
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_fb.c
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_sysfs.c
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_poweroff.c
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_charge.c)
+target_include_directories(neupod_y2_logic PUBLIC ${CMAKE_SOURCE_DIR}/platforms/y2/hal ${CMAKE_SOURCE_DIR}/hal/include)
+set_source_files_properties(${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_input.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_sd.c
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_power.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_fb.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_sysfs.c
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_poweroff.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_charge.c
+  test_y2_charge.c test_y2_input.c test_y2_sd.c test_y2_power.c test_y2_fb.c test_y2_sysfs.c test_y2_poweroff.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+foreach(T y2_input y2_sd y2_power y2_fb y2_sysfs y2_poweroff y2_charge)
+  add_executable(test_${T} test_${T}.c)
+  target_link_libraries(test_${T} neupod_y2_logic neupod_rt_core) # neupod_rt_core: input_events_diff (the real app mapping)
+  add_test(NAME ${T} COMMAND test_${T})
+endforeach()
+
+# The Y2-only capability re-arm logic: capabilities.c compiled on its own with NEUPOD_PLATFORM_Y2 (the host build has it off).
+add_executable(test_caps_rearm test_caps_rearm.c ${CMAKE_SOURCE_DIR}/app/runtime/capabilities.c)
+target_compile_definitions(test_caps_rearm PRIVATE NEUPOD_PLATFORM_Y2=1)
+target_include_directories(test_caps_rearm PRIVATE ${CMAKE_SOURCE_DIR}/app/include)
+add_test(NAME caps_rearm COMMAND test_caps_rearm)

@@ -22,7 +22,16 @@ static TickType_t to_ticks(uint32_t ms) {
     if (ms == OS_WAIT_FOREVER) {
         return portMAX_DELAY;
     }
+#ifdef NEUPOD_PLATFORM_Y2
+    // 250 Hz tick: round up, and never turn a real wait into 0 ticks (pdMS_TO_TICKS(2) would be 0 = no wait at all).
+    if (ms == 0) {
+        return 0;
+    }
+    uint64_t t = ((uint64_t)ms * configTICK_RATE_HZ + 999u) / 1000u;
+    return t == 0 ? 1 : (TickType_t)t;
+#else
     return pdMS_TO_TICKS(ms);
+#endif
 }
 
 uint32_t os_tick_ms(void) { return (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS); }
