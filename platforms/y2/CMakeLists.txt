@@ -13,6 +13,7 @@ set(NEUPOD_Y2_LOGIC_SOURCES
   ${Y2_HAL}/y2_sysfs.c
   ${Y2_HAL}/y2_poweroff.c
   ${Y2_HAL}/y2_charge.c
+  ${Y2_HAL}/y2_haptic.c
 )
 set(NEUPOD_Y2_HAL_SOURCES
   ${NEUPOD_Y2_LOGIC_SOURCES}
@@ -25,6 +26,7 @@ set(NEUPOD_Y2_HAL_SOURCES
   ${Y2_HAL}/hal_audio.c
   ${Y2_HAL}/hal_radio.c
   ${Y2_HAL}/hal_i2c.c
+  ${Y2_HAL}/hal_haptic.c
   ${CMAKE_SOURCE_DIR}/hal/host/hal_core.c                 # core 1 = a native thread, portable POSIX
   ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c
   ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c

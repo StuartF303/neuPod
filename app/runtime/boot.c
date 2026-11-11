@@ -199,10 +199,18 @@ static void check_haptics(void *arg) {
     }
     os_mutex_unlock(rt_i2c_mutex());
     if (st != HAL_OK) {
+#ifdef NEUPOD_PLATFORM_Y2
+        caps_resolve(CAP_HAPTICS, false, BR_HAPTIC, "timed_output vibrator: %s", status_name(st));
+#else
         caps_resolve(CAP_HAPTICS, false, BR_HAPTIC, "driver (0x5A): %s", status_name(st));
+#endif
         return;
     }
+#ifdef NEUPOD_PLATFORM_Y2
+    caps_resolve(CAP_HAPTICS, true, NULL, "timed_output vibrator (ERM)");
+#else
     caps_resolve(CAP_HAPTICS, true, NULL, "DRV2605L, standby");
+#endif
 }
 
 static void check_wheel(void *arg) {

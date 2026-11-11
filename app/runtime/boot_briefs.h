@@ -16,7 +16,11 @@
 #define BR_GAUGE "gauge: no response"
 #define BR_NO_CELL "no battery cell"
 #define BR_BAD_CELL "bad cell voltage"
+#ifdef NEUPOD_PLATFORM_Y2
+#define BR_HAPTIC "no vibrator node"
+#else
 #define BR_HAPTIC "no response at 0x5A"
+#endif
 #define BR_WHEEL_RX "receiver error"
 #define BR_WHEEL_OFF "not connected"
 #define BR_WHEEL_NOFRAME "no frames"
