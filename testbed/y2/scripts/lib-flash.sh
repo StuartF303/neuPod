@@ -1,8 +1,8 @@
-# Shared guards for the Y2 flash scripts. Sourced by flash-recovery.sh, flash-boot.sh, flash-rootfs.sh and restore-stock.sh; not run directly.
+# Shared guards for the Y2 flash scripts. Sourced by flash-recovery.sh, flash-boot.sh, flash-rootfs.sh, flash-logo.sh and restore-stock.sh; not run directly.
 #
 # Hard rules enforced here before anything can reach the device:
 #   * the verified backup exists locally AND on the NAS, and its checksum files are identical in both places;
-#   * writes go through tools/y2flash.py only (allowlist BOOTIMG/RECOVERY/USRDATA, pre-read compare, readback).
+#   * writes go through tools/y2flash.py only (allowlist BOOTIMG/RECOVERY/USRDATA/LOGO, pre-read compare, readback).
 # The full NAS verify (all 3 images re-read via gio and compared to SHA256SUMS) was done 2026-11-10 19:45
 # (docs/y2-log.md); here we only compare the checksum files, which is cheap.
 
@@ -21,6 +21,7 @@ Y2LOG="$Y2/docs/y2-log.md"
 FW="$HOME/y2-firmware/y2_v3.2.0_FM-20260813"
 PRELOADER="$FW/preloader_eastaeon82_wet_kk.bin"   # EMI/DRAM config only; never written
 PART_SIZE=$((0x1000000))                           # BOOTIMG and RECOVERY
+LOGO_SIZE=$((0x300000))                            # LOGO (scatter physical 0x4400000)
 die() { echo "error: $*" >&2; exit 1; }
 
 # env_overrides <dry 0|1> : call right after argument parsing
@@ -100,6 +101,15 @@ usrdata_backup_guard() {
         || die "$BACKUP/partitions/USRDATA.bin missing or not 800 MiB: refusing"
 }
 
+# logo_backup_guard : the stock LOGO backup must be present, exactly the partition size, and a valid logo container
+# (y2logo.py info --partition); the restore path and the pre-read compare rely on it
+logo_backup_guard() {
+    [[ $(stat -c %s "$BACKUP/partitions/LOGO.bin" 2>/dev/null || echo 0) -eq $LOGO_SIZE ]] \
+        || die "$BACKUP/partitions/LOGO.bin missing or not 3 MiB: refusing"
+    python3 -I "$Y2/tools/y2logo.py" info --partition "$BACKUP/partitions/LOGO.bin" >/dev/null 2>&1 \
+        || die "$BACKUP/partitions/LOGO.bin is not a valid logo container (y2logo.py info --partition): refusing"
+}
+
 arm_wait() {  # wait for the Y2 to leave the bus, then tell the human what to do
     command -v lsusb >/dev/null || die "lsusb not found (install usbutils)"
     echo "Waiting for the Y2 to leave the bus (unplug it)..."
@@ -140,7 +150,11 @@ partial_warning() {
                 echo "!!! would then mount the damaged ext4 as /data" >&2 ;;
             BOOTIMG|RECOVERY)
                 echo "!!! restore with: scripts/restore-stock.sh --target $t --force-unknown-current" >&2 ;;
-            *) echo "!!! restore with: scripts/restore-stock.sh --target <BOOTIMG|RECOVERY|USRDATA> --force-unknown-current (see $1)" >&2 ;;
+            LOGO)
+                echo "!!! restore with: scripts/restore-stock.sh --target LOGO --force-unknown-current" >&2
+                echo "!!! LOGO holds only the power-on/charging pictures: BOOTIMG, RECOVERY and USRDATA are not involved," >&2
+                echo "!!! so do not restore anything else for this (re-enter download mode with Vol-)" >&2 ;;
+            *) echo "!!! restore with: scripts/restore-stock.sh --target <BOOTIMG|RECOVERY|USRDATA|LOGO> --force-unknown-current (see $1)" >&2 ;;
         esac
         return 0
     fi
