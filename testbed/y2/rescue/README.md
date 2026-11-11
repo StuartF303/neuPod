@@ -14,9 +14,18 @@ mass storage), starts a shell on the ACM port, brings up the RNDIS network inter
 under the gadget, 10 s wait) at 192.168.7.2, then starts a DHCP server, telnet and a web server (serving `/tmp`:
 `rescue.log`, `diag.txt`) in that order, so each starts only after the address exists, waits 5 s for the hold/hand-off decision, then either hands over to USRDATA or stays.
 
-Screen progress row (top-left of the display, green block = reached; backdrop is 8 colour bars):
+### Screen
 
-| Blocks lit | Stage |
+The backdrop is the neuPod boot splash (480x360, the firmware's own splash with its progress bar, icons and
+status text removed), drawn by `fbtool image /etc/splash.y2i`. If that file is missing or fails validation nothing
+is drawn and init falls back to the 8 colour bars. The booted rootfs shows the same splash from `S20display`
+(plain grey if the image is unusable). A panel of another size gets the image centred (black margin) or
+centre-clipped.
+
+Progress is a row of five small dots along the bottom edge, drawn over the splash; a green dot = stage reached,
+a dim grey dot = not yet (`fbtool status N` lights the first N):
+
+| Dots lit | Stage |
 | --- | --- |
 | 1 | proc/sys/dev mounted |
 | 2 | mdev populated /dev |
@@ -25,6 +34,17 @@ Screen progress row (top-left of the display, green block = reached; backdrop is
 | 5 | RNDIS interface up with 192.168.7.2 |
 
 A solid red screen means PID 1 hit a fatal error; a shell is then left on the kernel console (UART).
+
+Splash asset: `splash/neupod-splash-480x360.png` is the source; `overlay/etc/splash.y2i` (about 4 KB, a palette plus
+run-length format with a `Y2I1` header) is generated from it and committed. The rootfs build copies the same file
+(`board/y2/post-build.sh`). Regenerate with:
+
+    python3 -I testbed/y2/tools/y2splash.py convert testbed/y2/rescue/splash/neupod-splash-480x360.png testbed/y2/rescue/overlay/etc/splash.y2i
+
+The PNG came from the host simulator on the `feat/ui-resolution` branch (`NEUPOD_DISPLAY_SIZE=480x360`,
+`--snapshots`, `splash.ppm`). The boot checks fail on the host (no battery gauge, wheel or haptics), so the
+dynamic parts were removed and only the gradient and the neuPod wordmark kept; the pixels are otherwise unmodified.
+`fbtool check FILE [OUT.ppm]` validates an image without a panel (exit 3 on a bad file).
 
 ## Build
 
@@ -79,7 +99,7 @@ report (`diag.sh --no-capture`, alias `--no-input`, skips the 10 s per-input-dev
 
 - **Network:** the RNDIS interface is `rndis0`, not `usb0`.
 - **Framebuffer** (`mtkfb`): 480x360, 32 bpp XRGB8888 (red at bit 16, green 8, blue 0, unused 24, 8 bits each),
-  stride 1920 bytes, virtual 480x1104. `fbtool` pans and draws correctly (colour bars verified).
+  stride 1920 bytes, virtual 480x1104. `fbtool` pans and draws correctly (colour bars verified; the splash image and progress dots are host-tested only, not yet seen on the panel).
 - **Backlight:** `/sys/class/leds/lcd-backlight/brightness`, max 255, boots at 128.
 - **Headphone jack:** `/sys/class/switch/h2w/state` (0 none, 2 headphones).
 - **Input:** only `event0` (`mtk-kpd`: volume, power) and `event2` (`mtk-tpd`: wheel as KEY_UP/KEY_DOWN ticks,

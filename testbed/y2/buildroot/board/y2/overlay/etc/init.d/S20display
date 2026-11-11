@@ -1,11 +1,13 @@
 #!/bin/sh
-# Backlight on and a dark splash so a booted rootfs is visible on the panel.
+# Backlight on and the neuPod splash (plain grey if the image is unusable) so a booted rootfs is visible on the panel.
 case "$1" in
 	start)
 		for b in /sys/class/leds/lcd-backlight/brightness; do
 			[ -w "$b" ] && echo 128 >"$b"
 		done
-		[ -x /usr/bin/fbtool ] && fbtool fill 202020 >/dev/null 2>&1
+		if [ -x /usr/bin/fbtool ]; then
+			fbtool image /etc/splash.y2i >/dev/null 2>&1 || fbtool fill 202020 >/dev/null 2>&1
+		fi
 		;;
 esac
 exit 0
