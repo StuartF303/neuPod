@@ -16,10 +16,15 @@
 #define BR_GAUGE "gauge: no response"
 #define BR_NO_CELL "no battery cell"
 #define BR_BAD_CELL "bad cell voltage"
+// Haptics boot check wording: the DRV2605L at 0x5A on the product, the timed_output ERM vibrator on the Y2.
 #ifdef NEUPOD_PLATFORM_Y2
 #define BR_HAPTIC "no vibrator node"
+#define HAPTIC_FAIL_FMT "timed_output vibrator: %s"
+#define HAPTIC_OK_MSG "timed_output vibrator (ERM)"
 #else
 #define BR_HAPTIC "no response at 0x5A"
+#define HAPTIC_FAIL_FMT "driver (0x5A): %s"
+#define HAPTIC_OK_MSG "DRV2605L, standby"
 #endif
 #define BR_WHEEL_RX "receiver error"
 #define BR_WHEEL_OFF "not connected"

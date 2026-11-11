@@ -3,7 +3,7 @@
 Source checks (defconfig, overlay scripts) always run. Image checks skip cleanly when the built image
 (~/y2-build/y2-rootfs.ext4, override with Y2_BUILD) is absent, e.g. in CI.
 """
-import os, re, shutil, stat, subprocess, tempfile, unittest
+import os, re, shutil, stat, subprocess, tempfile, time, unittest
 from pathlib import Path
 
 Y2 = Path(__file__).resolve().parents[2]
@@ -119,6 +119,93 @@ class Sources(unittest.TestCase):
         for rel in ("etc/inittab", "etc/fstab"):
             s = OVERLAY.joinpath(rel).read_text()
             self.assertNotRegex(s, r"(?m)^[^#]*(fsck|remount)", rel)
+
+
+class S91EnvFile(unittest.TestCase):
+    """S91neupod-fw sandbox: /etc/neupod-fw.env is optional, and only a root-owned, not group/world-writable regular file
+    is sourced. The script's absolute paths are rewritten into a temp dir and a fake app records its environment."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="s91env-"))
+        t = self.tmp
+        src = (OVERLAY / "etc" / "init.d" / "S91neupod-fw").read_text()
+        for a, b in (("/opt/neupod-fw/neupod", f"{t}/app"), ("/etc/neupod-ui", f"{t}/ui"), ("/run/", f"{t}/run-"),
+                     ("/tmp/neupod-fw.log", f"{t}/log")):
+            src = src.replace(a, b)
+        self.script = t / "S91"
+        self.script.write_text(src)
+        (t / "ui").write_text("fw\n")
+        (t / "app").write_text(f'#!/bin/sh\necho "[$NEUPOD_Y2_HAPTIC_MS]" > {t}/seen\nexec sleep 30\n')
+        (t / "app").chmod(0o755)
+        self.env = dict(os.environ, NEUPOD_BOOT_MODE_FILE=str(t / "none"), NEUPOD_FW_ENV_FILE=str(t / "fw.env"),
+                        NEUPOD_FW_ENV_UID=str(os.getuid()), NEUPOD_Y2_HAPTIC_MS="")
+
+    def tearDown(self):
+        self.stop()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def stop(self):
+        subprocess.run(["sh", str(self.script), "stop"], env=self.env, capture_output=True)
+        (self.tmp / "seen").unlink(missing_ok=True)
+
+    def run_start(self, **extra):
+        env = dict(self.env, **extra)
+        out = subprocess.run(["sh", str(self.script), "start"], env=env, capture_output=True, text=True, timeout=20).stdout
+        seen = self.tmp / "seen"
+        for _ in range(50):
+            if seen.exists() and seen.read_text().strip():
+                break
+            time.sleep(0.1)
+        return out, seen.read_text().strip() if seen.exists() else None
+
+    def env_file(self, text, mode=0o644):
+        f = self.tmp / "fw.env"
+        f.unlink(missing_ok=True)
+        f.write_text(text)
+        f.chmod(mode)
+        return f
+
+    def test_no_env_file_is_fine(self):
+        out, seen = self.run_start()
+        self.assertEqual(seen, "[]")
+        self.assertEqual(out, "")
+
+    def test_var_from_env_file_reaches_the_app(self):
+        self.env_file('NEUPOD_Y2_HAPTIC_MS="20,40,90"\n')
+        out, seen = self.run_start()
+        self.assertEqual(seen, "[20,40,90]")
+        self.assertEqual(out, "")
+
+    def test_world_writable_env_file_is_ignored(self):
+        for mode in (0o666, 0o664, 0o646):
+            self.stop()
+            self.env_file('NEUPOD_Y2_HAPTIC_MS="99"\n', mode)
+            out, seen = self.run_start()
+            self.assertEqual(seen, "[]", oct(mode))
+            self.assertIn("ignored (writable by group or others)", out)
+
+    def test_wrong_owner_bad_syntax_and_symlink_are_ignored(self):
+        self.env_file('NEUPOD_Y2_HAPTIC_MS="99"\n')
+        out, seen = self.run_start(NEUPOD_FW_ENV_UID="123456")
+        self.assertEqual(seen, "[]")
+        self.assertIn("not owned by root", out)
+        self.stop()
+        self.env_file('NEUPOD_Y2_HAPTIC_MS="99\nif then\n')
+        out, seen = self.run_start()
+        self.assertEqual(seen, "[]")
+        self.assertIn("syntax error", out)
+        self.stop()
+        real = self.tmp / "real.env"
+        real.write_text('NEUPOD_Y2_HAPTIC_MS="99"\n')
+        real.chmod(0o644)
+        (self.tmp / "fw.env").unlink()
+        (self.tmp / "fw.env").symlink_to(real)
+        out, seen = self.run_start()
+        self.assertEqual(seen, "[]")
+        self.assertIn("not a regular file", out)
+
+    def test_deploy_script_never_touches_the_env_file(self):
+        self.assertNotIn("neupod-fw.env", (Y2 / "scripts" / "deploy-fw.sh").read_text())
 
 
 @unittest.skipUnless(IMG.exists() and shutil.which("debugfs"), f"{IMG} not built (run rootfs/build-rootfs.sh)")
