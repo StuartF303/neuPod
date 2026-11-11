@@ -5,9 +5,9 @@ name: y2-tools
 on:
   push:
     branches: [main]
-    paths: ["testbed/y2/tools/**", "testbed/y2/rescue/**", "testbed/y2/buildroot/**", "testbed/y2/scripts/usb-console.sh", ".github/workflows/y2-tools.yml"]
+    paths: ["testbed/y2/tools/**", "testbed/y2/rescue/**", "testbed/y2/buildroot/**", "testbed/y2/scripts/usb-console.sh", "testbed/y2/scripts/deploy-demo.sh", "testbed/y2/dotnet/**", ".github/workflows/y2-tools.yml"]
   pull_request:
-    paths: ["testbed/y2/tools/**", "testbed/y2/rescue/**", "testbed/y2/buildroot/**", "testbed/y2/scripts/usb-console.sh", ".github/workflows/y2-tools.yml"]
+    paths: ["testbed/y2/tools/**", "testbed/y2/rescue/**", "testbed/y2/buildroot/**", "testbed/y2/scripts/usb-console.sh", "testbed/y2/scripts/deploy-demo.sh", "testbed/y2/dotnet/**", ".github/workflows/y2-tools.yml"]
   workflow_dispatch:
 
 jobs:
@@ -15,10 +15,15 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.x
       - name: Unit tests (mtk-bootimg)
         run: python3 -I -m unittest discover -s testbed/y2/tools/tests -v
+      - name: .NET tests (Y2 demo and platform layer)
+        run: dotnet test testbed/y2/dotnet/NeuPod.Y2.slnx -c Release
       - name: Shell syntax
         run: |
-          for f in testbed/y2/tools/setup-host.sh testbed/y2/rescue/build-rescue.sh testbed/y2/scripts/usb-console.sh; do
+          for f in testbed/y2/tools/setup-host.sh testbed/y2/rescue/build-rescue.sh testbed/y2/scripts/usb-console.sh testbed/y2/scripts/deploy-demo.sh testbed/y2/buildroot/board/y2/overlay/etc/init.d/S90neupod-demo; do
             bash -n "$f"
           done
