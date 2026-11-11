@@ -11,6 +11,7 @@ set(NEUPOD_Y2_LOGIC_SOURCES
   ${Y2_HAL}/y2_power.c
   ${Y2_HAL}/y2_fb.c
   ${Y2_HAL}/y2_sysfs.c
+  ${Y2_HAL}/y2_poweroff.c
 )
 set(NEUPOD_Y2_HAL_SOURCES
   ${NEUPOD_Y2_LOGIC_SOURCES}

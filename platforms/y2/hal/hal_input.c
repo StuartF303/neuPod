@@ -12,6 +12,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "hal_display.h"
 #include "hal_input.h"
 #include "hal_system.h"
 #include "y2_hal.h"
@@ -26,7 +27,10 @@ static node_t g_nodes[] = {{"mtk-tpd", -1}, {"mtk-kpd", -1}};
 static y2_input_t g_in;
 static void (*g_volume_fn)(int32_t);
 
+static void (*g_power_fn)(void);
+
 void y2_input_set_volume_handler(void (*fn)(int32_t steps)) { g_volume_fn = fn; }
+void y2_input_set_power_handler(void (*fn)(void)) { g_power_fn = fn; }
 
 hal_status_t hal_input_init(void) {
     y2_input_init(&g_in);
@@ -69,6 +73,9 @@ static void drain(node_t *n) {
                 printf("input: %s read failed (%s), node closed\n", n->name, strerror(errno));
                 close(n->fd);
                 n->fd = -1;
+                if (n == &g_nodes[1]) { // mtk-kpd carries KEY_POWER: a held press would never see its release
+                    y2_input_power_lost(&g_in);
+                }
             }
             return;
         }
@@ -103,6 +110,18 @@ bool hal_input_poll(hal_wheel_state *out) {
             if (g_nodes[i].fd >= 0) {
                 drain(&g_nodes[i]);
             }
+        }
+    }
+    // The hold timer runs on every call, not only when events arrive: a held key sends nothing.
+    y2_input_tick(&g_in, now);
+    bool asleep;
+    if (y2_input_take_sleep(&g_in, &asleep)) {
+        hal_display_sleep(asleep); // backlight only; the previous brightness comes back on wake; playback is not touched
+    }
+    if (y2_input_take_shutdown(&g_in)) {
+        printf("y2: power held, shutting down\n");
+        if (g_power_fn != NULL) {
+            g_power_fn();
         }
     }
     int32_t vol = y2_input_take_volume(&g_in);

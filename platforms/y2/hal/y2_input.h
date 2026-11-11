@@ -37,6 +37,8 @@ extern "C" {
 #define Y2_KEY_BACK 158u
 
 #define Y2_POSITIONS_PER_DETENT 4
+/** Power key held this long (while still held) requests a clean shutdown; a shorter press toggles screen sleep. */
+#define Y2_POWER_HOLD_MS 2000u
 /**
  * A wheel tick this soon after a Centre, Prev or Next press is a finger brushing the wheel on its way to that button, not
  * a turn. Menu and Play are not covered: they sit at the top and bottom of the ring, and the usual thing after Menu (back)
@@ -70,13 +72,38 @@ typedef struct {
     uint32_t last_press_ms;
     int32_t volume_steps;   /**< pending side-key volume steps (+ louder), taken with y2_input_take_volume() */
     uint32_t ticks_dropped; /**< wheel ticks ignored by the brush filter (diagnostics) */
-    uint32_t power_presses; /**< KEY_POWER presses seen (diagnostics; not mapped to an app action) */
+    uint32_t power_presses; /**< KEY_POWER presses seen (diagnostics) */
+    bool power_down;        /**< KEY_POWER is held (power_down_ms is valid) */
+    uint32_t power_down_ms;
+    bool power_no_toggle;   /**< the screen was woken by Centre/Menu during this press: its release must not sleep again */
+    bool power_fired;       /**< the hold already requested shutdown: the release does nothing */
+    bool asleep;            /**< screen sleep: input is swallowed except Power and Centre/Menu, which wake */
+    bool sleep_changed;     /**< asleep changed since y2_input_take_sleep() */
+    bool shutdown_req;      /**< hold reached Y2_POWER_HOLD_MS, taken once with y2_input_take_shutdown() */
 } y2_input_t;
 
 void y2_input_init(y2_input_t *s);
 
 /** Feed one decoded event at monotonic time @p now_ms. Non-key events and unknown codes are ignored. */
 void y2_input_feed(y2_input_t *s, const y2_event_t *ev, uint32_t now_ms);
+
+/**
+ * Advance the power-key hold timer to @p now_ms (call every poll, events or not: a held key sends no events). Reaching
+ * Y2_POWER_HOLD_MS while held raises the shutdown request exactly once per press, without waiting for the release.
+ */
+void y2_input_tick(y2_input_t *s, uint32_t now_ms);
+
+/**
+ * The node that delivers KEY_POWER closed (mtk-kpd): its release will never arrive, so forget the press. No sleep toggle
+ * and no shutdown. Call only for that node: the state is shared with the wheel node.
+ */
+void y2_input_power_lost(y2_input_t *s);
+
+/** True once when a power-key hold requested shutdown (then false until the next hold). */
+bool y2_input_take_shutdown(y2_input_t *s);
+
+/** True if screen sleep changed since the last call; @p asleep (may be NULL) gets the new state. */
+bool y2_input_take_sleep(y2_input_t *s, bool *asleep);
 
 /**
  * Copy the current wheel state to @p out (always valid, finger always "on" the wheel) and clear dirty. True if it changed.

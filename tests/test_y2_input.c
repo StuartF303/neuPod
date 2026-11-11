@@ -231,15 +231,203 @@ TEST(side_keys_become_volume_steps) {
     ASSERT_EQ(0, s.position);
 }
 
-TEST(power_key_is_counted_not_mapped) {
+// Press Power at t0 and release it after hold_ms (polling the hold timer on the way, as hal_input_poll does).
+static void power_press(y2_input_t *s, uint32_t t0, uint32_t hold_ms) {
+    y2_event_t pw = key(Y2_KEY_POWER, 1), pwr = key(Y2_KEY_POWER, 0);
+    y2_input_feed(s, &pw, t0);
+    y2_input_tick(s, t0 + hold_ms);
+    y2_input_feed(s, &pwr, t0 + hold_ms);
+}
+
+TEST(short_power_press_toggles_screen_sleep) {
     y2_input_t s;
     y2_input_init(&s);
     y2_input_take(&s, NULL);
+    bool asleep = true;
+    ASSERT_FALSE(y2_input_take_sleep(&s, &asleep));
+    power_press(&s, 1000, 300);
+    ASSERT_EQ(1, s.power_presses);
+    ASSERT_TRUE(y2_input_take_sleep(&s, &asleep));
+    ASSERT_TRUE(asleep);
+    ASSERT_FALSE(y2_input_take_sleep(&s, &asleep)); // reported once
+    power_press(&s, 5000, Y2_POWER_HOLD_MS - 1); // just under the hold time is still short: wakes
+    ASSERT_TRUE(y2_input_take_sleep(&s, &asleep));
+    ASSERT_FALSE(asleep);
+    ASSERT_FALSE(y2_input_take_shutdown(&s));
+}
+
+TEST(power_hold_requests_shutdown_once_while_still_held) {
+    y2_input_t s;
+    y2_input_init(&s);
+    y2_event_t pw = key(Y2_KEY_POWER, 1), rep = key(Y2_KEY_POWER, 2), pwr = key(Y2_KEY_POWER, 0);
+    y2_input_feed(&s, &pw, 1000);
+    y2_input_tick(&s, 2999);
+    ASSERT_FALSE(y2_input_take_shutdown(&s));
+    y2_input_tick(&s, 3000); // exactly 2 s, no release yet
+    ASSERT_TRUE(y2_input_take_shutdown(&s));
+    y2_input_feed(&s, &rep, 3500); // autorepeat and further ticks do not fire again
+    y2_input_tick(&s, 9000);
+    ASSERT_FALSE(y2_input_take_shutdown(&s));
+    y2_input_feed(&s, &pwr, 9100); // the release after a hold is not a short press
+    bool asleep;
+    ASSERT_FALSE(y2_input_take_sleep(&s, &asleep));
+    ASSERT_FALSE(asleep);
+    power_press(&s, 20000, 100); // a new press works normally again
+    ASSERT_TRUE(y2_input_take_sleep(&s, &asleep));
+    ASSERT_TRUE(asleep);
+}
+
+TEST(power_hold_seen_only_at_release_still_counts) {
+    y2_input_t s;
+    y2_input_init(&s);
     y2_event_t pw = key(Y2_KEY_POWER, 1), pwr = key(Y2_KEY_POWER, 0);
     y2_input_feed(&s, &pw, 0);
-    y2_input_feed(&s, &pwr, 0);
-    ASSERT_EQ(1, s.power_presses);
-    ASSERT_FALSE(s.dirty);
+    y2_input_feed(&s, &pwr, 2500); // no tick in between (poll gap)
+    ASSERT_TRUE(y2_input_take_shutdown(&s));
+    bool asleep;
+    ASSERT_FALSE(y2_input_take_sleep(&s, &asleep));
+}
+
+TEST(power_release_without_press_is_ignored) {
+    y2_input_t s;
+    y2_input_init(&s);
+    y2_event_t pwr = key(Y2_KEY_POWER, 0);
+    y2_input_feed(&s, &pwr, 100);
+    bool asleep;
+    ASSERT_FALSE(y2_input_take_sleep(&s, &asleep));
+    ASSERT_FALSE(y2_input_take_shutdown(&s));
+}
+
+TEST(asleep_swallows_input_except_wake_keys) {
+    y2_input_t s;
+    y2_input_init(&s);
+    hal_wheel_state prev = {0};
+    input_event_t ev[8];
+    ASSERT_EQ(0, step(&s, &prev, ev));
+    power_press(&s, 100, 100);
+    bool asleep;
+    ASSERT_TRUE(y2_input_take_sleep(&s, &asleep));
+    ASSERT_TRUE(asleep);
+    y2_event_t down = key(Y2_KEY_DOWN, 1), left = key(Y2_KEY_LEFT, 1), left_up = key(Y2_KEY_LEFT, 0),
+               play = key(Y2_KEY_PLAYPAUSE, 1), vol = key(Y2_KEY_VOLUMEUP, 1);
+    y2_input_feed(&s, &down, 1000);
+    y2_input_feed(&s, &left, 1010);
+    y2_input_feed(&s, &left_up, 1020);
+    y2_input_feed(&s, &play, 1030);
+    y2_input_feed(&s, &vol, 1040);
+    ASSERT_EQ(0, step(&s, &prev, ev)); // nothing reached the app
+    ASSERT_EQ(0, y2_input_take_volume(&s));
+    ASSERT_FALSE(y2_input_take_sleep(&s, &asleep)); // and none of it woke the screen
+    // Centre wakes, and that press is not delivered as a Select
+    y2_event_t sel = key(Y2_KEY_ENTER, 1), sel_up = key(Y2_KEY_ENTER, 0);
+    y2_input_feed(&s, &sel, 2000);
+    ASSERT_TRUE(y2_input_take_sleep(&s, &asleep));
+    ASSERT_FALSE(asleep);
+    y2_input_feed(&s, &sel_up, 2100);
+    ASSERT_EQ(0, step(&s, &prev, ev));
+    // awake again: the wheel works
+    y2_input_feed(&s, &down, 3000);
+    ASSERT_EQ(1, step(&s, &prev, ev));
+    ASSERT_EQ(4, ev[0].steps);
+    // Menu wakes too; Power wakes (tested above by toggle)
+    power_press(&s, 4000, 100);
+    ASSERT_TRUE(y2_input_take_sleep(&s, &asleep));
+    ASSERT_TRUE(asleep);
+    y2_event_t menu = key(Y2_KEY_BACK, 1);
+    y2_input_feed(&s, &menu, 5000);
+    ASSERT_TRUE(y2_input_take_sleep(&s, &asleep));
+    ASSERT_FALSE(asleep);
+    ASSERT_EQ(0, step(&s, &prev, ev));
+    ASSERT_EQ(0, s.buttons);
+}
+
+TEST(sleep_releases_a_held_button) {
+    y2_input_t s;
+    y2_input_init(&s);
+    hal_wheel_state prev = {0};
+    input_event_t ev[8];
+    step(&s, &prev, ev);
+    y2_event_t sel = key(Y2_KEY_ENTER, 1), sel_up = key(Y2_KEY_ENTER, 0);
+    y2_input_feed(&s, &sel, 100);
+    step(&s, &prev, ev);
+    ASSERT_EQ(HAL_BTN_SELECT, prev.buttons);
+    power_press(&s, 200, 100);
+    y2_input_feed(&s, &sel_up, 400); // swallowed while asleep
+    step(&s, &prev, ev);
+    ASSERT_EQ(0, prev.buttons); // not stuck held
+}
+
+TEST(hold_while_asleep_still_shuts_down) {
+    y2_input_t s;
+    y2_input_init(&s);
+    power_press(&s, 0, 100);
+    ASSERT_TRUE(s.asleep);
+    power_press(&s, 1000, 2500);
+    ASSERT_TRUE(y2_input_take_shutdown(&s));
+}
+
+TEST(other_buttons_during_a_power_hold_still_work_and_hold_still_fires) {
+    y2_input_t s;
+    y2_input_init(&s);
+    hal_wheel_state w;
+    y2_input_take(&s, &w);
+    y2_event_t pw = key(Y2_KEY_POWER, 1), pwr = key(Y2_KEY_POWER, 0), rep = key(Y2_KEY_POWER, 2), sel = key(Y2_KEY_ENTER, 1),
+               selu = key(Y2_KEY_ENTER, 0);
+    bool asleep;
+    y2_input_feed(&s, &pw, 1000);
+    y2_input_feed(&s, &sel, 1500);
+    y2_input_take(&s, &w);
+    ASSERT_EQ(HAL_BTN_SELECT, w.buttons); // awake: Centre still reaches the app
+    y2_input_feed(&s, &selu, 1700);
+    y2_input_feed(&s, &rep, 2000);
+    y2_input_tick(&s, 3000);
+    ASSERT_TRUE(y2_input_take_shutdown(&s));
+    y2_input_feed(&s, &pwr, 3100);
+    ASSERT_FALSE(y2_input_take_sleep(&s, &asleep));
+    ASSERT_FALSE(asleep);
+}
+
+TEST(wake_by_centre_while_power_held_stays_awake_on_release) {
+    y2_input_t s;
+    y2_input_init(&s);
+    bool asleep;
+    power_press(&s, 100, 100);
+    ASSERT_TRUE(y2_input_take_sleep(&s, &asleep));
+    ASSERT_TRUE(asleep);
+    y2_event_t pw = key(Y2_KEY_POWER, 1), pwr = key(Y2_KEY_POWER, 0), sel = key(Y2_KEY_ENTER, 1), menu = key(Y2_KEY_BACK, 1);
+    y2_input_feed(&s, &pw, 6000);
+    y2_input_feed(&s, &sel, 6500); // Centre wakes during the hold
+    ASSERT_TRUE(y2_input_take_sleep(&s, &asleep));
+    ASSERT_FALSE(asleep);
+    y2_input_feed(&s, &pwr, 6800); // short release: must not sleep again
+    ASSERT_FALSE(y2_input_take_sleep(&s, &asleep));
+    ASSERT_FALSE(s.asleep);
+    power_press(&s, 8000, 100); // the next ordinary press toggles as usual
+    ASSERT_TRUE(s.asleep);
+    // Menu wake during a hold, then the hold still reaches 2 s
+    y2_input_take_sleep(&s, &asleep);
+    y2_input_feed(&s, &pw, 9000);
+    y2_input_feed(&s, &menu, 9200);
+    ASSERT_FALSE(s.asleep);
+    y2_input_tick(&s, 11000);
+    ASSERT_TRUE(y2_input_take_shutdown(&s));
+}
+
+TEST(power_lost_forgets_the_press_without_side_effects) {
+    y2_input_t s;
+    y2_input_init(&s);
+    y2_event_t pw = key(Y2_KEY_POWER, 1), pwr = key(Y2_KEY_POWER, 0);
+    bool asleep;
+    y2_input_feed(&s, &pw, 1000);
+    y2_input_power_lost(&s); // mtk-kpd closed mid-press
+    y2_input_tick(&s, 9000);
+    ASSERT_FALSE(y2_input_take_shutdown(&s));
+    ASSERT_FALSE(y2_input_take_sleep(&s, &asleep));
+    y2_input_feed(&s, &pwr, 9100); // a stray release is ignored
+    ASSERT_FALSE(y2_input_take_sleep(&s, &asleep));
+    power_press(&s, 10000, 100); // and the key works again afterwards
+    ASSERT_TRUE(y2_input_take_sleep(&s, &asleep));
+    ASSERT_TRUE(asleep);
 }
 
 TEST(non_key_events_and_unknown_codes_are_ignored) {
@@ -292,7 +480,16 @@ int main(void) {
     RUN(debounce_survives_millisecond_clock_wrap);
     RUN(no_debounce_before_any_press);
     RUN(side_keys_become_volume_steps);
-    RUN(power_key_is_counted_not_mapped);
+    RUN(short_power_press_toggles_screen_sleep);
+    RUN(power_hold_requests_shutdown_once_while_still_held);
+    RUN(power_hold_seen_only_at_release_still_counts);
+    RUN(power_release_without_press_is_ignored);
+    RUN(asleep_swallows_input_except_wake_keys);
+    RUN(sleep_releases_a_held_button);
+    RUN(hold_while_asleep_still_shuts_down);
+    RUN(other_buttons_during_a_power_hold_still_work_and_hold_still_fires);
+    RUN(wake_by_centre_while_power_held_stays_awake_on_release);
+    RUN(power_lost_forgets_the_press_without_side_effects);
     RUN(non_key_events_and_unknown_codes_are_ignored);
     RUN(console_filter_drops_newline_only_off_a_terminal);
     RUN(find_node_by_exact_device_name);

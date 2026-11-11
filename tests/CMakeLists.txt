@@ -389,12 +389,14 @@ add_library(neupod_y2_logic STATIC
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_sd.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_power.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_fb.c
-  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_sysfs.c)
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_sysfs.c
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_poweroff.c)
 target_include_directories(neupod_y2_logic PUBLIC ${CMAKE_SOURCE_DIR}/platforms/y2/hal ${CMAKE_SOURCE_DIR}/hal/include)
 set_source_files_properties(${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_input.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_sd.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_power.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_fb.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_sysfs.c
-  test_y2_input.c test_y2_sd.c test_y2_power.c test_y2_fb.c test_y2_sysfs.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
-foreach(T y2_input y2_sd y2_power y2_fb y2_sysfs)
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_poweroff.c
+  test_y2_input.c test_y2_sd.c test_y2_power.c test_y2_fb.c test_y2_sysfs.c test_y2_poweroff.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+foreach(T y2_input y2_sd y2_power y2_fb y2_sysfs y2_poweroff)
   add_executable(test_${T} test_${T}.c)
   target_link_libraries(test_${T} neupod_y2_logic neupod_rt_core) # neupod_rt_core: input_events_diff (the real app mapping)
   add_test(NAME ${T} COMMAND test_${T})

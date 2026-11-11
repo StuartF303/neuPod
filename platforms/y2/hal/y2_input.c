@@ -49,12 +49,70 @@ static void move(y2_input_t *s, int detents) {
     s->dirty = true;
 }
 
+static void set_asleep(y2_input_t *s, bool asleep) {
+    if (s->asleep == asleep) {
+        return;
+    }
+    s->asleep = asleep;
+    s->sleep_changed = true;
+    if (asleep) { // a button still down would never see its release (swallowed), so let go of everything now
+        s->buttons = 0;
+        s->latched = 0;
+        s->volume_steps = 0;
+        s->dirty = true;
+    }
+}
+
+void y2_input_tick(y2_input_t *s, uint32_t now_ms) {
+    if (s->power_down && !s->power_fired && (uint32_t)(now_ms - s->power_down_ms) >= Y2_POWER_HOLD_MS) {
+        s->power_fired = true;
+        s->shutdown_req = true;
+    }
+}
+
+void y2_input_power_lost(y2_input_t *s) {
+    s->power_down = false;
+    s->power_fired = false;
+    s->power_no_toggle = false;
+}
+
+static void power_key(y2_input_t *s, int32_t value, uint32_t now_ms) {
+    if (value == 1) {
+        if (!s->power_down) {
+            s->power_down = true;
+            s->power_down_ms = now_ms;
+            s->power_fired = false;
+            s->power_no_toggle = false;
+            s->power_presses++;
+        }
+    } else if (value == 0 && s->power_down) {
+        y2_input_tick(s, now_ms); // a poll gap longer than the hold time still counts as a hold
+        if (!s->power_fired && !s->power_no_toggle) {
+            set_asleep(s, !s->asleep); // short press
+        }
+        s->power_down = false;
+    }
+}
+
 void y2_input_feed(y2_input_t *s, const y2_event_t *ev, uint32_t now_ms) {
     if (ev->type != Y2_EV_KEY) {
         return;
     }
     const uint16_t code = ev->code;
     const int32_t value = ev->value; // 1 press, 0 release, 2 autorepeat
+    if (code == Y2_KEY_POWER) {
+        power_key(s, value, now_ms);
+        return;
+    }
+    if (s->asleep) { // only Centre and Menu wake; the waking press itself does nothing else, and so does everything else
+        if (value == 1 && (code == Y2_KEY_ENTER || code == Y2_KEY_BACK)) {
+            set_asleep(s, false);
+            if (s->power_down) {
+                s->power_no_toggle = true; // Power is still held: its release must not put the screen back to sleep
+            }
+        }
+        return;
+    }
     uint8_t btn = ring_button(code);
     if (btn != 0) {
         if (value == 1) {
@@ -89,14 +147,24 @@ void y2_input_feed(y2_input_t *s, const y2_event_t *ev, uint32_t now_ms) {
             s->volume_steps += code == Y2_KEY_VOLUMEUP ? 1 : -1;
         }
         break;
-    case Y2_KEY_POWER:
-        if (value == 1) {
-            s->power_presses++;
-        }
-        break;
     default:
         break;
     }
+}
+
+bool y2_input_take_shutdown(y2_input_t *s) {
+    bool r = s->shutdown_req;
+    s->shutdown_req = false;
+    return r;
+}
+
+bool y2_input_take_sleep(y2_input_t *s, bool *asleep) {
+    if (asleep != NULL) {
+        *asleep = s->asleep;
+    }
+    bool r = s->sleep_changed;
+    s->sleep_changed = false;
+    return r;
 }
 
 bool y2_input_take(y2_input_t *s, hal_wheel_state *out) {

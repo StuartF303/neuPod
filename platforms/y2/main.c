@@ -20,6 +20,7 @@
 #include "player.h"
 #include "runtime.h"
 #include "y2_hal.h"
+#include "y2_poweroff.h"
 
 static void on_volume(int32_t steps) { (void)player_volume_step(steps); }
 
@@ -45,6 +46,31 @@ static void on_term(int sig) {
 }
 static bool stop_requested(void) { return g_stop != 0; }
 
+// Power key held: the same orderly stop as SIGTERM (the monitor task finishes the storage task, locks card writes and calls
+// exit(0)), then, from an atexit hook, the poweroff command. Running it only after that stop means the card is already
+// flushed and unmounted when init starts its own stop scripts; S91neupod-fw's stop then finds this process gone (or, if it
+// is still in exit(), SIGTERMs it, which only sets g_stop again). poweroff is spawned detached and never waited for, so
+// nothing can deadlock. Exit status 77 tells the init script's respawn wrapper not to restart the firmware; if poweroff
+// cannot be started the exit stays 0, the wrapper respawns the firmware and the device keeps running.
+#define Y2_EXIT_POWEROFF 77
+static volatile sig_atomic_t g_poweroff;
+static void poweroff_at_exit(void) {
+    if (g_poweroff == 0) {
+        return;
+    }
+    g_poweroff = 0;
+    printf("y2: stopped, requesting poweroff (%s)\n", y2_poweroff_command());
+    fflush(NULL);
+    if (y2_poweroff_spawn(NULL)) {
+        _exit(Y2_EXIT_POWEROFF);
+    }
+    fprintf(stderr, "y2: cannot start %s, staying up\n", y2_poweroff_command());
+}
+static void on_power_hold(void) {
+    g_poweroff = 1;
+    g_stop = 1;
+}
+
 int main(int argc, char **argv) {
     neupod_runtime_config_t cfg = {.console_keys = true, .storage_hotplug = true, .stop_requested = stop_requested};
     for (int i = 1; i < argc; i++) {
@@ -69,6 +95,10 @@ int main(int argc, char **argv) {
     signal(SIGPIPE, SIG_IGN); // a closed ssh session must not kill the player
     y2_set_delay_hook(os_delay_ms); // HAL sleeps go through the scheduler
     y2_input_set_volume_handler(on_volume);
+    // Must stay the FIRST atexit registration: handlers run last-in first-out and poweroff_at_exit ends with _exit(77),
+    // which would skip any handler registered before it.
+    atexit(poweroff_at_exit);
+    y2_input_set_power_handler(on_power_hold);
     neupod_runtime_run(&cfg);
     return 0;
 }
