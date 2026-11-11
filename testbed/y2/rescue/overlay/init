@@ -14,7 +14,7 @@ log() {
 	echo "y2-rescue: $*"
 }
 
-stage() { # N: progress row on the screen
+stage() { # N: progress dots along the bottom of the screen
 	fbtool status "$1" >/dev/null 2>&1
 	log "stage $1: $2"
 }
@@ -56,7 +56,8 @@ log "y2-rescue starting, $(cat /proc/version)"
 read -r CMDLINE </proc/cmdline
 
 [ -w /sys/class/leds/lcd-backlight/brightness ] && echo 128 >/sys/class/leds/lcd-backlight/brightness
-fbtool bars >/dev/null 2>&1
+# Splash first; if the image is missing or bad (nothing is drawn then) fall back to the colour bars.
+fbtool image /etc/splash.y2i >/dev/null 2>&1 || fbtool bars >/dev/null 2>&1
 stage 1 "proc/sys/dev mounted"
 
 # ---- 2. mdev (no devtmpfs on this kernel) ----------------------------------------------

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Buildroot post-build hook for the y2 rootfs. $1 = target dir.
 #   - installs diag.sh from the rescue overlay (single source of truth)
+#   - installs the splash image from the rescue overlay (same single source as diag.sh)
 #   - installs root's SSH key from $Y2_SSH_PUBKEY (generated into the image only; never committed)
 #   - drops Buildroot's mdev daemon script (S00dev arms mdev as hotplug helper instead)
 #   - makes /var/log and /etc/dropbear persistent real directories (skeleton symlinks them to tmpfs)
@@ -11,6 +12,7 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 Y2=$(cd "$HERE/../../.." && pwd)
 
 install -D -m 0755 "$Y2/rescue/overlay/bin/diag.sh" "$TARGET/usr/bin/diag.sh"
+install -D -m 0644 "$Y2/rescue/overlay/etc/splash.y2i" "$TARGET/etc/splash.y2i"
 # Boot-time runs must never remount the SD read-write (Y2_DIAG_NO_SD=1, set by S99diag). The rescue copy
 # is not edited; patch the installed one and fail loudly if the rescue script changed shape.
 sed -i 's/^if \[ -n "\$SDMOUNTED" \] && mount -o remount,rw/if [ -n "$SDMOUNTED" ] \&\& [ -z "$Y2_DIAG_NO_SD" ] \&\& mount -o remount,rw/' "$TARGET/usr/bin/diag.sh"

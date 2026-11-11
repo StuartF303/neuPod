@@ -29,3 +29,4 @@ jobs:
           done
           # Device scripts run under busybox ash; /bin/sh on the runner is dash, a POSIX-only parser.
           sh -n testbed/y2/buildroot/board/y2/overlay/etc/init.d/S90neupod-demo
+          sh -n testbed/y2/buildroot/board/y2/overlay/etc/init.d/S20display
