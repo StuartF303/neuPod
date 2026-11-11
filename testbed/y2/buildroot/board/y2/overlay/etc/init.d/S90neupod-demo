@@ -1,16 +1,22 @@
 #!/bin/sh
 # neuPod .NET demo (testbed/y2/dotnet). No-op unless /opt/neupod-demo/NeuPod.Y2Demo exists, which
-# testbed/y2/scripts/deploy-demo.sh puts there. Runs under a respawn wrapper (2 s pause so a crash cannot
+# testbed/y2/scripts/deploy-demo.sh puts there, and unless it is the selected UI: /etc/neupod-ui holds "demo" or "fw" (the
+# C firmware, S91neupod-fw); a missing, empty or unrecognised file means demo. Runs under a respawn wrapper (2 s pause so a crash cannot
 # spin); the log is on tmpfs, not eMMC. stop kills by PID file only, never by name.
 APP=/opt/neupod-demo/NeuPod.Y2Demo
 WRAP_PID=/run/neupod-demo.pid
 APP_PID=/run/neupod-demo.app.pid
 LOG=/tmp/neupod-demo.log
+UI_FILE=/etc/neupod-ui
 
 alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
 
+# Only "fw" hands /dev/fb0 to the C firmware; anything else keeps today's behaviour.
+selected() { [ "$(tr -d ' \t\r\n' <"$UI_FILE" 2>/dev/null)" != fw ]; }
+
 start() {
 	[ -x "$APP" ] || return 0
+	selected || return 0
 	if alive "$(cat "$WRAP_PID" 2>/dev/null)"; then
 		echo "neupod-demo already running"
 		return 0

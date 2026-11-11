@@ -1,0 +1,70 @@
+#!/bin/sh
+# neuPod C firmware on the Y2 (platforms/y2). Starts only if /etc/neupod-ui contains "fw" (the .NET demo, S90neupod-demo,
+# owns /dev/fb0 otherwise) and /opt/neupod-fw/neupod exists, which testbed/y2/scripts/deploy-fw.sh puts there. Runs under
+# a respawn wrapper (2 s pause so a crash cannot spin); the log is on tmpfs, not eMMC, and is emptied whenever it passes
+# 256 KB. stop kills by PID file only, never by name.
+# Keys can be sent from ssh while it runs:  echo s > /run/neupod.keys   (w/s scroll, e select, m menu, a/d left/right, p play)
+APP=/opt/neupod-fw/neupod
+UI_FILE=/etc/neupod-ui
+WRAP_PID=/run/neupod-fw.pid
+APP_PID=/run/neupod-fw.app.pid
+LOG=/tmp/neupod-fw.log
+
+alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
+
+selected() { [ "$(tr -d ' \t\r\n' <"$UI_FILE" 2>/dev/null)" = fw ]; }
+
+start() {
+	[ -x "$APP" ] || return 0
+	selected || return 0
+	if alive "$(cat "$WRAP_PID" 2>/dev/null)"; then
+		echo "neupod-fw already running"
+		return 0
+	fi
+	: >"$LOG"
+	setsid sh -c '
+		echo $$ >"$0"
+		while :; do
+			[ "$(wc -c <"$3")" -gt 262144 ] && : >"$3"
+			"$1" --splash-hold-ms 3000 &
+			app=$!
+			echo $app >"$2"
+			# Trim the log while the app runs (the shell holds it open O_APPEND, so truncating in place is safe).
+			# A separate subshell, because this one sits in wait: a kill -0 poll here would also succeed on the
+			# exited-but-unreaped app and never notice a crash. The trimmer ends within 5 s of the app.
+			(while sleep 5 && kill -0 $app 2>/dev/null; do
+				[ "$(wc -c <"$3")" -gt 262144 ] && : >"$3"
+			done) &
+			wait $app
+			rc=$?
+			rm -f "$2"
+			echo "neupod-fw exited ($rc), restarting in 2 s" >&2
+			sleep 2
+		done
+	' "$WRAP_PID" "$APP" "$APP_PID" "$LOG" </dev/null >>"$LOG" 2>&1 &
+}
+
+stop() {
+	wp=$(cat "$WRAP_PID" 2>/dev/null)
+	ap=$(cat "$APP_PID" 2>/dev/null)
+	# Wrapper first so it cannot respawn, then the app (SIGTERM: it exits at once).
+	alive "$wp" && kill "$wp" 2>/dev/null
+	if alive "$ap"; then
+		kill "$ap" 2>/dev/null
+		i=0
+		while alive "$ap" && [ $i -lt 30 ]; do
+			sleep 0.1
+			i=$((i + 1))
+		done
+		alive "$ap" && kill -9 "$ap" 2>/dev/null
+	fi
+	rm -f "$WRAP_PID" "$APP_PID"
+}
+
+case "$1" in
+	start) start ;;
+	stop) stop ;;
+	restart) stop; start ;;
+	*) echo "Usage: $0 {start|stop|restart}"; exit 1 ;;
+esac
+exit 0

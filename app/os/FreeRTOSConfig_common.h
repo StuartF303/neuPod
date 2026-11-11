@@ -45,7 +45,9 @@
 /* Safety nets (docs/runtime.md, "Failure handling"). Handlers live in app/runtime/panic.c. */
 #define configCHECK_FOR_STACK_OVERFLOW 2
 #define configUSE_MALLOC_FAILED_HOOK 1
+#ifndef configUSE_IDLE_HOOK /* a platform config may turn it on first (the Y2 sleeps in the idle task) */
 #define configUSE_IDLE_HOOK 0
+#endif
 #define configUSE_TICK_HOOK 0
 #define configUSE_DAEMON_TASK_STARTUP_HOOK 0
 

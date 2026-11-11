@@ -11,6 +11,7 @@
 # Touches only: /opt/neupod-demo (staged as /opt/neupod-demo.new, renamed in; the previous build is kept as
 # /opt/neupod-demo.old until the new one has stayed up, and restored if it does not), /etc/init.d/S90neupod-demo,
 # and (indirectly, via the app) /etc/neupod-demo.conf. No sudo, no flashing, no partition writes.
+# If /etc/neupod-ui says "fw" (the C firmware owns the screen, see deploy-fw.sh / select-ui.sh) the build is only staged.
 #
 # ssh host-key checking is left at its default. After the Y2 is reflashed or its rootfs is rebuilt, dropbear
 # generates a new host key and ssh refuses to connect; verify the device is yours, then run
@@ -80,6 +81,14 @@ fi
 
 if [ "$RESTART" = 0 ]; then
 	echo "staged in /opt/neupod-demo.new; not swapped or restarted (--no-restart). Re-run without the flag to install."
+	exit 0
+fi
+
+# The C firmware (deploy-fw.sh) may own the screen: /etc/neupod-ui = fw makes S90neupod-demo a no-op, so a "start and verify" here
+# would always fail and roll back. Leave the new build staged and say how to switch.
+if [ "$DRY" = 0 ] && [ "$("${SSH[@]}" 'tr -d " \t\r\n" </etc/neupod-ui 2>/dev/null || true')" = fw ]; then
+	echo "the C firmware is the selected UI (/etc/neupod-ui = fw): staged in /opt/neupod-demo.new, not swapped or restarted."
+	echo "Run select-ui.sh demo, then re-run this script to install it."
 	exit 0
 fi
 

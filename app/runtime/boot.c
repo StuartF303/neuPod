@@ -313,6 +313,50 @@ void boot_start(void) {
     }
 }
 
+// --- Card inserted after boot (Y2) ------------------------------------------------------------------------------------
+
+#define HOTPLUG_POLL_MS 2000u
+static volatile bool g_hotplug_busy;
+
+static void hotplug_check(void *arg) {
+    (void)arg;
+    printf("boot: card appeared, checking storage again\n");
+    caps_allow_late_ok(CAP_STORAGE);
+    check_storage(NULL);
+    g_hotplug_busy = false;
+}
+
+void boot_storage_hotplug_poll(void) {
+    static uint32_t last_ms;
+    static bool tried_this_card;
+    if (!g_started || g_hotplug_busy) {
+        return;
+    }
+    uint32_t now = os_tick_ms();
+    if (now - last_ms < HOTPLUG_POLL_MS) {
+        return;
+    }
+    last_ms = now;
+    capabilities_t c;
+    caps_get(&c);
+    if (c.state[CAP_STORAGE] != CAP_DEGRADED) {
+        return; // still checking (PENDING) or already usable
+    }
+    if (!hal_storage_card_present()) {
+        tried_this_card = false;
+        return;
+    }
+    if (tried_this_card) {
+        return;
+    }
+    tried_this_card = true;
+    g_hotplug_busy = true;
+    if (os_task_create(&(os_task_cfg_t){.name = "chk_sd2", .fn = hotplug_check, .stack_bytes = RT_STACK_CHECK_STORAGE,
+                                        .priority = RT_PRIO_CHECK, .core = RT_CORE_OTHER}) == NULL) {
+        g_hotplug_busy = false;
+    }
+}
+
 bool boot_poll(void) {
     if (!g_started) {
         return false;

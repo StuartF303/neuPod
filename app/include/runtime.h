@@ -31,6 +31,11 @@ typedef struct {
     const char *ui_script;
     /** True where console keys are an input source (the UART testbed); the host uses its window. */
     bool console_keys;
+    /**
+     * True where a microSD card can be inserted after boot and the HAL can notice (the Y2): while storage is unavailable the monitor
+     * polls hal_storage_card_present() and, when a card shows up, runs the storage boot check again. Never used on the RP2350.
+     */
+    bool storage_hotplug;
     /** Called from the UI task when a named screen is fully drawn ("splash", "home"). */
     void (*on_screen)(const char *name, void *ctx);
     /** Called from the monitor task when run_ms has elapsed. */

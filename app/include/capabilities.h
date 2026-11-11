@@ -64,6 +64,12 @@ bool caps_resolve(cap_id_t id, bool ok, const char *brief, const char *fmt, ...)
 bool caps_resolve_timeout(cap_id_t id, const char *brief, const char *fmt, ...)
     __attribute__((format(printf, 3, 4)));
 
+/**
+ * Let a capability that is DEGRADED (not pending) be upgraded to OK by a later caps_resolve(ok), exactly as one that missed its
+ * deadline can. For a check that is deliberately run again later (the Y2's microSD hot-plug). No-op unless DEGRADED.
+ */
+void caps_allow_late_ok(cap_id_t id);
+
 /** Copy of the current state. */
 void caps_get(capabilities_t *out);
 

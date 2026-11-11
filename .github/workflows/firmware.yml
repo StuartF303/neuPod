@@ -82,6 +82,32 @@ jobs:
       - name: Test
         run: ctest --test-dir build/host --output-on-failure -j3
 
+  # Compile check of the Innioasis Y2 target (docs/y2.md). The device binary is built with the Buildroot toolchain from the
+  # rootfs; CI cannot have that, so it cross-builds with Ubuntu's armhf gcc (a few seconds of apt) and only checks that the
+  # result is a 32-bit ARM hard-float executable. The Y2's portable logic is unit-tested by the host job (ctest -R y2_).
+  y2:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Fetch submodules
+        run: git submodule update --init lib/FreeRTOS-Kernel lib/lvgl
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build build-essential gcc-arm-linux-gnueabihf
+      - name: Fetch mbed TLS (only that submodule of the Pico SDK; the secrets code needs it)
+        run: |
+          git clone --depth 1 --branch "$PICO_SDK_VERSION" https://github.com/raspberrypi/pico-sdk.git ~/pico-sdk
+          git -C ~/pico-sdk submodule update --init --depth 1 lib/mbedtls
+      - name: Cross-build
+        run: |
+          export PICO_SDK_PATH=$HOME/pico-sdk NEUPOD_Y2_TOOLCHAIN=/usr NEUPOD_Y2_TRIPLE=arm-linux-gnueabihf
+          scripts/build.sh y2 --clean -- -DCMAKE_BUILD_TYPE=Release -DNEUPOD_REQUIRE_CRYPTO=ON
+      - name: Check the result is an armhf executable
+        run: |
+          file build/y2/platforms/y2/neupod | tee /dev/stderr | grep -q "ELF 32-bit LSB.*ARM.*EABI5"
+          arm-linux-gnueabihf-readelf -A build/y2/platforms/y2/neupod | grep -q "Tag_ABI_VFP_args: VFP registers"
+
   esp32s3:
     runs-on: ubuntu-24.04
     container: espressif/idf:v5.3.2

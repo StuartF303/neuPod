@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Configure and build one platform into build/<platform>/.
-# Usage: scripts/build.sh [rp2350|esp32s3|host] [--clean] [-- extra cmake/idf.py args]
+# Usage: scripts/build.sh [rp2350|esp32s3|host|y2] [--clean] [-- extra cmake/idf.py args]
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLATFORM="${1:-rp2350}"; shift || true
@@ -12,7 +12,7 @@ BUILD="$ROOT/build/$PLATFORM"
 (( CLEAN )) && rm -rf "$BUILD"
 
 case "$PLATFORM" in
-    rp2350|host)
+    rp2350|host|y2)
         cmake -S "$ROOT" -B "$BUILD" -G Ninja -DNEUPOD_PLATFORM="$PLATFORM" "$@"
         ninja -C "$BUILD"
         ;;
@@ -25,7 +25,7 @@ case "$PLATFORM" in
         idf.py -C "$ROOT/platforms/esp32s3" -B "$BUILD" build "$@"
         ;;
     *)
-        echo "Unknown platform '$PLATFORM' (rp2350, esp32s3, host)" >&2
+        echo "Unknown platform '$PLATFORM' (rp2350, esp32s3, host, y2)" >&2
         exit 2
         ;;
 esac

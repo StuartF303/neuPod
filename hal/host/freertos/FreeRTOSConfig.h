@@ -20,6 +20,12 @@ extern void neupod_panic_assert(const char *file, int line);
 #endif
 #define configASSERT(x) do { if (!(x)) neupod_panic_assert(__FILE__, __LINE__); } while (0)
 
+#ifdef NEUPOD_PLATFORM_Y2
+/* On the Y2 (a battery-powered Linux device) the POSIX port's idle task must sleep instead of spinning:
+ * platforms/y2/hal/hal_system.c defines vApplicationIdleHook(). */
+#define configUSE_IDLE_HOOK 1
+#endif
+
 #include "FreeRTOSConfig_common.h"
 
 #endif // NEUPOD_HOST_FREERTOS_CONFIG_H

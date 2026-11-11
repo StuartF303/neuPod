@@ -65,6 +65,15 @@ bool caps_resolve_timeout(cap_id_t id, const char *brief, const char *fmt, ...) 
     return r;
 }
 
+void caps_allow_late_ok(cap_id_t id) {
+    if (id < CAP_COUNT && os_mutex_lock(g_lock, OS_WAIT_FOREVER)) {
+        if (g_caps.state[id] == CAP_DEGRADED) {
+            g_timed_out[id] = true;
+        }
+        os_mutex_unlock(g_lock);
+    }
+}
+
 void caps_get(capabilities_t *out) {
     if (os_mutex_lock(g_lock, OS_WAIT_FOREVER)) {
         *out = g_caps;

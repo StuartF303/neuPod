@@ -5,9 +5,9 @@ name: y2-tools
 on:
   push:
     branches: [main]
-    paths: ["testbed/y2/tools/**", "testbed/y2/rescue/**", "testbed/y2/buildroot/**", "testbed/y2/scripts/usb-console.sh", "testbed/y2/scripts/deploy-demo.sh", "testbed/y2/dotnet/**", ".github/workflows/y2-tools.yml"]
+    paths: ["testbed/y2/tools/**", "testbed/y2/rescue/**", "testbed/y2/buildroot/**", "testbed/y2/scripts/usb-console.sh", "testbed/y2/scripts/deploy-demo.sh", "testbed/y2/scripts/deploy-fw.sh", "testbed/y2/scripts/select-ui.sh", "testbed/y2/dotnet/**", ".github/workflows/y2-tools.yml"]
   pull_request:
-    paths: ["testbed/y2/tools/**", "testbed/y2/rescue/**", "testbed/y2/buildroot/**", "testbed/y2/scripts/usb-console.sh", "testbed/y2/scripts/deploy-demo.sh", "testbed/y2/dotnet/**", ".github/workflows/y2-tools.yml"]
+    paths: ["testbed/y2/tools/**", "testbed/y2/rescue/**", "testbed/y2/buildroot/**", "testbed/y2/scripts/usb-console.sh", "testbed/y2/scripts/deploy-demo.sh", "testbed/y2/scripts/deploy-fw.sh", "testbed/y2/scripts/select-ui.sh", "testbed/y2/dotnet/**", ".github/workflows/y2-tools.yml"]
   workflow_dispatch:
 
 jobs:
@@ -24,9 +24,10 @@ jobs:
         run: dotnet test testbed/y2/dotnet/NeuPod.Y2.slnx -c Release
       - name: Shell syntax
         run: |
-          for f in testbed/y2/tools/setup-host.sh testbed/y2/rescue/build-rescue.sh testbed/y2/scripts/usb-console.sh testbed/y2/scripts/deploy-demo.sh; do
+          for f in testbed/y2/tools/setup-host.sh testbed/y2/rescue/build-rescue.sh testbed/y2/scripts/usb-console.sh testbed/y2/scripts/deploy-demo.sh testbed/y2/scripts/deploy-fw.sh testbed/y2/scripts/select-ui.sh; do
             bash -n "$f"
           done
           # Device scripts run under busybox ash; /bin/sh on the runner is dash, a POSIX-only parser.
           sh -n testbed/y2/buildroot/board/y2/overlay/etc/init.d/S90neupod-demo
           sh -n testbed/y2/buildroot/board/y2/overlay/etc/init.d/S20display
+          sh -n testbed/y2/buildroot/board/y2/overlay/etc/init.d/S91neupod-fw
