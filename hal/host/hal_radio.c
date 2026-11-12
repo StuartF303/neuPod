@@ -50,6 +50,21 @@ static uint32_t g_reported;      /* devices reported so far in this scan */
 static bool g_named[N_DEVS];
 static const hal_bt_storage_t *g_storage;
 
+/* stream (stage 2b) */
+#define SIM_STREAM_OPEN_MS 250u  /* AVDTP set-up after CONNECTED */
+#define SIM_STREAM_START_MS 120u /* start command to the first packet */
+static hal_bt_stream_state_t g_stream = HAL_BT_STREAM_CLOSED;
+static hal_bt_fail_t g_stream_reason = HAL_BT_FAIL_NONE;
+static hal_bt_codec_t g_codec;
+static uint32_t g_stream_t0;
+static bool g_start_pending;
+static hal_bt_pcm_source_t g_src;
+static bool g_have_src;
+static hal_bt_stats_t g_stats;
+static uint32_t g_pace_t0, g_pace_frac; /* ms of the last consumption, and the sub-frame remainder (in 1/1000 frame) */
+static uint32_t g_sbc_frames_frac;
+static hal_bt_fail_t g_force_stream_fail;
+
 /* link */
 static uint32_t g_attempt;
 static hal_bt_link_state_t g_link = HAL_BT_LINK_DISCONNECTED;
@@ -141,7 +156,42 @@ static void keys_load(void) {
     }
 }
 
+static void emit_stream(hal_bt_stream_state_t st, hal_bt_fail_t reason) {
+    g_stream = st;
+    g_stream_reason = st == HAL_BT_STREAM_FAILED ? reason : HAL_BT_FAIL_NONE;
+    if (g_cb != NULL) {
+        hal_bt_event_t ev = {.type = HAL_BT_EVT_STREAM, .state = g_state, .dev = g_peer, .stream = st, .reason = g_stream_reason};
+        if (st == HAL_BT_STREAM_OPEN || st == HAL_BT_STREAM_STREAMING || st == HAL_BT_STREAM_SUSPENDED) {
+            ev.codec = g_codec;
+        }
+        g_cb(&ev, g_ctx);
+    }
+}
+
+/* What the simulated headset negotiates: the WH-1000XM5 accepts the high bitpool (SBC-XQ), everything else is plain SBC. */
+static void sim_codec_for(const uint8_t addr[6]) {
+    memset(&g_codec, 0, sizeof g_codec);
+    g_codec = (hal_bt_codec_t){.codec = HAL_BT_CODEC_SBC, .rate = 44100, .channels = 2, .mode = HAL_BT_MODE_JOINT_STEREO,
+                               .bitpool_min = 2, .bitpool_max = 53, .bitpool = 53, .kbps = 328};
+    if (addr[0] == 0x00 && addr[1] == 0x1B) {
+        g_codec.codec = HAL_BT_CODEC_SBC_XQ;
+        g_codec.bitpool_max = g_codec.bitpool = 76;
+        g_codec.kbps = 455;
+    }
+}
+
+static void stream_reset_stats(void) {
+    memset(&g_stats, 0, sizeof g_stats);
+    g_stats.link_quality = HAL_BT_RSSI_UNKNOWN;
+    g_pace_frac = 0;
+    g_sbc_frames_frac = 0;
+}
+
 static void emit_link(hal_bt_link_state_t s, hal_bt_fail_t reason) {
+    if (s != HAL_BT_LINK_CONNECTED && g_stream != HAL_BT_STREAM_CLOSED) {
+        g_start_pending = false;
+        emit_stream(HAL_BT_STREAM_CLOSED, HAL_BT_FAIL_NONE); /* the audio connection goes with the link; announced first */
+    }
     g_link = s;
     g_reason = s == HAL_BT_LINK_FAILED ? reason : HAL_BT_FAIL_NONE;
     if (s != HAL_BT_LINK_PAIRING) {
@@ -150,6 +200,12 @@ static void emit_link(hal_bt_link_state_t s, hal_bt_fail_t reason) {
     if (g_cb != NULL) {
         hal_bt_event_t ev = {.type = HAL_BT_EVT_LINK, .state = g_state, .dev = g_peer, .link = s, .reason = g_reason, .attempt = g_attempt};
         g_cb(&ev, g_ctx);
+    }
+    if (s == HAL_BT_LINK_CONNECTED) { /* the stream opens by itself once the link is up */
+        sim_codec_for(g_peer.addr);
+        stream_reset_stats();
+        g_stream_t0 = hal_millis();
+        emit_stream(HAL_BT_STREAM_OPENING, HAL_BT_FAIL_NONE);
     }
 }
 
@@ -207,6 +263,7 @@ void hal_bt_inquiry_stop(void) {
 }
 
 static void link_poll(void);
+static void stream_poll(void);
 
 void hal_bt_poll(void) {
     link_poll();
@@ -364,6 +421,7 @@ void hal_host_bt_remote_hangup(void) {
 }
 
 static void link_poll(void) {
+    stream_poll();
     uint32_t dt = hal_millis() - g_link_t0;
     if (g_link == HAL_BT_LINK_PAIRING && dt >= SIM_PAIR_MS) {
         hal_bt_fail_t r = sim_outcome(g_peer.addr);
@@ -380,12 +438,118 @@ static void link_poll(void) {
     }
 }
 
-hal_status_t hal_radio_a2dp_connect(const uint8_t addr[6]) {
-    (void)addr;
-    return HAL_ENOTSUP; /* stage 2b */
+/* ---- the audio stream ---- */
+
+void hal_bt_set_pcm_source(const hal_bt_pcm_source_t *src) {
+    g_have_src = src != NULL;
+    if (src != NULL) {
+        g_src = *src;
+    }
 }
 
-void hal_radio_a2dp_disconnect(void) {}
+hal_status_t hal_bt_stream_open(void) {
+    if (g_link != HAL_BT_LINK_CONNECTED) {
+        return HAL_ENODEV;
+    }
+    if (g_stream != HAL_BT_STREAM_CLOSED && g_stream != HAL_BT_STREAM_FAILED) {
+        return HAL_EBUSY;
+    }
+    g_stream_t0 = hal_millis();
+    emit_stream(HAL_BT_STREAM_OPENING, HAL_BT_FAIL_NONE);
+    return HAL_OK;
+}
+
+hal_status_t hal_bt_stream_start(void) {
+    if (g_stream == HAL_BT_STREAM_STREAMING) {
+        return HAL_OK;
+    }
+    if (g_stream != HAL_BT_STREAM_OPEN && g_stream != HAL_BT_STREAM_SUSPENDED) {
+        return HAL_ENODEV;
+    }
+    g_start_pending = true;
+    g_stream_t0 = hal_millis();
+    return HAL_OK;
+}
+
+void hal_bt_stream_suspend(void) {
+    g_start_pending = false;
+    if (g_stream == HAL_BT_STREAM_STREAMING) {
+        emit_stream(HAL_BT_STREAM_SUSPENDED, HAL_BT_FAIL_NONE);
+    }
+}
+
+void hal_bt_stream_close(void) {
+    g_start_pending = false;
+    if (g_stream != HAL_BT_STREAM_CLOSED) {
+        emit_stream(HAL_BT_STREAM_CLOSED, HAL_BT_FAIL_NONE);
+    }
+}
+
+hal_bt_stream_state_t hal_bt_stream_state(void) { return g_stream; }
+hal_bt_fail_t hal_bt_stream_reason(void) { return g_stream == HAL_BT_STREAM_FAILED ? g_stream_reason : HAL_BT_FAIL_NONE; }
+
+bool hal_bt_stream_codec(hal_bt_codec_t *out) {
+    if (g_stream != HAL_BT_STREAM_OPEN && g_stream != HAL_BT_STREAM_STREAMING && g_stream != HAL_BT_STREAM_SUSPENDED) {
+        return false;
+    }
+    *out = g_codec;
+    return true;
+}
+
+void hal_bt_stats(hal_bt_stats_t *out) { *out = g_stats; }
+
+void hal_host_bt_fail_next_stream(hal_bt_fail_t reason) { g_force_stream_fail = reason; }
+
+/* Consume the PCM ring at the real rate while STREAMING, like a headset would (the encoder side of the real adapter). */
+static void stream_poll(void) {
+    uint32_t now = hal_millis();
+    if (g_link != HAL_BT_LINK_CONNECTED) {
+        return;
+    }
+    if (g_stream == HAL_BT_STREAM_OPENING && now - g_stream_t0 >= SIM_STREAM_OPEN_MS) {
+        if (g_force_stream_fail != HAL_BT_FAIL_NONE) {
+            hal_bt_fail_t r = g_force_stream_fail;
+            g_force_stream_fail = HAL_BT_FAIL_NONE;
+            emit_stream(HAL_BT_STREAM_FAILED, r);
+        } else {
+            emit_stream(HAL_BT_STREAM_OPEN, HAL_BT_FAIL_NONE);
+        }
+    } else if (g_start_pending && now - g_stream_t0 >= SIM_STREAM_START_MS) {
+        g_start_pending = false;
+        g_pace_t0 = now;
+        g_pace_frac = 0;
+        emit_stream(HAL_BT_STREAM_STREAMING, HAL_BT_FAIL_NONE);
+    } else if (g_stream == HAL_BT_STREAM_STREAMING) {
+        uint32_t dt = now - g_pace_t0;
+        g_pace_t0 = now;
+        uint32_t milli = dt * g_codec.rate + g_pace_frac; /* frames x 1000 */
+        uint32_t want = milli / 1000u;
+        g_pace_frac = milli % 1000u;
+        if (g_have_src && want > 0) {
+            int16_t buf[256 * 2];
+            uint32_t got_total = 0;
+            while (got_total < want) {
+                uint32_t n = want - got_total > 256u ? 256u : want - got_total;
+                uint32_t got = g_src.read(g_src.ctx, buf, n);
+                got_total += got;
+                if (got < n) {
+                    g_stats.underruns++; /* the encoder wanted audio and the ring had none */
+                    break;
+                }
+            }
+            uint32_t f = got_total * 1000u + g_sbc_frames_frac; /* SBC frames of 128 samples, in 1/1000 */
+            g_stats.frames_encoded += f / 128000u;
+            g_sbc_frames_frac = f % 128000u;
+            g_stats.packets_sent = g_stats.frames_encoded / 5u;
+        }
+    }
+}
+
+void hal_host_bt_stream_dropped_by_headset(void) {
+    if (g_stream == HAL_BT_STREAM_STREAMING || g_stream == HAL_BT_STREAM_OPEN || g_stream == HAL_BT_STREAM_SUSPENDED) {
+        emit_stream(HAL_BT_STREAM_CLOSED, HAL_BT_FAIL_NONE);
+    }
+}
 
 /* ============================ Wi-Fi simulation ============================ */
 /* Scan "finds" five networks after a moment; a join succeeds for any of them with a non-empty password except "wrongpass"
