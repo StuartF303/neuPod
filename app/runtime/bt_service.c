@@ -127,8 +127,9 @@ static void reconnect_tick(void) {
     const uint32_t now = os_tick_ms();
     if (g_lost) {
         g_lost = false;
-        hal_bt_device_t d;
-        if (bt_saved_get(&d)) {
+        /* Not while a schedule runs: a reconnect attempt that fails with LINK_LOST (the ACL dropped during its SDP query) is one more failed attempt, not a
+         * fresh loss; re-arming would restart the 2 s step and the 5 minute give-up for ever. */
+        if (!bt_rc_active(&g_rc) && bt_saved_get(NULL)) {
             bt_rc_lost(&g_rc, now);
         }
     }
