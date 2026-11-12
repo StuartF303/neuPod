@@ -36,7 +36,7 @@ static const ui_licence_t k_licences[] = {
      "mbed TLS 3.6", "Apache-2.0", false},
     {"BTstack", "Non-commercial",
      "BlueKitchen GmbH. Free for non-commercial use only: any commercial product needs a licence from BlueKitchen (bluekitchen-gmbh.com). "
-     "On Raspberry Pi hardware a separate grant applies. LICENSE.md in the source has the details.",
+     "On Raspberry Pi hardware a separate grant applies (not on the Y2 testbed). LICENSE.md in the source has the details.",
      "BTstack (BlueKitchen GmbH)", "non-commercial", false},
     {"Android SBC codec", "Apache-2.0",
      "Bluedroid SBC from the Android project, copyright Broadcom 1999-2012, inside BTstack. It encodes the audio sent to a Bluetooth headset.",
