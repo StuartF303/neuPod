@@ -237,6 +237,7 @@ static libsvc_status_t do_info(const libsvc_req_t *rq) {
     // through stale handles (and a reader left broken by an error recovers). Costs a few file opens, once per list.
     rows_invalidate();
     reader_close();
+    g_cur_view.kind = LVW_KINDS; /* g_cur_info is about to be replaced: if this open fails, no list may be taken to match what is left of it */
     libsvc_status_t s = reader_ensure();
     if (s != LIBSVC_OK) {
         return s;
@@ -255,6 +256,7 @@ static libsvc_status_t do_rows(const libsvc_req_t *rq) {
         return s;
     }
     if (g_cur_view.kind != rq->view.kind || g_cur_view.id != rq->view.id) {
+        g_cur_view.kind = LVW_KINDS; /* lvw_info clears g_cur_info first: a failure must not leave it standing for the old view */
         lib_err_t e = lvw_info(&g_mem.lib.r, rq->view, &g_cur_info);
         if (e != LIB_OK) {
             return LIBSVC_ERROR;

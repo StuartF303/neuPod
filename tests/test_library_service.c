@@ -187,6 +187,19 @@ TEST(rows_error_on_a_bad_view_and_the_service_keeps_working) {
     ASSERT_EQ(LIBSVC_OK, do_info((lvw_view_t){LVW_SONGS, 0}));
 }
 
+TEST(a_failed_list_open_does_not_leave_the_previous_lists_rows_computed_from_its_empty_info) {
+    ASSERT_TRUE(fresh_card(2));
+    ASSERT_EQ(LIBSVC_OK, do_build());
+    lvw_view_t songs = {LVW_SONGS, 0};
+    ASSERT_EQ(LIBSVC_OK, do_info(songs));
+    ASSERT_EQ(LIBSVC_OK, do_rows(songs, 0, LIBSVC_ROWS));
+    ASSERT_EQ(LIBSVC_DAMAGED, do_info((lvw_view_t){LVW_ARTIST, 99})); /* a child list that cannot open ... */
+    ASSERT_EQ(LIBSVC_OK, do_rows(songs, 0, LIBSVC_ROWS));             /* ... and back in the parent: it still fills */
+    lvw_row_t r;
+    ASSERT_TRUE(library_row(songs, 0, &r));
+    ASSERT_TRUE(r.text[0] != '\0');
+}
+
 TEST(a_folder_listing_takes_the_shared_buffer_and_the_next_request_opens_the_reader_again) {
     ASSERT_TRUE(fresh_card(3));
     ASSERT_EQ(LIBSVC_OK, do_build());
@@ -328,6 +341,7 @@ int main(void) {
     RUN(no_library_says_so_and_a_build_makes_one);
     RUN(rows_come_in_a_window_and_only_for_the_list_they_were_filled_for);
     RUN(rows_error_on_a_bad_view_and_the_service_keeps_working);
+    RUN(a_failed_list_open_does_not_leave_the_previous_lists_rows_computed_from_its_empty_info);
     RUN(a_folder_listing_takes_the_shared_buffer_and_the_next_request_opens_the_reader_again);
     RUN(a_build_refuses_while_something_plays_and_on_a_card_it_cannot_write);
     RUN(no_card_means_no_library_and_no_build);
