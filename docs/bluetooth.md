@@ -296,6 +296,13 @@ grant for use with its chips).
 
 ## Stage 2b: the audio stream (built)
 
+**Headroom.** The Bluetooth output is attenuated by a fixed `NEUPOD_BT_HEADROOM_DB` (3 dB, `audio_dsp.h`) before the 16-bit conversion
+(TPDF-dithered) and SBC. Found on the Y2 with AirPods Pro (12 Nov 2026): with a track mastered to 0 dBFS at volume 0 dB, the decoded SBC
+put 80 to 135 samples per 2 s at the rail in loud passages, heard as crackle; the PCM into the encoder was bit-exact and the SBC stream
+matched a reference encode on the PC (22 to 27 dB SNR), so the overshoot is SBC's own reconstruction. At -4 dB it was clean. The headset's
+volume (AVRCP, stage 2c) makes up the level. Bench aids on the Y2 only: `NEUPOD_BT_HCI_DUMP=<file>` (HCI trace, PacketLogger format) and
+`NEUPOD_BT_PCM_DUMP=<file>` (the encoder's input PCM) in `/etc/neupod-fw.env`.
+
 Built and host-tested; **not yet run on a headset in the firmware** (bench steps at the end). The Y2 is where it is proved first: the BTstack A2DP source it uses is the one verified
 on AirPods Pro and a Sony WI-C200 by the `y2-a2dp` tool, now inside the shared adapter.
 

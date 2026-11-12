@@ -1009,6 +1009,11 @@ static void a2dp_gone(hal_bt_fail_t why_failed) {
 }
 
 static uint32_t g_dbg_sendfail, g_dbg_peak;
+#ifdef NEUPOD_BT_PCM_TAP
+#include <stdlib.h>
+static FILE *g_dbg_tap; /* bench aid (Y2): NEUPOD_BT_PCM_DUMP=<file> records the encoder's input PCM */
+static bool g_dbg_tap_tried;
+#endif
 static uint8_t g_dbg_lastrc;
 
 static void send_packet(void) {
@@ -1088,6 +1093,16 @@ static void media_tick(btstack_timer_source_t *ts) {
             uint32_t a = (uint32_t)(g_pcm_buf[i] < 0 ? -(int32_t)g_pcm_buf[i] : g_pcm_buf[i]);
             g_dbg_peak = a > g_dbg_peak ? a : g_dbg_peak;
         }
+#ifdef NEUPOD_BT_PCM_TAP
+        if (!g_dbg_tap_tried) {
+            g_dbg_tap_tried = true;
+            const char *tp = getenv("NEUPOD_BT_PCM_DUMP");
+            g_dbg_tap = tp != NULL && tp[0] != '\0' ? fopen(tp, "wb") : NULL;
+        }
+        if (g_dbg_tap != NULL) {
+            fwrite(g_pcm_buf, sizeof g_pcm_buf, 1, g_dbg_tap);
+        }
+#endif
         g_enc->encode_signed_16(&g_enc_state, g_pcm_buf, &g_sbc_store[1u + g_sbc_count]);
         g_sbc_count = (uint16_t)(g_sbc_count + g_sbc_frame_len);
         g_owed -= SBC_SAMPLES_PER_FRAME;

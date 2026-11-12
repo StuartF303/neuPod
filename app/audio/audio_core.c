@@ -52,6 +52,7 @@ static uint32_t g_bt_rate;           // the one sample rate the Bluetooth stream
 static uint32_t g_dither_rng;
 static uint32_t g_bt_stall_blocks;   // blocks the interrupt waited because the Bluetooth ring was full (the link is the pace)
 static int16_t g_block16[HAL_AUDIO_BLOCK_FRAMES * 2u];
+static uint32_t g_bt_headroom = AUDIO_GAIN_UNITY; // Q30, set with the output (set_output)
 static volatile uint8_t g_pcm_bits; // bits of the stream being decoded (loop writes, the interrupt reads it to decide on dither)
 // Gapless: where each finished stream ends in the PCM ring, as a running frame count (free-running, wraps). The loop pushes
 // the count of frames written so far when it switches decoders; the interrupt pops it and reports end of track when the frames it
@@ -176,7 +177,13 @@ static void NEUPOD_RAM_FUNC(on_block)(uint32_t missed) {
     if (bt) {
         if (serve_ring && !stalled) {
             // 16 bit for SBC: rounded, with TPDF dither when the volume or a deeper source left bits below the 16th
-            audio_s32_to_s16(g_block, g_block16, HAL_AUDIO_BLOCK_FRAMES, g_vol_att != 0u || g_pcm_bits > 16u, &g_dither_rng);
+            // Headroom for SBC (NEUPOD_BT_HEADROOM_DB), then 16 bit for the encoder: rounded, with TPDF dither whenever an attenuation (volume or
+            // headroom) or a deeper source left bits below the 16th.
+            if (g_bt_headroom != AUDIO_GAIN_UNITY) {
+                audio_apply_gain(g_block, HAL_AUDIO_BLOCK_FRAMES, g_bt_headroom, g_bt_headroom);
+            }
+            audio_s32_to_s16(g_block, g_block16, HAL_AUDIO_BLOCK_FRAMES,
+                             g_vol_att != 0u || g_pcm_bits > 16u || g_bt_headroom != AUDIO_GAIN_UNITY, &g_dither_rng);
             (void)bt_pcm_write(g_block16, HAL_AUDIO_BLOCK_FRAMES); // there is room: checked above
         }
         bt_pcm_set_active(audible);
@@ -380,6 +387,7 @@ static void set_nominal(uint32_t rate) {
 static void set_output(bool bt, uint32_t bt_rate) {
     bt_pcm_attach(NULL, 0); // detach first: the bytes change meaning below
     g_out_bt = bt ? 1u : 0u;
+    g_bt_headroom = bt ? audio_gain_q30(NEUPOD_BT_HEADROOM_DB) : AUDIO_GAIN_UNITY;
     g_bt_rate = bt ? bt_rate : 0u;
     hal_audio_set_virtual(bt);
     (void)spsc_ring_init(&g_pcm_ring, g_pcm_store, FRAME_BYTES, bt ? PCM_FRAMES / 2u : PCM_FRAMES);
