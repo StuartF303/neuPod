@@ -379,6 +379,9 @@ static void lib_resume(ui_screen_t *b) {
         s->pop_me = true;
     }
     ui_list_resume(s->list);
+    /* A fill asked for before a child list was opened may have been answered while this screen was not polling, and the child's own fills then
+     * replaced that answer (one slot per kind): the poll would never match. Forget it; the misses ask again. */
+    s->rows_pending = false;
     s->miss_idx = -1;
     ui_list_refresh(s->list); /* the window may belong to another list now: the misses ask for a new fill */
 }
