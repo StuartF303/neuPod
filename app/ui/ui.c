@@ -204,6 +204,46 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
         }
         return end;
     }
+    if (strncmp(p, "toast:", 6) == 0 || strncmp(p, "hud:", 4) == 0) {
+        /* Tour only (design-system strips): toast:warn:Text_with_underscores / toast:info:Text, hud:Label_text:PCT (PCT -1 = no bar); settled at once for the snapshot. */
+        char txt[64];
+        bool hud = p[0] == 'h';
+        const char *a = p + (hud ? 4 : 6);
+        bool info = !hud && strncmp(a, "info:", 5) == 0;
+        if (!hud) {
+            a += 5; /* "warn:" and "info:" are both five characters */
+        }
+        size_t n = 0;
+        while (a + n < end && a[n] != ':' && n < sizeof txt - 1) {
+            txt[n] = a[n] == '_' ? ' ' : a[n];
+            n++;
+        }
+        txt[n] = '\0';
+        if (hud) {
+            ui_hud_show(txt, a + n < end ? atoi(a + n + 1) : -1, 60000u);
+        } else {
+            ui_toast_show(txt, info ? UI_TOAST_INFO : UI_TOAST_WARN, 60000u);
+        }
+        return end;
+    }
+    if (strncmp(p, "theme:", 6) == 0) {
+        /* Tour only: Settings > Display > Theme set directly (light, dark, auto). */
+        ui_theme_mode_t m = strncmp(p + 6, "dark", 4) == 0 ? UI_THEME_DARK : strncmp(p + 6, "auto", 4) == 0 ? UI_THEME_AUTO : UI_THEME_LIGHT;
+        g_ui_state.theme = m;
+        ui_apply_theme();
+        return end;
+    }
+    if (strncmp(p, "dim:", 4) == 0) {
+        /* Tour only: Auto-dim on, dimming after the first choice (10 s), so a tour can reach the dimmed backlight with sleep:. */
+        g_ui_state.autodim = true;
+        g_ui_state.dim_idx = 0;
+        return end;
+    }
+    if (strncmp(p, "strips:off", 10) == 0) {
+        ui_toast_hide(); /* Tour only: take the strips down again */
+        ui_hud_hide();
+        return end;
+    }
     if (strncmp(p, "bt:drop", 7) == 0) {
         /* Tour only (host simulator): the headset goes away now. Weak, so builds without the simulator simply skip it. */
         if (hal_host_bt_drop_link != NULL) {
@@ -271,6 +311,7 @@ static bool skip_requested(void) {
 }
 
 static void screen_ready(const char *name) {
+    ui_frame_settle(); // a slide or a strip still moving jumps to its end: the picture (and the layout audit) is of the settled screen
     lv_refr_now(NULL); // make sure the screen's latest state is on the panel before anyone looks
     sample_lvgl_memory();
     printf("ui: screen '%s' lvgl_mem=%u/%uB depth=%d\n", name, (unsigned)g_perf.mem_used, (unsigned)g_perf.mem_total, ui_frame_depth());

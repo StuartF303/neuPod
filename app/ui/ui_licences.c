@@ -17,7 +17,7 @@ static ui_screen_t *make_notice(const ui_licence_t *l) {
     if (s == NULL) {
         return NULL;
     }
-    lv_obj_t *head = ui_label(s->root, l->licence, UI_L_SEL_BOT);
+    lv_obj_t *head = ui_label(s->root, l->licence, UI_C_ACCENT);
     lv_obj_set_style_text_font(head, UIM->font_large, 0);
     lv_obj_set_width(head, UI_W - 2 * UIM->pad);
     lv_label_set_long_mode(head, LV_LABEL_LONG_DOT);

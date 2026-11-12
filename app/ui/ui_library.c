@@ -44,8 +44,6 @@ typedef struct {
     bool pop_me;                /* leave on the next tick (a screen may not pop itself from inside a button handler or resume) */
     bool played;                /* Shuffle Songs started: when Now Playing is left, leave too */
     uint32_t shown_files, shown_ms;
-    lv_obj_t *toast;
-    uint32_t toast_until;
     wi_letterjump_t lj;
     ui_letter_overlay_t *overlay;
 } lib_screen_t;
@@ -143,7 +141,17 @@ static void lib_get(void *ctx, int32_t idx, ui_list_item_t *out) {
 
 /* ---- requests ------------------------------------------------------------------------------------------------------------- */
 
-static void set_count(lib_screen_t *s) { ui_list_set_count(s->list, item_count(s)); }
+// The list and the status bar's left slot (design review 3.10: lists show their count) move together.
+static void set_count(lib_screen_t *s) {
+    ui_list_set_count(s->list, item_count(s));
+    if (s->st == S_READY && s->mode == M_LIST) {
+        char c[16];
+        snprintf(c, sizeof c, "%u", (unsigned)s->info.count);
+        ui_screen_set_left(&s->base, c);
+    } else {
+        ui_screen_set_left(&s->base, "");
+    }
+}
 
 static void show_msg(lib_screen_t *s, libsvc_status_t st, const char *text, const char *hint, bool retry) {
     s->st = S_MSG;
@@ -212,9 +220,8 @@ static void start_shuffle(lib_screen_t *s) {
 }
 
 static void show_toast(lib_screen_t *s, const char *text) {
-    ui_label_set_text(s->toast, text);
-    lv_obj_set_hidden(s->toast, false);
-    s->toast_until = os_tick_ms() + 3000u;
+    (void)s;
+    ui_toast_show(text, UI_TOAST_WARN, 0);
 }
 
 /* ---- screen callbacks ---------------------------------------------------------------------------------------------------- */
@@ -230,10 +237,6 @@ static void lib_tick(ui_screen_t *b) {
     if (s->lj.active) {
         wi_letterjump_tick(&s->lj, now);
         ui_letter_overlay_update(s->overlay, &s->lj);
-    }
-    if (s->toast_until != 0 && (int32_t)(now - s->toast_until) >= 0) {
-        s->toast_until = 0;
-        lv_obj_set_hidden(s->toast, true);
     }
     libsvc_status_t st;
     switch (s->st) {
@@ -412,14 +415,6 @@ static ui_screen_t *screen_new(lvw_view_t view, mode_t_ mode, const char *title)
     s->base.resume = lib_resume;
     s->base.destroy = lib_destroy;
     s->list = ui_list_create(s->base.root, UI_W, &(ui_list_model_t){.count = 1, .ctx = s, .get = lib_get});
-    s->toast = ui_label(s->base.root, "", UI_L_TEXT);
-    lv_obj_set_size(s->toast, UI_W, UI_ROW_H);
-    lv_obj_set_style_bg_color(s->toast, lv_color_hex(0xFFF3CD), 0);
-    lv_obj_set_style_bg_opa(s->toast, LV_OPA_COVER, 0);
-    lv_obj_set_style_pad_all(s->toast, UIM->toast_pad, 0);
-    lv_obj_set_pos(s->toast, 0, UI_CONTENT_H - UI_ROW_H);
-    lv_label_set_long_mode(s->toast, LV_LABEL_LONG_DOT);
-    lv_obj_set_hidden(s->toast, true);
     wi_letterjump_init(&s->lj);
     s->overlay = ui_letter_overlay_create(s->base.root);
     return &s->base;

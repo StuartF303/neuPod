@@ -93,7 +93,7 @@
 // Text beyond ASCII (UI-17): Extras > Files on a card whose names hold accents, the ripper's U+00BF, curly quotes, CJK and an emoji
 // (tests/tools/make_text_card.py), into the accented folder, then its FLAC (accented tags) on Now Playing. The track lasts 0.3 s: as in the art tour,
 // Settings > Repeat is set to One first so the player ends up paused on it (wait:pause) instead of dropping to idle.
-#define TOUR_TEXT "x s s s s _ s s s s s s _ m w _ _ x snap:text-files _ x snap:text-folder _ wait:pause x snap:text-nowplaying m m"
+#define TOUR_TEXT "x s s s s _ s s s s s s _ m w _ _ x snap:text-files _ x snap:text-folder _ wait:pause x snap:text-nowplaying m m m m x x snap:text-home _ _ 5*s x snap:text-longrow"
 
 // Hold (docs/adr/0020-hold.md): the Power key is simulated by pwr:down / pwr:up and sleep:MS lets time pass between them. A 1.2 s press shows the ring and
 // does nothing; 2.1 s locks (confirmation toast, lock icon); keys while locked only remind; held on to 5.9 s the power-off countdown shows (and the
@@ -111,7 +111,18 @@
     "s s s s _ x snap:hold-autolock-off m m"
 
 // Settings > About > Licences (the third-party components and their licences): the About list, the Licences list, and the longest notice (BTstack).
-#define TOUR_LICENCES "x s s s s _ _ snap:about _ snap:licences 10*s _ snap:licence-btstack m m m"
+#define TOUR_LICENCES "x s s s s _ _ snap:about _ snap:licences 11*s _ snap:licence-btstack m m m"
+
+// The design system (docs/ui.md, DS-1 to DS-5): the toast strip (warning, info) and the volume HUD over Home (toast: / hud: / strips:off tokens, they stay
+// until taken down), Settings > Display with its Theme row, the dark theme on Home and on a list (Select on the Theme row cycles Light, Dark, Auto;
+// theme: sets it directly), and Auto: light while the backlight is at full, dark once it dims (dim:10 makes that 10 s; sleep: lets the UI clock run), light
+// again on the next key. The ctest fixture wipes the stored settings first.
+#define TOUR_DESIGN                                                                                \
+    "x snap:ds-home toast:warn:Headset_disconnected x snap:ds-toast-warn strips:off x "            \
+    "toast:info:Headset_connected x snap:ds-toast-info strips:off x hud:Volume_-18_dB:62 x snap:ds-hud strips:off x " \
+    "s s s s _ x snap:ds-settings s _ x snap:ds-display _ x snap:ds-display-dark m m "              \
+    "x snap:ds-home-dark w w w w _ x snap:ds-music-dark m theme:auto x x snap:ds-home-auto "          \
+    "dim:10 sleep:11500 snap:ds-home-auto-dim s x snap:ds-home-auto-wake theme:light x x"
 
 static unsigned g_expect = 18;
 static const char *g_snapshot_dir;
@@ -196,10 +207,14 @@ int main(int argc, char **argv) {
             cfg.ui_script = TOUR_HOLD;
             cfgp_tour = true;
             g_expect = 16; // the splash, home and the fourteen named snapshots
+        } else if (strcmp(argv[i], "--tour-design") == 0) {
+            cfg.ui_script = TOUR_DESIGN;
+            cfgp_tour = true;
+            g_expect = 14; // the splash, home and the twelve named snapshots
         } else if (strcmp(argv[i], "--tour-text") == 0) {
             cfg.ui_script = TOUR_TEXT;
             cfgp_tour = true;
-            g_expect = 5; // the splash, home and the three named snapshots
+            g_expect = 7; // the splash, home and the five named snapshots
         } else if (strcmp(argv[i], "--script") == 0 && i + 1 < argc) {
             cfg.ui_script = argv[++i]; // ad-hoc key script, same tokens as the tour
         } else if (strcmp(argv[i], "--splash-hold-ms") == 0 && i + 1 < argc) {
@@ -207,7 +222,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--snapshots") == 0 && i + 1 < argc) {
             g_snapshot_dir = argv[++i];
         } else {
-            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek|--tour-library|--tour-library-ro|--tour-text|--tour-hold|--tour-licences] [--script KEYS] [--snapshots DIR]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek|--tour-library|--tour-library-ro|--tour-text|--tour-hold|--tour-licences|--tour-design] [--script KEYS] [--snapshots DIR]\n", argv[0]);
             return 64;
         }
     }

@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
 // Layout invariants of every UI metrics profile (app/ui/ui_metrics.c): the numbers are static, so "does the layout fit the panel"
-// can be checked without drawing. The 320x240 profile is also pinned to the values the UI had before profiles existed (the host
-// snapshots at that size are compared byte for byte, so those numbers may not drift). Runs on every profile compiled in.
+// can be checked without drawing. The 320x240 profile is also pinned to the design system's metric table (docs/ui.md, review section 2.3):
+// row 30, 7 rows, status bar 24, padding 10, selection inset 3 / radius 4 ... Runs on every profile compiled in.
 #include <stdlib.h>
 #include <string.h>
+
+#include <math.h>
 
 #include "boot_briefs.h"
 #include "lvgl.h"
@@ -11,6 +13,7 @@
 #include "src/misc/lv_text_private.h" /* lv_text_get_width: LVGL private API, fine for a host test */
 #include "ui_logic.h"
 #include "ui_metrics.h"
+#include "ui_theme.h"
 #include "unit.h"
 
 #define CELLS 5 /* ui_input.c: letters shown in the text picker */
@@ -24,23 +27,33 @@ void neupod_panic_assert(const char *file, int line) {
 
 static int32_t lh(const lv_font_t *f) { return lv_font_get_line_height(f); }
 
-TEST(profile_320_is_the_historic_layout) {
+TEST(profile_320_is_the_design_system_layout) {
     const ui_metrics_t *m = ui_metrics_select(320, 240);
     ASSERT_TRUE(strcmp(m->name, "320x240") == 0);
     ASSERT_EQ(320, m->w);
     ASSERT_EQ(240, m->h);
     ASSERT_EQ(24, m->status_h);
-    ASSERT_EQ(24, m->row_h);
-    ASSERT_EQ(9, m->rows);
+    ASSERT_EQ(30, m->row_h);
+    ASSERT_EQ(7, m->rows);
     ASSERT_EQ(216, m->content_h);
+    ASSERT_EQ(10, m->pad);
+    ASSERT_EQ(3, m->sel_inset);
+    ASSERT_EQ(4, m->sel_radius);
+    ASSERT_EQ(30, m->toast_h);
+    ASSERT_EQ(26, m->hud_h);
+    ASSERT_EQ(2, m->sb_w);
+    ASSERT_EQ(1, m->sb_gap);
+    ASSERT_TRUE(m->font_small == &neupod_font_12);
+    ASSERT_TRUE(m->font_icon_sm == &neupod_icons_16);
+    ASSERT_TRUE(m->font_icon_lg == &neupod_icons_24);
     ASSERT_EQ(24, m->buf_lines);
     ASSERT_TRUE(m->font_body == &neupod_font_14);
     ASSERT_TRUE(m->font_large == &neupod_font_20);
     ASSERT_TRUE(m->font_huge == &neupod_font_48);
     ASSERT_EQ(112, m->np_art);
-    ASSERT_EQ(96, m->home_art);
-    ASSERT_EQ(160, m->home_list_w);
-    ASSERT_EQ(170, m->set_list_w);
+    ASSERT_EQ(117, m->home_art); /* the pane (141) less 12 each side */
+    ASSERT_EQ(179, m->home_list_w); /* 56 % */
+    ASSERT_EQ(179, m->set_list_w);
     ASSERT_EQ(32, m->sp_icon);
     ASSERT_EQ(142, m->sp_icon_row_y);
 }
@@ -63,6 +76,17 @@ TEST(every_profile_fits_its_panel) {
         ASSERT_TRUE(lh(m->font_body) <= m->row_h);
         ASSERT_TRUE(lh(m->font_body) <= m->line_h + 2);
         ASSERT_TRUE(lh(m->font_large) <= m->status_h);
+        // design system: the toast / HUD / pill strips fit under and over the content, the selection bar is taller than the text it carries,
+        // the small font is smaller than the body font, the icons fit a row and the status bar, the left slot stays clear of the centred title
+        ASSERT_TRUE(m->toast_h + m->status_h < m->h / 4);
+        ASSERT_TRUE(m->hud_h < m->content_h / 4 && m->pill_h + 2 * m->pill_margin < m->hud_h * 2);
+        ASSERT_TRUE(m->row_h - 2 * m->sel_inset_y > lh(m->font_body));
+        ASSERT_TRUE(m->sel_inset * 2 < m->w / 8 && m->sel_radius * 2 < m->row_h);
+        ASSERT_TRUE(lh(m->font_small) < lh(m->font_body) && lh(m->font_small) <= m->status_h - 2);
+        ASSERT_TRUE(lh(m->font_icon_sm) <= m->row_h && lh(m->font_icon_sm) <= m->status_h && lh(m->font_icon_lg) <= m->content_h);
+        ASSERT_TRUE(m->batt_h < m->status_h);
+        ASSERT_TRUE(m->title_w + 2 * (m->bar_inset + m->slot_w) <= m->w + 2 * m->pad);
+        ASSERT_TRUE(m->hold_line_h < m->status_h / 2);
         ASSERT_TRUE(m->glyph_bar_w * UI_METER_BARS + (UI_METER_BARS - 1) * (m->glyph_step - m->glyph_bar_w) <= m->row_h * 2);
         ASSERT_TRUE(m->meter_h[UI_METER_BARS - 1] <= m->row_h);
         ASSERT_TRUE(m->row_inset + m->chev_w < m->w / 4);
@@ -164,9 +188,9 @@ static bool font_has(const lv_font_t *f, uint32_t cp) {
 }
 
 TEST(text_filter_matches_the_fonts) {
-    const lv_font_t *fonts[] = {&neupod_font_14, &neupod_font_20,
+    const lv_font_t *fonts[] = {&neupod_font_12, &neupod_font_14, &neupod_font_20,
 #ifdef NEUPOD_UI_HIRES
-                                &neupod_font_28,
+                                &neupod_font_16, &neupod_font_28,
 #endif
     };
     for (size_t i = 0; i < sizeof fonts / sizeof fonts[0]; i++) {
@@ -188,11 +212,67 @@ TEST(text_filter_matches_the_fonts) {
     ASSERT_TRUE(font_has(&neupod_font_48, 0xF001));
 }
 
+// The two themes (app/ui/ui_theme.c, DS-1): every token is RGB565-safe (red and blue multiples of 8, green of 4: what the panel shows is what was
+// written), the text tokens are readable on the surfaces they are drawn on (WCAG contrast), and selecting a theme changes what a token resolves to.
+static double lum(uint32_t rgb) {
+    double c[3] = {((rgb >> 16) & 255u) / 255.0, ((rgb >> 8) & 255u) / 255.0, (rgb & 255u) / 255.0};
+    for (int i = 0; i < 3; i++) {
+        c[i] = c[i] <= 0.03928 ? c[i] / 12.92 : pow((c[i] + 0.055) / 1.055, 2.4);
+    }
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+
+static double contrast(uint32_t a, uint32_t b) {
+    double la = lum(a), lb = lum(b);
+    return (la > lb ? la + 0.05 : lb + 0.05) / (la > lb ? lb + 0.05 : la + 0.05);
+}
+
+TEST(themes_are_rgb565_safe_and_readable) {
+    const ui_theme_t *themes[2] = {&k_ui_theme_light, &k_ui_theme_dark};
+    for (int t = 0; t < 2; t++) {
+        const ui_theme_t *th = themes[t];
+        for (int k = 0; k < UI_TOK_COUNT; k++) {
+            uint32_t c = th->c[k];
+            ASSERT_TRUE(c <= 0xFFFFFFu);
+            ASSERT_TRUE(((c >> 16) & 7u) == 0 || ((c >> 16) & 255u) == 255u); // red: multiple of 8 (full scale 255 is exact too)
+            ASSERT_TRUE(((c >> 8) & 3u) == 0 || ((c >> 8) & 255u) == 255u);   // green: multiple of 4
+            ASSERT_TRUE((c & 7u) == 0 || (c & 255u) == 255u);                 // blue: multiple of 8
+        }
+        ASSERT_TRUE(contrast(th->c[UI_TOK_INK], th->c[UI_TOK_BG]) >= 7.0);
+        ASSERT_TRUE(contrast(th->c[UI_TOK_INK], th->c[UI_TOK_BAR]) >= 7.0);
+        ASSERT_TRUE(contrast(th->c[UI_TOK_INK2], th->c[UI_TOK_SURFACE]) >= 4.5);
+        // white on the accent: 6.4:1 light (the review quotes 7.3), about 5:1 dark (owner decision: dark accent #2868D8)
+        ASSERT_TRUE(contrast(th->c[UI_TOK_ON_ACCENT], th->c[UI_TOK_ACCENT]) >= (t == 0 ? 6.0 : 4.5));
+        ASSERT_TRUE(contrast(th->c[UI_TOK_INK], th->c[UI_TOK_ACCENT_SOFT]) >= 7.0);
+        ASSERT_TRUE(contrast(th->c[UI_TOK_INK], th->c[UI_TOK_AMBER_SOFT]) >= 7.0);
+        ASSERT_TRUE(contrast(th->c[UI_TOK_INK3], th->c[UI_TOK_SURFACE]) >= 2.5); // hints and disabled rows only
+    }
+    // the review's published values
+    ASSERT_EQ(0x1858C8u, k_ui_theme_light.c[UI_TOK_ACCENT]);
+    ASSERT_EQ(0x2868D8u, k_ui_theme_dark.c[UI_TOK_ACCENT]);
+    ASSERT_EQ(0xF8F8F8u, k_ui_theme_light.c[UI_TOK_BG]);
+    ASSERT_EQ(0x101010u, k_ui_theme_dark.c[UI_TOK_BG]);
+}
+
+TEST(a_token_follows_the_active_theme_and_a_literal_does_not) {
+    lv_init();
+    ASSERT_TRUE(ui_theme() == &k_ui_theme_light); // Light is the default
+    ASSERT_EQ(0x181818u, ui_rgb(UI_C_INK));
+    ASSERT_EQ(0x123456u, ui_rgb(0x123456u));
+    ui_theme_set(&k_ui_theme_dark);
+    ASSERT_EQ(0xF0F0F0u, ui_rgb(UI_C_INK));
+    ASSERT_EQ(0x123456u, ui_rgb(0x123456u));
+    ui_theme_set(&k_ui_theme_light);
+    ASSERT_EQ(0x181818u, ui_rgb(UI_C_INK));
+}
+
 int main(void) {
-    RUN(profile_320_is_the_historic_layout);
+    RUN(profile_320_is_the_design_system_layout);
     RUN(every_profile_fits_its_panel);
     RUN(splash_captions_fit_one_line_in_every_profile);
     RUN(selection_picks_the_largest_profile_that_fits);
     RUN(text_filter_matches_the_fonts);
+    RUN(themes_are_rgb565_safe_and_readable);
+    RUN(a_token_follows_the_active_theme_and_a_literal_does_not);
     return RESULT();
 }

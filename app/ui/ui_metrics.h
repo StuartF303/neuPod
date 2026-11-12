@@ -23,7 +23,7 @@
 #define UI_BUF_W_MAX 320
 #define UI_BUF_LINES_MAX 24
 #endif
-#define UI_ROWS_MAX 9 /* rows_visible of every profile (checked by tests/test_ui_metrics.c) */
+#define UI_ROWS_MAX 7 /* rows_visible of every profile (checked by tests/test_ui_metrics.c) */
 
 #define UI_METER_BARS 4 /* signal meter / busy dots at the right edge of a row */
 
@@ -37,15 +37,19 @@ typedef struct {
     int32_t row_h;     /* list row height */
     int32_t rows;      /* list rows that fit the content area (content_h / row_h) */
     int32_t buf_lines; /* LVGL partial-render buffer height */
-    int32_t bar_inset; /* status bar: play glyph and battery inset from the edges */
-    int32_t wifi_x;    /* status bar: Wi-Fi glyph x */
-    int32_t bt_x;      /* status bar: Bluetooth glyph x */
+    int32_t bar_inset; /* status bar: left slot and the right-hand group inset from the edges */
     int32_t title_w, title_h;
+    int32_t slot_w;    /* status bar: widest left slot text (clock, "3 of 12", count, path) */
+    int32_t bar_gap;   /* status bar: gap between the right-hand items (Wi-Fi, Bluetooth, percentage, battery) */
+    int32_t batt_w, batt_h, batt_nub_w, batt_nub_h; /* the drawn battery: body outline, positive terminal */
 
     /* Text */
     const lv_font_t *font_body;  /* every label unless a screen asks for more (Montserrat 14 / 20, Latin-1) */
     const lv_font_t *font_large; /* titles, values, splash icons (20 / 28) */
     const lv_font_t *font_huge;  /* splash wordmark, the art-less note glyph (48 / 48: ASCII only) */
+    const lv_font_t *font_small; /* secondary lines, times, pills, hints, the status bar's left slot (12 / 16) */
+    const lv_font_t *font_icon_sm; /* Lucide icons for rows and the status bar (16 / 24; ui_icons.h) */
+    const lv_font_t *font_icon_lg; /* Lucide icons for larger spots (24 / 36) */
     int32_t pad;                 /* left text inset of rows, side margin of free-standing text */
     int32_t line_h;              /* fixed height of a one-line label (so "..." replaces wrapping) */
 
@@ -61,6 +65,11 @@ typedef struct {
     int32_t detail_char_w; /* estimated width of one detail character */
     int32_t detail_pad;
     int32_t sb_w, sb_min_h, sb_radius, sb_gap; /* scroll bar; gap = distance from the right edge */
+    int32_t sel_inset, sel_radius;             /* selection bar: inset from the list's left and right edges, corner radius */
+    int32_t sel_inset_y;                       /* ... and from the top and bottom of its row */
+    int32_t ticker_px_s;                       /* overlong text scrolls at this speed (after a 1 s pause) */
+    int32_t sel_anim_ms;                       /* the bar slides to an adjacent row in this time (0 = jumps) */
+    int32_t icon_w;                            /* width reserved for a row's leading icon (folder, file) */
 
     /* Shared widgets */
     int32_t art_radius, art_ring_w; /* artwork placeholder */
@@ -84,8 +93,12 @@ typedef struct {
     int32_t set_list_w;
     int32_t set_pane_pad, set_head_y, set_body_y, set_body_line_space;
 
-    /* Files */
+    /* Toast strip (top, under the status bar), HUD strip (bottom), Hold pill and the Power-hold line (docs/ui.md "Design system") */
     int32_t toast_pad;
+    int32_t toast_h, hud_h;
+    int32_t pill_h, pill_margin, pill_pad; /* the lock pill: height, distance from the bottom edge, text inset */
+    int32_t hold_line_h;                   /* the Power-hold progress line under the status bar */
+    int32_t hud_bar_h;
 
     /* Input widgets (ui_input.c) */
     int32_t in_text_value_y, in_cell_y, in_cell_w, in_hint_y, in_text_hint_x, in_hint_x;

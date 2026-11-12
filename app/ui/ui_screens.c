@@ -80,11 +80,8 @@ static lv_obj_t *pane_new(lv_obj_t *parent, int32_t x, int32_t w) {
     lv_obj_set_size(p, w, UI_CONTENT_H);
     lv_obj_set_pos(p, x, 0);
     lv_obj_set_scrollable(p, false);
-    lv_obj_set_style_bg_color(p, lv_color_hex(UI_L_PANE), 0);
-    lv_obj_set_style_bg_opa(p, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(p, lv_color_hex(0xD9D9D4), 0);
-    lv_obj_set_style_border_width(p, 1, 0);
-    lv_obj_set_style_border_side(p, LV_BORDER_SIDE_LEFT, 0);
+    ui_obj_bg(p, UI_C_SURFACE, 0);
+    ui_obj_border(p, UI_C_LINE, 1, LV_BORDER_SIDE_LEFT);
     return p;
 }
 
@@ -257,8 +254,8 @@ static void home_mode(menu_screen_t *m, bool playing) {
     m->playing = playing;
     home_hide(lv_obj_get_child(m->art_box, 0), playing); /* ring and dot of the placeholder */
     home_hide(lv_obj_get_child(m->art_box, 1), playing);
-    lv_obj_set_style_text_color(m->line1, lv_color_hex(playing ? UI_L_TEXT : UI_L_DIM), 0);
-    lv_obj_set_style_text_color(m->uptime, lv_color_hex(playing ? UI_L_DIM : UI_L_TEXT), 0);
+    ui_label_recolour(m->line1, playing ? UI_C_INK2 : UI_C_INK, playing ? UI_C_INK : UI_C_INK2);
+    ui_label_recolour(m->uptime, playing ? UI_C_INK : UI_C_INK2, playing ? UI_C_INK2 : UI_C_INK);
 }
 
 /* Nothing to free: it only exists so the frame calls resume (it only does when suspend ran first). */
@@ -272,6 +269,12 @@ static void home_resume(ui_screen_t *s) {
 static void home_tick(ui_screen_t *s) {
     menu_screen_t *m = (menu_screen_t *)s;
     uint32_t now = os_tick_ms();
+    clock_tm_t clk;
+    char hm[8] = "";
+    if (clock_local_now(&clk)) {
+        snprintf(hm, sizeof hm, "%02d:%02d", (int)clk.h, (int)clk.mi);
+    }
+    ui_screen_set_left(&m->base, hm); /* the status bar's left slot on Home is the clock (design review 3.10) */
     /* The player and the art view are polled on every tick: the art decoder only waits ~300 ms for our ack before it overwrites the
      * thumbnail we point at. Label writes are strcmp-guarded, so nothing is redrawn needlessly. */
     player_info_t n;
@@ -287,7 +290,7 @@ static void home_tick(ui_screen_t *s) {
     bool force = m->refresh || changed;
     m->refresh = false;
     if (file || tone) {
-        const char *sym = n.state == PLAYER_PAUSED ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY;
+        const char *sym = n.state == PLAYER_PAUSED ? "Paused" : "Playing";
         if (file) {
             home_set(m->line1, n.tags.title[0] != '\0' ? n.tags.title : n.name);
             home_set(m->uptime, n.tags.artist);
@@ -296,9 +299,9 @@ static void home_tick(ui_screen_t *s) {
             } else if (n.state == PLAYER_ERROR || n.state == PLAYER_VERIFYING || n.state == PLAYER_VERIFIED) {
                 snprintf(buf, sizeof buf, "%s", n.state == PLAYER_ERROR ? "Error" : n.state == PLAYER_VERIFYING ? "Verifying" : "Verified");
             } else if (n.queue_len > 1) {
-                snprintf(buf, sizeof buf, "%s %u of %u", sym, (unsigned)n.queue_pos, (unsigned)n.queue_len);
+                snprintf(buf, sizeof buf, "%s - %u of %u", sym, (unsigned)n.queue_pos, (unsigned)n.queue_len);
             } else {
-                snprintf(buf, sizeof buf, "%s %s", sym, n.state == PLAYER_PAUSED ? "Paused" : n.state == PLAYER_OPENING ? "Opening" : "Playing");
+                snprintf(buf, sizeof buf, "%s", n.state == PLAYER_PAUSED ? "Paused" : n.state == PLAYER_OPENING ? "Opening" : "Playing");
             }
         } else {
             home_set(m->line1, n.name);
@@ -361,8 +364,11 @@ ui_screen_t *ui_screen_home_create(void) {
     m->storage = ui_label(pane, "", UI_L_DIM);
     lv_obj_t *lines[3] = {m->line1, m->uptime, m->storage};
     for (int i = 0; i < 3; i++) {
-        lv_obj_set_width(lines[i], pane_w);
+        lv_obj_set_size(lines[i], pane_w, UIM->line_h); /* fixed height: a long title ends in dots instead of wrapping onto the next line */
         lv_label_set_long_mode(lines[i], LV_LABEL_LONG_DOT);
+        if (i < 2) {
+            ui_label_ticker(lines[i], true); /* the track title and artist scroll when too long (the card line keeps dots) */
+        }
         lv_obj_set_style_text_align(lines[i], LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_pos(lines[i], 0, UIM->home_line_y[i]);
     }

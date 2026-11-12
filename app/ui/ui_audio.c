@@ -55,8 +55,7 @@ static lv_obj_t *bar_new(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int3
     lv_obj_set_size(b, w, h);
     lv_obj_set_pos(b, x, y);
     lv_obj_set_style_radius(b, h / 2, 0);
-    lv_obj_set_style_bg_color(b, lv_color_hex(col), 0);
-    lv_obj_set_style_bg_opa(b, LV_OPA_COVER, 0);
+    ui_obj_bg(b, col, 0);
     return b;
 }
 
@@ -181,7 +180,7 @@ ui_screen_t *ui_screen_testtone_create(void) {
 
 typedef struct {
     ui_screen_t base;
-    lv_obj_t *title, *artist, *album, *badge, *state, *elapsed, *remain, *icon, *vol, *prog_fill, *prog_track, *vol_fill, *modes;
+    lv_obj_t *title, *artist, *album, *badge, *state, *elapsed, *remain, *icon, *vol, *prog_fill, *prog_track, *vol_fill, *modes, *modes2;
     lv_obj_t *art_img, *art_note; /* album art (hidden unless the decoder has a picture) and the note shown otherwise */
     lv_image_dsc_t art_dsc;       /* points at the art service's thumbnail; nothing is copied */
     uint32_t art_gen;
@@ -192,22 +191,22 @@ typedef struct {
     int32_t prog_w, vol_w;
     ui_npc_t ctl;          /* wheel mode (volume / seek), scrub target, Left / Right hold */
     bool seek_shown;       /* the bars are drawn in seek colours */
-    const char *msg;       /* a short notice shown on the status line until msg_until ("Seek not available") */
-    uint32_t msg_until;
+    uint32_t state_col;    /* colour of the status line now */
 } np_t;
 
 #define NP_NOTICE_MS 2000u
-#define NP_COL_SEEK UI_L_WARN       /* progress bar while the wheel seeks */
-#define NP_COL_SEEK_TRACK 0xFFE2B8  /* its unfilled part */
-#define NP_COL_TRACK 0xE6E6E2
+#define NP_COL_SEEK UI_C_AMBER           /* progress bar while the wheel seeks */
+#define NP_COL_SEEK_TRACK UI_C_AMBER_SOFT /* its unfilled part */
+#define NP_COL_TRACK UI_C_LINE
 
 static ui_npc_track_t np_track(const player_info_t *n) {
     return (ui_npc_track_t){.seekable = n->seekable, .pos_frames = n->pos_frames, .total_frames = n->total_frames, .rate = n->rate, .id = n->track_id};
 }
 
+/* A short notice ("Seek not available") is a toast now (it replaced the status line for a moment). */
 static void np_notice(np_t *p, const char *text) {
-    p->msg = text;
-    p->msg_until = os_tick_ms() + NP_NOTICE_MS;
+    (void)p;
+    ui_toast_show(text, UI_TOAST_WARN, NP_NOTICE_MS);
 }
 
 static void mmss(char *out, size_t n, const char *prefix, uint32_t s) {
@@ -305,18 +304,28 @@ static void np_update(np_t *p) {
     if (bt_volume_get() == 0 && n.state == PLAYER_PLAYING) { /* the headset is at 0 %: it plays, but silently (an AirPods Pro left at 0 % by a phone): say so */
         st = "Playing - headset volume 0%";
     }
-    if (p->msg != NULL && (int32_t)(p->msg_until - os_tick_ms()) > 0) {
-        st = p->msg; /* a notice replaces the status line for a moment */
-    } else {
-        p->msg = NULL;
-    }
     set_text(p->state, st);
-    /* shuffle / repeat indicators: only while a queue is playing; repeat-one carries a 1 */
-    snprintf(b, sizeof b, "%s%s%s%s", n.shuffle ? LV_SYMBOL_SHUFFLE : "", n.shuffle && n.repeat ? " " : "",
-             n.repeat ? LV_SYMBOL_LOOP : "", n.repeat == PQ_REPEAT_ONE ? "1" : "");
-    set_text(p->modes, b);
-    lv_obj_set_style_text_color(p->state, lv_color_hex(n.state == PLAYER_ERROR || (n.state == PLAYER_VERIFIED && n.verify == AUDIO_VERIFY_MISMATCH) ? UI_L_ERR : n.state == PLAYER_VERIFIED && n.verify == AUDIO_VERIFY_OK ? UI_L_OK : UI_L_DIM), 0);
-    set_text(p->icon, n.state == PLAYER_PLAYING ? LV_SYMBOL_PLAY : n.state == PLAYER_PAUSED ? LV_SYMBOL_PAUSE : "");
+    /* shuffle / repeat indicators (Lucide icons): only while a queue is playing; repeat-one has its own glyph */
+    lv_obj_set_hidden(p->modes, !n.shuffle);
+    lv_obj_set_hidden(p->modes2, !n.repeat);
+    if (n.repeat) {
+        lv_label_set_text_static(p->modes2, n.repeat == PQ_REPEAT_ONE ? UI_ICON_REPEAT_1 : UI_ICON_REPEAT);
+    }
+    uint32_t sc = n.state == PLAYER_ERROR || (n.state == PLAYER_VERIFIED && n.verify == AUDIO_VERIFY_MISMATCH) ? UI_C_RED
+                  : n.state == PLAYER_VERIFIED && n.verify == AUDIO_VERIFY_OK ? UI_C_GREEN : UI_C_INK2;
+    ui_label_recolour(p->state, p->state_col, sc);
+    p->state_col = sc;
+    bool show_icon = n.state == PLAYER_PLAYING || n.state == PLAYER_PAUSED;
+    lv_obj_set_hidden(p->icon, !show_icon);
+    if (show_icon) {
+        lv_label_set_text_static(p->icon, n.state == PLAYER_PLAYING ? UI_ICON_PLAY : UI_ICON_PAUSE);
+    }
+    if (n.queue_len > 1 && n.src == PLAYER_SRC_FILE) { /* the status bar's left slot (design review 3.10): where this track sits in its queue */
+        snprintf(b, sizeof b, "%u of %u", (unsigned)n.queue_pos, (unsigned)n.queue_len);
+        ui_screen_set_left(&p->base, b);
+    } else {
+        ui_screen_set_left(&p->base, "");
+    }
     uint32_t el = n.state == PLAYER_ENDED && n.rate != 0 ? (uint32_t)(n.total_frames / n.rate) : n.elapsed_s;
     ui_npc_track_t trk = np_track(&n);
     bool seek_mode = p->ctl.mode == UI_WHEEL_SEEK;
@@ -325,9 +334,9 @@ static void np_update(np_t *p) {
     }
     if (seek_mode != p->seek_shown) { /* the progress bar is the thing the wheel moves: highlighted; the volume bar greys out */
         p->seek_shown = seek_mode;
-        lv_obj_set_style_bg_color(p->prog_fill, lv_color_hex(seek_mode ? NP_COL_SEEK : UI_L_SEL_BOT), 0);
-        lv_obj_set_style_bg_color(p->prog_track, lv_color_hex(seek_mode ? NP_COL_SEEK_TRACK : NP_COL_TRACK), 0);
-        lv_obj_set_style_bg_color(p->vol_fill, lv_color_hex(seek_mode ? UI_L_FAINT : UI_L_SEL_BOT), 0);
+        ui_obj_bg_swap(p->prog_fill, seek_mode ? UI_C_ACCENT : NP_COL_SEEK, seek_mode ? NP_COL_SEEK : UI_C_ACCENT, 0);
+        ui_obj_bg_swap(p->prog_track, seek_mode ? NP_COL_TRACK : NP_COL_SEEK_TRACK, seek_mode ? NP_COL_SEEK_TRACK : NP_COL_TRACK, 0);
+        ui_obj_bg_swap(p->vol_fill, seek_mode ? UI_C_ACCENT : UI_C_INK3, seek_mode ? UI_C_INK3 : UI_C_ACCENT, 0);
     }
     int32_t pw = 0;
     if (n.src == PLAYER_SRC_FILE && n.rate != 0 && n.total_frames != 0 &&
@@ -515,7 +524,7 @@ ui_screen_t *ui_screen_nowplaying_create(void) {
     lv_obj_set_size(p->album, NP_TEXT_W, UIM->line_h);
     lv_label_set_long_mode(p->album, LV_LABEL_LONG_DOT);
     lv_obj_set_pos(p->album, UIM->np_text_x, UIM->np_album_y);
-    p->badge = ui_label(r, "", UI_L_SEL_BOT);
+    p->badge = ui_label(r, "", UI_C_ACCENT);
     lv_obj_set_pos(p->badge, UIM->np_text_x, UIM->np_badge_y);
     p->state = ui_label(r, "", UI_L_DIM);
     lv_obj_set_size(p->state, NP_TEXT_W, UIM->np_state_h);
@@ -523,23 +532,29 @@ ui_screen_t *ui_screen_nowplaying_create(void) {
     lv_obj_set_pos(p->state, UIM->np_text_x, UIM->np_state_y);
 
     p->prog_track = bar_new(r, UIM->np_margin, UIM->np_bar_y, NP_BAR_W, UIM->np_bar_h, NP_COL_TRACK);
-    p->prog_fill = bar_new(r, UIM->np_margin, UIM->np_bar_y, 1, UIM->np_bar_h, UI_L_SEL_BOT);
+    p->prog_fill = bar_new(r, UIM->np_margin, UIM->np_bar_y, 1, UIM->np_bar_h, UI_C_ACCENT);
     lv_obj_set_hidden(p->prog_fill, true);
     p->elapsed = ui_label(r, "0:00", UI_L_DIM);
     lv_obj_set_pos(p->elapsed, UIM->np_margin, UIM->np_time_y);
     p->remain = ui_label(r, "-:--", UI_L_DIM);
     lv_obj_align(p->remain, LV_ALIGN_TOP_RIGHT, -UIM->np_margin, UIM->np_time_y);
-    p->icon = ui_label(r, "", UI_L_FAINT);
+    p->icon = ui_icon(r, UI_ICON_PLAY, false, UI_L_FAINT); /* play / pause */
     lv_obj_align(p->icon, LV_ALIGN_TOP_MID, 0, UIM->np_time_y);
+    lv_obj_set_hidden(p->icon, true);
 
-    p->modes = ui_label(r, "", UI_L_FAINT);
+    p->modes = ui_icon(r, UI_ICON_SHUFFLE, false, UI_L_FAINT); /* shuffle, then repeat (or repeat-one) */
     lv_obj_align(p->modes, LV_ALIGN_TOP_MID, UIM->np_modes_dx, UIM->np_time_y);
+    lv_obj_set_hidden(p->modes, true);
+    p->modes2 = ui_icon(r, UI_ICON_REPEAT, false, UI_L_FAINT);
+    lv_obj_align(p->modes2, LV_ALIGN_TOP_MID, UIM->np_modes_dx + lv_font_get_line_height(UIM->font_icon_sm) + UIM->bar_gap, UIM->np_time_y);
+    lv_obj_set_hidden(p->modes2, true);
     p->vol = ui_label(r, "", UI_L_TEXT);
     lv_obj_set_pos(p->vol, UIM->np_margin, UIM->np_vol_y);
-    bar_new(r, NP_VOL_X, UIM->np_vol_bar_y, NP_VOL_W, UIM->np_vol_bar_h, 0xE6E6E2);
-    p->vol_fill = bar_new(r, NP_VOL_X, UIM->np_vol_bar_y, 1, UIM->np_vol_bar_h, UI_L_SEL_BOT);
+    bar_new(r, NP_VOL_X, UIM->np_vol_bar_y, NP_VOL_W, UIM->np_vol_bar_h, UI_C_LINE);
+    p->vol_fill = bar_new(r, NP_VOL_X, UIM->np_vol_bar_y, 1, UIM->np_vol_bar_h, UI_C_ACCENT);
     p->prog_w = -1;
     p->vol_w = -1;
+    p->state_col = UI_C_INK2;
     p->base.on_tick = np_tick;
     p->base.on_scroll = np_scroll;
     p->base.on_button = np_button;

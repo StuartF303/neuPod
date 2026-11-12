@@ -10,15 +10,17 @@
 #include "lvgl.h"
 #include "ui.h"
 #include "ui_hold.h"
+#include "ui_icons.h"
 #include "ui_logic.h"
 #include "ui_metrics.h"
+#include "ui_theme.h"
 
 /* Geometry comes from the active metrics profile (ui_metrics.h), chosen at UI init from the panel size. */
 #define UIM (ui_metrics())
 #define UI_W (UIM->w)
 #define UI_H (UIM->h)
 
-// Boot splash palette: deep blue-black ground, one cyan accent, red only for "not working".
+// Boot splash palette: deep blue-black ground, one cyan accent, red only for "not working". Literal colours: the splash is not themed.
 #define UI_COL_BG 0x0A1020
 #define UI_COL_BG2 0x16263F
 #define UI_COL_BAR 0x1B2A3F
@@ -27,25 +29,18 @@
 #define UI_COL_DIM 0x6C7B8F
 #define UI_COL_ERR 0xFF4D4F
 
-// Menu palette (docs/ui.md mock-ups): light surfaces, blue selection bar.
-#define UI_L_BG 0xFFFFFF
-#define UI_L_PANE 0xF4F4F1
-#define UI_L_BAR_TOP 0xF7F7F5
-#define UI_L_BAR_BOT 0xD9D9D4
-#define UI_L_LINE 0xB9B9B3
-#define UI_L_TEXT 0x1D1D1B
-#define UI_L_DIM 0x5B5A56
-#define UI_L_FAINT 0x8F8F89
-#define UI_L_SEL_TOP 0x5F9DF0
-#define UI_L_SEL_BOT 0x2663C6
-#define UI_L_OK 0x3FA34D
-#define UI_L_WARN 0xC77700
-#define UI_L_ERR 0xC62828
-
-/* Font Awesome glyphs with no LV_SYMBOL_*, in the UI fonts (tools/gen_ui_fonts.sh; keep ui_text_has_glyph() in step). */
-#define UI_SYM_POWER "\xEF\x80\x91"  /* U+F011 */
-#define UI_SYM_LOCK "\xEF\x80\xA3"   /* U+F023 */
-#define UI_SYM_UNLOCK "\xEF\x82\x9C" /* U+F09C */
+// Everything else draws with the design-system tokens in ui_theme.h (UI_C_INK, UI_C_ACCENT ...): they follow Settings > Display > Theme.
+// The names the screens used before the tokens existed, kept so a colour reads by its role:
+#define UI_L_BG UI_C_BG
+#define UI_L_PANE UI_C_SURFACE
+#define UI_L_LINE UI_C_LINE
+#define UI_L_TEXT UI_C_INK
+#define UI_L_DIM UI_C_INK2
+#define UI_L_FAINT UI_C_INK3
+#define UI_L_SEL UI_C_ACCENT
+#define UI_L_OK UI_C_GREEN
+#define UI_L_WARN UI_C_AMBER
+#define UI_L_ERR UI_C_RED
 
 #define UI_STATUS_H (UIM->status_h)
 #define UI_CONTENT_H (UIM->content_h)
@@ -79,6 +74,7 @@ struct ui_screen {
     void (*suspend)(ui_screen_t *s);                  /* optional: another screen was pushed over this one (free what can be rebuilt) */
     void (*resume)(ui_screen_t *s);                   /* optional: it is on top again */
     bool suspended;
+    char left[40]; /* text of the status bar's left slot while this screen is on top (ui_screen_set_left) */
     void *ud;
 };
 
@@ -90,10 +86,13 @@ typedef struct {
     uint8_t dim_idx;       /* idle time, an index for ui_autodim_seconds() */
     uint8_t off_idx;       /* time after the dim until the backlight is fully off, an index for ui_screenoff_seconds() */
     bool autolock;         /* Hold turns on by itself when the screen goes off (docs/adr/0020-hold.md) */
+    ui_theme_mode_t theme; /* Settings > Display > Theme: Light (default), Dark, Auto (dark once the backlight dims) */
 } ui_state_t;
 extern ui_state_t g_ui_state;
 /** Show the backlight level on the panel: the set level, or the dimmed one while idle. The only place that computes it. */
 void ui_apply_backlight(void);
+/** Apply g_ui_state.theme now (the Settings row changed it, or the settings store was loaded). Auto follows the dim state at the next tick. */
+void ui_apply_theme(void);
 /** True while Hold is on (the screens get no input; ui_hold.h). */
 bool ui_frame_locked(void);
 /** Hold the auto-dim off while a screen previews the backlight (the slider); the idle time restarts when it is released. */
@@ -105,6 +104,22 @@ void ui_state_persist(void);
 void ui_frame_init(lv_obj_t *scr);
 /** Replace the status bar title (screens whose title changes, e.g. the file browser). */
 void ui_frame_set_title(const char *t);
+/** The status bar's left context slot for @p s: the clock on Home, "n of m" on Now Playing, a count on lists, the path in Files ("" = empty).
+ *  The text is kept with the screen and shown while it is on top; cheap to call every tick (nothing is touched when it is unchanged). */
+void ui_screen_set_left(ui_screen_t *s, const char *text);
+
+/* ---- Toast strip (top, under the status bar) and HUD strip (bottom), ui_strips.c ----------------------------------------------------------- */
+
+typedef enum { UI_TOAST_WARN, UI_TOAST_INFO } ui_toast_kind_t;
+#define UI_TOAST_MS 3000u /* default time a toast stays */
+/** Slide a one-line notice in under the status bar: WARN is amber (a problem), INFO soft blue. A new toast replaces the one showing. @p ms 0 = UI_TOAST_MS. */
+void ui_toast_show(const char *text, ui_toast_kind_t kind, uint32_t ms);
+void ui_toast_hide(void);
+/** Bottom strip with a label and a bar (@p pct 0..100, -1 = label only), for a value changing from any screen (volume): 120 ms in, @p ms hold (0 = 1200), 200 ms out. */
+void ui_hud_show(const char *label, int pct, uint32_t ms);
+void ui_hud_hide(void);
+/** Finish the transitions now (a toast, HUD or screen slide in flight jumps to its end state): the host snapshots and the layout audit look at settled screens. */
+void ui_frame_settle(void);
 /** Allocate a zeroed screen object of @p size bytes (first member must be ui_screen_t) with its root. */
 ui_screen_t *ui_screen_new(size_t size, const char *title);
 /** Suspend the top screen now (frees its rebuildable objects); a modal calls this BEFORE building itself so the pool peak is lower. */
@@ -135,7 +150,8 @@ void ui_bt_stream_pane_text(char *out, size_t n);
 typedef struct {
     char label[96];
     char detail[32]; /* right-aligned, optional */
-    bool chevron;    /* "›" at the right edge */
+    bool chevron;    /* the Lucide chevron at the right edge */
+    const char *icon; /* a Lucide glyph (ui_icons.h, a string constant) before the label; NULL = none */
     bool dim;        /* greyed, not meant to be opened */
     uint8_t bars;    /* signal meter at the right edge, 1..4 (ui_signal_bars; 0 = none) */
     bool busy;       /* pulsing dots at the right edge instead of the meter: the row's action is still running.
@@ -192,12 +208,23 @@ ui_screen_t *ui_screen_inputdemo_create(void); /* input/ui_input_demo.c */
 /** Small helpers shared by the screens. */
 lv_obj_t *ui_artwork(lv_obj_t *parent, int32_t x, int32_t y, int32_t size);
 lv_obj_t *ui_label(lv_obj_t *parent, const char *text, uint32_t colour);
+/** Like ui_label() in the Small font (secondary lines, times, pills, hints). */
+lv_obj_t *ui_label_small(lv_obj_t *parent, const char *text, uint32_t colour);
+/** A Lucide icon (ui_icons.h): a label drawn with the icon font, @p large picks the bigger size (24 / 36 instead of 16 / 24); @p colour is a token or literal. */
+lv_obj_t *ui_icon(lv_obj_t *parent, const char *glyph, bool large, uint32_t colour);
 /** Set a label's text from a raw string (file name, tag, device name, SSID ...): runs ui_text_display() first, so characters the fonts lack
  *  never draw as an empty box, and does nothing when the label already shows the result. Every label that can carry such a string
  *  is set through this (or ui_label()); the stored string is untouched. */
 void ui_label_set_text(lv_obj_t *l, const char *raw);
 /** Change a label's colour (from a colour it was created with / last set to). Shared styles: no per-object style memory. */
 void ui_label_recolour(lv_obj_t *l, uint32_t from, uint32_t to);
+/** Ticker (owner decision, docs/ui.md "Text that does not fit"): @p on makes a one-line label scroll round when its text is wider than its box
+ *  (1 s pause, then 35 px/s, x1.5 on 480x360, a gap between repeats); off gives it dots again and rewinds it. The label's box must be one line high. */
+void ui_label_ticker(lv_obj_t *l, bool on);
+/** Tickers stand still (rewound) while the screen is off. */
+void ui_ticker_set_active(bool active);
+/** Rewind every ticker to its start with its pause (tours: a snapshot is always of the start position). */
+void ui_ticker_restart(void);
 void ui_format_size(uint64_t bytes, char *out, size_t n);
 
 #endif // NEUPOD_UI_INTERNAL_H

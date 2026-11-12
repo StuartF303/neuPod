@@ -89,6 +89,15 @@ uint32_t ui_screenoff_seconds(uint8_t idx);
 /** Label of the "Screen off after" choice @p idx ("3 min", "Never"); "-" if out of range. */
 const char *ui_screenoff_name(uint8_t idx);
 
+/** Settings > Display > Theme (design review DS-1). Stored as a u8; Light is the default. */
+typedef enum { UI_THEME_LIGHT = 0, UI_THEME_DARK = 1, UI_THEME_AUTO = 2, UI_THEME_MODES } ui_theme_mode_t;
+/** Decode a stored value; false (and @p out untouched) when it is not a mode. */
+bool ui_theme_mode_from_stored(uint8_t v, ui_theme_mode_t *out);
+const char *ui_theme_mode_name(ui_theme_mode_t m); /**< "Light", "Dark", "Auto" */
+ui_theme_mode_t ui_theme_mode_next(ui_theme_mode_t m); /**< Light -> Dark -> Auto -> Light */
+/** Is the dark theme in force: Dark always, Auto while the backlight is dimmed (or off), Light never. */
+bool ui_theme_is_dark(ui_theme_mode_t m, bool dimmed);
+
 typedef struct {
     uint32_t last_ms; /**< time of the last input (or of the start) */
     bool dimmed;

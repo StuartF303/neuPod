@@ -32,6 +32,43 @@ the Pico 2 W build is frozen as a compile check; items may assume the RP2350B wi
 | UI-6 | **Rapid presses (bench check)**: the queue is 64 deep, the UI wakes on input and drops are counted (`input: WARNING n events dropped`); send 20 UART keys in one burst on the Pico rig and confirm none are lost. | bench 2026-11-03 | wheel / UART on the bench |
 | UI-23 | **Licences screen, remainder**: the on-device list shows a licence name and a short notice; the full texts (SIL OFL, CC BY 4.0, Apache-2.0, ChaN's licence) are in the source tree only; BTstack's commercial terms (a final board that is not a Raspberry Pi product, and the Y2) are an open legal question ([LICENSE.md](https://github.com/StuartF303/neuPod/blob/main/LICENSE.md)). | req 12 Nov 2026 | decision on shipping full texts; BlueKitchen answer |
 
+## Design review 2026-11-12
+
+From the owner-commissioned [design review](design/2026-11-12-ui-review/README.md) ([report](design/2026-11-12-ui-review/REPORT.md), mock-ups in `design/2026-11-12-ui-review/mockups/`). Owner decisions that override the report are in the README there. Order: phase 1 foundation, phase 2 Now Playing and library rows, phase 3 Bluetooth, phase 4 the rest. Effort (S/M/L) and impact (1 to 3) are the review's.
+
+| ID | Item | Area | Effort | Impact | Depends on | Phase | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| DS-1 | Colour token table + light/dark structs, Theme setting (Light / Dark / Auto on dim) | System | S | 3 | — | 1 | built (phase 1) |
+| DS-2 | Add Small font size (12/16) to both profiles | System | S | 3 | — | 1 | built (phase 1) |
+| DS-3 | Status bar: left slot, battery % rules, BT glyph states | System | S | 3 | DS-1 | 1 | built (phase 1) |
+| DS-4 | Selection bar restyle (inset, radius, 80 ms slide) and grey chevrons | System | S | 2 | DS-1 | 1 | built (phase 1) |
+| DS-5 | Toast strip component (top) and HUD strip (bottom) | System | M | 3 | DS-1, DS-2 | 1 | built (phase 1) |
+| DS-6 | Lucide icon set, replace FontAwesome where covered | System | S | 2 | — | 1 | built (phase 1) |
+| DS-7 | Push/pop slide transition, 30 fps cap | System | M | 2 | DS-4 | 1 | built (phase 1) |
+| HL-1 | Lock pill and Power-hold progress line | Hold/Power | S | 2 | DS-5 | 1 | built (phase 1) |
+| NP-1 | Now Playing layout: tag stack, pills, progress, volume strip | Now Playing | M | 3 | DS-2, DS-3 | 2 | open |
+| NP-2 | Seek mode: Big amber time, knob, hints, no third bar; entered by hold Select | Now Playing | S | 2 | NP-1 | 2 | open |
+| NP-3 | Now Playing page 2 (rating, shuffle, repeat, go-to); Select opens it | Now Playing | M | 2 | NP-1 | 2 | open |
+| NP-4 | Volume HUD from any screen | Now Playing | S | 2 | DS-5 | 2 | open |
+| NP-5 | Art pipeline: 160² thumbnails + LRU (PSRAM board and Y2 only) | Now Playing | M | 2 | — | 2 | open |
+| LB-1 | Two-line song rows (title / artist · album) | Library | S | 3 | DS-2 | 2 | open |
+| LB-2 | Fast-scroll letter overlay + index rail, sort keys ignoring articles/diacritics (UI-4) | Library | M | 3 | DS-2 | 2 | open |
+| LB-3 | Album header (art, title, artist · year, totals) | Library | S | 2 | NP-5 | 2 | open |
+| LB-4 | Empty / error / busy states as full-pane layouts, determinate progress | Library | M | 3 | DS-5 | 4 | open |
+| LB-5 | Unplayable rows show codec; auto-skip with toast | Library | S | 2 | DS-5 | 4 | open |
+| LB-6 | Cover Flow (flat five-tile) view on Albums (UI-11) | Library | M | 2 | NP-5 | 4 | open |
+| LB-7 | Playlists screen (smart lists + .m3u) (UI-19) | Library | L | 2 | — | 4 | open |
+| BT-1 | Devices screen (known / found / scan), signal bars monochrome | Bluetooth | M | 3 | DS-6 | 3 | open |
+| BT-2 | Forget / pairing / reconnect flows with toasts; no self-mutating rows; link lost ends "Couldn't reconnect — paused" (never switches output) | Bluetooth | M | 3 | DS-5, BT-1 | 3 | open |
+| BT-3 | Bluetooth settings page; codec detail moves to Diagnostics | Bluetooth | S | 1 | BT-1 | 3 | open |
+| ST-1 | Settings right pane as key/value summary; toggles in place | Settings | S | 2 | DS-2 | 4 | open |
+| ST-2 | Display page (theme, brightness, timeouts); the Theme row itself is built with DS-1 | Settings | S | 2 | DS-1 | 4 | Theme row built (DS-1); the rest open |
+| ST-3 | About › Diagnostics, Licences screen | Settings | S | 1 | — | 4 | open (Licences screen built, UI-23) |
+| IN-1 | Text entry: letter ring, mode chips, field box | Input | M | 2 | DS-2 | 4 | open |
+| IN-2 | Number/slider/date-time polish | Input | S | 1 | IN-1 | 4 | open |
+| FL-1 | Files: path in status bar, icons, paged "Load more" | Files | S | 1 | DS-3, DS-6 | 4 | open |
+| SP-1 | Release splash; self-test to debug splash | Splash | S | 1 | — | 4 | open |
+
 ## UI — blocked on other work
 
 | ID | Item | Source | Needs |
@@ -41,7 +78,7 @@ the Pico 2 W build is frozen as a compile check; items may assume the RP2350B wi
 | UI-13 | **Settings → Output** (headphone / line / optical / USB) when jack detect cannot decide. | spec | final board jack detect |
 | UI-14 | **Click: Piezo** actually clicks (setting exists, shows `Piezo not fitted yet`). | #23 | piezo driver + part on the testbed |
 | UI-15 | **Photos** browser. | spec | RP2350B + PSRAM, JPEG decode at screen size |
-| UI-16 | **Now Playing: rating / shuffle / repeat page** on a further Select (spec says "not drawn"). | spec | (Select now toggles volume / seek; pause is the Play button) |
+| UI-16 | **Now Playing: rating / shuffle / repeat page** on a further Select (spec says "not drawn"). | spec | (superseded by NP-2 / NP-3: Select opens page 2, hold Select seeks) |
 
 ## Non-UI, tracked elsewhere
 

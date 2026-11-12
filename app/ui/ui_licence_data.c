@@ -14,11 +14,15 @@ static const ui_licence_t k_licences[] = {
      "FreeRTOS", "MIT", false},
     {"LVGL", "MIT", "Copyright (c) LVGL Kft. The graphics library that draws every screen.", "LVGL", "MIT", false},
     {"Montserrat font", "SIL OFL 1.1",
-     "Copyright The Montserrat Project Authors. Built into the firmware as letter images. The licence text is in the source tree, next to the fonts.",
+     "Copyright The Montserrat Project Authors. Built into the firmware as letter images in the sizes the screens use (12 to 48). The licence text is in the source tree, next to the fonts.",
      "Montserrat", "OFL", false},
+    {"Lucide icons", "ISC / MIT",
+     "Copyright Lucide Icons and Contributors (ISC). The arrows, lock, folder and other small icons in the lists and the status bar; a few of them come from Feather, "
+     "copyright Cole Bemis (MIT). lucide.dev",
+     "Lucide", "ISC", false},
     {"Font Awesome icons", "CC BY 4.0 / OFL",
-     "Font Awesome Free by Fonticons, Inc. The icons are CC BY 4.0 and the font files SIL OFL 1.1. They are the small symbols in the lists and the status bar. "
-     "fontawesome.com/license/free",
+     "Font Awesome Free by Fonticons, Inc. The icons are CC BY 4.0 and the font files SIL OFL 1.1. They are the few symbols still drawn from the fonts: the music note, "
+     "the start-up icons and the tick. fontawesome.com/license/free",
      "Font Awesome", "CC BY 4.0", false},
     {"FatFs", "BSD-style",
      "FatFs R0.15, copyright ChaN. Free to use with the copyright notice and disclaimer kept. Reads and writes the memory card. elm-chan.org/fsw/ff",
