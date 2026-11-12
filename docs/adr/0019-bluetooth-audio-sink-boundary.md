@@ -121,6 +121,13 @@ Details and the RAM / flash figures are in [Bluetooth](../bluetooth.md#stage-2b-
 
 * **`hal_bt_set_pcm_source()`** hands the stack the consumer side of the PCM ring (a small type in `hal/include/hal_bt_pcm.h`). PCM still does not travel through `hal_bt_*`; the stack pulls it from the ring on its own thread.
 * **44.1 kHz only.** One SBC endpoint at 44.1 kHz; tracks at other rates are refused on the Bluetooth output. 48 kHz and the hi-res decimation of ADR-0013 are a follow-up.
-* **Not declared yet** (phase 3 / 2c): `HAL_BT_EVT_VOLUME`, `hal_bt_volume_set`, `HAL_BT_EVT_KEY`, `hal_bt_track_info`; the Now Playing volume bar and the headset buttons.
+* **Declared in 2c** (see below): `HAL_BT_EVT_VOLUME`, `hal_bt_volume_set`, `HAL_BT_EVT_KEY`, `hal_bt_track_info`; the Now Playing volume bar and the headset buttons.
 * Two new failure reasons, `HAL_BT_FAIL_STREAM` ("audio refused") and `HAL_BT_FAIL_CODEC` ("no common format"); the status-bar glyph uses the text colour for "connected" because the bar is light.
 
+## Amendment 12 Nov 2026: stage 2c as built, and reconnect
+
+Details in [Bluetooth](../bluetooth.md#stage-2c-avrcp-volume-buttons-metadata-built). Differences from the decision above:
+
+* The volume path is the **AVRCP controller** role (the headset is the target of absolute volume); the AVRCP **target** carries the buttons and the metadata. `hal_bt_volume_supported()` / `hal_bt_volume_get()` are added to the boundary, `HAL_BT_EVT_KEY` also has `FF` and `RW`, and `hal_bt_track_info()` returns false when the stack is busy.
+* STOP from the headset pauses (the place is kept). No volume is remembered per headset.
+* Stage 3 reconnect is built early on the owner's request: after a lost link and at power-up, with backoff, ended by any user action; playback is not resumed.

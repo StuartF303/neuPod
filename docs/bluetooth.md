@@ -12,8 +12,8 @@ sink. HFP comes later. This page covers what **stage 1** and **stage 2a** (pairi
 | 1 | RAM trim; SD-backed settings store (volume, backlight, click feedback, and BTstack's link keys); BTstack classic running on core 0; HCI bring-up; device discovery with a Settings > Bluetooth screen; host simulation | built |
 | 2a | Pairing (SSP "just works") and one saved headset; connection states (Pairing, Connecting, Connected, Disconnected, Failed with a reason); Connect / Disconnect / Forget; Settings > Bluetooth rows and the Devices pairing flow; link keys on the SD card; host simulation and tests. **No audio.** See [Pairing and the connection](#pairing-and-the-connection-stage-2a) | built; bench: Pair / save / reconnect / Forget passed on a Sony WI-C200. Disconnect, re-pair after Forget, wiped-headset refusal and Wi-Fi + Bluetooth coexistence are deferred to 2b |
 | 2b | A2DP source with SBC / SBC-XQ; audio routing from core 1 through a new core 1 to core 0 PCM path (storage shared with the I2S ring, [ADR-0013](adr/0013-bluetooth-ram-psram.md) amendment) with the source-side pacing model below; negotiated codec on the Now Playing badge; Audio output Auto / Wired; pause on link loss; status-bar glyph. See [Stage 2b](#stage-2b-the-audio-stream-built). **Not built: hi-res decimation, 48 kHz.** | built, host-tested; bench pending (Y2 first) |
-| 2c | AVRCP target with absolute volume, headset buttons, track metadata | planned |
-| 3 | Reconnect on power-up and after a drop; polish (error states, auto-sleep of the radio); the ADR-0007 listening test (SBC-XQ against a QCC3008 board, AirPods Pro 3); power measurements | planned |
+| 2c | AVRCP: the headset's absolute volume is the volume (software at 0 dB), headset buttons, track metadata. See [Stage 2c](#stage-2c-avrcp-volume-buttons-metadata-built) | built, host-tested; bench pending (Y2 first) |
+| 3 | Reconnect on power-up and after a drop (**built**, [below](#reconnecting-stage-3-built)); polish (error states, auto-sleep of the radio); the ADR-0007 listening test (SBC-XQ against a QCC3008 board, AirPods Pro 3); power measurements | reconnect built, host-tested; the rest planned |
 
 ## The stack
 
@@ -282,7 +282,7 @@ the number to check on the board (earlier bench figures: heap minimum free about
 BTstack heap use: none. `HAVE_MALLOC` is not defined and every pool is a static array in `.bss`; the pool counts in `btstack_config.h` did not change (the 444 B above is everything that moved). The FreeRTOS heap and the task stacks are unchanged;
 the new code runs on the 6 KB radio-worker stack, so its high-water mark is on the bench list. No internal-flash write code is linked (`flash_safe_execute`, `pico_flash`, `btstack_tlv_flash_bank` are absent from the ELF). The core-1 closure check reports ok.
 
-BTstack pools (`btstack_config.h`) are sized for **one** headset: 1 HCI connection, 4 L2CAP channels, 1 AVDTP connection, 2 stream endpoints, 1 AVRCP connection,
+BTstack pools (`btstack_config.h`) are sized for **one** headset: 1 HCI connection, 4 L2CAP channels, 1 AVDTP connection, 2 stream endpoints, 2 AVRCP entries (the two roles of one link, since 2c),
 8 remembered link keys (the UI remembers one headset; the other seven slots are headroom); ACL buffers 1021 + 4 bytes. Stage 2a needs 1 HCI connection and 1 L2CAP channel (the SDP query), so they were not touched. Revisit them in 2b when the real stream is up.
 
 ## Licence
@@ -338,7 +338,7 @@ shows for 3 s, nothing plays from the wired output. Play pressed with no headset
 **What is not in 2b (deviations from ADR-0019 and the brief).**
 
 * **Sample rate: 44.1 kHz only.** The endpoint offers 44.1 kHz; a track at another rate (48 kHz, 88.2 / 96 kHz) is refused on the Bluetooth output ("Not supported on Bluetooth (44.1 kHz only)", and the queue skips it) because there is no resampler and ADR-0003 forbids a cheap one. 48 kHz would need a stream reconfiguration per track (or a resampler); the **hi-res decimation on core 1 (half-band FIR, 2:1 / 4:1) of ADR-0013 is a follow-up**, not built: its coefficients and state have to be measured against the closure check and the 7.7 KB of free SRAM.
-* **Volume** is the software volume as on I2S (absolute volume is 2c). `HAL_BT_EVT_VOLUME`, `hal_bt_volume_set`, `HAL_BT_EVT_KEY` and `hal_bt_track_info` are not declared yet; the stream state and the codec struct leave room for them. The AVRCP records and endpoint pools are not registered.
+* **Volume** is the software volume as on I2S in 2b (absolute volume, the headset keys and the track information are [2c](#stage-2c-avrcp-volume-buttons-metadata-built)).
 * **`hal_bt_set_pcm_source`** is an addition to the HAL: ADR-0019 says PCM does not go through `hal_bt_*`; this call only hands the stack the consumer side of the ring.
 * The status-bar glyph for "connected" is the text colour, not white: the bar is light.
 
@@ -361,7 +361,34 @@ The rings add nothing (shared store). The stack of BTstack's worker (6 KB) now a
 5. A 48 kHz or 96 kHz file on Bluetooth: refused with the message, the queue moves on, nothing crashes.
 6. AirPods Pro 3: Connect, music; try `NEUPOD_BT_SBC_XQ=1` on a build and listen (the ADR-0007 test).
 
-## Stage 2 design notes (2a and 2b built; 2c not built)
+## Stage 2c: AVRCP, volume, buttons, metadata (built)
+
+**Roles.** The headset is the AVRCP *target* of absolute volume (category 2) and we are its *controller* for that; for the buttons and the display we are the *target* (category 1, player) and the headset is the controller. BTstack creates both roles on every AVRCP link, so `MAX_NR_AVRCP_CONNECTIONS` is **2** (640 B each) and the SDP records of both roles are registered (107 and 114 bytes). The headset normally opens the AVRCP channel itself (AirPods do); if it has not 2 s after the A2DP signalling channel we open it. The adapter (`hal/common/bt_btstack/bt_btstack.c`, same code on the RP2350 and the Y2) follows the verified `y2-a2dp` tool.
+
+**HAL (`hal_radio.h`, ADR-0019 section 1).** `HAL_BT_EVT_VOLUME` (0..127), `hal_bt_volume_set()`, `hal_bt_volume_supported()` / `hal_bt_volume_get()`, `HAL_BT_EVT_KEY` (`PLAY`, `PAUSE`, `PLAY_PAUSE`, `NEXT`, `PREV`, `STOP`, `FF`, `RW`; presses only), `hal_bt_track_info()` (title, artist, album, duration, position, play status, track id; returns false when the stack is busy with the previous call, the app asks again at its next tick). "Absolute volume supported" means the headset **has reported a volume** on the AVRCP channel (the answer to our volume-change registration): it turns true a moment after CONNECTED and false when the channel or the link goes; a headset that rejects the registration never turns it true and the software volume stays. Our own volume commands are sent without waiting for each answer (BTstack allows several in flight), the latest value wins, and the headset's reports that cross our commands are ignored so the bar does not jump back. No FreeRTOS call is made on the BTstack thread (the Y2 rule of `bt_port_stpbt.c`): the track information is one copy under a try-lock that neither side waits on, events leave through `bt_port_deliver()`.
+
+**Volume policy (`app/runtime/bt_control.c`).** On the Bluetooth output with absolute volume the wheel moves the headset's volume (`hal_bt_volume_set`, 4 of 127 per step, 32 steps lock to lock), the software volume is held at 0 dB (`player_volume_hold_unity`; the user's software level is kept and comes back when the headset is not the volume), and a swipe on the stem moves the bar. Without absolute volume, or on the wired output, the software volume is the volume as before. One scale (`bt_vol_to_db` / `bt_vol_from_db`): 127 = 0 dB, 0 = the software "off" level (80 dB), linear in dB, so a wheel step is about 2 dB in both modes; host-tested. On connect the headset's volume is read and shown; **nothing is ever pushed to the headset** (no restore of an earlier level). If it reports 0 the bar is empty, the label says `Headset 0%` and the status line says `Playing - headset volume 0%` (the AirPods Pro that a phone left at 0 % are no longer silently "playing"). Deviation: **no per-headset volume is stored** (asked as "if cheap"): the headset keeps its own level, which is the truth, and re-applying an old level behind the user's back is a loudness risk.
+
+**Buttons.** Done by the monitor task, so they work with any screen open or none: Play/Pause toggle; PLAY only when not playing and PAUSE only when playing (a repeated or crossed press does no harm); STOP **pauses** (the place is kept; a later PLAY resumes); NEXT / PREV are Right / Left (a folder queue is needed, and Previous restarts a track more than 3 s in); FF / RW scrub by the Now Playing step (a 60th of the track, 1 to 30 s) per press, so holding the button repeats. A button press does not wake the backlight.
+
+**Track information.** While a link exists the track's title (the file name without a title tag), artist, album, length, position and play status are handed over when the track or the status changes, when the position jumps more than 2 s (a seek), and every 10 s. The stack extrapolates the position while playing, answers the headset's play-status queries, and sends the track-changed and playback-status notifications. Nothing is sent for a test tone.
+
+**UI.** Now Playing: `Headset 62%` and a bar on the same 0..127 scale; Test tone the same. Settings > Bluetooth pane: `Absolute volume: yes / no` (the pane no longer says `On` while a stream is open, to make room). Tours at 320x240 and 480x360: `np-bt-volume`, `np-bt-volume0`, `bt-key-next` ([UI](ui.md)).
+
+**Memory (RP2350, Release):** `text` 1,350,480 B to 1,374,856 B (**+24,376 B**, AVRCP, the volume / key / metadata policy and the reconnect policy, UI), `bss` 496,548 B to 498,596 B (**+2,048 B**: two AVRCP connections 1,280 B, SDP records 232 B, track information and state about 400 B), so free SRAM falls from about 7.7 KB to **about 5.6 KB**. The 6 KB worker stack now also runs the AVRCP code: its minimum is on the bench list. The core-1 closure check reports ok.
+
+**On the board (stage 2c), in this order.**
+
+1. Y2, AirPods Pro, connected after the iPhone left them at 0 %: Now Playing shows `Headset 0%` and the hint; turn the wheel: sound, the bar follows; swipe the stem: the bar follows (console: `bt: avrcp: headset volume N%`).
+2. Press the stem / buttons: Play/Pause, double and triple press give Next / Previous. The track changes on the device; the headset display (if any) shows title and artist.
+3. A headset without absolute volume (a speaker): `Absolute volume: no`, the wheel is the software volume as before.
+4. The WI-C200 and the RP2350: the same, plus the worker stack minimum and the free SRAM.
+
+## Reconnecting (stage 3, built)
+
+`app/runtime/bt_reconnect.c` (pure policy) driven by `bt_service.c`. After the link to the remembered headset is **lost** (`HAL_BT_FAIL_LINK_LOST`: out of range, switched off without saying goodbye) Connect is tried again after 2 s, 5 s, 10 s, then every 30 s, for 5 minutes in all. At power-up, once Bluetooth is on and the settings are loaded, one attempt is made at once and the same schedule follows if it fails. Every attempt is ended by the HAL's own connect timer (20 s; the MT6582 does not report its page timeout until the connection is cancelled). **Any action of the user ends it for good** (Disconnect, Forget, Pair, Connect, Cancel); a running scan or somebody else's Pair / Connect only holds it back. A headset that hangs up politely (idle disconnect, `0x13`) is not "lost" and is not chased. The headset row reads `Reconnecting...` with busy dots from the loss until it is back, or given up. **Playback is not resumed** by a reconnect: the pause from the drop stays (Play, or the headset's button, continues). Not built: auto-resume of playback.
+
+## Stage 2 design notes (2a, 2b and 2c built)
 
 * **Priority and RAM ([ADR-0013](adr/0013-bluetooth-ram-psram.md), amendment of 4 Nov 2026):** stage 2 follows the Audio Pack tone test and MP3/ALAC playback. The original funding (sizing the codec arena, releasing LVGL's second render buffer)
   no longer pays: the arena saving was already spent in #17, and free SRAM is now about 15 KB (15,320 B measured on `main`, 14,876 B with stage 2a). The **core 1 to core 0 Bluetooth PCM ring reuses the 32 KB I2S PCM ring storage**: the outputs are
@@ -384,7 +411,7 @@ The rings add nothing (shared store). The stack of BTstack's worker (6 KB) now a
   encoder task when the headset consumes slowly, the ring then fills, and the decoder on core 1 (which only decodes when the ring has room) slows with it, so the
   decoder is paced by the link. A fill-level target (about half the ring) with an occasional one-frame drop or repeat on drift keeps it steady; underruns on the Bluetooth path are
   counted like the I2S ones. To be proven on the bench with the AirPods Pro 3.
-* **AVRCP**: target with absolute volume (volume changes on the headset move the software volume and the other way round), play/pause/next/previous from the headset's buttons, and track metadata for the headset display.
+* **AVRCP** (2c, built, [above](#stage-2c-avrcp-volume-buttons-metadata-built)): the headset's absolute volume is the player's volume, play/pause/next/previous from the headset's buttons, and track metadata for the headset display.
 * **UI** (2a built: pairing flow, saved device and state in the pane): still to come, negotiated codec and battery (if the headset reports it) in the pane; the Now Playing badge shows
   the codec ([UI](ui.md)).
 
