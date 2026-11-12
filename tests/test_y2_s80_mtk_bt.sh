@@ -89,7 +89,9 @@ check "existing property area is left alone" test "$before" = "$after"
 pid=$(cat "$T/run/6620_launcher.pid")
 run stop
 sleep 1
-check "stop ends the launcher" sh -c "! kill -0 $pid 2>/dev/null"
+# Gone or a zombie: in a container the orphaned launcher may be reparented to a PID 1 that never reaps it, and kill -0
+# succeeds on a zombie. On the Y2, init reaps it.
+check "stop ends the launcher" sh -c "! { [ -r /proc/$pid/stat ] && [ \"\$(sed 's/.*) //' /proc/$pid/stat | cut -c1)\" != Z ]; }"
 check "stop removes the pid file" test ! -e "$T/run/6620_launcher.pid"
 
 # --- staged but the stock helpers are missing: says so, does nothing else ---

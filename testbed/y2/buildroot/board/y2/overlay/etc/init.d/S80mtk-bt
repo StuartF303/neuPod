@@ -81,7 +81,8 @@ start() {
 	make_props || { log "cannot create $DEV/__properties__"; return 0; }
 
 	if [ ! -e "$LOADER_DONE" ]; then
-		: >"$LOADER_DONE"
+		# echo, not ":": a failed redirection on a special builtin ends some shells; here a marker that cannot be written must skip the loader
+		echo started >"$LOADER_DONE" || { log "cannot write $LOADER_DONE: wmt_loader not run"; return 0; }
 		rc=0
 		if command -v timeout >/dev/null 2>&1; then
 			timeout 20 "$LOADER" >/dev/null 2>&1 || rc=$?
