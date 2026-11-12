@@ -405,6 +405,10 @@ bool y2_audio_work(y2_audio_t *a) {
         return true;
     }
 
+    // Write whole IRQ periods: wait (bounded) for a full chunk rather than padding a short one with zeros.
+    for (int i = 0; i < 40 && spsc_ring_available(&a->ring) < Y2_AUDIO_CHUNK_FRAMES; i++) {
+        a->ops.sleep_ms(a->ops.ctx, 1u);
+    }
     uint32_t got = spsc_ring_read(&a->ring, a->wchunk, Y2_AUDIO_CHUNK_FRAMES);
     if (got < Y2_AUDIO_CHUNK_FRAMES) {
         memset(a->wchunk + got * 2u, 0, (Y2_AUDIO_CHUNK_FRAMES - got) * Y2_AUDIO_BYTES_PER_FRAME);

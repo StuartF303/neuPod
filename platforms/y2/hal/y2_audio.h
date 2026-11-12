@@ -42,7 +42,7 @@ extern "C" {
 #define Y2_AUDIO_BUF_BYTES 16384u
 #define Y2_AUDIO_BYTES_PER_FRAME 4u
 #define Y2_AUDIO_RING_FRAMES 4096u  /**< ring between the block clock and the writer (power of two): 93 ms at 44.1 kHz */
-#define Y2_AUDIO_CHUNK_FRAMES 256u  /**< one write(): a block */
+#define Y2_AUDIO_CHUNK_FRAMES 1024u /**< one write(): one AFE IRQ period (Y2_AUDIO_BUF_BYTES / 4), as the stock HAL and y2-tone write */
 #define Y2_AUDIO_RATE 44100u
 
 #define Y2_AUDIO_SILENCE_HOLD_MS 3000u   /**< digital silence for this long stops the AFE stream (DAC stays powered) */

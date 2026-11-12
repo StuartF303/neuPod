@@ -84,8 +84,20 @@ static int op_eac_ioctl(void *ctx, unsigned long cmd, unsigned long arg) {
     return ioctl(g_fd_eac, cmd, arg);
 }
 
+/* Bench aid: NEUPOD_Y2_PCM_DUMP=<file> records every byte written to /dev/eac (writer thread only). */
+static FILE *g_tap;
+static bool g_tap_tried;
+
 static long op_eac_write(void *ctx, const void *buf, size_t bytes) {
     (void)ctx;
+    if (!g_tap_tried) {
+        g_tap_tried = true;
+        const char *tp = getenv("NEUPOD_Y2_PCM_DUMP");
+        g_tap = tp != NULL && tp[0] != '\0' ? fopen(tp, "wb") : NULL;
+    }
+    if (g_tap != NULL) {
+        fwrite(buf, 1, bytes, g_tap);
+    }
     for (int tries = 0; tries < 3; tries++) {
         ssize_t w = write(g_fd_eac, buf, bytes);
         if (w >= 0 || errno != EINTR) {
