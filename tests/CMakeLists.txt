@@ -512,13 +512,13 @@ set_tests_properties(text_tour PROPERTIES
   TIMEOUT 90)
 if(NEUPOD_UI_HIRES)
   set_tests_properties(text_tour PROPERTIES PASS_REGULAR_EXPRESSION
-    "ui: audit 'text-files' 320x240 objects=[1-9][0-9]* violations=0.*ui: audit 'text-folder' 320x240 objects=[1-9][0-9]* violations=0.*ui: audit 'text-nowplaying' 320x240 objects=[1-9][0-9]* violations=0.*host: run finished, status 0")
+    "ui: audit 'text-files' 320x240 objects=[1-9][0-9]* violations=0.*ui: audit 'text-folder' 320x240 objects=[1-9][0-9]* violations=0.*ui: audit 'text-nowplaying' 320x240 objects=[1-9][0-9]* violations=0.*ui: audit 'text-home' 320x240 objects=[1-9][0-9]* violations=0.*ui: audit 'text-longrow' 320x240 objects=[1-9][0-9]* violations=0.*host: run finished, status 0")
   neupod_text_card(hires_text)
   add_test(NAME hires_text_tour
     COMMAND neupod --run-ms 30000 --splash-hold-ms 1500 --tour-text --snapshots ${CMAKE_BINARY_DIR}/snapshots_hires_text)
   set_tests_properties(hires_text_tour PROPERTIES
     ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_DISPLAY_SIZE=480x360;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_hires_text;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_hires_text.img"
-    PASS_REGULAR_EXPRESSION "ui: audit 'text-files' 480x360 objects=[1-9][0-9]* violations=0.*ui: audit 'text-folder' 480x360 objects=[1-9][0-9]* violations=0.*ui: audit 'text-nowplaying' 480x360 objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+    PASS_REGULAR_EXPRESSION "ui: audit 'text-files' 480x360 objects=[1-9][0-9]* violations=0.*ui: audit 'text-folder' 480x360 objects=[1-9][0-9]* violations=0.*ui: audit 'text-nowplaying' 480x360 objects=[1-9][0-9]* violations=0.*ui: audit 'text-home' 480x360 objects=[1-9][0-9]* violations=0.*ui: audit 'text-longrow' 480x360 objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
     FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     FIXTURES_REQUIRED hires_text_card

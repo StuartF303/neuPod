@@ -48,6 +48,7 @@ void ui_apply_backlight(void) {
 
 static void backlight_transition(void) {
     ui_apply_backlight();
+    ui_ticker_set_active(!g_idle.off); /* nothing scrolls on a dark panel */
     printf("ui: backlight %s %u%%\n", g_idle.off ? "off" : g_idle.dimmed ? "dim" : "wake",
            (unsigned)ui_backlight_level(g_ui_state.backlight_pct, g_idle.dimmed, g_idle.off));
 }
@@ -171,6 +172,7 @@ void ui_frame_init(lv_obj_t *scr) {
     lv_obj_set_size(g_title, UIM->title_w, UIM->title_h);
     lv_obj_set_style_text_align(g_title, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(g_title, LV_LABEL_LONG_DOT);
+    ui_label_ticker(g_title, true); /* a long title scrolls */
     lv_obj_align(g_title, LV_ALIGN_CENTER, 0, 0);
 
     g_left = ui_label_small(bar, "", UI_C_INK2);
@@ -306,6 +308,7 @@ static void slide_in(lv_obj_t *root, int32_t from_x, uint32_t ms) {
 }
 
 void ui_frame_settle(void) {
+    ui_ticker_restart(); /* a snapshot shows every ticker at its start */
     slide_settle();
     ui_strips_settle();
 }
@@ -725,6 +728,98 @@ static void fonts_init(void) {
     lv_style_init(&g_font_icon[1]);
     lv_style_set_text_font(&g_font_icon[1], UIM->font_icon_lg);
     g_fonts_ready = true;
+}
+
+// ---- tickers ----
+// Text wider than its one-line box scrolls round (LV_LABEL_LONG_SCROLL_CIRCULAR) instead of ending in dots: the focused list row, the Home track
+// lines, the status-bar title. LVGL's own label animation does it: it moves only the label's text offset, so only the label's own box is invalidated,
+// and a label whose text fits has no animation at all. One shared style carries the speed and the pause (the start delay is the animation template's
+// negative time). Unfocused rows keep their dots. The registry lets the screen-off stage and the tours freeze them.
+#define TICKERS_MAX 8
+#define TICKER_PAUSE_MS 1000
+static lv_style_t g_ticker_style;
+static lv_anim_t g_ticker_anim;
+static bool g_ticker_ready;
+static lv_obj_t *g_tickers[TICKERS_MAX];
+static bool g_ticker_active = true;
+
+static void ticker_init(void) {
+    lv_anim_init(&g_ticker_anim);
+    lv_anim_set_delay(&g_ticker_anim, TICKER_PAUSE_MS); /* the first start waits for it; repeats wait for the repeat delay below */
+    lv_anim_set_repeat_count(&g_ticker_anim, LV_ANIM_REPEAT_INFINITE);
+    lv_anim_set_repeat_delay(&g_ticker_anim, TICKER_PAUSE_MS);
+    lv_style_init(&g_ticker_style);
+    lv_style_set_anim(&g_ticker_style, &g_ticker_anim);
+    lv_style_set_anim_duration(&g_ticker_style, lv_anim_speed_clamped((uint32_t)UIM->ticker_px_s, 300, 10000));
+    g_ticker_ready = true;
+}
+
+static int ticker_find(const lv_obj_t *l) {
+    for (int i = 0; i < TICKERS_MAX; i++) {
+        if (g_tickers[i] == l) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static void ticker_deleted(lv_event_t *e) {
+    int i = ticker_find(lv_event_get_target(e));
+    if (i >= 0) {
+        g_tickers[i] = NULL;
+    }
+}
+
+static void ticker_apply(lv_obj_t *l, bool scroll) {
+    lv_label_long_mode_t want = scroll ? LV_LABEL_LONG_SCROLL_CIRCULAR : LV_LABEL_LONG_DOT;
+    if (lv_label_get_long_mode(l) != want || scroll) {
+        lv_label_set_long_mode(l, want); /* also rewinds: the old animation is deleted and the offset reset */
+    }
+}
+
+void ui_label_ticker(lv_obj_t *l, bool on) {
+    if (!g_ticker_ready) {
+        ticker_init();
+    }
+    int i = ticker_find(l);
+    if (on == (i >= 0)) {
+        return; /* no change: never restart a scroll that is running */
+    }
+    if (on) {
+        int slot = ticker_find(NULL);
+        if (slot < 0) {
+            return; /* registry full: this label keeps its dots */
+        }
+        g_tickers[slot] = l;
+        lv_obj_add_style(l, &g_ticker_style, 0);
+        lv_obj_add_event_cb(l, ticker_deleted, LV_EVENT_DELETE, NULL);
+        ticker_apply(l, g_ticker_active);
+    } else {
+        g_tickers[i] = NULL;
+        lv_obj_remove_event_cb(l, ticker_deleted);
+        lv_obj_remove_style(l, &g_ticker_style, 0);
+        ticker_apply(l, false);
+    }
+}
+
+void ui_ticker_set_active(bool active) {
+    if (active == g_ticker_active) {
+        return;
+    }
+    g_ticker_active = active;
+    for (int i = 0; i < TICKERS_MAX; i++) {
+        if (g_tickers[i] != NULL) {
+            ticker_apply(g_tickers[i], active);
+        }
+    }
+}
+
+void ui_ticker_restart(void) {
+    for (int i = 0; i < TICKERS_MAX; i++) {
+        if (g_tickers[i] != NULL) {
+            ticker_apply(g_tickers[i], g_ticker_active);
+        }
+    }
 }
 
 void ui_label_set_text(lv_obj_t *l, const char *raw) {

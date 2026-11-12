@@ -89,6 +89,7 @@ static void style_row(ui_list_t *l, row_t *r, bool dim) {
     bool on = r->sel && l->focus;
     uint32_t text = on ? UI_C_ON_ACCENT : dim ? UI_C_INK3 : UI_C_INK;
     uint32_t sub = on ? UI_C_ON_ACCENT : UI_C_INK2;
+    ui_label_ticker(r->label, on); /* the focused row's text scrolls if it does not fit; the others keep their dots */
     ui_label_recolour(r->label, r->c_label, text);
     ui_label_recolour(r->detail, r->c_detail, sub);
     ui_label_recolour(r->chev, r->c_chev, sub);

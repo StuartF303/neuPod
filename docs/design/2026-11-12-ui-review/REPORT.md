@@ -34,7 +34,7 @@ Mock-ups are in `mockups/`, named `<area>-<screen>-<WxH>.png`, rendered at nativ
 | `ink` | `#181818` | `#F0F0F0` | primary text, battery fill |
 | `ink2` | `#606060` | `#A0A0A0` | secondary text, chevrons, volume fill |
 | `ink3` | `#A0A0A0` | `#686868` | tertiary text, disabled rows, hints |
-| `accent` | `#1858C8` | `#3078E8` | selection bar, progress fill, focused value |
+| `accent` | `#1858C8` | `#2868D8` | selection bar, progress fill, focused value |
 | `on_accent` | `#FFFFFF` | `#FFFFFF` | text on the selection bar |
 | `accent_soft` | `#D8E4F8` | `#203050` | pills, info toast |
 | `amber` | `#D08018` | `#E89828` | seek mode, warnings |
@@ -101,7 +101,7 @@ Drop FontAwesome where these cover it; keep it only for glyphs you already ship 
 | Selection bar jump > 3 rows / fast spin | 0 ms | — | no anim; letter overlay shows instead |
 | Push screen (deeper) | 120 ms | ease-out-cubic | list area slides in 24 px from the right, fades from 0; status bar title swaps instantly |
 | Pop screen (Menu) | 100 ms | ease-out-cubic | list slides 24 px to the right and fades out |
-| Toast in / out | 150 / 200 ms | ease-out / ease-in | 22 px strip slides down from under the status bar |
+| Toast in / out | 150 / 200 ms | ease-out / ease-in | one-row (30 / 45 px) strip slides down from under the status bar |
 | Volume HUD | 120 ms in, hold 1200 ms, 200 ms out | ease-out | 26 px bottom strip; bar fill animates 60 ms |
 | Seek mode enter / leave | 0 ms | — | colour swap only; haptic tick |
 | Progress bar | 1 Hz step | — | invalidate only the bar rectangle |

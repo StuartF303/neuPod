@@ -67,6 +67,7 @@ typedef struct {
     int32_t sb_w, sb_min_h, sb_radius, sb_gap; /* scroll bar; gap = distance from the right edge */
     int32_t sel_inset, sel_radius;             /* selection bar: inset from the list's left and right edges, corner radius */
     int32_t sel_inset_y;                       /* ... and from the top and bottom of its row */
+    int32_t ticker_px_s;                       /* overlong text scrolls at this speed (after a 1 s pause) */
     int32_t sel_anim_ms;                       /* the bar slides to an adjacent row in this time (0 = jumps) */
     int32_t icon_w;                            /* width reserved for a row's leading icon (folder, file) */
 

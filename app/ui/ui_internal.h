@@ -218,6 +218,13 @@ lv_obj_t *ui_icon(lv_obj_t *parent, const char *glyph, bool large, uint32_t colo
 void ui_label_set_text(lv_obj_t *l, const char *raw);
 /** Change a label's colour (from a colour it was created with / last set to). Shared styles: no per-object style memory. */
 void ui_label_recolour(lv_obj_t *l, uint32_t from, uint32_t to);
+/** Ticker (owner decision, docs/ui.md "Text that does not fit"): @p on makes a one-line label scroll round when its text is wider than its box
+ *  (1 s pause, then 35 px/s, x1.5 on 480x360, a gap between repeats); off gives it dots again and rewinds it. The label's box must be one line high. */
+void ui_label_ticker(lv_obj_t *l, bool on);
+/** Tickers stand still (rewound) while the screen is off. */
+void ui_ticker_set_active(bool active);
+/** Rewind every ticker to its start with its pause (tours: a snapshot is always of the start position). */
+void ui_ticker_restart(void);
 void ui_format_size(uint64_t bytes, char *out, size_t n);
 
 #endif // NEUPOD_UI_INTERNAL_H
