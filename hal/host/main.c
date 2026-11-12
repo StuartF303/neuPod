@@ -89,6 +89,11 @@
 // The same on a write-protected card (NEUPOD_DISK_READ_ONLY=1): the first open and Update Library both say "Library needs a writable card" and offer to try again.
 #define TOUR_LIBRARY_RO "x _ _ x x x x x snap:lib-needs-writable m 6*s _ x x x x snap:lib-update-needs-writable"
 
+// Text beyond ASCII (UI-17): Extras > Files on a card whose names hold accents, the ripper's U+00BF, curly quotes, CJK and an emoji
+// (tests/tools/make_text_card.py), into the accented folder, then its FLAC (accented tags) on Now Playing. The track lasts 0.3 s: as in the art tour,
+// Settings > Repeat is set to One first so the player ends up paused on it (wait:pause) instead of dropping to idle.
+#define TOUR_TEXT "x s s s s _ s s s s s s _ m w _ _ x snap:text-files _ x snap:text-folder _ wait:pause x snap:text-nowplaying m m"
+
 static unsigned g_expect = 18;
 static const char *g_snapshot_dir;
 static unsigned g_snapshots;
@@ -164,6 +169,10 @@ int main(int argc, char **argv) {
             cfg.ui_script = TOUR_LIBRARY_RO;
             cfgp_tour = true;
             g_expect = 4;
+        } else if (strcmp(argv[i], "--tour-text") == 0) {
+            cfg.ui_script = TOUR_TEXT;
+            cfgp_tour = true;
+            g_expect = 5; // the splash, home and the three named snapshots
         } else if (strcmp(argv[i], "--script") == 0 && i + 1 < argc) {
             cfg.ui_script = argv[++i]; // ad-hoc key script, same tokens as the tour
         } else if (strcmp(argv[i], "--splash-hold-ms") == 0 && i + 1 < argc) {
@@ -171,7 +180,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--snapshots") == 0 && i + 1 < argc) {
             g_snapshot_dir = argv[++i];
         } else {
-            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek|--tour-library|--tour-library-ro] [--script KEYS] [--snapshots DIR]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek|--tour-library|--tour-library-ro|--tour-text] [--script KEYS] [--snapshots DIR]\n", argv[0]);
             return 64;
         }
     }
