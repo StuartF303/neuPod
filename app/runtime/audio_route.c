@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include "audio_route.h"
+#include "hal_audio.h"
 #include "bt_pcm.h"
 #include "hal_radio.h"
 #include "os.h"
@@ -16,6 +17,7 @@
 static audio_output_t g_out = AUDIO_OUT_WIRED;
 static audio_route_pref_t g_pref = AUDIO_ROUTE_AUTO;
 static uint32_t g_gen_seen = UINT32_MAX;
+static bool g_wired_was_attached; /* the wired output had something plugged in at the last tick (a platform that cannot tell always says yes) */
 static bool g_was_up;           /* the stream was usable at the last tick while the output was Bluetooth */
 static uint32_t g_release_until;
 static bool g_release_armed;
@@ -79,6 +81,7 @@ static void apply_output(audio_output_t out) {
     g_out = out;
     player_set_output_path(out == AUDIO_OUT_BT ? OUT_PATH_BT : OUT_PATH_WIRED);
     g_was_up = out == AUDIO_OUT_BT;
+    g_wired_was_attached = hal_audio_wired_attached();
     g_quiet_since = os_tick_ms();
     g_reopen_tries = 0;
     printf("route: output %s\n", out == AUDIO_OUT_BT ? "Bluetooth" : "wired");
@@ -96,7 +99,20 @@ void audio_route_service(void) {
     if (g_out == AUDIO_OUT_WIRED) {
         if (g_pref == AUDIO_ROUTE_AUTO && up) {
             apply_output(AUDIO_OUT_BT);
+            return;
         }
+        /* Headphones pulled out while playing: pause (position kept, like a lost link) and say so. Plugging back in does not resume. */
+        const bool attached = hal_audio_wired_attached();
+        if (g_wired_was_attached && !attached) {
+            player_info_t pi;
+            player_get(&pi);
+            if (pi.state == PLAYER_PLAYING) {
+                player_pause();
+                notice(ROUTE_NOTICE_HEADPHONES_UNPLUGGED);
+                printf("route: headphones unplugged, paused\n");
+            }
+        }
+        g_wired_was_attached = attached;
         return;
     }
 

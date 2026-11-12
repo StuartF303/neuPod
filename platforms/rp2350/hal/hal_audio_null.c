@@ -58,6 +58,8 @@ void hal_audio_mute(bool mute) { (void)mute; }
 
 void hal_audio_force_mute(void) {}
 
+bool hal_audio_wired_attached(void) { return true; } // no jack detection
+
 void hal_audio_get_info(hal_audio_info_t *out) {
     out->rate_hz = g_open ? g_rate : 0;
     out->rate_actual_mhz = 0;

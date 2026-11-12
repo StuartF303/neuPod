@@ -266,6 +266,43 @@ TEST(a_stream_released_by_the_headset_is_reopened_a_few_times_then_left) {
     ASSERT_EQ(0, g_stops);
 }
 
+TEST(headphones_pulled_out_while_playing_pause_with_a_notice_and_do_not_resume) {
+    reset();
+    ASSERT_EQ(AUDIO_OUT_WIRED, audio_route_output());
+    hal_host_set_wired_attached(true);
+    tick(100);
+    uint32_t seq0;
+    (void)audio_route_notice(&seq0);
+    g_pstate = PLAYER_PLAYING;
+    hal_host_set_wired_attached(false);
+    tick(100);
+    uint32_t seq1;
+    ASSERT_EQ(ROUTE_NOTICE_HEADPHONES_UNPLUGGED, audio_route_notice(&seq1));
+    ASSERT_TRUE(seq1 != seq0);
+    ASSERT_EQ(1, g_pauses);
+    ASSERT_EQ(PLAYER_PAUSED, g_pstate);
+    ASSERT_EQ(AUDIO_OUT_WIRED, audio_route_output());
+    hal_host_set_wired_attached(true); // plugging back in is not a Play
+    tick(100);
+    ASSERT_EQ(PLAYER_PAUSED, g_pstate);
+    ASSERT_EQ(1, g_pauses);
+    // pulled out while not playing: nothing to pause, no notice
+    hal_host_set_wired_attached(false);
+    tick(100);
+    uint32_t seq2;
+    (void)audio_route_notice(&seq2);
+    ASSERT_EQ(seq1, seq2);
+    // playing with nothing plugged in from the start (the null sink): not an unplug, no pause
+    g_pstate = PLAYER_PLAYING;
+    tick(100);
+    tick(100);
+    ASSERT_EQ(PLAYER_PLAYING, g_pstate);
+    ASSERT_EQ(1, g_pauses);
+    hal_host_set_wired_attached(true);
+    g_pstate = PLAYER_IDLE;
+    tick(100);
+}
+
 int main(void) {
     RUN(wired_until_a_stream_is_open_then_bluetooth_with_a_quiet_change);
     RUN(a_track_playing_is_stopped_for_the_change_of_output);
@@ -278,5 +315,6 @@ int main(void) {
     RUN(reconnecting_after_a_drop_lets_playback_resume_without_another_change);
     RUN(letting_the_headset_go_on_purpose_returns_to_wired);
     RUN(a_stream_released_by_the_headset_is_reopened_a_few_times_then_left);
+    RUN(headphones_pulled_out_while_playing_pause_with_a_notice_and_do_not_resume);
     return RESULT();
 }

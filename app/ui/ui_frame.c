@@ -374,7 +374,8 @@ static void update_banner(uint32_t now_ms) {
     if (seq != g_notice_seen) {
         g_notice_seen = seq;
         if (n != ROUTE_NOTICE_NONE) {
-            lv_label_set_text(g_banner, n == ROUTE_NOTICE_HEADSET_DROPPED ? "Headset disconnected" : "Headset not connected");
+            lv_label_set_text(g_banner, n == ROUTE_NOTICE_HEADSET_DROPPED ? "Headset disconnected"
+                                : n == ROUTE_NOTICE_HEADPHONES_UNPLUGGED ? "Headphones unplugged" : "Headset not connected");
             lv_obj_set_hidden(g_banner, false);
             g_banner_until = now_ms + AUDIO_ROUTE_BANNER_MS;
         }

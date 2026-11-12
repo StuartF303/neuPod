@@ -142,6 +142,8 @@ void hal_audio_force_mute(void) {
     sink_hw_stop(g_ch[0], g_ch[1], g_sm);
 }
 
+bool hal_audio_wired_attached(void) { return true; } // no jack detection
+
 bool hal_audio_rate_supported(uint32_t sample_rate) {
     return sample_rate == 44100u || sample_rate == 48000u || sample_rate == 88200u || sample_rate == 96000u;
 }

@@ -28,6 +28,7 @@ typedef enum {
     ROUTE_NOTICE_NONE = 0,
     ROUTE_NOTICE_HEADSET_DROPPED, /**< the headset went away while playing: "Headset disconnected" */
     ROUTE_NOTICE_NOT_CONNECTED,   /**< Play was pressed on the Bluetooth output with no headset: "Headset not connected" */
+    ROUTE_NOTICE_HEADPHONES_UNPLUGGED, /**< the wired headphones were pulled out while playing: "Headphones unplugged" */
 } audio_route_notice_t;
 
 #define AUDIO_ROUTE_SUSPEND_MS 4000u /**< silence on the Bluetooth output for this long suspends the A2DP stream */

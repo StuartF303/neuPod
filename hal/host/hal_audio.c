@@ -137,6 +137,10 @@ uint32_t hal_audio_free_frames(void) { return HAL_AUDIO_BLOCK_FRAMES; }
 
 void hal_audio_mute(bool mute) { (void)mute; }
 
+static volatile bool g_wired_attached = true;
+void hal_host_set_wired_attached(bool attached) { g_wired_attached = attached; }
+bool hal_audio_wired_attached(void) { return g_wired_attached; }
+
 void hal_audio_force_mute(void) {}
 
 void hal_audio_get_info(hal_audio_info_t *out) {

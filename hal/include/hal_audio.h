@@ -109,6 +109,13 @@ void hal_audio_get_info(hal_audio_info_t *out);
  */
 void hal_audio_set_virtual(bool virtual_sink);
 
+/**
+ * Is there something on the wired output to listen to? false only when the platform can tell that nothing is plugged in (the Y2's headphone
+ * jack: its output is then the null sink); true everywhere else, including when it cannot tell. The audio route pauses with a notice when
+ * this goes from true to false during playback on the wired output.
+ */
+bool hal_audio_wired_attached(void);
+
 /** Stop the stream and release buffers. */
 void hal_audio_close(void);
 
