@@ -109,18 +109,20 @@ read `UIM->...` (the active profile); `UI_W`, `UI_H`, `UI_STATUS_H`, `UI_CONTENT
 
 | | 320x240 (product panel) | 480x360 (Y2 testbed, host `NEUPOD_DISPLAY_SIZE=480x360`) |
 | --- | --- | --- |
-| Status bar / list row | 24 / 24 px | 36 / 36 px |
-| Content area, rows per page | 216 px, 9 | 324 px, 9 |
-| Fonts body / large / huge | Montserrat 14 / 20 / 48 (own build, Latin-1) | Montserrat 20 / 28 / 48 |
-| Home split (list / pane), art box | 160 / 160, 96 px | 240 / 240, 144 px |
+| Status bar / list row | 24 / 30 px | 36 / 45 px |
+| Content area, rows per page | 216 px, 7 | 324 px, 7 |
+| Fonts small / body / large / huge | Montserrat 12 / 14 / 20 / 48 (own build, Latin-1) | Montserrat 16 / 20 / 28 / 48 |
+| Icons (Lucide, 1-bit) small / large | 16 / 24 px | 24 / 36 px |
+| Home split (list / pane), art box | 179 / 141 (56 %), 117 px | 269 / 211, 175 px |
 | Now Playing art box, text column | 112 px at (14, 14), x = 140 | 168 px at (21, 21), x = 210 |
-| Settings split (groups / summary) | 170 / 150 | 255 / 225 |
+| Settings split (groups / summary) | 179 / 141 | 269 / 211 |
 | Splash icon, icon row, wordmark | 32 px, y = 142, 48 pt | 48 px, y = 213, 48 pt (the largest size built) |
 | LVGL partial-render buffers | 2 x 320 x 24 RGB565 (15 KB each) | 2 x 480 x 36 (34 KB each; hosted builds only) |
+| Toast / HUD strip, lock pill | 22 / 26 / 24 px | 33 / 39 / 36 px |
 
 The 480x360 profile is every length of the 320x240 one times 3/2 (the `S()` macro in `ui_metrics.c`, used only in that
 table), and fonts step to the next size (14 to 20, 20 to 28: 1.43x and 1.4x, a little under 1.5x, so text that fits at 320
-fits at 480). Row counts do not change: both profiles show 9 rows. Adding a profile is one more initialiser in
+fits at 480). Row counts do not change: both profiles show 7 rows. Adding a profile is one more initialiser in
 `ui_metrics.c`; `tests/test_ui_metrics.c` checks every compiled-in profile (title bar and rows fit the height, art box fits
 above the progress bar, text lines stack without overlapping, splash captions fit one line, the static LVGL buffers are big
 enough) and pins the 320x240 numbers to what the UI had before profiles existed.
@@ -147,14 +149,14 @@ test menu) are 320x240 only.
 
 ## Fonts and display text
 
-The UI draws with its own builds of Montserrat Medium (SIL OFL 1.1) at 14, 20, 28 (480x360 profile, hosted builds only) and 48 pt, 4 bpp, merged with
-the Font Awesome symbols the screens use (`LV_SYMBOL_*`). They are generated files in `app/ui/fonts/` (`tools/gen_ui_fonts.sh` rebuilds them; the
+The UI draws with its own builds of Montserrat Medium (SIL OFL 1.1) at 12 (Small), 14, 16 (Small at 480x360, hosted builds only), 20, 28 (480x360, hosted builds only) and 48 pt, 4 bpp, merged with
+the few Font Awesome symbols that are still drawn from the fonts (`LV_SYMBOL_*`: note, tick, image, Wi-Fi, battery 3, Bluetooth, SD card; the rest of the symbols moved to the Lucide icons, below). They are generated files in `app/ui/fonts/` (`tools/gen_ui_fonts.sh` rebuilds them; the
 command line, sources and licences are in `app/ui/fonts/README.md`) and replace LVGL's built-in `lv_font_montserrat_*`, which are switched off in
 `lv_conf.h` so the flash is not paid twice (the themes' default font is the 14 too). The metrics profiles point at them (`neupod_font_14` and so on).
 
 | Font | Characters |
 |------|------------|
-| 14, 20, 28 | ASCII (U+0020 to 007E), Latin-1 (U+00A0 to 00FF, without the soft hyphen), bullet, en and em dash, curly single and double quotes, ellipsis, euro, and the 19 symbols the UI draws |
+| 12, 14, 16, 20, 28 | ASCII (U+0020 to 007E), Latin-1 (U+00A0 to 00FF, without the soft hyphen), bullet, en and em dash, curly single and double quotes, ellipsis, euro, and the 7 symbols still drawn from the fonts |
 | 48 | ASCII and the note symbol only (the splash wordmark and the art-less note; it never shows a name) |
 
 Latin-1 covers the accented letters of Western European names (é ü ñ ø å ß ...) and `¿ ¡`: some rippers write `¿` where the title had a `?`, and it is a
@@ -175,9 +177,47 @@ label alone when the result is what it already shows. Everything drawn from such
 text), the screen titles (a folder name), Now Playing title, artist and album, the Home screen's playing lines, the toasts, the Settings panes
 (Bluetooth and Wi-Fi names) and the Bluetooth and Wi-Fi lists. Text the wheel keyboards build is typed from their own character sets and drawn as is.
 New code that puts a media string into a label must use it, and a new `LV_SYMBOL_*` needs its code point in `tools/gen_ui_fonts.sh` and
-`ui_text_has_glyph()`.
+`ui_text_has_glyph()`. Lucide icons are drawn with `ui_icon()` (an icon-font label, never run through the filter).
 
 Flash cost on the RP2350 (Release): see the CHANGELOG entry for UI-17.
+
+## Design system (2026-11-12 review)
+
+From the owner-commissioned [design review](design/2026-11-12-ui-review/README.md); phase 1 (the foundation, backlog `DS-1` to `DS-7` and `HL-1`, see [Backlog](backlog.md#design-review-2026-11-12))
+is built. The decisions the owner took where the review conflicted with earlier ones are in the README of the review and apply to every phase (Now Playing: Select opens page 2, hold Select seeks;
+a lost Bluetooth link stays paused on Bluetooth, ADR-0019; Light by default; the Pico 2 W is frozen; every third-party asset goes into `LICENSE.md` and the Licences screen).
+
+**Colour tokens and themes (DS-1).** Every colour the UI draws is one of 14 tokens (`ui_theme.h`: bg, surface, bar, line, ink, ink2, ink3, accent, on_accent, accent_soft, amber, amber_soft, green, red),
+each with a Light and a Dark value from the review (RGB565-safe: red and blue multiples of 8, green of 4; `test_ui_metrics` checks it and the text contrast). Code names a token (`UI_C_INK`), never a hex value: labels,
+backgrounds and borders use shared styles that read the active theme (`ui_style_text()`, `ui_obj_bg()` ...), so switching rewrites those styles and restyles everything at once (one full repaint). The boot splash keeps its own fixed
+palette, and the art placeholder is not themed. **Settings > Display > Theme** is Light (default), Dark or Auto and is stored (`SETTING_THEME`, `NPth`); Auto is dark exactly while the backlight is dimmed or off (`ui_theme_is_dark()`),
+switched before the backlight comes back on a wake. Contrast: the dark theme's white-on-accent is 4.2:1 (below 4.5:1) and the light one 6.4:1 (the review quotes 7.3:1).
+
+**Type scale (DS-2).** Title = the large font (20 / 28), Body = 14 / 20, **Small** = 12 / 16 (secondary lines, times, pills, hints, the status bar's left slot; built from the same Montserrat Medium and the same glyph coverage), Big = 48.
+
+**Metrics.** Status bar 24 / 36, row 30 / 45 (7 rows in both profiles), padding 10 / 15, selection bar inset 3 / 4 and radius 4 / 6, Home and Settings split 56 / 44, scroll bar 2 px wide with a track, toast strip 22 / 33,
+HUD strip 26 / 39, lock pill 24 / 36, Power-hold line 3 / 4 (all in `ui_metrics_t`).
+
+**Status bar (DS-3).** Left slot (Small, ink2), centred title, right-hand group (Wi-Fi, Bluetooth, lock, battery percentage, battery; hidden members close up). The slot belongs to the screen on top:
+`ui_screen_set_left(screen, text)` (the text is kept with the screen, so a pop restores it). Built so far: the clock on Home, "n of m" on Now Playing (while a queue plays), the item count on the Music lists, the path in Files
+(the title stays "Files"). The battery is drawn (outline, terminal, fill), never "--": the fill is ink, green while charging, red below 15 %, and the percentage shows only below 20 % or while charging.
+The Bluetooth icon is ink3 for a saved headset that is not connected, ink connected, accent streaming, hidden with no radio or no headset. (The three busy dots of a background library build are not drawn yet; the slot is the place.)
+
+**Selection bar (DS-4).** One rounded bar, inset from the list edges, behind the rows (`ui_list.c`); the rows are transparent. It slides to an adjacent row in 80 ms; a move of more than three rows (a fast spin) and a new list
+jump without animation. The selected row's text, detail and chevron use on_accent, the rest ink / ink2 (greyed rows ink3).
+
+**Strips (DS-5, HL-1; `ui_strips.c`).** `ui_toast_show(text, WARN | INFO, ms)`: a one-line strip under the status bar (amber_soft for a problem, accent_soft for information), slides down from under the bar in 150 ms and out in 200 ms. The
+audio route's "Headset disconnected" / "Headset not connected", the Files notices ("Not a playable file", "Path too long") and the library's "Can't play" are toasts now (they were a banner over the first row and a row at the bottom). (There is no "Headphones unplugged" notice
+in the firmware.) `ui_hud_show(label, pct, ms)`: the bottom strip (ink, Small text and a bar) for a value changing from any screen, 120 ms in, 1200 ms hold, 200 ms out, the fill follows in 60 ms; the volume HUD itself is NP-4 (phase 2).
+`ui_pill_show()` / `ui_hold_line_set()`: the lock pill and the Power-hold line (see Hold). None of them dims or blends anything behind it. The host tour tokens `toast:warn:Text_with_underscores`, `toast:info:...`, `hud:Label:PCT`, `strips:off` and `theme:light|dark|auto`
+drive them for `--tour-design` (ctest `design_tour`, `hires_design_tour`).
+
+**Icons (DS-6).** The Lucide set (ISC; chevron-right and lock derive from Feather, MIT) as 1-bit bitmaps at 16 / 24 px (320x240) and 24 / 36 px (480x360): chevron-right, play, pause, skip-back, skip-forward, shuffle, repeat, repeat-1, volume-2, bluetooth, wifi, lock, folder, file, and lock-open (`ui_icons.h`). They are generated from the pinned `lucide-static`
+package by `tools/gen_ui_fonts.sh` into `neupod_icons_*.c` and drawn with `ui_icon()` like a label, so they take a theme colour. Lists use the chevron, the Files rows the folder and file icons (`ui_list_item_t.icon`), the status bar Wi-Fi, Bluetooth and lock,
+Now Playing play / pause / shuffle / repeat. Battery and signal bars stay drawn shapes. The licence text is `app/ui/fonts/LICENSE-Lucide.txt`.
+
+**Motion (DS-7).** Push slides the new screen in 24 px over 120 ms (ease-out), pop slides the revealed screen in from the left over 100 ms; no alpha, only the content area repaints. (The review fades the popped screen out; the popped screen is destroyed at once, so the mirror slide is used.)
+LVGL runs at 30 fps (`LV_DEF_REFR_PERIOD 33`, `lv_conf.h`) on every build; the Y2 stays at 30 until a vsync'd framebuffer is confirmed there. A snapshot or the layout audit first settles any slide or strip in flight (`ui_frame_settle()`).
 
 ## Implemented (stage 2: home menu)
 
@@ -189,7 +229,7 @@ Nothing persists across a reboot yet (settings are RAM only).
 ("--" when the gauge failed its check; green with a charge symbol while charging, red at 15 % or less), and a
 play/pause glyph slot on the left (empty: nothing plays yet), then the Wi-Fi glyph and the **Bluetooth glyph**: grey = a headset is remembered but not
 connected, dark = connected, accent blue = streaming audio, hidden when Bluetooth is not up or no headset is remembered and nothing is connected (the bar is light, so the
-"connected" colour is the text colour and not white). A **banner** of one row under the status bar, 3 s, on any screen: "Headset disconnected" when the headset goes away
+"connected" colour is the text colour and not white). A **toast** (the strip under the status bar, 3 s, on any screen): "Headset disconnected" when the headset goes away
 while playing (the player is paused at once, the position kept, and the output stays Bluetooth), "Headset not connected" when Play is pressed on the Bluetooth output with no
 headset. **Menu** goes back one screen (nothing at the top
 level), **Select** enters. Lists clamp at both ends (no wrap), the selection bar jumps and the list scrolls
@@ -267,24 +307,24 @@ Left/Right, Space/`p` Play/Pause. The wheel, when it works, sends the same event
 
 Decision: [ADR-0020](adr/0020-hold.md). Hold is the iPod's lock switch, on every platform. While it is on, the wheel and every button do nothing:
 `ui_frame_input()` swallows them before any screen sees them (so there is no click, no Play/Pause, no scroll), and each one only restarts the idle clock and
-shows a reminder box ("Locked", "Hold Power to unlock"). Headset buttons (AVRCP) keep working; the Y2's side volume keys are locked with the rest. A lock glyph sits at the left end of the status bar while Hold is on.
+shows the lock pill ("Locked · hold Power 2 s to unlock"). Headset buttons (AVRCP) keep working; the Y2's side volume keys are locked with the rest. A lock icon sits in the status bar's right-hand group while Hold is on.
 
 | What | How |
 | --- | --- |
 | Auto-lock | the screen goes fully off (Screen off after, or a Power tap) and Settings > Display > Auto-lock is On |
-| Gesture | **Power held 2 s** toggles Hold: from 0.4 s a bar fills under "Hold to lock" / "Hold to unlock" (letting go early does nothing), at 2 s the box says "Locked" / "Unlocked" and a haptic click plays |
-| Power-off | still held: at 5 s the box counts "Powering off in 5 ... 1" with a draining bar (letting go cancels), at 10 s the power-off is requested (Y2; the Pico rig cannot, and shows no countdown) |
+| Gesture | **Power held 2 s** toggles Hold: from 0.4 s a 3 px accent line grows under the status bar and a dark pill at the bottom says "Keep holding to lock · 10 s = off" (or "... to unlock"; letting go early does nothing), at 2 s the pill says "Locked" / "Unlocked" and a haptic click plays |
+| Power-off | still held: at 5 s the line turns red and grows again while the pill counts "Release to cancel · shutting down in 5 ... 1" (letting go cancels), at 10 s the power-off is requested (Y2; the Pico rig cannot, and shows no countdown) |
 | Tap | **Power tapped** (under 0.4 s) turns the screen off now; the next input wakes it (and is lost) |
 | Switch | the iPod 6G donor board's slide switch (`hal_input_hold_switch()`), same state; none on the Y2 or the Pico rig |
 | Console / simulator | no Power key on the Pico rig: the console key `l` toggles Hold. Simulator: **F1** is Power (hold it) |
 
-The reminder, the confirmations and the countdown are one overlay (`ui_frame.c`, built when shown, deleted after), drawn at both UI profiles and covered by
+The reminder ("Locked · hold Power 2 s to unlock"), the confirmations and the countdown are the lock pill and the Power-hold line of the design system (`ui_strips.c`; HL-1): nothing is dimmed, blended or covered except the pill itself. They are drawn at both UI profiles and covered by
 the layout audit (`hold_tour`, `hires_hold_tour`: ring, locked, swallowed keys, countdown, power-off, switch, screen off, wake, unlock, the Display rows).
 
 ## Licences
 
 Settings > About > **Licences** lists the third-party parts of the firmware and their licences (`app/ui/ui_licence_data.c`): the neuPod licences, FreeRTOS, LVGL,
-Montserrat, Font Awesome, FatFs, TJpgDec, dr_flac / dr_mp3, Apple Lossless, mbed TLS, BTstack (with the non-commercial note), the Android SBC codec and, on the
+Montserrat, Lucide, Font Awesome, FatFs, TJpgDec, dr_flac / dr_mp3, Apple Lossless, mbed TLS, BTstack (with the non-commercial note), the Android SBC codec and, on the
 RP2350 build only, lwIP, cyw43-driver, the SD card driver and the Pico SDK. Select on a row shows the licence as a headline and a short plain notice (no
 scrolling: at most 400 characters). The table is the on-device copy of the one in [LICENSE.md](https://github.com/StuartF303/neuPod/blob/main/LICENSE.md); `ctest -R licences`
 fails if a component is listed on the device but not named, with its licence, in LICENSE.md. Adding a dependency means adding it to both.

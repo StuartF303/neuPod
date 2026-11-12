@@ -38,14 +38,14 @@ From the owner-commissioned [design review](design/2026-11-12-ui-review/README.m
 
 | ID | Item | Area | Effort | Impact | Depends on | Phase | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| DS-1 | Colour token table + light/dark structs, Theme setting (Light / Dark / Auto on dim) | System | S | 3 | — | 1 | in progress |
-| DS-2 | Add Small font size (12/16) to both profiles | System | S | 3 | — | 1 | in progress |
-| DS-3 | Status bar: left slot, battery % rules, BT glyph states | System | S | 3 | DS-1 | 1 | in progress |
-| DS-4 | Selection bar restyle (inset, radius, 80 ms slide) and grey chevrons | System | S | 2 | DS-1 | 1 | in progress |
-| DS-5 | Toast strip component (top) and HUD strip (bottom) | System | M | 3 | DS-1, DS-2 | 1 | in progress |
-| DS-6 | Lucide icon set, replace FontAwesome where covered | System | S | 2 | — | 1 | in progress |
-| DS-7 | Push/pop slide transition, 30 fps cap | System | M | 2 | DS-4 | 1 | in progress |
-| HL-1 | Lock pill and Power-hold progress line | Hold/Power | S | 2 | DS-5 | 1 | in progress |
+| DS-1 | Colour token table + light/dark structs, Theme setting (Light / Dark / Auto on dim) | System | S | 3 | — | 1 | built (phase 1) |
+| DS-2 | Add Small font size (12/16) to both profiles | System | S | 3 | — | 1 | built (phase 1) |
+| DS-3 | Status bar: left slot, battery % rules, BT glyph states | System | S | 3 | DS-1 | 1 | built (phase 1) |
+| DS-4 | Selection bar restyle (inset, radius, 80 ms slide) and grey chevrons | System | S | 2 | DS-1 | 1 | built (phase 1) |
+| DS-5 | Toast strip component (top) and HUD strip (bottom) | System | M | 3 | DS-1, DS-2 | 1 | built (phase 1) |
+| DS-6 | Lucide icon set, replace FontAwesome where covered | System | S | 2 | — | 1 | built (phase 1) |
+| DS-7 | Push/pop slide transition, 30 fps cap | System | M | 2 | DS-4 | 1 | built (phase 1) |
+| HL-1 | Lock pill and Power-hold progress line | Hold/Power | S | 2 | DS-5 | 1 | built (phase 1) |
 | NP-1 | Now Playing layout: tag stack, pills, progress, volume strip | Now Playing | M | 3 | DS-2, DS-3 | 2 | open |
 | NP-2 | Seek mode: Big amber time, knob, hints, no third bar; entered by hold Select | Now Playing | S | 2 | NP-1 | 2 | open |
 | NP-3 | Now Playing page 2 (rating, shuffle, repeat, go-to); Select opens it | Now Playing | M | 2 | NP-1 | 2 | open |
@@ -62,7 +62,7 @@ From the owner-commissioned [design review](design/2026-11-12-ui-review/README.m
 | BT-2 | Forget / pairing / reconnect flows with toasts; no self-mutating rows; link lost ends "Couldn't reconnect — paused" (never switches output) | Bluetooth | M | 3 | DS-5, BT-1 | 3 | open |
 | BT-3 | Bluetooth settings page; codec detail moves to Diagnostics | Bluetooth | S | 1 | BT-1 | 3 | open |
 | ST-1 | Settings right pane as key/value summary; toggles in place | Settings | S | 2 | DS-2 | 4 | open |
-| ST-2 | Display page (theme, brightness, timeouts); the Theme row itself is built with DS-1 | Settings | S | 2 | DS-1 | 4 | in progress (Theme row only) |
+| ST-2 | Display page (theme, brightness, timeouts); the Theme row itself is built with DS-1 | Settings | S | 2 | DS-1 | 4 | Theme row built (DS-1); the rest open |
 | ST-3 | About › Diagnostics, Licences screen | Settings | S | 1 | — | 4 | open (Licences screen built, UI-23) |
 | IN-1 | Text entry: letter ring, mode chips, field box | Input | M | 2 | DS-2 | 4 | open |
 | IN-2 | Number/slider/date-time polish | Input | S | 1 | IN-1 | 4 | open |

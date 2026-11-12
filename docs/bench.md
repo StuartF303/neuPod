@@ -49,10 +49,10 @@ Steps for the Y2 after flashing a build with [ADR-0020](adr/0020-hold.md) (watch
 `y2: power held` lines):
 
 1. **Tap Power** (quick): the backlight goes off (`ui: backlight off 0%`) and `ui: hold on` follows (Auto-lock is On by default). Turn the wheel or press anything: the screen
-   wakes, shows "Locked, Hold Power to unlock", and nothing else happens (no click, no Play/Pause, no selection moved).
-2. **Hold Power**: after about 0.4 s a bar fills under "Hold to unlock"; let go at 1 s: nothing changes. Hold again to 2 s: "Unlocked", one haptic click, the lock glyph
+   wakes, shows the pill "Locked · hold Power 2 s to unlock", and nothing else happens (no click, no Play/Pause, no selection moved).
+2. **Hold Power**: after about 0.4 s a blue line grows under the status bar and the pill says "Keep holding to unlock · 10 s = off"; let go at 1 s: nothing changes. Hold again to 2 s: "Unlocked", one haptic click, the lock icon
    leaves the status bar, `ui: hold off`. Keys work again.
-3. **Hold Power to 2 s and on**: "Locked" appears at 2 s; at 5 s "Powering off in 5" counts down with a draining bar; **let go at 7 s: nothing powers off** (and nothing
+3. **Hold Power to 2 s and on**: "Locked" appears at 2 s; at 5 s the line turns red and the pill counts "Release to cancel · shutting down in 5"; **let go at 7 s: nothing powers off** (and nothing
    is lost). Repeat and hold to 10 s: `ui: power-off requested`, `y2: power held, shutting down`, the storage task stops, the player exits with status 77 and the device powers
    off (the wrapper's `poweroff did not happen, restarting` must NOT appear).
 4. With music playing and the screen locked: the headset's buttons (play/pause, next, previous) still work; the wheel and the ring buttons do not.
