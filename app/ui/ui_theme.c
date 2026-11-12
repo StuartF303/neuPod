@@ -18,7 +18,7 @@ const ui_theme_t k_ui_theme_light = {{
 
 const ui_theme_t k_ui_theme_dark = {{
     [UI_TOK_BG] = 0x101010,          [UI_TOK_SURFACE] = 0x181818,     [UI_TOK_BAR] = 0x202020,        [UI_TOK_LINE] = 0x303030,
-    [UI_TOK_INK] = 0xF0F0F0,         [UI_TOK_INK2] = 0xA0A0A0,        [UI_TOK_INK3] = 0x686868,       [UI_TOK_ACCENT] = 0x3078E8,
+    [UI_TOK_INK] = 0xF0F0F0,         [UI_TOK_INK2] = 0xA0A0A0,        [UI_TOK_INK3] = 0x686868,       [UI_TOK_ACCENT] = 0x2868D8,
     [UI_TOK_ON_ACCENT] = 0xFFFFFF,   [UI_TOK_ACCENT_SOFT] = 0x203050, [UI_TOK_AMBER] = 0xE89828,      [UI_TOK_AMBER_SOFT] = 0x483818,
     [UI_TOK_GREEN] = 0x30B870,       [UI_TOK_RED] = 0xE84840,
 }};

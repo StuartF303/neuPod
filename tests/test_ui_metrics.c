@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <math.h>
+
 #include "boot_briefs.h"
 #include "lvgl.h"
 #include "fonts/neupod_fonts.h"
@@ -37,7 +39,7 @@ TEST(profile_320_is_the_design_system_layout) {
     ASSERT_EQ(10, m->pad);
     ASSERT_EQ(3, m->sel_inset);
     ASSERT_EQ(4, m->sel_radius);
-    ASSERT_EQ(22, m->toast_h);
+    ASSERT_EQ(30, m->toast_h);
     ASSERT_EQ(26, m->hud_h);
     ASSERT_EQ(2, m->sb_w);
     ASSERT_EQ(1, m->sb_gap);
@@ -239,15 +241,15 @@ TEST(themes_are_rgb565_safe_and_readable) {
         ASSERT_TRUE(contrast(th->c[UI_TOK_INK], th->c[UI_TOK_BG]) >= 7.0);
         ASSERT_TRUE(contrast(th->c[UI_TOK_INK], th->c[UI_TOK_BAR]) >= 7.0);
         ASSERT_TRUE(contrast(th->c[UI_TOK_INK2], th->c[UI_TOK_SURFACE]) >= 4.5);
-        // white on the accent: 6.4:1 light (the review quotes 7.3); the dark theme's brighter accent gives 4.2:1, below 4.5 (reported as an open question)
-        ASSERT_TRUE(contrast(th->c[UI_TOK_ON_ACCENT], th->c[UI_TOK_ACCENT]) >= (t == 0 ? 6.0 : 4.0));
+        // white on the accent: 6.4:1 light (the review quotes 7.3), about 5:1 dark (owner decision: dark accent #2868D8)
+        ASSERT_TRUE(contrast(th->c[UI_TOK_ON_ACCENT], th->c[UI_TOK_ACCENT]) >= (t == 0 ? 6.0 : 4.5));
         ASSERT_TRUE(contrast(th->c[UI_TOK_INK], th->c[UI_TOK_ACCENT_SOFT]) >= 7.0);
         ASSERT_TRUE(contrast(th->c[UI_TOK_INK], th->c[UI_TOK_AMBER_SOFT]) >= 7.0);
         ASSERT_TRUE(contrast(th->c[UI_TOK_INK3], th->c[UI_TOK_SURFACE]) >= 2.5); // hints and disabled rows only
     }
     // the review's published values
     ASSERT_EQ(0x1858C8u, k_ui_theme_light.c[UI_TOK_ACCENT]);
-    ASSERT_EQ(0x3078E8u, k_ui_theme_dark.c[UI_TOK_ACCENT]);
+    ASSERT_EQ(0x2868D8u, k_ui_theme_dark.c[UI_TOK_ACCENT]);
     ASSERT_EQ(0xF8F8F8u, k_ui_theme_light.c[UI_TOK_BG]);
     ASSERT_EQ(0x101010u, k_ui_theme_dark.c[UI_TOK_BG]);
 }
