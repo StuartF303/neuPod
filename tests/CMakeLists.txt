@@ -61,6 +61,11 @@ add_executable(test_bt_reconnect test_bt_reconnect.c ${CMAKE_SOURCE_DIR}/app/run
 target_link_libraries(test_bt_reconnect hal_host)
 add_test(NAME bt_reconnect COMMAND test_bt_reconnect)
 set_source_files_properties(test_bt_reconnect.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+# The A2DP link policy (catch-up budget, bitpool ladder): pure, no BTstack.
+add_executable(test_bt_link_policy test_bt_link_policy.c ${CMAKE_SOURCE_DIR}/hal/common/bt_btstack/bt_link_policy.c)
+target_include_directories(test_bt_link_policy PRIVATE ${CMAKE_SOURCE_DIR}/hal/common/bt_btstack)
+add_test(NAME bt_link_policy COMMAND test_bt_link_policy)
+set_source_files_properties(test_bt_link_policy.c ${CMAKE_SOURCE_DIR}/hal/common/bt_btstack/bt_link_policy.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 add_executable(test_bt_control test_bt_control.c ${CMAKE_SOURCE_DIR}/app/runtime/bt_control.c)
 target_link_libraries(test_bt_control hal_host neupod_rt_core)
 add_test(NAME bt_control COMMAND test_bt_control)

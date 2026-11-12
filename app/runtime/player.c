@@ -706,6 +706,7 @@ void player_pause_toggle(void) {
             rs_queue(&r, RESUME_EVENT);
         }
         unlock();
+        printf("player: %s (Play/Pause)\n", pause ? "paused" : "playing"); /* walk logs: tells a pocket key press from a link fault */
         rs_flush();
         return;
     } else if (g_info.src == PLAYER_SRC_FILE && (g_info.state == PLAYER_ENDED || g_info.state == PLAYER_VERIFIED) && g_path[0] != '\0') {

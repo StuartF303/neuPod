@@ -24,6 +24,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "bt_port.h"
@@ -72,6 +73,23 @@ static bool start_thread(void *(*fn)(void *)) {
     pthread_attr_destroy(&at);
     pthread_sigmask(SIG_SETMASK, &old, NULL);
     return rc == 0;
+}
+
+/* Bench aid: the HCI trace is written with plain write() calls (no stdio buffer), so it is in the page cache at once but reaches the disk only when
+ * the kernel gets to it (up to about 30 s later, and never on a crash or a power cut of the Y2). A thread that is not an RTOS task (it calls no
+ * RTOS function) fsync()s it every DUMP_SYNC_S through a second descriptor of the same file, so a walk's trace survives whatever ended it. */
+#define DUMP_SYNC_S 5
+static int g_dump_fd = -1;
+
+static void *dump_sync_thread(void *arg) {
+    (void)arg;
+    for (;;) {
+        struct timespec ts = {.tv_sec = DUMP_SYNC_S, .tv_nsec = 0};
+        while (nanosleep(&ts, &ts) != 0 && errno == EINTR) {
+        }
+        (void)fsync(g_dump_fd);
+    }
+    return NULL;
 }
 
 static void *probe_thread(void *arg) {
@@ -249,7 +267,11 @@ bool bt_port_start(void) {
     if (dump != NULL && dump[0] != '\0') {
         hci_dump_posix_fs_open(dump, HCI_DUMP_PACKETLOGGER);
         hci_dump_init(hci_dump_posix_fs_get_instance());
-        printf("bt: HCI trace -> %s\n", dump);
+        printf("bt: HCI trace -> %s (synced to the disk every %d s)\n", dump, DUMP_SYNC_S);
+        g_dump_fd = open(dump, O_RDONLY | O_CLOEXEC); // fsync() needs no write access; the trace file now exists
+        if (g_dump_fd < 0 || !start_thread(dump_sync_thread)) {
+            printf("bt: HCI trace: cannot sync it (%s): is the directory there and writable?\n", strerror(errno));
+        }
     }
     btstack_uart_stpbt_set_fd(g_dev_fd); // opened by y2_bt_probe(); the driver owns it from here
     g_dev_fd = -1;

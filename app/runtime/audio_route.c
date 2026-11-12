@@ -147,6 +147,7 @@ void audio_route_service(void) {
             (void)hal_bt_stream_start();
         }
     } else if (st == HAL_BT_STREAM_STREAMING && now - g_quiet_since >= AUDIO_ROUTE_SUSPEND_MS) {
+        printf("route: not playing for %u ms (player state %d), suspending the stream\n", (unsigned)(now - g_quiet_since), (int)pi.state);
         hal_bt_stream_suspend();
     }
 }
