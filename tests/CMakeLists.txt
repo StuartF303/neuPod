@@ -56,6 +56,12 @@ add_test(NAME bt_saved COMMAND test_bt_saved)
 set_tests_properties(bt_saved PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_source_files_properties(test_bt_saved.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
+# Audio routing: Auto / Wired, the quiet change of output, pause on link loss, over the Bluetooth simulator and the real settings store.
+add_executable(test_audio_route test_audio_route.c ${CMAKE_SOURCE_DIR}/app/runtime/audio_route.c ${CMAKE_SOURCE_DIR}/app/audio/bt_pcm.c)
+target_link_libraries(test_audio_route neupod_settings hal_host neupod_rt_core)
+add_test(NAME audio_route COMMAND test_audio_route)
+set_source_files_properties(test_audio_route.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
 set_source_files_properties(test_nfs.c test_clickwheel.c test_fatfs.c test_gfx.c test_storage_decode.c
   PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
