@@ -511,6 +511,25 @@ TEST(library_shuffle_visits_every_song_once_with_the_chosen_one_first) {
     }
 }
 
+TEST(library_shuffle_is_a_permutation_even_for_a_range_of_over_a_billion_songs) {
+    // half_bits() reaches 16 bits per half only above 2^30 songs: no card holds that many, but the mask must still be 16 bits wide there.
+    uint32_t n = PLAY_QUEUE_LIB_MAX;
+    pq_clear(&g_lq);
+    pq_seed(&g_lq, 99);
+    g_lq.shuffle = 1;
+    ASSERT_TRUE(pq_build_range(&g_lq, &(pq_range_t){.order = 0, .first = 0, .count = n}, n - 3u));
+    ASSERT_EQ(n - 3u, pq_entry(&g_lq, 0));
+    pq_set_shuffle(&g_lq, PQ_SHUFFLE_OFF); // goes through the inverse: it must give back the same song
+    ASSERT_EQ(n - 3u, g_lq.pos);
+    pq_set_shuffle(&g_lq, PQ_SHUFFLE_SONGS);
+    ASSERT_EQ(n - 3u, pq_entry(&g_lq, g_lq.pos));
+    for (uint32_t s = 1; s < 2000; s++) { // distinct and in range, sampled
+        uint32_t e = pq_entry(&g_lq, s);
+        ASSERT_TRUE(e < n);
+        ASSERT_TRUE(e != pq_entry(&g_lq, s - 1u));
+    }
+}
+
 TEST(library_shuffle_really_mixes_and_depends_on_the_seed) {
     pq_clear(&g_lq);
     pq_seed(&g_lq, 99);
@@ -704,6 +723,7 @@ int main(void) {
     RUN(library_queue_plays_the_range_in_order_from_the_chosen_song);
     RUN(library_queue_rejects_empty_oversized_and_out_of_range);
     RUN(library_shuffle_visits_every_song_once_with_the_chosen_one_first);
+    RUN(library_shuffle_is_a_permutation_even_for_a_range_of_over_a_billion_songs);
     RUN(library_shuffle_really_mixes_and_depends_on_the_seed);
     RUN(library_start_may_be_random_for_shuffle_songs);
     RUN(library_toggling_shuffle_keeps_the_current_song_and_back_again);

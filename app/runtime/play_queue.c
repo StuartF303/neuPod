@@ -115,7 +115,7 @@ static uint32_t half_bits(uint32_t n) { // bits per half: 2 * half >= bits neede
 }
 
 static uint32_t feistel_once(uint32_t x, uint32_t h, uint32_t key, bool inverse) {
-    uint32_t mask = h >= 16 ? 0xFFFFFFFFu : (1u << h) - 1u;
+    uint32_t mask = (1u << h) - 1u; /* h <= 16: half_bits() of a 32-bit n */
     uint32_t l = (x >> h) & mask, r = x & mask;
     if (!inverse) {
         for (uint32_t i = 0; i < 4; i++) {
