@@ -137,6 +137,20 @@ TEST(signal_bars_thresholds) {
     ASSERT_EQ(3, ui_signal_class(4));
 }
 
+TEST(bluetooth_meter_has_three_bars_and_devices_have_a_class_word) {
+    ASSERT_EQ(0, ui_signal_bars3(0));
+    ASSERT_EQ(1, ui_signal_bars3(1));
+    ASSERT_EQ(2, ui_signal_bars3(2));
+    ASSERT_EQ(2, ui_signal_bars3(3));
+    ASSERT_EQ(3, ui_signal_bars3(4));
+    ASSERT_TRUE(strcmp(ui_bt_class_word(0x240404), "") == 0);      // headset: no word
+    ASSERT_TRUE(strcmp(ui_bt_class_word(0x5A020C), "phone") == 0); // smart phone
+    ASSERT_TRUE(strcmp(ui_bt_class_word(0x02010C), "computer") == 0);
+    ASSERT_TRUE(strcmp(ui_bt_class_word(0x000704), "wearable") == 0);
+    ASSERT_TRUE(strcmp(ui_bt_class_word(0x000000), "other") == 0); // unknown class
+    ASSERT_TRUE(strcmp(ui_bt_class_word(0x000540), "other") == 0); // keyboard
+}
+
 TEST(signal_bars_hysteresis) {
     const ui_signal_thr_t *w = &k_ui_signal_wifi;
     /* showing 3 bars: -60 is not enough to rise (needs -57), -73 is not enough to fall (needs below -73) */
@@ -776,6 +790,7 @@ TEST(off_survives_the_clock_wrap_and_a_future_stamp) {
 int main(void) {
     RUN(signal_bars_unknown_rssi);
     RUN(signal_bars_thresholds);
+    RUN(bluetooth_meter_has_three_bars_and_devices_have_a_class_word);
     RUN(signal_bars_hysteresis);
     RUN(nav_clamps_and_window_follows);
     RUN(nav_short_and_empty_lists);

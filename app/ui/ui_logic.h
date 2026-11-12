@@ -68,6 +68,14 @@ int ui_signal_bars(int32_t rssi_dbm, const ui_signal_thr_t *thr, int prev, int32
 const char *ui_signal_word(int bars);
 /** Colour class of a bar count: 3 = green (3 or 4 bars), 2 = yellow (2 bars), 1 = red (1 bar). */
 int ui_signal_class(int bars);
+/** The three-bar monochrome meter of the Bluetooth lists from the 0..4 bars of ui_signal_bars(): 0, 1, 2, 2, 3. */
+int ui_signal_bars3(int bars);
+
+/**
+ * What a found Bluetooth device is, from its Class of Device, for the Devices list: "" for an audio device (the only kind that can be a
+ * headset), otherwise a word for the row's "(phone)": "phone", "computer", "wearable", "other" (peripherals, an unknown class).
+ */
+const char *ui_bt_class_word(uint32_t cod);
 
 /* ---- Backlight auto-dim: idle clock and effective level ------------------------------------------- */
 
