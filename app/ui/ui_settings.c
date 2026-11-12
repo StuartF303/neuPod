@@ -489,11 +489,11 @@ static void pane_text(int32_t g, char *out, size_t n) {
             } else {
                 snprintf(a, sizeof a, "-");
             }
-            char hs[80], cs[64];
+            char hs[80], cs[96];
             ui_bt_headset_text(hs, sizeof hs);
             ui_bt_stream_pane_text(cs, sizeof cs);
-            if (cs[0] != '\0') { /* with a stream open the codec lines need the room: no address, no hint */
-                snprintf(out, n, "%s\n%s\n%s", bs == HAL_BT_SCANNING ? "Scanning..." : "On", hs, cs);
+            if (cs[0] != '\0') { /* with a stream open the codec lines (and the absolute-volume line) need the room: no address, no hint, no "On" */
+                snprintf(out, n, "%s%s\n%s", bs == HAL_BT_SCANNING ? "Scanning...\n" : "", hs, cs); /* "On" is not said: the headset line says more */
             } else {
                 snprintf(out, n, "%s\n%s\n%s%sSelect to %s", bs == HAL_BT_SCANNING ? "Scanning..." : "On", a, hs, hs[0] != '\0' ? "\n" : "",
                          hs[0] != '\0' ? "manage" : "scan");
