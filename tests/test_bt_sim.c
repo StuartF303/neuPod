@@ -315,7 +315,7 @@ static uint32_t src_read(void *c, int16_t *d, uint32_t n) {
     return g;
 }
 static void src_flush(void *c) { (void)c; g_ring_frames = 0; }
-static const hal_bt_pcm_source_t k_src = {NULL, src_available, src_capacity, src_read, src_flush};
+static const hal_bt_pcm_source_t k_src = {NULL, src_available, src_capacity, src_read, src_flush, NULL};
 
 static void pump_stream(hal_bt_stream_state_t want, uint32_t max_ms) {
     for (uint32_t t = 0; t < max_ms && hal_bt_stream_state() != want; t += 20) {

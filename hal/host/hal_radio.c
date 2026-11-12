@@ -533,7 +533,9 @@ static void stream_poll(void) {
                 uint32_t got = g_src.read(g_src.ctx, buf, n);
                 got_total += got;
                 if (got < n) {
-                    g_stats.underruns++; /* the encoder wanted audio and the ring had none */
+                    if (g_src.active == NULL || g_src.active(g_src.ctx)) {
+                        g_stats.underruns++; /* the encoder wanted audio and the ring had none (once per dry spell would be kinder; the sim is blunt) */
+                    }
                     break;
                 }
             }

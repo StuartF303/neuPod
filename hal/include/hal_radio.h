@@ -178,7 +178,7 @@ static inline void hal_bt_codec_label(const hal_bt_codec_t *c, char *out, size_t
     }
 }
 
-/** Counters of the current stream (reset when it starts). */
+/** Counters of the current stream (reset when it is opened; they keep counting across suspend and resume). */
 typedef struct {
     uint32_t frames_encoded;     /**< codec frames produced (SBC: 128 samples each) */
     uint32_t packets_sent;
@@ -355,9 +355,10 @@ typedef struct {
     uint32_t (*capacity)(void *ctx);           /**< ring size in frames (the pacing aims at half of it) */
     uint32_t (*read)(void *ctx, int16_t *dst, uint32_t frames); /**< copy out up to @p frames frames; returns the number read */
     void (*flush)(void *ctx);                  /**< drop everything buffered (consumer side) */
+    bool (*active)(void *ctx);                 /**< optional: the producer is playing (an empty ring is then an underrun; paused / stopped it is not). NULL: always */
 } hal_bt_pcm_source_t;
 
-/** Register the PCM source (NULL = none: a started stream then sends nothing). Call before a stream starts; any task. */
+/** Register the PCM source (NULL = none: a started stream then sends nothing). Call before a stream starts; any task. @p src must stay valid for the life of the program. */
 void hal_bt_set_pcm_source(const hal_bt_pcm_source_t *src);
 
 /**
