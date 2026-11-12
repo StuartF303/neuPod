@@ -184,7 +184,10 @@ static bool queue_real_path(uint32_t slot, char *out, size_t n) {
         return true;
     }
     char handle[40];
-    snprintf(handle, sizeof handle, "%s", out);
+    if (strlen(out) >= sizeof handle) {
+        return false;
+    }
+    memcpy(handle, out, strlen(out) + 1u);
     return g_resolver != NULL && g_resolver(handle, out, n);
 }
 

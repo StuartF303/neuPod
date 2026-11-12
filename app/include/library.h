@@ -249,9 +249,6 @@ lib_err_t lib_track_path(lib_reader_t *r, uint32_t id, char *out, size_t cap);
 /** The three orders a queue can run through (a range of one of them is "the album", "all songs", "this genre"): each file lists track ids. */
 typedef enum { LIB_ORDER_TITLE = 0, LIB_ORDER_ALBUM, LIB_ORDER_GENRE, LIB_ORDERS } lib_order_t;
 
-/** Short reason text for a lib_play_t ("AAC", "too many channels", ...): "Can't play: <this>". "" for LIB_PLAY_OK. */
-const char *lib_play_str(uint8_t play);
-
 /**
  * Path of the track at position @p pos of @p order, without a lib_reader_t: opens the few small files it needs one at a time on a local
  * FIL (about 600 B of stack), so the storage task can resolve a queue entry while the browse reader is closed, busy or in use for another

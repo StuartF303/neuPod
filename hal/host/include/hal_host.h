@@ -7,6 +7,7 @@
 #define NEUPOD_HAL_HOST_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -41,6 +42,15 @@ void hal_host_bt_remote_hangup(void);
  * backend of nfs.h (app/storage/nfs_fatfs.c) and run it on a disk image it mounted itself.
  */
 void hal_host_storage_set_mounted(bool mounted);
+
+/** Tests only: the card reports write-protected (hal_storage_get_info) and refuses writes, as a card with its lock switch on does. */
+void hal_host_storage_set_read_only(bool read_only);
+
+/**
+ * The host simulator's card is a folder: the real path of the card path @p path (normalised, mapped into the folder, kept inside it even through
+ * symbolic links), as nfs_posix.c resolves it. For the library's POSIX file layer (app/include/lib_ff_posix.h). False if the path is not allowed.
+ */
+bool hal_host_resolve_path(const char *path, char *out, size_t cap);
 
 /** Write the panel's current contents to @p path as a binary PPM (P6). False on I/O error. */
 bool hal_host_display_dump_ppm(const char *path);

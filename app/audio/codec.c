@@ -22,6 +22,10 @@ void *codec_realloc(void *p, size_t n) { return arena_realloc(&g_arena, p, n); }
 void codec_free(void *p) { arena_free(&g_arena, p); }
 size_t codec_arena_high_water(void) { return g_arena.high; }
 size_t codec_arena_failures(void) { return g_arena.failures; }
+void *codec_arena_borrow(size_t *bytes) {
+    *bytes = sizeof g_store;
+    return g_store;
+}
 
 void codec_md5_pcm(md5_t *m, const int32_t *s, uint32_t frames, uint32_t channels, uint32_t bits) {
     const uint32_t bytes = (bits + 7u) / 8u, shift = 32u - bits;

@@ -7,19 +7,6 @@
 #include "lib_internal.h"
 #include "library.h"
 
-const char *lib_play_str(uint8_t play) {
-    switch (play) {
-    case LIB_PLAY_OK: return "";
-    case LIB_PLAY_CODEC: return "unsupported codec (AAC)";
-    case LIB_PLAY_CHANNELS: return "more than 2 channels";
-    case LIB_PLAY_BITS: return "unsupported bit depth";
-    case LIB_PLAY_DAMAGED: return "damaged file";
-    case LIB_PLAY_RATE: return "unsupported sample rate";
-    case LIB_PLAY_BLOCK: return "FLAC block size too large";
-    default: return "unsupported file";
-    }
-}
-
 // Read @p n bytes at payload offset @p off of index file @p lf (@p dir = "<base>/lib"). @p fp (may be NULL) keeps the file open for the
 // next call; pass the same FIL and the file stays open until lres_close.
 typedef struct {
