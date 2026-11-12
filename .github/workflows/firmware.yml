@@ -82,6 +82,19 @@ jobs:
         run: |
           file build/y2/platforms/y2/neupod | tee /dev/stderr | grep -q "ELF 32-bit LSB.*ARM.*EABI5"
           arm-linux-gnueabihf-readelf -A build/y2/platforms/y2/neupod | grep -q "Tag_ABI_VFP_args: VFP registers"
+      # The Bluetooth bring-up tool (testbed/y2/tools/y2-a2dp) uses BTstack from the Pico SDK in the image. A PC build runs its
+      # unit tests; the armhf build is the same static executable the Buildroot toolchain produces for the device.
+      - name: y2-a2dp tests (PC build)
+        run: |
+          cmake -S testbed/y2/tools/y2-a2dp -B build/y2-a2dp-host
+          cmake --build build/y2-a2dp-host -j3
+          ctest --test-dir build/y2-a2dp-host --output-on-failure
+      - name: y2-a2dp cross-build
+        run: |
+          export NEUPOD_Y2_TOOLCHAIN=/usr NEUPOD_Y2_TRIPLE=arm-linux-gnueabihf
+          cmake -S testbed/y2/tools/y2-a2dp -B build/y2-a2dp -DY2A2DP_TARGET=y2
+          cmake --build build/y2-a2dp -j3
+          file build/y2-a2dp/y2-a2dp | tee /dev/stderr | grep -q "ELF 32-bit LSB.*ARM.*EABI5.*statically linked"
 
   esp32s3:
     runs-on: ubuntu-24.04
