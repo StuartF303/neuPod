@@ -171,6 +171,29 @@ TEST(eof_reports_error){
     btstack_uart_stpbt_set_error_handler(NULL);
 }
 
+TEST(oversize_packet_reports_error){
+    const btstack_uart_t * uart = btstack_uart_stpbt_instance();
+    open_pair();
+    btstack_uart_stpbt_set_error_handler(on_error);
+    uart->init(&(btstack_uart_config_t){ .baudrate = 115200, .device_name = "unused" });
+    uart->set_block_received(on_block_received);
+    ASSERT_EQ(0, uart->open());
+    static uint8_t big[4000];
+    big[0] = 0x02;
+    chip_sends(big, sizeof(big));
+    uint8_t a[1];
+    errors = 0;
+    blocks_received = 0;
+    uart->receive_block(a, 1);
+    pump(30);
+    ASSERT_EQ(1, errors);
+    ASSERT_EQ(0, blocks_received);
+    ASSERT_TRUE(strstr(last_error, "larger") != NULL);
+    uart->close();
+    close(peer);
+    btstack_uart_stpbt_set_error_handler(NULL);
+}
+
 // --- through the stock H4 transport -------------------------------------------------------------------------------
 
 typedef struct {
@@ -269,6 +292,7 @@ int main(void){
     RUN(next_packet_starts_fresh);
     RUN(write_is_one_packet_per_write);
     RUN(eof_reports_error);
+    RUN(oversize_packet_reports_error);
     RUN(h4_transport_receives_whole_packets);
     RUN(h4_transport_sends_command_with_type_byte);
     return RESULT();

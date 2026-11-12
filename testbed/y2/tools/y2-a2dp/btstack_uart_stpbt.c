@@ -101,6 +101,12 @@ static void process_read(btstack_data_source_t * ds){
             fail("read");
             return;
         }
+        if ((size_t) n >= sizeof(rx_buffer)) {
+            // read() truncates a packet that does not fit; the framing is lost, so stop rather than feed H4 garbage.
+            errno = 0;
+            fail("packet larger than the receive buffer");
+            return;
+        }
         rx_len = (uint16_t) n;
         rx_pos = 0;
     }

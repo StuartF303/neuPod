@@ -166,6 +166,16 @@ static double   sine_phase;
 static double   sine_amplitude;
 static char     track_title[64] = "440 Hz test tone";
 
+// fseek() takes a long, which is 32 bits on the device: skip in steps so a bogus 4 GB chunk length cannot wrap negative.
+static bool skip_bytes(FILE * f, uint64_t n){
+    while (n > 0) {
+        long step = n > 0x40000000u ? 0x40000000L : (long) n;
+        if (fseek(f, step, SEEK_CUR) != 0) return false;
+        n -= (uint64_t) step;
+    }
+    return true;
+}
+
 static bool wav_open(const char * path){
     FILE * f = fopen(path, "rb");
     if (!f) {
@@ -204,7 +214,7 @@ static bool wav_open(const char * path){
                 return false;
             }
             have_fmt = true;
-            if (fseek(f, (long) (len - 16 + (len & 1)), SEEK_CUR) != 0) {
+            if (!skip_bytes(f, (uint64_t) (len - 16) + (len & 1))) {
                 fclose(f);
                 return false;
             }
@@ -233,7 +243,7 @@ static bool wav_open(const char * path){
             snprintf(track_title, sizeof(track_title), "%s", base ? base + 1 : path);
             return true;
         } else {
-            if (fseek(f, (long) (len + (len & 1)), SEEK_CUR) != 0) {
+            if (!skip_bytes(f, (uint64_t) len + (len & 1))) {
                 fclose(f);
                 return false;
             }
@@ -396,7 +406,7 @@ static void a2dp_audio_timeout_handler(btstack_timer_source_t * timer){
 }
 
 static void a2dp_timer_start(media_context_t * context){
-    context->max_media_payload_size = btstack_min(a2dp_max_media_payload_size(context->a2dp_cid, context->local_seid), SBC_STORAGE_SIZE);
+    context->max_media_payload_size = btstack_min(a2dp_max_media_payload_size(context->a2dp_cid, context->local_seid) - 1, SBC_STORAGE_SIZE - 1); // minus the SBC payload header byte
     context->sbc_storage_count = 0;
     context->sbc_ready_to_send = 0;
     context->streaming = 1;
@@ -1177,6 +1187,7 @@ int main(int argc, char ** argv){
 
     bd_addr_t local_addr;
     if (!read_local_bd_addr(local_addr)) return 1;
+    umask(077); // the link-key file is created with fopen(): keep it private to the owner
     if (mkdir(STATE_DIR, 0700) != 0 && errno != EEXIST) {
         fprintf(stderr, "y2-a2dp: cannot create %s: %s\n", STATE_DIR, strerror(errno));
         return 1;
