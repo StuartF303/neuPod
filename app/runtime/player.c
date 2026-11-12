@@ -84,6 +84,7 @@ static const char *codec_error_text(uint32_t e) {
     case 3: return "File does not match its header";
     case 4: return "Decoding error (damaged data)";
     case 5: return "File is truncated or damaged";
+    case AUDIO_ERR_RATE_NOT_ON_BT: return "Not supported on Bluetooth (44.1 kHz only)";
     default: return "Decoder error";
     }
 }
@@ -713,6 +714,24 @@ void player_pause_toggle(void) {
         snprintf(name, sizeof name, "%s", g_info.name);
         unlock();
         player_play_file(path, name);
+        return;
+    }
+    unlock();
+}
+
+void player_pause(void) {
+    audio_stats_t st;
+    bool have = audio_stats_get(&st);
+    lock();
+    if (g_info.state == PLAYER_PLAYING) {
+        g_info.state = PLAYER_PAUSED;
+        (void)audio_pause(true);
+        resume_state_t r;
+        if (rs_snapshot(&r, have, &st)) {
+            rs_queue(&r, RESUME_EVENT);
+        }
+        unlock();
+        rs_flush();
         return;
     }
     unlock();

@@ -10,6 +10,7 @@
 
 #include "audio_engine.h"
 #include "battery_store.h"
+#include "audio_route.h"
 #include "bt_service.h"
 #include "boot.h"
 #include "capabilities.h"
@@ -252,6 +253,7 @@ static void monitor_task(void *arg) {
             shutdown_now();
         }
         player_service(); // the queue moves on even when no screen is polling the player
+        audio_route_service(); // Bluetooth output: switch, start / suspend the stream, pause when the headset goes away
         if (t >= next_beat) {
             next_beat += HEARTBEAT_MS;
             check_audio_alive();
@@ -318,6 +320,7 @@ void neupod_runtime_run(const neupod_runtime_config_t *cfg) {
         printf("neuPod: audio core did not start\n");
     }
     player_init(); // default volume -30 dB goes to the audio core before anything can play
+    audio_route_init();
     must_create("storage", storage_task, RT_STACK_STORAGE, RT_PRIO_STORAGE, RT_CORE_OTHER);
     must_create("haptic", haptic_task, RT_STACK_HAPTIC, RT_PRIO_HAPTIC, RT_CORE_OTHER);
     must_create("wifi", wifi_task, RT_STACK_WIFI, RT_PRIO_WIFI, RT_CORE_OTHER);

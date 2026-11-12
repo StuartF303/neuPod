@@ -324,3 +324,41 @@ void ui_npc_committed(ui_npc_t *c) {
     c->pending = false;
     c->mode_ms = c->move_ms; /* the idle clock counts from the last input, not from the commit */
 }
+
+void ui_display_name(char *out, size_t n, const char *raw) {
+    if (n == 0) {
+        return;
+    }
+    size_t o = 0;
+    const unsigned char *r = (const unsigned char *)raw;
+    while (*r != '\0') {
+        const char *rep = NULL;
+        size_t len = 1;
+        if (r[0] == 0xE2u && r[1] == 0x80u && r[2] != 0) {
+            len = 3;
+            switch (r[2]) {
+            case 0x98: case 0x99: rep = "'"; break;
+            case 0x9C: case 0x9D: rep = "\""; break;
+            case 0x93: case 0x94: rep = "-"; break;
+            case 0xA6: rep = "..."; break;
+            default: break;
+            }
+        } else if (r[0] >= 0xC0u) {
+            len = r[0] >= 0xF0u ? 4 : r[0] >= 0xE0u ? 3 : 2;
+        }
+        for (size_t i = 1; i < len; i++) { // a truncated sequence at the end of the string: stop at the NUL
+            if ((r[i] & 0xC0u) != 0x80u) {
+                len = i;
+                break;
+            }
+        }
+        size_t w = rep != NULL ? strlen(rep) : len;
+        if (o + w + 1 > n) {
+            break; // never cut inside a character
+        }
+        memcpy(out + o, rep != NULL ? (const unsigned char *)rep : r, w);
+        o += w;
+        r += len;
+    }
+    out[o] = '\0';
+}

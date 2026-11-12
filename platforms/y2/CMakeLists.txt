@@ -50,6 +50,8 @@ target_include_directories(neupod PRIVATE ${Y2_HAL} ${CMAKE_SOURCE_DIR}/hal/incl
 set_source_files_properties(main.c charging.c ${NEUPOD_Y2_HAL_SOURCES} PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 # neupod_fatfs: FatFs + diskio over hal_storage (the raw block device). Libraries after the HAL objects.
 target_link_libraries(neupod PRIVATE neupod_runtime neupod_drivers neupod_fatfs btstack_y2 pthread)
+# Bench aid: NEUPOD_BT_PCM_DUMP=<file> in the environment records the Bluetooth encoder input (Y2 only, never the product).
+target_compile_definitions(neupod PRIVATE NEUPOD_BT_PCM_TAP=1)
 
 # A smaller image to copy over USB; the unstripped one stays in the build tree for debugging.
 add_custom_command(TARGET neupod POST_BUILD

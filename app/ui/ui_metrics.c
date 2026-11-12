@@ -32,6 +32,7 @@ static const ui_metrics_t k_480x360 = {
     .buf_lines = S(24),
     .bar_inset = S(8),
     .wifi_x = S(30),
+    .bt_x = S(52),
     .title_w = S(190),
     .title_h = S(18),
     .font_body = &lv_font_montserrat_20,

@@ -114,3 +114,13 @@ Tours: `--tour-bt` is extended with `bt-streaming`, `np-bt-badge`, `np-bt-volume
 4. **Volume:** AVRCP absolute volume to the headset with the software volume at 0 dB; software volume when the headset has no
    absolute volume.
 5. **Y2 as a Bluetooth platform:** yes, the real stack goes into the Y2 firmware (taken as the default; not asked separately).
+
+## Amendment 12 Nov 2026: stage 2b as built
+
+Details and the RAM / flash figures are in [Bluetooth](../bluetooth.md#stage-2b-the-audio-stream-built). Differences from the decision above, all deliberate:
+
+* **`hal_bt_set_pcm_source()`** hands the stack the consumer side of the PCM ring (a small type in `hal/include/hal_bt_pcm.h`). PCM still does not travel through `hal_bt_*`; the stack pulls it from the ring on its own thread.
+* **44.1 kHz only.** One SBC endpoint at 44.1 kHz; tracks at other rates are refused on the Bluetooth output. 48 kHz and the hi-res decimation of ADR-0013 are a follow-up.
+* **Not declared yet** (phase 3 / 2c): `HAL_BT_EVT_VOLUME`, `hal_bt_volume_set`, `HAL_BT_EVT_KEY`, `hal_bt_track_info`; the Now Playing volume bar and the headset buttons.
+* Two new failure reasons, `HAL_BT_FAIL_STREAM` ("audio refused") and `HAL_BT_FAIL_CODEC` ("no common format"); the status-bar glyph uses the text colour for "connected" because the bar is light.
+

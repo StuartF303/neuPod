@@ -8,6 +8,7 @@
 #define NEUPOD_UI_LOGIC_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -167,6 +168,15 @@ void ui_npc_committed(ui_npc_t *c);
 uint64_t ui_npc_position(const ui_npc_t *c, const ui_npc_track_t *t);
 /** Track seconds one (accelerated) wheel step moves in seek mode: about 1/60 of the track, 1..30 s. */
 uint32_t ui_seek_step_s(uint64_t total_s);
+
+/* ---- Display text ---- */
+
+/**
+ * Copy @p raw (UTF-8) to @p out (capacity @p n) for a label: the typographic punctuation the UI font has no glyph for becomes its ASCII
+ * look-alike (U+2018/2019 -> ', U+201C/201D -> ", U+2013/2014 -> -, U+2026 -> ...), other multi-byte characters are kept, and the copy is cut
+ * only at a character boundary. The stored name is never changed. Always NUL-terminates (n > 0).
+ */
+void ui_display_name(char *out, size_t n, const char *raw);
 
 /* ---- Screen stack (opaque entries) ---------------------------------------------------------------- */
 

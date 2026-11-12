@@ -30,6 +30,8 @@
 #include "btstack.h"
 #include "btstack_chipset_mtk_consys.h"
 #include "btstack_run_loop_posix.h"
+#include "hci_dump_posix_fs.h"
+#include <stdlib.h>
 #include "btstack_uart_stpbt.h"
 #include "hal_system.h"
 #include "hci_transport_h4.h"
@@ -242,6 +244,13 @@ bool bt_port_start(void) {
     };
     btstack_memory_init();
     btstack_run_loop_init(btstack_run_loop_posix_get_instance());
+    /* Bench aid: NEUPOD_BT_HCI_DUMP=<file> writes an HCI trace (PacketLogger format) of the whole session. */
+    const char *dump = getenv("NEUPOD_BT_HCI_DUMP");
+    if (dump != NULL && dump[0] != '\0') {
+        hci_dump_posix_fs_open(dump, HCI_DUMP_PACKETLOGGER);
+        hci_dump_init(hci_dump_posix_fs_get_instance());
+        printf("bt: HCI trace -> %s\n", dump);
+    }
     btstack_uart_stpbt_set_fd(g_dev_fd); // opened by y2_bt_probe(); the driver owns it from here
     g_dev_fd = -1;
     btstack_uart_stpbt_set_error_handler(transport_error);

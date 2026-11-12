@@ -528,6 +528,27 @@ TEST(a_hold_that_reaches_the_end_of_the_track_applies_it_at_once) {
     ASSERT_EQ(UI_NPC_NONE, ui_npc_key_up(&c, 1, UI_HOLD_MS + 19500));
 }
 
+TEST(display_name_normalises_typographic_punctuation) {
+    char o[64];
+    ui_display_name(o, sizeof o, "Stuart\xE2\x80\x99s AirPods Pro \xE2\x80\x93 Find My");
+    ASSERT_EQ(0, strcmp("Stuart's AirPods Pro - Find My", o));
+    ui_display_name(o, sizeof o, "\xE2\x80\x9CQ\xE2\x80\x9D\xE2\x80\x98" "a\xE2\x80\x99 \xE2\x80\x94 x\xE2\x80\xA6");
+    ASSERT_EQ(0, strcmp("\"Q\"'a' - x...", o));
+    ui_display_name(o, sizeof o, "Caf\xC3\xA9"); // other characters are kept
+    ASSERT_EQ(0, strcmp("Caf\xC3\xA9", o));
+}
+
+TEST(display_name_cuts_on_a_character_boundary) {
+    char o[7];
+    ui_display_name(o, sizeof o, "abcde\xC3\xA9\xC3\xA9"); // 'e acute' is 2 bytes: 5 + 2 = 7 > 6 available
+    ASSERT_EQ(0, strcmp("abcde", o));
+    char o2[5];
+    ui_display_name(o2, sizeof o2, "ab\xE2\x80\xA6"); // an ellipsis needs 3 bytes
+    ASSERT_EQ(0, strcmp("ab", o2));
+    ui_display_name(o2, sizeof o2, "ab\xE2\x80"); // truncated sequence
+    ASSERT_TRUE(strlen(o2) <= 4);
+}
+
 int main(void) {
     RUN(signal_bars_unknown_rssi);
     RUN(signal_bars_thresholds);
@@ -569,5 +590,7 @@ int main(void) {
     RUN(another_key_or_the_wheel_drops_a_hold_whose_release_may_be_lost);
     RUN(a_hold_whose_release_never_comes_ends_itself);
     RUN(a_hold_that_reaches_the_end_of_the_track_applies_it_at_once);
+    RUN(display_name_normalises_typographic_punctuation);
+    RUN(display_name_cuts_on_a_character_boundary);
     return RESULT();
 }

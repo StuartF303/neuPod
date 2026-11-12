@@ -101,6 +101,14 @@ typedef struct {
 } hal_audio_info_t;
 void hal_audio_get_info(hal_audio_info_t *out);
 
+/**
+ * What the next hal_audio_open() is. false (the default): the wired output: the DAC on a board that has one, otherwise the null sink.
+ * true: a virtual sink for Bluetooth output: the block clock runs at the sample rate exactly as for the wired sink, but hal_audio_write()
+ * discards, because the audio core sends the audio to the Bluetooth ring instead (docs/bluetooth.md). Call with the sink closed.
+ * A platform whose wired sink is already only a clock (host, Y2, the null sink) ignores it.
+ */
+void hal_audio_set_virtual(bool virtual_sink);
+
 /** Stop the stream and release buffers. */
 void hal_audio_close(void);
 

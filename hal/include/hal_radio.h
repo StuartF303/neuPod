@@ -6,8 +6,8 @@
  * Bluetooth (classic, via the CYW43439): stage 1 of docs/bluetooth.md provides bring-up, the local address and
  * device discovery (inquiry). Stage 2a adds pairing (SSP "just works") and a connection to one remote device
  * (hal_bt_pair / _connect / _disconnect / _forget, hal_bt_link_*): an ACL link, authentication and an SDP check that the
- * remote offers an A2DP sink. No audio yet; the A2DP source arrives in stage 2b, and hal_radio_a2dp_connect() stays
- * declared for it and not implemented.
+ * remote offers an A2DP sink. Stage 2b adds the A2DP stream on that link (hal_bt_stream_*, hal_bt_set_pcm_source): opened by itself once
+ * the link is CONNECTED, started and suspended by the audio routing, reported with HAL_BT_EVT_STREAM.
  *
  * Threading: every hal_bt_* call may be made from any RTOS task on core 0. The event callback runs on the radio
  * worker (the CYW43 async-context task) with BTstack's lock held: it must be quick, must not block and must not call
@@ -18,8 +18,10 @@
 #define NEUPOD_HAL_RADIO_H
 
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
+#include "hal_bt_pcm.h"
 #include "hal_types.h"
 
 #ifdef __cplusplus
@@ -109,15 +111,6 @@ void hal_wifi_mem(hal_wifi_mem_t *out);
 /** Call about every 200 ms: hardware: steps a join through the security modes (WPA2, WPA2/3, WPA3); host simulator: advances scans, joins and time. */
 void hal_wifi_poll(void);
 
-/**
- * Connect to an A2DP sink by Bluetooth address (6 bytes, MSB first).
- * Audio then flows via a hal_audio sink selected by the app. Stage 2: not implemented.
- */
-hal_status_t hal_radio_a2dp_connect(const uint8_t addr[6]);
-
-/** Disconnect the A2DP sink. */
-void hal_radio_a2dp_disconnect(void);
-
 /* ---- Bluetooth: state, discovery ------------------------------------------------------------------------ */
 
 typedef enum {
@@ -128,7 +121,7 @@ typedef enum {
     HAL_BT_FAILED,   /**< the stack or the controller did not come up */
 } hal_bt_state_t;
 
-#define HAL_BT_NAME_MAX 32u         /**< bytes kept of a remote name (UTF-8, NUL-terminated copy) */
+#define HAL_BT_NAME_MAX 48u         /**< bytes kept of a remote name (UTF-8, NUL-terminated copy; 48 holds "Stuart's AirPods Pro - Find My" with its 3-byte apostrophe) */
 #define HAL_BT_RSSI_UNKNOWN 127     /**< rssi value when the inquiry result carried none */
 #define HAL_BT_COD_MAJOR_AUDIO_VIDEO 0x04u
 
@@ -145,7 +138,55 @@ typedef enum {
     HAL_BT_EVT_DEVICE,    /**< a device was found, or its name arrived: ev.dev (the full record, repeated updates) */
     HAL_BT_EVT_SCAN_DONE, /**< inquiry (and the name requests that followed) finished or was stopped */
     HAL_BT_EVT_LINK,      /**< connection state changed: ev.link, ev.reason (FAILED only) and ev.dev (the remote device) */
+    HAL_BT_EVT_STREAM,    /**< the audio stream changed state: ev.stream, ev.reason (FAILED only) and ev.codec (from OPEN on) */
 } hal_bt_event_type_t;
+
+/* ---- Bluetooth: the audio stream (stage 2b) ------------------------------------------------------------------- */
+
+/** State of the A2DP stream on the CONNECTED link. */
+typedef enum {
+    HAL_BT_STREAM_CLOSED = 0, /**< no stream (no link, not opened yet, or it was released) */
+    HAL_BT_STREAM_OPENING,    /**< the audio connection is being set up (capabilities, configuration) */
+    HAL_BT_STREAM_OPEN,       /**< configured, not started: hal_bt_stream_start() begins sending */
+    HAL_BT_STREAM_STREAMING,  /**< media packets are being sent */
+    HAL_BT_STREAM_SUSPENDED,  /**< was streaming, now paused (by us or by the headset); hal_bt_stream_start() resumes it */
+    HAL_BT_STREAM_FAILED,     /**< the last open / start failed: see hal_bt_stream_reason() */
+} hal_bt_stream_state_t;
+
+typedef enum { HAL_BT_CODEC_NONE = 0, HAL_BT_CODEC_SBC, HAL_BT_CODEC_SBC_XQ, HAL_BT_CODEC_AAC, HAL_BT_CODEC_APTX } hal_bt_codec_kind_t;
+typedef enum { HAL_BT_MODE_MONO = 0, HAL_BT_MODE_DUAL, HAL_BT_MODE_STEREO, HAL_BT_MODE_JOINT_STEREO } hal_bt_chmode_t;
+
+/** The negotiated configuration of the stream, for the badge and the statistics. */
+typedef struct {
+    hal_bt_codec_kind_t codec; /**< SBC, or SBC_XQ when the bitpool in use is above the standard 53 */
+    uint32_t rate;             /**< Hz */
+    uint8_t channels;
+    hal_bt_chmode_t mode;
+    uint8_t bitpool_min, bitpool_max; /**< the range the headset accepts in the configuration */
+    uint8_t bitpool;                  /**< the bitpool the encoder uses */
+    uint16_t kbps;                    /**< bit rate of the encoded stream, kbit/s */
+} hal_bt_codec_t;
+
+/** A short label for the Now Playing badge: "SBC 44.1", "SBC-XQ" ... ("" for NONE). At most 15 characters. */
+static inline void hal_bt_codec_label(const hal_bt_codec_t *c, char *out, size_t n) {
+    if (c->codec == HAL_BT_CODEC_SBC_XQ) {
+        snprintf(out, n, "SBC-XQ");
+    } else if (c->codec == HAL_BT_CODEC_SBC) {
+        unsigned khz10 = (unsigned)(c->rate / 100u); /* 44100 -> 441 */
+        snprintf(out, n, "SBC %u.%u", khz10 / 10u, khz10 % 10u);
+    } else {
+        snprintf(out, n, "%s", c->codec == HAL_BT_CODEC_AAC ? "AAC" : c->codec == HAL_BT_CODEC_APTX ? "aptX" : "");
+    }
+}
+
+/** Counters of the current stream (reset when it is opened; they keep counting across suspend and resume). */
+typedef struct {
+    uint32_t frames_encoded;     /**< codec frames produced (SBC: 128 samples each) */
+    uint32_t packets_sent;
+    uint32_t underruns;          /**< times the encoder wanted audio and the PCM ring had none */
+    uint32_t drift_corrections;  /**< times the pacing trim against the ring's fill level changed step */
+    int8_t link_quality;         /**< RSSI of the link in dBm where the controller reports one, HAL_BT_RSSI_UNKNOWN if not */
+} hal_bt_stats_t;
 
 /** State of the one connection (the remote headset). Independent of hal_bt_state_t, except that a link needs the stack ON. */
 typedef enum {
@@ -167,6 +208,8 @@ typedef enum {
     HAL_BT_FAIL_INTERNAL,  /**< the stack refused the request (out of buffers, busy) */
     HAL_BT_FAIL_BUSY,      /**< a Pair that the headset ended or had no resources for: busy with something else, or not in pairing mode */
     HAL_BT_FAIL_PIN,       /**< a pre-2.1 headset that wants a PIN: only Secure Simple Pairing is supported */
+    HAL_BT_FAIL_STREAM,    /**< the audio connection could not be opened or started (the headset refused, or is busy with another source) */
+    HAL_BT_FAIL_CODEC,     /**< the headset offers no audio format we can send (SBC, 44.1 kHz stereo) */
 } hal_bt_fail_t;
 
 /** One short phrase per reason, shared by the console and the UI ("Failed: <phrase>"; at most 19 characters). */
@@ -180,6 +223,8 @@ static inline const char *hal_bt_fail_text(hal_bt_fail_t r) {
     case HAL_BT_FAIL_INTERNAL: return "radio error";
     case HAL_BT_FAIL_BUSY: return "busy or not pairing";
     case HAL_BT_FAIL_PIN: return "PIN not supported";
+    case HAL_BT_FAIL_STREAM: return "audio refused";
+    case HAL_BT_FAIL_CODEC: return "no common format";
     case HAL_BT_FAIL_NONE: break;
     }
     return "error";
@@ -195,6 +240,8 @@ typedef struct {
     hal_bt_link_state_t link; /**< HAL_BT_EVT_LINK */
     hal_bt_fail_t reason;     /**< HAL_BT_EVT_LINK with link == HAL_BT_LINK_FAILED */
     uint32_t attempt;         /**< HAL_BT_EVT_LINK: the Pair / Connect attempt this event belongs to (hal_bt_link_attempt() at that time) */
+    hal_bt_stream_state_t stream; /**< HAL_BT_EVT_STREAM */
+    hal_bt_codec_t codec;     /**< HAL_BT_EVT_STREAM: the negotiated configuration (codec NONE until OPEN) */
 } hal_bt_event_t;
 
 typedef void (*hal_bt_event_fn)(const hal_bt_event_t *ev, void *ctx);
@@ -295,6 +342,32 @@ hal_bt_fail_t hal_bt_link_reason(void);
 bool hal_bt_link_device(hal_bt_device_t *out);
 /** true while the device is connectable and bondable: only while a Pair action runs, and then for the chosen headset only. It is never discoverable. */
 bool hal_bt_accepting(void);
+
+/* ---- Bluetooth: the audio stream (stage 2b) ---------------------------------------------------------------- */
+
+/** Register the PCM source (NULL = none: a started stream then sends nothing). Call before a stream starts; any task. @p src must stay valid for the life of the program. */
+void hal_bt_set_pcm_source(const hal_bt_pcm_source_t *src);
+
+/**
+ * Open the A2DP stream on the CONNECTED link. The stack does this by itself right after CONNECTED, so the call is only for a retry after
+ * HAL_BT_STREAM_FAILED or CLOSED. HAL_ENODEV if there is no CONNECTED link, HAL_EBUSY if a stream exists or is opening. Asynchronous:
+ * HAL_BT_EVT_STREAM OPENING, then OPEN or FAILED.
+ */
+hal_status_t hal_bt_stream_open(void);
+/** Begin sending (OPEN or SUSPENDED -> STREAMING). HAL_ENODEV if the stream is not OPEN / SUSPENDED. A no-op while it is already STREAMING. */
+hal_status_t hal_bt_stream_start(void);
+/** Pause sending (STREAMING -> SUSPENDED), the audio connection stays up. No-op in any other state. */
+void hal_bt_stream_suspend(void);
+/** Release the audio connection (the link stays). HAL_BT_EVT_STREAM CLOSED follows. No-op when CLOSED. */
+void hal_bt_stream_close(void);
+
+hal_bt_stream_state_t hal_bt_stream_state(void);
+/** Why the stream is FAILED (HAL_BT_FAIL_NONE otherwise). */
+hal_bt_fail_t hal_bt_stream_reason(void);
+/** The negotiated configuration; false while CLOSED / OPENING / FAILED. */
+bool hal_bt_stream_codec(hal_bt_codec_t *out);
+/** Counters of the current stream (all zero when there is none). */
+void hal_bt_stats(hal_bt_stats_t *out);
 
 /**
  * Give the HAL a chance to advance. Hardware: a no-op, events arrive by themselves from the radio worker. Host

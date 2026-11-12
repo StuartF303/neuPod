@@ -26,6 +26,11 @@ void player_prev(void) { g_prev++; }
 uint32_t os_tick_ms(void) { return 1000; }
 bool battery_store_get(hal_battery_status_t *b) { (void)b; return false; }
 void bt_service_tick(void) {}
+hal_bt_state_t hal_bt_state(void) { return HAL_BT_OFF; }
+hal_bt_stream_state_t hal_bt_stream_state(void) { return HAL_BT_STREAM_CLOSED; }
+hal_bt_link_state_t hal_bt_link_state(void) { return HAL_BT_LINK_DISCONNECTED; }
+bool bt_saved_get(hal_bt_device_t *o) { (void)o; return false; }
+audio_route_notice_t audio_route_notice(uint32_t *seq) { *seq = 0; return ROUTE_NOTICE_NONE; }
 bool caps_available(cap_id_t c) { (void)c; return false; }
 bool caps_all_resolved(void) { return true; }
 hal_wifi_status hal_wifi_state(void) { return HAL_WIFI_DOWN; }

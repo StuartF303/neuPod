@@ -16,6 +16,12 @@
  * connectable or bondable, so a headset that lost its key cannot silently start a new pairing. Every step runs on the BTstack thread;
  * the public calls only hand a request over.
  *
+ * The audio stream (stage 2b). Once the link is CONNECTED the adapter opens an A2DP source stream by itself (a2dp_source_establish_stream) with one
+ * SBC endpoint: 44.1 kHz stereo, joint stereo, 16 blocks, 8 subbands, bitpool up to the headset's maximum but at most NEUPOD_BT_SBC_BITPOOL
+ * (53; with NEUPOD_BT_SBC_XQ 76, the "SBC-XQ" setting). The audio comes from the PCM source (hal_bt_set_pcm_source: the consumer side of the
+ * core 1 ring), encoded on BTstack's thread by a run-loop timer that works like a source clock steered by the ring's fill level (see media_tick).
+ * No RTOS call is made on this path: on the Y2 BTstack's thread is not an RTOS task.
+ *
  * An unanswered page is ended by our own timer (HAL_BT_PAIR_TIMEOUT_MS / HAL_BT_CONNECT_TIMEOUT_MS) with Create_Connection_Cancel, never by
  * the controller's page timeout: the MT6582 (Y2) does not report its page timeout until the connection is cancelled. A Connection_Complete
  * with an error that arrives after the attempt has ended is ignored (link_packet, HCI_EVENT_CONNECTION_COMPLETE: g_lphase is IDLE).
@@ -26,6 +32,8 @@
 #include "btstack.h"
 #include "btstack_version.h"
 #include "classic/btstack_link_key_db_tlv.h"
+#include "classic/btstack_sbc.h"
+#include "classic/btstack_sbc_bluedroid.h"
 #include "hal_radio.h"
 #include "bt_port.h"
 
@@ -34,6 +42,27 @@
 #define LOCAL_COD 0x20041Cu
 #define MAX_FOUND 12u        /* devices kept per scan */
 #define MAX_NAME_REQUESTS 6u /* remote name requests after a scan (each can take seconds) */
+
+/* ---- A2DP configuration: the constants to flip ---- */
+#ifndef NEUPOD_BT_SBC_XQ
+#define NEUPOD_BT_SBC_XQ 0 /* 1: accept the headset's high bitpools (up to 76, "SBC-XQ", about 455 kbit/s). 0: at most the standard 53 (328 kbit/s). */
+#endif
+#define SBC_BITPOOL_STD 53u
+#define SBC_BITPOOL_XQ 76u
+#define NEUPOD_BT_SBC_BITPOOL (NEUPOD_BT_SBC_XQ ? SBC_BITPOOL_XQ : SBC_BITPOOL_STD)
+#define A2DP_RATE 44100u   /* the one sample rate offered: every sink supports it; 48 kHz material is not played on Bluetooth yet (docs/bluetooth.md) */
+#define SBC_SAMPLES_PER_FRAME 128u /* 16 blocks x 8 subbands */
+#ifdef NEUPOD_RP2350
+#define SBC_STORAGE_BYTES 680u  /* header byte + SBC frames of one media packet; a typical headset's L2CAP MTU is 672 */
+#else
+#define SBC_STORAGE_BYTES 1030u
+#endif
+#define PACE_TICK_MS 8u         /* the encoder timer */
+#define PACE_BACKLOG_MS 40u     /* the most audio the encoder will owe after a stall: no unbounded backlog */
+#define PACE_PACKET_MAX_AGE_MS 20u /* a partly filled packet is sent after this long */
+#define PACE_TRIM_UNIT_PPM 500  /* one step of the fill-level trim */
+#define PACE_TRIM_MAX 6         /* +-3000 ppm */
+#define RSSI_PERIOD_MS 10000u
 
 typedef struct {
     hal_bt_device_t dev;
@@ -99,6 +128,8 @@ static uint32_t g_cancel_attempt;     /* the attempt a pending create-connection
 #define FORGET_SLOTS 2u
 static uint8_t g_forget_addr[FORGET_SLOTS][6];
 static volatile int g_forget_state[FORGET_SLOTS]; /* 0 free, 1 being filled, 2 ready */
+
+static volatile int g_st_rssi = HAL_BT_RSSI_UNKNOWN; /* link quality (stream statistics) */
 
 /* ---- events out ---- */
 
@@ -340,6 +371,9 @@ static void packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint
     case GAP_EVENT_INQUIRY_COMPLETE:
         on_inquiry_complete();
         break;
+    case GAP_EVENT_RSSI_MEASUREMENT:
+        g_st_rssi = (int8_t)gap_event_rssi_measurement_get_rssi(packet);
+        break;
     case HCI_EVENT_REMOTE_NAME_REQUEST_COMPLETE:
         on_name_complete(packet);
         break;
@@ -513,10 +547,14 @@ static void link_timeout(btstack_timer_source_t *ts) {
     }
 }
 
+static void a2dp_open(void);
+static void a2dp_gone(hal_bt_fail_t why_failed);
+
 static void link_up(void) {
     g_lphase = LP_UP;
     printf("bt: connected %s\n", bd_addr_to_str(g_peer.addr));
     link_end(HAL_BT_LINK_CONNECTED, HAL_BT_FAIL_NONE);
+    a2dp_open(); /* the audio stream opens by itself once the link is up (stage 2b) */
 }
 
 static bool have_link_key(void) {
@@ -629,6 +667,7 @@ static void drop_link(void) {
             (void)gap_disconnect(g_acl);
         }
         g_lphase = LP_IDLE;
+        a2dp_gone(HAL_BT_FAIL_NONE); /* the audio connection goes first, then the link */
         set_link(HAL_BT_LINK_DISCONNECTED, HAL_BT_FAIL_NONE);
         return;
     }
@@ -663,6 +702,7 @@ static void worker_forget(void *arg) {
 
 /* The stack went down (HCI_STATE_OFF) under a link or an attempt: nothing is left of it. */
 static void link_reset(void) {
+    a2dp_gone(HAL_BT_FAIL_NONE);
     g_acl = HCI_CON_HANDLE_INVALID;
     g_sdp_live = g_sdp_wait = false;
     btstack_run_loop_remove_timer(&g_cancel_timer);
@@ -739,13 +779,14 @@ static void link_packet(uint8_t *packet) {
         }
         uint8_t why = hci_event_disconnection_complete_get_reason(packet);
         g_acl = HCI_CON_HANDLE_INVALID;
+        a2dp_gone(HAL_BT_FAIL_NONE); /* a stream does not outlive its link; its state is announced before the link's */
         if (g_lphase == LP_UP) {
-            /* Stage 2a has no profile open, so an idle link is closed: by us (BTstack's idle timeout, local host) or by the headset (0x13,
+            /* An idle link is closed: by us (BTstack's idle timeout, local host) or by the headset (0x13,
              * remote user terminated: a headset with nothing to do hangs up after a second or two). Neither is a failure. Anything else
              * (supervision timeout 0x08, ...) is a lost link. */
             g_lphase = LP_IDLE;
             if (why == ERROR_CODE_CONNECTION_TERMINATED_BY_LOCAL_HOST || why == ERROR_CODE_REMOTE_USER_TERMINATED_CONNECTION) {
-                printf("bt: link closed %s reason 0x%02X (idle, no profile yet)\n", bd_addr_to_str(g_peer.addr), (unsigned)why);
+                printf("bt: link closed %s reason 0x%02X (idle)\n", bd_addr_to_str(g_peer.addr), (unsigned)why);
                 set_link(HAL_BT_LINK_DISCONNECTED, HAL_BT_FAIL_NONE);
             } else {
                 printf("bt: link lost 0x%02X\n", (unsigned)why);
@@ -867,6 +908,553 @@ bool hal_bt_link_device(hal_bt_device_t *out) {
 
 bool hal_bt_accepting(void) { return g_accepting; }
 
+
+/* ---- the audio stream (stage 2b) ---- */
+
+static volatile int g_stream = HAL_BT_STREAM_CLOSED; /* hal_bt_stream_state_t */
+static volatile int g_stream_reason = HAL_BT_FAIL_NONE;
+static hal_bt_codec_t g_codec;              /* written by BTstack's thread under g_codec_seq, read by anyone (hal_bt_stream_codec) */
+static volatile uint32_t g_codec_seq;
+static const hal_bt_pcm_source_t *volatile g_pcm; /* must stay valid for the life of the program */
+static volatile uint32_t g_st_encoded, g_st_packets, g_st_underruns, g_st_drift;
+
+static uint16_t g_a2dp_cid;
+static uint8_t g_local_seid, g_remote_seid;
+static bool g_a2dp_inited;
+static uint8_t g_sbc_caps[] = {(AVDTP_SBC_44100 << 4) | AVDTP_SBC_STEREO | AVDTP_SBC_JOINT_STEREO, 0xFF, 2, (uint8_t)NEUPOD_BT_SBC_BITPOOL};
+static uint8_t g_sbc_config[4];
+static uint8_t g_sdp_a2dp_record[150];
+static const btstack_sbc_encoder_t *g_enc;
+static btstack_sbc_encoder_bluedroid_t g_enc_state;
+static bool g_enc_ready;
+static uint16_t g_sbc_frame_len;
+
+/* Media packet being built. Byte 0 is the SBC payload header (frame count), the frames follow. */
+static uint8_t g_sbc_store[SBC_STORAGE_BYTES];
+static uint16_t g_sbc_count;       /* frame bytes in g_sbc_store[1..] */
+static uint16_t g_max_payload;     /* bound: min(what the link takes, our storage) minus the header byte */
+static bool g_ready_to_send;       /* a packet is complete and waits for "can send now" */
+static uint32_t g_first_frame_ms;  /* when the first frame of the current packet was encoded */
+static uint32_t g_rtp_ts;
+static int16_t g_pcm_buf[SBC_SAMPLES_PER_FRAME * 2u];
+
+/* Pacing: the encoder is a source clock (a timer) that owes the headset rate x elapsed time of audio, steered by the ring's fill level. */
+static btstack_timer_source_t g_media_timer, g_rssi_timer;
+static uint32_t g_pace_last_ms;
+static uint32_t g_pace_frac;       /* sub-frame remainder, in 1/1000 frame */
+static uint32_t g_owed;            /* frames the encoder may produce now */
+static int g_trim;                 /* the fill-level trim, in PACE_TRIM_UNIT_PPM steps: >0 consumes faster than the nominal rate */
+static bool g_in_underrun;
+static bool g_streaming_timer;
+
+typedef enum { REQ_NONE = 0, REQ_OPEN, REQ_START, REQ_SUSPEND, REQ_CLOSE } stream_req_t;
+static volatile int g_req;
+static volatile bool g_req_queued;
+static btstack_context_callback_registration_t g_req_reg;
+
+static void emit_stream(hal_bt_stream_state_t st, hal_bt_fail_t reason) {
+    hal_bt_event_t ev = {.type = HAL_BT_EVT_STREAM, .state = (hal_bt_state_t)g_state, .dev = g_peer, .stream = st, .reason = reason};
+    if (st == HAL_BT_STREAM_OPEN || st == HAL_BT_STREAM_STREAMING || st == HAL_BT_STREAM_SUSPENDED) {
+        ev.codec = g_codec;
+    }
+    emit(&ev);
+}
+
+static void set_stream(hal_bt_stream_state_t st, hal_bt_fail_t reason) {
+    g_stream_reason = st == HAL_BT_STREAM_FAILED ? reason : HAL_BT_FAIL_NONE;
+    int prev = __atomic_exchange_n(&g_stream, (int)st, __ATOMIC_SEQ_CST);
+    if (prev != (int)st) {
+        emit_stream(st, g_stream_reason);
+    }
+}
+
+static void codec_publish(const hal_bt_codec_t *c) {
+    __atomic_add_fetch(&g_codec_seq, 1u, __ATOMIC_SEQ_CST); /* odd: being written */
+    g_codec = *c;
+    __atomic_add_fetch(&g_codec_seq, 1u, __ATOMIC_SEQ_CST);
+}
+
+static void media_stop(void) {
+    if (g_streaming_timer) {
+        btstack_run_loop_remove_timer(&g_media_timer);
+        btstack_run_loop_remove_timer(&g_rssi_timer);
+        g_streaming_timer = false;
+    }
+    g_sbc_count = 0;
+    g_ready_to_send = false;
+    g_owed = 0;
+    g_pace_frac = 0;
+    g_trim = 0;
+    g_in_underrun = false;
+}
+
+/* The stream is gone (released, signalling lost, link down): stop the clock, forget the connection, say so. The ring is emptied so a later
+ * stream never starts with audio from before the loss. */
+static void a2dp_gone(hal_bt_fail_t why_failed) {
+    media_stop();
+    g_a2dp_cid = 0;
+    g_enc_ready = false;
+    if (g_stream == HAL_BT_STREAM_CLOSED && why_failed == HAL_BT_FAIL_NONE) {
+        return;
+    }
+    const hal_bt_pcm_source_t *src = g_pcm;
+    if (src != NULL && src->flush != NULL) {
+        src->flush(src->ctx);
+    }
+    if (why_failed != HAL_BT_FAIL_NONE) {
+        set_stream(HAL_BT_STREAM_FAILED, why_failed);
+    } else {
+        set_stream(HAL_BT_STREAM_CLOSED, HAL_BT_FAIL_NONE);
+    }
+}
+
+static uint32_t g_dbg_sendfail, g_dbg_peak;
+#ifdef NEUPOD_BT_PCM_TAP
+#include <stdlib.h>
+static FILE *g_dbg_tap; /* bench aid (Y2): NEUPOD_BT_PCM_DUMP=<file> records the encoder's input PCM */
+static bool g_dbg_tap_tried;
+#endif
+static uint8_t g_dbg_lastrc;
+
+static void send_packet(void) {
+    uint16_t frames = (uint16_t)(g_sbc_count / g_sbc_frame_len);
+    g_sbc_store[0] = (uint8_t)frames; /* no fragmentation */
+    uint8_t rc = a2dp_source_stream_send_media_payload_rtp(g_a2dp_cid, g_local_seid, 0, g_rtp_ts, g_sbc_store, (uint16_t)(g_sbc_count + 1u));
+    if (rc != ERROR_CODE_SUCCESS) {
+        g_dbg_sendfail++;
+        g_dbg_lastrc = rc;
+    }
+    g_rtp_ts += (uint32_t)frames * SBC_SAMPLES_PER_FRAME;
+    g_sbc_count = 0;
+    g_ready_to_send = false;
+    g_st_packets++;
+}
+
+static int trim_wanted(uint32_t fill, uint32_t cap) {
+    int32_t half = (int32_t)(cap / 2u);
+    if (half <= 0) {
+        return 0;
+    }
+    int32_t err = (int32_t)fill - half; /* > 0: the ring is above the target: consume faster */
+    int32_t t = err * PACE_TRIM_MAX / half;
+    return t < -PACE_TRIM_MAX ? -PACE_TRIM_MAX : t > PACE_TRIM_MAX ? PACE_TRIM_MAX : (int)t;
+}
+
+static void media_tick(btstack_timer_source_t *ts) {
+    btstack_run_loop_set_timer(ts, PACE_TICK_MS);
+    btstack_run_loop_add_timer(ts);
+    const uint32_t now = btstack_run_loop_get_time_ms();
+    const uint32_t dt = now - g_pace_last_ms;
+    g_pace_last_ms = now;
+    const hal_bt_pcm_source_t *src = g_pcm;
+    if (src == NULL || !g_enc_ready) {
+        return;
+    }
+    const uint32_t rate = g_codec.rate;
+    const uint32_t fill = src->available(src->ctx);
+
+    /* Steer: the ring above half full means the encoder is too slow for the producer, below means too fast. One step per tick, and each
+     * step counts as a drift correction. The producer (the audio core's virtual sink) stalls when the ring is full, so the link paces it. */
+    int want = trim_wanted(fill, src->capacity(src->ctx));
+    if (want != g_trim) {
+        g_trim += want > g_trim ? 1 : -1;
+        g_st_drift++;
+    }
+    int64_t milli = (int64_t)dt * rate + g_pace_frac; /* frames x 1000 */
+    milli += milli * g_trim * PACE_TRIM_UNIT_PPM / 1000000;
+    if (milli < 0) {
+        milli = 0;
+    }
+    g_owed += (uint32_t)(milli / 1000);
+    g_pace_frac = (uint32_t)(milli % 1000);
+    const uint32_t cap_owed = rate * PACE_BACKLOG_MS / 1000u;
+    if (g_owed > cap_owed) {
+        g_owed = cap_owed; /* a stall (the link did not take packets) is not made up with a burst */
+    }
+
+    if (g_ready_to_send) {
+        return; /* the finished packet still waits for "can send now": the link is the limit */
+    }
+    while (g_owed >= SBC_SAMPLES_PER_FRAME && (uint32_t)(g_max_payload - g_sbc_count) >= g_sbc_frame_len) {
+        if (src->read(src->ctx, g_pcm_buf, SBC_SAMPLES_PER_FRAME) < SBC_SAMPLES_PER_FRAME) {
+            bool active = src->active == NULL || src->active(src->ctx);
+            if (active && !g_in_underrun) {
+                g_st_underruns++; /* one count per dry spell, not per tick */
+            }
+            g_in_underrun = active;
+            g_owed = 0; /* what was owed is lost: no burst when the audio returns */
+            break;
+        }
+        g_in_underrun = false;
+        if (g_sbc_count == 0) {
+            g_first_frame_ms = now;
+        }
+        for (unsigned i = 0; i < SBC_SAMPLES_PER_FRAME * 2u; i++) {
+            uint32_t a = (uint32_t)(g_pcm_buf[i] < 0 ? -(int32_t)g_pcm_buf[i] : g_pcm_buf[i]);
+            g_dbg_peak = a > g_dbg_peak ? a : g_dbg_peak;
+        }
+#ifdef NEUPOD_BT_PCM_TAP
+        if (!g_dbg_tap_tried) {
+            g_dbg_tap_tried = true;
+            const char *tp = getenv("NEUPOD_BT_PCM_DUMP");
+            g_dbg_tap = tp != NULL && tp[0] != '\0' ? fopen(tp, "wb") : NULL;
+        }
+        if (g_dbg_tap != NULL) {
+            fwrite(g_pcm_buf, sizeof g_pcm_buf, 1, g_dbg_tap);
+        }
+#endif
+        g_enc->encode_signed_16(&g_enc_state, g_pcm_buf, &g_sbc_store[1u + g_sbc_count]);
+        g_sbc_count = (uint16_t)(g_sbc_count + g_sbc_frame_len);
+        g_owed -= SBC_SAMPLES_PER_FRAME;
+        g_st_encoded++;
+    }
+    bool full = (uint32_t)(g_sbc_count + g_sbc_frame_len) > g_max_payload;
+    bool aged = g_sbc_count > 0 && now - g_first_frame_ms >= PACE_PACKET_MAX_AGE_MS;
+    if (g_sbc_count > 0 && (full || aged)) {
+        g_ready_to_send = true;
+        a2dp_source_stream_endpoint_request_can_send_now(g_a2dp_cid, g_local_seid);
+    }
+}
+
+static void rssi_tick(btstack_timer_source_t *ts) {
+    btstack_run_loop_set_timer(ts, RSSI_PERIOD_MS);
+    btstack_run_loop_add_timer(ts);
+    if (g_acl != HCI_CON_HANDLE_INVALID) {
+        (void)gap_read_rssi(g_acl);
+    }
+    printf("bt: a2dp: packets %lu encoded %lu sendfail %lu (rc 0x%02X) peak %lu underruns %lu max_payload %u\n",
+           (unsigned long)g_st_packets, (unsigned long)g_st_encoded, (unsigned long)g_dbg_sendfail, (unsigned)g_dbg_lastrc,
+           (unsigned long)g_dbg_peak, (unsigned long)g_st_underruns, (unsigned)g_max_payload);
+    g_dbg_peak = 0;
+}
+
+static void media_start(void) {
+    media_stop(); /* a second STARTED without a stop in between must not put the timers in BTstack's list twice (it does not check) */
+    const hal_bt_pcm_source_t *src = g_pcm;
+    int room = a2dp_max_media_payload_size(g_a2dp_cid, g_local_seid) - 1; /* minus the SBC payload header byte */
+    g_max_payload = (uint16_t)btstack_min(room > 0 ? room : 0, (int)SBC_STORAGE_BYTES - 1);
+    g_sbc_count = 0;
+    g_ready_to_send = false;
+    g_pace_last_ms = btstack_run_loop_get_time_ms();
+    g_pace_frac = 0;
+    g_trim = 0;
+    g_in_underrun = false;
+    /* The ring is usually full when a stream starts (it filled while the stream was being set up): send the excess above the target at once,
+     * within the backlog bound, instead of draining it at a 0.3 % trim over many seconds. */
+    g_owed = 0;
+    if (src != NULL) {
+        uint32_t fill = src->available(src->ctx), half = src->capacity(src->ctx) / 2u;
+        g_owed = fill > half ? fill - half : 0;
+        uint32_t cap_owed = g_codec.rate * PACE_BACKLOG_MS / 1000u;
+        g_owed = g_owed > cap_owed ? cap_owed : g_owed;
+    }
+    btstack_run_loop_set_timer_handler(&g_media_timer, media_tick);
+    btstack_run_loop_set_timer(&g_media_timer, PACE_TICK_MS);
+    btstack_run_loop_add_timer(&g_media_timer);
+    btstack_run_loop_set_timer_handler(&g_rssi_timer, rssi_tick);
+    btstack_run_loop_set_timer(&g_rssi_timer, 1000);
+    btstack_run_loop_add_timer(&g_rssi_timer);
+    g_streaming_timer = true;
+}
+
+/** Bytes in one SBC frame, two channels (stereo or joint stereo). */
+static uint16_t sbc_frame_bytes(int blocks, int subbands, int bitpool, bool joint) {
+    int bits = (joint ? subbands : 0) + blocks * bitpool;
+    return (uint16_t)(4 + (4 * subbands * 2) / 8 + (bits + 7) / 8);
+}
+
+static bool configure_encoder(const uint8_t *packet, hal_bt_codec_t *out) {
+    int rate = a2dp_subevent_signaling_media_codec_sbc_configuration_get_sampling_frequency(packet);
+    int blocks = a2dp_subevent_signaling_media_codec_sbc_configuration_get_block_length(packet);
+    int subbands = a2dp_subevent_signaling_media_codec_sbc_configuration_get_subbands(packet);
+    int min_bp = a2dp_subevent_signaling_media_codec_sbc_configuration_get_min_bitpool_value(packet);
+    int max_bp = a2dp_subevent_signaling_media_codec_sbc_configuration_get_max_bitpool_value(packet);
+    int alloc = (int)a2dp_subevent_signaling_media_codec_sbc_configuration_get_allocation_method(packet);
+    avdtp_channel_mode_t mode = (avdtp_channel_mode_t)a2dp_subevent_signaling_media_codec_sbc_configuration_get_channel_mode(packet);
+    btstack_sbc_channel_mode_t cm;
+    hal_bt_chmode_t hm;
+    switch (mode) {
+    case AVDTP_CHANNEL_MODE_JOINT_STEREO: cm = SBC_CHANNEL_MODE_JOINT_STEREO; hm = HAL_BT_MODE_JOINT_STEREO; break;
+    case AVDTP_CHANNEL_MODE_STEREO: cm = SBC_CHANNEL_MODE_STEREO; hm = HAL_BT_MODE_STEREO; break;
+    default:
+        printf("bt: a2dp: headset channel mode %d (stereo or joint stereo needed)\n", (int)mode);
+        return false; /* we send stereo only */
+    }
+    printf("bt: a2dp: headset config %d Hz, mode %d, blocks %d, subbands %d, alloc %d, bitpool %d..%d\n", rate, (int)mode, blocks, subbands,
+           alloc, min_bp, max_bp);
+    if ((uint32_t)rate != A2DP_RATE || blocks != 16 || subbands != 8) {
+        return false; /* the frame size (128 samples) and the rate are fixed in this version */
+    }
+    int bitpool = max_bp < (int)NEUPOD_BT_SBC_BITPOOL ? max_bp : (int)NEUPOD_BT_SBC_BITPOOL;
+    if (bitpool < min_bp) {
+        bitpool = min_bp;
+    }
+    g_enc = btstack_sbc_encoder_bluedroid_init_instance(&g_enc_state);
+    /* BTstack's allocation constants start at 1 (the Bluetooth spec: loudness 1, SNR 2 as configured); the encoder's start at 0. */
+    g_enc->configure(&g_enc_state, SBC_MODE_STANDARD, blocks, subbands, (btstack_sbc_allocation_method_t)(alloc - 1), rate, bitpool, cm);
+    /* The encoder only knows its frame length after the first encode (sbc_buffer_length() is 0 until then), so compute it from the
+     * A2DP spec (12.9): header 4 + scale factors 4*subbands*channels/8 + ceil((join*subbands + blocks*channels*bitpool)/8) for stereo and
+     * joint stereo; for both stereo modes the bitpool covers both channels, so blocks*bitpool. */
+    g_sbc_frame_len = sbc_frame_bytes(blocks, subbands, bitpool, mode == AVDTP_CHANNEL_MODE_JOINT_STEREO);
+    if (g_enc->num_audio_frames(&g_enc_state) != SBC_SAMPLES_PER_FRAME || g_sbc_frame_len == 0 || g_sbc_frame_len + 1u > SBC_STORAGE_BYTES) {
+        printf("bt: a2dp: encoder frame %u samples, %u bytes (storage %u)\n", (unsigned)g_enc->num_audio_frames(&g_enc_state),
+               (unsigned)g_sbc_frame_len, (unsigned)SBC_STORAGE_BYTES);
+        return false;
+    }
+    memset(out, 0, sizeof *out);
+    out->codec = bitpool > (int)SBC_BITPOOL_STD ? HAL_BT_CODEC_SBC_XQ : HAL_BT_CODEC_SBC;
+    out->rate = (uint32_t)rate;
+    out->channels = 2;
+    out->mode = hm;
+    out->bitpool_min = (uint8_t)min_bp;
+    out->bitpool_max = (uint8_t)max_bp;
+    out->bitpool = (uint8_t)bitpool;
+    out->kbps = (uint16_t)((uint32_t)g_sbc_frame_len * 8u * (uint32_t)rate / SBC_SAMPLES_PER_FRAME / 1000u);
+    return true;
+}
+
+static void a2dp_packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint16_t size) {
+    (void)channel;
+    (void)size;
+    if (type != HCI_EVENT_PACKET || hci_event_packet_get_type(packet) != HCI_EVENT_A2DP_META) {
+        return;
+    }
+    switch (hci_event_a2dp_meta_get_subevent_code(packet)) {
+    case A2DP_SUBEVENT_SIGNALING_CONNECTION_ESTABLISHED: {
+        uint8_t st = a2dp_subevent_signaling_connection_established_get_status(packet);
+        if (st != ERROR_CODE_SUCCESS) {
+            printf("bt: a2dp signalling failed 0x%02X\n", (unsigned)st);
+            g_a2dp_cid = 0;
+            if (g_stream == HAL_BT_STREAM_OPENING) {
+                set_stream(HAL_BT_STREAM_FAILED, HAL_BT_FAIL_STREAM);
+            }
+        } else {
+            g_a2dp_cid = a2dp_subevent_signaling_connection_established_get_a2dp_cid(packet);
+        }
+        break;
+    }
+    case A2DP_SUBEVENT_SIGNALING_MEDIA_CODEC_SBC_CONFIGURATION: {
+        if (a2dp_subevent_signaling_media_codec_sbc_configuration_get_a2dp_cid(packet) != g_a2dp_cid) {
+            break;
+        }
+        g_remote_seid = a2dp_subevent_signaling_media_codec_sbc_configuration_get_remote_seid(packet);
+        hal_bt_codec_t c;
+        if (!configure_encoder(packet, &c)) {
+            printf("bt: a2dp: headset configuration not usable\n");
+            g_enc_ready = false;
+            set_stream(HAL_BT_STREAM_FAILED, HAL_BT_FAIL_CODEC);
+            if (g_a2dp_cid != 0) {
+                (void)a2dp_source_disconnect(g_a2dp_cid);
+            }
+            break;
+        }
+        codec_publish(&c);
+        g_enc_ready = true;
+        printf("bt: a2dp: SBC %u Hz, bitpool %u (headset %u..%u), %u kbit/s, frame %u bytes\n", (unsigned)c.rate, (unsigned)c.bitpool, (unsigned)c.bitpool_min,
+               (unsigned)c.bitpool_max, (unsigned)c.kbps, (unsigned)g_sbc_frame_len);
+        break;
+    }
+    case A2DP_SUBEVENT_STREAM_ESTABLISHED: {
+        uint8_t st = a2dp_subevent_stream_established_get_status(packet);
+        if (st != ERROR_CODE_SUCCESS || !g_enc_ready) {
+            printf("bt: a2dp stream failed 0x%02X\n", (unsigned)st);
+            if (g_stream == HAL_BT_STREAM_OPENING) {
+                set_stream(HAL_BT_STREAM_FAILED, g_enc_ready ? HAL_BT_FAIL_STREAM : HAL_BT_FAIL_CODEC);
+            }
+            break;
+        }
+        g_st_encoded = g_st_packets = g_st_underruns = g_st_drift = 0;
+        g_st_rssi = HAL_BT_RSSI_UNKNOWN;
+        printf("bt: a2dp stream open\n");
+        set_stream(HAL_BT_STREAM_OPEN, HAL_BT_FAIL_NONE);
+        break;
+    }
+    case A2DP_SUBEVENT_STREAM_STARTED:
+        media_start();
+        printf("bt: a2dp streaming\n");
+        set_stream(HAL_BT_STREAM_STREAMING, HAL_BT_FAIL_NONE);
+        break;
+    case A2DP_SUBEVENT_STREAMING_CAN_SEND_MEDIA_PACKET_NOW:
+        if (g_streaming_timer && g_ready_to_send && g_sbc_count > 0) {
+            send_packet();
+        }
+        break;
+    case A2DP_SUBEVENT_STREAM_SUSPENDED:
+        media_stop();
+        printf("bt: a2dp suspended\n");
+        if (g_stream == HAL_BT_STREAM_STREAMING) {
+            set_stream(HAL_BT_STREAM_SUSPENDED, HAL_BT_FAIL_NONE);
+        }
+        break;
+    case A2DP_SUBEVENT_STREAM_RELEASED:
+        printf("bt: a2dp stream released\n");
+        media_stop();
+        if (g_stream != HAL_BT_STREAM_FAILED) {
+            set_stream(HAL_BT_STREAM_CLOSED, HAL_BT_FAIL_NONE);
+        }
+        break;
+    case A2DP_SUBEVENT_SIGNALING_CONNECTION_RELEASED:
+        printf("bt: a2dp signalling released\n");
+        if (a2dp_subevent_signaling_connection_released_get_a2dp_cid(packet) == g_a2dp_cid) {
+            bool failed = g_stream == HAL_BT_STREAM_FAILED;
+            a2dp_gone(failed ? (hal_bt_fail_t)g_stream_reason : HAL_BT_FAIL_NONE);
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+/* Worker: open the stream on the CONNECTED link. */
+static void a2dp_open(void) {
+    if (g_link != HAL_BT_LINK_CONNECTED || g_acl == HCI_CON_HANDLE_INVALID) {
+        return;
+    }
+    if (g_stream != HAL_BT_STREAM_CLOSED && g_stream != HAL_BT_STREAM_FAILED) {
+        return;
+    }
+    g_enc_ready = false;
+    set_stream(HAL_BT_STREAM_OPENING, HAL_BT_FAIL_NONE);
+    bd_addr_t a;
+    memcpy(a, g_peer.addr, 6);
+    uint8_t rc = a2dp_source_establish_stream(a, &g_a2dp_cid);
+    if (rc != ERROR_CODE_SUCCESS) {
+        printf("bt: a2dp_source_establish_stream 0x%02X\n", (unsigned)rc);
+        g_a2dp_cid = 0;
+        set_stream(HAL_BT_STREAM_FAILED, HAL_BT_FAIL_STREAM);
+    }
+}
+
+static void worker_stream_req(void *arg) {
+    (void)arg;
+    g_req_queued = false;
+    int req = __atomic_exchange_n(&g_req, (int)REQ_NONE, __ATOMIC_SEQ_CST);
+    switch (req) {
+    case REQ_OPEN:
+        a2dp_open();
+        break;
+    case REQ_START:
+        if ((g_stream == HAL_BT_STREAM_OPEN || g_stream == HAL_BT_STREAM_SUSPENDED) && g_a2dp_cid != 0) {
+            uint8_t rc = a2dp_source_start_stream(g_a2dp_cid, g_local_seid);
+            if (rc != ERROR_CODE_SUCCESS) {
+                printf("bt: a2dp start 0x%02X\n", (unsigned)rc);
+            }
+        }
+        break;
+    case REQ_SUSPEND:
+        if (g_stream == HAL_BT_STREAM_STREAMING && g_a2dp_cid != 0) {
+            (void)a2dp_source_pause_stream(g_a2dp_cid, g_local_seid);
+        }
+        break;
+    case REQ_CLOSE:
+        if (g_a2dp_cid != 0 && g_stream != HAL_BT_STREAM_CLOSED) {
+            if (a2dp_source_stop_stream(g_a2dp_cid, g_local_seid) != ERROR_CODE_SUCCESS) {
+                (void)a2dp_source_disconnect(g_a2dp_cid);
+            }
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+static void post_req(stream_req_t r) {
+    __atomic_store_n(&g_req, (int)r, __ATOMIC_SEQ_CST);
+    if (!__atomic_exchange_n(&g_req_queued, true, __ATOMIC_SEQ_CST)) {
+        bt_port_post(&g_req_reg);
+    }
+}
+
+static void a2dp_init_once(void) {
+    if (g_a2dp_inited) {
+        return;
+    }
+    g_a2dp_inited = true;
+    g_req_reg.callback = &worker_stream_req;
+    a2dp_source_init();
+    a2dp_source_register_packet_handler(&a2dp_packet_handler);
+    avdtp_stream_endpoint_t *ep = a2dp_source_create_stream_endpoint(AVDTP_AUDIO, AVDTP_CODEC_SBC, g_sbc_caps, sizeof g_sbc_caps, g_sbc_config, sizeof g_sbc_config);
+    if (ep == NULL) {
+        printf("bt: no memory for the stream endpoint\n");
+        g_a2dp_inited = false;
+        return;
+    }
+    avdtp_set_preferred_sampling_frequency(ep, A2DP_RATE);
+    g_local_seid = avdtp_local_seid(ep);
+    avdtp_source_register_delay_reporting_category(g_local_seid);
+    /* Our own SDP record (an A2DP source), as the verified bench tool registers it: some headsets read it before they accept the stream. */
+    sdp_init();
+    memset(g_sdp_a2dp_record, 0, sizeof g_sdp_a2dp_record);
+    a2dp_source_create_sdp_record(g_sdp_a2dp_record, sdp_create_service_record_handle(), AVDTP_SOURCE_FEATURE_MASK_PLAYER, NULL, NULL);
+    btstack_assert(de_get_len(g_sdp_a2dp_record) <= sizeof g_sdp_a2dp_record);
+    sdp_register_service(g_sdp_a2dp_record);
+}
+
+void hal_bt_set_pcm_source(const hal_bt_pcm_source_t *src) { g_pcm = src; }
+
+hal_status_t hal_bt_stream_open(void) {
+    if (g_link != HAL_BT_LINK_CONNECTED) {
+        return HAL_ENODEV;
+    }
+    if (g_stream != HAL_BT_STREAM_CLOSED && g_stream != HAL_BT_STREAM_FAILED) {
+        return HAL_EBUSY;
+    }
+    post_req(REQ_OPEN);
+    return HAL_OK;
+}
+
+hal_status_t hal_bt_stream_start(void) {
+    if (g_stream == HAL_BT_STREAM_STREAMING) {
+        return HAL_OK;
+    }
+    if (g_stream != HAL_BT_STREAM_OPEN && g_stream != HAL_BT_STREAM_SUSPENDED) {
+        return HAL_ENODEV;
+    }
+    post_req(REQ_START);
+    return HAL_OK;
+}
+
+void hal_bt_stream_suspend(void) {
+    if (g_stream == HAL_BT_STREAM_STREAMING) {
+        post_req(REQ_SUSPEND);
+    }
+}
+
+void hal_bt_stream_close(void) {
+    if (g_stream != HAL_BT_STREAM_CLOSED) {
+        post_req(REQ_CLOSE);
+    }
+}
+
+hal_bt_stream_state_t hal_bt_stream_state(void) { return (hal_bt_stream_state_t)g_stream; }
+hal_bt_fail_t hal_bt_stream_reason(void) { return g_stream == HAL_BT_STREAM_FAILED ? (hal_bt_fail_t)g_stream_reason : HAL_BT_FAIL_NONE; }
+
+bool hal_bt_stream_codec(hal_bt_codec_t *out) {
+    int st = g_stream;
+    if (st != HAL_BT_STREAM_OPEN && st != HAL_BT_STREAM_STREAMING && st != HAL_BT_STREAM_SUSPENDED) {
+        return false;
+    }
+    for (int tries = 0; tries < 8; tries++) {
+        uint32_t q = __atomic_load_n(&g_codec_seq, __ATOMIC_SEQ_CST);
+        if (q & 1u) {
+            continue;
+        }
+        *out = g_codec;
+        if (__atomic_load_n(&g_codec_seq, __ATOMIC_SEQ_CST) == q) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void hal_bt_stats(hal_bt_stats_t *out) {
+    out->frames_encoded = g_st_encoded;
+    out->packets_sent = g_st_packets;
+    out->underruns = g_st_underruns;
+    out->drift_corrections = g_st_drift;
+    out->link_quality = (int8_t)g_st_rssi;
+}
+
 /* ---- start-up ---- */
 
 typedef struct {
@@ -891,8 +1479,9 @@ static uint32_t worker_init(void *param) {
         g_link_reg.callback = &worker_link_start;
         g_disc_reg.callback = &worker_disconnect;
         g_forget_reg.callback = &worker_forget;
-        l2cap_init(); /* the SDP client runs on it; no service is registered, so nothing can connect to us */
+        l2cap_init(); /* the SDP client and AVDTP run on it; we are never connectable outside a Pair, so only our own link can open channels */
         sdp_client_init();
+        a2dp_init_once();
         if (g_storage != NULL) {
             btstack_tlv_set_instance(&k_tlv, NULL);
             hci_set_link_key_db(btstack_link_key_db_tlv_get_instance(&k_tlv, NULL));
@@ -973,10 +1562,3 @@ void hal_bt_inquiry_stop(void) {
     g_stop_queued = true;
     bt_port_post(&g_stop_reg);
 }
-
-hal_status_t hal_radio_a2dp_connect(const uint8_t addr[6]) {
-    (void)addr;
-    return HAL_ENOTSUP; /* stage 2 (docs/bluetooth.md) */
-}
-
-void hal_radio_a2dp_disconnect(void) {}

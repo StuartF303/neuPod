@@ -21,6 +21,13 @@ extern "C" {
 #define AUDIO_VOL_OFF_DB 80u         /**< this attenuation and above = silence */
 #define AUDIO_VOL_DEFAULT_ATT_DB 30u /**< power-on level: -30 dB (headphone safety) */
 #define AUDIO_GAIN_UNITY (1u << 30)  /**< Q30 gain of exactly 0 dB */
+/** Fixed attenuation on the Bluetooth output, before the 16-bit conversion and SBC. SBC's reconstruction overshoots full scale on
+ * material mastered to 0 dBFS (measured on the Y2 with AirPods Pro, 12 Nov 2026: 80-135 decoded samples per 2 s at the rail in a loud
+ * passage, heard as crackle; clean at -4 dB). Bluetooth is the lossy path anyway (ADR-0003), and the headset's own (AVRCP) volume makes
+ * up the level. 0 disables it. */
+#ifndef NEUPOD_BT_HEADROOM_DB
+#define NEUPOD_BT_HEADROOM_DB 3u
+#endif
 /** Hard cap: the smallest attenuation the engine accepts (0 = full scale allowed). Lower the loudest level of a build by raising it. */
 #ifndef NEUPOD_AUDIO_VOLUME_CAP_DB
 #define NEUPOD_AUDIO_VOLUME_CAP_DB 0u
@@ -49,6 +56,12 @@ bool audio_pcm_to_s32(int32_t *dst, const uint8_t *src, uint32_t frames, uint8_t
 
 /** Full-scale sine (peak 0x7FFFFFFF) for a 32-bit phase (2^32 = one cycle), table + linear interpolation. */
 int32_t audio_sine_q31(uint32_t phase);
+
+/**
+ * 32-bit left-justified stereo frames to 16-bit (rounded, saturated) for the Bluetooth encoder. @p dither adds TPDF dither of +-1 LSB16;
+ * @p rng is the generator state (any value, 0 is replaced). Without dither a 16-bit signal passes unchanged.
+ */
+void audio_s32_to_s16(const int32_t *in, int16_t *out, uint32_t frames, bool dither, uint32_t *rng);
 
 #define AUDIO_TONE_HZ 1000u
 #define AUDIO_TONE_LEVEL_Q31 214748365 /**< 0.1 = -20 dBFS peak */

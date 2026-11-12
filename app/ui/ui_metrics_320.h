@@ -26,6 +26,7 @@ UI_METRICS_UNUSED static const ui_metrics_t k_ui_metrics_320 = {
     .buf_lines = 24,
     .bar_inset = 8,
     .wifi_x = 30,
+    .bt_x = 52,
     .title_w = 190,
     .title_h = 18,
     .font_body = &lv_font_montserrat_14,

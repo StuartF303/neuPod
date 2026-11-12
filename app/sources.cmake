@@ -66,6 +66,7 @@ set(NEUPOD_RT_CORE_SOURCES               # pure logic, no OS: host-testable on t
 set(NEUPOD_AUDIO_CORE_SOURCES
   ${NEUPOD_APP_DIR}/audio/audio_core.c
   ${NEUPOD_APP_DIR}/audio/audio_shared.c
+  ${NEUPOD_APP_DIR}/audio/bt_pcm.c
   ${NEUPOD_APP_DIR}/audio/codec.c
 )
 # Vendored decoders: dr_flac / dr_mp3 (public domain / MIT-0) and Apple's ALAC core (Apache-2.0). Third party:
@@ -94,6 +95,7 @@ set(NEUPOD_RUNTIME_SOURCES
   ${NEUPOD_APP_DIR}/runtime/resume.c
   ${NEUPOD_APP_DIR}/runtime/settings_service.c
   ${NEUPOD_APP_DIR}/runtime/bt_service.c
+  ${NEUPOD_APP_DIR}/runtime/audio_route.c
   ${NEUPOD_APP_DIR}/runtime/bt_saved.c
   ${NEUPOD_APP_DIR}/runtime/wifi_service.c
   ${NEUPOD_APP_DIR}/storage/nfs_path.c   # portable half of the nfs API (the backend is in the HAL libs)

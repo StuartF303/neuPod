@@ -14,6 +14,11 @@ static hal_bt_link_state_t g_last_link;
 static hal_bt_fail_t g_last_reason;
 static hal_bt_link_state_t g_seq[16]; // the link states in the order they were reported
 static int g_nseq;
+static hal_bt_stream_state_t g_last_stream;
+static hal_bt_fail_t g_last_stream_reason;
+static hal_bt_codec_t g_last_codec;
+static hal_bt_stream_state_t g_sseq[16];
+static int g_nsseq;
 static bool g_accepting_at_event; // hal_bt_accepting() as seen from inside the last link event
 
 static void on_event(const hal_bt_event_t *ev, void *ctx) {
@@ -37,6 +42,14 @@ static void on_event(const hal_bt_event_t *ev, void *ctx) {
         g_accepting_at_event = hal_bt_accepting();
         if (g_nseq < 16) {
             g_seq[g_nseq++] = ev->link;
+        }
+        break;
+    case HAL_BT_EVT_STREAM:
+        g_last_stream = ev->stream;
+        g_last_stream_reason = ev->reason;
+        g_last_codec = ev->codec;
+        if (g_nsseq < 16) {
+            g_sseq[g_nsseq++] = ev->stream;
         }
         break;
     }
@@ -289,6 +302,123 @@ TEST(test_bad_requests_and_scan_exclusion) {
     ASSERT_EQ(HAL_BT_ON, hal_bt_state());
 }
 
+// ---- the audio stream (stage 2b) ----
+
+static uint32_t g_ring_frames; // frames "in the ring" of the fake PCM source
+static uint32_t src_available(void *c) { (void)c; return g_ring_frames; }
+static uint32_t src_capacity(void *c) { (void)c; return 4096; }
+static uint32_t src_read(void *c, int16_t *d, uint32_t n) {
+    (void)c;
+    uint32_t g = n < g_ring_frames ? n : g_ring_frames;
+    memset(d, 0, g * 4u);
+    g_ring_frames -= g;
+    return g;
+}
+static void src_flush(void *c) { (void)c; g_ring_frames = 0; }
+static const hal_bt_pcm_source_t k_src = {NULL, src_available, src_capacity, src_read, src_flush, NULL};
+
+static void pump_stream(hal_bt_stream_state_t want, uint32_t max_ms) {
+    for (uint32_t t = 0; t < max_ms && hal_bt_stream_state() != want; t += 20) {
+        hal_bt_poll();
+        hal_delay_ms(20);
+    }
+}
+
+TEST(test_the_stream_opens_by_itself_and_reports_its_codec) {
+    hal_bt_set_pcm_source(&k_src);
+    g_nsseq = 0;
+    ASSERT_EQ(HAL_BT_STREAM_CLOSED, hal_bt_stream_state());
+    ASSERT_EQ(HAL_ENODEV, hal_bt_stream_open()); // no link
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, pair_to_end(A_AIRPODS, "AirPods Pro 3"));
+    ASSERT_EQ(HAL_BT_STREAM_OPENING, hal_bt_stream_state());
+    hal_bt_codec_t c;
+    ASSERT_FALSE(hal_bt_stream_codec(&c)); // not negotiated yet
+    pump_stream(HAL_BT_STREAM_OPEN, 2000);
+    ASSERT_EQ(HAL_BT_STREAM_OPEN, hal_bt_stream_state());
+    ASSERT_TRUE(hal_bt_stream_codec(&c));
+    ASSERT_EQ(HAL_BT_CODEC_SBC, c.codec);
+    ASSERT_EQ(44100, (int)c.rate);
+    char l[16];
+    hal_bt_codec_label(&c, l, sizeof l);
+    ASSERT_TRUE(strcmp(l, "SBC 44.1") == 0);
+    ASSERT_EQ(HAL_BT_CODEC_SBC, g_last_codec.codec);
+    ASSERT_EQ(HAL_EBUSY, hal_bt_stream_open()); // one stream
+    ASSERT_EQ(2, g_nsseq); // OPENING, OPEN
+}
+
+TEST(test_start_consumes_pcm_at_the_real_rate_and_counts_underruns) {
+    ASSERT_EQ(HAL_OK, hal_bt_stream_start());
+    pump_stream(HAL_BT_STREAM_STREAMING, 2000);
+    ASSERT_EQ(HAL_BT_STREAM_STREAMING, hal_bt_stream_state());
+    hal_bt_stats_t st0, st1;
+    hal_bt_stats(&st0);
+    g_ring_frames = 4096;
+    for (int i = 0; i < 10; i++) { // 200 ms: 8820 frames wanted, 4096 there: the ring runs dry
+        hal_bt_poll();
+        hal_delay_ms(20);
+    }
+    hal_bt_stats(&st1);
+    ASSERT_EQ(0, (int)g_ring_frames);
+    ASSERT_TRUE(st1.underruns > st0.underruns);
+    ASSERT_TRUE(st1.frames_encoded >= 30 && st1.frames_encoded <= 33); // 4096 / 128 = 32
+    hal_bt_stream_suspend();
+    ASSERT_EQ(HAL_BT_STREAM_SUSPENDED, hal_bt_stream_state());
+    g_ring_frames = 1000;
+    for (int i = 0; i < 5; i++) {
+        hal_bt_poll();
+        hal_delay_ms(20);
+    }
+    ASSERT_EQ(1000, (int)g_ring_frames); // nothing is consumed while suspended
+    ASSERT_EQ(HAL_OK, hal_bt_stream_start()); // resume
+    pump_stream(HAL_BT_STREAM_STREAMING, 2000);
+    ASSERT_EQ(HAL_BT_STREAM_STREAMING, hal_bt_stream_state());
+}
+
+TEST(test_a_dropped_link_closes_the_stream_first) {
+    g_nsseq = 0;
+    g_nseq = 0;
+    hal_host_bt_drop_link();
+    ASSERT_EQ(HAL_BT_STREAM_CLOSED, hal_bt_stream_state());
+    ASSERT_EQ(HAL_BT_STREAM_CLOSED, g_last_stream);
+    ASSERT_EQ(HAL_BT_LINK_FAILED, hal_bt_link_state());
+    ASSERT_EQ(HAL_ENODEV, hal_bt_stream_start());
+    // a clean disconnect and a headset that releases the stream by itself
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, pair_to_end(A_AIRPODS, "AirPods Pro 3"));
+    pump_stream(HAL_BT_STREAM_OPEN, 2000);
+    hal_host_bt_stream_dropped_by_headset();
+    ASSERT_EQ(HAL_BT_STREAM_CLOSED, hal_bt_stream_state());
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, hal_bt_link_state()); // the link stays up
+    ASSERT_EQ(HAL_OK, hal_bt_stream_open());               // and the stream can be opened again
+    pump_stream(HAL_BT_STREAM_OPEN, 2000);
+    ASSERT_EQ(HAL_BT_STREAM_OPEN, hal_bt_stream_state());
+    hal_bt_disconnect();
+    ASSERT_EQ(HAL_BT_STREAM_CLOSED, hal_bt_stream_state());
+}
+
+TEST(test_the_high_bitpool_headset_reports_sbc_xq_and_an_opening_can_fail) {
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, pair_to_end(A_XM5, "WH-1000XM5"));
+    pump_stream(HAL_BT_STREAM_OPEN, 2000);
+    hal_bt_codec_t c;
+    ASSERT_TRUE(hal_bt_stream_codec(&c));
+    ASSERT_EQ(HAL_BT_CODEC_SBC_XQ, c.codec);
+    char l[16];
+    hal_bt_codec_label(&c, l, sizeof l);
+    ASSERT_TRUE(strcmp(l, "SBC-XQ") == 0);
+    hal_bt_disconnect();
+    hal_host_bt_fail_next_stream(HAL_BT_FAIL_STREAM);
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, pair_to_end(A_AIRPODS, "AirPods Pro 3"));
+    pump_stream(HAL_BT_STREAM_FAILED, 2000);
+    ASSERT_EQ(HAL_BT_STREAM_FAILED, hal_bt_stream_state());
+    ASSERT_EQ(HAL_BT_FAIL_STREAM, hal_bt_stream_reason());
+    ASSERT_EQ(HAL_BT_FAIL_STREAM, g_last_stream_reason);
+    ASSERT_TRUE(strlen(hal_bt_fail_text(HAL_BT_FAIL_STREAM)) <= 19 && strlen(hal_bt_fail_text(HAL_BT_FAIL_CODEC)) <= 19);
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, hal_bt_link_state()); // the link itself is fine
+    ASSERT_EQ(HAL_OK, hal_bt_stream_open());               // retry
+    pump_stream(HAL_BT_STREAM_OPEN, 2000);
+    ASSERT_EQ(HAL_BT_STREAM_OPEN, hal_bt_stream_state());
+    ASSERT_EQ(HAL_BT_FAIL_NONE, hal_bt_stream_reason());
+}
+
 int main(void) {
     RUN(test_bring_up_and_scan);
     RUN(test_stop_ends_the_scan);
@@ -299,5 +429,9 @@ int main(void) {
     RUN(test_link_loss_is_a_failure_with_its_reason);
     RUN(test_the_headset_hanging_up_is_not_a_failure_when_connected_but_ends_a_setup);
     RUN(test_bad_requests_and_scan_exclusion);
+    RUN(test_the_stream_opens_by_itself_and_reports_its_codec);
+    RUN(test_start_consumes_pcm_at_the_real_rate_and_counts_underruns);
+    RUN(test_a_dropped_link_closes_the_stream_first);
+    RUN(test_the_high_bitpool_headset_reports_sbc_xq_and_an_opening_can_fail);
     return RESULT();
 }
