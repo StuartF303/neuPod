@@ -80,7 +80,7 @@ thread with signals blocked (the open powers the chip and takes about 1.3 s). Bl
 kept and handed to the transport, so the device is opened once. `hal_bt_init` then sets BTstack up (the MediaTek vendor script, with the
 address, runs before HCI_Reset), starts the thread and powers HCI on. There is no Wi-Fi on the Y2 (`hal_wifi_present()` is false), so the
 boot check reports Wi-Fi unavailable while Bluetooth is available. Chip bring-up before the firmware starts is `S80mtk-bt`
-([Y2 testbed](../testbed/y2/README.md)).
+([Y2 testbed](https://github.com/StuartF303/neuPod/blob/main/testbed/y2/README.md)).
 
 The controller does not report a page timeout at the configured time (the MT6582 only answers after Create_Connection_Cancel), so an
 unanswered Pair or Connect is ended by our own timer (`HAL_BT_PAIR_TIMEOUT_MS` / `HAL_BT_CONNECT_TIMEOUT_MS`), which cancels the page and ends the
