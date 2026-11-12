@@ -73,6 +73,22 @@
     "x s s s _ _ _ _ x wait:pause snap:seek-volume _ snap:seek-mode 8*s snap:seek-scrub "          \
     "x x x x x x x x x x x x snap:seek-timeout m m s _ _ x wait:pause _ snap:seek-unavailable m"
 
+// Music library (ADR-0017, L2): every list of Music on a card with a small tagged library (tests/tools/make_library_card.py): the first open builds the
+// index (NEUPOD_LIB_SLOW_MS slows the scan so the progress screen can be seen), Artists > artist > album > songs with a greyed AAC track and a refused
+// Select, Albums, Songs scrolled, Genres > genre > All Songs, Compilations, Update Library (rebuild), Shuffle Songs, and an album played from its list:
+// the 3 s tracks hand over gaplessly (the log shows it). wait:pause holds the script until the player is paused, so no snapshot depends on the clock.
+#define TOUR_LIBRARY                                                                                                                      \
+    "x _ snap:lib-music-menu _ x x x x snap:lib-building wait:lib x x snap:lib-artists "                                                 \
+    "_ x x snap:lib-artist s _ x x snap:lib-album m m s _ x x s _ x x s snap:lib-album-greyed _ x snap:lib-cant-play "                  \
+    "m m m s _ x x x snap:lib-albums m s _ x x x snap:lib-songs 8*s x x snap:lib-songs-scrolled "                                        \
+    "m s _ x x x snap:lib-genres _ x x snap:lib-genre _ x x snap:lib-genre-songs "                                                     \
+    "m m m s _ x x x snap:lib-comps _ x x snap:lib-comp-songs "                                                                          \
+    "m m s s _ x x x snap:lib-update-building x x x x x x x x x x x x snap:lib-update-done m m "                                                             \
+    "5*s _ wait:pause snap:lib-shuffle m x x 5*w _ s _ x x 2*s _ x x snap:lib-longplay _ x x x x x x x x x x x x x x wait:pause snap:lib-nowplaying"
+
+// The same on a write-protected card (NEUPOD_DISK_READ_ONLY=1): the first open and Update Library both say "Library needs a writable card" and offer to try again.
+#define TOUR_LIBRARY_RO "x _ _ x x x x x snap:lib-needs-writable m 6*s _ x x x x snap:lib-update-needs-writable"
+
 static unsigned g_expect = 18;
 static const char *g_snapshot_dir;
 static unsigned g_snapshots;
@@ -140,6 +156,14 @@ int main(int argc, char **argv) {
             cfg.ui_script = TOUR_SEEK;
             cfgp_tour = true;
             g_expect = 7; // the splash, home and the five named snapshots
+        } else if (strcmp(argv[i], "--tour-library") == 0) {
+            cfg.ui_script = TOUR_LIBRARY;
+            cfgp_tour = true;
+            g_expect = 22; // the splash, home and the twenty named snapshots
+        } else if (strcmp(argv[i], "--tour-library-ro") == 0) {
+            cfg.ui_script = TOUR_LIBRARY_RO;
+            cfgp_tour = true;
+            g_expect = 4;
         } else if (strcmp(argv[i], "--script") == 0 && i + 1 < argc) {
             cfg.ui_script = argv[++i]; // ad-hoc key script, same tokens as the tour
         } else if (strcmp(argv[i], "--splash-hold-ms") == 0 && i + 1 < argc) {
@@ -147,7 +171,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--snapshots") == 0 && i + 1 < argc) {
             g_snapshot_dir = argv[++i];
         } else {
-            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek] [--script KEYS] [--snapshots DIR]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek|--tour-library|--tour-library-ro] [--script KEYS] [--snapshots DIR]\n", argv[0]);
             return 64;
         }
     }

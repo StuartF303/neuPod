@@ -10,17 +10,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "ff.h"
-#include "library.h"
+#include "library.h" /* ff.h, or its POSIX stand-in */
 
 /* ---- on-card layout ----------------------------------------------------------------------------------------------- */
 
-#define LIB_VERSION 1u
+#define LIB_VERSION 2u /* 2: by_genre.u32, genres.bin 20 B (first track position), manifest genre_tracks */
 #define LIB_HDR 16u /**< magic, version, count, crc32 (of the payload) */
 
-/** Files of the set. Order = manifest order; LF_MANIFEST is the 12th file and is not in the manifest's own table. */
+/** Files of the set. Order = manifest order; LF_MANIFEST is the 14th file and is not in the manifest's own table. */
 enum { LF_DIRS, LF_NAMES, LF_TRACKS, LF_STRINGS, LF_ARTISTS, LF_ALBUMS, LF_GENRES, LF_BY_ALBUM, LF_BY_TITLE, LF_BY_ALBUM_NAME,
-       LF_GENRE_ARTISTS, LF_ENAMES, LF_MANIFEST };
+       LF_GENRE_ARTISTS, LF_ENAMES, LF_BY_GENRE, LF_MANIFEST };
 
 typedef struct {
     const char *name;
@@ -34,7 +33,7 @@ extern const lib_file_info_t lib_files[LIB_FILES + 1];
 #define LIB_REC_TRACK 48u
 #define LIB_REC_ARTIST 16u /**< name_off u32, key[8], first album u32 */
 #define LIB_REC_ALBUM 20u  /**< name_off u32, key[8], first position in by_album u32, artist id u32 */
-#define LIB_REC_GENRE 16u  /**< name_off u32, key[8], first position in genre_artists u32 */
+#define LIB_REC_GENRE 20u  /**< name_off u32, key[8], first position in genre_artists u32, first position in by_genre u32 */
 
 /* track record offsets */
 #define TR_NAME 0u     /* u32 file name offset in names.str */

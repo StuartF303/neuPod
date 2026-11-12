@@ -403,6 +403,70 @@ add_test(NAME core1_closure_selftest_sdk_assert_ok COMMAND ${Python3_EXECUTABLE}
 add_test(NAME core1_closure_selftest_own_assert_fails COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_core1_closure.py --text ${CMAKE_SOURCE_DIR}/tests/assets/closure/bad_own_assert.txt)
 set_tests_properties(core1_closure_selftest_own_assert_fails PROPERTIES WILL_FAIL TRUE)
 
+# Music library tour (ADR-0017, L2): a card folder with a small tagged library (tests/tools/make_library_card.py writes it: real FLAC test vectors with
+# their tags replaced, an MP3, an AAC track the player cannot decode, three 3 s WAVs). The tour builds the index on the first open (NEUPOD_LIB_SLOW_MS slows
+# the scan so the progress screen is on show), walks every list, plays an album from its list and shuffles the library. PASS needs: the index built, a
+# queue of 3 playing through its first handoff gaplessly from the library (the log line), and the layout audit clean on every snapshot.
+function(neupod_library_card NAME)
+  set(FS ${CMAKE_BINARY_DIR}/fsroot_${NAME})
+  execute_process(COMMAND dd if=/dev/zero of=${CMAKE_BINARY_DIR}/disk_${NAME}.img bs=1024 count=2048 status=none)
+  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_${NAME})
+  # the card folder is (re)made by a test so every run starts from no index and the default settings
+  add_test(NAME ${NAME}_card COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_library_card.py ${FS} ${CMAKE_CURRENT_SOURCE_DIR}/assets/audio)
+  set_tests_properties(${NAME}_card PROPERTIES FIXTURES_SETUP ${NAME}_card)
+endfunction()
+set(LIB_GAPLESS "player: track 2/3 .*\\(gapless\\)")
+neupod_library_card(library)
+add_test(NAME library_tour
+  COMMAND neupod --run-ms 60000 --splash-hold-ms 1500 --tour-library --snapshots ${CMAKE_BINARY_DIR}/snapshots_library)
+set_tests_properties(library_tour PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_UI_AUDIT=1;NEUPOD_LIB_SLOW_MS=100;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_library;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_library.img"
+  PASS_REGULAR_EXPRESSION "library: build finished in [0-9]+ ms: 16 tracks.*${LIB_GAPLESS}.*host: run finished, status 0"
+  FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  FIXTURES_REQUIRED library_card
+  TIMEOUT 150)
+if(NEUPOD_UI_HIRES)
+  set_tests_properties(library_tour PROPERTIES PASS_REGULAR_EXPRESSION
+    "library: build finished in [0-9]+ ms: 16 tracks.*${LIB_GAPLESS}.*ui: audit '[^']*' 320x240 objects=[1-9][0-9]* violations=0.*host: run finished, status 0")
+  neupod_library_card(hires_library)
+  add_test(NAME hires_library_tour
+    COMMAND neupod --run-ms 60000 --splash-hold-ms 1500 --tour-library --snapshots ${CMAKE_BINARY_DIR}/snapshots_hires_library)
+  set_tests_properties(hires_library_tour PROPERTIES
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_DISPLAY_SIZE=480x360;NEUPOD_UI_AUDIT=1;NEUPOD_LIB_SLOW_MS=100;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_hires_library;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_hires_library.img"
+    PASS_REGULAR_EXPRESSION "library: build finished in [0-9]+ ms: 16 tracks.*${LIB_GAPLESS}.*ui: audit '[^']*' 480x360 objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+    FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    FIXTURES_REQUIRED hires_library_card
+    TIMEOUT 150)
+endif()
+
+# The same on a write-protected card (NEUPOD_DISK_READ_ONLY=1): "Library needs a writable card" from the first open and from Update Library, and no scan is started.
+neupod_library_card(library_ro)
+add_test(NAME library_ro_tour
+  COMMAND neupod --run-ms 30000 --splash-hold-ms 1500 --tour-library-ro --snapshots ${CMAKE_BINARY_DIR}/snapshots_library_ro)
+set_tests_properties(library_ro_tour PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_UI_AUDIT=1;NEUPOD_DISK_READ_ONLY=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_library_ro;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_library_ro.img"
+  PASS_REGULAR_EXPRESSION "host: run finished, status 0"
+  FAIL_REGULAR_EXPRESSION "AUDIT FAIL;library: build started"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  FIXTURES_REQUIRED library_ro_card
+  TIMEOUT 90)
+if(NEUPOD_UI_HIRES)
+  set_tests_properties(library_ro_tour PROPERTIES PASS_REGULAR_EXPRESSION
+    "ui: audit 'lib-needs-writable' 320x240 objects=[1-9][0-9]* violations=0.*ui: audit 'lib-update-needs-writable' 320x240 objects=[1-9][0-9]* violations=0.*host: run finished, status 0")
+  neupod_library_card(hires_library_ro)
+  add_test(NAME hires_library_ro_tour
+    COMMAND neupod --run-ms 30000 --splash-hold-ms 1500 --tour-library-ro --snapshots ${CMAKE_BINARY_DIR}/snapshots_hires_library_ro)
+  set_tests_properties(hires_library_ro_tour PROPERTIES
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_DISPLAY_SIZE=480x360;NEUPOD_UI_AUDIT=1;NEUPOD_DISK_READ_ONLY=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_hires_library_ro;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_hires_library_ro.img"
+    PASS_REGULAR_EXPRESSION "ui: audit 'lib-needs-writable' 480x360 objects=[1-9][0-9]* violations=0.*ui: audit 'lib-update-needs-writable' 480x360 objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+    FAIL_REGULAR_EXPRESSION "AUDIT FAIL;library: build started"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    FIXTURES_REQUIRED hires_library_ro_card
+    TIMEOUT 90)
+endif()
+
 # Optional AddressSanitizer + UBSan build of the codec / parser / handshake tests: cmake -DNEUPOD_HOST_ASAN=ON
 # (runs the same hostile-input tests, which truncate and bit-flip every vector, under the sanitizers).
 option(NEUPOD_HOST_ASAN "Also build test_codecs_asan with -fsanitize=address,undefined" OFF)
@@ -495,6 +559,21 @@ target_link_libraries(test_library neupod_library_test neupod_storage_tests neup
 add_test(NAME library COMMAND test_library)
 set_tests_properties(library PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_source_files_properties(test_library.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+# The Music lists and queue ranges over a small tagged library (library_view.h), and every queue entry's path (lib_resolve).
+add_executable(test_library_view test_library_view.c ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c)
+target_link_libraries(test_library_view neupod_library neupod_storage_tests neupod_fatfs neupod_rt_core hal_host)
+add_test(NAME library_view COMMAND test_library_view)
+set_tests_properties(library_view PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_source_files_properties(test_library_view.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+# The library service (the storage task's half of the Music screens): protocol, row window, build and its refusals, resolver. library_service.c is
+# compiled in with fakes for the player, the audio core and the storage queue.
+add_executable(test_library_service test_library_service.c ${CMAKE_SOURCE_DIR}/app/runtime/library_service.c ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c)
+target_link_libraries(test_library_service neupod_library neupod_storage_tests neupod_fatfs neupod_rt_core hal_host)
+add_test(NAME library_service COMMAND test_library_service)
+set_tests_properties(library_service PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_source_files_properties(test_library_service.c ${CMAKE_SOURCE_DIR}/app/runtime/library_service.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
 # The same at scale: 100,000 files on a disk image, 32 KB of scratch. About a minute; label "slow" (ctest -LE slow skips it).
 add_executable(test_library_big test_library_big.c ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c)

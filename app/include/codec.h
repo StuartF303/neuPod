@@ -83,6 +83,12 @@ int32_t codec_read(codec_t *c, int32_t *out, uint32_t max_frames);
 void codec_md5_final(codec_t *c, uint8_t out[16]);
 void codec_close(codec_t *c);
 size_t codec_arena_high_water(void);
+/**
+ * Lend out the arena's memory (CODEC_ARENA_BYTES, 8-byte aligned) as scratch for the library scanner (core 0). Only while the audio core has
+ * no stream: after audio_stop() has taken effect (audio_stats_t.source == AUDIO_SRC_NONE) and until the next stream is started. The next
+ * codec_open() resets the arena, so nothing in it survives.
+ */
+void *codec_arena_borrow(size_t *bytes);
 size_t codec_arena_failures(void);
 
 /** Hash @p frames native-channel frames the way FLAC defines its MD5: each sample as ceil(bits/8) little-endian bytes of its right-justified value. */

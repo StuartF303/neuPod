@@ -88,6 +88,7 @@ set(NEUPOD_RUNTIME_SOURCES
   ${NEUPOD_APP_DIR}/runtime/battery_store.c
   ${NEUPOD_APP_DIR}/runtime/panic.c
   ${NEUPOD_APP_DIR}/runtime/storage_service.c
+  ${NEUPOD_APP_DIR}/runtime/library_service.c
   ${NEUPOD_APP_DIR}/runtime/art_service.c
   ${NEUPOD_APP_DIR}/runtime/haptic_service.c
   ${NEUPOD_APP_DIR}/runtime/player.c
@@ -116,6 +117,8 @@ set(NEUPOD_LIBRARY_SOURCES
   ${NEUPOD_APP_DIR}/library/lib_esort.c
   ${NEUPOD_APP_DIR}/library/lib_build.c
   ${NEUPOD_APP_DIR}/library/lib_reader.c
+  ${NEUPOD_APP_DIR}/library/lib_resolve.c
+  ${NEUPOD_APP_DIR}/library/lib_view.c
 )
 set(NEUPOD_UI_SOURCES
   ${NEUPOD_APP_DIR}/ui/ui.c
@@ -124,6 +127,7 @@ set(NEUPOD_UI_SOURCES
   ${NEUPOD_APP_DIR}/ui/ui_list.c
   ${NEUPOD_APP_DIR}/ui/ui_screens.c
   ${NEUPOD_APP_DIR}/ui/ui_files.c
+  ${NEUPOD_APP_DIR}/ui/ui_library.c
   ${NEUPOD_APP_DIR}/ui/ui_audio.c
   ${NEUPOD_APP_DIR}/ui/ui_settings.c
   ${NEUPOD_APP_DIR}/ui/ui_bluetooth.c

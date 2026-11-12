@@ -14,6 +14,7 @@
 #include "player.h"
 #include "sys_clock.h"
 #include "ui_internal.h"
+#include "ui_library.h"
 
 /* ---- generic menu screen: a list of entries, Select pushes the entry's screen ----------------------- */
 
@@ -144,11 +145,9 @@ static ui_screen_t *make_podcasts(void) {
 static ui_screen_t *make_photos(void) {
     return ui_screen_placeholder_create("Photos", "No photos", "The photo browser is not built yet.");
 }
-static ui_screen_t *make_shuffle(void) {
-    return ui_screen_placeholder_create("Shuffle Songs", "Nothing to shuffle", "Add music to the card; the library is not built yet.");
-}
+static ui_screen_t *make_shuffle(void) { return ui_screen_shuffle_create(); }
 
-/* ---- Music: sub-lists that are empty until there is a library ------------------------------------ */
+/* ---- Music: the library lists (ui_library.c) and the one list that is still empty ------------------------------- */
 
 typedef struct {
     ui_screen_t base;
@@ -158,7 +157,7 @@ typedef struct {
 static void empty_get(void *ctx, int32_t idx, ui_list_item_t *out) {
     (void)ctx;
     (void)idx;
-    snprintf(out->label, sizeof out->label, "Empty - no library yet");
+    snprintf(out->label, sizeof out->label, "None yet");
     out->dim = true;
 }
 static void empty_destroy(ui_screen_t *s) { ui_list_destroy(((empty_list_t *)s)->list); }
@@ -174,14 +173,16 @@ static ui_screen_t *empty_list(const char *title) {
     e->list = ui_list_create(e->base.root, UI_W, &(ui_list_model_t){.count = 1, .get = empty_get});
     return &e->base;
 }
-static ui_screen_t *make_artists(void) { return empty_list("Artists"); }
-static ui_screen_t *make_albums(void) { return empty_list("Albums"); }
-static ui_screen_t *make_songs(void) { return empty_list("Songs"); }
-static ui_screen_t *make_genres(void) { return empty_list("Genres"); }
+static ui_screen_t *make_artists(void) { return ui_screen_library_view_create(LVW_ARTISTS, 0, "Artists"); }
+static ui_screen_t *make_albums(void) { return ui_screen_library_view_create(LVW_ALBUMS, 0, "Albums"); }
+static ui_screen_t *make_songs(void) { return ui_screen_library_view_create(LVW_SONGS, 0, "Songs"); }
+static ui_screen_t *make_genres(void) { return ui_screen_library_view_create(LVW_GENRES, 0, "Genres"); }
+static ui_screen_t *make_comps(void) { return ui_screen_library_view_create(LVW_COMPILATIONS, 0, "Compilations"); }
 static ui_screen_t *make_playlists(void) { return empty_list("Playlists"); }
 
-static const menu_entry_t k_music[] = {{"Artists", make_artists},     {"Albums", make_albums}, {"Songs", make_songs},
-                                       {"Genres", make_genres},       {"Playlists", make_playlists}};
+static const menu_entry_t k_music[] = {{"Artists", make_artists},         {"Albums", make_albums},      {"Songs", make_songs},
+                                       {"Genres", make_genres},           {"Compilations", make_comps}, {"Playlists", make_playlists},
+                                       {"Update Library", ui_screen_library_update_create}};
 
 ui_screen_t *ui_screen_music_create(void) {
     menu_screen_t *m = menu_new("Music", k_music, (int32_t)(sizeof k_music / sizeof k_music[0]), UI_W);

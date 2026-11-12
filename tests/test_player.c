@@ -1015,10 +1015,143 @@ TEST(a_verify_run_is_not_seekable) {
 }
 
 
+// ---- library queues (player_play_library) --------------------------------------------------------------------------------
+
+// The storage task turns "@lib/<order>/<pos>" into a file; here a made-up path, and a handle it has not resolved is not known.
+static char g_known_handle[40];
+static bool fake_resolver(const char *handle, char *out, size_t n) {
+    if (strcmp(handle, g_known_handle) != 0) {
+        return false;
+    }
+    snprintf(out, n, "/Music/Real/%s.flac", handle + 5);
+    return true;
+}
+static const pq_range_t k_range = {.order = 1, .first = 40, .count = 5};
+
+TEST(a_library_queue_hands_the_storage_task_handles_and_offers_the_next_one_gaplessly) {
+    g_play_ok = true;
+    player_set_path_resolver(fake_resolver);
+    player_play_library(&k_range, 2, false); // the third song of the album is chosen
+    ASSERT_EQ(0, strcmp(g_last_path, "@lib/1/42"));
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(5, i.queue_len);
+    ASSERT_EQ(3, i.queue_pos); // "3 of 5"
+    player_file_t f = file("Third");
+    player_file_started(&f);
+    char path[300];
+    ASSERT_TRUE(player_next_track(path, sizeof path)); // the gapless look-ahead is a handle too
+    ASSERT_EQ(0, strcmp(path, "@lib/1/43"));
+    player_file_t g = file("Fourth");
+    player_next_announced(&g);
+    g_changes++; // the audio core hands over
+    ASSERT_EQ(4, pos());
+    player_get(&i);
+    ASSERT_EQ(0, strcmp(i.tags.title, "Fourth"));
+    ASSERT_EQ(5, i.queue_len);
+    player_next();
+    ASSERT_EQ(0, strcmp(g_last_path, "@lib/1/44"));
+    ASSERT_EQ(5, pos());
+    player_file_t h = file("Fifth");
+    player_file_started(&h);
+    ASSERT_FALSE(player_next_track(path, sizeof path)); // the last song: nothing follows
+    settle();
+}
+
+TEST(the_resume_record_of_a_library_track_has_its_real_path) {
+    g_play_ok = true;
+    player_set_path_resolver(fake_resolver);
+    snprintf(g_known_handle, sizeof g_known_handle, "@lib/1/41");
+    int saves = g_rs_saves;
+    player_play_library(&k_range, 1, false);
+    ASSERT_EQ(0, strcmp(g_last_path, "@lib/1/41"));
+    ASSERT_EQ(saves + 1, g_rs_saves); // the storage task had resolved it (the resolver knows it): saved from its beginning
+    ASSERT_EQ(0, strcmp(g_rs_last.path, "/Music/Real/1/41.flac"));
+    ASSERT_EQ(0, g_rs_last.index);
+    player_file_t f = file("t");
+    player_file_started(&f);
+    saves = g_rs_saves;
+    g_pcm_frames = 44100u * 25u;
+    player_pause_toggle(); // pause: the position is stored, with the same real path
+    ASSERT_EQ(saves + 1, g_rs_saves);
+    ASSERT_EQ(0, strcmp(g_rs_last.path, "/Music/Real/1/41.flac"));
+    ASSERT_EQ(44100u * 25u, g_rs_last.frame);
+    // a track the storage task has not resolved yet cannot be saved (the record waits for the next save): nothing wrong is saved
+    snprintf(g_known_handle, sizeof g_known_handle, "nothing");
+    saves = g_rs_saves;
+    player_pause_toggle();
+    player_next();
+    ASSERT_EQ(0, strcmp(g_last_path, "@lib/1/42"));
+    ASSERT_TRUE(g_rs_last.path[0] == '/'); // (whatever was saved is a real path, never a handle)
+    g_pcm_frames = 44100u * 10u;
+    settle();
+}
+
+TEST(shuffle_songs_shuffles_the_whole_range_without_touching_the_setting) {
+    g_play_ok = true;
+    g_shuffle_setting = 0;
+    pq_range_t all = {.order = 0, .first = 0, .count = 200};
+    player_play_library(&all, PLAY_QUEUE_NO_ENTRY, true);
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(200, i.queue_len);
+    ASSERT_EQ(1, i.queue_pos); // the random opener is slot 0
+    ASSERT_EQ(1, i.shuffle);
+    ASSERT_EQ(0, g_shuffle_setting); // Settings > Shuffle is as it was
+    ASSERT_TRUE(g_last_path[0] == '@');
+    player_file_t f = file("t");
+    player_file_started(&f);
+    char a[40], b[40];
+    snprintf(a, sizeof a, "%s", g_last_path);
+    player_next();
+    snprintf(b, sizeof b, "%s", g_last_path);
+    ASSERT_TRUE(strcmp(a, b) != 0); // the next song is another one
+    ASSERT_EQ(2, pos());
+    player_play_folder("/Album", g_dir, 4, 0); // a folder after the library: an ordinary folder queue again
+    player_get(&i);
+    ASSERT_EQ(4, i.queue_len);
+    ASSERT_EQ(0, strcmp(g_last_path, "/Album/01.flac"));
+    settle();
+}
+
+TEST(a_library_track_that_cannot_be_played_is_skipped_like_a_broken_file) {
+    g_play_ok = true;
+    player_set_repeat(PQ_REPEAT_OFF);
+    player_play_library(&k_range, 0, false);
+    player_file_t f = file("first");
+    player_file_started(&f);
+    g_ended++;
+    player_service(); // the first ended: the second is started
+    ASSERT_EQ(2, pos());
+    ASSERT_EQ(0, strcmp(g_last_path, "@lib/1/41"));
+    player_file_failed("Can't play: unsupported codec (AAC)"); // the storage task refused it
+    player_service();
+    ASSERT_EQ(3, pos()); // skipped
+    ASSERT_EQ(0, strcmp(g_last_path, "@lib/1/42"));
+    settle();
+}
+
+TEST(an_empty_library_range_starts_nothing) {
+    g_play_ok = true;
+    int calls = g_play_calls;
+    player_play_library(&(pq_range_t){.order = 0, .first = 0, .count = 0}, 0, false);
+    player_play_library(&k_range, 9, false); // outside the range
+    ASSERT_EQ(calls, g_play_calls);
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(0, i.queue_len);
+}
+
+
 #define RUN_T(name) do { RUN(name); ASSERT_EQ(0, player_starts_outstanding()); } while (0)
 
 int main(void) {
     player_init();
+    RUN_T(a_library_queue_hands_the_storage_task_handles_and_offers_the_next_one_gaplessly);
+    RUN_T(the_resume_record_of_a_library_track_has_its_real_path);
+    RUN_T(shuffle_songs_shuffles_the_whole_range_without_touching_the_setting);
+    RUN_T(a_library_track_that_cannot_be_played_is_skipped_like_a_broken_file);
+    RUN_T(an_empty_library_range_starts_nothing);
     RUN_T(volume_policy_cases);
     RUN_T(restore_reads_the_saved_path_and_the_step_writes_it);
     RUN_T(player_pause_pauses_a_playing_track_once_and_keeps_the_position);
