@@ -41,7 +41,25 @@ static void fail(audit_t *au, const lv_area_t *a, const char *what) {
 
 static void check_label(lv_obj_t *o, const lv_area_t *a, audit_t *au) {
     lv_label_t *lb = (lv_label_t *)o;
-    if (lb->long_mode == LV_LABEL_LONG_DOT || lb->long_mode == LV_LABEL_LONG_SCROLL || lb->long_mode == LV_LABEL_LONG_SCROLL_CIRCULAR) {
+    if (lb->long_mode == LV_LABEL_LONG_DOT || lb->long_mode == LV_LABEL_LONG_SCROLL_CIRCULAR) {
+        /* Dots only work on a box of one line: LVGL wraps a dotted label whose height follows its content onto a second line (the Home track title
+         * once ran into the artist line). So a dotted label as tall as two lines or more, holding text wider than it, is a violation. */
+        const char *t = lv_label_get_text(o);
+        const lv_font_t *f = lv_obj_get_style_text_font(o, LV_PART_MAIN);
+        int32_t bw = lv_area_get_width(a) - lv_obj_get_style_pad_left(o, LV_PART_MAIN) - lv_obj_get_style_pad_right(o, LV_PART_MAIN);
+        if (t != NULL && t[0] != '\0' && lv_area_get_height(a) >= 2 * lv_font_get_line_height(f)) {
+            lv_text_attributes_t at = {.letter_space = lv_obj_get_style_text_letter_space(o, LV_PART_MAIN), .line_space = 0, .max_width = LV_COORD_MAX, .text_flags = LV_TEXT_FLAG_NONE};
+            lv_point_t one;
+            lv_text_get_size_attributes(&one, t, f, &at);
+            if (one.x > bw) {
+                char what[120];
+                snprintf(what, sizeof what, "dotted label '%.40s' is %d px tall (must be one line: dots or ticker)", t, (int)lv_area_get_height(a));
+                fail(au, a, what);
+            }
+        }
+        return;
+    }
+    if (lb->long_mode == LV_LABEL_LONG_SCROLL || lb->long_mode == LV_LABEL_LONG_SCROLL_CIRCULAR) {
         return;
     }
     const char *text = lv_label_get_text(o);

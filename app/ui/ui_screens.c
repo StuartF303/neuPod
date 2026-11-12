@@ -364,8 +364,11 @@ ui_screen_t *ui_screen_home_create(void) {
     m->storage = ui_label(pane, "", UI_L_DIM);
     lv_obj_t *lines[3] = {m->line1, m->uptime, m->storage};
     for (int i = 0; i < 3; i++) {
-        lv_obj_set_width(lines[i], pane_w);
+        lv_obj_set_size(lines[i], pane_w, UIM->line_h); /* fixed height: a long title ends in dots instead of wrapping onto the next line */
         lv_label_set_long_mode(lines[i], LV_LABEL_LONG_DOT);
+        if (i < 2) {
+            ui_label_ticker(lines[i], true); /* the track title and artist scroll when too long (the card line keeps dots) */
+        }
         lv_obj_set_style_text_align(lines[i], LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_pos(lines[i], 0, UIM->home_line_y[i]);
     }
