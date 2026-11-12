@@ -18,6 +18,7 @@
 #include "hal_radio.h"
 #include "haptic_logic.h"
 #include "haptic_service.h"
+#include "hal_system.h"
 #include "os.h"
 #include "player.h"
 #include "runtime_config.h"
@@ -25,20 +26,27 @@
 #include "ui_internal.h"
 #include "wifi_service.h"
 
-ui_state_t g_ui_state = {.click_mode = CLICK_HAPTIC, .backlight_pct = 100, .autodim = true, .dim_idx = UI_AUTODIM_DEFAULT_IDX};
+ui_state_t g_ui_state = {.click_mode = CLICK_HAPTIC,
+                         .backlight_pct = 100,
+                         .autodim = true,
+                         .dim_idx = UI_AUTODIM_DEFAULT_IDX,
+                         .off_idx = UI_SCREENOFF_DEFAULT_IDX,
+                         .autolock = true};
 
 static ui_idle_t g_idle;
+static ui_hold_t g_hold;
 static bool g_idle_inhibit;
 
 void ui_idle_inhibit(bool on) { g_idle_inhibit = on; }
 
 void ui_apply_backlight(void) {
-    hal_display_backlight((uint8_t)((ui_backlight_effective(g_ui_state.backlight_pct, g_idle.dimmed) * 255u + 50u) / 100u));
+    hal_display_backlight((uint8_t)((ui_backlight_level(g_ui_state.backlight_pct, g_idle.dimmed, g_idle.off) * 255u + 50u) / 100u));
 }
 
 static void backlight_transition(void) {
     ui_apply_backlight();
-    printf("ui: backlight %s %u%%\n", g_idle.dimmed ? "dim" : "wake", (unsigned)ui_backlight_effective(g_ui_state.backlight_pct, g_idle.dimmed));
+    printf("ui: backlight %s %u%%\n", g_idle.off ? "off" : g_idle.dimmed ? "dim" : "wake",
+           (unsigned)ui_backlight_level(g_ui_state.backlight_pct, g_idle.dimmed, g_idle.off));
 }
 
 void ui_state_persist(void) {
@@ -46,6 +54,8 @@ void ui_state_persist(void) {
     settings_set_u8(SETTING_CLICK_FEEDBACK, (uint8_t)g_ui_state.click_mode);
     settings_set_u8(SETTING_AUTODIM, g_ui_state.autodim ? 1u : 0u);
     settings_set_u8(SETTING_AUTODIM_IDX, g_ui_state.dim_idx);
+    settings_set_u8(SETTING_SCREENOFF_IDX, g_ui_state.off_idx);
+    settings_set_u8(SETTING_AUTOLOCK, g_ui_state.autolock ? 1u : 0u);
 }
 
 // The settings store is loaded from the card some time after boot (storage task): when its contents are replaced, take
@@ -72,12 +82,24 @@ static void sync_from_settings(void) {
     if (settings_get_u8(SETTING_AUTODIM_IDX, &v) && v < UI_AUTODIM_STEPS) {
         g_ui_state.dim_idx = v;
     }
+    if (settings_get_u8(SETTING_SCREENOFF_IDX, &v) && v < UI_SCREENOFF_STEPS) {
+        g_ui_state.off_idx = v;
+    }
+    if (settings_get_u8(SETTING_AUTOLOCK, &v) && v <= 1) {
+        g_ui_state.autolock = v == 1;
+    }
 }
 
 static lv_obj_t *g_content;
 static lv_obj_t *g_title;
 static lv_obj_t *g_play;
 static lv_obj_t *g_batt;
+static lv_obj_t *g_frame_scr;    /* the screen the frame lives on (the Hold overlay is a child of it) */
+static lv_obj_t *g_lock;   /* Hold: the lock glyph at the left end of the status bar, shown while locked */
+static lv_obj_t *g_hbox;   /* the Hold overlay: a box over the middle of the content, built when something is shown and deleted when it goes */
+static lv_obj_t *g_htitle; /* glyph and headline */
+static lv_obj_t *g_hsub;   /* a second line */
+static lv_obj_t *g_hbar;   /* progress ring of a hold, drained bar of a countdown */
 static lv_obj_t *g_wifi;
 static lv_obj_t *g_bt;     /* Bluetooth: dim = a remembered headset, not connected; dark = connected; accent = streaming; hidden = unavailable */
 static lv_obj_t *g_banner; /* a notice over the top of the content for a few seconds ("Headset disconnected") */
@@ -126,6 +148,9 @@ void ui_frame_init(lv_obj_t *scr) {
 
     g_play = ui_label(bar, play_glyph(), UI_L_DIM);
     lv_obj_align(g_play, LV_ALIGN_LEFT_MID, UIM->bar_inset, 0);
+    g_lock = ui_label(bar, UI_SYM_LOCK, UI_L_SEL_BOT); /* same spot as the (always empty) play glyph */
+    lv_obj_align(g_lock, LV_ALIGN_LEFT_MID, UIM->bar_inset, 0);
+    lv_obj_set_hidden(g_lock, true);
     g_wifi = ui_label(bar, "", UI_L_DIM); /* Wi-Fi state: hidden when the station is off, dim while joining, green when up */
     lv_obj_align(g_wifi, LV_ALIGN_LEFT_MID, UIM->wifi_x, 0);
 
@@ -151,9 +176,12 @@ void ui_frame_init(lv_obj_t *scr) {
     lv_label_set_long_mode(g_banner, LV_LABEL_LONG_DOT);
     lv_obj_set_hidden(g_banner, true);
 
+    g_frame_scr = scr;
+    g_hbox = NULL; /* a screen of an earlier init (tests) took its overlay with it */
     ui_stack_init(&g_stack);
     ui_accel_init(&g_accel);
     ui_idle_init(&g_idle, os_tick_ms());
+    ui_hold_init(&g_hold);
 }
 
 ui_screen_t *ui_screen_new(size_t size, const char *title) {
@@ -252,9 +280,184 @@ static bool queue_active(void) {
            (pi.state == PLAYER_PLAYING || pi.state == PLAYER_PAUSED || pi.state == PLAYER_OPENING);
 }
 
+// ---- Hold (docs/adr/0020-hold.md): the overlay, the gestures and the input filter --------------------------------------------------------
+
+static uint32_t g_htoast_until; /* a confirmation or the "Locked" reminder goes away at this time (0 = none showing) */
+static uint8_t g_swallowed;     /* buttons whose press was swallowed: their release is too */
+static uint8_t g_delivered;     /* buttons whose press reached a screen: their release does too, even if Hold came on in between */
+
+bool ui_frame_locked(void) { return g_hold.locked; }
+bool ui_locked(void) { return __atomic_load_n(&g_hold.locked, __ATOMIC_RELAXED); }
+
+static void hold_overlay_hide(void) {
+    if (g_hbox != NULL) {
+        lv_obj_delete(g_hbox);
+        g_hbox = g_htitle = g_hsub = g_hbar = NULL;
+    }
+    g_htoast_until = 0;
+}
+
+// Show @p title / @p sub; a bar when @p bar_pct >= 0. Builds the box on first use.
+static void hold_overlay_show(const char *title, const char *sub, int bar_pct) {
+    if (g_frame_scr == NULL) {
+        return;
+    }
+    if (g_hbox == NULL) {
+        const lv_font_t *fl = UIM->font_large, *fb = UIM->font_body;
+        int32_t pad = UIM->toast_pad * 2;
+        int32_t w = UI_W * 3 / 4;
+        int32_t h = pad * 3 + lv_font_get_line_height(fl) + lv_font_get_line_height(fb) + UIM->in_bar_h;
+        g_hbox = lv_obj_create(g_frame_scr);
+        lv_obj_remove_style_all(g_hbox);
+        lv_obj_set_size(g_hbox, w, h);
+        lv_obj_set_pos(g_hbox, (UI_W - w) / 2, UI_STATUS_H + (UI_CONTENT_H - h) / 2);
+        lv_obj_set_style_bg_color(g_hbox, lv_color_hex(UI_COL_BG2), 0);
+        lv_obj_set_style_bg_opa(g_hbox, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_color(g_hbox, lv_color_hex(UI_COL_ACCENT), 0);
+        lv_obj_set_style_border_width(g_hbox, 1, 0);
+        lv_obj_set_style_radius(g_hbox, UIM->in_overlay_radius, 0);
+        int32_t iw = w - 2 * pad - 2; /* inside the 1 px border */
+        g_htitle = ui_label(g_hbox, "", UI_COL_TEXT);
+        lv_obj_set_style_text_font(g_htitle, fl, 0);
+        lv_obj_set_size(g_htitle, iw, lv_font_get_line_height(fl));
+        lv_obj_set_style_text_align(g_htitle, LV_TEXT_ALIGN_CENTER, 0);
+        lv_label_set_long_mode(g_htitle, LV_LABEL_LONG_DOT);
+        lv_obj_set_pos(g_htitle, pad, pad);
+        g_hsub = ui_label(g_hbox, "", UI_COL_TEXT);
+        lv_obj_set_size(g_hsub, iw, lv_font_get_line_height(fb));
+        lv_obj_set_style_text_align(g_hsub, LV_TEXT_ALIGN_CENTER, 0);
+        lv_label_set_long_mode(g_hsub, LV_LABEL_LONG_DOT);
+        lv_obj_set_pos(g_hsub, pad, pad + lv_font_get_line_height(fl));
+        g_hbar = lv_bar_create(g_hbox);
+        lv_obj_set_size(g_hbar, iw, UIM->in_bar_h);
+        lv_obj_set_pos(g_hbar, pad, h - pad - UIM->in_bar_h - 2);
+        lv_bar_set_range(g_hbar, 0, 100);
+        lv_obj_set_style_bg_color(g_hbar, lv_color_hex(UI_COL_BAR), 0);
+        lv_obj_set_style_bg_color(g_hbar, lv_color_hex(UI_COL_ACCENT), LV_PART_INDICATOR);
+    }
+    ui_label_set_text(g_htitle, title);
+    ui_label_set_text(g_hsub, sub);
+    lv_obj_set_hidden(g_hbar, bar_pct < 0);
+    if (bar_pct >= 0) {
+        lv_bar_set_value(g_hbar, bar_pct, LV_ANIM_OFF);
+    }
+}
+
+static void hold_toast(const char *title, const char *sub, uint32_t now_ms) {
+    hold_overlay_show(title, sub, -1);
+    g_htoast_until = now_ms + UI_HOLD_TOAST_MS;
+    if (g_htoast_until == 0) {
+        g_htoast_until = 1;
+    }
+}
+
+// How to get Hold off again, for the reminder: platforms without a Power key are driven from the console.
+static const char *unlock_hint(void) { return hal_input_has_power_key() ? "Hold Power to unlock" : "Console key l unlocks"; }
+
+static void hold_reminder(uint32_t now_ms) { hold_toast(UI_SYM_LOCK "  Locked", unlock_hint(), now_ms); }
+
+// Carry out what ui_hold said happened. Silent (no overlay, no click) while the screen is off: nobody is looking.
+static void hold_apply(uint32_t r, uint32_t now_ms) {
+    if ((r & UI_HOLD_CANCELLED) != 0 && g_htoast_until == 0) {
+        hold_overlay_hide(); /* a ring or countdown was up; a confirmation that follows is shown below */
+    }
+    if ((r & (UI_HOLD_LOCKED | UI_HOLD_UNLOCKED)) != 0) {
+        bool locked = (r & UI_HOLD_LOCKED) != 0;
+        printf("ui: hold %s\n", locked ? "on" : "off");
+        if (g_lock != NULL) {
+            lv_obj_set_hidden(g_lock, !locked);
+        }
+        if (!g_idle.off) {
+            hold_toast(locked ? UI_SYM_LOCK "  Locked" : UI_SYM_UNLOCK "  Unlocked", locked ? unlock_hint() : "", now_ms);
+            ui_feedback_step(); /* the click of the slide switch */
+        }
+    }
+    if ((r & UI_HOLD_SLEEP) != 0 && ui_idle_force_off(&g_idle)) {
+        hold_overlay_hide();
+        backlight_transition();
+        if (g_ui_state.autolock) {
+            hold_apply(ui_hold_set(&g_hold, true), now_ms);
+        }
+    }
+    if ((r & UI_HOLD_POWEROFF) != 0) {
+        printf("ui: power-off requested\n");
+        hold_overlay_show(UI_SYM_POWER "  Powering off", "Please wait", -1);
+        g_htoast_until = 0;
+        if (!hal_system_poweroff()) {
+            hold_overlay_hide();
+        }
+    }
+}
+
+// The progress of a Power press that is still down, drawn once per UI pass.
+static void hold_draw_progress(uint32_t now_ms) {
+    ui_hold_progress_t p = ui_hold_progress(&g_hold, now_ms, hal_system_can_poweroff());
+    char t[40], s[40];
+    switch (p.phase) {
+    case UI_HOLD_P_RING:
+        snprintf(t, sizeof t, "%s  Hold to %s", p.to_lock ? UI_SYM_LOCK : UI_SYM_UNLOCK, p.to_lock ? "lock" : "unlock");
+        hold_overlay_show(t, "Keep holding Power", p.pct);
+        g_htoast_until = 0;
+        break;
+    case UI_HOLD_P_COUNTDOWN:
+        snprintf(t, sizeof t, UI_SYM_POWER "  Powering off in %u", (unsigned)p.secs);
+        snprintf(s, sizeof s, "Let go to cancel");
+        hold_overlay_show(t, s, p.pct);
+        g_htoast_until = 0;
+        break;
+    case UI_HOLD_P_POWEROFF:
+    case UI_HOLD_P_NONE:
+        break;
+    }
+}
+
+// Is this event one the Hold filter judges (wheel and buttons)? The Power key, the switch and the console toggle are Hold's own.
+static bool is_user_input(const input_event_t *ev) { return ev->type == INPUT_SCROLL || ev->type == INPUT_BUTTON_DOWN || ev->type == INPUT_BUTTON_UP; }
+
 void ui_frame_input(const input_event_t *ev, uint32_t now_ms) {
+    bool was_off = g_idle.off;
     if (ui_idle_activity(&g_idle, now_ms)) {
         backlight_transition(); /* before the screen sees the event: a slider handler re-applies the level */
+    }
+    switch (ev->type) {
+    case INPUT_POWER_DOWN:
+        hold_apply(ui_hold_power_down(&g_hold, now_ms, was_off), now_ms);
+        return;
+    case INPUT_POWER_UP:
+        hold_apply(ui_hold_power_up(&g_hold, now_ms), now_ms);
+        return;
+    case INPUT_HOLD_SWITCH:
+        hold_apply(ui_hold_set(&g_hold, ev->steps != 0), now_ms);
+        return;
+    case INPUT_HOLD_TOGGLE:
+        hold_apply(ui_hold_toggle(&g_hold), now_ms);
+        return;
+    default:
+        break;
+    }
+    if (is_user_input(ev)) {
+        // The screen was off: this input only wakes it. Locked: it only reminds. Neither reaches a screen, so neither can act or click.
+        bool swallow = was_off || g_hold.locked;
+        if (ev->type == INPUT_BUTTON_UP && (g_swallowed & ev->button) != 0) {
+            g_swallowed = (uint8_t)(g_swallowed & ~ev->button);
+            return;
+        }
+        if (ev->type == INPUT_BUTTON_UP && (g_delivered & ev->button) != 0) {
+            g_delivered = (uint8_t)(g_delivered & ~ev->button);
+            swallow = false; /* the screen saw this press: it must see the release (no stuck press-and-hold) */
+        }
+        if (swallow) {
+            if (ev->type == INPUT_BUTTON_DOWN) {
+                g_swallowed = (uint8_t)(g_swallowed | ev->button);
+            }
+            if (g_hold.locked && ev->type != INPUT_BUTTON_UP) {
+                hold_reminder(now_ms);
+            }
+            return;
+        }
+        if (ev->type == INPUT_BUTTON_DOWN) {
+            g_delivered = (uint8_t)(g_delivered | ev->button);
+        }
     }
     ui_screen_t *top = ui_stack_top(&g_stack);
     if (top == NULL) {
@@ -284,6 +487,8 @@ void ui_frame_input(const input_event_t *ev, uint32_t now_ms) {
         if (top->on_button_up != NULL) {
             top->on_button_up(top, ev->button);
         }
+        break;
+    default:
         break;
     }
 }
@@ -401,8 +606,23 @@ static void kick_haptics(void) {
 
 void ui_frame_tick(uint32_t now_ms) {
     sync_from_settings();
-    if (ui_idle_tick(&g_idle, now_ms, g_ui_state.autodim, g_idle_inhibit, ui_autodim_seconds(g_ui_state.dim_idx) * 1000u)) {
+    bool dim_changed = ui_idle_tick(&g_idle, now_ms, g_ui_state.autodim, g_idle_inhibit, ui_autodim_seconds(g_ui_state.dim_idx) * 1000u);
+    bool was_off = g_idle.off;
+    bool off_changed = ui_idle_off_tick(&g_idle, now_ms, g_ui_state.autodim, g_idle_inhibit, ui_autodim_seconds(g_ui_state.dim_idx) * 1000u,
+                                        ui_screenoff_seconds(g_ui_state.off_idx) * 1000u);
+    if (dim_changed || off_changed) {
         backlight_transition();
+    }
+    if (!was_off && g_idle.off) { /* the screen just went off by itself: lock now (docs/adr/0020-hold.md) */
+        hold_overlay_hide();
+        if (g_ui_state.autolock) {
+            hold_apply(ui_hold_set(&g_hold, true), now_ms);
+        }
+    }
+    hold_apply(ui_hold_tick(&g_hold, now_ms, hal_system_can_poweroff()), now_ms);
+    hold_draw_progress(now_ms);
+    if (g_htoast_until != 0 && (int32_t)(now_ms - g_htoast_until) >= 0 && !g_hold.down) {
+        hold_overlay_hide();
     }
     kick_haptics();
     update_wifi();

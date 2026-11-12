@@ -191,4 +191,8 @@ void hal_random(void *buf, size_t n) {
     }
 }
 
+// No software power-off on the bench rig (USB powered, no power switch IC): the UI hides the power-off countdown there.
+bool hal_system_can_poweroff(void) { return false; }
+bool hal_system_poweroff(void) { return false; }
+
 const char *hal_platform_name(void) { return "rp2350"; }

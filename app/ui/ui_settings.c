@@ -68,7 +68,7 @@ typedef struct {
 static int32_t info_count(const info_t *in) {
     switch (in->kind) {
     case INFO_ABOUT:
-        return ABOUT_FIXED + CAP_COUNT;
+        return 1 + ABOUT_FIXED + CAP_COUNT; /* row 0 opens the Licences screen */
     case INFO_STORAGE:
         return 5;
     case INFO_BATTERY:
@@ -79,6 +79,12 @@ static int32_t info_count(const info_t *in) {
 
 static void about_get(const info_t *in, int32_t i, ui_list_item_t *o) {
     char b[24];
+    if (i == 0) {
+        snprintf(o->label, sizeof o->label, "Licences");
+        o->chevron = true;
+        return;
+    }
+    i--; /* the rows below are the live read-outs */
     switch (i) {
     case 0: put(o, "Version", "%s", NEUPOD_VERSION); break;
     case 1: put(o, "Build", "%s", NEUPOD_GIT_HASH); break;
@@ -193,6 +199,18 @@ static void info_tick(ui_screen_t *s) {
 }
 
 static void info_scroll(ui_screen_t *s, int32_t steps) { ui_list_move(((info_t *)s)->list, steps); }
+
+/* About: Select on the first row opens Licences (the third-party components and their licences, kept in step with LICENSE.md) */
+static bool info_button(ui_screen_t *s, uint8_t btn) {
+    info_t *in = (info_t *)s;
+    if (btn != HAL_BTN_SELECT || in->kind != INFO_ABOUT) {
+        return false;
+    }
+    if (ui_list_selected(in->list) == 0) {
+        ui_frame_push(ui_screen_licences_create());
+    }
+    return true;
+}
 static void info_destroy(ui_screen_t *s) { ui_list_destroy(((info_t *)s)->list); }
 
 static ui_screen_t *info_create(const char *title, info_kind_t kind) {
@@ -203,6 +221,7 @@ static ui_screen_t *info_create(const char *title, info_kind_t kind) {
     in->kind = kind;
     in->base.on_scroll = info_scroll;
     in->base.on_tick = info_tick;
+    in->base.on_button = info_button;
     in->base.destroy = info_destroy;
     info_sample(in);
     if (kind == INFO_STORAGE && caps_available(CAP_STORAGE)) {
@@ -253,7 +272,7 @@ typedef struct {
     ui_list_t *list;
 } display_t;
 
-enum { D_BACKLIGHT, D_AUTODIM, D_DIM_AFTER, D_COUNT };
+enum { D_BACKLIGHT, D_AUTODIM, D_DIM_AFTER, D_SCREEN_OFF, D_AUTOLOCK, D_COUNT };
 
 static void display_get(void *ctx, int32_t i, ui_list_item_t *o) {
     (void)ctx;
@@ -262,9 +281,13 @@ static void display_get(void *ctx, int32_t i, ui_list_item_t *o) {
         o->chevron = true;
     } else if (i == D_AUTODIM) {
         put(o, "Auto-dim", "%s", g_ui_state.autodim ? "On" : "Off");
-    } else {
+    } else if (i == D_DIM_AFTER) {
         put(o, "Dim after", "%s", ui_autodim_name(g_ui_state.dim_idx));
         o->dim = !g_ui_state.autodim;
+    } else if (i == D_SCREEN_OFF) {
+        put(o, "Screen off after", "%s", ui_screenoff_name(g_ui_state.off_idx)); /* counted from the dim (from the last press when Auto-dim is off) */
+    } else {
+        put(o, "Auto-lock", "%s", g_ui_state.autolock ? "On" : "Off"); /* Hold turns on when the screen goes off */
     }
 }
 
@@ -282,11 +305,17 @@ static bool display_button(ui_screen_t *b, uint8_t btn) {
     case D_AUTODIM:
         g_ui_state.autodim = !g_ui_state.autodim;
         break;
-    default:
+    case D_DIM_AFTER:
         if (!g_ui_state.autodim) {
             return true; /* greyed: nothing to change */
         }
         g_ui_state.dim_idx = (uint8_t)((g_ui_state.dim_idx + 1u) % UI_AUTODIM_STEPS);
+        break;
+    case D_SCREEN_OFF:
+        g_ui_state.off_idx = (uint8_t)((g_ui_state.off_idx + 1u) % UI_SCREENOFF_STEPS);
+        break;
+    default:
+        g_ui_state.autolock = !g_ui_state.autolock;
         break;
     }
     ui_state_persist();

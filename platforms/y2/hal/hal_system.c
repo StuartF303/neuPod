@@ -146,3 +146,20 @@ void hal_random(void *buf, size_t n) {
 }
 
 const char *hal_platform_name(void) { return "y2"; }
+
+// Power-off request from the UI (a 10 s Power hold, app/ui/ui_hold.c): main.c installs the handler that starts the orderly stop and
+// the system poweroff (exit status 77 keeps the init wrapper from respawning the firmware). Without a handler the request is refused.
+static void (*g_poweroff_fn)(void);
+
+void y2_input_set_power_handler(void (*fn)(void)) { g_poweroff_fn = fn; }
+
+bool hal_system_can_poweroff(void) { return g_poweroff_fn != NULL; }
+
+bool hal_system_poweroff(void) {
+    if (g_poweroff_fn == NULL) {
+        return false;
+    }
+    printf("y2: power held, shutting down\n");
+    g_poweroff_fn();
+    return true;
+}

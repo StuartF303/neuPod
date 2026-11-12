@@ -640,6 +640,81 @@ TEST(text_display_is_never_longer_than_its_input) {
     }
 }
 
+TEST(screenoff_choices) {
+    ASSERT_EQ(0u, ui_screenoff_seconds(0)); /* Never */
+    ASSERT_EQ(180u, ui_screenoff_seconds(UI_SCREENOFF_DEFAULT_IDX)); /* the owner's default: 3 min after the dim */
+    ASSERT_EQ(300u, ui_screenoff_seconds(UI_SCREENOFF_STEPS - 1u));
+    ASSERT_EQ(0u, ui_screenoff_seconds(UI_SCREENOFF_STEPS)); /* out of range: never */
+    ASSERT_EQ(0, strcmp("Never", ui_screenoff_name(0)));
+    ASSERT_EQ(0, strcmp("3 min", ui_screenoff_name(UI_SCREENOFF_DEFAULT_IDX)));
+    ASSERT_EQ(0, strcmp("-", ui_screenoff_name(200)));
+}
+
+TEST(off_comes_a_set_time_after_the_dim) {
+    ui_idle_t t;
+    ui_idle_init(&t, 0);
+    /* dim after 30 s, off 180 s after that: 210 s from the last input */
+    ASSERT_TRUE(ui_idle_tick(&t, 30000, true, false, 30000));
+    ASSERT_FALSE(ui_idle_off_tick(&t, 30000, true, false, 30000, 180000));
+    ASSERT_FALSE(ui_idle_off_tick(&t, 209999, true, false, 30000, 180000));
+    ASSERT_TRUE(ui_idle_off_tick(&t, 210000, true, false, 30000, 180000));
+    ASSERT_TRUE(t.off);
+    ASSERT_FALSE(ui_idle_off_tick(&t, 400000, true, false, 30000, 180000)); /* a transition once, not per tick */
+    ASSERT_EQ(0, ui_backlight_level(100, true, t.off));
+    ASSERT_EQ(10, ui_backlight_level(100, true, false));
+    ASSERT_EQ(100, ui_backlight_level(100, false, false));
+}
+
+TEST(never_means_never_and_auto_dim_off_counts_from_the_last_input) {
+    ui_idle_t t;
+    ui_idle_init(&t, 0);
+    ASSERT_FALSE(ui_idle_off_tick(&t, 100000000u, true, false, 30000, 0)); /* "Never" */
+    ASSERT_TRUE(ui_idle_off_tick(&t, 180000, false, false, 30000, 180000)); /* no dim stage: 180 s from the input, not 210 */
+    ASSERT_TRUE(t.off);
+}
+
+TEST(input_ends_the_off_stage_and_restarts_the_clock) {
+    ui_idle_t t;
+    ui_idle_init(&t, 0);
+    ASSERT_TRUE(ui_idle_off_tick(&t, 200000, true, false, 10000, 180000));
+    ASSERT_TRUE(ui_idle_activity(&t, 200100)); /* the waking input: reported, so the caller can swallow it */
+    ASSERT_FALSE(t.off);
+    ASSERT_FALSE(ui_idle_off_tick(&t, 200100 + 189999, true, false, 10000, 180000));
+    ASSERT_TRUE(ui_idle_off_tick(&t, 200100 + 190000, true, false, 10000, 180000));
+}
+
+TEST(a_forced_off_stays_until_input_whatever_the_timers_say) {
+    ui_idle_t t;
+    ui_idle_init(&t, 0);
+    ASSERT_TRUE(ui_idle_force_off(&t));
+    ASSERT_FALSE(ui_idle_force_off(&t)); /* already */
+    ASSERT_FALSE(ui_idle_off_tick(&t, 1000, true, false, 30000, 0)); /* the off stage is set to Never: still off */
+    ASSERT_TRUE(t.off);
+    ASSERT_TRUE(ui_idle_activity(&t, 2000));
+    ASSERT_FALSE(t.off);
+    ASSERT_FALSE(t.forced_off);
+    ASSERT_FALSE(ui_idle_off_tick(&t, 2500, true, false, 30000, 0));
+}
+
+TEST(a_preview_inhibit_keeps_the_screen_on) {
+    ui_idle_t t;
+    ui_idle_init(&t, 0);
+    ASSERT_FALSE(ui_idle_off_tick(&t, 999999, true, true, 10000, 15000)); /* the backlight slider is open */
+    ASSERT_FALSE(t.off);
+}
+
+TEST(off_survives_the_clock_wrap_and_a_future_stamp) {
+    ui_idle_t t;
+    ui_idle_init(&t, 0xFFFFFF00u);
+    ASSERT_FALSE(ui_idle_off_tick(&t, 0x00000100u, false, false, 0, 1000)); /* 512 ms across the wrap */
+    ASSERT_TRUE(ui_idle_off_tick(&t, 0x00000100u + 488u, false, false, 0, 1000));
+    ui_idle_activity(&t, 59000); /* the tour stamps input ahead of the tick clock */
+    ASSERT_FALSE(ui_idle_off_tick(&t, 0, false, false, 0, 1000));
+    ui_idle_activity(&t, 78000); /* "260*s": 260 presses 300 ms apart: the last is 78 s ahead and must not read as an hour of idle (it locked the tour) */
+    ASSERT_FALSE(ui_idle_tick(&t, 0, true, false, 10000));
+    ASSERT_FALSE(ui_idle_off_tick(&t, 0, true, false, 10000, 15000));
+}
+
 int main(void) {
     RUN(signal_bars_unknown_rssi);
     RUN(signal_bars_thresholds);
@@ -652,6 +727,13 @@ int main(void) {
     RUN(accel_reversal_drops_residue);
     RUN(stack_push_pop);
     RUN(autodim_choices);
+    RUN(screenoff_choices);
+    RUN(off_comes_a_set_time_after_the_dim);
+    RUN(never_means_never_and_auto_dim_off_counts_from_the_last_input);
+    RUN(input_ends_the_off_stage_and_restarts_the_clock);
+    RUN(a_forced_off_stays_until_input_whatever_the_timers_say);
+    RUN(a_preview_inhibit_keeps_the_screen_on);
+    RUN(off_survives_the_clock_wrap_and_a_future_stamp);
     RUN(idle_dims_at_exactly_the_timeout);
     RUN(idle_clock_starts_at_init_not_zero);
     RUN(idle_activity_wakes);

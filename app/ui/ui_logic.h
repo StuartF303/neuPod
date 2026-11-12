@@ -72,7 +72,7 @@ int ui_signal_class(int bars);
 /* ---- Backlight auto-dim: idle clock and effective level ------------------------------------------- */
 
 #define UI_DIM_PCT 10u          /**< the idle backlight level, absolute; a set level below it is left alone */
-#define UI_IDLE_FUTURE_MS 60000u /**< how far ahead of the tick clock an input stamp may be (the tour spaces events by 300 ms) */
+#define UI_IDLE_FUTURE_MS 120000u /**< how far ahead of the tick clock an input stamp may be (the tour spaces the 260 presses of "260*s" 300 ms apart: 78 s) */
 #define UI_AUTODIM_STEPS 6u     /**< entries of the "Dim after" choice */
 #define UI_AUTODIM_DEFAULT_IDX 2u /**< 30 s */
 
@@ -81,19 +81,39 @@ uint32_t ui_autodim_seconds(uint8_t idx);
 /** Label of the "Dim after" choice @p idx ("30 s", "1 min"); "-" if out of range. */
 const char *ui_autodim_name(uint8_t idx);
 
+#define UI_SCREENOFF_STEPS 7u       /**< entries of the "Screen off after" choice */
+#define UI_SCREENOFF_DEFAULT_IDX 5u /**< 3 min (after the dim) */
+
+/** Seconds of the "Screen off after" choice @p idx (0 = Never, 15 s, 30 s, 1 min, 2 min, 3 min, 5 min); 0 (never) if out of range. */
+uint32_t ui_screenoff_seconds(uint8_t idx);
+/** Label of the "Screen off after" choice @p idx ("3 min", "Never"); "-" if out of range. */
+const char *ui_screenoff_name(uint8_t idx);
+
 typedef struct {
     uint32_t last_ms; /**< time of the last input (or of the start) */
     bool dimmed;
+    bool off;        /**< the backlight is fully off (second stage after the dim, or Power pressed briefly): the waking input is not delivered */
+    bool forced_off; /**< off because the user asked (short Power press), not because of the idle time: stays until input */
 } ui_idle_t;
 
 /** Start the idle clock at @p now_ms (not at 0: a long boot must not count as idle). */
 void ui_idle_init(ui_idle_t *t, uint32_t now_ms);
-/** Input happened at @p now_ms (may be ahead of the tick clock in the host tour). True if that ended a dim. */
+/** Input happened at @p now_ms (may be ahead of the tick clock in the host tour). True if that ended a dim or an off. */
 bool ui_idle_activity(ui_idle_t *t, uint32_t now_ms);
 /** Re-evaluate: dimmed exactly when @p enabled and at least @p timeout_ms have passed since the last input (wrap-safe;
  *  a last input up to UI_IDLE_FUTURE_MS ahead of @p now_ms is not idle). While @p inhibit is set it is never dimmed and the
  *  clock restarts at @p now_ms. True if the dimmed state changed. */
 bool ui_idle_tick(ui_idle_t *t, uint32_t now_ms, bool enabled, bool inhibit, uint32_t timeout_ms);
+/**
+ * The second stage: off exactly when the screen is forced off (ui_idle_force_off) or @p off_after_ms (0 = never) has passed beyond the dim
+ * time (@p dim_enabled ? @p dim_timeout_ms : 0) since the last input. Never while @p inhibit is set. Same future-stamp tolerance as
+ * ui_idle_tick(). True if the off state changed. Call after ui_idle_tick() (which restarts the clock while inhibited).
+ */
+bool ui_idle_off_tick(ui_idle_t *t, uint32_t now_ms, bool dim_enabled, bool inhibit, uint32_t dim_timeout_ms, uint32_t off_after_ms);
+/** Turn the screen off now (a short Power press); it stays off until input. True if that changed anything. */
+bool ui_idle_force_off(ui_idle_t *t);
+/** Backlight percent to drive: 0 while @p off, else ui_backlight_effective(). */
+uint8_t ui_backlight_level(uint8_t set_pct, bool dimmed, bool off);
 /** Level (percent) to show: the set level, capped at UI_DIM_PCT while dimmed. Never brighter than @p set_pct. */
 uint8_t ui_backlight_effective(uint8_t set_pct, bool dimmed);
 

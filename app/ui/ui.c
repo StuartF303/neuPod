@@ -136,6 +136,10 @@ static uint32_t pump(void) {
 extern void hal_host_bt_drop_link(void) __attribute__((weak));
 extern void hal_host_bt_headset_volume(uint8_t volume) __attribute__((weak));
 extern void hal_host_bt_headset_key(hal_bt_key_t key) __attribute__((weak));
+extern void hal_host_power_key(bool down) __attribute__((weak));
+extern void hal_host_hold_switch(hal_hold_switch_t sw) __attribute__((weak));
+static uint32_t g_script_sleep_until;
+static bool g_script_sleeping;
 static void screen_ready(const char *name);
 static const char *script_step(const char *p, uint32_t now, bool *done) {
     while (*p == ' ') {
@@ -173,6 +177,32 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
                   (strncmp(p + 5, "pause", 5) == 0 && pi.state == PLAYER_PAUSED) ||
                   (strncmp(p + 5, "art", 3) == 0 && pi.state == PLAYER_PAUSED && av.state == ART_VIEW_READY);
         return ok ? end : p;
+    }
+    if (strncmp(p, "sleep:", 6) == 0) {
+        /* Tour only: let N ms of the UI clock pass before the next token (a Power hold of 2 s needs 2 s, not seven 300 ms steps). */
+        if (!g_script_sleeping) {
+            g_script_sleeping = true;
+            g_script_sleep_until = now + (uint32_t)atoi(p + 6);
+        }
+        if ((int32_t)(now - g_script_sleep_until) < 0) {
+            return p;
+        }
+        g_script_sleeping = false;
+        return end;
+    }
+    if (strncmp(p, "pwr:", 4) == 0) {
+        /* Tour only (host simulator): the Power key goes down (pwr:down) or up (pwr:up); the input task turns the level into events. */
+        if (hal_host_power_key != NULL) {
+            hal_host_power_key(strncmp(p + 4, "down", 4) == 0);
+        }
+        return end;
+    }
+    if (strncmp(p, "sw:", 3) == 0) {
+        /* Tour only: the hardware Hold switch (sw:on / sw:off) */
+        if (hal_host_hold_switch != NULL) {
+            hal_host_hold_switch(strncmp(p + 3, "on", 2) == 0 ? HAL_HOLD_SWITCH_ON : HAL_HOLD_SWITCH_OFF);
+        }
+        return end;
     }
     if (strncmp(p, "bt:drop", 7) == 0) {
         /* Tour only (host simulator): the headset goes away now. Weak, so builds without the simulator simply skip it. */
@@ -235,7 +265,7 @@ static bool skip_requested(void) {
     input_event_t ev;
     bool skip = false;
     while (os_queue_recv(rt_input_queue(), &ev, OS_NO_WAIT)) {
-        skip = true;
+        skip = skip || ev.type == INPUT_SCROLL || ev.type == INPUT_BUTTON_DOWN || ev.type == INPUT_BUTTON_UP || ev.type == INPUT_POWER_DOWN;
     }
     return skip;
 }
@@ -338,6 +368,10 @@ void ui_task(void *arg) {
     uint32_t script_next = home_at + FADE_MS + HOME_SNAPSHOT_AFTER_MS + 400u;
     bool script_done = false;
     uint32_t mem_at = 0;
+    // The hardware Hold switch may have been slid before the UI existed (its event was dropped with the splash's): take its position now.
+    if (hal_input_hold_switch() == HAL_HOLD_SWITCH_ON) {
+        ui_frame_input(&(input_event_t){.type = INPUT_HOLD_SWITCH, .steps = 1}, os_tick_ms());
+    }
 
     for (;;) {
         uint32_t now = os_tick_ms();
@@ -358,6 +392,10 @@ void ui_task(void *arg) {
             mem_at = now;
             sample_lvgl_memory();
         }
-        os_delay_ms(pump());
+        // Sleep until the next UI pass is due, or until an input event arrives: a press must not wait out the sleep (UI-6).
+        uint32_t wait = pump();
+        if (os_queue_recv(rt_input_queue(), &ev, wait)) {
+            ui_frame_input(&ev, os_tick_ms());
+        }
     }
 }

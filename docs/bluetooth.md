@@ -254,6 +254,8 @@ is capped at -30 dB, exactly as before; the policy, the stored path and the test
 
 ## Memory budget (RP2350, main SRAM 512 KB)
 
+> **Since 12 Nov 2026 this is history, not a limit:** the Pico 2 W build is frozen (compile-only regression check) and its 520 KB is no longer a budget; the product target is the RP2350B with PSRAM ([ADR-0001 amendment](adr/0001-rp2350-phase1-platform.md#amendment-12-november-2026-the-pico-2-w-is-frozen-the-product-target-is-the-rp2350b-with-psram)). The figures stay as the record of what the testbed ran.
+
 The static RAM ("bss", every figure from `arm-none-eabi-size` on the linked `neupod.elf`):
 
 | | before (feat/codecs) | after stage 1 |

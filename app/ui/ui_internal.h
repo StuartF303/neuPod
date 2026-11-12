@@ -9,6 +9,7 @@
 #include "input_events.h"
 #include "lvgl.h"
 #include "ui.h"
+#include "ui_hold.h"
 #include "ui_logic.h"
 #include "ui_metrics.h"
 
@@ -40,6 +41,11 @@
 #define UI_L_OK 0x3FA34D
 #define UI_L_WARN 0xC77700
 #define UI_L_ERR 0xC62828
+
+/* Font Awesome glyphs with no LV_SYMBOL_*, in the UI fonts (tools/gen_ui_fonts.sh; keep ui_text_has_glyph() in step). */
+#define UI_SYM_POWER "\xEF\x80\x91"  /* U+F011 */
+#define UI_SYM_LOCK "\xEF\x80\xA3"   /* U+F023 */
+#define UI_SYM_UNLOCK "\xEF\x82\x9C" /* U+F09C */
 
 #define UI_STATUS_H (UIM->status_h)
 #define UI_CONTENT_H (UIM->content_h)
@@ -82,10 +88,14 @@ typedef struct {
     uint8_t backlight_pct; /* 5..100 */
     bool autodim;          /* dim the backlight after the idle time */
     uint8_t dim_idx;       /* idle time, an index for ui_autodim_seconds() */
+    uint8_t off_idx;       /* time after the dim until the backlight is fully off, an index for ui_screenoff_seconds() */
+    bool autolock;         /* Hold turns on by itself when the screen goes off (docs/adr/0020-hold.md) */
 } ui_state_t;
 extern ui_state_t g_ui_state;
 /** Show the backlight level on the panel: the set level, or the dimmed one while idle. The only place that computes it. */
 void ui_apply_backlight(void);
+/** True while Hold is on (the screens get no input; ui_hold.h). */
+bool ui_frame_locked(void);
 /** Hold the auto-dim off while a screen previews the backlight (the slider); the idle time restarts when it is released. */
 void ui_idle_inhibit(bool on);
 /** Remember a changed UI setting (RAM now, the card a moment later: settings_store.h). */
@@ -170,6 +180,7 @@ ui_screen_t *ui_screen_extras_create(void);
 ui_screen_t *ui_screen_files_create(void);
 ui_screen_t *ui_screen_settings_create(void);
 ui_screen_t *ui_screen_bluetooth_create(void); /* ui_bluetooth.c */
+ui_screen_t *ui_screen_licences_create(void);  /* ui_licences.c: Settings > About > Licences */
 ui_screen_t *ui_screen_bt_devices_create(void); /* ui_bluetooth.c: starts a scan when it opens */
 /** "Name\nState" of the remembered Bluetooth headset ("Connected", "Pairing...", "Failed: not found", "Not connected"); "" if none (ui_bluetooth.c). */
 void ui_bt_headset_text(char *out, size_t n);

@@ -23,7 +23,7 @@ void y2_set_delay_hook(void (*fn)(uint32_t ms));
 void y2_input_set_volume_handler(void (*fn)(int32_t steps));
 
 /**
- * Called once from the input task when the power key has been held long enough (Y2_POWER_HOLD_MS). main.c installs a
+ * Called once by hal_system_poweroff() (the UI asked for it after a 10 s Power hold). main.c installs a
  * function that starts the same orderly stop as SIGTERM and arranges the power-off.
  */
 void y2_input_set_power_handler(void (*fn)(void));

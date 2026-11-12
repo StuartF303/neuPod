@@ -65,7 +65,7 @@ Priority 7 is the highest; the kernel idle task is 0.
 | --- | --- | --- | --- | --- |
 | kernel timer service | 6 | 1.5 KB | kernel timers | microseconds |
 | storage | 5 | 8 KB | request queue; while a file streams, every 1 ms; otherwise every 500 ms | directory listings and volume space for the UI (yields every 32 entries); streams the file from the card in 2 KB reads into the audio data ring; decodes the album art of the playing track in slices (2 ms of work, 1 ms sleep, audio top-ups between, aborts on any request; [UI](ui.md#now-playing-art)); loads the settings store after the card mounts and saves it about 1.5 s after a change ([Bluetooth](bluetooth.md)); later: library scan, track prefetch |
-| input | 4 | 2 KB | every 2 ms | well under 1 % (the wheel FIFO overflows after ~4.8 ms) |
+| input | 4 | 2 KB | every 2 ms | well under 1 % (the wheel FIFO overflows after ~4.8 ms); also the Power key and Hold switch levels |
 | I2C users, while on the bus | 4 (lifted) | n/a | boot checks, the 5 s gauge read | a few ms (see findings) |
 | CYW43 worker (SDK) | 3 | 6 KB | radio events; **every BTstack callback and lwIP callback** | LED; Bluetooth (BTstack's one thread); lwIP (via the SDK's FreeRTOS arch; lwIP also has its own 4 KB tcpip thread) |
 | wifi (policy) | 1 | 4 KB | every 200 ms | requests from the UI, join/retry with backoff, power policy, SNTP, the 1 s snapshot for the UI ([Wi-Fi](wifi.md)) |
@@ -84,7 +84,7 @@ below the UI so the splash keeps animating while they run.
 
 | From to | Mechanism |
 | --- | --- |
-| input to UI | queue of `input_event_t` (16 deep; dropped if the UI lags) |
+| input to UI | queue of `input_event_t` (`RT_INPUT_QUEUE_LEN` = 64 deep). Wheel and key events are dropped if the UI lags, and counted (`input: WARNING n events dropped` in the 10 s statistics when it ever happens); Power-key and Hold-switch edges are retried until the queue takes them. **UI-6:** the queue was 16 deep (8 presses, two events each) and the UI drained it once per pass (a frame, about 30 ms, then its sleep), so a burst of more than 8 presses (a UART paste, a quick run on the keypad) lost the rest silently and later keys landed on the wrong screen; the UI now sleeps on the queue (an arriving event wakes it at once) and the queue holds 32 presses |
 | monitor / battery check to UI | latest value in a mutex-guarded store (`battery_store`) |
 | boot checks to UI | `capabilities_t` (mutex-guarded; first result per subsystem wins) |
 | I2C bus | one mutex (`rt_i2c_mutex`) around every battery / haptic transaction |
@@ -193,8 +193,8 @@ on the wheel.
 
 | Source | Keys |
 | --- | --- |
-| UART console on the testbed (`console_keys`) | `w` / `k` scroll up (counter-clockwise), `s` / `j` scroll down (+/-4 wheel positions = one list step); Enter or `e` = Select; `a` = Left; `d` = Right; `p` or Space = Play/Pause; `m` or Backspace = Menu |
-| Host simulator window | Up / Down arrows and the mouse wheel scroll; Enter = Select; Left / Right; Space or `p` = Play/Pause; Esc, Backspace or `m` = Menu |
+| UART console on the testbed (`console_keys`) | `w` / `k` scroll up (counter-clockwise), `s` / `j` scroll down (+/-4 wheel positions = one list step); Enter or `e` = Select; `a` = Left; `d` = Right; `p` or Space = Play/Pause; `m` or Backspace = Menu; `l` = toggle Hold (the Pico rig has no Power key, [ADR-0020](adr/0020-hold.md)) |
+| Host simulator window | Up / Down arrows and the mouse wheel scroll; Enter = Select; Left / Right; Space or `p` = Play/Pause; Esc, Backspace or `m` = Menu; **F1** = the Power key (hold it: 2 s toggles Hold, 10 s asks for a power-off, which the simulator only logs) |
 
 Any input event also skips the splash hold. The UI screens and their keys are described in [UI](ui.md). `hal_input_reinit()` failing (the init packet is still
 `TODO(hw)`) is not fatal: the wheel check passes if valid frames arrive within about 1.1 s, otherwise it is

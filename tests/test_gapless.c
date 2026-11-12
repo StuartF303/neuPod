@@ -804,7 +804,7 @@ TEST(resume_past_the_end_starts_at_the_beginning) {
 
 // ---- seek while playing (UI-7): the player restarts the same file at a frame (a hard start; the resume path) -------------------
 
-// Which codecs the player may offer Seek on: those whose track_feed_seek() lands on the exact frame.
+// Which codecs the player may offer Seek on: those whose track_feed_seek() lands on (WAV, ALAC, FLAC with a table) or near (MP3) the requested frame.
 static bool seekable_of(const char *path) {
     meta_read_fn rd;
     void *rctx;
@@ -818,14 +818,14 @@ static bool seekable_of(const char *path) {
     ops_close(rctx);
     return ok;
 }
-TEST(only_wav_and_flac_with_a_seek_table_are_seekable) {
+TEST(wav_alac_mp3_and_flac_with_a_seek_table_are_seekable) {
     char mp3[600];
     snprintf(mp3, sizeof mp3, "%s/mp3_44k_st.mp3", ASSETS);
     ASSERT_TRUE(seekable_of(P[7]));   // WAV
     ASSERT_TRUE(seekable_of(P[8]));   // FLAC with a seek table
     ASSERT_FALSE(seekable_of(P[0]));  // FLAC without one: reaching a frame would mean decoding from the start
-    ASSERT_FALSE(seekable_of(P[2]));  // ALAC
-    ASSERT_FALSE(seekable_of(mp3));   // MP3
+    ASSERT_TRUE(seekable_of(P[2]));   // ALAC: any packet, the decoder drops the frames before the target (UI-7)
+    ASSERT_TRUE(seekable_of(mp3));    // MP3: a frame header found from the byte proportion / Xing table (UI-7)
 }
 
 // Play @p path for a moment, then seek to @p frame the way player_seek() does; the output after the restart must be the reference from
@@ -874,6 +874,36 @@ TEST(seek_in_a_playing_flac_with_a_seek_table_lands_on_the_exact_frame) {
     ASSERT_TRUE(exact);
     ASSERT_TRUE(tail_exact_pad(P[8], 4097));
     ASSERT_EQ(0, g_failed);
+    ASSERT_EQ(0, g_ev.cmd_errors);
+}
+TEST(seek_in_a_playing_alac_lands_on_the_exact_frame) {
+    bool exact;
+    ASSERT_TRUE(seek_while_playing(P[2], 10000, &exact)); // packet 2 of 4096 frames: the decoder drops the 1808 before the target
+    ASSERT_TRUE(exact);
+    ASSERT_TRUE(tail_exact_pad(P[2], 10000));
+    ASSERT_TRUE(seek_while_playing(P[2], 4096, &exact)); // exactly on a packet
+    ASSERT_TRUE(exact);
+    ASSERT_TRUE(tail_exact_pad(P[2], 4096));
+    ASSERT_TRUE(seek_while_playing(P[2], 7, &exact)); // backwards, near the start
+    ASSERT_TRUE(exact);
+    ASSERT_TRUE(tail_exact_pad(P[2], 7));
+    ASSERT_EQ(0, g_failed);
+    ASSERT_EQ(0, g_ev.cmd_errors);
+}
+TEST(seek_in_a_playing_mp3_lands_within_a_frame_and_plays_to_the_end) {
+    char mp3[600];
+    snprintf(mp3, sizeof mp3, "%s/mp3_44k_st.mp3", ASSETS);
+    bool exact;
+    ASSERT_TRUE(seek_while_playing(mp3, 30000, &exact)); // CBR: the landed frame is within a frame of the request
+    ASSERT_TRUE(g_started_frame > 30000 - 1200 && g_started_frame < 30000 + 1200);
+    ASSERT_EQ(0, g_failed);
+    ASSERT_EQ(0, g_ev.cmd_errors);
+    pthread_mutex_lock(&g_cap_mu);
+    uint32_t got = g_cap_frames;
+    pthread_mutex_unlock(&g_cap_mu);
+    ASSERT_TRUE(got > 14100u - 4600u && got < 14100u + 4600u); // what remains of the 44100-frame vector
+    ASSERT_TRUE(seek_while_playing(mp3, 5, &exact)); // near the start: the first frame after the Xing / Info frame
+    ASSERT_TRUE(g_started_frame < 1200);
     ASSERT_EQ(0, g_ev.cmd_errors);
 }
 TEST(seek_to_the_last_frame_plays_that_frame_and_ends) {
@@ -1102,9 +1132,11 @@ int main(void) {
     RUN(resume_alac_starts_on_the_exact_frame_trimmed_or_not);
     RUN(resume_mp3_starts_near_the_frame_and_plays_to_the_end);
     RUN(resume_past_the_end_starts_at_the_beginning);
-    RUN(only_wav_and_flac_with_a_seek_table_are_seekable);
+    RUN(wav_alac_mp3_and_flac_with_a_seek_table_are_seekable);
     RUN(seek_in_a_playing_wav_lands_on_the_exact_frame);
     RUN(seek_in_a_playing_flac_with_a_seek_table_lands_on_the_exact_frame);
+    RUN(seek_in_a_playing_alac_lands_on_the_exact_frame);
+    RUN(seek_in_a_playing_mp3_lands_within_a_frame_and_plays_to_the_end);
     RUN(seek_to_the_last_frame_plays_that_frame_and_ends);
     RUN(seek_during_gapless_prefetch_keeps_the_handoff_sample_exact_wav);
     RUN(seek_during_gapless_prefetch_keeps_the_handoff_sample_exact_across_codecs);

@@ -51,11 +51,16 @@ os_queue_t *rt_input_queue(void) { return g_input_queue; }
 static volatile uint32_t g_wheel_frames;
 uint32_t rt_wheel_frames_seen(void) { return g_wheel_frames; }
 
-static void send_events(const input_event_t *ev, size_t n) {
-    for (size_t i = 0; i < n; i++) {
-        (void)os_queue_send(g_input_queue, &ev[i], OS_NO_WAIT); // drop if the UI lags
-    }
+static input_pump_t g_pump;
+uint32_t rt_input_events_dropped(void) { return g_pump.dropped; }
+
+static bool queue_send(void *ctx, const input_event_t *ev) {
+    (void)ctx;
+    return os_queue_send(g_input_queue, ev, OS_NO_WAIT);
 }
+
+// Best effort: a burst the UI cannot take is dropped, but counted (the monitor prints it). See input_pump_send().
+static void send_events(const input_event_t *ev, size_t n) { input_pump_send(&g_pump, queue_send, NULL, ev, n); }
 
 // This task is the ONLY caller of hal_input_poll() and of the console reader (the PIO FIFO and the
 // frame sync are single-consumer); the wheel boot check just waits for g_wheel_frames.
@@ -63,7 +68,10 @@ static void input_task(void *arg) {
     (void)arg;
     hal_wheel_state prev = {0};
     uint32_t last = os_tick_ms();
+    input_pump_init(&g_pump);
     for (;;) {
+        // Power key and Hold switch: levels turned into edges that are never lost (retried until the queue has room).
+        input_pump_levels(&g_pump, queue_send, NULL, hal_input_power_key(), hal_input_hold_switch());
         hal_wheel_state cur;
         if (hal_input_poll(&cur) && cur.valid) {
             g_wheel_frames++;
@@ -160,6 +168,10 @@ static void print_ui_stats(void) {
         printf("ui: frames=%u frame_us avg/max=%u/%u lvgl_mem=%u/%uB (max %uB, frag %u%%)\n", (unsigned)u.frames,
                (unsigned)u.frame_avg_us, (unsigned)u.frame_max_us, (unsigned)u.mem_used, (unsigned)u.mem_total,
                (unsigned)u.mem_max_used, (unsigned)u.mem_frag_pct);
+    }
+    uint32_t dropped = rt_input_events_dropped();
+    if (dropped != 0) { // only when something was lost: the bench has no other way to see it (UI-6)
+        printf("input: WARNING %u events dropped (queue of %u full)\n", (unsigned)dropped, (unsigned)RT_INPUT_QUEUE_LEN);
     }
     ui_perf_new_window();
 }
@@ -306,7 +318,7 @@ void neupod_runtime_run(const neupod_runtime_config_t *cfg) {
     caps_init();
     battery_store_init();
     g_i2c_mutex = os_mutex_create();
-    g_input_queue = os_queue_create(sizeof(input_event_t), 16);
+    g_input_queue = os_queue_create(sizeof(input_event_t), RT_INPUT_QUEUE_LEN);
     settings_service_init();
     bt_service_init();
     wifi_service_init();

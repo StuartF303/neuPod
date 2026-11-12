@@ -56,7 +56,7 @@ typedef struct {
     uint32_t elapsed_s;    /**< from the audio core's own frame count */
     uint64_t pos_frames;   /**< the same position in frames of the track (a seek in progress shows its target) */
     uint32_t track_id;     /**< changes when another track plays (a start, a gapless handoff), not on a seek within the track */
-    bool seekable;         /**< playing or paused on a track player_seek() can move within (WAV, FLAC with a seek table) */
+    bool seekable;         /**< playing or paused on a track player_seek() can move within (WAV, ALAC, MP3, FLAC with a seek table) */
     uint32_t vol_att_db;
     bool muted;            /**< output stage mute line asserted */
     uint32_t queue_pos;    /**< file playback through a queue: 1-based position ("n of N"); 0 when there is no queue */
@@ -113,7 +113,7 @@ pq_repeat_t player_repeat(void);
 void player_set_shuffle(pq_shuffle_t mode);
 void player_set_repeat(pq_repeat_t mode);
 /**
- * Move playback to PCM frame @p frame of the current track (exact for the seekable tracks, player_info_t.seekable). Done as a hard start of
+ * Move playback to PCM frame @p frame of the current track (exact for WAV, ALAC and FLAC with a seek table, near it for MP3: player_info_t.seekable). Done as a hard start of
  * the same file at that frame (the resume path: a short mute, the announced gapless successor is withdrawn and offered again), so the audio
  * core and its rings see an ordinary new stream. Paused stays paused. @p frame at or past the end of the track is the end of the track: the
  * queue moves on as it does when a track ends by itself (repeat-one restarts it, the last track stops). False (nothing done) when the track

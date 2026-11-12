@@ -144,17 +144,48 @@ static const struct {
 uint32_t ui_autodim_seconds(uint8_t idx) { return idx < UI_AUTODIM_STEPS ? k_autodim[idx].sec : 0u; }
 const char *ui_autodim_name(uint8_t idx) { return idx < UI_AUTODIM_STEPS ? k_autodim[idx].name : "-"; }
 
+static const struct {
+    uint16_t sec;
+    const char *name;
+} k_screenoff[UI_SCREENOFF_STEPS] = {{0, "Never"}, {15, "15 s"}, {30, "30 s"}, {60, "1 min"}, {120, "2 min"}, {180, "3 min"}, {300, "5 min"}};
+
+uint32_t ui_screenoff_seconds(uint8_t idx) { return idx < UI_SCREENOFF_STEPS ? k_screenoff[idx].sec : 0u; }
+const char *ui_screenoff_name(uint8_t idx) { return idx < UI_SCREENOFF_STEPS ? k_screenoff[idx].name : "-"; }
+
 void ui_idle_init(ui_idle_t *t, uint32_t now_ms) {
     t->last_ms = now_ms;
     t->dimmed = false;
+    t->off = false;
+    t->forced_off = false;
 }
 
 bool ui_idle_activity(ui_idle_t *t, uint32_t now_ms) {
-    bool was = t->dimmed;
+    bool was = t->dimmed || t->off;
     t->last_ms = now_ms;
     t->dimmed = false;
+    t->off = false;
+    t->forced_off = false;
     return was;
 }
+
+bool ui_idle_off_tick(ui_idle_t *t, uint32_t now_ms, bool dim_enabled, bool inhibit, uint32_t dim_timeout_ms, uint32_t off_after_ms) {
+    uint32_t elapsed = now_ms - t->last_ms;
+    bool future = elapsed >= 0u - UI_IDLE_FUTURE_MS;
+    bool idle_off = off_after_ms != 0u && !future && elapsed >= (dim_enabled ? dim_timeout_ms : 0u) + off_after_ms;
+    bool off = !inhibit && (t->forced_off || idle_off);
+    bool changed = off != t->off;
+    t->off = off;
+    return changed;
+}
+
+bool ui_idle_force_off(ui_idle_t *t) {
+    bool changed = !t->off;
+    t->off = true;
+    t->forced_off = true;
+    return changed;
+}
+
+uint8_t ui_backlight_level(uint8_t set_pct, bool dimmed, bool off) { return off ? 0u : ui_backlight_effective(set_pct, dimmed); }
 
 bool ui_idle_tick(ui_idle_t *t, uint32_t now_ms, bool enabled, bool inhibit, uint32_t timeout_ms) {
     if (inhibit) {
@@ -340,6 +371,8 @@ bool ui_text_has_glyph(uint32_t cp) {
     // LV_SYMBOL_*: AUDIO OK IMAGE PLAY PAUSE RIGHT SHUFFLE LOOP DIRECTORY CHARGE FILE WIFI BATTERY_FULL/3/2/1/EMPTY BLUETOOTH SD_CARD
     case 0xF001: case 0xF00C: case 0xF03E: case 0xF04B: case 0xF04C: case 0xF054: case 0xF074: case 0xF079: case 0xF07B:
     case 0xF0E7: case 0xF15B: case 0xF1EB: case 0xF240: case 0xF241: case 0xF242: case 0xF243: case 0xF244: case 0xF293: case 0xF7C2:
+    // Font Awesome with no LV_SYMBOL (UI_SYM_* in ui_internal.h): power, lock, unlock
+    case 0xF011: case 0xF023: case 0xF09C:
         return true;
     default:
         return false;

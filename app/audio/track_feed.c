@@ -122,6 +122,9 @@ const char *track_feed_open(track_feed_t *t, const char *path, uint64_t size, me
                 snprintf(pf->tags.title, sizeof pf->tags.title, "%s", base_name(path));
             }
             snprintf(pf->format, sizeof pf->format, "MP3 %s%uk", mi.vbr ? "VBR ~" : "", (unsigned)mi.bitrate_kbps);
+            // Seek lands on a frame header found from the Xing / VBRI table or the byte proportion (mp3_seek_point): a frame for constant bit rate, about
+            // 1 % of the track for a VBR file, and an estimate (no frame count in the file) is as good as that estimate. The UI shows where it landed.
+            pf->seekable = mi.total_frames != 0;
             t->kind = TRACK_FEED_BYTES;
             t->base = mi.audio_offset;
             t->data_len = size > mi.audio_offset ? size - mi.audio_offset : 0;
@@ -151,6 +154,7 @@ const char *track_feed_open(track_feed_t *t, const char *path, uint64_t size, me
             fill_format(pf, "ALAC", m->bits, m->rate, m->channels);
             t->kind = TRACK_FEED_M4A;
             mp4_iter_init(&t->it, &t->mp4);
+            pf->seekable = m->sample_count != 0 && m->frame_length != 0; // any packet: mp4_iter_seek(), the decoder drops the frames before the target
         }
     } else if (verify) {
         fail = "Verify works on FLAC files";
