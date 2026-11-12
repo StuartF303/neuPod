@@ -216,6 +216,27 @@ TEST(restore_reads_the_saved_path_and_the_step_writes_it) {
     ASSERT_EQ(OUT_PATH_BT, g_set_vol_path);
 }
 
+TEST(player_pause_pauses_a_playing_track_once_and_keeps_the_position) {
+    start_album(0);
+    player_info_t i;
+    player_get(&i);
+    ASSERT_EQ(PLAYER_PLAYING, i.state);
+    g_pcm_frames = 44100u * 12u;
+    int calls = g_pause_calls;
+    player_pause(); // the headset went away (audio_route.c)
+    ASSERT_EQ(calls + 1, g_pause_calls);
+    ASSERT_TRUE(g_paused);
+    player_get(&i);
+    ASSERT_EQ(PLAYER_PAUSED, i.state);
+    ASSERT_EQ(12u, i.elapsed_s);
+    ASSERT_EQ(44100u * 12u, g_rs_last.frame); // the place is kept for the resume record
+    player_pause(); // already paused: nothing
+    ASSERT_EQ(calls + 1, g_pause_calls);
+    player_pause_toggle(); // and Play carries on
+    player_get(&i);
+    ASSERT_EQ(PLAYER_PLAYING, i.state);
+}
+
 TEST(resume_saves_on_pause_track_change_stop_and_end) {
     int saves = g_rs_saves;
     start_album(1);                               // a new track: saved from its beginning
@@ -1000,6 +1021,7 @@ int main(void) {
     player_init();
     RUN_T(volume_policy_cases);
     RUN_T(restore_reads_the_saved_path_and_the_step_writes_it);
+    RUN_T(player_pause_pauses_a_playing_track_once_and_keeps_the_position);
     RUN_T(resume_saves_on_pause_track_change_stop_and_end);
 #if RESUME_WRITE_WHILE_PLAYING
     RUN_T(periodic_save_only_while_playing_and_only_when_due);
