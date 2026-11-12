@@ -23,6 +23,7 @@ the Pico 2 W build is frozen as a compile check; items may assume the RP2350B wi
 | UI-8 | **Wi-Fi status-bar icon**: today one Wi-Fi glyph coloured by the signal class of the joined network (hidden when the station is off); remainder: draw the signal as bars in the status bar like the lists do, and a distinct "joining" look. | spec (common frame) | — | The Bluetooth glyph (remembered / connected / streaming) is done. Keep to one glyph; the detail lives in Settings. |
 | UI-7 | **Seek remainder**: FLAC without a SEEKTABLE (needs a decode-from-start fallback, seconds of silence, or a frame scan) and AAC (not playable yet); **audible fast-forward** while Right / Left is held (today the hold moves a target and applies it on release); a Fraunhofer VBRI byte table is read as if its first stretch includes the VBRI frame (not checked against a real file). | spec (Now playing) | — | MP3 and ALAC seek are built (UI-7, 12 Nov 2026); see [Audio](audio.md#gapless-playback-and-the-play-queue). |
 
+| TS-1 | **Library tours are clock-driven** (key script timed in wall-clock ms), so they flake on a loaded CI runner (failed at 60 s and 80 s run limits; now 140 s). Make the tour scripts wait for events (log line / screen state) instead of fixed times. | CI 2026-11-12 | — | |
 ## UI — checks and loose ends from the Hold / screen-off work (12 Nov 2026)
 
 | ID | Item | Source | Needs |
