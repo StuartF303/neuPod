@@ -554,6 +554,7 @@ static void link_timeout(btstack_timer_source_t *ts) {
 }
 
 static void a2dp_open(void);
+static void emit_key(hal_bt_key_t k);
 static void a2dp_gone(hal_bt_fail_t why_failed);
 static void avrcp_gone(void);
 static void avrcp_arm_connect(void);
@@ -930,6 +931,7 @@ static const hal_bt_pcm_source_t *volatile g_pcm; /* must stay valid for the lif
 static volatile uint32_t g_st_encoded, g_st_packets, g_st_underruns, g_st_drift;
 
 static uint16_t g_a2dp_cid;
+static volatile bool g_start_ours, g_suspend_ours; /* a START / SUSPEND we asked for is outstanding: its event is not the headset's */
 static uint8_t g_local_seid, g_remote_seid;
 static bool g_a2dp_inited;
 static uint8_t g_sbc_caps[] = {(AVDTP_SBC_44100 << 4) | AVDTP_SBC_STEREO | AVDTP_SBC_JOINT_STEREO, 0xFF, 2, (uint8_t)NEUPOD_BT_SBC_BITPOOL};
@@ -1281,11 +1283,18 @@ static void a2dp_packet_handler(uint8_t type, uint16_t channel, uint8_t *packet,
         set_stream(HAL_BT_STREAM_OPEN, HAL_BT_FAIL_NONE);
         break;
     }
-    case A2DP_SUBEVENT_STREAM_STARTED:
+    case A2DP_SUBEVENT_STREAM_STARTED: {
         media_start();
-        printf("bt: a2dp streaming\n");
+        /* Started by the headset (an AVDTP START it sent: a stem click on a headset whose stream we had suspended) and not by our own request: the click means
+         * "play". Some headsets send this instead of, or before, an AVRCP PLAY. The app resumes a paused player (bt_key_action: PLAY does nothing while playing). */
+        bool remote = !__atomic_exchange_n(&g_start_ours, false, __ATOMIC_SEQ_CST);
+        printf("bt: a2dp streaming%s\n", remote ? " (started by the headset)" : "");
         set_stream(HAL_BT_STREAM_STREAMING, HAL_BT_FAIL_NONE);
+        if (remote) {
+            emit_key(HAL_BT_KEY_PLAY);
+        }
         break;
+    }
     case A2DP_SUBEVENT_STREAMING_CAN_SEND_MEDIA_PACKET_NOW:
         if (g_streaming_timer && g_ready_to_send && g_sbc_count > 0) {
             send_packet();
@@ -1293,7 +1302,7 @@ static void a2dp_packet_handler(uint8_t type, uint16_t channel, uint8_t *packet,
         break;
     case A2DP_SUBEVENT_STREAM_SUSPENDED:
         media_stop();
-        printf("bt: a2dp suspended\n");
+        printf("bt: a2dp suspended%s\n", __atomic_exchange_n(&g_suspend_ours, false, __ATOMIC_SEQ_CST) ? "" : " (by the headset)");
         if (g_stream == HAL_BT_STREAM_STREAMING) {
             set_stream(HAL_BT_STREAM_SUSPENDED, HAL_BT_FAIL_NONE);
         }
@@ -1347,14 +1356,17 @@ static void worker_stream_req(void *arg) {
         break;
     case REQ_START:
         if ((g_stream == HAL_BT_STREAM_OPEN || g_stream == HAL_BT_STREAM_SUSPENDED) && g_a2dp_cid != 0) {
+            __atomic_store_n(&g_start_ours, true, __ATOMIC_SEQ_CST);
             uint8_t rc = a2dp_source_start_stream(g_a2dp_cid, g_local_seid);
             if (rc != ERROR_CODE_SUCCESS) {
+                __atomic_store_n(&g_start_ours, false, __ATOMIC_SEQ_CST);
                 printf("bt: a2dp start 0x%02X\n", (unsigned)rc);
             }
         }
         break;
     case REQ_SUSPEND:
         if (g_stream == HAL_BT_STREAM_STREAMING && g_a2dp_cid != 0) {
+            __atomic_store_n(&g_suspend_ours, true, __ATOMIC_SEQ_CST);
             (void)a2dp_source_pause_stream(g_a2dp_cid, g_local_seid);
         }
         break;
@@ -1516,6 +1528,11 @@ static void np_unlock(void) { __atomic_store_n(&g_np_lock, 0, __ATOMIC_SEQ_CST);
 static void emit_volume(uint8_t v) {
     hal_bt_event_t ev = {.type = HAL_BT_EVT_VOLUME, .state = (hal_bt_state_t)g_state, .dev = g_peer, .volume = v};
     emit(&ev);
+}
+
+static const char *key_name(hal_bt_key_t k) {
+    static const char *const n[] = {"?", "PLAY", "PAUSE", "PLAY_PAUSE", "NEXT", "PREV", "STOP", "FF", "RW"};
+    return (unsigned)k < sizeof n / sizeof n[0] ? n[k] : "?";
 }
 
 static void emit_key(hal_bt_key_t k) {
@@ -1726,6 +1743,8 @@ static void avrcp_target_packet_handler(uint8_t type, uint16_t channel, uint8_t 
         break;
     }
     case AVRCP_SUBEVENT_OPERATION: {
+        printf("bt: avrcp: key 0x%02X %s (target)\n", (unsigned)avrcp_subevent_operation_get_operation_id(packet),
+               avrcp_subevent_operation_get_button_pressed(packet) ? "pressed" : "released");
         if (avrcp_subevent_operation_get_button_pressed(packet) == 0) {
             break;
         }
@@ -1741,11 +1760,13 @@ static void avrcp_target_packet_handler(uint8_t type, uint16_t channel, uint8_t 
         default: break;
         }
         if (k != (hal_bt_key_t)0) {
+            printf("bt: avrcp: key %s\n", key_name(k));
             emit_key(k);
         }
         break;
     }
     default:
+        printf("bt: avrcp: target event 0x%02X\n", (unsigned)packet[2]);
         break;
     }
 }
