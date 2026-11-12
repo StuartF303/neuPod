@@ -24,6 +24,11 @@ void player_get(player_info_t *o) {
     memset(o, 0, sizeof *o);
     o->state = g_pstate;
 }
+static int g_player_stops;
+void player_stop(void) { /* as the real one: the place is kept for resume, the player goes idle */
+    g_player_stops++;
+    g_pstate = PLAYER_IDLE;
+}
 static int g_audio_stops;
 bool audio_stop(void) {
     g_audio_stops++;
@@ -218,13 +223,24 @@ TEST(a_folder_listing_takes_the_shared_buffer_and_the_next_request_opens_the_rea
     ASSERT_TRUE(r.text[0] >= 'A' && r.text[0] <= 'Z');
 }
 
+TEST(asking_for_a_build_stops_a_paused_track_but_not_a_playing_one) {
+    g_pstate = PLAYER_PAUSED; /* after boot: resume brought the last track back paused */
+    g_player_stops = 0;
+    ASSERT_TRUE(library_request_build(++g_seq));
+    ASSERT_EQ(1, g_player_stops);
+    ASSERT_EQ(PLAYER_IDLE, g_pstate);
+    g_pstate = PLAYER_PLAYING;
+    ASSERT_TRUE(library_request_build(++g_seq));
+    ASSERT_EQ(1, g_player_stops); /* something actually playing is left alone: the build then refuses */
+    g_pstate = PLAYER_IDLE;
+    library_cancel_build();
+}
+
 TEST(a_build_refuses_while_something_plays_and_on_a_card_it_cannot_write) {
     ASSERT_TRUE(fresh_card(2));
     g_pstate = PLAYER_PLAYING;
     ASSERT_EQ(LIBSVC_PLAYING, do_build());
-    g_pstate = PLAYER_PAUSED;
-    ASSERT_EQ(LIBSVC_PLAYING, do_build());
-    g_pstate = PLAYER_OPENING;
+    g_pstate = PLAYER_OPENING; /* (a paused track is stopped by the request: asking_for_a_build_stops_a_paused_track...) */
     ASSERT_EQ(LIBSVC_PLAYING, do_build());
     ASSERT_EQ(LIBSVC_NONE, do_info((lvw_view_t){LVW_SONGS, 0})); /* nothing was written */
     g_pstate = PLAYER_ENDED; /* a finished track is nothing playing */
@@ -343,6 +359,7 @@ int main(void) {
     RUN(rows_error_on_a_bad_view_and_the_service_keeps_working);
     RUN(a_failed_list_open_does_not_leave_the_previous_lists_rows_computed_from_its_empty_info);
     RUN(a_folder_listing_takes_the_shared_buffer_and_the_next_request_opens_the_reader_again);
+    RUN(asking_for_a_build_stops_a_paused_track_but_not_a_playing_one);
     RUN(a_build_refuses_while_something_plays_and_on_a_card_it_cannot_write);
     RUN(no_card_means_no_library_and_no_build);
     RUN(cancel_stops_the_scan_and_the_old_library_survives);
