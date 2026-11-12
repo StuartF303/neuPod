@@ -324,9 +324,9 @@ decoder ring (2048 frames, 46 ms at 44.1 kHz) and its second half is the Bluetoo
 
 * The Bluetooth ring is the only buffer between the decoder and the link. When it has no room for a block the block interrupt **waits** (consumes nothing, advances no position, counts `bt_stall_blocks`): the
   decoder, the elapsed time and the end of the track are paced by the link.
-* The encoder is a run-loop timer (8 ms) that owes the headset rate x elapsed time of audio, never more than 40 ms of it (no unbounded backlog after a stall), and while a finished packet waits for "can send now"
+* The encoder is a run-loop timer (8 ms) that owes the headset rate x elapsed time of audio, never more than the catch-up budget of it (160 ms; it was a hard 40 ms cap until the Y2 walk, see [Link robustness](#link-robustness-built)), and while a finished packet waits for "can send now"
   it produces nothing. The owed amount is steered by the ring's fill level against half of it: above half the encoder consumes up to 0.3 % faster, below half slower, one step of 0.05 % per tick; each change of step is a "drift
-  correction" in the statistics. When a stream starts the excess above half (the ring filled during the set-up) is sent at once, within the 40 ms bound.
+  correction" in the statistics. When a stream starts the excess above half (the ring filled during the set-up) is sent at once, within a 40 ms bound (`BT_LINK_STALL_MS`).
 * An empty ring while a track plays is an **underrun** (counted once per dry spell, not per tick); an empty ring while paused is not (`active()` of the source). What was owed during an underrun is dropped: no burst when audio returns.
 * The SBC storage bound includes the payload header byte (the `y2-a2dp` review fix): the packet holds at most `min(link MTU - 1, storage - 1)` bytes of frames. 680 B of storage on the RP2350 (a typical headset MTU is 672), 1030 B on the Y2.
 
@@ -360,6 +360,52 @@ The rings add nothing (shared store). The stack of BTstack's worker (6 KB) now a
 4. RP2350 + WI-C200: the same, plus the 6 KB worker stack minimum, core 1 `underruns` on I2S before and after a Bluetooth session (the ring layout comes back), Wi-Fi joining and leaving while streaming (still provisional).
 5. A 48 kHz or 96 kHz file on Bluetooth: refused with the message, the queue moves on, nothing crashes.
 6. AirPods Pro 3: Connect, music; try `NEUPOD_BT_SBC_XQ=1` on a build and listen (the ADR-0007 test).
+
+## Link robustness (built)
+
+**Why.** A 47-minute walk on the Y2 with AirPods Pro (Y2 in a pocket, 12 Nov 2026; logs kept off-repo) gave glitches and some full breakdowns. What the firmware log showed:
+
+* The decoder never starved (`ring_min` 2048 of 2048 throughout, FLAC about 1.5 % of one core) and the encoder ring underran 8 times in 47 minutes. The audio was always there; the **link** was the limit.
+* Normally about 431 packets per 10 s. In bad patches the encoder waited on the link (02:14:35 to 02:14:45: only about half the audio got through). The old rule never owed the headset more than 40 ms
+  after a stall, so every stall permanently drained the headset's jitter buffer by what the link had held up, and a few of them in a row was a glitch, then a dropout.
+* The mid-song `a2dp suspended` lines (3 of the walk's 12, at 02:13:47, 02:14:38 and 02:15:46; all 12 are ours, none "by the headset") were **not** the route going quiet while playing. Each is preceded by `display: wake` / `backlight wake` a few seconds before (a key on the Y2 itself, which
+  in a pocket is a press of Play/Pause), the PCM frame counter freezes there (e.g. 726,528 to 741,632 frames over the next 10 s), and the stream resumes at a later Play (the headset's `key PLAY` at 02:13:56, or the next press). `audio_route.c` only suspends when the player is not PLAYING for 4 s, and it was paused. The firmware now says so: `player: paused (Play/Pause)`
+  / `player: playing (Play/Pause)`, and `route: not playing for N ms (player state S), suspending the stream`.
+* The `a2dp stream released` events at 02:22:34, 02:43:09, 02:43:16, 02:47:23 and 02:49:59 were **not** the headset letting go: each is followed within the same second by `route: output wired`, which only the Disconnect / Forget actions produce
+  (`audio_route_user_released`), and then by `bt: connect` (a manual Connect; the automatic one logs `bt: reconnecting`). They are the owner's manual reconnects after a breakdown. The volume cap at 02:43:15 (66 % to 50 %) happened three times in the log
+  with the same sequence and only that once was followed by a disconnect, a second later and by hand. Nothing in the log says the cap provoked anything. The actual cause of the breakdowns is not in the firmware log (no link-level lines). Hence the diagnostics below and the HCI trace advice.
+
+**What was built (one place for every number: `hal/common/bt_btstack/bt_link_policy.h`, pure functions, host tests `bt_link_policy`).**
+
+1. **Bounded catch-up.** The owed-audio cap is now `BT_LINK_CATCHUP_MS` = 160 ms. After a stall the missed audio is encoded and sent as fast as the link takes packets (one packet per 8 ms tick at most, about 3 times real time), so the headset's buffer fills
+   again. There is no unbounded burst; audio owed beyond the budget is forgone and counted (`drops`). In practice the ring is what limits it: the Bluetooth ring holds 93 ms and the audio core waits, losing nothing, while it is full (see above), so up to
+   about 93 ms of a stall can be made up; the budget is headroom for a larger ring. A ring that runs dry while paying off a stall is the catch-up having caught up, not an underrun. The start-up burst keeps the old 40 ms bound.
+2. **Adaptive bitpool.** One tick is *pressured* when the packet has waited 30 ms for "can send now" or 50 ms of audio is owed. A 1 s window with 25 % pressured ticks is bad; **2 bad windows in a row** step the bitpool down 53, 45, 35 (never above what the headset
+   asks for, never below its minimum; steps that coincide are one; with `NEUPOD_BT_SBC_XQ` the ladder starts at 76). The encoder is reconfigured between two frames (`set_bitpool`): SBC frames carry their bitpool, so the headset needs no AVDTP reconfigure
+   (the frames of a packet in progress keep their own length: `g_sbc_frames`). It steps back up one level after **15 s** without a bad window and under 5 % pressure; a step down soon (60 s) after a step up doubles the hold (to 60 s at most), so a link that stays
+   bad does not oscillate. Every stream start begins at the best bitpool. Every change is logged: `bt: a2dp: bitpool 53 -> 45 (link backpressure), frame 103 bytes, 284 kbit/s`; the Now Playing / Settings codec readout follows (it is the same published codec record). Bitrates:
+   53 is 328 kbit/s, 45 is 284, 35 is 229. The switch re-initialises the SBC encoder's filter state: expect at most a tick-sized discontinuity, which is far less than the dropout it prevents.
+3. **Diagnostics, every 10 s** (UART / Y2 log), next to the existing `bt: a2dp: packets ...` line:
+
+   `bt: link: rssi -4 dB, wait avg/max 3/41 ms, inflight 3/4, bitpool 53, stalls 2, catchup 88 ms, drops 0 ms`
+
+   * `rssi`: the result of `gap_read_rssi` (the line is printed when the HCI answer arrives; `?` if it never does). BR/EDR Read RSSI is in dB relative to the controller's golden receive power range (0 inside it, negative below it); some controllers report absolute dBm. What the MT6582 returns is one thing to learn from the next walk.
+   * `wait avg/max`: request to the "can send now" event, of the packets sent in the window. `inflight N/T`: the most ACL packets the controller had outstanding at an 8 ms tick, of the T buffers it reported (HCI Read Buffer Size; 4 on the MT6582, logged once as `bt: controller ACL buffers`). N = T all the time means the controller's buffers are the bottleneck.
+   * `stalls`: episodes of owing more than 40 ms (counted once per episode, not per tick). `catchup`: the most audio owed, ms (up to 160). `drops`: audio forgone beyond the budget, ms.
+   * Releases and link loss are explained in the log: `bt: acl down, reason 0x08 (link supervision timeout: ...), rssi, last packet N ms ago`; `bt: a2dp stream released (by the headset | by us; acl up | down; rssi; last packet N ms ago; bitpool)`; `bt: disconnecting (requested by the app ...)` when Disconnect / Forget does it.
+   * Track names: a library queue's entries have no name until the storage task resolves them, so the queue line reads `''`; the resolved file is now logged: `player: file '/Music/...'` (and `player: next (gapless look-ahead) '...'`).
+4. **HCI trace for a walk (Y2).** `NEUPOD_BT_HCI_DUMP=<file>` in `/etc/neupod-fw.env` writes a PacketLogger trace of the whole session. For an hour-long walk write it to the persistent ext4, not `/tmp` (RAM, and gone on a reboot):
+
+   ```
+   mkdir -p /opt/neupod-logs        # once
+   echo 'NEUPOD_BT_HCI_DUMP=/opt/neupod-logs/hci-$(date +%Y%m%d-%H%M%S).pklg' >> /etc/neupod-fw.env   # sourced by the init script, so the date is the start time
+   /etc/init.d/S91neupod-fw restart
+   ```
+   The file grows by about 40 KB/s while streaming (about 150 MB per hour: check `df /opt` first). The port keeps a second descriptor of the file and `fsync()`s it every 5 s from a helper thread (no RTOS call), so the trace is on the disk to within 5 s even if the Y2 loses power. Read it with Wireshark (PacketLogger) or BTstack's `tools/`; `Number of Completed Packets` against the data packets shows the controller's buffer use, `Disconnection Complete` has the reason.
+
+**Cost (RP2350, Release, `arm-none-eabi-size` on `neupod.elf`, origin/main 701c8f2 against this change):** `text` 1,411,808 to 1,415,144 B (**+3,336 B**), `bss` 499,876 to 499,948 B (**+72 B**: link statistics, the policy state, the encoder's saved settings). Free SRAM about 5.6 KB before, 72 B less now. The core-1 closure check is green (Release and Debug); nothing here is reachable from core 1, and the Y2's BTstack thread still makes no RTOS call (the HCI trace flusher is a plain pthread using `fsync`).
+
+**What to watch on the next walk.** `wait max` and `stalls` in the bad patches (does the catch-up refill: `catchup` up to about 90 ms, `drops` near 0?); `bitpool` stepping and the time it spends below 53 (does the headset sound better at 45, and does it step back up); `inflight` against T; the `rssi` values on a good and a bad stretch; any `acl down` with its reason; and that no `route: not playing ... suspending` appears while playing.
 
 ## Stage 2c: AVRCP, volume, buttons, metadata (built)
 

@@ -238,6 +238,7 @@ static bool ts_next_track(char *path, size_t n) {
         if (!library_service_resolve(path, real, sizeof real, &why) || strlen(real) >= n) {
             return false; // not playable: no gapless handoff, the ordinary start then reports it and the queue skips it
         }
+        printf("player: next (gapless look-ahead) '%s'\n", real);
         memcpy(path, real, strlen(real) + 1u);
     }
     return true;
@@ -394,6 +395,7 @@ void storage_task(void *arg) {
                     player_file_failed(why);
                     continue;
                 }
+                printf("player: file '%s'\n", real); /* the queue log line names library tracks '' (the name is only known here) */
                 track_stream_start_at(real, false, rq.seq);
                 continue;
             }
