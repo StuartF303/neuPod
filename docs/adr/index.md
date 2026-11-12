@@ -22,5 +22,6 @@ Format: [Michael Nygard](https://cognitect.com/blog/2011/11/15/documenting-archi
 | [0016](0016-gapless-playback-and-play-queue.md) | Gapless playback and the play queue | Accepted |
 | [0017](0017-music-library-index.md) | Music library index | Accepted |
 | [0018](0018-ui-resolution-profiles.md) | UI resolution profiles: 320x240 product panel, native 480x360 for the Y2 testbed | Accepted |
+| [0019](0019-bluetooth-audio-sink-boundary.md) | Bluetooth audio output behind a stack-neutral boundary (BTstack adapter, per-platform transports, UI) | Proposed |
 
 Every feature ADR carries a **RAM budget** line in its Consequences (from 3 Nov 2026).
