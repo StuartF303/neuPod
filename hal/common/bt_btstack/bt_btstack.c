@@ -22,6 +22,12 @@
  * core 1 ring), encoded on BTstack's thread by a run-loop timer that works like a source clock steered by the ring's fill level (see media_tick).
  * No RTOS call is made on this path: on the Y2 BTstack's thread is not an RTOS task.
  *
+ * AVRCP (stage 2c). We are the AVRCP target of the headset's buttons and metadata (play / pause / next ... become HAL_BT_EVT_KEY; hal_bt_track_info() feeds
+ * the track-changed / play-status notifications and the metadata the headset asks for) and its AVRCP controller for the volume: the headset is the
+ * target of absolute volume (category 2), so its volume reaches us as a notification (HAL_BT_EVT_VOLUME) and ours goes out with
+ * avrcp_controller_set_absolute_volume(). The headset usually opens the AVRCP channel itself; if it has not within AVRCP_CONNECT_DELAY_MS of the A2DP
+ * signalling channel we open it. "Absolute volume supported" means the headset has reported a volume on this channel (hal_bt_volume_supported()).
+ *
  * An unanswered page is ended by our own timer (HAL_BT_PAIR_TIMEOUT_MS / HAL_BT_CONNECT_TIMEOUT_MS) with Create_Connection_Cancel, never by
  * the controller's page timeout: the MT6582 (Y2) does not report its page timeout until the connection is cancelled. A Connection_Complete
  * with an error that arrives after the attempt has ended is ignored (link_packet, HCI_EVENT_CONNECTION_COMPLETE: g_lphase is IDLE).
@@ -549,6 +555,8 @@ static void link_timeout(btstack_timer_source_t *ts) {
 
 static void a2dp_open(void);
 static void a2dp_gone(hal_bt_fail_t why_failed);
+static void avrcp_gone(void);
+static void avrcp_arm_connect(void);
 
 static void link_up(void) {
     g_lphase = LP_UP;
@@ -668,6 +676,7 @@ static void drop_link(void) {
         }
         g_lphase = LP_IDLE;
         a2dp_gone(HAL_BT_FAIL_NONE); /* the audio connection goes first, then the link */
+        avrcp_gone();
         set_link(HAL_BT_LINK_DISCONNECTED, HAL_BT_FAIL_NONE);
         return;
     }
@@ -703,6 +712,7 @@ static void worker_forget(void *arg) {
 /* The stack went down (HCI_STATE_OFF) under a link or an attempt: nothing is left of it. */
 static void link_reset(void) {
     a2dp_gone(HAL_BT_FAIL_NONE);
+    avrcp_gone();
     g_acl = HCI_CON_HANDLE_INVALID;
     g_sdp_live = g_sdp_wait = false;
     btstack_run_loop_remove_timer(&g_cancel_timer);
@@ -780,6 +790,7 @@ static void link_packet(uint8_t *packet) {
         uint8_t why = hci_event_disconnection_complete_get_reason(packet);
         g_acl = HCI_CON_HANDLE_INVALID;
         a2dp_gone(HAL_BT_FAIL_NONE); /* a stream does not outlive its link; its state is announced before the link's */
+        avrcp_gone();
         if (g_lphase == LP_UP) {
             /* An idle link is closed: by us (BTstack's idle timeout, local host) or by the headset (0x13,
              * remote user terminated: a headset with nothing to do hangs up after a second or two). Neither is a failure. Anything else
@@ -1230,6 +1241,7 @@ static void a2dp_packet_handler(uint8_t type, uint16_t channel, uint8_t *packet,
             }
         } else {
             g_a2dp_cid = a2dp_subevent_signaling_connection_established_get_a2dp_cid(packet);
+            avrcp_arm_connect();
         }
         break;
     }
@@ -1455,6 +1467,385 @@ void hal_bt_stats(hal_bt_stats_t *out) {
     out->link_quality = (int8_t)g_st_rssi;
 }
 
+/* ---- AVRCP: headset keys, volume, track information (stage 2c) ---- */
+
+#define AVRCP_CONNECT_DELAY_MS 2000u /* the headset's own AVRCP connection is awaited this long after the A2DP signalling channel */
+#define VOL_RETRY_MS 20u             /* a Set Absolute Volume the stack could not take yet is tried again */
+#define VOL_RETRIES 10u
+#define VOL_INFLIGHT_MAX 4u          /* unanswered Set Absolute Volume commands (BTstack accepts several: a fast wheel is not throttled to one per round trip) */
+#define VOL_ANSWER_TIMEOUT_MS 1000u  /* an answer that does not come stops suppressing the headset's own reports after this */
+#define NP_LOCK_SPINS 2000u          /* hal_bt_track_info() gives up (the app asks again) after this many tries for the track information */
+
+static uint16_t g_avrcp_cid;
+static bool g_avrcp_inited;
+static uint8_t g_sdp_avrcp_tg[112]; /* de_get_len() of the records (no service name): 107 / 114 bytes, asserted at start-up */
+static uint8_t g_sdp_avrcp_ct[120];
+static btstack_timer_source_t g_avrcp_timer, g_vol_timer, g_np_timer;
+static btstack_context_callback_registration_t g_vol_reg, g_np_reg;
+
+/* Volume. g_vol is what hal_bt_volume_get() answers: -1 until the headset has reported one on this AVRCP channel. */
+static volatile int g_vol = -1;
+static volatile int g_vol_want = -1; /* the latest hal_bt_volume_set() */
+static volatile bool g_vol_queued;
+static uint8_t g_vol_inflight, g_vol_retry;
+static int g_vol_sent = -1;
+static uint32_t g_vol_sent_ms;
+
+/* Track information from hal_bt_track_info(): one copy, shared with the app under a try-lock (neither side ever waits for the other: the app's
+ * writer gives up and is asked again, BTstack's thread tries again from a timer). The values under "mirror" belong to BTstack's thread. */
+static hal_bt_track_t g_np;
+static volatile uint8_t g_np_lock;
+static bool g_np_valid;              /* something is playing (the app gave information, not NULL) */
+static uint32_t g_np_ms;             /* BTstack's clock when g_np was stored */
+static volatile bool g_np_queued;
+static uint32_t g_pl_len = 0xFFFFFFFFu, g_pl_pos = 0xFFFFFFFFu, g_pl_ms; /* mirror: what a play status query is answered from */
+static avrcp_playback_status_t g_pl_status = AVRCP_PLAYBACK_STATUS_STOPPED;
+static bool g_np_announced;          /* the headset was told about a track on this AVRCP channel */
+static uint32_t g_np_announced_id;
+
+static bool np_try_lock(uint32_t spins) {
+    while (spins-- > 0u) {
+        if (!__atomic_exchange_n(&g_np_lock, 1, __ATOMIC_SEQ_CST)) {
+            return true;
+        }
+    }
+    return false;
+}
+static void np_unlock(void) { __atomic_store_n(&g_np_lock, 0, __ATOMIC_SEQ_CST); }
+
+static void emit_volume(uint8_t v) {
+    hal_bt_event_t ev = {.type = HAL_BT_EVT_VOLUME, .state = (hal_bt_state_t)g_state, .dev = g_peer, .volume = v};
+    emit(&ev);
+}
+
+static void emit_key(hal_bt_key_t k) {
+    hal_bt_event_t ev = {.type = HAL_BT_EVT_KEY, .state = (hal_bt_state_t)g_state, .dev = g_peer, .key = k};
+    emit(&ev);
+}
+
+/* The headset's volume (a notification, or the answer to our Set Absolute Volume). The headset's own reports that cross our commands, and the answers to
+ * all but the last of them, are old news: they would only make the bar jump back for a moment. */
+static void volume_report(uint8_t v, bool answer) {
+    uint32_t now = btstack_run_loop_get_time_ms();
+    if (answer && g_vol_inflight > 0u) {
+        g_vol_inflight--;
+    }
+    if (g_vol_inflight > 0u && now - g_vol_sent_ms < VOL_ANSWER_TIMEOUT_MS) {
+        return;
+    }
+    g_vol_inflight = 0;
+    if (v > HAL_BT_VOLUME_MAX) {
+        v = (uint8_t)HAL_BT_VOLUME_MAX;
+    }
+    int prev = g_vol;
+    g_vol = v;
+    if (g_vol_want == g_vol_sent) {
+        g_vol_want = g_vol_sent = v; /* nothing of ours is waiting: the headset's value is the one to move on from (it may have rounded ours) */
+    }
+    if (prev != (int)v) { /* the first report (prev == -1) always differs: it also says the headset has absolute volume */
+        printf("bt: avrcp: headset volume %u%%\n", (unsigned)v * 100u / HAL_BT_VOLUME_MAX);
+        emit_volume(v);
+    }
+}
+
+static void vol_send(void);
+static void vol_retry(btstack_timer_source_t *ts) {
+    (void)ts;
+    vol_send();
+}
+
+static void vol_send(void) {
+    int want = g_vol_want;
+    if (want < 0 || g_avrcp_cid == 0 || want == g_vol_sent) {
+        return;
+    }
+    uint32_t now = btstack_run_loop_get_time_ms();
+    if (g_vol_inflight > 0u && now - g_vol_sent_ms >= VOL_ANSWER_TIMEOUT_MS) {
+        g_vol_inflight = 0;
+    }
+    if (g_vol_inflight < VOL_INFLIGHT_MAX) {
+        uint8_t rc = avrcp_controller_set_absolute_volume(g_avrcp_cid, (uint8_t)want);
+        if (rc == ERROR_CODE_SUCCESS) {
+            g_vol_inflight++;
+            g_vol_sent = want;
+            g_vol_sent_ms = now;
+            g_vol_retry = 0;
+            return;
+        }
+        if (++g_vol_retry >= VOL_RETRIES) {
+            g_vol_retry = 0;
+            printf("bt: avrcp: set volume 0x%02X\n", (unsigned)rc);
+            return;
+        }
+    }
+    btstack_run_loop_remove_timer(&g_vol_timer);
+    btstack_run_loop_set_timer_handler(&g_vol_timer, vol_retry);
+    btstack_run_loop_set_timer(&g_vol_timer, VOL_RETRY_MS);
+    btstack_run_loop_add_timer(&g_vol_timer);
+}
+
+static void worker_vol(void *arg) {
+    (void)arg;
+    g_vol_queued = false;
+    vol_send();
+}
+
+static avrcp_playback_status_t map_play_status(hal_bt_play_status_t st) {
+    return st == HAL_BT_PLAY_PLAYING ? AVRCP_PLAYBACK_STATUS_PLAYING : st == HAL_BT_PLAY_PAUSED ? AVRCP_PLAYBACK_STATUS_PAUSED : AVRCP_PLAYBACK_STATUS_STOPPED;
+}
+
+/* BTstack's thread: take what hal_bt_track_info() stored, answer from it, and tell the headset what changed. */
+static void np_apply(void);
+static void np_retry(btstack_timer_source_t *ts) {
+    (void)ts;
+    np_apply();
+}
+
+static void np_apply(void) {
+    if (!np_try_lock(NP_LOCK_SPINS)) {
+        btstack_run_loop_remove_timer(&g_np_timer);
+        btstack_run_loop_set_timer_handler(&g_np_timer, np_retry);
+        btstack_run_loop_set_timer(&g_np_timer, 5);
+        btstack_run_loop_add_timer(&g_np_timer);
+        return;
+    }
+    g_pl_len = g_np_valid && g_np.duration_ms != 0u ? g_np.duration_ms : 0xFFFFFFFFu;
+    g_pl_pos = g_np_valid ? g_np.position_ms : 0xFFFFFFFFu;
+    g_pl_ms = g_np_ms;
+    g_pl_status = g_np_valid ? map_play_status(g_np.status) : AVRCP_PLAYBACK_STATUS_STOPPED;
+    if (g_avrcp_cid != 0) {
+        if (g_np_valid && (!g_np_announced || g_np_announced_id != g_np.track_id)) {
+            avrcp_track_t tr = {.track_nr = 1, .title = g_np.title, .artist = g_np.artist, .album = g_np.album, .genre = (char *)"", .song_length_ms = g_pl_len, .song_position_ms = 0};
+            big_endian_store_32(tr.track_id, 4, g_np.track_id); /* bytes 0..3 stay 0: an id of all 0xFF would mean "no track" */
+            (void)avrcp_target_set_now_playing_info(g_avrcp_cid, &tr, 1); /* copies the strings; also sends "track changed" when the headset registered for it */
+            g_np_announced = true;
+            g_np_announced_id = g_np.track_id;
+        } else if (!g_np_valid && g_np_announced) {
+            (void)avrcp_target_track_changed(g_avrcp_cid, NULL);
+            g_np_announced = false;
+        }
+        (void)avrcp_target_set_playback_status(g_avrcp_cid, g_pl_status);
+    }
+    np_unlock();
+}
+
+static void worker_np(void *arg) {
+    (void)arg;
+    g_np_queued = false;
+    np_apply();
+}
+
+static void avrcp_connect_tick(btstack_timer_source_t *ts) {
+    (void)ts;
+    if (g_avrcp_cid != 0 || g_link != HAL_BT_LINK_CONNECTED) {
+        return;
+    }
+    bd_addr_t a;
+    memcpy(a, g_peer.addr, 6);
+    uint16_t cid = 0;
+    uint8_t rc = avrcp_connect(a, &cid);
+    printf("bt: avrcp: opening the channel (the headset did not) 0x%02X\n", (unsigned)rc);
+}
+
+/* The A2DP signalling channel is up: give the headset a moment to open AVRCP itself, then open it. */
+static void avrcp_arm_connect(void) {
+    btstack_run_loop_remove_timer(&g_avrcp_timer);
+    btstack_run_loop_set_timer_handler(&g_avrcp_timer, avrcp_connect_tick);
+    btstack_run_loop_set_timer(&g_avrcp_timer, AVRCP_CONNECT_DELAY_MS);
+    btstack_run_loop_add_timer(&g_avrcp_timer);
+}
+
+/* The link is gone (or going): the channel and everything learned on it with it. Nothing is announced: the link event says it. */
+static void avrcp_gone(void) {
+    btstack_run_loop_remove_timer(&g_avrcp_timer);
+    btstack_run_loop_remove_timer(&g_vol_timer);
+    g_avrcp_cid = 0;
+    g_vol = -1;
+    g_vol_want = -1;
+    g_vol_sent = -1;
+    g_vol_inflight = g_vol_retry = 0;
+    g_np_announced = false;
+}
+
+static void avrcp_packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint16_t size) {
+    (void)channel;
+    (void)size;
+    if (type != HCI_EVENT_PACKET || hci_event_packet_get_type(packet) != HCI_EVENT_AVRCP_META) {
+        return;
+    }
+    switch (packet[2]) {
+    case AVRCP_SUBEVENT_CONNECTION_ESTABLISHED: {
+        uint8_t st = avrcp_subevent_connection_established_get_status(packet);
+        if (st != ERROR_CODE_SUCCESS) {
+            printf("bt: avrcp: channel failed 0x%02X\n", (unsigned)st);
+            return;
+        }
+        if (g_link != HAL_BT_LINK_CONNECTED) {
+            (void)avrcp_disconnect(avrcp_subevent_connection_established_get_avrcp_cid(packet)); /* not ours: a Pair or Connect is still being set up */
+            return;
+        }
+        g_avrcp_cid = avrcp_subevent_connection_established_get_avrcp_cid(packet);
+        btstack_run_loop_remove_timer(&g_avrcp_timer);
+        printf("bt: avrcp: channel open\n");
+        (void)avrcp_target_support_event(g_avrcp_cid, AVRCP_NOTIFICATION_EVENT_PLAYBACK_STATUS_CHANGED);
+        (void)avrcp_target_support_event(g_avrcp_cid, AVRCP_NOTIFICATION_EVENT_TRACK_CHANGED);
+        (void)avrcp_target_support_event(g_avrcp_cid, AVRCP_NOTIFICATION_EVENT_NOW_PLAYING_CONTENT_CHANGED);
+        g_np_announced = false;
+        np_apply(); /* what is playing now, if anything */
+        (void)avrcp_controller_enable_notification(g_avrcp_cid, AVRCP_NOTIFICATION_EVENT_VOLUME_CHANGED); /* the answer carries the headset's volume now */
+        break;
+    }
+    case AVRCP_SUBEVENT_CONNECTION_RELEASED:
+        printf("bt: avrcp: channel closed\n");
+        if (avrcp_subevent_connection_released_get_avrcp_cid(packet) == g_avrcp_cid) {
+            avrcp_gone();
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+/* Headset buttons: only presses are reported (FF / RW are held buttons: the headset repeats them as presses while held). */
+static void avrcp_target_packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint16_t size) {
+    (void)channel;
+    (void)size;
+    if (type != HCI_EVENT_PACKET || hci_event_packet_get_type(packet) != HCI_EVENT_AVRCP_META) {
+        return;
+    }
+    switch (packet[2]) {
+    case AVRCP_SUBEVENT_PLAY_STATUS_QUERY: {
+        uint32_t pos = g_pl_pos;
+        if (pos != 0xFFFFFFFFu && g_pl_status == AVRCP_PLAYBACK_STATUS_PLAYING) {
+            pos += btstack_run_loop_get_time_ms() - g_pl_ms;
+            if (g_pl_len != 0xFFFFFFFFu && pos > g_pl_len) {
+                pos = g_pl_len;
+            }
+        }
+        (void)avrcp_target_play_status(g_avrcp_cid, g_pl_len, pos, g_pl_status);
+        break;
+    }
+    case AVRCP_SUBEVENT_OPERATION: {
+        if (avrcp_subevent_operation_get_button_pressed(packet) == 0) {
+            break;
+        }
+        hal_bt_key_t k = (hal_bt_key_t)0;
+        switch ((avrcp_operation_id_t)avrcp_subevent_operation_get_operation_id(packet)) {
+        case AVRCP_OPERATION_ID_PLAY: k = HAL_BT_KEY_PLAY; break;
+        case AVRCP_OPERATION_ID_PAUSE: k = HAL_BT_KEY_PAUSE; break;
+        case AVRCP_OPERATION_ID_STOP: k = HAL_BT_KEY_STOP; break;
+        case AVRCP_OPERATION_ID_FORWARD: k = HAL_BT_KEY_NEXT; break;
+        case AVRCP_OPERATION_ID_BACKWARD: k = HAL_BT_KEY_PREV; break;
+        case AVRCP_OPERATION_ID_FAST_FORWARD: k = HAL_BT_KEY_FF; break;
+        case AVRCP_OPERATION_ID_REWIND: k = HAL_BT_KEY_RW; break;
+        default: break;
+        }
+        if (k != (hal_bt_key_t)0) {
+            emit_key(k);
+        }
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+static void avrcp_controller_packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint16_t size) {
+    (void)channel;
+    (void)size;
+    if (type != HCI_EVENT_PACKET || hci_event_packet_get_type(packet) != HCI_EVENT_AVRCP_META || g_avrcp_cid == 0) {
+        return;
+    }
+    switch (packet[2]) {
+    case AVRCP_SUBEVENT_NOTIFICATION_VOLUME_CHANGED:
+        if (avrcp_subevent_notification_volume_changed_get_avrcp_cid(packet) == g_avrcp_cid) {
+            volume_report(avrcp_subevent_notification_volume_changed_get_absolute_volume(packet), false);
+        }
+        break;
+    case AVRCP_SUBEVENT_SET_ABSOLUTE_VOLUME_RESPONSE:
+        if (avrcp_subevent_set_absolute_volume_response_get_avrcp_cid(packet) == g_avrcp_cid) {
+            volume_report(avrcp_subevent_set_absolute_volume_response_get_absolute_volume(packet), true);
+            if (g_vol_inflight == 0u && g_vol_want >= 0 && g_vol_want != g_vol_sent) {
+                vol_send(); /* the wheel moved on while we waited */
+            }
+        }
+        break;
+    case AVRCP_SUBEVENT_NOTIFICATION_STATE:
+        if (avrcp_subevent_notification_state_get_event_id(packet) == AVRCP_NOTIFICATION_EVENT_VOLUME_CHANGED && avrcp_subevent_notification_state_get_status(packet) != ERROR_CODE_SUCCESS) {
+            printf("bt: avrcp: the headset has no absolute volume\n"); /* no report will come: hal_bt_volume_supported() stays false */
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+static void avrcp_init_once(void) {
+    if (g_avrcp_inited) {
+        return;
+    }
+    g_avrcp_inited = true;
+    g_vol_reg.callback = &worker_vol;
+    g_np_reg.callback = &worker_np;
+    avrcp_init();
+    avrcp_register_packet_handler(&avrcp_packet_handler);
+    avrcp_target_init();
+    avrcp_target_register_packet_handler(&avrcp_target_packet_handler);
+    avrcp_controller_init();
+    avrcp_controller_register_packet_handler(&avrcp_controller_packet_handler);
+    /* Our own SDP records, as the verified bench tool registers them: the target with the category-1 (player) features, the controller as category 2
+     * (monitor / amplifier) because it is the volume it sends. */
+    memset(g_sdp_avrcp_tg, 0, sizeof g_sdp_avrcp_tg);
+    avrcp_target_create_sdp_record(g_sdp_avrcp_tg, sdp_create_service_record_handle(), AVRCP_FEATURE_MASK_CATEGORY_PLAYER_OR_RECORDER, NULL, NULL);
+    btstack_assert(de_get_len(g_sdp_avrcp_tg) <= sizeof g_sdp_avrcp_tg);
+    sdp_register_service(g_sdp_avrcp_tg);
+    memset(g_sdp_avrcp_ct, 0, sizeof g_sdp_avrcp_ct);
+    avrcp_controller_create_sdp_record(g_sdp_avrcp_ct, sdp_create_service_record_handle(), AVRCP_FEATURE_MASK_CATEGORY_MONITOR_OR_AMPLIFIER, NULL, NULL);
+    btstack_assert(de_get_len(g_sdp_avrcp_ct) <= sizeof g_sdp_avrcp_ct);
+    sdp_register_service(g_sdp_avrcp_ct);
+}
+
+bool hal_bt_volume_supported(void) { return g_link == HAL_BT_LINK_CONNECTED && g_vol >= 0; }
+
+int hal_bt_volume_get(void) {
+    int v = g_vol;
+    return g_link == HAL_BT_LINK_CONNECTED ? v : -1;
+}
+
+hal_status_t hal_bt_volume_set(uint8_t volume) {
+    if (!hal_bt_volume_supported()) {
+        return HAL_ENODEV;
+    }
+    if (volume > HAL_BT_VOLUME_MAX) {
+        volume = (uint8_t)HAL_BT_VOLUME_MAX;
+    }
+    g_vol = volume; /* the bar does not wait for the headset */
+    g_vol_want = volume;
+    if (!__atomic_exchange_n(&g_vol_queued, true, __ATOMIC_SEQ_CST)) {
+        bt_port_post(&g_vol_reg);
+    }
+    return HAL_OK;
+}
+
+bool hal_bt_track_info(const hal_bt_track_t *info) {
+    if (g_state != HAL_BT_ON && g_state != HAL_BT_SCANNING) {
+        return true; /* the stack is not up: nothing to tell, and the app tells again */
+    }
+    if (!np_try_lock(NP_LOCK_SPINS)) {
+        return false;
+    }
+    if (info != NULL) {
+        g_np = *info;
+        g_np_ms = btstack_run_loop_get_time_ms();
+    }
+    g_np_valid = info != NULL;
+    np_unlock();
+    if (!__atomic_exchange_n(&g_np_queued, true, __ATOMIC_SEQ_CST)) {
+        bt_port_post(&g_np_reg);
+    }
+    return true;
+}
+
 /* ---- start-up ---- */
 
 typedef struct {
@@ -1482,6 +1873,7 @@ static uint32_t worker_init(void *param) {
         l2cap_init(); /* the SDP client and AVDTP run on it; we are never connectable outside a Pair, so only our own link can open channels */
         sdp_client_init();
         a2dp_init_once();
+        avrcp_init_once();
         if (g_storage != NULL) {
             btstack_tlv_set_instance(&k_tlv, NULL);
             hci_set_link_key_db(btstack_link_key_db_tlv_get_instance(&k_tlv, NULL));

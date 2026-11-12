@@ -20,6 +20,9 @@ static hal_bt_codec_t g_last_codec;
 static hal_bt_stream_state_t g_sseq[16];
 static int g_nsseq;
 static bool g_accepting_at_event; // hal_bt_accepting() as seen from inside the last link event
+static int g_volumes, g_keys;     // HAL_BT_EVT_VOLUME / HAL_BT_EVT_KEY events
+static uint8_t g_last_volume;
+static hal_bt_key_t g_last_key;
 
 static void on_event(const hal_bt_event_t *ev, void *ctx) {
     (void)ctx;
@@ -51,6 +54,14 @@ static void on_event(const hal_bt_event_t *ev, void *ctx) {
         if (g_nsseq < 16) {
             g_sseq[g_nsseq++] = ev->stream;
         }
+        break;
+    case HAL_BT_EVT_VOLUME:
+        g_volumes++;
+        g_last_volume = ev->volume;
+        break;
+    case HAL_BT_EVT_KEY:
+        g_keys++;
+        g_last_key = ev->key;
         break;
     }
 }
@@ -419,6 +430,118 @@ TEST(test_the_high_bitpool_headset_reports_sbc_xq_and_an_opening_can_fail) {
     ASSERT_EQ(HAL_BT_FAIL_NONE, hal_bt_stream_reason());
 }
 
+// ---- AVRCP: volume, keys, track information (stage 2c) ----
+
+static void pump_ms(uint32_t ms) {
+    for (uint32_t t = 0; t < ms; t += 20) {
+        hal_bt_poll();
+        hal_delay_ms(20);
+    }
+}
+
+TEST(test_absolute_volume_is_reported_after_connect_and_set_by_the_app) {
+    hal_bt_disconnect();
+    ASSERT_FALSE(hal_bt_volume_supported());
+    ASSERT_EQ(-1, hal_bt_volume_get());
+    ASSERT_EQ(HAL_ENODEV, hal_bt_volume_set(10)); // nothing to set
+    g_volumes = 0;
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, pair_to_end(A_AIRPODS, "AirPods Pro 3"));
+    ASSERT_FALSE(hal_bt_volume_supported()); // AVRCP is not up the moment the link is
+    pump_ms(400);
+    ASSERT_TRUE(hal_bt_volume_supported());
+    ASSERT_EQ(80, hal_bt_volume_get());
+    ASSERT_EQ(1, g_volumes);
+    ASSERT_EQ(80, g_last_volume);
+    // our set: get() follows at once, the headset's answer is a second event
+    uint32_t sets = hal_host_bt_volume_sets();
+    ASSERT_EQ(HAL_OK, hal_bt_volume_set(200)); // clamped to 127
+    ASSERT_EQ(127, hal_bt_volume_get());
+    ASSERT_EQ(sets + 1, hal_host_bt_volume_sets());
+    pump_ms(100);
+    ASSERT_EQ(2, g_volumes);
+    ASSERT_EQ(127, g_last_volume);
+    // a swipe on the stem
+    hal_host_bt_headset_volume(23);
+    ASSERT_EQ(23, hal_bt_volume_get());
+    ASSERT_EQ(23, g_last_volume);
+    // the link goes: so does the volume
+    hal_host_bt_drop_link();
+    ASSERT_FALSE(hal_bt_volume_supported());
+    ASSERT_EQ(-1, hal_bt_volume_get());
+    ASSERT_EQ(HAL_ENODEV, hal_bt_volume_set(1));
+    // the headset that was left at 0 %: the first report is 0, and it still counts as supported
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, pair_to_end(A_XM5, "WH-1000XM5"));
+    pump_ms(400);
+    ASSERT_TRUE(hal_bt_volume_supported());
+    ASSERT_EQ(0, hal_bt_volume_get());
+    hal_bt_disconnect();
+}
+
+TEST(test_a_headset_without_absolute_volume_never_reports_one) {
+    static const uint8_t A_FLIP[6] = {0x70, 0x99, 0x1C, 0x0B, 0x55, 0x66};
+    g_volumes = 0;
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, pair_to_end(A_FLIP, "Flip 6")); // the speaker has none
+    pump_ms(500);
+    ASSERT_FALSE(hal_bt_volume_supported());
+    ASSERT_EQ(-1, hal_bt_volume_get());
+    ASSERT_EQ(0, g_volumes);
+    hal_host_bt_headset_volume(10); // ignored
+    ASSERT_EQ(0, g_volumes);
+    hal_bt_disconnect();
+    hal_host_bt_set_no_absolute_volume(true); // the same for any headset on request
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, pair_to_end(A_AIRPODS, "AirPods Pro 3"));
+    pump_ms(500);
+    ASSERT_FALSE(hal_bt_volume_supported());
+    hal_bt_disconnect();
+    hal_host_bt_set_no_absolute_volume(false);
+}
+
+TEST(test_headset_keys_arrive_as_events_only_on_a_connected_link) {
+    g_keys = 0;
+    hal_host_bt_headset_key(HAL_BT_KEY_NEXT); // no link
+    ASSERT_EQ(0, g_keys);
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, pair_to_end(A_AIRPODS, "AirPods Pro 3"));
+    hal_host_bt_headset_key(HAL_BT_KEY_PLAY_PAUSE);
+    ASSERT_EQ(1, g_keys);
+    ASSERT_EQ(HAL_BT_KEY_PLAY_PAUSE, g_last_key);
+    hal_host_bt_headset_key(HAL_BT_KEY_PREV);
+    ASSERT_EQ(HAL_BT_KEY_PREV, g_last_key);
+    hal_bt_disconnect();
+}
+
+TEST(test_track_information_is_kept_and_cut_on_a_character_boundary) {
+    hal_bt_track_t t;
+    memset(&t, 0, sizeof t);
+    t.track_id = 7;
+    hal_bt_meta_copy(t.title, sizeof t.title, "Sigur R\xC3\xB3s - Hopp\xC3\xADpolla");
+    t.duration_ms = 4000;
+    t.status = HAL_BT_PLAY_PLAYING;
+    uint32_t calls0 = 0;
+    (void)hal_host_bt_track_info(NULL, &calls0);
+    ASSERT_TRUE(hal_bt_track_info(&t));
+    hal_bt_track_t got;
+    uint32_t calls = 0;
+    ASSERT_TRUE(hal_host_bt_track_info(&got, &calls));
+    ASSERT_EQ(calls0 + 1, calls);
+    ASSERT_EQ(7, got.track_id);
+    ASSERT_TRUE(strcmp(got.title, t.title) == 0);
+    ASSERT_TRUE(hal_bt_track_info(NULL));
+    ASSERT_FALSE(hal_host_bt_track_info(NULL, NULL));
+    // the cut: 4-byte buffer ("a" + a two-byte character that does not fit whole)
+    char b[3];
+    hal_bt_meta_copy(b, sizeof b, "a\xC3\xA9z"); // a, e-acute, z: 'a' + the first byte of the accent would be 2 bytes: cut before the accent
+    ASSERT_TRUE(strcmp(b, "a") == 0);
+    char c[4];
+    hal_bt_meta_copy(c, sizeof c, "a\xC3\xA9z");
+    ASSERT_TRUE(strcmp(c, "a\xC3\xA9") == 0);
+    char d[2];
+    hal_bt_meta_copy(d, sizeof d, "\xE2\x82\xAC"); // a three-byte character into one byte: nothing
+    ASSERT_TRUE(d[0] == '\0');
+    char e[8];
+    hal_bt_meta_copy(e, sizeof e, "short");
+    ASSERT_TRUE(strcmp(e, "short") == 0);
+}
+
 int main(void) {
     RUN(test_bring_up_and_scan);
     RUN(test_stop_ends_the_scan);
@@ -433,5 +556,9 @@ int main(void) {
     RUN(test_start_consumes_pcm_at_the_real_rate_and_counts_underruns);
     RUN(test_a_dropped_link_closes_the_stream_first);
     RUN(test_the_high_bitpool_headset_reports_sbc_xq_and_an_opening_can_fail);
+    RUN(test_absolute_volume_is_reported_after_connect_and_set_by_the_app);
+    RUN(test_a_headset_without_absolute_volume_never_reports_one);
+    RUN(test_headset_keys_arrive_as_events_only_on_a_connected_link);
+    RUN(test_track_information_is_kept_and_cut_on_a_character_boundary);
     return RESULT();
 }

@@ -139,7 +139,21 @@ typedef enum {
     HAL_BT_EVT_SCAN_DONE, /**< inquiry (and the name requests that followed) finished or was stopped */
     HAL_BT_EVT_LINK,      /**< connection state changed: ev.link, ev.reason (FAILED only) and ev.dev (the remote device) */
     HAL_BT_EVT_STREAM,    /**< the audio stream changed state: ev.stream, ev.reason (FAILED only) and ev.codec (from OPEN on) */
+    HAL_BT_EVT_VOLUME,    /**< the headset's absolute volume: ev.volume (0..127). The first one also says the headset has absolute volume (hal_bt_volume_supported()) */
+    HAL_BT_EVT_KEY,       /**< a button on the headset: ev.key */
 } hal_bt_event_type_t;
+
+/** A headset button (AVRCP pass-through), reported on the press. FF and RW repeat while the button is held. */
+typedef enum {
+    HAL_BT_KEY_PLAY = 1,
+    HAL_BT_KEY_PAUSE,
+    HAL_BT_KEY_PLAY_PAUSE, /**< one button that toggles (many headsets send this; AirPods send PLAY or PAUSE according to the state they believe) */
+    HAL_BT_KEY_NEXT,
+    HAL_BT_KEY_PREV,
+    HAL_BT_KEY_STOP,
+    HAL_BT_KEY_FF,         /**< fast forward (held) */
+    HAL_BT_KEY_RW,         /**< rewind (held) */
+} hal_bt_key_t;
 
 /* ---- Bluetooth: the audio stream (stage 2b) ------------------------------------------------------------------- */
 
@@ -242,6 +256,8 @@ typedef struct {
     uint32_t attempt;         /**< HAL_BT_EVT_LINK: the Pair / Connect attempt this event belongs to (hal_bt_link_attempt() at that time) */
     hal_bt_stream_state_t stream; /**< HAL_BT_EVT_STREAM */
     hal_bt_codec_t codec;     /**< HAL_BT_EVT_STREAM: the negotiated configuration (codec NONE until OPEN) */
+    uint8_t volume;           /**< HAL_BT_EVT_VOLUME: 0..127 (0 = silent, 127 = the headset's loudest) */
+    hal_bt_key_t key;         /**< HAL_BT_EVT_KEY */
 } hal_bt_event_t;
 
 typedef void (*hal_bt_event_fn)(const hal_bt_event_t *ev, void *ctx);
@@ -368,6 +384,63 @@ hal_bt_fail_t hal_bt_stream_reason(void);
 bool hal_bt_stream_codec(hal_bt_codec_t *out);
 /** Counters of the current stream (all zero when there is none). */
 void hal_bt_stats(hal_bt_stats_t *out);
+
+/* ---- Bluetooth: volume, headset keys, track information (stage 2c, AVRCP) ------------------------------------------ */
+
+#define HAL_BT_VOLUME_MAX 127u /**< AVRCP absolute volume is 0..127 (0 % .. 100 %) */
+
+/**
+ * true while the headset has AVRCP absolute volume: it is connected and it has reported its volume. It is the headset that decides: the answer
+ * can turn true a moment after CONNECTED (once AVRCP is up) and false when the link or the AVRCP channel goes. While true, the headset's own volume
+ * is the volume of the player (hal_bt_volume_set / HAL_BT_EVT_VOLUME) and the software volume stays at 0 dB (docs/bluetooth.md); while false the
+ * software volume is the volume.
+ */
+bool hal_bt_volume_supported(void);
+/** The headset's volume 0..127 as last reported or set; -1 while hal_bt_volume_supported() is false. */
+int hal_bt_volume_get(void);
+/** Ask the headset to set its volume to @p volume (0..127, clamped). The value is what hal_bt_volume_get() returns at once; the headset's answer (it may round) follows as HAL_BT_EVT_VOLUME. HAL_ENODEV if not supported. */
+hal_status_t hal_bt_volume_set(uint8_t volume);
+
+#define HAL_BT_META_MAX 64u /**< bytes kept of a title / artist / album (the size of the tags the player reads; UTF-8, cut at a character boundary by hal_bt_meta_copy()) */
+
+typedef enum { HAL_BT_PLAY_STOPPED = 0, HAL_BT_PLAY_PLAYING, HAL_BT_PLAY_PAUSED } hal_bt_play_status_t;
+
+/** What the headset may show about the playing track (AVRCP metadata). */
+typedef struct {
+    uint32_t track_id;                 /**< changes with every track (not on a seek); the headset is told "track changed" when it does */
+    char title[HAL_BT_META_MAX + 1];
+    char artist[HAL_BT_META_MAX + 1];
+    char album[HAL_BT_META_MAX + 1];
+    uint32_t duration_ms;              /**< 0 = unknown */
+    uint32_t position_ms;              /**< at the moment of the call; the stack adds the time that passes while PLAYING */
+    hal_bt_play_status_t status;
+} hal_bt_track_t;
+
+/**
+ * Tell the stack what is playing (any task; cheap; call it when the track or the play status changes, when the position jumps, and now and then
+ * to keep the position honest). NULL = nothing is playing. With no AVRCP connection nothing is sent now; the latest information is what the
+ * headset gets when it connects or asks. Strings must fit HAL_BT_META_MAX (hal_bt_meta_copy() cuts them). Returns false when the stack is
+ * busy with the previous call (nothing was taken: call again a moment later, e.g. at the next service tick); true otherwise, also when there is
+ * no stack to tell.
+ */
+bool hal_bt_track_info(const hal_bt_track_t *info);
+
+/** Copy @p src into @p dst (size @p n >= 1), cutting at a UTF-8 character boundary so that no broken sequence is sent to a headset. */
+static inline void hal_bt_meta_copy(char *dst, size_t n, const char *src) {
+    size_t len = 0;
+    while (len + 1 < n && src[len] != '\0') {
+        len++;
+    }
+    if (src[len] != '\0') { /* cut: step back over continuation bytes (10xxxxxx) to the start of the character that does not fit */
+        while (len > 0 && ((unsigned char)src[len] & 0xC0u) == 0x80u) {
+            len--;
+        }
+    }
+    for (size_t i = 0; i < len; i++) {
+        dst[i] = src[i];
+    }
+    dst[len] = '\0';
+}
 
 /**
  * Give the HAL a chance to advance. Hardware: a no-op, events arrive by themselves from the radio worker. Host

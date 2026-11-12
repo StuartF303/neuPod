@@ -43,10 +43,11 @@
 
 // Bluetooth audio (stage 2b), after the pairing tour (the card has the WAV album): pair a headset again (its stream opens by itself and becomes the
 // output), play the first track on it (Now Playing shows the codec in the badge), look at Settings > Bluetooth while it streams, then the headset
-// goes away (bt:drop): the player pauses, the banner says so and the row says why.
+// goes away (bt:drop): the player pauses, the banner says so and the row says why. Stage 2c adds the headset's volume (the wheel moves it: np-bt-volume; a swipe on the stem
+// to 0 %: np-bt-volume0, bt:vol:N) and its buttons (bt:key:next: bt-key-next, the next track plays).
 #define TOUR_BT_AUDIO                                                                              \
     "w w w w w s s s s _ x s s s s s s s s _ x s s _ x x x x x x x x x s _ x x x x x x x x m m m m "   \
-    "w w w w w s s s _ _ _ _ x x x x x x snap:np-bt-badge m m m m w w w w w s s s s _ x s s s s s s s s _ x x snap:bt-streaming m snap:settings-bt-streaming _ "  \
+    "w w w w w s s s _ _ _ _ x x x x x x snap:np-bt-badge 4*s snap:np-bt-volume bt:vol:0 x x x snap:np-bt-volume0 bt:vol:48 x x bt:key:next x x x x snap:bt-key-next m m m m w w w w w s s s s _ x s s s s s s s s _ x x snap:bt-streaming m snap:settings-bt-streaming _ "  \
     "bt:drop x x x snap:bt-dropped m m m"
 
 // Bluetooth pairing (stage 2a): Settings > Bluetooth > Scan, pair the first headset (busy dots, then Connected), the Settings rows and right pane
@@ -130,7 +131,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--tour-bt") == 0) {
             cfg.ui_script = TOUR_BT;
             cfgp_tour = true;
-            g_expect = 17; // the splash, home and the fifteen named snapshots
+            g_expect = 20; // the splash, home and the eighteen named snapshots
         } else if (strcmp(argv[i], "--tour-art") == 0) {
             cfg.ui_script = TOUR_ART;
             cfgp_tour = true;

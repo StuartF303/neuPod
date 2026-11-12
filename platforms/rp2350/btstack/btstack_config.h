@@ -32,8 +32,8 @@
 #define MAX_NR_L2CAP_CHANNELS 4         // AVDTP signalling + media, AVRCP control (+ spare)
 #define MAX_NR_AVDTP_CONNECTIONS 1
 #define MAX_NR_AVDTP_STREAM_ENDPOINTS 2 // SBC source (+ spare)
-#define MAX_NR_AVRCP_CONNECTIONS 1
-#define MAX_NR_SERVICE_RECORD_ITEMS 4   // A2DP source, AVRCP target, AVRCP controller, device id
+#define MAX_NR_AVRCP_CONNECTIONS 2      // one link = two entries (BTstack creates the controller role and the target role); 640 bytes each
+#define MAX_NR_SERVICE_RECORD_ITEMS 3   // A2DP source, AVRCP target, AVRCP controller
 #define MAX_NR_BTSTACK_LINK_KEY_DB_MEMORY_ENTRIES 0 // we use the TLV link key database (SD-backed), not the RAM one
 
 // Link key database on top of TLV (the SD-card settings store, app/settings): number of remembered headsets.
