@@ -325,40 +325,142 @@ void ui_npc_committed(ui_npc_t *c) {
     c->mode_ms = c->move_ms; /* the idle clock counts from the last input, not from the commit */
 }
 
-void ui_display_name(char *out, size_t n, const char *raw) {
+/* ---- Display text ---------------------------------------------------------------------------------------------------------------- */
+
+// Latin Extended-A (U+0100..U+017F) to the base letter(s); the four ligatures are special-cased in map_cp().
+static const char k_latin_ext_a[] = "AaAaAaCcCcCcCcDd" "DdEeEeEeEeEeGgGg" "GgGgHhHhIiIiIiIi" "IiIiJjKkkLlLlLlL"
+                                    "lLlNnNnNnnNnOoOo" "OoOoRrRrRrSsSsSs" "SsTtTtTtUuUuUuUu" "UuUuWwYyYZzZzZzs";
+
+bool ui_text_has_glyph(uint32_t cp) {
+    if ((cp >= 0x20 && cp <= 0x7E) || (cp >= 0xA0 && cp <= 0xFF && cp != 0xAD)) { // ASCII, Latin-1 without the soft hyphen (left out of the fonts: it must not draw)
+        return true;
+    }
+    switch (cp) {
+    case 0x2013: case 0x2014: case 0x2018: case 0x2019: case 0x201C: case 0x201D: case 0x2022: case 0x2026: case 0x20AC:
+    // LV_SYMBOL_*: AUDIO OK IMAGE PLAY PAUSE RIGHT SHUFFLE LOOP DIRECTORY CHARGE FILE WIFI BATTERY_FULL/3/2/1/EMPTY BLUETOOTH SD_CARD
+    case 0xF001: case 0xF00C: case 0xF03E: case 0xF04B: case 0xF04C: case 0xF054: case 0xF074: case 0xF079: case 0xF07B:
+    case 0xF0E7: case 0xF15B: case 0xF1EB: case 0xF240: case 0xF241: case 0xF242: case 0xF243: case 0xF244: case 0xF293: case 0xF7C2:
+        return true;
+    default:
+        return false;
+    }
+}
+
+// What @p cp (not in the fonts) draws as: "" (nothing), a look-alike, the base letter(s), or "?". @p buf is scratch for the result.
+static const char *map_cp(uint32_t cp, char buf[3]) {
+    buf[1] = '\0';
+    buf[2] = '\0';
+    if (cp < 0x20 || cp == 0x7F || (cp >= 0x80 && cp < 0xA0)) {
+        return cp == '\n' ? "\n" : " "; // a label breaks lines at '\n' (the multi-line panes); every other control is a space
+    }
+    if (cp == 0xAD || (cp >= 0x200B && cp <= 0x200F) || (cp >= 0x202A && cp <= 0x202E) || cp == 0x2060 || cp == 0xFEFF ||
+        (cp >= 0x0300 && cp <= 0x036F)) {
+        return ""; // zero width, direction marks, combining accents (a decomposed "e" + acute draws as the base letter)
+    }
+    if (cp >= 0x100 && cp <= 0x17F) {
+        if (cp == 0x132 || cp == 0x133) {
+            return cp == 0x132 ? "IJ" : "ij";
+        }
+        if (cp == 0x152 || cp == 0x153) {
+            return cp == 0x152 ? "OE" : "oe";
+        }
+        buf[0] = k_latin_ext_a[cp - 0x100];
+        return buf;
+    }
+    if (cp >= 0xFF01 && cp <= 0xFF5E) {
+        buf[0] = (char)(cp - 0xFEE0); // fullwidth ASCII
+        return buf;
+    }
+    switch (cp) {
+    case 0x0192: return "f";
+    case 0x2002: case 0x2003: case 0x2004: case 0x2005: case 0x2006: case 0x2007: case 0x2008: case 0x2009: case 0x200A:
+    case 0x2028: case 0x202F: case 0x205F: case 0x3000:
+        return " ";
+    case 0x2010: case 0x2011: case 0x2012: case 0x2015: case 0x2212: return "-";
+    case 0x201A: return ",";
+    case 0x201B: case 0x2032: return "'";
+    case 0x201E: case 0x201F: case 0x2033: return "\"";
+    case 0x2039: return "<";
+    case 0x203A: return ">";
+    case 0x2044: case 0x2215: return "/";
+    case 0x2122: return "TM";
+    default: return "?"; // CJK, emoji, other scripts
+    }
+}
+
+// Decode the character at @p r (never at the NUL): its code point, and how many bytes it takes. A malformed byte is U+FFFD (one byte);
+// a sequence cut short by the end of the string is *len bytes of nothing (cp 0 with *len > 0 is never a real character).
+static uint32_t next_cp(const unsigned char *r, size_t *len) {
+    unsigned char b = r[0];
+    *len = 1;
+    if (b < 0x80u) {
+        return b;
+    }
+    size_t need = b >= 0xC2u && b <= 0xDFu ? 2 : b >= 0xE0u && b <= 0xEFu ? 3 : b >= 0xF0u && b <= 0xF4u ? 4 : 0;
+    if (need == 0) {
+        return 0xFFFDu; // a stray continuation byte, or 0xC0/0xC1/0xF5.. (never valid)
+    }
+    uint32_t cp = b & (need == 2 ? 0x1Fu : need == 3 ? 0x0Fu : 0x07u);
+    for (size_t i = 1; i < need; i++) {
+        if (r[i] == 0) {
+            *len = i;
+            return 0; // cut short at the end of the string
+        }
+        if ((r[i] & 0xC0u) != 0x80u) {
+            *len = i; // the sequence ends early: replace what we read
+            return 0xFFFDu;
+        }
+        cp = (cp << 6) | (r[i] & 0x3Fu);
+    }
+    *len = need;
+    if ((need == 3 && cp < 0x800u) || (need == 4 && (cp < 0x10000u || cp > 0x10FFFFu)) || (cp >= 0xD800u && cp <= 0xDFFFu)) {
+        return 0xFFFDu; // overlong, out of range, surrogate
+    }
+    return cp;
+}
+
+void ui_text_display(char *out, size_t n, const char *raw) {
     if (n == 0) {
         return;
     }
     size_t o = 0;
     const unsigned char *r = (const unsigned char *)raw;
     while (*r != '\0') {
-        const char *rep = NULL;
-        size_t len = 1;
-        if (r[0] == 0xE2u && r[1] == 0x80u && r[2] != 0) {
-            len = 3;
-            switch (r[2]) {
-            case 0x98: case 0x99: rep = "'"; break;
-            case 0x9C: case 0x9D: rep = "\""; break;
-            case 0x93: case 0x94: rep = "-"; break;
-            case 0xA6: rep = "..."; break;
-            default: break;
-            }
-        } else if (r[0] >= 0xC0u) {
-            len = r[0] >= 0xF0u ? 4 : r[0] >= 0xE0u ? 3 : 2;
+        size_t len;
+        uint32_t cp = next_cp(r, &len);
+        char scratch[3];
+        const char *rep = NULL; // NULL: copy the original bytes
+        size_t w = len;
+        if (cp == 0) {
+            break; // a truncated sequence at the end of the string
         }
-        for (size_t i = 1; i < len; i++) { // a truncated sequence at the end of the string: stop at the NUL
-            if ((r[i] & 0xC0u) != 0x80u) {
-                len = i;
-                break;
-            }
+        if (!ui_text_has_glyph(cp)) {
+            rep = map_cp(cp == 0xFFFDu ? 0x10FFFFu : cp, scratch);
+            w = strlen(rep);
         }
-        size_t w = rep != NULL ? strlen(rep) : len;
         if (o + w + 1 > n) {
             break; // never cut inside a character
         }
-        memcpy(out + o, rep != NULL ? (const unsigned char *)rep : r, w);
+        memcpy(out + o, rep != NULL ? (const void *)rep : (const void *)r, w);
         o += w;
         r += len;
     }
     out[o] = '\0';
+}
+
+bool ui_text_is_clean(const char *raw) {
+    const unsigned char *r = (const unsigned char *)raw;
+    while (*r != '\0') {
+        if (*r >= 0x20u && *r < 0x7Fu) { // plain ASCII: the common case, no decode
+            r++;
+            continue;
+        }
+        size_t len;
+        uint32_t cp = next_cp(r, &len);
+        if (cp == 0 || cp == 0xFFFDu || !ui_text_has_glyph(cp)) {
+            return false;
+        }
+        r += len;
+    }
+    return true;
 }

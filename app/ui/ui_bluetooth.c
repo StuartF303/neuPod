@@ -121,7 +121,7 @@ void ui_bt_headset_text(char *out, size_t n) {
     char st[32];
     link_text_for(sv.addr, st, sizeof st);
     char nm[HAL_BT_NAME_MAX + 8];
-    ui_display_name(nm, sizeof nm, sv.name);
+    ui_text_display(nm, sizeof nm, sv.name);
     snprintf(out, n, "%s\n%s", nm[0] != '\0' ? nm : "Headset", st);
 }
 
@@ -187,7 +187,7 @@ static void bt_get(void *ctx, int32_t idx, ui_list_item_t *o) {
     case ROW_DEVICE: {
         hal_bt_link_state_t l = hal_bt_link_state();
         char nm[HAL_BT_NAME_MAX + 8];
-        ui_display_name(nm, sizeof nm, b->saved.name);
+        ui_text_display(nm, sizeof nm, b->saved.name);
         snprintf(o->label, sizeof o->label, "%s%s", b->saved.audio_sink ? LV_SYMBOL_AUDIO " " : "", nm[0] != '\0' ? nm : "Headset");
         link_text_for(b->saved.addr, o->detail, sizeof o->detail);
         o->busy = (link_busy(l) && link_is_for(b->saved.addr)) || (bt_service_reconnecting() && l != HAL_BT_LINK_CONNECTED);
@@ -386,7 +386,7 @@ static void dev_get(void *ctx, int32_t idx, ui_list_item_t *o) {
     char addr[18];
     fmt_addr(v->addr, addr, sizeof addr);
     char nm[HAL_BT_NAME_MAX + 8];
-    ui_display_name(nm, sizeof nm, v->name);
+    ui_text_display(nm, sizeof nm, v->name);
     snprintf(o->label, sizeof o->label, "%s%s", v->audio_sink ? LV_SYMBOL_AUDIO " " : "", nm[0] != '\0' ? nm : addr);
     o->dim = !v->audio_sink; /* not a headset or speaker: shown, but not what we are looking for */
     if (link_is_for(v->addr)) {

@@ -3,7 +3,7 @@
  * UI metrics: every pixel size the LVGL UI uses, in one struct chosen once at UI init from the panel size
  * (docs/ui.md "Resolution profiles", ADR-0018). The product panel is 320x240 (the profile that holds the
  * exact numbers the UI always had); hosted builds (NEUPOD_UI_HIRES: the host simulator and the Y2 testbed)
- * also carry a 480x360 profile at 1.5x with the next-size Montserrat fonts. Screens read their geometry from
+ * also carry a 480x360 profile at 1.5x with the next-size fonts (app/ui/fonts). Screens read their geometry from
  * ui_metrics(); nothing outside ui_metrics.c multiplies by a scale factor.
  */
 #ifndef NEUPOD_UI_METRICS_H
@@ -13,6 +13,7 @@
 #include <stdint.h>
 
 #include "lvgl.h"
+#include "fonts/neupod_fonts.h"
 
 /* Compile-time ceilings for the things that are sized statically (LVGL partial-render buffers, list row pool). */
 #ifdef NEUPOD_UI_HIRES
@@ -42,9 +43,9 @@ typedef struct {
     int32_t title_w, title_h;
 
     /* Text */
-    const lv_font_t *font_body;  /* every label unless a screen asks for more (Montserrat 14 / 20) */
+    const lv_font_t *font_body;  /* every label unless a screen asks for more (Montserrat 14 / 20, Latin-1) */
     const lv_font_t *font_large; /* titles, values, splash icons (20 / 28) */
-    const lv_font_t *font_huge;  /* splash wordmark, the art-less note glyph (48 / 48: the largest built-in) */
+    const lv_font_t *font_huge;  /* splash wordmark, the art-less note glyph (48 / 48: ASCII only) */
     int32_t pad;                 /* left text inset of rows, side margin of free-standing text */
     int32_t line_h;              /* fixed height of a one-line label (so "..." replaces wrapping) */
 

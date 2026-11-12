@@ -211,11 +211,7 @@ static const menu_entry_t k_home[] = {{"Music", ui_screen_music_create},
                                       {"Shuffle Songs", make_shuffle},
                                       {"Now Playing", make_nowplaying}};
 
-static void home_set(lv_obj_t *l, const char *t) {
-    if (strcmp(lv_label_get_text(l), t) != 0) {
-        lv_label_set_text(l, t);
-    }
-}
+static void home_set(lv_obj_t *l, const char *t) { ui_label_set_text(l, t); }
 
 static void home_hide(lv_obj_t *o, bool hidden) {
     if (lv_obj_is_hidden(o) != hidden) {

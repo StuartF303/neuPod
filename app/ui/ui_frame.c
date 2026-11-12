@@ -96,7 +96,7 @@ static uint32_t g_batt_col = UI_L_DIM;
 /* Playback state for the status bar glyph. Nothing plays yet (no decoder), so: idle. */
 static const char *play_glyph(void) { return ""; }
 
-static void set_title(const char *t) { lv_label_set_text(g_title, t); }
+static void set_title(const char *t) { ui_label_set_text(g_title, t); }
 
 void ui_frame_set_title(const char *t) { set_title(t); }
 
@@ -451,6 +451,30 @@ static lv_style_t *colour_style(uint32_t colour) {
     return &g_colour[g_ncolour++].style;
 }
 
+void ui_label_set_text(lv_obj_t *l, const char *raw) {
+    const char *shown = raw;
+    char small[96];
+    char *big = NULL;
+    if (!ui_text_is_clean(raw)) {
+        size_t need = strlen(raw) + 1; // the filtered text is never longer
+        char *buf = small;
+        if (need > sizeof small) {
+            big = lv_malloc(need);
+            buf = big;
+        }
+        if (buf != NULL) { // out of memory: show the raw text (empty boxes beat a blank row)
+            ui_text_display(buf, need, raw);
+            shown = buf;
+        }
+    }
+    if (strcmp(lv_label_get_text(l), shown) != 0) {
+        lv_label_set_text(l, shown);
+    }
+    if (big != NULL) {
+        lv_free(big);
+    }
+}
+
 lv_obj_t *ui_label(lv_obj_t *parent, const char *text, uint32_t colour) {
     if (!g_font_body_ready) {
         lv_style_init(&g_font_body);
@@ -458,7 +482,7 @@ lv_obj_t *ui_label(lv_obj_t *parent, const char *text, uint32_t colour) {
         g_font_body_ready = true;
     }
     lv_obj_t *l = lv_label_create(parent);
-    lv_label_set_text(l, text);
+    ui_label_set_text(l, text);
     lv_obj_add_style(l, &g_font_body, 0);
     lv_obj_add_style(l, colour_style(colour), 0);
     return l;

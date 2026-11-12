@@ -74,11 +74,7 @@ struct ui_list {
     lv_obj_t *parent;
 };
 
-static void set_text(lv_obj_t *label, const char *text) {
-    if (strcmp(lv_label_get_text(label), text) != 0) {
-        lv_label_set_text(label, text);
-    }
-}
+static void set_text(lv_obj_t *label, const char *text) { ui_label_set_text(label, text); } /* filters names; skips an unchanged label */
 
 static void style_row(ui_list_t *l, row_t *r, bool dim) {
     bool on = r->sel && l->focus;

@@ -7,7 +7,9 @@
 
 #include "boot_briefs.h"
 #include "lvgl.h"
+#include "fonts/neupod_fonts.h"
 #include "src/misc/lv_text_private.h" /* lv_text_get_width: LVGL private API, fine for a host test */
+#include "ui_logic.h"
 #include "ui_metrics.h"
 #include "unit.h"
 
@@ -32,9 +34,9 @@ TEST(profile_320_is_the_historic_layout) {
     ASSERT_EQ(9, m->rows);
     ASSERT_EQ(216, m->content_h);
     ASSERT_EQ(24, m->buf_lines);
-    ASSERT_TRUE(m->font_body == &lv_font_montserrat_14);
-    ASSERT_TRUE(m->font_large == &lv_font_montserrat_20);
-    ASSERT_TRUE(m->font_huge == &lv_font_montserrat_48);
+    ASSERT_TRUE(m->font_body == &neupod_font_14);
+    ASSERT_TRUE(m->font_large == &neupod_font_20);
+    ASSERT_TRUE(m->font_huge == &neupod_font_48);
     ASSERT_EQ(112, m->np_art);
     ASSERT_EQ(96, m->home_art);
     ASSERT_EQ(160, m->home_list_w);
@@ -154,10 +156,43 @@ TEST(selection_picks_the_largest_profile_that_fits) {
 #endif
 }
 
+// ui_text_has_glyph() (the display-text filter) claims exactly the glyphs the compiled fonts have: a drift either draws empty boxes (claimed
+// but missing) or turns a drawable character into '?' (present but not claimed).
+static bool font_has(const lv_font_t *f, uint32_t cp) {
+    lv_font_glyph_dsc_t d;
+    return lv_font_get_glyph_dsc(f, &d, cp, 0) && !d.is_placeholder;
+}
+
+TEST(text_filter_matches_the_fonts) {
+    const lv_font_t *fonts[] = {&neupod_font_14, &neupod_font_20,
+#ifdef NEUPOD_UI_HIRES
+                                &neupod_font_28,
+#endif
+    };
+    for (size_t i = 0; i < sizeof fonts / sizeof fonts[0]; i++) {
+        uint32_t claimed = 0;
+        for (uint32_t cp = 0x20; cp < 0x30000u; cp++) {
+            bool want = ui_text_has_glyph(cp);
+            claimed += want ? 1u : 0u;
+            if (want != font_has(fonts[i], cp)) {
+                printf("  font %zu: U+%04X claimed=%d\n", i, (unsigned)cp, want);
+            }
+            ASSERT_EQ(want, font_has(fonts[i], cp));
+        }
+        ASSERT_TRUE(claimed > 190);
+    }
+    // The 48 pt font is for the wordmark and the note symbol only: ASCII and LV_SYMBOL_AUDIO.
+    for (uint32_t cp = 0x20; cp <= 0x7E; cp++) {
+        ASSERT_TRUE(font_has(&neupod_font_48, cp));
+    }
+    ASSERT_TRUE(font_has(&neupod_font_48, 0xF001));
+}
+
 int main(void) {
     RUN(profile_320_is_the_historic_layout);
     RUN(every_profile_fits_its_panel);
     RUN(splash_captions_fit_one_line_in_every_profile);
     RUN(selection_picks_the_largest_profile_that_fits);
+    RUN(text_filter_matches_the_fonts);
     return RESULT();
 }

@@ -121,7 +121,7 @@ static bool has_ext(const char *name, const char *ext) {
 }
 
 static void show_toast(files_t *f, const char *text) {
-    lv_label_set_text(f->toast, text);
+    ui_label_set_text(f->toast, text);
     lv_obj_set_hidden(f->toast, false);
     f->toast_until = os_tick_ms() + 3000u;
 }

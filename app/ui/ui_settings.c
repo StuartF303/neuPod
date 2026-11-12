@@ -551,7 +551,7 @@ static void settings_update_pane(settings_t *s) {
         snprintf(s->text, sizeof s->text, "%s", text);
         s->shown_sel = g;
         lv_label_set_text(s->head, k_group[g]);
-        lv_label_set_text(s->body, s->text);
+        ui_label_set_text(s->body, s->text);
     }
 }
 
