@@ -360,6 +360,14 @@ target_link_libraries(test_ui_logic neupod_rt_core)
 add_test(NAME ui_logic COMMAND test_ui_logic)
 set_source_files_properties(test_ui_logic.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
+# The Licences screen's data against LICENSE.md (the standing rule: licence notes stay up to date).
+add_executable(test_licences test_licences.c)
+target_include_directories(test_licences PRIVATE ${CMAKE_SOURCE_DIR}/app/ui)
+target_compile_definitions(test_licences PRIVATE NEUPOD_LICENSE_MD="${CMAKE_SOURCE_DIR}/LICENSE.md")
+target_link_libraries(test_licences neupod_rt_core)
+add_test(NAME licences COMMAND test_licences)
+set_source_files_properties(test_licences.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
 add_executable(test_wheel_input test_wheel_input.c)
 target_link_libraries(test_wheel_input neupod_rt_core)
 add_test(NAME wheel_input COMMAND test_wheel_input)

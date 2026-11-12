@@ -180,6 +180,7 @@ ui_screen_t *ui_screen_inputdemo_create(void); /* input/ui_input_demo.c */
 
 /** Small helpers shared by the screens. */
 lv_obj_t *ui_artwork(lv_obj_t *parent, int32_t x, int32_t y, int32_t size);
+ui_screen_t *ui_screen_licences_create(void);  /* ui_licences.c: Settings > About > Licences */
 lv_obj_t *ui_label(lv_obj_t *parent, const char *text, uint32_t colour);
 /** Set a label's text from a raw string (file name, tag, device name, SSID ...): runs ui_text_display() first, so characters the fonts lack
  *  never draw as an empty box, and does nothing when the label already shows the result. Every label that can carry such a string

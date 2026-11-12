@@ -68,7 +68,7 @@ typedef struct {
 static int32_t info_count(const info_t *in) {
     switch (in->kind) {
     case INFO_ABOUT:
-        return ABOUT_FIXED + CAP_COUNT;
+        return 1 + ABOUT_FIXED + CAP_COUNT; /* row 0 opens the Licences screen */
     case INFO_STORAGE:
         return 5;
     case INFO_BATTERY:
@@ -79,6 +79,12 @@ static int32_t info_count(const info_t *in) {
 
 static void about_get(const info_t *in, int32_t i, ui_list_item_t *o) {
     char b[24];
+    if (i == 0) {
+        snprintf(o->label, sizeof o->label, "Licences");
+        o->chevron = true;
+        return;
+    }
+    i--; /* the rows below are the live read-outs */
     switch (i) {
     case 0: put(o, "Version", "%s", NEUPOD_VERSION); break;
     case 1: put(o, "Build", "%s", NEUPOD_GIT_HASH); break;
@@ -193,6 +199,18 @@ static void info_tick(ui_screen_t *s) {
 }
 
 static void info_scroll(ui_screen_t *s, int32_t steps) { ui_list_move(((info_t *)s)->list, steps); }
+
+/* About: Select on the first row opens Licences (the third-party components and their licences, kept in step with LICENSE.md) */
+static bool info_button(ui_screen_t *s, uint8_t btn) {
+    info_t *in = (info_t *)s;
+    if (btn != HAL_BTN_SELECT || in->kind != INFO_ABOUT) {
+        return false;
+    }
+    if (ui_list_selected(in->list) == 0) {
+        ui_frame_push(ui_screen_licences_create());
+    }
+    return true;
+}
 static void info_destroy(ui_screen_t *s) { ui_list_destroy(((info_t *)s)->list); }
 
 static ui_screen_t *info_create(const char *title, info_kind_t kind) {
@@ -203,6 +221,7 @@ static ui_screen_t *info_create(const char *title, info_kind_t kind) {
     in->kind = kind;
     in->base.on_scroll = info_scroll;
     in->base.on_tick = info_tick;
+    in->base.on_button = info_button;
     in->base.destroy = info_destroy;
     info_sample(in);
     if (kind == INFO_STORAGE && caps_available(CAP_STORAGE)) {

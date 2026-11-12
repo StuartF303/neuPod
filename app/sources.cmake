@@ -46,6 +46,7 @@ set(NEUPOD_RT_CORE_SOURCES               # pure logic, no OS: host-testable on t
   ${NEUPOD_APP_DIR}/audio/spsc_ring.c
   ${NEUPOD_APP_DIR}/input/input_events.c
   ${NEUPOD_APP_DIR}/ui/ui_logic.c
+  ${NEUPOD_APP_DIR}/ui/ui_licence_data.c
   ${NEUPOD_APP_DIR}/ui/input/wheel_input.c
   ${NEUPOD_APP_DIR}/net/sys_clock.c
   ${NEUPOD_APP_DIR}/net/wifi_logic.c
@@ -131,6 +132,7 @@ set(NEUPOD_UI_SOURCES
   ${NEUPOD_APP_DIR}/ui/ui_audio.c
   ${NEUPOD_APP_DIR}/ui/ui_settings.c
   ${NEUPOD_APP_DIR}/ui/ui_bluetooth.c
+  ${NEUPOD_APP_DIR}/ui/ui_licences.c
   ${NEUPOD_APP_DIR}/ui/ui_wifi.c
   ${NEUPOD_APP_DIR}/ui/ui_nettest.c
   ${NEUPOD_APP_DIR}/ui/input/ui_input.c
