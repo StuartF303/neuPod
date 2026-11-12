@@ -666,6 +666,9 @@ static void update_banner(void) {
 // which volume is in use (a headset connecting takes over) is not a volume change and shows nothing; nor does anything while the screen is off or Hold is on.
 static int32_t g_vol_att = -1;
 static int g_vol_hv = -2;
+static uint32_t g_vol_gen = UINT32_MAX, g_vol_quiet_until;
+static bool g_vol_quiet;
+#define VOL_QUIET_MS 1500u /* after a settings load (the saved volume is restored a moment later) or a change of volume mode (the software volume follows the headset's) */
 
 static void update_volume_hud(void) {
     uint32_t att = player_volume_att();
@@ -675,7 +678,17 @@ static void update_volume_hud(void) {
     const bool changed = hv >= 0 ? hv != g_vol_hv : (int32_t)att != g_vol_att;
     g_vol_att = (int32_t)att;
     g_vol_hv = hv;
-    if (first || !mode_same || !changed) {
+    const uint32_t now = os_tick_ms();
+    const uint32_t gen = settings_generation();
+    if (gen != g_vol_gen || !mode_same) {
+        g_vol_gen = gen;
+        g_vol_quiet = true;
+        g_vol_quiet_until = now + VOL_QUIET_MS;
+    }
+    if (g_vol_quiet && (int32_t)(now - g_vol_quiet_until) >= 0) {
+        g_vol_quiet = false;
+    }
+    if (first || g_vol_quiet || !mode_same || !changed) {
         return;
     }
     ui_screen_t *top = ui_stack_top(&g_stack);
