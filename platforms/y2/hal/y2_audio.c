@@ -108,7 +108,7 @@ static void logf_(const y2_audio_t *a, const char *fmt, ...) {
 }
 
 static int dac_cmd(y2_audio_t *a, unsigned long cmd, unsigned long arg) {
-    if (!y2_audio_dac_cmd_ok(cmd)) {
+    if (!y2_audio_dac_cmd_ok(cmd) || (cmd == DAC_VOLUME && arg > Y2_AUDIO_DAC_INDEX_MAX)) { // the volume cap is enforced here, whoever asks
         a->stats.refused++;
         return -1;
     }
@@ -340,10 +340,11 @@ bool y2_audio_work(y2_audio_t *a) {
     const bool hp = atomic_load(&a->headphones) != 0u;
     const bool sd = atomic_load(&a->shutdown) != 0u;
     const bool fo = atomic_exchange(&a->force_off, 0u) != 0u;
+    const bool virt = atomic_load(&a->virt) != 0u; // Bluetooth took over: the DAC must not stay streaming under it
     atomic_store(&a->dev_ok, hp && !sd && atomic_load(&a->virt) == 0u && now >= a->retry_at_us ? 1u : 0u);
     const bool ok = atomic_load(&a->dev_ok) != 0u;
 
-    if (a->st != Y2_DAC_OFF && (!hp || sd || fo)) {
+    if (a->st != Y2_DAC_OFF && (!hp || sd || fo || virt)) {
         if (!hp) {
             logf_(a, "audio: headphones unplugged");
         }

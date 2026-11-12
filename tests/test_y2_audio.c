@@ -638,6 +638,29 @@ TEST(the_bluetooth_virtual_clock_never_starts_the_dac) {
     ASSERT_EQ(Y2_DAC_STREAMING, y2_audio_state(&g_dev));
 }
 
+TEST(switching_to_the_bluetooth_clock_while_streaming_powers_the_dac_down_at_once) {
+    setup(2, NULL);
+    settle();
+    (void)produce(1 << 20, 1 << 20);
+    settle();
+    ASSERT_EQ(Y2_DAC_STREAMING, y2_audio_state(&g_dev));
+    y2_audio_set_virtual(&g_dev, true);
+    ASSERT_TRUE(y2_audio_work(&g_dev));
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev));
+    ASSERT_EQ(1, count('D', 0x4303));
+    ASSERT_EQ(0, g_dev.stats.refused);
+}
+
+TEST(a_volume_command_above_the_cap_never_reaches_the_dac) {
+    setup(2, NULL);
+    g_dev.dac_index = 12; // even a corrupted index
+    settle();
+    (void)produce(1 << 20, 1 << 20);
+    settle();
+    ASSERT_EQ(-1, find('D', 0x40044304ul, 12, 0));
+    ASSERT_TRUE(g_dev.stats.refused > 0);
+}
+
 TEST(the_volume_index_from_the_environment_is_what_the_stream_starts_with) {
     setup(2, "7");
     settle();
@@ -676,6 +699,8 @@ int main(void) {
     RUN(shutdown_and_force_off_power_everything_down);
     RUN(a_shutdown_with_the_dac_never_started_touches_nothing);
     RUN(the_bluetooth_virtual_clock_never_starts_the_dac);
+    RUN(switching_to_the_bluetooth_clock_while_streaming_powers_the_dac_down_at_once);
+    RUN(a_volume_command_above_the_cap_never_reaches_the_dac);
     RUN(the_volume_index_from_the_environment_is_what_the_stream_starts_with);
     return RESULT();
 }
