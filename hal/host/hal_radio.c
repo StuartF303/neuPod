@@ -70,6 +70,7 @@ static hal_bt_fail_t g_force_stream_fail;
 #define SIM_AVRCP_MS 150u
 #define SIM_VOLUME_ANSWER_MS 30u
 static bool g_force_no_abs;
+static int g_initial_vol = -1;      /* hal_host_bt_set_initial_volume(): the volume a headset reports first (-1: 60, about 47 %; the WH-1000XM5 starts at 0) */
 static bool g_abs_cap;              /* the headset of this link has absolute volume */
 static bool g_avrcp_pending;        /* CONNECTED, the first volume report is still to come */
 static uint32_t g_avrcp_t0;
@@ -197,11 +198,11 @@ static void sim_codec_for(const uint8_t addr[6]) {
     }
 }
 
-/* The headset of this link: the speaker has no absolute volume; the WH-1000XM5 starts silent (like an AirPods Pro that was left at 0 %), the others at about 63 %. */
+/* The headset of this link: the speaker has no absolute volume; the WH-1000XM5 starts silent (like an AirPods Pro that was left at 0 %), the others at 60 (about 47 %: under the connect cap). */
 static void sim_avrcp_for(const uint8_t addr[6]) {
     bool speaker = addr[0] == 0x70 && addr[1] == 0x99;
     g_abs_cap = !speaker && !g_force_no_abs;
-    g_vol = addr[0] == 0x00 && addr[1] == 0x1B ? 0 : 80;
+    g_vol = addr[0] == 0x00 && addr[1] == 0x1B ? 0 : g_initial_vol >= 0 ? (uint8_t)g_initial_vol : 60;
     g_vol_known = false;
     g_ans_pending = false;
     g_avrcp_pending = true;
@@ -586,6 +587,7 @@ bool hal_bt_track_info(const hal_bt_track_t *info) {
 }
 
 void hal_host_bt_set_no_absolute_volume(bool on) { g_force_no_abs = on; }
+void hal_host_bt_set_initial_volume(int volume) { g_initial_vol = volume; }
 
 void hal_host_bt_headset_volume(uint8_t volume) {
     if (!hal_bt_volume_supported()) {

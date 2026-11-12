@@ -449,9 +449,9 @@ TEST(test_absolute_volume_is_reported_after_connect_and_set_by_the_app) {
     ASSERT_FALSE(hal_bt_volume_supported()); // AVRCP is not up the moment the link is
     pump_ms(400);
     ASSERT_TRUE(hal_bt_volume_supported());
-    ASSERT_EQ(80, hal_bt_volume_get());
+    ASSERT_EQ(60, hal_bt_volume_get());
     ASSERT_EQ(1, g_volumes);
-    ASSERT_EQ(80, g_last_volume);
+    ASSERT_EQ(60, g_last_volume);
     // our set: get() follows at once, the headset's answer is a second event
     uint32_t sets = hal_host_bt_volume_sets();
     ASSERT_EQ(HAL_OK, hal_bt_volume_set(200)); // clamped to 127

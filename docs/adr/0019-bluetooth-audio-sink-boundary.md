@@ -129,5 +129,7 @@ Details and the RAM / flash figures are in [Bluetooth](../bluetooth.md#stage-2b-
 Details in [Bluetooth](../bluetooth.md#stage-2c-avrcp-volume-buttons-metadata-built). Differences from the decision above:
 
 * The volume path is the **AVRCP controller** role (the headset is the target of absolute volume); the AVRCP **target** carries the buttons and the metadata. `hal_bt_volume_supported()` / `hal_bt_volume_get()` are added to the boundary, `HAL_BT_EVT_KEY` also has `FF` and `RW`, and `hal_bt_track_info()` returns false when the stack is busy.
+* **Volume cap on connect (owner decision, 12 Nov 2026):** a headset whose first absolute-volume report on a connection is above 50 % (`NEUPOD_BT_VOLUME_CAP_ON_CONNECT`, 64 of 127) is turned down to 50 %, never up; later changes are the user's. Taking over the headset's volume releases the software attenuation, so a headset a phone left at 100 % would otherwise play full scale.
+* A headset-initiated AVDTP START (a stem click on a suspended stream) is delivered as `HAL_BT_KEY_PLAY`; every AVRCP pass-through and every remote START / SUSPEND is logged.
 * STOP from the headset pauses (the place is kept). No volume is remembered per headset.
 * Stage 3 reconnect is built early on the owner's request: after a lost link and at power-up, with backoff, ended by any user action; playback is not resumed.

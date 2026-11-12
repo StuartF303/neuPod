@@ -8,7 +8,7 @@
  * 0 dB so that nothing is attenuated twice. Without absolute volume, or on the wired output, the software volume is the volume, as before. One scale
  * ties the two together (bt_vol_to_db / bt_vol_from_db): linear in dB between 0 dB (127) and the software "off" level (0), so a wheel step is 2 dB in
  * either mode and the bar means the same thing. Nothing is remembered per headset: the headset keeps its own volume and is read on connect, and a
- * volume is never pushed to a headset behind the user's back.
+ * earlier level is never restored to a headset behind the user's back. The one push: a headset that first reports more than NEUPOD_BT_VOLUME_CAP_ON_CONNECT (50 %) is turned down to it, never up (owner decision, 12 Nov 2026).
  *
  * Keys. A headset button (HAL_BT_EVT_KEY) does what the matching button of the device does on every screen: Play / Pause, Right (next track), Left
  * (previous track); the held FF / RW buttons scrub the track.

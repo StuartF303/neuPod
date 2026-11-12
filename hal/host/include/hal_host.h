@@ -46,6 +46,8 @@ void hal_host_bt_stream_dropped_by_headset(void);
 
 /** Tests: headsets connected from now on have no AVRCP absolute volume (software volume applies). The speaker never has it. Default off. */
 void hal_host_bt_set_no_absolute_volume(bool on);
+/** The volume (0..127) a simulated headset reports first on its next connection; -1 = the default (60). The WH-1000XM5 stays at 0. */
+void hal_host_bt_set_initial_volume(int volume);
 
 /** Tests: the headset's own volume changes (a swipe on the stem): HAL_BT_EVT_VOLUME. No-op without absolute volume. */
 void hal_host_bt_headset_volume(uint8_t volume);

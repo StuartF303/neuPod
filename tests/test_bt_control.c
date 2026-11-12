@@ -245,14 +245,14 @@ TEST(test_absolute_volume_policy) {
     ASSERT_EQ(1, g_sw_last_steps);
     connect(A_AIRPODS, "AirPods Pro 3");
     ASSERT_TRUE(bt_volume_absolute());
-    ASSERT_EQ(80, bt_volume_get());
+    ASSERT_EQ(60, bt_volume_get());
     ASSERT_TRUE(g_hold); // the software volume went to 0 dB
     // the wheel moves the headset's volume, not the software one
     uint32_t sets = hal_host_bt_volume_sets();
     bt_volume_step(2);
-    ASSERT_EQ(88, bt_volume_get());
+    ASSERT_EQ(68, bt_volume_get());
     bt_volume_step(-1);
-    ASSERT_EQ(84, bt_volume_get());
+    ASSERT_EQ(64, bt_volume_get());
     ASSERT_EQ(sets + 2, hal_host_bt_volume_sets());
     ASSERT_EQ(1, g_sw_steps); // unchanged
     // the headset's own volume moves the bar
@@ -308,6 +308,65 @@ TEST(test_a_headset_at_zero_percent_is_reported_as_zero) {
     ASSERT_EQ(sets, hal_host_bt_volume_sets()); // and nothing of ours is pushed to the headset
     bt_volume_step(1);
     ASSERT_EQ(4, bt_volume_get());
+    hal_bt_disconnect();
+}
+
+TEST(test_connect_cap_turns_a_loud_headset_down_once) {
+    // 100 %: set to 50 % (64), before the software volume is released
+    hal_host_bt_set_initial_volume(127);
+    uint32_t sets = hal_host_bt_volume_sets();
+    connect(A_AIRPODS, "AirPods Pro 3");
+    ASSERT_TRUE(bt_volume_absolute());
+    ASSERT_EQ(64, bt_volume_get());
+    ASSERT_EQ(sets + 1, hal_host_bt_volume_sets());
+    // a swipe above the cap afterwards is the user's: respected, not capped again
+    hal_host_bt_headset_volume(110);
+    pump(200);
+    ASSERT_EQ(110, bt_volume_get());
+    ASSERT_EQ(sets + 1, hal_host_bt_volume_sets());
+    hal_bt_disconnect();
+    // exactly at the cap and below it: untouched
+    hal_host_bt_set_initial_volume(64);
+    sets = hal_host_bt_volume_sets();
+    connect(A_AIRPODS, "AirPods Pro 3");
+    ASSERT_EQ(64, bt_volume_get());
+    ASSERT_EQ(sets, hal_host_bt_volume_sets());
+    hal_bt_disconnect();
+    hal_host_bt_set_initial_volume(40 * 127 / 100); // 40 %
+    connect(A_AIRPODS, "AirPods Pro 3");
+    ASSERT_EQ(50, bt_volume_get());
+    ASSERT_EQ(sets, hal_host_bt_volume_sets());
+    hal_bt_disconnect();
+    // a new connection is a new first report: capped again
+    hal_host_bt_set_initial_volume(120);
+    connect(A_AIRPODS, "AirPods Pro 3");
+    ASSERT_EQ(64, bt_volume_get());
+    ASSERT_EQ(sets + 1, hal_host_bt_volume_sets());
+    hal_bt_disconnect();
+    hal_host_bt_set_initial_volume(-1);
+}
+
+TEST(test_headset_play_pause_keys_are_robust) {
+    // the matrix of the three keys over every player state: PLAY never pauses, PAUSE never plays, PLAY_PAUSE always toggles
+    const player_state_t all[] = {PLAYER_IDLE, PLAYER_OPENING, PLAYER_PLAYING, PLAYER_PAUSED, PLAYER_ENDED};
+    for (unsigned i = 0; i < sizeof all / sizeof all[0]; i++) {
+        bool playing = all[i] == PLAYER_PLAYING;
+        ASSERT_EQ(playing ? BT_KEY_NONE : BT_KEY_TOGGLE, bt_key_action(HAL_BT_KEY_PLAY, all[i], false));
+        ASSERT_EQ(playing ? BT_KEY_TOGGLE : BT_KEY_NONE, bt_key_action(HAL_BT_KEY_PAUSE, all[i], false));
+        ASSERT_EQ(BT_KEY_TOGGLE, bt_key_action(HAL_BT_KEY_PLAY_PAUSE, all[i], false));
+    }
+    // the headset's own START of a suspended stream reaches the app as PLAY: it resumes a paused player, and does nothing to a playing one
+    connect(A_AIRPODS, "AirPods Pro 3");
+    fill_playing(&g_pi);
+    g_pi.state = PLAYER_PAUSED;
+    int t0 = g_toggles;
+    hal_host_bt_headset_key(HAL_BT_KEY_PLAY);
+    pump(100);
+    ASSERT_EQ(t0 + 1, g_toggles);
+    g_pi.state = PLAYER_PLAYING;
+    hal_host_bt_headset_key(HAL_BT_KEY_PLAY);
+    pump(100);
+    ASSERT_EQ(t0 + 1, g_toggles);
     hal_bt_disconnect();
 }
 
@@ -403,6 +462,8 @@ int main(void) {
     RUN(test_absolute_volume_policy);
     RUN(test_no_absolute_volume_keeps_the_software_volume);
     RUN(test_a_headset_at_zero_percent_is_reported_as_zero);
+    RUN(test_connect_cap_turns_a_loud_headset_down_once);
+    RUN(test_headset_play_pause_keys_are_robust);
     RUN(test_headset_buttons_do_what_the_device_buttons_do);
     RUN(test_the_headset_is_told_what_plays);
     return RESULT();

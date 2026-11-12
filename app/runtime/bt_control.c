@@ -6,6 +6,7 @@
 #include "audio_route.h"
 #include "bt_control.h"
 #include "os.h"
+#include "runtime_config.h"
 #include "../ui/ui_logic.h"  /* ui_seek_step_s: the Now Playing scrub step */
 
 /* ---- the volume scale ---- */
@@ -149,6 +150,7 @@ static hal_bt_track_t g_sent, g_now; /* monitor task only */
 static bool g_sent_valid, g_none_sent;
 static uint32_t g_sent_ms;
 static bool g_hold;
+static bool g_supported_seen; /* hal_bt_volume_supported() as of the last service: its rising edge is "the headset's first volume report on this connection" */
 
 static void meta_service(uint32_t now) {
     if (hal_bt_link_state() != HAL_BT_LINK_CONNECTED) {
@@ -171,6 +173,16 @@ static void meta_service(uint32_t now) {
 
 void bt_control_service(void) {
     const uint32_t now = os_tick_ms();
+    const bool supported = hal_bt_volume_supported();
+    if (supported && !g_supported_seen) {
+        /* The headset has just told us its volume (a phone may have left it at 100 %). Never louder than the cap when we take it over: before the software
+         * volume is released to 0 dB below, so the first sound is not the loud one. Only down; what the user does afterwards is theirs. */
+        int v = hal_bt_volume_get();
+        if (v > (int)NEUPOD_BT_VOLUME_CAP_ON_CONNECT && hal_bt_volume_set((uint8_t)NEUPOD_BT_VOLUME_CAP_ON_CONNECT) == HAL_OK) {
+            printf("bt: headset volume capped %u%% -> %u%%\n", bt_vol_percent((uint8_t)v), bt_vol_percent((uint8_t)NEUPOD_BT_VOLUME_CAP_ON_CONNECT));
+        }
+    }
+    g_supported_seen = supported;
     const bool absolute = bt_volume_absolute();
     if (absolute != g_hold) { /* the headset's volume is the volume: nothing may be attenuated a second time. Back to the software volume when it is not. */
         g_hold = absolute;
