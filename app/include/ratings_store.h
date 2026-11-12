@@ -8,7 +8,7 @@
  * file once the settings store is attached to the card and writes it after a change, under the same nfs write scope and write-lock discipline as the
  * settings store (confined to /.neupod). On a write-protected card, or while the card is not usable, ratings stay in RAM only
  * (ratings_persistent() says so) and are written as soon as the card allows. File: "NPRT", version, count, entries (key u32, stars u8), CRC-32;
- * saved in place, so a power cut during a save can lose the ratings (a bad CRC loads as "none"), never anything else.
+ * saved through a temp file (write + sync, then unlink + rename), so a power cut during a save keeps the previous ratings or the complete new ones.
  */
 #ifndef NEUPOD_RATINGS_STORE_H
 #define NEUPOD_RATINGS_STORE_H
@@ -28,6 +28,7 @@ extern "C" {
 #define RATINGS_MAX 24u
 #endif
 #define RATINGS_FILE "/.neupod/ratings.bin"
+#define RATINGS_TMP "/.neupod/ratings.tmp" /**< a save is written here in full, then renamed over RATINGS_FILE */
 
 /** Key of the file at @p path of @p size bytes (never 0). */
 uint32_t ratings_key(const char *path, uint64_t size);

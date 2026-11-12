@@ -93,10 +93,14 @@ static int slot_victim(void) {
 static void slot_touch(int i) { g_slot[i].stamp = ++g_clock; }
 
 static void show_slot(int i) { // the track playing now has its thumbnail: publish it
+    slot_touch(i);
+    g_seq++; // the slot, its size and the state change together: a reader never pairs the new pixels with the old size
     g_prev = g_cur;
     g_cur = i;
-    slot_touch(i);
-    set_state(ART_VIEW_READY, g_slot[i].w, g_slot[i].h);
+    g_state = ART_VIEW_READY;
+    g_w = g_slot[i].w;
+    g_h = g_slot[i].h;
+    g_seq++;
 }
 
 // ---- the album being browsed (the album header of the library) -------------------------------------------------------------
@@ -422,8 +426,11 @@ static bool read_art_ref(const char *path, art_ref_t *out, char *album, size_t a
 
 static void run_browse(art_yield_fn caller_yield, void *caller_ctx) {
     char handle[BROWSE_HANDLE_MAX];
+    uint32_t want_gen = g_b.gen; // read first: the UI writes the handle before it bumps the generation, so an unchanged one means a whole handle
     snprintf(handle, sizeof handle, "%s", g_b.handle);
-    uint32_t want_gen = g_b.gen;
+    if (g_b.gen != want_gen) {
+        return; // retargeted while copying: the request stays pending and restarts
+    }
     guard_t guard = {.yield = caller_yield, .ctx = caller_ctx, .gen = want_gen, .live_gen = &g_b.gen};
     char path[NFS_PATH_MAX];
     const char *why = "";

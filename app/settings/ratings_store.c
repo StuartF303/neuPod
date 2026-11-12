@@ -151,28 +151,34 @@ bool ratings_parse(const uint8_t *in, size_t n) {
 
 static uint8_t g_img[12 + RATINGS_MAX * 5 + 4]; /* the file image: load and save never run at once (storage task) */
 
-static void do_load(void) {
-    uint8_t *img = g_img;
+/* Read one candidate file into g_img and parse it (replaces the table). False when missing, short or failing its CRC. */
+static bool load_file(const char *path) {
     nfs_file_t *f;
-    if (nfs_open(&f, RATINGS_FILE, NFS_O_READ) == NFS_OK) {
-        size_t got = 0;
-        nfs_err_t e = nfs_read(f, img, sizeof g_img, &got);
-        (void)nfs_close(f);
-        if (e == NFS_OK) {
-            entry_t keep[RATINGS_MAX]; /* ratings made before the card was ready win over the file's */
-            memcpy(keep, g_t, sizeof keep);
-            if (ratings_parse(img, got)) {
-                for (unsigned i = 0; i < RATINGS_MAX; i++) {
-                    if (keep[i].key != 0) {
-                        ratings_set(keep[i].key, keep[i].stars);
-                    }
-                }
+    if (nfs_open(&f, path, NFS_O_READ) != NFS_OK) {
+        return false;
+    }
+    size_t got = 0;
+    nfs_err_t e = nfs_read(f, g_img, sizeof g_img, &got);
+    (void)nfs_close(f);
+    return e == NFS_OK && ratings_parse(g_img, got);
+}
+
+static void do_load(void) {
+    entry_t keep[RATINGS_MAX]; /* ratings made before the card was ready win over the file's */
+    memcpy(keep, g_t, sizeof keep);
+    /* A complete temp file is newer than the main one (a cut fell between the unlink and the rename of a save); a partial one fails its CRC. */
+    if (load_file(RATINGS_TMP) || load_file(RATINGS_FILE)) {
+        for (unsigned i = 0; i < RATINGS_MAX; i++) {
+            if (keep[i].key != 0) {
+                ratings_set(keep[i].key, keep[i].stars);
             }
         }
     }
     g_loaded = true;
 }
 
+/* Write the whole image to the temp file and sync it; only then is the main file replaced (the card never replaces on rename: unlink first). A
+ * power cut leaves the old main file, or a complete temp file that load picks up, never neither. */
 static nfs_err_t do_save(void) {
     uint8_t *img = g_img;
     size_t n = ratings_serialise(img, sizeof g_img);
@@ -185,17 +191,33 @@ static nfs_err_t do_save(void) {
         return e;
     }
     nfs_file_t *f;
-    e = nfs_open(&f, RATINGS_FILE, NFS_O_WRITE | NFS_O_CREATE | NFS_O_TRUNC);
+    e = nfs_open(&f, RATINGS_TMP, NFS_O_WRITE | NFS_O_CREATE | NFS_O_TRUNC);
     if (e != NFS_OK) {
         return e;
     }
     size_t put = 0;
     e = nfs_write(f, img, n, &put);
+    if (e == NFS_OK && put != n) {
+        e = NFS_ERR_IO;
+    }
     if (e == NFS_OK) {
         e = nfs_sync(f);
     }
     nfs_err_t ce = nfs_close(f);
-    return e != NFS_OK ? e : ce;
+    if (e == NFS_OK) {
+        e = ce;
+    }
+    if (e != NFS_OK) {
+        (void)nfs_unlink(RATINGS_TMP); /* the old main file is untouched */
+        return e;
+    }
+    if (nfs_stat(RATINGS_FILE, &st) == NFS_OK) {
+        e = nfs_unlink(RATINGS_FILE);
+        if (e != NFS_OK) {
+            return e; /* the complete temp file stays; the next save overwrites it */
+        }
+    }
+    return nfs_rename(RATINGS_TMP, RATINGS_FILE);
 }
 
 void ratings_poll(uint32_t now_ms) {
