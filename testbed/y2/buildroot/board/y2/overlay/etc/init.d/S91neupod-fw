@@ -51,11 +51,13 @@ load_env() {
 		echo "neupod-fw: $ENV_FILE ignored (not a regular file)"
 		return 0
 	fi
-	st=$(stat -c '%u %a' "$ENV_FILE" 2>/dev/null)
-	uid=${st% *}
-	perm=${st#* }
-	case "$perm" in
-		*[0145][0145]) ;;  # group and others: no write bit (digits 0, 1, 4, 5)
+	# ls -ln, not stat: the Y2's busybox has no stat applet. Fields: mode, links, uid, ...
+	# shellcheck disable=SC2012
+	set -- $(ls -ln "$ENV_FILE" 2>/dev/null)
+	mode=$1
+	uid=$3
+	case "$mode" in
+		-????-??-*) ;;  # group and others: no write bit
 		*) echo "neupod-fw: $ENV_FILE ignored (writable by group or others)"; return 0 ;;
 	esac
 	if [ "$uid" != "$ENV_UID" ]; then

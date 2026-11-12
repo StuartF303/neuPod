@@ -1008,10 +1008,17 @@ static void a2dp_gone(hal_bt_fail_t why_failed) {
     }
 }
 
+static uint32_t g_dbg_sendfail, g_dbg_peak;
+static uint8_t g_dbg_lastrc;
+
 static void send_packet(void) {
     uint16_t frames = (uint16_t)(g_sbc_count / g_sbc_frame_len);
     g_sbc_store[0] = (uint8_t)frames; /* no fragmentation */
-    (void)a2dp_source_stream_send_media_payload_rtp(g_a2dp_cid, g_local_seid, 0, g_rtp_ts, g_sbc_store, (uint16_t)(g_sbc_count + 1u));
+    uint8_t rc = a2dp_source_stream_send_media_payload_rtp(g_a2dp_cid, g_local_seid, 0, g_rtp_ts, g_sbc_store, (uint16_t)(g_sbc_count + 1u));
+    if (rc != ERROR_CODE_SUCCESS) {
+        g_dbg_sendfail++;
+        g_dbg_lastrc = rc;
+    }
     g_rtp_ts += (uint32_t)frames * SBC_SAMPLES_PER_FRAME;
     g_sbc_count = 0;
     g_ready_to_send = false;
@@ -1077,6 +1084,10 @@ static void media_tick(btstack_timer_source_t *ts) {
         if (g_sbc_count == 0) {
             g_first_frame_ms = now;
         }
+        for (unsigned i = 0; i < SBC_SAMPLES_PER_FRAME * 2u; i++) {
+            uint32_t a = (uint32_t)(g_pcm_buf[i] < 0 ? -(int32_t)g_pcm_buf[i] : g_pcm_buf[i]);
+            g_dbg_peak = a > g_dbg_peak ? a : g_dbg_peak;
+        }
         g_enc->encode_signed_16(&g_enc_state, g_pcm_buf, &g_sbc_store[1u + g_sbc_count]);
         g_sbc_count = (uint16_t)(g_sbc_count + g_sbc_frame_len);
         g_owed -= SBC_SAMPLES_PER_FRAME;
@@ -1096,6 +1107,10 @@ static void rssi_tick(btstack_timer_source_t *ts) {
     if (g_acl != HCI_CON_HANDLE_INVALID) {
         (void)gap_read_rssi(g_acl);
     }
+    printf("bt: a2dp: packets %lu encoded %lu sendfail %lu (rc 0x%02X) peak %lu underruns %lu max_payload %u\n",
+           (unsigned long)g_st_packets, (unsigned long)g_st_encoded, (unsigned long)g_dbg_sendfail, (unsigned)g_dbg_lastrc,
+           (unsigned long)g_dbg_peak, (unsigned long)g_st_underruns, (unsigned)g_max_payload);
+    g_dbg_peak = 0;
 }
 
 static void media_start(void) {
@@ -1127,6 +1142,12 @@ static void media_start(void) {
     g_streaming_timer = true;
 }
 
+/** Bytes in one SBC frame, two channels (stereo or joint stereo). */
+static uint16_t sbc_frame_bytes(int blocks, int subbands, int bitpool, bool joint) {
+    int bits = (joint ? subbands : 0) + blocks * bitpool;
+    return (uint16_t)(4 + (4 * subbands * 2) / 8 + (bits + 7) / 8);
+}
+
 static bool configure_encoder(const uint8_t *packet, hal_bt_codec_t *out) {
     int rate = a2dp_subevent_signaling_media_codec_sbc_configuration_get_sampling_frequency(packet);
     int blocks = a2dp_subevent_signaling_media_codec_sbc_configuration_get_block_length(packet);
@@ -1140,8 +1161,12 @@ static bool configure_encoder(const uint8_t *packet, hal_bt_codec_t *out) {
     switch (mode) {
     case AVDTP_CHANNEL_MODE_JOINT_STEREO: cm = SBC_CHANNEL_MODE_JOINT_STEREO; hm = HAL_BT_MODE_JOINT_STEREO; break;
     case AVDTP_CHANNEL_MODE_STEREO: cm = SBC_CHANNEL_MODE_STEREO; hm = HAL_BT_MODE_STEREO; break;
-    default: return false; /* we send stereo only */
+    default:
+        printf("bt: a2dp: headset channel mode %d (stereo or joint stereo needed)\n", (int)mode);
+        return false; /* we send stereo only */
     }
+    printf("bt: a2dp: headset config %d Hz, mode %d, blocks %d, subbands %d, alloc %d, bitpool %d..%d\n", rate, (int)mode, blocks, subbands,
+           alloc, min_bp, max_bp);
     if ((uint32_t)rate != A2DP_RATE || blocks != 16 || subbands != 8) {
         return false; /* the frame size (128 samples) and the rate are fixed in this version */
     }
@@ -1152,8 +1177,13 @@ static bool configure_encoder(const uint8_t *packet, hal_bt_codec_t *out) {
     g_enc = btstack_sbc_encoder_bluedroid_init_instance(&g_enc_state);
     /* BTstack's allocation constants start at 1 (the Bluetooth spec: loudness 1, SNR 2 as configured); the encoder's start at 0. */
     g_enc->configure(&g_enc_state, SBC_MODE_STANDARD, blocks, subbands, (btstack_sbc_allocation_method_t)(alloc - 1), rate, bitpool, cm);
-    g_sbc_frame_len = g_enc->sbc_buffer_length(&g_enc_state);
+    /* The encoder only knows its frame length after the first encode (sbc_buffer_length() is 0 until then), so compute it from the
+     * A2DP spec (12.9): header 4 + scale factors 4*subbands*channels/8 + ceil((join*subbands + blocks*channels*bitpool)/8) for stereo and
+     * joint stereo; for both stereo modes the bitpool covers both channels, so blocks*bitpool. */
+    g_sbc_frame_len = sbc_frame_bytes(blocks, subbands, bitpool, mode == AVDTP_CHANNEL_MODE_JOINT_STEREO);
     if (g_enc->num_audio_frames(&g_enc_state) != SBC_SAMPLES_PER_FRAME || g_sbc_frame_len == 0 || g_sbc_frame_len + 1u > SBC_STORAGE_BYTES) {
+        printf("bt: a2dp: encoder frame %u samples, %u bytes (storage %u)\n", (unsigned)g_enc->num_audio_frames(&g_enc_state),
+               (unsigned)g_sbc_frame_len, (unsigned)SBC_STORAGE_BYTES);
         return false;
     }
     memset(out, 0, sizeof *out);
