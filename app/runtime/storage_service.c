@@ -234,7 +234,7 @@ static bool ts_next_track(char *path, size_t n) {
     }
     if (pq_is_handle(path)) {
         const char *why;
-        char real[NFS_PATH_MAX];
+        static char real[NFS_PATH_MAX]; // storage task only: off its 8 KB stack (the look-ahead runs deep in the feed)
         if (!library_service_resolve(path, real, sizeof real, &why) || strlen(real) >= n) {
             return false; // not playable: no gapless handoff, the ordinary start then reports it and the queue skips it
         }
@@ -388,7 +388,7 @@ void storage_task(void *arg) {
         case REQ_PLAY: {
             const char *why;
             if (pq_is_handle(rq.path)) { // a library queue entry: find the file (FatFs is ours alone)
-                char real[NFS_PATH_MAX];
+                static char real[NFS_PATH_MAX]; // storage task only: off its stack (distinct from the look-ahead buffer)
                 if (!library_service_resolve(rq.path, real, sizeof real, &why)) {
                     track_stream_stop(); // as a start that fails to open does: the track that was playing is no longer fed
                     player_file_failed(why);
