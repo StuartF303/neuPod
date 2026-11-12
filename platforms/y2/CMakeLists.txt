@@ -31,6 +31,7 @@ set(NEUPOD_Y2_HAL_SOURCES
   ${Y2_HAL}/btstack_uart_stpbt.c
   ${Y2_HAL}/btstack_chipset_mtk_consys.c
   ${CMAKE_SOURCE_DIR}/hal/common/bt_btstack/bt_btstack.c
+  ${CMAKE_SOURCE_DIR}/hal/common/bt_btstack/bt_link_policy.c
   ${Y2_HAL}/hal_i2c.c
   ${Y2_HAL}/hal_haptic.c
   ${CMAKE_SOURCE_DIR}/hal/host/hal_core.c                 # core 1 = a native thread, portable POSIX

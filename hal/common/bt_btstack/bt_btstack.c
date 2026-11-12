@@ -41,6 +41,7 @@
 #include "classic/btstack_sbc.h"
 #include "classic/btstack_sbc_bluedroid.h"
 #include "hal_radio.h"
+#include "bt_link_policy.h"
 #include "bt_port.h"
 
 #define LOCAL_NAME "neuPod"
@@ -64,11 +65,12 @@
 #define SBC_STORAGE_BYTES 1030u
 #endif
 #define PACE_TICK_MS 8u         /* the encoder timer */
-#define PACE_BACKLOG_MS 40u     /* the most audio the encoder will owe after a stall: no unbounded backlog */
+/* The catch-up budget after a stall (BT_LINK_CATCHUP_MS), the start-up burst bound (BT_LINK_STALL_MS) and the adaptive bitpool: bt_link_policy.h. */
 #define PACE_PACKET_MAX_AGE_MS 20u /* a partly filled packet is sent after this long */
 #define PACE_TRIM_UNIT_PPM 500  /* one step of the fill-level trim */
 #define PACE_TRIM_MAX 6         /* +-3000 ppm */
-#define RSSI_PERIOD_MS 10000u
+#define LINK_LINE_PERIOD_MS 10000u /* the "bt: link:" line, the RSSI read and the dump flush cadence */
+#define ACL_BUFFERS_DEFAULT 4u     /* the MT6582 reports 4 controller ACL buffers; used until the controller says (HCI Read Buffer Size) */
 
 typedef struct {
     hal_bt_device_t dev;
@@ -116,6 +118,7 @@ static volatile bool g_accepting;
 static hal_bt_device_t g_peer;       /* written by the caller that wins the idle -> PAIRING / CONNECTING transition, then read by the worker */
 static link_phase_t g_lphase;        /* worker only (the scan has its own g_phase) */
 static void link_packet(uint8_t *packet);
+static void link_line_if_due(void); /* the 10 s link line follows the RSSI result */
 static void link_reset(void);
 static bool g_pairing;               /* this attempt is a Pair (bondable, discoverable) */
 static hci_con_handle_t g_acl = HCI_CON_HANDLE_INVALID;
@@ -136,6 +139,9 @@ static uint8_t g_forget_addr[FORGET_SLOTS][6];
 static volatile int g_forget_state[FORGET_SLOTS]; /* 0 free, 1 being filled, 2 ready */
 
 static volatile int g_st_rssi = HAL_BT_RSSI_UNKNOWN; /* link quality (stream statistics) */
+static uint32_t g_last_pkt_ms;                   /* when the last media packet went (link diagnostics) */
+static uint8_t g_acl_total = ACL_BUFFERS_DEFAULT; /* the controller's ACL buffers */
+static volatile bool g_we_closing;               /* we asked for the stream / link to end: its release is not the headset's */
 
 /* ---- events out ---- */
 
@@ -379,11 +385,19 @@ static void packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint
         break;
     case GAP_EVENT_RSSI_MEASUREMENT:
         g_st_rssi = (int8_t)gap_event_rssi_measurement_get_rssi(packet);
+        link_line_if_due();
         break;
     case HCI_EVENT_REMOTE_NAME_REQUEST_COMPLETE:
         on_name_complete(packet);
         break;
     case HCI_EVENT_COMMAND_COMPLETE:
+        if (HCI_EVENT_IS_COMMAND_COMPLETE(packet, hci_read_buffer_size)) {
+            const uint8_t *r = hci_event_command_complete_get_return_parameters(packet); /* status, ACL length (2), SCO length, ACL count (2), SCO count (2) */
+            if (r[0] == 0 && little_endian_read_16(r, 4) != 0) {
+                g_acl_total = (uint8_t)btstack_min(little_endian_read_16(r, 4), 255);
+                printf("bt: controller ACL buffers: %u x %u bytes\n", (unsigned)g_acl_total, (unsigned)little_endian_read_16(r, 1));
+            }
+        }
         if (HCI_EVENT_IS_COMMAND_COMPLETE(packet, hci_read_local_version_information)) {
             const uint8_t *r = hci_event_command_complete_get_return_parameters(packet);
             if (r[0] == 0 && !g_version_logged) { /* status, hci_version, hci_revision(2), lmp_version, manufacturer(2), lmp_subversion(2) */
@@ -671,6 +685,8 @@ static void drop_link(void) {
         return;
     }
     if (g_lphase == LP_UP) {
+        printf("bt: disconnecting (requested by the app: Disconnect or Forget)\n"); /* so a log can tell this from the headset letting go */
+        g_we_closing = true;
         btstack_run_loop_remove_timer(&g_link_timer);
         if (g_acl != HCI_CON_HANDLE_INVALID) {
             (void)gap_disconnect(g_acl);
@@ -723,6 +739,20 @@ static void link_reset(void) {
     }
     g_lphase = LP_IDLE; /* no connection to cancel, no command to send */
     link_end(HAL_BT_LINK_FAILED, HAL_BT_FAIL_INTERNAL);
+}
+
+/* HCI disconnect reason, for the log. */
+static const char *hci_reason_text(uint8_t why) {
+    switch (why) {
+    case ERROR_CODE_CONNECTION_TIMEOUT: return "link supervision timeout: out of range or interference";
+    case ERROR_CODE_REMOTE_USER_TERMINATED_CONNECTION: return "the headset hung up";
+    case ERROR_CODE_REMOTE_DEVICE_TERMINATED_CONNECTION_DUE_TO_LOW_RESOURCES: return "the headset: low resources";
+    case ERROR_CODE_REMOTE_DEVICE_TERMINATED_CONNECTION_DUE_TO_POWER_OFF: return "the headset: power off";
+    case ERROR_CODE_CONNECTION_TERMINATED_BY_LOCAL_HOST: return "by us";
+    case ERROR_CODE_CONNECTION_FAILED_TO_BE_ESTABLISHED: return "failed to establish";
+    case ERROR_CODE_AUTHENTICATION_FAILURE: return "authentication";
+    default: return "other";
+    }
 }
 
 static void link_packet(uint8_t *packet) {
@@ -789,6 +819,8 @@ static void link_packet(uint8_t *packet) {
             break;
         }
         uint8_t why = hci_event_disconnection_complete_get_reason(packet);
+        printf("bt: acl down, reason 0x%02X (%s), rssi %d, last packet %lu ms ago\n", (unsigned)why, hci_reason_text(why), g_st_rssi,
+               (unsigned long)(btstack_run_loop_get_time_ms() - g_last_pkt_ms));
         g_acl = HCI_CON_HANDLE_INVALID;
         a2dp_gone(HAL_BT_FAIL_NONE); /* a stream does not outlive its link; its state is announced before the link's */
         avrcp_gone();
@@ -949,6 +981,7 @@ static uint16_t g_max_payload;     /* bound: min(what the link takes, our storag
 static bool g_ready_to_send;       /* a packet is complete and waits for "can send now" */
 static uint32_t g_first_frame_ms;  /* when the first frame of the current packet was encoded */
 static uint32_t g_rtp_ts;
+static uint16_t g_sbc_frames;      /* frames in g_sbc_store: the bitpool (so the frame length) can change between two frames of one packet */
 static int16_t g_pcm_buf[SBC_SAMPLES_PER_FRAME * 2u];
 
 /* Pacing: the encoder is a source clock (a timer) that owes the headset rate x elapsed time of audio, steered by the ring's fill level. */
@@ -959,6 +992,21 @@ static uint32_t g_owed;            /* frames the encoder may produce now */
 static int g_trim;                 /* the fill-level trim, in PACE_TRIM_UNIT_PPM steps: >0 consumes faster than the nominal rate */
 static bool g_in_underrun;
 static bool g_streaming_timer;
+
+/* Link robustness (bt_link_policy.h). Everything here is touched by BTstack's thread only. The adaptive bitpool: the encoder is reconfigured
+ * between two frames (SBC frames carry their bitpool); the ceiling is what configure_encoder() chose, the floor what the headset allows. */
+static bt_link_policy_t g_lp;
+static uint8_t g_bp_cur, g_bp_ceiling, g_bp_min;
+static btstack_sbc_channel_mode_t g_enc_cm;
+static uint8_t g_enc_alloc;
+static bool g_enc_joint;
+/* The 10 s "bt: link:" line: the can-send-now wait (request to event), the audio owed, what was dropped, the ACL buffers in use. Reset after each line. */
+static uint32_t g_req_ms;                        /* when the waiting packet asked to be sent */
+static uint32_t g_w_sum, g_w_n, g_w_max;         /* waits of the packets sent this window, ms */
+static uint32_t g_w_stalls, g_w_peak_owed;       /* stall episodes (owed above BT_LINK_STALL_MS); the most audio owed (ms) */
+static uint32_t g_w_drop;                        /* samples forgone beyond the catch-up budget */
+static uint8_t g_w_inflight;                     /* the most ACL packets outstanding at a tick */
+static bool g_in_stall, g_line_due;
 
 typedef enum { REQ_NONE = 0, REQ_OPEN, REQ_START, REQ_SUSPEND, REQ_CLOSE } stream_req_t;
 static volatile int g_req;
@@ -994,11 +1042,13 @@ static void media_stop(void) {
         g_streaming_timer = false;
     }
     g_sbc_count = 0;
+    g_sbc_frames = 0;
     g_ready_to_send = false;
     g_owed = 0;
     g_pace_frac = 0;
     g_trim = 0;
     g_in_underrun = false;
+    g_in_stall = false;
 }
 
 /* The stream is gone (released, signalling lost, link down): stop the clock, forget the connection, say so. The ring is emptied so a later
@@ -1030,7 +1080,7 @@ static bool g_dbg_tap_tried;
 static uint8_t g_dbg_lastrc;
 
 static void send_packet(void) {
-    uint16_t frames = (uint16_t)(g_sbc_count / g_sbc_frame_len);
+    const uint16_t frames = g_sbc_frames;
     g_sbc_store[0] = (uint8_t)frames; /* no fragmentation */
     uint8_t rc = a2dp_source_stream_send_media_payload_rtp(g_a2dp_cid, g_local_seid, 0, g_rtp_ts, g_sbc_store, (uint16_t)(g_sbc_count + 1u));
     if (rc != ERROR_CODE_SUCCESS) {
@@ -1039,9 +1089,13 @@ static void send_packet(void) {
     }
     g_rtp_ts += (uint32_t)frames * SBC_SAMPLES_PER_FRAME;
     g_sbc_count = 0;
+    g_sbc_frames = 0;
     g_ready_to_send = false;
     g_st_packets++;
+    g_last_pkt_ms = btstack_run_loop_get_time_ms();
 }
+
+static void set_bitpool(uint8_t bp);
 
 static int trim_wanted(uint32_t fill, uint32_t cap) {
     int32_t half = (int32_t)(cap / 2u);
@@ -1080,9 +1134,31 @@ static void media_tick(btstack_timer_source_t *ts) {
     }
     g_owed += (uint32_t)(milli / 1000);
     g_pace_frac = (uint32_t)(milli % 1000);
-    const uint32_t cap_owed = rate * PACE_BACKLOG_MS / 1000u;
-    if (g_owed > cap_owed) {
-        g_owed = cap_owed; /* a stall (the link did not take packets) is not made up with a burst */
+    /* After a stall (the link did not take packets) the audio owed is made up as fast as the link allows, so the headset's buffer fills again; the
+     * budget bounds it (no unbounded burst), and only what is beyond is dropped. The ring holds at most 93 ms, so in practice the ring is what
+     * limits a catch-up: the audio core waits while it is full (it does not lose audio), and the encoder cannot owe more than the source made. */
+    uint32_t dropped = 0;
+    g_owed = bt_link_owed_clamp(g_owed, rate, &dropped);
+    g_w_drop += dropped;
+    const uint32_t owed_ms = g_owed * 1000u / rate;
+    if (owed_ms > g_w_peak_owed) {
+        g_w_peak_owed = owed_ms;
+    }
+    const bool stalled = owed_ms >= BT_LINK_STALL_MS;
+    if (stalled && !g_in_stall) {
+        g_w_stalls++; /* one per episode */
+    }
+    g_in_stall = stalled;
+    if (g_acl != HCI_CON_HANDLE_INVALID) {
+        int free_slots = hci_number_free_acl_slots_for_handle(g_acl);
+        int out = (int)g_acl_total - free_slots;
+        if (out > 0 && (uint32_t)out > g_w_inflight) {
+            g_w_inflight = (uint8_t)out;
+        }
+    }
+    const uint8_t nb = bt_link_policy_tick(&g_lp, now, bt_link_pressured(g_ready_to_send ? now - g_req_ms : 0u, owed_ms), g_bp_ceiling, g_bp_min);
+    if (nb != 0) {
+        set_bitpool(nb);
     }
 
     if (g_ready_to_send) {
@@ -1091,7 +1167,8 @@ static void media_tick(btstack_timer_source_t *ts) {
     while (g_owed >= SBC_SAMPLES_PER_FRAME && (uint32_t)(g_max_payload - g_sbc_count) >= g_sbc_frame_len) {
         if (src->read(src->ctx, g_pcm_buf, SBC_SAMPLES_PER_FRAME) < SBC_SAMPLES_PER_FRAME) {
             bool active = src->active == NULL || src->active(src->ctx);
-            if (active && !g_in_underrun) {
+            /* A ring that ran dry while paying off a stall is a catch-up that has caught up (the audio core held the source back), not an underrun. */
+            if (active && !g_in_underrun && !stalled) {
                 g_st_underruns++; /* one count per dry spell, not per tick */
             }
             g_in_underrun = active;
@@ -1118,6 +1195,7 @@ static void media_tick(btstack_timer_source_t *ts) {
 #endif
         g_enc->encode_signed_16(&g_enc_state, g_pcm_buf, &g_sbc_store[1u + g_sbc_count]);
         g_sbc_count = (uint16_t)(g_sbc_count + g_sbc_frame_len);
+        g_sbc_frames++;
         g_owed -= SBC_SAMPLES_PER_FRAME;
         g_st_encoded++;
     }
@@ -1125,15 +1203,47 @@ static void media_tick(btstack_timer_source_t *ts) {
     bool aged = g_sbc_count > 0 && now - g_first_frame_ms >= PACE_PACKET_MAX_AGE_MS;
     if (g_sbc_count > 0 && (full || aged)) {
         g_ready_to_send = true;
+        g_req_ms = now;
         a2dp_source_stream_endpoint_request_can_send_now(g_a2dp_cid, g_local_seid);
     }
 }
 
+/* One line per window: how the link behaved. rssi: the last Read RSSI result (BR/EDR: dB relative to the controller's "golden receive power range",
+ * so 0 is inside it and negative is below; some controllers report absolute dBm); wait: request to "can send now" event of each packet; inflight: the
+ * most ACL packets the controller had outstanding at a tick, of the controller's buffers; bitpool: now; stalls: episodes of owing more than
+ * BT_LINK_STALL_MS; catchup: the most audio owed (ms, at most the budget); drops: audio beyond the budget that was forgone. */
+static void link_line(void) {
+    char rssi[12];
+    if (g_st_rssi == HAL_BT_RSSI_UNKNOWN) {
+        snprintf(rssi, sizeof rssi, "?");
+    } else {
+        snprintf(rssi, sizeof rssi, "%d", g_st_rssi);
+    }
+    printf("bt: link: rssi %s dB, wait avg/max %lu/%lu ms, inflight %u/%u, bitpool %u, stalls %lu, catchup %lu ms, drops %lu ms\n", rssi,
+           (unsigned long)(g_w_n != 0 ? g_w_sum / g_w_n : 0u), (unsigned long)g_w_max, (unsigned)g_w_inflight, (unsigned)g_acl_total, (unsigned)g_bp_cur,
+           (unsigned long)g_w_stalls, (unsigned long)g_w_peak_owed, (unsigned long)(g_w_drop * 1000u / (g_codec.rate != 0u ? g_codec.rate : A2DP_RATE)));
+    g_w_sum = g_w_n = g_w_max = g_w_stalls = g_w_peak_owed = g_w_drop = 0;
+    g_w_inflight = 0;
+    g_line_due = false;
+}
+
+static void link_line_if_due(void) {
+    if (g_line_due) {
+        link_line();
+    }
+}
+
 static void rssi_tick(btstack_timer_source_t *ts) {
-    btstack_run_loop_set_timer(ts, RSSI_PERIOD_MS);
+    btstack_run_loop_set_timer(ts, LINK_LINE_PERIOD_MS);
     btstack_run_loop_add_timer(ts);
+    if (g_line_due) {
+        link_line(); /* the last read was never answered: report without it */
+    }
     if (g_acl != HCI_CON_HANDLE_INVALID) {
-        (void)gap_read_rssi(g_acl);
+        g_line_due = gap_read_rssi(g_acl) == ERROR_CODE_SUCCESS; /* the line follows the result (GAP_EVENT_RSSI_MEASUREMENT) */
+    }
+    if (!g_line_due) {
+        link_line();
     }
     printf("bt: a2dp: packets %lu encoded %lu sendfail %lu (rc 0x%02X) peak %lu underruns %lu max_payload %u\n",
            (unsigned long)g_st_packets, (unsigned long)g_st_encoded, (unsigned long)g_dbg_sendfail, (unsigned)g_dbg_lastrc,
@@ -1147,8 +1257,18 @@ static void media_start(void) {
     int room = a2dp_max_media_payload_size(g_a2dp_cid, g_local_seid) - 1; /* minus the SBC payload header byte */
     g_max_payload = (uint16_t)btstack_min(room > 0 ? room : 0, (int)SBC_STORAGE_BYTES - 1);
     g_sbc_count = 0;
+    g_sbc_frames = 0;
     g_ready_to_send = false;
+    g_in_stall = false;
     g_pace_last_ms = btstack_run_loop_get_time_ms();
+    g_last_pkt_ms = g_pace_last_ms;
+    bt_link_policy_init(&g_lp, g_pace_last_ms); /* every start at the best bitpool: the link may have changed while suspended */
+    if (g_bp_cur != g_bp_ceiling && g_bp_ceiling != 0) {
+        set_bitpool(g_bp_ceiling);
+    }
+    g_w_sum = g_w_n = g_w_max = g_w_stalls = g_w_peak_owed = g_w_drop = 0;
+    g_w_inflight = 0;
+    g_line_due = false;
     g_pace_frac = 0;
     g_trim = 0;
     g_in_underrun = false;
@@ -1158,14 +1278,14 @@ static void media_start(void) {
     if (src != NULL) {
         uint32_t fill = src->available(src->ctx), half = src->capacity(src->ctx) / 2u;
         g_owed = fill > half ? fill - half : 0;
-        uint32_t cap_owed = g_codec.rate * PACE_BACKLOG_MS / 1000u;
+        uint32_t cap_owed = g_codec.rate * BT_LINK_STALL_MS / 1000u; /* the start-up burst keeps the old bound */
         g_owed = g_owed > cap_owed ? cap_owed : g_owed;
     }
     btstack_run_loop_set_timer_handler(&g_media_timer, media_tick);
     btstack_run_loop_set_timer(&g_media_timer, PACE_TICK_MS);
     btstack_run_loop_add_timer(&g_media_timer);
     btstack_run_loop_set_timer_handler(&g_rssi_timer, rssi_tick);
-    btstack_run_loop_set_timer(&g_rssi_timer, 1000);
+    btstack_run_loop_set_timer(&g_rssi_timer, LINK_LINE_PERIOD_MS);
     btstack_run_loop_add_timer(&g_rssi_timer);
     g_streaming_timer = true;
 }
@@ -1174,6 +1294,25 @@ static void media_start(void) {
 static uint16_t sbc_frame_bytes(int blocks, int subbands, int bitpool, bool joint) {
     int bits = (joint ? subbands : 0) + blocks * bitpool;
     return (uint16_t)(4 + (4 * subbands * 2) / 8 + (bits + 7) / 8);
+}
+
+/* Switch the encoder to @p bp between two frames (BTstack's thread, so no frame is in the encoder) and say so. Frames already in the packet being
+ * built keep their length: g_sbc_frames counts them. */
+static void set_bitpool(uint8_t bp) {
+    if (!g_enc_ready || bp == g_bp_cur) {
+        return;
+    }
+    const uint8_t from = g_bp_cur;
+    g_enc->configure(&g_enc_state, SBC_MODE_STANDARD, 16, 8, (btstack_sbc_allocation_method_t)(g_enc_alloc - 1), (int)A2DP_RATE, bp, g_enc_cm);
+    g_bp_cur = bp;
+    g_sbc_frame_len = sbc_frame_bytes(16, 8, bp, g_enc_joint);
+    hal_bt_codec_t c = g_codec;
+    c.bitpool = bp;
+    c.codec = bp > (int)SBC_BITPOOL_STD ? HAL_BT_CODEC_SBC_XQ : HAL_BT_CODEC_SBC;
+    c.kbps = (uint16_t)((uint32_t)g_sbc_frame_len * 8u * A2DP_RATE / SBC_SAMPLES_PER_FRAME / 1000u);
+    codec_publish(&c);
+    printf("bt: a2dp: bitpool %u -> %u (%s), frame %u bytes, %u kbit/s\n", (unsigned)from, (unsigned)bp, bp < from ? "link backpressure" : "link clean",
+           (unsigned)g_sbc_frame_len, (unsigned)c.kbps);
 }
 
 static bool configure_encoder(const uint8_t *packet, hal_bt_codec_t *out) {
@@ -1203,6 +1342,11 @@ static bool configure_encoder(const uint8_t *packet, hal_bt_codec_t *out) {
         bitpool = min_bp;
     }
     g_enc = btstack_sbc_encoder_bluedroid_init_instance(&g_enc_state);
+    g_enc_alloc = (uint8_t)alloc;
+    g_enc_cm = cm;
+    g_enc_joint = mode == AVDTP_CHANNEL_MODE_JOINT_STEREO;
+    g_bp_cur = g_bp_ceiling = (uint8_t)bitpool;
+    g_bp_min = (uint8_t)min_bp;
     /* BTstack's allocation constants start at 1 (the Bluetooth spec: loudness 1, SNR 2 as configured); the encoder's start at 0. */
     g_enc->configure(&g_enc_state, SBC_MODE_STANDARD, blocks, subbands, (btstack_sbc_allocation_method_t)(alloc - 1), rate, bitpool, cm);
     /* The encoder only knows its frame length after the first encode (sbc_buffer_length() is 0 until then), so compute it from the
@@ -1243,6 +1387,7 @@ static void a2dp_packet_handler(uint8_t type, uint16_t channel, uint8_t *packet,
             }
         } else {
             g_a2dp_cid = a2dp_subevent_signaling_connection_established_get_a2dp_cid(packet);
+            g_we_closing = false;
             avrcp_arm_connect();
         }
         break;
@@ -1258,6 +1403,7 @@ static void a2dp_packet_handler(uint8_t type, uint16_t channel, uint8_t *packet,
             g_enc_ready = false;
             set_stream(HAL_BT_STREAM_FAILED, HAL_BT_FAIL_CODEC);
             if (g_a2dp_cid != 0) {
+                g_we_closing = true;
                 (void)a2dp_source_disconnect(g_a2dp_cid);
             }
             break;
@@ -1297,6 +1443,10 @@ static void a2dp_packet_handler(uint8_t type, uint16_t channel, uint8_t *packet,
     }
     case A2DP_SUBEVENT_STREAMING_CAN_SEND_MEDIA_PACKET_NOW:
         if (g_streaming_timer && g_ready_to_send && g_sbc_count > 0) {
+            const uint32_t w = btstack_run_loop_get_time_ms() - g_req_ms;
+            g_w_sum += w;
+            g_w_n++;
+            g_w_max = w > g_w_max ? w : g_w_max;
             send_packet();
         }
         break;
@@ -1308,14 +1458,16 @@ static void a2dp_packet_handler(uint8_t type, uint16_t channel, uint8_t *packet,
         }
         break;
     case A2DP_SUBEVENT_STREAM_RELEASED:
-        printf("bt: a2dp stream released\n");
+        printf("bt: a2dp stream released (%s; acl %s; rssi %d; last packet %lu ms ago; bitpool %u)\n", g_we_closing ? "by us" : "by the headset",
+               g_acl != HCI_CON_HANDLE_INVALID ? "up" : "down", g_st_rssi, (unsigned long)(btstack_run_loop_get_time_ms() - g_last_pkt_ms),
+               (unsigned)g_bp_cur);
         media_stop();
         if (g_stream != HAL_BT_STREAM_FAILED) {
             set_stream(HAL_BT_STREAM_CLOSED, HAL_BT_FAIL_NONE);
         }
         break;
     case A2DP_SUBEVENT_SIGNALING_CONNECTION_RELEASED:
-        printf("bt: a2dp signalling released\n");
+        printf("bt: a2dp signalling released (%s; acl %s)\n", g_we_closing ? "by us" : "by the headset", g_acl != HCI_CON_HANDLE_INVALID ? "up" : "down");
         if (a2dp_subevent_signaling_connection_released_get_a2dp_cid(packet) == g_a2dp_cid) {
             bool failed = g_stream == HAL_BT_STREAM_FAILED;
             a2dp_gone(failed ? (hal_bt_fail_t)g_stream_reason : HAL_BT_FAIL_NONE);
@@ -1335,6 +1487,7 @@ static void a2dp_open(void) {
         return;
     }
     g_enc_ready = false;
+    g_we_closing = false;
     set_stream(HAL_BT_STREAM_OPENING, HAL_BT_FAIL_NONE);
     bd_addr_t a;
     memcpy(a, g_peer.addr, 6);
@@ -1372,6 +1525,7 @@ static void worker_stream_req(void *arg) {
         break;
     case REQ_CLOSE:
         if (g_a2dp_cid != 0 && g_stream != HAL_BT_STREAM_CLOSED) {
+            g_we_closing = true;
             if (a2dp_source_stop_stream(g_a2dp_cid, g_local_seid) != ERROR_CODE_SUCCESS) {
                 (void)a2dp_source_disconnect(g_a2dp_cid);
             }
