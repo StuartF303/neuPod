@@ -17,44 +17,17 @@ endif()
 project(y2_a2dp C)
 set(CMAKE_C_STANDARD 11)
 
-if(NOT BTSTACK_ROOT)
-  if(DEFINED ENV{BTSTACK_ROOT})
-    set(BTSTACK_ROOT "$ENV{BTSTACK_ROOT}")
-  elseif(DEFINED ENV{PICO_SDK_PATH})
-    set(BTSTACK_ROOT "$ENV{PICO_SDK_PATH}/lib/btstack")
-  endif()
-endif()
-if(NOT BTSTACK_ROOT OR NOT EXISTS "${BTSTACK_ROOT}/src/hci.c")
-  message(FATAL_ERROR "BTstack not found. Pass -DBTSTACK_ROOT=<btstack checkout> (v1.6.x) or set PICO_SDK_PATH.")
-endif()
-
-# BTstack itself: classic + A2DP/AVRCP + the bluedroid SBC codec (only the encoder is used) + the POSIX run loop, TLV and HCI dump. A static library, so
-# the linker drops what is not used.
-file(GLOB BTSTACK_CORE    "${BTSTACK_ROOT}/src/*.c")
-file(GLOB BTSTACK_CLASSIC "${BTSTACK_ROOT}/src/classic/*.c")
-file(GLOB BTSTACK_SBC     "${BTSTACK_ROOT}/3rd-party/bluedroid/encoder/srce/*.c" "${BTSTACK_ROOT}/3rd-party/bluedroid/decoder/srce/*.c")
-list(FILTER BTSTACK_CORE EXCLUDE REGEX "lc3") # LC3 codecs need external libraries and are not used
-add_library(btstack STATIC
-  ${BTSTACK_CORE} ${BTSTACK_CLASSIC} ${BTSTACK_SBC}
-  ${BTSTACK_ROOT}/platform/posix/btstack_run_loop_posix.c
-  ${BTSTACK_ROOT}/platform/posix/btstack_tlv_posix.c
-  ${BTSTACK_ROOT}/platform/posix/hci_dump_posix_fs.c
-  ${BTSTACK_ROOT}/3rd-party/yxml/yxml.c ${BTSTACK_ROOT}/3rd-party/md5/md5.c) # needed by the classic profiles that btstack.h pulls in
-target_include_directories(btstack PUBLIC
-  ${CMAKE_CURRENT_LIST_DIR}          # btstack_config.h (first)
-  ${BTSTACK_ROOT}/src
-  ${BTSTACK_ROOT}/src/classic
-  ${BTSTACK_ROOT}/platform/posix
-  ${BTSTACK_ROOT}/3rd-party/bluedroid/encoder/include
-  ${BTSTACK_ROOT}/3rd-party/yxml
-  ${BTSTACK_ROOT}/3rd-party/md5
-  ${BTSTACK_ROOT}/3rd-party/bluedroid/decoder/include) # headers only (btstack.h pulls in the decoder API)
-target_compile_options(btstack PRIVATE -w) # third-party code: not ours to keep warning-free
+# BTstack itself and the transport + chipset driver are shared with the firmware: cmake/btstack_posix.cmake, platforms/y2/hal/.
+set(NEUPOD_ROOT ${CMAKE_CURRENT_LIST_DIR}/../../../..)
+include(${NEUPOD_ROOT}/cmake/btstack_posix.cmake)
+neupod_btstack_posix(btstack ${CMAKE_CURRENT_LIST_DIR}) # this tool's btstack_config.h
 
 set(Y2A2DP_WARN -Wall -Wextra -Wno-unused-parameter)
 
 # The two pieces that make BTstack talk to the MediaTek chip.
-add_library(y2a2dp_transport STATIC btstack_uart_stpbt.c btstack_chipset_mtk_consys.c)
+set(Y2_HAL ${NEUPOD_ROOT}/platforms/y2/hal)
+add_library(y2a2dp_transport STATIC ${Y2_HAL}/btstack_uart_stpbt.c ${Y2_HAL}/btstack_chipset_mtk_consys.c)
+target_include_directories(y2a2dp_transport PUBLIC ${Y2_HAL})
 target_link_libraries(y2a2dp_transport PUBLIC btstack)
 target_compile_options(y2a2dp_transport PRIVATE ${Y2A2DP_WARN})
 

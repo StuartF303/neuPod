@@ -8,8 +8,8 @@ with BTstack running in userspace over the kernel's `/dev/stpbt` character devic
 
 | File | What it does |
 | --- | --- |
-| `btstack_uart_stpbt.c` | `btstack_uart_t` for a device that is not a tty and returns one whole H4 packet per `read()`. It buffers the packet and serves the byte counts the stock `hci_transport_h4` asks for. Baud rate, parity and flow control are no-ops. |
-| `btstack_chipset_mtk_consys.c` | BTstack chipset driver: the MediaTek vendor commands (Set_Local_BD_Addr, Set_Radio, Set_TX_Power_Offset, Set_Sleep_Timeout). They run through `hci_enable_custom_pre_init()`, so they go out before HCI_Reset. |
+| `platforms/y2/hal/btstack_uart_stpbt.c` (shared with the firmware) | `btstack_uart_t` for a device that is not a tty and returns one whole H4 packet per `read()`. It buffers the packet and serves the byte counts the stock `hci_transport_h4` asks for. Baud rate, parity and flow control are no-ops. |
+| `platforms/y2/hal/btstack_chipset_mtk_consys.c` (shared) | BTstack chipset driver: the MediaTek vendor commands (Set_Local_BD_Addr, Set_Radio, Set_TX_Power_Offset, Set_Sleep_Timeout). They run through `hci_enable_custom_pre_init()`, so they go out before HCI_Reset. |
 | `main.c` | The tool: `scan` and `play`, adapted from BTstack's `a2dp_source_demo.c`. |
 | `test/` | Host tests (see below). |
 

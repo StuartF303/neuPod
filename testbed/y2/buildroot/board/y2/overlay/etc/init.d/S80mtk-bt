@@ -1,0 +1,140 @@
+#!/bin/sh
+# Bluetooth bring-up for the Y2 (MediaTek MT6582 combo chip): everything that has to be in place before the firmware
+# (S91neupod-fw) opens /dev/stpbt. Runs the stock Android helpers from /system/bin, staged from the device backup under
+# /opt/mtk-wmt (never committed to the repository). Skips everything, silently, if /opt/mtk-wmt is not staged.
+#
+#   1. the KitKat property area: the stock helpers read and write Android system properties through a 128 KiB shared file,
+#      /dev/__properties__ (header "PROP" + version 0x14 and magic 0xfc6ed0ab, the rest zero), mode 0444. Created on the tmpfs
+#      /dev if missing; there is no property service, so the helpers' property_set() fails (see 2).
+#   2. wmt_loader, ONCE per boot (marker /run/wmt_loader.done, written before it runs, so a hang or a crash never lets it run a
+#      second time in the same boot). It loads the chip's firmware patch through the kernel driver and registers the device
+#      numbers. It exits 255 because its property_set() has nobody to talk to: that is expected and is only logged.
+#   3. the device nodes /dev/stpwmt, /dev/stpbt, /dev/wmtWifi (character, 0660), from the majors in /proc/devices, if missing.
+#   4. 6620_launcher in the background (pid file /run/6620_launcher.pid; never started twice), then a wait of up to ~5 s for it.
+#
+# Never touched here: /dev/mmcblk0* (the eMMC), /data/nvram, /data/BT_Addr (the firmware only reads the address file) and
+# nvram_daemon (it writes the NVRAM).
+#
+# Test hooks (all default to the device's paths): MTK_STAGE, MTK_BIN, MTK_DEV, MTK_RUN, MTK_PROC_DEVICES, MTK_WAIT_S.
+STAGE=${MTK_STAGE:-/opt/mtk-wmt}
+BIN=${MTK_BIN:-/system/bin}
+DEV=${MTK_DEV:-/dev}
+RUN=${MTK_RUN:-/run}
+PROC_DEVICES=${MTK_PROC_DEVICES:-/proc/devices}
+WAIT_S=${MTK_WAIT_S:-5}
+PROP_SIZE=131072
+LOADER=$BIN/wmt_loader
+LAUNCHER=$BIN/6620_launcher
+# The patch directory (ROM patches for the MT6582 CONSYS); the stock init.rc starts it the same way.
+FW_DIR=${MTK_FW_DIR:-/system/etc/firmware/}
+LOADER_DONE=$RUN/wmt_loader.done
+LAUNCHER_PID=$RUN/6620_launcher.pid
+
+log() { echo "S80mtk-bt: $*"; }
+
+alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
+
+launcher_alive() { alive "$(cat "$LAUNCHER_PID" 2>/dev/null)"; }
+
+# The 128 KiB property area. Written to a temporary name, then renamed, so no helper ever sees a half-made file.
+make_props() {
+	[ -e "$DEV/__properties__" ] && return 0
+	tmp=$DEV/.__properties__.$$
+	dd if=/dev/zero of="$tmp" bs=4096 count=$((PROP_SIZE / 4096)) 2>/dev/null || { rm -f "$tmp"; return 1; }
+	# 14 00 00 00 | 00 00 00 00 | 'P' 'R' 'O' 'P' | ab d0 6e fc
+	printf '\024\000\000\000\000\000\000\000\120\122\117\120\253\320\156\374' |
+		dd of="$tmp" bs=16 count=1 conv=notrunc 2>/dev/null || { rm -f "$tmp"; return 1; }
+	chmod 0444 "$tmp" && mv "$tmp" "$DEV/__properties__" || { rm -f "$tmp"; return 1; }
+}
+
+# Major number of a registered character device ("stpbt" -> 192 ...), empty if it is not in /proc/devices.
+major_of() {
+	in_char=0
+	while read -r major name; do
+		case "$major" in
+			Character) in_char=1; continue ;;
+			Block) in_char=0; continue ;;
+		esac
+		if [ "$in_char" = 1 ] && [ "$name" = "$1" ]; then
+			echo "$major"
+			return 0
+		fi
+	done <"$PROC_DEVICES"
+}
+
+make_node() {
+	[ -e "$DEV/$1" ] && return 0
+	major=$(major_of "$1")
+	if [ -z "$major" ]; then
+		log "$1 is not in $PROC_DEVICES (is the WMT driver loaded?)"
+		return 1
+	fi
+	mknod "$DEV/$1" c "$major" 0 && chmod 0660 "$DEV/$1"
+}
+
+start() {
+	[ -d "$STAGE" ] || return 0
+	if [ ! -x "$LOADER" ] || [ ! -x "$LAUNCHER" ]; then
+		log "$STAGE is staged but $LOADER or $LAUNCHER is missing: Bluetooth stays off"
+		return 0
+	fi
+	make_props || { log "cannot create $DEV/__properties__"; return 0; }
+
+	if [ ! -e "$LOADER_DONE" ]; then
+		# echo, not ":": a failed redirection on a special builtin ends some shells; here a marker that cannot be written must skip the loader
+		echo started >"$LOADER_DONE" || { log "cannot write $LOADER_DONE: wmt_loader not run"; return 0; }
+		rc=0
+		if command -v timeout >/dev/null 2>&1; then
+			timeout 20 "$LOADER" >/dev/null 2>&1 || rc=$?
+		else
+			"$LOADER" >/dev/null 2>&1 || rc=$?
+		fi
+		log "wmt_loader exited $rc (255 is expected: no property service)"
+	fi
+
+	for n in stpwmt stpbt wmtWifi; do
+		make_node "$n"
+	done
+
+	if launcher_alive; then
+		log "6620_launcher already running"
+	else
+		# Own session: init's tty and signals never reach it. The pid file is written before start returns.
+		setsid "$LAUNCHER" -p "$FW_DIR" >/dev/null 2>&1 &
+		echo $! >"$LAUNCHER_PID"
+		log "6620_launcher started (pid $!)"
+	fi
+
+	# Ready: still running and the Bluetooth node exists, seen on two polls one second apart (it needs a moment to register).
+	i=0
+	seen=0
+	while [ "$i" -lt "$WAIT_S" ]; do
+		if ! launcher_alive; then
+			log "6620_launcher exited early: Bluetooth may not come up"
+			return 0
+		fi
+		if [ -e "$DEV/stpbt" ]; then
+			seen=$((seen + 1))
+			[ "$seen" -ge 2 ] && break
+		fi
+		sleep 1
+		i=$((i + 1))
+	done
+	return 0
+}
+
+stop() {
+	pid=$(cat "$LAUNCHER_PID" 2>/dev/null)
+	if alive "$pid"; then
+		kill "$pid" 2>/dev/null
+	fi
+	rm -f "$LAUNCHER_PID"
+	return 0
+}
+
+case "$1" in
+	start) start ;;
+	stop) stop ;;
+	restart) stop; start ;;
+esac
+exit 0

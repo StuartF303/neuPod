@@ -24,27 +24,67 @@ sink. HFP comes later. This page covers what **stage 1** and **stage 2a** (pairi
   Classic only: no BLE, no mesh. Configuration: `platforms/rp2350/btstack/btstack_config.h` (static pools, no `malloc`).
 * **Not used**: the SDK's `pico_btstack_cyw43` glue, because it stores BTstack's pairing data in the **internal flash**
   (`pico_btstack_flash_bank` on `flash_safe_execute`). See "Why the SD card" below.
-* **Our glue**: `platforms/rp2350/hal/hal_radio_bt.c` provides `btstack_cyw43_init()` / `btstack_cyw43_deinit()` (the SDK's
-  `cyw43_arch_init()` calls them), implements the Bluetooth half of `hal/include/hal_radio.h` (`hal_bt_*`), and wraps
-  the settings store as a `btstack_tlv_t` for the link key database. `hal/host/hal_radio.c` is the host simulator.
+* **Our glue** ([ADR-0019](adr/0019-bluetooth-audio-sink-boundary.md)): the BTstack code is one platform-neutral adapter plus a small
+  port per platform.
+  * `hal/common/bt_btstack/bt_btstack.c` implements the Bluetooth half of `hal/include/hal_radio.h` (`hal_bt_*`): discovery, the
+    pairing and connection state machine, the timeouts, and the link key database on top of the settings store (`hal_bt_storage_t`,
+    wrapped as a `btstack_tlv_t`). Nothing BTstack-specific crosses `hal_radio.h`. `hal/host/hal_radio.c` is the host simulator.
+  * `hal/common/bt_btstack/bt_port.h` is what a platform provides: `bt_port_present()` (is the controller usable), `bt_port_start()`
+    (memory, run loop and `hci_init()` with the platform's transport), `bt_port_run_sync()` and `bt_port_post()` (hand work to
+    BTstack's thread, blocking or not), `bt_port_power()`, `bt_port_storage()` (the storage BTstack's thread may use),
+    `bt_port_deliver()` and `bt_port_poll()` (events out). The local address comes from the controller on the RP2350; the Y2 port
+    reads it before HCI starts. No locking is part of the port: the adapter's state is touched by BTstack's thread only, or through atomics.
+  * RP2350: `platforms/rp2350/hal/bt_port_cyw43.c`: the CYW43 transport, the `async_context` run loop, and the SDK's
+    `btstack_cyw43_init()` / `btstack_cyw43_deinit()` hooks (`cyw43_arch_init()` calls them), as before the split.
+  * Y2: `platforms/y2/hal/bt_port_stpbt.c`: `/dev/stpbt` through `btstack_uart_stpbt.c` (one H4 packet per `read()`, the device is not
+    a tty) and `btstack_chipset_mtk_consys.c` (the MediaTek vendor script that must run before HCI_Reset), both shared with the
+    `y2-a2dp` bench tool (`testbed/y2/tools/y2-a2dp`), and the POSIX run loop on a thread of its own. Configuration:
+    `platforms/y2/btstack/btstack_config.h`; BTstack's source list is `cmake/btstack_posix.cmake` (the Pico SDK's copy, as for the tool).
 * **Controller**: the CYW43439 on the Pico 2 W. Its Bluetooth device address is the Wi-Fi MAC plus one (the SDK transport sets
   it). `CYW43_ENABLE_BLUETOOTH=1` is set once for everything that links `neupod_freertos`, because `cyw43_arch_init()` is
   compiled into several static libraries and every copy must agree.
 
 ## Threading
 
-BTstack is single-threaded. It runs on the **async context of the CYW43 driver**, which with
-`pico_cyw43_arch_sys_freertos` is one FreeRTOS task, the "CYW43 worker" (core 0, priority 3, **6 KB** stack; it was
-4 KB before BTstack). Every BTstack callback, and our packet handler, runs on that task.
+BTstack is single-threaded; which thread that is depends on the port. Every `hal_bt_*` call can be made from any RTOS task and only
+hands a request over (`bt_port_post()`) or reads an atomic; the BTstack code itself runs on one thread.
+
+**RP2350.** BTstack runs on the **async context of the CYW43 driver**, which with `pico_cyw43_arch_sys_freertos` is one FreeRTOS
+task, the "CYW43 worker" (core 0, priority 3, **6 KB** stack; it was 4 KB before BTstack). Every BTstack callback, and our packet
+handler, runs on that task.
 
 | Caller | How it reaches BTstack | Blocks the caller? |
 | --- | --- | --- |
-| radio boot check (`hal_bt_init`) | `async_context_execute_sync` | yes, until the worker has queued the HCI power-on (milliseconds) |
-| UI task (`hal_bt_inquiry_start` / `_stop`; stage 2a: `hal_bt_pair` / `_connect` / `_disconnect` / `_forget`) | `btstack_run_loop_execute_on_main_thread` (a static callback registration each; the state is reserved with an atomic exchange first, so one request is in flight) | no |
-| radio worker to the UI | `hal_bt_event_fn` callback, which `app/runtime/bt_service.c` turns into a 16-deep queue (`os_queue_send`, no wait: an event is dropped rather than holding the radio up) | no |
+| radio boot check (`hal_bt_init`) | `async_context_execute_sync` (`bt_port_run_sync`) | yes, until the worker has queued the HCI power-on (milliseconds) |
+| UI task (`hal_bt_inquiry_start` / `_stop`; stage 2a: `hal_bt_pair` / `_connect` / `_disconnect` / `_forget`) | `btstack_run_loop_execute_on_main_thread` (`bt_port_post`; a static callback registration each; the state is reserved with an atomic exchange first, so one request is in flight) | no |
+| radio worker to the UI | `hal_bt_event_fn` callback (`bt_port_deliver` calls it at once), which `app/runtime/bt_service.c` turns into a 16-deep queue (`os_queue_send`, no wait: an event is dropped rather than holding the radio up) | no |
 
 Core 1 never calls any of this, and BTstack never runs on it. The rules in [Runtime](runtime.md) hold unchanged;
 `tools/check_core1_closure.py` is still green on the linked image.
+
+**Y2.** The firmware is a Linux process whose RTOS is the FreeRTOS POSIX port: tasks are pthreads that the port runs one at a time
+and its critical sections are global state, so a thread that is not an RTOS task must never call a FreeRTOS function (queue, mutex,
+event group, delay). BTstack therefore runs on the **POSIX run loop on a pthread of its own** (512 KB stack, every signal blocked,
+including the port's SIGALRM tick, which is sent to the running task's thread only). It never calls the app and never touches the settings
+store:
+
+| Direction | How |
+| --- | --- |
+| task to BTstack | `bt_port_post()`: tasks take turns (an atomic flag, sleeping through the scheduler) and call `btstack_run_loop_execute_on_main_thread`, whose own native lock then only BTstack's thread and one task contend for. `hal_bt_init` waits with `hal_delay_ms` (scheduler sleep), up to 15 s, never a native wait |
+| BTstack to the app | events go into a 64-slot lock-free ring; `hal_bt_poll()` (the UI frame calls it through `bt_service_tick`) delivers them from the calling task, in order, one task at a time. The callback therefore runs on that task, not on the radio thread: same rules (quick, no blocking, no calls back into `hal_bt_*`). A ring that overflows drops the new event and says so on the console |
+| link keys | `platforms/y2/hal/y2_bt_tlv.c`: BTstack's thread reads and writes a RAM copy of the link-key records (preloaded from the settings store in `hal_bt_init`); the same poll writes changes back to the store, retrying about once a second while the store refuses (no card, read-only, not loaded). Pairing works without a writable card; the key then lives for the session only |
+
+Start-up on the Y2: `hal_system_late_init()` calls `y2_bt_probe()`, which reads `/data/BT_Addr` (read only, 6 bytes, MSB first; an
+unreadable, short, all-zero or all-0xFF file means Bluetooth unavailable, never a default address) and opens `/dev/stpbt` on a helper
+thread with signals blocked (the open powers the chip and takes about 1.3 s). Bluetooth is available only if both worked. The descriptor is
+kept and handed to the transport, so the device is opened once. `hal_bt_init` then sets BTstack up (the MediaTek vendor script, with the
+address, runs before HCI_Reset), starts the thread and powers HCI on. There is no Wi-Fi on the Y2 (`hal_wifi_present()` is false), so the
+boot check reports Wi-Fi unavailable while Bluetooth is available. Chip bring-up before the firmware starts is `S80mtk-bt`
+([Y2 testbed](https://github.com/StuartF303/neuPod/blob/main/testbed/y2/README.md)).
+
+The controller does not report a page timeout at the configured time (the MT6582 only answers after Create_Connection_Cancel), so an
+unanswered Pair or Connect is ended by our own timer (`HAL_BT_PAIR_TIMEOUT_MS` / `HAL_BT_CONNECT_TIMEOUT_MS`), which cancels the page and ends the
+attempt as "timed out"; a late Connection_Complete with an error is ignored.
 
 ## Boot and what the UART shows
 
@@ -103,7 +143,7 @@ bt: scan done, 3 devices
 
 Built and host-tested; Pair, save, reconnect and Forget passed on the bench (Sony WI-C200). Disconnect, re-pair after Forget, the refusal of a headset that wiped its key, and Wi-Fi + Bluetooth coexistence are **deferred to the stage 2b bench**. No audio: the connection ends at "the other side has an A2DP sink".
 
-**HAL** (`hal/include/hal_radio.h`, `hal_bt_*`; the hardware half is `platforms/rp2350/hal/hal_radio_bt.c`, the host simulator `hal/host/hal_radio.c`):
+**HAL** (`hal/include/hal_radio.h`, `hal_bt_*`; the hardware half is `hal/common/bt_btstack/bt_btstack.c`, the host simulator `hal/host/hal_radio.c`):
 
 | Call | What it does |
 | --- | --- |
@@ -141,12 +181,12 @@ result that belongs to an earlier attempt cannot end the next one (a query still
 
 **Pairing order.** Pair uses `gap_dedicated_bonding` and keeps the link for the SDP query: `btstack_config.h` defines `ENABLE_EXPLICIT_DEDICATED_BONDING_DISCONNECT`, so BTstack reports a good bonding at once and does not disconnect (a failed bonding still disconnects). Without that define the result is only reported after a disconnect, and every Pair timed out (found on the bench). `gap_dedicated_bonding` deletes any old key for the address first, which is what a re-pair wants; Connect cannot use it for that very reason. On real hardware the bonding result arrives before the link-key notification: neither the stray-key filter nor the candidate logic depends on the order (the Pair is still in progress when the key arrives, and a headset is only remembered after the SDP check).
 
-**Console lines** (`hal_radio_bt.c`, `bt_saved.c`): `bt: pair <addr>`, `bt: connect <addr>`, `bt: connected <addr>`, `bt: <addr> failed: <text>`, `bt: link lost 0x..` (abnormal end of an established link), `bt: link closed <addr> reason 0x.. (idle, no profile yet)` (clean idle drop), `bt: link dropped in set-up 0x..`, `bt: bonding 0x..`, `bt: dropped stray key <addr>`, `bt: forgot <addr>`, `bt: pair not persisted (store not writable)`, `bt: key delete waits (store not writable)`, `bt: record kept (store not writable)`.
+**Console lines** (`bt_btstack.c`, `bt_saved.c`): `bt: pair <addr>`, `bt: connect <addr>`, `bt: connected <addr>`, `bt: <addr> failed: <text>`, `bt: link lost 0x..` (abnormal end of an established link), `bt: link closed <addr> reason 0x.. (idle, no profile yet)` (clean idle drop), `bt: link dropped in set-up 0x..`, `bt: bonding 0x..`, `bt: dropped stray key <addr>`, `bt: forgot <addr>`, `bt: pair not persisted (store not writable)`, `bt: key delete waits (store not writable)`, `bt: record kept (store not writable)`.
 
 ### Stage 2b to-do from the 2a review
 
 * Bench: Disconnect, re-pair after Forget, a headset that wiped its key (Connect must refuse), Wi-Fi + Bluetooth coexistence.
-* A host test that links `platforms/rp2350/hal/hal_radio_bt.c` against a BTstack stub and injects event sequences (bonding failure 0x16 then 0xD9, remote 0x13 during SDP, timeout in each phase, stack off mid-attempt, Forget of the current peer, PIN request). Today only the simulator in `hal/host/hal_radio.c` is tested.
+* A host test that links `hal/common/bt_btstack/bt_btstack.c` against a BTstack stub and injects event sequences (bonding failure 0x16 then 0xD9, remote 0x13 during SDP, timeout in each phase, stack off mid-attempt, Forget of the current peer, PIN request). Today only the simulator in `hal/host/hal_radio.c` is tested.
 * A boot-time sweep that drops any BTstack link key whose address is not the saved record (orphan keys after a damaged record or a power cut before the stale queue drains).
 
 ### Wi-Fi alongside Bluetooth (provisional)

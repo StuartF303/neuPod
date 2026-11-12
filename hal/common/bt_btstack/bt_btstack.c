@@ -1,25 +1,24 @@
 // SPDX-License-Identifier: MPL-2.0
 /*
- * Bluetooth classic on the CYW43439 through BTstack (docs/bluetooth.md). RTOS build only.
+ * Bluetooth classic through BTstack: the platform-neutral adapter (docs/bluetooth.md, ADR-0019). It implements the Bluetooth half
+ * of hal/include/hal_radio.h and is built by every platform that uses BTstack; what differs per platform (the controller transport,
+ * the run loop and the thread it runs on, the hand-over between tasks) is behind bt_port.h.
  *
- * Threading. BTstack is single-threaded: it runs on the CYW43 driver's async context, i.e. the worker task the SDK's
- * pico_cyw43_arch_sys_freertos creates on core 0. Every BTstack call below therefore runs on that worker: either
- * inside a BTstack callback, or because it was handed over with async_context_execute_sync() (blocking, used for
- * start-up) or btstack_run_loop_execute_on_main_thread() (non-blocking, used for scan start/stop so the UI task never
- * waits for the radio). The public hal_bt_* functions can be called from any core-0 task. Nothing here runs on core 1.
- *
- * NO FLASH. The SDK's own btstack_cyw43_init() installs a TLV store in the internal flash (pico_flash,
- * flash_safe_execute). Core 1 executes from the same XIP flash and is not lockout-aware, so that would crash the audio
- * core: this file provides btstack_cyw43_init()/btstack_cyw43_deinit() itself (the SDK's cyw43_arch_init() calls them)
- * and the SDK's btstack_cyw43.c, pico_btstack_flash_bank and pico_flash are NOT linked. Link keys go to the SD-card
- * settings store through hal_bt_storage_t.
+ * Threading. BTstack is single-threaded: every BTstack call below runs on the port's BTstack thread, either inside a BTstack callback,
+ * or because it was handed over with bt_port_run_sync() (blocking, used for start-up) or bt_port_post() (non-blocking, used for scan
+ * start/stop and the link requests so the UI task never waits for the radio). The public hal_bt_* functions can be called from any
+ * task. Events reach the listener through bt_port_deliver().
  *
  * Pairing and the connection (stage 2a). Pair: discoverable + connectable + bondable ON, gap_dedicated_bonding() (outgoing ACL,
  * SSP "just works", link key into the SD-card TLV store), the ACL is kept (ENABLE_EXPLICIT_DEDICATED_BONDING_DISCONNECT: BTstack neither disconnects after a good bonding nor waits for a disconnect to report it) and an SDP
  * query for an A2DP sink (0x110B) runs on it; then all three go OFF again. Connect (a device paired before): the SDP query first
  * (it creates the ACL), then gap_request_security_level(LEVEL_2) to authenticate with the stored key; never discoverable,
- * connectable or bondable, so a headset that lost its key cannot silently start a new pairing. Every step runs on the worker;
+ * connectable or bondable, so a headset that lost its key cannot silently start a new pairing. Every step runs on the BTstack thread;
  * the public calls only hand a request over.
+ *
+ * An unanswered page is ended by our own timer (HAL_BT_PAIR_TIMEOUT_MS / HAL_BT_CONNECT_TIMEOUT_MS) with Create_Connection_Cancel, never by
+ * the controller's page timeout: the MT6582 (Y2) does not report its page timeout until the connection is cancelled. A Connection_Complete
+ * with an error that arrives after the attempt has ended is ignored (link_packet, HCI_EVENT_CONNECTION_COMPLETE: g_lphase is IDLE).
  */
 #include <stdio.h>
 #include <string.h>
@@ -28,11 +27,7 @@
 #include "btstack_version.h"
 #include "classic/btstack_link_key_db_tlv.h"
 #include "hal_radio.h"
-#include "pico/async_context.h"
-#include "pico/btstack_cyw43.h"
-#include "pico/btstack_hci_transport_cyw43.h"
-#include "pico/btstack_run_loop_async_context.h"
-#include "pico/cyw43_arch.h"
+#include "bt_port.h"
 
 #define LOCAL_NAME "neuPod"
 /* Class of Device: service class Audio (bit 21), major Audio/Video, minor Portable audio. */
@@ -58,7 +53,7 @@ static bd_addr_t g_local;
 static volatile bool g_have_addr;
 static bool g_registered;
 
-/* Only touched on the BTstack worker. */
+/* Only touched on the BTstack thread. */
 static found_t g_found[MAX_FOUND];
 static uint32_t g_nfound;
 static scan_phase_t g_phase;
@@ -109,7 +104,7 @@ static volatile int g_forget_state[FORGET_SLOTS]; /* 0 free, 1 being filled, 2 r
 
 static void emit(const hal_bt_event_t *ev) {
     if (g_cb != NULL) {
-        g_cb(ev, g_cb_ctx);
+        bt_port_deliver(g_cb, g_cb_ctx, ev);
     }
 }
 
@@ -143,23 +138,6 @@ static void emit_device(const found_t *f) {
 static void emit_scan_done(void) {
     hal_bt_event_t ev = {.type = HAL_BT_EVT_SCAN_DONE, .state = (hal_bt_state_t)g_state};
     emit(&ev);
-}
-
-/* ---- the SDK's cyw43_arch_init() hooks (see the header comment) ---- */
-
-bool btstack_cyw43_init(async_context_t *context) {
-    btstack_memory_init();
-    btstack_run_loop_init(btstack_run_loop_async_context_get_instance(context));
-    hci_init(hci_transport_cyw43_instance(), NULL);
-    return true;
-}
-
-void btstack_cyw43_deinit(__unused async_context_t *context) {
-    hci_power_control(HCI_POWER_OFF);
-    hci_close();
-    btstack_run_loop_async_context_deinit();
-    btstack_run_loop_deinit();
-    btstack_memory_deinit();
 }
 
 /* ---- BTstack TLV on top of hal_bt_storage_t ---- */
@@ -420,7 +398,11 @@ static void worker_scan_stop(void *arg) {
 /* The key record layout hal_bt_storage_delete_key() relies on (btstack_link_key_db_tlv.c, link_key_nvm_t: uint32 seq, bd_addr_t, link_key_t,
  * link_key_type_t): size = round_up(4 + 6 + 16 + sizeof(link_key_type_t), 4). The struct is private to BTstack, so the assert is on its parts. */
 _Static_assert(sizeof(bd_addr_t) == 6 && sizeof(link_key_t) == 16, "link key record layout");
-_Static_assert(HAL_BT_KEY_RECORD_LEN == ((4u + 6u + 16u + sizeof(link_key_type_t) + 3u) & ~3u), "HAL_BT_KEY_RECORD_LEN must match BTstack's link_key_nvm_t");
+/* The RP2350 toolchain uses short enums (1-byte key type: the record is exactly HAL_BT_KEY_RECORD_LEN = 28 bytes). The Y2's has 4-byte enums
+ * (a 32-byte record): HAL_BT_KEY_RECORD_LEN is then only the read buffer of hal_bt_storage_delete_key(), which needs the address at offset 4. */
+#define LINK_KEY_RECORD_LEN ((4u + 6u + 16u + sizeof(link_key_type_t) + 3u) & ~3u)
+_Static_assert(sizeof(link_key_type_t) != 1 || HAL_BT_KEY_RECORD_LEN == LINK_KEY_RECORD_LEN, "HAL_BT_KEY_RECORD_LEN must match BTstack's link_key_nvm_t");
+_Static_assert(LINK_KEY_RECORD_LEN >= HAL_BT_KEY_ADDR_OFFSET + 6u && LINK_KEY_RECORD_LEN <= 48u, "link key record size (y2_bt_tlv.c caches up to 48 bytes)");
 _Static_assert(HAL_BT_KEY_SLOTS == NVM_NUM_LINK_KEYS, "HAL_BT_KEY_SLOTS must match NVM_NUM_LINK_KEYS");
 
 /* HCI / SDP / L2CAP status to our reason. During a Pair, "the remote ended it" and "no resources" mean a headset that is busy or not in
@@ -820,7 +802,7 @@ hal_status_t hal_bt_pair(const hal_bt_device_t *dev) {
     }
     g_peer = *dev;
     g_reason = HAL_BT_FAIL_NONE;
-    btstack_run_loop_execute_on_main_thread(&g_link_reg);
+    bt_port_post(&g_link_reg);
     return HAL_OK;
 }
 
@@ -836,7 +818,7 @@ hal_status_t hal_bt_connect(const uint8_t addr[6]) {
     memcpy(g_peer.addr, addr, 6);
     g_peer.rssi = HAL_BT_RSSI_UNKNOWN;
     g_reason = HAL_BT_FAIL_NONE;
-    btstack_run_loop_execute_on_main_thread(&g_link_reg);
+    bt_port_post(&g_link_reg);
     return HAL_OK;
 }
 
@@ -846,7 +828,7 @@ void hal_bt_disconnect(void) {
     }
     g_disc_tag = g_attempt; /* the attempt this request is about */
     if (!__atomic_exchange_n(&g_disc_queued, true, __ATOMIC_SEQ_CST)) {
-        btstack_run_loop_execute_on_main_thread(&g_disc_reg);
+        bt_port_post(&g_disc_reg);
     }
 }
 
@@ -863,7 +845,7 @@ hal_status_t hal_bt_forget(const uint8_t addr[6]) {
             memcpy(g_forget_addr[i], addr, 6);
             __atomic_store_n(&g_forget_state[i], 2, __ATOMIC_SEQ_CST);
             if (!__atomic_exchange_n(&g_forget_queued, true, __ATOMIC_SEQ_CST)) {
-                btstack_run_loop_execute_on_main_thread(&g_forget_reg);
+                bt_port_post(&g_forget_reg);
             }
             return HAL_OK;
         }
@@ -893,6 +875,7 @@ typedef struct {
     const hal_bt_storage_t *storage;
     int rc;
 } init_args_t;
+static init_args_t g_init; /* static: a port that gives up waiting must not leave the BTstack thread with a dangling pointer */
 
 static uint32_t worker_init(void *param) {
     init_args_t *a = param;
@@ -925,7 +908,7 @@ static uint32_t worker_init(void *param) {
         set_accepting(false);
     }
     set_state(HAL_BT_STARTING);
-    a->rc = hci_power_control(HCI_POWER_ON);
+    a->rc = bt_port_power(true);
     if (a->rc != 0) {
         printf("bt: hci_power_control(ON) failed (%d)\n", a->rc);
         set_state(HAL_BT_FAILED);
@@ -934,16 +917,20 @@ static uint32_t worker_init(void *param) {
 }
 
 hal_status_t hal_bt_init(hal_bt_event_fn cb, void *ctx, const hal_bt_storage_t *storage) {
-    async_context_t *ac = cyw43_arch_async_context();
-    if (ac == NULL) {
-        return HAL_ENODEV; /* the radio driver is not up */
+    if (!bt_port_present()) {
+        return HAL_ENODEV; /* the radio driver / the controller device is not there */
     }
     if (g_state != HAL_BT_OFF && g_state != HAL_BT_FAILED) {
         return HAL_EBUSY;
     }
-    init_args_t args = {.cb = cb, .ctx = ctx, .storage = storage};
-    (void)async_context_execute_sync(ac, worker_init, &args);
-    return args.rc == 0 ? HAL_OK : HAL_ERR;
+    if (!bt_port_start()) {
+        return HAL_ERR;
+    }
+    g_init = (init_args_t){.cb = cb, .ctx = ctx, .storage = bt_port_storage(storage), .rc = 0};
+    if (!bt_port_run_sync(worker_init, &g_init)) {
+        return HAL_ERR;
+    }
+    return g_init.rc == 0 ? HAL_OK : HAL_ERR;
 }
 
 hal_bt_state_t hal_bt_state(void) { return (hal_bt_state_t)g_state; }
@@ -956,7 +943,7 @@ bool hal_bt_local_address(uint8_t addr[6]) {
     return true;
 }
 
-void hal_bt_poll(void) {}
+void hal_bt_poll(void) { bt_port_poll(); }
 
 hal_status_t hal_bt_inquiry_start(uint8_t duration_s) {
     int expect = HAL_BT_ON;
@@ -975,7 +962,7 @@ hal_status_t hal_bt_inquiry_start(uint8_t duration_s) {
     uint32_t units = ((uint32_t)duration_s * 1000u + 1279u) / 1280u; /* 1.28 s units */
     g_start_units = (uint8_t)(units < 1u ? 1u : units > 48u ? 48u : units);
     g_start_queued = true;
-    btstack_run_loop_execute_on_main_thread(&g_start_reg);
+    bt_port_post(&g_start_reg);
     return HAL_OK;
 }
 
@@ -984,7 +971,7 @@ void hal_bt_inquiry_stop(void) {
         return;
     }
     g_stop_queued = true;
-    btstack_run_loop_execute_on_main_thread(&g_stop_reg);
+    bt_port_post(&g_stop_reg);
 }
 
 hal_status_t hal_radio_a2dp_connect(const uint8_t addr[6]) {

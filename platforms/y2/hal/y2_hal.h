@@ -6,6 +6,7 @@
 #ifndef NEUPOD_Y2_HAL_H
 #define NEUPOD_Y2_HAL_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -26,6 +27,13 @@ void y2_input_set_volume_handler(void (*fn)(int32_t steps));
  * function that starts the same orderly stop as SIGTERM and arranges the power-off.
  */
 void y2_input_set_power_handler(void (*fn)(void));
+
+/**
+ * Is Bluetooth usable? Reads the address from /data/BT_Addr (read only) and opens /dev/stpbt (powers the chip, about 1.3 s; the
+ * descriptor is kept for BTstack). true only if both worked. Called once by hal_system_late_init() from an RTOS task; later calls
+ * return the first answer.
+ */
+bool y2_bt_probe(void);
 
 /** Device paths. */
 #define Y2_SYS_BLOCK "/sys/block"

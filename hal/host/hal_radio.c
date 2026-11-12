@@ -419,6 +419,8 @@ static void *g_hctx;
 static uint32_t g_h_t0, g_h_sent;
 #define SIM_HTTP_BYTES (2u * 1024u * 1024u)
 
+bool hal_wifi_present(void) { return true; }
+
 hal_status_t hal_wifi_start(void) {
     g_wifi_on = true;
     if (g_wstate == HAL_WIFI_DOWN) {

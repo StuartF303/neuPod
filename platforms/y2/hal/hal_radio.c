@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MPL-2.0
 /*
- * Y2 radio: there is no Wi-Fi or Bluetooth chip we can drive, so this is "not present". hal_system_late_init()
- * already reports HAL_ENODEV, which makes the boot check mark both capabilities unavailable (the UI greys the
- * features out); these stubs only keep any stray call safe: every action answers HAL_ENODEV, every state is
- * off/down, there are no scan results and no events.
+ * Y2 radio. Wi-Fi: there is no Wi-Fi driver we can run, so it is "not present" (hal_wifi_present() is false, every action answers
+ * HAL_ENODEV, every state is down, there are no scan results). Bluetooth is real: hal/common/bt_btstack/bt_btstack.c with
+ * bt_port_stpbt.c (docs/bluetooth.md), and hal_system_late_init() reports the radio as present only if /dev/stpbt opened.
  */
 #include "hal_radio.h"
 
+bool hal_wifi_present(void) { return false; }
 hal_status_t hal_wifi_start(void) { return HAL_ENODEV; }
 void hal_wifi_stop(void) {}
 hal_wifi_status hal_wifi_state(void) { return HAL_WIFI_DOWN; }
@@ -66,62 +66,3 @@ void hal_wifi_mem(hal_wifi_mem_t *out) {
 }
 
 void hal_wifi_poll(void) {}
-
-hal_status_t hal_radio_a2dp_connect(const uint8_t addr[6]) {
-    (void)addr;
-    return HAL_ENODEV;
-}
-
-void hal_radio_a2dp_disconnect(void) {}
-
-hal_status_t hal_bt_init(hal_bt_event_fn cb, void *ctx, const hal_bt_storage_t *storage) {
-    (void)cb;
-    (void)ctx;
-    (void)storage;
-    return HAL_ENODEV;
-}
-
-hal_bt_state_t hal_bt_state(void) { return HAL_BT_OFF; }
-
-bool hal_bt_local_address(uint8_t addr[6]) {
-    for (int i = 0; i < 6; i++) {
-        addr[i] = 0;
-    }
-    return false;
-}
-
-hal_status_t hal_bt_inquiry_start(uint8_t duration_s) {
-    (void)duration_s;
-    return HAL_ENODEV;
-}
-
-void hal_bt_inquiry_stop(void) {}
-
-hal_status_t hal_bt_pair(const hal_bt_device_t *dev) {
-    (void)dev;
-    return HAL_ENODEV;
-}
-
-hal_status_t hal_bt_connect(const uint8_t addr[6]) {
-    (void)addr;
-    return HAL_ENODEV;
-}
-
-void hal_bt_disconnect(void) {}
-
-hal_status_t hal_bt_forget(const uint8_t addr[6]) {
-    (void)addr;
-    return HAL_ENODEV;
-}
-
-hal_bt_link_state_t hal_bt_link_state(void) { return HAL_BT_LINK_DISCONNECTED; }
-uint32_t hal_bt_link_attempt(void) { return 0; }
-hal_bt_fail_t hal_bt_link_reason(void) { return HAL_BT_FAIL_NONE; }
-
-bool hal_bt_link_device(hal_bt_device_t *out) {
-    (void)out;
-    return false;
-}
-
-bool hal_bt_accepting(void) { return false; }
-void hal_bt_poll(void) {}
