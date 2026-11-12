@@ -25,6 +25,8 @@ WAIT_S=${MTK_WAIT_S:-5}
 PROP_SIZE=131072
 LOADER=$BIN/wmt_loader
 LAUNCHER=$BIN/6620_launcher
+# The patch directory (ROM patches for the MT6582 CONSYS); the stock init.rc starts it the same way.
+FW_DIR=${MTK_FW_DIR:-/system/etc/firmware/}
 LOADER_DONE=$RUN/wmt_loader.done
 LAUNCHER_PID=$RUN/6620_launcher.pid
 
@@ -97,7 +99,7 @@ start() {
 		log "6620_launcher already running"
 	else
 		# Own session: init's tty and signals never reach it. The pid file is written before start returns.
-		setsid "$LAUNCHER" >/dev/null 2>&1 &
+		setsid "$LAUNCHER" -p "$FW_DIR" >/dev/null 2>&1 &
 		echo $! >"$LAUNCHER_PID"
 		log "6620_launcher started (pid $!)"
 	fi
