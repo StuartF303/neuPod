@@ -534,7 +534,7 @@ TEST(text_display_keeps_what_the_fonts_have) {
     char o[96];
     const char *keep = "Stuart\xE2\x80\x99s \xE2\x80\x9CQ\xE2\x80\x9D \xE2\x80\x93 \xE2\x80\x94 x\xE2\x80\xA6 \xE2\x82\xAC " // typographic marks, euro
                        "Caf\xC3\xA9 \xC3\xBC\xC3\xB1\xC3\xB8\xC3\xA5\xC3\x9F \xC2\xBF? \xC2\xA0\xC2\xB0 "                 // Latin-1
-                       "\xEF\x81\xBB \xEF\x80\x81";                                                                      // LV_SYMBOL_DIRECTORY, AUDIO
+                       "\xEF\x80\xBE \xEF\x80\x81";                                                                      // LV_SYMBOL_IMAGE, AUDIO
     ASSERT_TRUE(ui_text_is_clean(keep));
     disp(o, sizeof o, keep);
     ASSERT_EQ(0, strcmp(keep, o));
@@ -640,6 +640,32 @@ TEST(text_display_is_never_longer_than_its_input) {
     }
 }
 
+TEST(theme_mode_choices) {
+    ui_theme_mode_t m = UI_THEME_AUTO;
+    ASSERT_TRUE(ui_theme_mode_from_stored(0, &m));
+    ASSERT_EQ(UI_THEME_LIGHT, m); /* a stored 0 is Light: the default */
+    ASSERT_TRUE(ui_theme_mode_from_stored(1, &m));
+    ASSERT_EQ(UI_THEME_DARK, m);
+    ASSERT_TRUE(ui_theme_mode_from_stored(2, &m));
+    ASSERT_EQ(UI_THEME_AUTO, m);
+    ASSERT_FALSE(ui_theme_mode_from_stored(3, &m)); /* junk is refused and leaves the value alone */
+    ASSERT_EQ(UI_THEME_AUTO, m);
+    ASSERT_FALSE(ui_theme_mode_from_stored(255, &m));
+    ASSERT_EQ(UI_THEME_DARK, ui_theme_mode_next(UI_THEME_LIGHT)); /* Light -> Dark -> Auto -> Light */
+    ASSERT_EQ(UI_THEME_AUTO, ui_theme_mode_next(UI_THEME_DARK));
+    ASSERT_EQ(UI_THEME_LIGHT, ui_theme_mode_next(UI_THEME_AUTO));
+    ASSERT_EQ(0, strcmp("Light", ui_theme_mode_name(UI_THEME_LIGHT)));
+    ASSERT_EQ(0, strcmp("Dark", ui_theme_mode_name(UI_THEME_DARK)));
+    ASSERT_EQ(0, strcmp("Auto", ui_theme_mode_name(UI_THEME_AUTO)));
+    /* Light never goes dark, Dark always is, Auto is dark exactly while the backlight is dimmed (or off) */
+    ASSERT_FALSE(ui_theme_is_dark(UI_THEME_LIGHT, false));
+    ASSERT_FALSE(ui_theme_is_dark(UI_THEME_LIGHT, true));
+    ASSERT_TRUE(ui_theme_is_dark(UI_THEME_DARK, false));
+    ASSERT_TRUE(ui_theme_is_dark(UI_THEME_DARK, true));
+    ASSERT_FALSE(ui_theme_is_dark(UI_THEME_AUTO, false));
+    ASSERT_TRUE(ui_theme_is_dark(UI_THEME_AUTO, true));
+}
+
 TEST(screenoff_choices) {
     ASSERT_EQ(0u, ui_screenoff_seconds(0)); /* Never */
     ASSERT_EQ(180u, ui_screenoff_seconds(UI_SCREENOFF_DEFAULT_IDX)); /* the owner's default: 3 min after the dim */
@@ -727,6 +753,7 @@ int main(void) {
     RUN(accel_reversal_drops_residue);
     RUN(stack_push_pop);
     RUN(autodim_choices);
+    RUN(theme_mode_choices);
     RUN(screenoff_choices);
     RUN(off_comes_a_set_time_after_the_dim);
     RUN(never_means_never_and_auto_dim_off_counts_from_the_last_input);

@@ -152,6 +152,20 @@ static const struct {
 uint32_t ui_screenoff_seconds(uint8_t idx) { return idx < UI_SCREENOFF_STEPS ? k_screenoff[idx].sec : 0u; }
 const char *ui_screenoff_name(uint8_t idx) { return idx < UI_SCREENOFF_STEPS ? k_screenoff[idx].name : "-"; }
 
+bool ui_theme_mode_from_stored(uint8_t v, ui_theme_mode_t *out) {
+    if (v >= UI_THEME_MODES) {
+        return false;
+    }
+    *out = (ui_theme_mode_t)v;
+    return true;
+}
+
+const char *ui_theme_mode_name(ui_theme_mode_t m) { return m == UI_THEME_DARK ? "Dark" : m == UI_THEME_AUTO ? "Auto" : "Light"; }
+
+ui_theme_mode_t ui_theme_mode_next(ui_theme_mode_t m) { return (ui_theme_mode_t)(((unsigned)m + 1u) % UI_THEME_MODES); }
+
+bool ui_theme_is_dark(ui_theme_mode_t m, bool dimmed) { return m == UI_THEME_DARK || (m == UI_THEME_AUTO && dimmed); }
+
 void ui_idle_init(ui_idle_t *t, uint32_t now_ms) {
     t->last_ms = now_ms;
     t->dimmed = false;
@@ -368,11 +382,9 @@ bool ui_text_has_glyph(uint32_t cp) {
     }
     switch (cp) {
     case 0x2013: case 0x2014: case 0x2018: case 0x2019: case 0x201C: case 0x201D: case 0x2022: case 0x2026: case 0x20AC:
-    // LV_SYMBOL_*: AUDIO OK IMAGE PLAY PAUSE RIGHT SHUFFLE LOOP DIRECTORY CHARGE FILE WIFI BATTERY_FULL/3/2/1/EMPTY BLUETOOTH SD_CARD
-    case 0xF001: case 0xF00C: case 0xF03E: case 0xF04B: case 0xF04C: case 0xF054: case 0xF074: case 0xF079: case 0xF07B:
-    case 0xF0E7: case 0xF15B: case 0xF1EB: case 0xF240: case 0xF241: case 0xF242: case 0xF243: case 0xF244: case 0xF293: case 0xF7C2:
-    // Font Awesome with no LV_SYMBOL (UI_SYM_* in ui_internal.h): power, lock, unlock
-    case 0xF011: case 0xF023: case 0xF09C:
+    // Font Awesome symbols still in the fonts (tools/gen_ui_fonts.sh SYMS): LV_SYMBOL_ AUDIO OK IMAGE WIFI BATTERY_3 BLUETOOTH SD_CARD.
+    // The chevron, transport, folder / file, lock and battery glyphs are Lucide icons or drawn shapes now (ui_icons.h), not text.
+    case 0xF001: case 0xF00C: case 0xF03E: case 0xF1EB: case 0xF241: case 0xF293: case 0xF7C2:
         return true;
     default:
         return false;
