@@ -90,8 +90,35 @@ TEST(retargeting_during_a_decode_never_shows_the_old_cover_for_the_new_track) {
     ASSERT_FALSE(art_service_pending());
 }
 
+#ifdef NEUPOD_ART_HIRES
+TEST(an_album_played_before_comes_back_from_the_cache_without_decoding) {
+    art_view_t v;
+    audio_tags_t ta = tags("Alpha"), tb = tags("Beta");
+    art_service_track("/A/t9.flac", &ta); /* album A was abandoned mid-decode earlier: not cached, so it decodes now */
+    ASSERT_TRUE(art_service_pending());
+    art_service_run(plain_yield, NULL);
+    art_view_get(&v);
+    ASSERT_EQ(ART_VIEW_READY, v.state);
+    ASSERT_TRUE(v.w > 40 && v.w <= ART_MAX_DIM); /* album A's 500x333 picture */
+    uint16_t wa = v.w;
+    art_service_track("/B/t10.flac", &tb); /* B was decoded before: a hit, nothing queued, its own size back */
+    ASSERT_FALSE(art_service_pending());
+    art_view_get(&v);
+    ASSERT_EQ(ART_VIEW_READY, v.state);
+    ASSERT_EQ(40, v.w);
+    art_service_track("/A/t11.flac", &ta); /* ... and A again, from the cache too */
+    ASSERT_FALSE(art_service_pending());
+    art_view_get(&v);
+    ASSERT_EQ(wa, v.w);
+    ASSERT_EQ(160, ART_MAX_DIM);
+}
+#endif
+
 int main(void) {
     if (mkdtemp(g_root) == NULL || setenv("NEUPOD_FS_ROOT", g_root, 1) != 0) return 1;
     RUN(retargeting_during_a_decode_never_shows_the_old_cover_for_the_new_track);
+#ifdef NEUPOD_ART_HIRES
+    RUN(an_album_played_before_comes_back_from_the_cache_without_decoding);
+#endif
     return RESULT();
 }

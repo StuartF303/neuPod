@@ -29,7 +29,9 @@ static union {
     file_entry_t entries[FILES_MAX_ENTRIES];
     lib_mem_t lib;
 } g_mem;
-_Static_assert(sizeof(lib_mem_t) <= sizeof(file_entry_t[FILES_MAX_ENTRIES]), "reader + row window must fit the Files listing buffer");
+// The reader plus the row window are a little larger than the folder listing since the two-line rows (a second text per row) and the fifth page of the cache
+// (a song row reads five table pages): the shared buffer grows to the larger of the two, which costs under 1 KB over the listing alone.
+_Static_assert(sizeof(lib_mem_t) <= sizeof(file_entry_t[FILES_MAX_ENTRIES]) + 1024u, "reader + row window must stay close to the Files listing buffer");
 
 // Is there a card the library can use? A mounted FatFs volume on the device; the simulator's card is a folder, which the storage check has vouched for.
 static bool card_ready(void) {

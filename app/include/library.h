@@ -147,7 +147,11 @@ lib_err_t lib_manifest_load(const char *dir, bool full, lib_manifest_t *out);
 
 #define LIB_TEXT_MAX 65u /**< a name or title, UTF-8, NUL included */
 #define LIB_PAGE_BYTES 2048u
-#define LIB_PAGES 4u
+#ifdef NEUPOD_ART_HIRES
+#define LIB_PAGES 5u /* a song row touches five table pages (order, track, strings, album): the pages of one row must all stay cached; the reader plus the row window must fit the Files buffer (library_service.c) */
+#else
+#define LIB_PAGES 4u /* the Pico 2 W (frozen): its song rows re-read pages instead; the reader + row window stay within the Files buffer */
+#endif
 #define LIB_NONE 0xFFFFFFFFu
 
 /** Why a track cannot be played (D6); 0 = playable. */

@@ -41,6 +41,12 @@ add_test(NAME settings COMMAND test_settings)
 set_tests_properties(settings PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_source_files_properties(test_settings.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
+# Ratings (Now Playing page 2): keys by path + size, the table, the card image and its CRC.
+add_executable(test_ratings test_ratings.c)
+target_link_libraries(test_ratings neupod_settings hal_host)
+add_test(NAME ratings COMMAND test_ratings)
+set_source_files_properties(test_ratings.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
 # Resume record over the real settings store: round trip through the store's write path, rate limiting, missing / changed file decisions.
 add_executable(test_resume test_resume.c ${CMAKE_SOURCE_DIR}/app/runtime/resume.c)
 target_compile_definitions(test_resume PRIVATE NEUPOD_TEST_ASSETS="${CMAKE_SOURCE_DIR}/tests/assets/audio")

@@ -46,14 +46,16 @@ From the owner-commissioned [design review](design/2026-11-12-ui-review/README.m
 | DS-6 | Lucide icon set, replace FontAwesome where covered | System | S | 2 | — | 1 | built (phase 1) |
 | DS-7 | Push/pop slide transition, 30 fps cap | System | M | 2 | DS-4 | 1 | built (phase 1) |
 | HL-1 | Lock pill and Power-hold progress line | Hold/Power | S | 2 | DS-5 | 1 | built (phase 1) |
-| NP-1 | Now Playing layout: tag stack, pills, progress, volume strip | Now Playing | M | 3 | DS-2, DS-3 | 2 | open |
-| NP-2 | Seek mode: Big amber time, knob, hints, no third bar; entered by hold Select | Now Playing | S | 2 | NP-1 | 2 | open |
-| NP-3 | Now Playing page 2 (rating, shuffle, repeat, go-to); Select opens it | Now Playing | M | 2 | NP-1 | 2 | open |
-| NP-4 | Volume HUD from any screen | Now Playing | S | 2 | DS-5 | 2 | open |
-| NP-5 | Art pipeline: 160² thumbnails + LRU (PSRAM board and Y2 only) | Now Playing | M | 2 | — | 2 | open |
-| LB-1 | Two-line song rows (title / artist · album) | Library | S | 3 | DS-2 | 2 | open |
-| LB-2 | Fast-scroll letter overlay + index rail, sort keys ignoring articles/diacritics (UI-4) | Library | M | 3 | DS-2 | 2 | open |
-| LB-3 | Album header (art, title, artist · year, totals) | Library | S | 2 | NP-5 | 2 | open |
+| NP-1 | Now Playing layout: tag stack, pills, progress, volume strip | Now Playing | M | 3 | DS-2, DS-3 | 2 | built |
+| NP-2 | Seek mode: Big amber time, knob, hints, no third bar; entered by hold Select | Now Playing | S | 2 | NP-1 | 2 | built |
+| NP-3 | Now Playing page 2 (rating, shuffle, repeat, go-to); Select opens it | Now Playing | M | 2 | NP-1 | 2 | built (ratings on the card; Add to playlist greyed until phase 4) |
+| NP-4 | Volume HUD from any screen | Now Playing | S | 2 | DS-5 | 2 | built |
+| NP-5 | Art pipeline: 160² thumbnails + LRU (PSRAM board and Y2 only) | Now Playing | M | 2 | — | 2 | built (host and Y2; RP2350B with PSRAM opts in with `NEUPOD_ART_HIRES`) |
+| LB-1 | Two-line song rows (title / artist · album) | Library | S | 3 | DS-2 | 2 | built |
+| LB-2 | Fast-scroll letter overlay + index rail, sort keys ignoring articles/diacritics (UI-4) | Library | M | 3 | DS-2 | 2 | built ("The " and accents ignored; "A " / "An " still sort under A: see LB-2b) |
+| LB-3 | Album header (art, title, artist · year, totals) | Library | S | 2 | NP-5 | 2 | built |
+| LB-2b | Sort keys also ignore "A " and "An " (changes the index order: bump the index version, rebuild) | Library | S | 1 | LB-2 | 4 | open |
+| NP-6 | Ratings in the library: show them in lists, a Rated / Top rated smart list (the stars are saved in `/.neupod/ratings.bin` by path and size) | Now Playing | S | 1 | NP-3, LB-7 | 4 | open |
 | LB-4 | Empty / error / busy states as full-pane layouts, determinate progress | Library | M | 3 | DS-5 | 4 | open |
 | LB-5 | Unplayable rows show codec; auto-skip with toast | Library | S | 2 | DS-5 | 4 | open |
 | LB-6 | Cover Flow (flat five-tile) view on Albums (UI-11) | Library | M | 2 | NP-5 | 4 | open |

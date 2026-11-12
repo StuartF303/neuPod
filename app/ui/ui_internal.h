@@ -151,7 +151,7 @@ void ui_bt_stream_pane_text(char *out, size_t n);
 typedef struct {
     char label[96];
     char detail[32]; /* right-aligned, optional */
-    char sub[64];    /* second line of a two-line list (ui_list_model_t.two_line): Small, ink2; "" = none */
+    char sub[48];    /* second line of a two-line list (ui_list_model_t.two_line): Small, ink2; "" = none */
     bool chevron;    /* the Lucide chevron at the right edge */
     const char *icon; /* a Lucide glyph (ui_icons.h, a string constant) before the label; NULL = none */
     bool dim;        /* greyed, not meant to be opened */

@@ -66,13 +66,15 @@
     "x s s s s _ s s s s s s _ m w _ _ _ s _ wait:pause wait:art x snap:art-cover m m s _ _ wait:pause wait:art x snap:art-embedded "  \
     "m m m m wait:art x x snap:art-home _ _ s s _ s _ wait:pause x snap:art-none m"
 
-// Now Playing seek mode (UI-7): a 20 s WAV album (seekable) is paused, Select hands the wheel to seek, the wheel scrubs, 3 s of rest drops it back to
-// volume; then an MP3 (seekable too: seek-mp3) and a FLAC without a seek table: Select answers "Seek not available". Settings > Repeat is set to One first
+// Now Playing (NP-1 to NP-4): a 20 s WAV album (seekable) is paused (np-nowplaying); HOLDING Select (sel:down, sleep, sel:up) enters seek mode, the wheel
+// scrubs, Menu cancels, a second hold and Select applies the scrub (seek-go); a short Select opens page 2 (np-page2) and a volume change from outside
+// shows the HUD there (np-volume-hud); then an MP3 (seekable too: seek-mp3) and a FLAC without a seek table: the hold answers "Seek not available". Settings > Repeat is set to One first
 // (the MP3 and FLAC last 1 s: they must still be there to pause). The tracks are paused at once (wait:pause) so the pictures do not
 // depend on the clock; the fixture is made by ctest (tests/CMakeLists.txt, seek card).
 #define TOUR_SEEK                                                                                  \
-    "x s s s s _ s s s s s s _ m w _ _ _ _ x wait:pause snap:seek-volume _ snap:seek-mode 8*s snap:seek-scrub "  \
-    "x x x x x x x x x x x x snap:seek-timeout m m s _ _ x wait:pause _ snap:seek-mp3 m m s _ _ x wait:pause _ snap:seek-unavailable m"
+    "x s s s s _ s s s s s s _ m w _ _ _ _ x wait:pause snap:seek-volume snap:np-nowplaying sel:down sleep:700 sel:up x snap:seek-mode 8*s snap:seek-scrub "  \
+    "m x snap:seek-cancel sel:down sleep:700 sel:up x 3*s _ x x snap:seek-go _ x snap:np-page2 vol:2 x snap:np-volume-hud strips:off "  \
+    "m m m s _ _ x wait:pause sel:down sleep:700 sel:up x snap:seek-mp3 m m m s _ _ x wait:pause sel:down sleep:700 sel:up x snap:seek-unavailable m"
 
 // Music library (ADR-0017, L2): every list of Music on a card with a small tagged library (tests/tools/make_library_card.py): the first open builds the
 // index (NEUPOD_LIB_SLOW_MS slows the scan so the progress screen can be seen), Artists > artist > album > songs with a greyed AAC track and a refused
@@ -81,7 +83,7 @@
 #define TOUR_LIBRARY                                                                                                                      \
     "x _ snap:lib-music-menu _ x x x x snap:lib-building wait:lib x x snap:lib-artists "                                                 \
     "_ x x snap:lib-artist s _ x x snap:lib-album m m s _ x x s _ x x s snap:lib-album-greyed _ x snap:lib-cant-play "                  \
-    "m m m s _ x x x snap:lib-albums m s _ x x x snap:lib-songs 8*s x x snap:lib-songs-scrolled "                                        \
+    "m m m s _ x x x snap:lib-albums m s _ x x x snap:lib-songs vol:2 x snap:lib-volume-hud strips:off 8*s rail:hold x snap:lib-songs-fastscroll rail:release x x x snap:lib-songs-scrolled "                                        \
     "m s _ x x x snap:lib-genres _ x x snap:lib-genre _ x x snap:lib-genre-songs "                                                     \
     "m m m s _ x x x snap:lib-comps _ x x snap:lib-comp-songs "                                                                          \
     "m m s s _ x x x snap:lib-update-building x x x x x x x x x x x x snap:lib-update-done m m "                                                             \
@@ -190,11 +192,11 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--tour-seek") == 0) {
             cfg.ui_script = TOUR_SEEK;
             cfgp_tour = true;
-            g_expect = 8; // the splash, home and the six named snapshots
+            g_expect = 12; // the splash, home and the ten named snapshots
         } else if (strcmp(argv[i], "--tour-library") == 0) {
             cfg.ui_script = TOUR_LIBRARY;
             cfgp_tour = true;
-            g_expect = 22; // the splash, home and the twenty named snapshots
+            g_expect = 24; // the splash, home and the twenty-two named snapshots
         } else if (strcmp(argv[i], "--tour-library-ro") == 0) {
             cfg.ui_script = TOUR_LIBRARY_RO;
             cfgp_tour = true;

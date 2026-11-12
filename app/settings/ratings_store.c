@@ -149,12 +149,14 @@ bool ratings_parse(const uint8_t *in, size_t n) {
     return true;
 }
 
+static uint8_t g_img[12 + RATINGS_MAX * 5 + 4]; /* the file image: load and save never run at once (storage task) */
+
 static void do_load(void) {
-    static uint8_t img[12 + RATINGS_MAX * 5 + 4];
+    uint8_t *img = g_img;
     nfs_file_t *f;
     if (nfs_open(&f, RATINGS_FILE, NFS_O_READ) == NFS_OK) {
         size_t got = 0;
-        nfs_err_t e = nfs_read(f, img, sizeof img, &got);
+        nfs_err_t e = nfs_read(f, img, sizeof g_img, &got);
         (void)nfs_close(f);
         if (e == NFS_OK) {
             entry_t keep[RATINGS_MAX]; /* ratings made before the card was ready win over the file's */
@@ -172,8 +174,8 @@ static void do_load(void) {
 }
 
 static nfs_err_t do_save(void) {
-    static uint8_t img[12 + RATINGS_MAX * 5 + 4];
-    size_t n = ratings_serialise(img, sizeof img);
+    uint8_t *img = g_img;
+    size_t n = ratings_serialise(img, sizeof g_img);
     nfs_stat_t st;
     nfs_err_t e = nfs_stat(SETTINGS_DIR, &st);
     if (e == NFS_ERR_NOT_FOUND) {

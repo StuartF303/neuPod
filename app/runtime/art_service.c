@@ -62,7 +62,9 @@ void art_view_get(art_view_t *out) {
 
 void art_view_ack(uint32_t gen) { g_ack = gen; }
 
-static bool key_eq(const art_key_t *a, const art_key_t *b) { return memcmp(a, b, sizeof *a) == 0; }
+static bool key_eq(const art_key_t *a, const art_key_t *b) { // field by field: the struct has padding that memcmp would compare
+    return a->folder == b->folder && a->album == b->album && a->emb_len == b->emb_len && a->emb_kind == b->emb_kind;
+}
 
 static int slot_find(const art_key_t *k) {
     for (unsigned i = 0; i < ART_CACHE_N; i++) {
@@ -179,7 +181,7 @@ void art_service_track(const char *path, const audio_tags_t *tags) {
                 .album = fnv(tags->album, strlen(tags->album)),
                 .emb_len = tags->art.length,
                 .emb_kind = tags->art.kind};
-    if (g_job.have_key && memcmp(&g_job.key, &k, sizeof k) == 0) {
+    if (g_job.have_key && key_eq(&g_job.key, &k)) {
         return; // same album and picture: keep the thumbnail we have (or the job already queued for it)
     }
     g_job.gen++;

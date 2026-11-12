@@ -131,10 +131,8 @@ static void show_toast(files_t *f, const char *text) {
 
 static void files_tick(ui_screen_t *s) {
     files_t *f = (files_t *)s;
-    if (f->lj.active) {
-        wi_letterjump_tick(&f->lj, os_tick_ms());
-        ui_letter_overlay_update(f->overlay, &f->lj);
-    }
+    wi_letterjump_tick(&f->lj, os_tick_ms());
+    ui_letter_overlay_update(f->overlay, &f->lj); /* every pass: it fades out once the wheel has rested */
     storage_result_t r;
     while (f->state == LOADING && storage_result_poll(&r)) {
         if (r.kind != STORAGE_RES_LIST || r.seq != f->seq) {

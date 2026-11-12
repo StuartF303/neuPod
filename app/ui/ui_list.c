@@ -277,6 +277,7 @@ static void bind_row(ui_list_t *l, row_t *r, int32_t idx) {
         lv_obj_set_width(r->sub, label_w);
         lv_obj_set_pos(r->sub, lx, UIM->row2_y2);
         if (has_sub) {
+            lv_obj_set_align(r->label, LV_ALIGN_TOP_LEFT); /* (a middle-aligned label would take the y as an offset from the middle) */
             lv_obj_set_pos(r->label, lx, UIM->row2_y1);
         } else {
             lv_obj_align(r->label, LV_ALIGN_LEFT_MID, lx, 0);

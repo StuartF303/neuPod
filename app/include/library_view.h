@@ -44,7 +44,7 @@ typedef struct {
 
 #define LVW_TEXT_MAX 48u   /**< first line of a row, UTF-8, NUL included (longer is cut at a character boundary) */
 #define LVW_DETAIL_MAX 24u /**< right-hand text */
-#define LVW_SUB_MAX 64u    /**< second line of a two-line row ("Artist . Album"), UTF-8, NUL included */
+#define LVW_SUB_MAX 48u    /**< second line of a two-line row ("Artist . Album"), UTF-8, NUL included */
 
 typedef struct {
     uint32_t count;          /**< rows, "All Songs" included */

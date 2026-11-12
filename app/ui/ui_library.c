@@ -223,7 +223,8 @@ static void header_fill(lib_screen_t *s) {
     char len[16];
     fmt_length(len, sizeof len, s->info.total_s);
     const char *codec = codec_name(s->info.codec);
-    snprintf(b, sizeof b, "%u %s \xC2\xB7 %s%s%s", (unsigned)s->info.count, s->info.count == 1 ? "song" : "songs", len, codec[0] != '\0' ? " \xC2\xB7 " : "", codec);
+    snprintf(b, sizeof b, "%u %s%s%s%s%s", (unsigned)s->info.count, s->info.count == 1 ? "song" : "songs", s->info.total_s != 0 ? " \xC2\xB7 " : "",
+             s->info.total_s != 0 ? len : "", codec[0] != '\0' ? " \xC2\xB7 " : "", codec);
     ui_label_set_text(s->hd_l3, b);
     if (s->info.count > 0 && pq_format_handle(s->hd_handle, sizeof s->hd_handle, (uint8_t)s->info.range.order, s->info.range.first)) {
         art_browse_want(s->hd_handle);
@@ -364,10 +365,8 @@ static void lib_tick(ui_screen_t *b) {
         return;
     }
     uint32_t now = os_tick_ms();
-    if (s->lj.active) {
-        wi_letterjump_tick(&s->lj, now);
-        ui_letter_overlay_update(s->overlay, &s->lj);
-    }
+    wi_letterjump_tick(&s->lj, now);
+    ui_letter_overlay_update(s->overlay, &s->lj); /* every pass: it fades out once the wheel has rested */
     if (s->st == S_READY) {
         header_art_tick(s);
     }

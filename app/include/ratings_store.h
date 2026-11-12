@@ -21,7 +21,12 @@
 extern "C" {
 #endif
 
+/* 128 tracks where RAM is plentiful (hosted, PSRAM builds: NEUPOD_ART_HIRES), 24 on the Pico 2 W (frozen, ADR-0001 amendment: its 520 KB is full) */
+#ifdef NEUPOD_ART_HIRES
 #define RATINGS_MAX 128u
+#else
+#define RATINGS_MAX 24u
+#endif
 #define RATINGS_FILE "/.neupod/ratings.bin"
 
 /** Key of the file at @p path of @p size bytes (never 0). */
