@@ -18,7 +18,7 @@ The Bluetooth address comes from `/data/BT_Addr` (first 6 bytes, MSB first) at s
 
 ## Build
 
-BTstack is used in place from the Pico SDK (`$PICO_SDK_PATH/lib/btstack`; pico-sdk 2.3.1 ships v1.7-rc1-1219-geb0bb8b5e) or from `-DBTSTACK_ROOT=<dir>`.
+BTstack is used in place from the Pico SDK (`$PICO_SDK_PATH/lib/btstack`; pico-sdk 2.3.1: BTstack 1.6.2, git eb0bb8b5e) or from `-DBTSTACK_ROOT=<dir>`.
 
 ```sh
 # Y2 binary: static ARM hard-float, built with the Buildroot toolchain (see cmake/toolchain-y2.cmake for overrides)
