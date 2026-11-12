@@ -25,7 +25,7 @@ enum { GS_GREEN, GS_YELLOW, GS_RED, GS_OFF, GS_OFF_SEL, GS_DOT0, GS_DOT1, GS_DOT
 static lv_style_t g_gs[GS_N]; /* shared by every glyph rectangle: no per-object style memory */
 
 typedef struct {
-    lv_obj_t *obj, *label, *detail, *chev, *icon;
+    lv_obj_t *obj, *label, *sub, *detail, *chev, *icon; /* sub: the second (Small) line of a two-line row, created on demand */
     lv_obj_t *g[GLYPH_N]; /* created the first time the row needs a glyph */
     const lv_style_t *gs[GLYPH_N];
     uint8_t bars;
@@ -33,7 +33,7 @@ typedef struct {
     bool chevron;
     int32_t idx; /* bound item, -1 = unbound/hidden */
     bool sel;
-    uint32_t c_label, c_detail, c_chev; /* colours currently applied (shared styles, see ui_label) */
+    uint32_t c_label, c_detail, c_chev, c_sub; /* colours currently applied (shared styles, see ui_label) */
 } row_t;
 
 static bool g_styles_ready;
@@ -70,6 +70,8 @@ static void styles_init(void) {
 struct ui_list {
     lv_obj_t *box;
     int32_t w;
+    int32_t row_h, rows; /* row height and the rows that fit: one line (30 / 7) or two lines (40 / 5) */
+    int32_t top, box_h;  /* the list's y in its parent and its height (the album header sits above it) */
     ui_list_model_t model;
     ui_nav_t nav;
     int32_t scroll_px;
@@ -90,6 +92,11 @@ static void style_row(ui_list_t *l, row_t *r, bool dim) {
     uint32_t text = on ? UI_C_ON_ACCENT : dim ? UI_C_INK3 : UI_C_INK;
     uint32_t sub = on ? UI_C_ON_ACCENT : UI_C_INK2;
     ui_label_ticker(r->label, on); /* the focused row's text scrolls if it does not fit; the others keep their dots */
+    if (r->sub != NULL) {
+        ui_label_ticker(r->sub, on);
+        ui_label_recolour(r->sub, r->c_sub, sub);
+        r->c_sub = sub;
+    }
     ui_label_recolour(r->label, r->c_label, text);
     ui_label_recolour(r->detail, r->c_detail, sub);
     ui_label_recolour(r->chev, r->c_chev, sub);
@@ -122,12 +129,12 @@ static void bar_anim_cb(void *var, int32_t v) {
 // Put the bar on the selected row at once (no slide): a new list, a rebuilt model, a focus change.
 static void bar_sync(ui_list_t *l) {
     lv_anim_delete(l, bar_anim_cb);
-    l->bar_abs = l->nav.sel * UI_ROW_H;
+    l->bar_abs = l->nav.sel * l->row_h;
     position_bar(l);
 }
 
 static void bar_slide(ui_list_t *l, bool animate) {
-    int32_t target = l->nav.sel * UI_ROW_H;
+    int32_t target = l->nav.sel * l->row_h;
     lv_anim_delete(l, bar_anim_cb);
     if (!animate || UIM->sel_anim_ms <= 0 || target == l->bar_abs) {
         l->bar_abs = target;
@@ -180,11 +187,11 @@ static void glyph_apply(ui_list_t *l, row_t *r, bool restyle_only) {
             int32_t d = (int32_t)((l->busy_phase + GLYPH_N) - (uint32_t)i) % GLYPH_N;
             gs = (d == 0 ? GS_DOT2 : d == 1 ? GS_DOT1 : GS_DOT0) + (on ? GS_DOT0_SEL - GS_DOT0 : 0);
             h = UIM->glyph_bar_w;
-            y = UI_ROW_H / 2 - h / 2;
+            y = l->row_h / 2 - h / 2;
         } else {
             int cls = ui_signal_class(r->bars);
             h = UIM->meter_h[i];
-            y = UI_ROW_H / 2 + UIM->meter_h[GLYPH_N - 1] / 2 - h;
+            y = l->row_h / 2 + UIM->meter_h[GLYPH_N - 1] / 2 - h;
             gs = i < r->bars ? (cls == 3 ? GS_GREEN : cls == 2 ? GS_YELLOW : GS_RED) : (on ? GS_OFF_SEL : GS_OFF);
         }
         if (!restyle_only) { /* the busy timer only swaps styles: the geometry was set when the row was bound */
@@ -257,6 +264,24 @@ static void bind_row(ui_list_t *l, row_t *r, int32_t idx) {
     lv_obj_set_width(r->label, label_w);
     lv_obj_set_x(r->label, lx);
     lv_obj_align(r->detail, LV_ALIGN_RIGHT_MID, -(it.chevron ? UIM->chev_w : UIM->row_inset) - gw, 0);
+    if (l->model.two_line) { /* the title above, "Artist . Album" under it in Small; a row with no second line centres its title */
+        bool has_sub = it.sub[0] != '\0';
+        if (r->sub == NULL) {
+            r->sub = ui_label_small(r->obj, "", UI_C_INK2);
+            lv_label_set_long_mode(r->sub, LV_LABEL_LONG_DOT);
+            lv_obj_set_height(r->sub, lv_font_get_line_height(UIM->font_small));
+            r->c_sub = UI_C_INK2;
+        }
+        set_text(r->sub, it.sub);
+        lv_obj_set_hidden(r->sub, !has_sub);
+        lv_obj_set_width(r->sub, label_w);
+        lv_obj_set_pos(r->sub, lx, UIM->row2_y2);
+        if (has_sub) {
+            lv_obj_set_pos(r->label, lx, UIM->row2_y1);
+        } else {
+            lv_obj_align(r->label, LV_ALIGN_LEFT_MID, lx, 0);
+        }
+    }
     style_row(l, r, it.dim);
     glyph_apply(l, r, false);
 }
@@ -264,8 +289,8 @@ static void bind_row(ui_list_t *l, row_t *r, int32_t idx) {
 // The list scrolls in whole rows, so what it shows is rows * row height (a little less than the content area): the thumb is that window's
 // share of the track and reaches the end of the track exactly when the last row is in view.
 static void update_scrollbar(ui_list_t *l) {
-    int32_t total = l->model.count * UI_ROW_H;
-    int32_t win = UI_ROWS_VISIBLE * UI_ROW_H;
+    int32_t total = l->model.count * l->row_h;
+    int32_t win = l->rows * l->row_h;
     if (total <= win) {
         lv_obj_set_hidden(l->sb, true);
         lv_obj_set_hidden(l->sb_track, true);
@@ -273,7 +298,7 @@ static void update_scrollbar(ui_list_t *l) {
     }
     lv_obj_set_hidden(l->sb_track, false);
     lv_obj_set_hidden(l->sb, false);
-    int32_t track = UI_CONTENT_H - 2 * UIM->sb_gap;
+    int32_t track = l->box_h - 2 * UIM->sb_gap;
     int32_t h = track * win / total;
     if (h < UIM->sb_min_h) {
         h = UIM->sb_min_h;
@@ -288,7 +313,7 @@ static void layout(ui_list_t *l, bool rebind_all) {
     if (l->box == NULL) {
         return; /* suspended */
     }
-    int32_t first = l->scroll_px / UI_ROW_H;
+    int32_t first = l->scroll_px / l->row_h;
     for (int i = 0; i < POOL; i++) {
         row_t *r = &l->row[i];
         int32_t idx = first + i;
@@ -296,7 +321,7 @@ static void layout(ui_list_t *l, bool rebind_all) {
             bind_row(l, r, idx);
         }
         if (r->idx >= 0) {
-            lv_obj_set_y(r->obj, idx * UI_ROW_H - l->scroll_px);
+            lv_obj_set_y(r->obj, idx * l->row_h - l->scroll_px);
         }
     }
     update_scrollbar(l);
@@ -311,7 +336,7 @@ static void scroll_anim_cb(void *var, int32_t v) {
 }
 
 static void scroll_to_window(ui_list_t *l, bool animate) {
-    int32_t target = l->nav.top * UI_ROW_H;
+    int32_t target = l->nav.top * l->row_h;
     lv_anim_delete(l, scroll_anim_cb);
     if (!animate || target == l->scroll_px) {
         l->scroll_px = target;
@@ -331,13 +356,13 @@ static void scroll_to_window(ui_list_t *l, bool animate) {
 static void build(ui_list_t *l) {
     l->box = lv_obj_create(l->parent);
     lv_obj_remove_style_all(l->box);
-    lv_obj_set_size(l->box, l->w, UI_CONTENT_H);
-    lv_obj_set_pos(l->box, 0, 0);
+    lv_obj_set_size(l->box, l->w, l->box_h);
+    lv_obj_set_pos(l->box, 0, l->top);
     lv_obj_set_scrollable(l->box, false);
 
     l->selbar = lv_obj_create(l->box); /* behind the rows: created first */
     lv_obj_remove_style_all(l->selbar);
-    lv_obj_set_size(l->selbar, l->w - 2 * UIM->sel_inset, UI_ROW_H - 2 * UIM->sel_inset_y);
+    lv_obj_set_size(l->selbar, l->w - 2 * UIM->sel_inset, l->row_h - 2 * UIM->sel_inset_y);
     lv_obj_set_x(l->selbar, UIM->sel_inset);
     lv_obj_set_style_radius(l->selbar, UIM->sel_radius, 0);
     ui_obj_bg(l->selbar, UI_C_ACCENT, 0);
@@ -356,10 +381,11 @@ static void build(ui_list_t *l) {
         lv_obj_add_flag(r->obj, UI_OBJ_FLAG_POOL_ROW);
 #endif
         lv_obj_remove_style_all(r->obj);
-        lv_obj_set_size(r->obj, l->w, UI_ROW_H);
+        lv_obj_set_size(r->obj, l->w, l->row_h);
         lv_obj_set_scrollable(r->obj, false);
         r->c_label = UI_C_INK;
         r->c_detail = r->c_chev = UI_C_INK2;
+        r->sub = NULL;
         r->icon = ui_icon(r->obj, UI_ICON_FOLDER, false, UI_C_INK2); /* a leading icon (Files): folder or file */
         lv_obj_align(r->icon, LV_ALIGN_LEFT_MID, UIM->pad, 0);
         lv_obj_set_hidden(r->icon, true);
@@ -375,7 +401,7 @@ static void build(ui_list_t *l) {
     }
     l->sb_track = lv_obj_create(l->box);
     lv_obj_remove_style_all(l->sb_track);
-    lv_obj_set_size(l->sb_track, UIM->sb_w, UI_CONTENT_H - 2 * UIM->sb_gap);
+    lv_obj_set_size(l->sb_track, UIM->sb_w, l->box_h - 2 * UIM->sb_gap);
     lv_obj_set_pos(l->sb_track, l->w - UIM->sb_w - UIM->sb_gap, UIM->sb_gap);
     lv_obj_set_style_radius(l->sb_track, UIM->sb_radius, 0);
     ui_obj_bg(l->sb_track, UI_C_LINE, 0);
@@ -400,8 +426,15 @@ ui_list_t *ui_list_create(lv_obj_t *parent, int32_t w, const ui_list_model_t *mo
     }
     l->w = w;
     l->model = *model;
+    l->row_h = model->two_line ? UIM->row2_h : UI_ROW_H;
+    l->top = model->top;
+    l->box_h = UI_CONTENT_H - model->top;
+    l->rows = model->top > 0 ? l->box_h / l->row_h : model->two_line ? UIM->rows2 : UI_ROWS_VISIBLE;
+    if (l->rows < 1) {
+        l->rows = 1;
+    }
     l->focus = true;
-    ui_nav_init(&l->nav, model->count, UI_ROWS_VISIBLE);
+    ui_nav_init(&l->nav, model->count, l->rows);
 
     l->parent = parent;
     build(l);
@@ -469,7 +502,7 @@ void ui_list_set_count(ui_list_t *l, int32_t count) {
     l->model.count = count;
     ui_nav_set_count(&l->nav, count);
     lv_anim_delete(l, scroll_anim_cb);
-    l->scroll_px = l->nav.top * UI_ROW_H;
+    l->scroll_px = l->nav.top * l->row_h;
     bar_sync(l);
     layout(l, true);
 }

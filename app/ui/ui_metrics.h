@@ -82,9 +82,22 @@ typedef struct {
     int32_t home_art, home_art_off;
     const int32_t *home_line_y; /* 3 text line y positions */
 
-    /* Now Playing */
-    int32_t np_margin, np_art, np_text_x, np_title_y, np_title_h, np_artist_y, np_album_y, np_badge_y, np_state_y, np_state_h;
-    int32_t np_bar_y, np_bar_h, np_time_y, np_modes_dx, np_vol_y, np_vol_bar_y, np_vol_bar_h;
+    /* Two-line list rows (Songs and the song lists, docs/ui.md "Library lists"): title in Body, "Artist . Album" in Small underneath */
+    int32_t row2_h;           /* row height (40 / 60) */
+    int32_t rows2;            /* rows that fit the content area (5) */
+    int32_t row2_y1, row2_y2; /* top of the title line, top of the second line */
+
+    /* Now Playing (page 1): art, then Title / Artist / Album . Year, the pill row, the progress bar with its times, the volume strip */
+    int32_t np_margin, np_art, np_art_y, np_text_x, np_title_y, np_title_h, np_artist_y, np_album_y, np_album_h;
+    int32_t np_pill_y, np_pill_h, np_pill_pad, np_pill_gap;
+    int32_t np_bar_y, np_bar_h, np_bar_seek_h, np_knob, np_time_y, np_time_h;
+    int32_t np_seek_y; /* the big seek time (seek mode) */
+    int32_t np_vol_y, np_vol_x, np_vol_bar_y, np_vol_bar_h, np_hint_y;
+    /* Now Playing page 2 and the album header: a 64 / 96 px art, text to its right */
+    int32_t hd_art, hd_art_y, hd_text_x, hd_line1_y, hd_line2_y, hd_line3_y, hd_rule_y;
+
+    /* Fast-scroll letter overlay: a tile at the top right and the index rail down the right edge (every second letter) */
+    int32_t lr_tile, lr_tile_y, lr_tile_inset, lr_tile_radius, lr_rail_inset, lr_rail_y, lr_rail_h;
 
     /* Test tone: labels below the 3-row list */
     int32_t tt_y[4];

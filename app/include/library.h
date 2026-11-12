@@ -187,6 +187,7 @@ typedef struct {
     uint32_t id;             /**< artist / album / track / genre id */
     char text[LIB_TEXT_MAX]; /**< first line: name or title */
     char sub[LIB_TEXT_MAX];  /**< second line: album artist of an album, artist of a song; empty otherwise */
+    char album[LIB_TEXT_MAX]; /**< songs: the album's name (the second line of a two-line row is "artist . album"); empty otherwise */
     uint32_t count;          /**< children: albums of an artist, tracks of an album, artists of a genre; 0 for songs */
     uint8_t play;            /**< songs: lib_play_t */
 } lib_row_t;
@@ -255,6 +256,9 @@ typedef enum { LIB_ORDER_TITLE = 0, LIB_ORDER_ALBUM, LIB_ORDER_GENRE, LIB_ORDERS
  * list. @p play (may be NULL) gets the track's lib_play_t. LIB_E_NONE if there is no library.
  */
 lib_err_t lib_resolve(const char *base, lib_order_t order, uint32_t pos, char *path, size_t cap, uint8_t *play);
+/** lib_resolve() that also says which album (@p album) and album artist (@p album_artist; LIB_NONE for a compilation) the track belongs to (either may be NULL):
+ *  what "Go to album" / "Go to artist" on Now Playing open. */
+lib_err_t lib_resolve_ids(const char *base, lib_order_t order, uint32_t pos, char *path, size_t cap, uint8_t *play, uint32_t *album, uint32_t *album_artist);
 
 #ifdef __cplusplus
 }

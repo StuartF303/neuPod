@@ -109,7 +109,7 @@ typedef struct {
 } wi_letterjump_t;
 #define WI_LJ_FAST_STEPS 6u   /* steps inside the window that count as "fast" */
 #define WI_LJ_WINDOW_MS 400u
-#define WI_LJ_HIDE_MS 700u
+#define WI_LJ_HIDE_MS 250u
 void wi_letterjump_init(wi_letterjump_t *j);
 /** Feed a scroll of @p steps at @p now_ms; @p initial is the first byte of the (sorted) item now under the cursor. Returns active. */
 bool wi_letterjump_scroll(wi_letterjump_t *j, int32_t steps, uint32_t now_ms, char initial);

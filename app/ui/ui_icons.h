@@ -22,4 +22,7 @@
 #define UI_ICON_FILE "\xEE\x83\x80"          /* U+E0C0 */
 #define UI_ICON_LOCK_OPEN "\xEE\x84\x8C"     /* U+E10C */
 
+/* Font Awesome star (U+F005), drawn from the text fonts like the other remaining LV_SYMBOL glyphs: the rating on Now Playing page 2 */
+#define UI_SYMBOL_STAR "\xEF\x80\x85"
+
 #endif // NEUPOD_UI_ICONS_H

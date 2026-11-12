@@ -78,6 +78,10 @@ void library_progress(library_progress_t *out);
 /** "Can't play: <reason>" for a lib_play_t (a constant string: no RAM). The screens and the queue's resolver say the same words. */
 const char *lib_cant_play_str(uint8_t play);
 
+/** The album and album artist ids of a track the player started from the library (its queue handle; a compilation's artist is LIB_NONE). Any task.
+ *  False when it is not one of the last two tracks the storage task resolved (the track plays from a folder, or the list moved on). */
+bool library_track_ids(const char *handle, uint32_t *album, uint32_t *artist);
+
 /** True once a library has been opened this boot and it was fine: Shuffle Songs and the Music screens can then skip the wait. */
 bool library_known_ready(void);
 

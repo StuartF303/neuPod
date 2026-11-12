@@ -299,51 +299,79 @@ TEST(global_keys_route_by_queue_state) {
 static const ui_npc_track_t k_wav = {.seekable = true, .pos_frames = 44100u * 60u, .total_frames = 44100u * 240u, .rate = 44100u};
 static const ui_npc_track_t k_mp3 = {.seekable = false, .pos_frames = 44100u * 60u, .total_frames = 44100u * 240u, .rate = 44100u};
 
-TEST(select_cycles_volume_and_seek) {
-    ui_npc_t c;
-    ui_npc_init(&c);
-    ASSERT_EQ(UI_WHEEL_VOLUME, c.mode);
-    ASSERT_FALSE(ui_npc_scroll(&c, &k_wav, 1, 1000)); /* volume mode: the caller changes the volume */
-    ASSERT_TRUE(ui_npc_select(&c, &k_wav, 1000));
-    ASSERT_EQ(UI_WHEEL_SEEK, c.mode);
-    ASSERT_TRUE(ui_npc_select(&c, &k_wav, 1500)); /* a second Select goes back */
-    ASSERT_EQ(UI_WHEEL_VOLUME, c.mode);
+/* Enter seek mode the way the screen does: Select down, held for UI_SELHOLD_MS, seen by the next tick. Returns the tick's events. */
+static uint32_t hold_select(ui_npc_t *c, const ui_npc_track_t *t, uint32_t t0) {
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_select_down(c, t0));
+    return ui_npc_tick(c, t, t0 + UI_SELHOLD_MS);
 }
 
-TEST(select_on_a_track_that_cannot_seek_stays_on_volume) {
+TEST(a_short_select_press_opens_page_2_and_a_hold_enters_seek_mode) {
     ui_npc_t c;
     ui_npc_init(&c);
-    ASSERT_FALSE(ui_npc_select(&c, &k_mp3, 1000)); /* the screen says "Seek not available" */
+    ASSERT_FALSE(ui_npc_scroll(&c, &k_wav, 1, 1000)); /* volume mode: the caller changes the volume */
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_select_down(&c, 1000));
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, 1000 + UI_SELHOLD_MS - 1));
+    ASSERT_EQ(UI_NPC_PAGE2, ui_npc_select_up(&c)); /* released in time: page 2 */
     ASSERT_EQ(UI_WHEEL_VOLUME, c.mode);
+    ASSERT_EQ(UI_NPC_SEEK_ENTER, hold_select(&c, &k_wav, 5000)); /* held: seek mode, and the haptic tick */
+    ASSERT_EQ(UI_WHEEL_SEEK, c.mode);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_select_up(&c)); /* the release of the hold is not a press */
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_select_up(&c)); /* a release with no press here does nothing */
+}
+
+TEST(select_on_a_track_that_cannot_seek_says_so_and_stays_on_volume) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    ASSERT_EQ(UI_NPC_UNAVAILABLE, hold_select(&c, &k_mp3, 1000)); /* the screen says "Seek not available" */
+    ASSERT_EQ(UI_WHEEL_VOLUME, c.mode);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_select_up(&c)); /* and the release does not open page 2 */
     ASSERT_FALSE(ui_npc_scroll(&c, &k_mp3, 3, 1100)); /* the wheel still sets the volume */
     ui_npc_track_t zero = k_wav;
     zero.total_frames = 0;
-    ASSERT_FALSE(ui_npc_select(&c, &zero, 1200)); /* unknown length: no seek either */
+    ASSERT_EQ(UI_NPC_UNAVAILABLE, hold_select(&c, &zero, 1200)); /* unknown length: no seek either */
 }
 
-TEST(seek_mode_scrubs_and_commits_after_the_wheel_rests) {
+TEST(seek_mode_scrubs_and_waits_for_select) {
     ui_npc_t c;
     ui_npc_init(&c);
-    ASSERT_TRUE(ui_npc_select(&c, &k_wav, 1000));
+    ASSERT_EQ(UI_NPC_SEEK_ENTER, hold_select(&c, &k_wav, 1000));
+    ui_npc_select_up(&c);
     ASSERT_EQ(4, ui_seek_step_s(240)); /* a 4 min track: 4 s per step */
-    ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, 3, 1100));
+    ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, 3, 3000));
     ASSERT_TRUE(c.pending);
     ASSERT_EQ((60u + 12u) * 44100u, c.target);
     ASSERT_EQ(c.target, ui_npc_position(&c, &k_wav));
-    ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, -1, 1200)); /* the next step starts from the target, not the playing position */
+    ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, -1, 3200)); /* the next step starts from the target, not the playing position */
     ASSERT_EQ((60u + 8u) * 44100u, c.target);
-    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, 1200 + UI_SEEK_COMMIT_MS - 1)); /* still scrubbing */
-    ASSERT_EQ(UI_NPC_COMMIT, ui_npc_tick(&c, &k_wav, 1200 + UI_SEEK_COMMIT_MS));
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, 3200 + UI_SEEK_COMMIT_MS + 5000)); /* the wheel resting applies nothing: only Select does */
+    ASSERT_TRUE(c.pending);
+    ASSERT_EQ(UI_NPC_COMMIT, ui_npc_select_down(&c, 9000)); /* "Select: go" */
+    ASSERT_EQ(UI_WHEEL_VOLUME, c.mode);
+    ASSERT_EQ((60u + 8u) * 44100u, c.target);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_select_up(&c)); /* and its release is not a page-2 press */
     ui_npc_committed(&c);
     ASSERT_FALSE(c.pending);
-    ASSERT_EQ(k_wav.pos_frames, ui_npc_position(&c, &k_wav)); /* back to the playing position */
-    ASSERT_EQ(UI_WHEEL_SEEK, c.mode);                          /* still seek mode: more scrubbing is possible */
+}
+
+TEST(menu_cancels_seek_mode_and_applies_nothing) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    ASSERT_FALSE(ui_npc_menu(&c)); /* not seeking: Menu goes back as usual */
+    hold_select(&c, &k_wav, 1000);
+    ui_npc_select_up(&c);
+    ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, 2, 3000));
+    ASSERT_TRUE(c.pending);
+    ASSERT_TRUE(ui_npc_menu(&c));
+    ASSERT_FALSE(c.pending);
+    ASSERT_EQ(UI_WHEEL_VOLUME, c.mode);
+    ASSERT_EQ(k_wav.pos_frames, ui_npc_position(&c, &k_wav));
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, 20000)); /* nothing is applied afterwards */
 }
 
 TEST(scrub_clamps_to_the_track) {
     ui_npc_t c;
     ui_npc_init(&c);
-    ASSERT_TRUE(ui_npc_select(&c, &k_wav, 0));
+    hold_select(&c, &k_wav, 0);
     ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, -1000, 10));
     ASSERT_EQ(0, c.target);
     ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, 100000, 20));
@@ -352,38 +380,40 @@ TEST(scrub_clamps_to_the_track) {
     ASSERT_EQ(30, ui_seek_step_s(3600 * 10));
 }
 
-TEST(seek_mode_drops_back_to_volume_after_three_seconds_idle) {
+TEST(a_forgotten_seek_mode_is_cancelled_after_ten_seconds) {
     ui_npc_t c;
     ui_npc_init(&c);
-    ASSERT_EQ(3000, UI_SEEK_IDLE_MS);
-    ASSERT_TRUE(ui_npc_select(&c, &k_wav, 5000));
-    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, 5000 + UI_SEEK_IDLE_MS - 1));
+    ASSERT_EQ(10000, UI_SEEK_IDLE_MS);
+    hold_select(&c, &k_wav, 5000);
+    ui_npc_select_up(&c);
+    uint32_t t0 = 5000 + UI_SELHOLD_MS;
+    ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, 1, t0 + 100));
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, t0 + 100 + UI_SEEK_IDLE_MS - 1));
     ASSERT_EQ(UI_WHEEL_SEEK, c.mode);
-    ASSERT_EQ(UI_NPC_TO_VOLUME, ui_npc_tick(&c, &k_wav, 5000 + UI_SEEK_IDLE_MS));
+    ASSERT_EQ(UI_NPC_TO_VOLUME, ui_npc_tick(&c, &k_wav, t0 + 100 + UI_SEEK_IDLE_MS));
     ASSERT_EQ(UI_WHEEL_VOLUME, c.mode);
-    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, 20000)); /* once */
-}
-
-TEST(wheel_input_restarts_the_idle_clock) {
-    ui_npc_t c;
-    ui_npc_init(&c);
-    ASSERT_TRUE(ui_npc_select(&c, &k_wav, 0));
-    ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, 1, 2500));
-    ASSERT_EQ(UI_NPC_COMMIT, ui_npc_tick(&c, &k_wav, 2500 + UI_SEEK_COMMIT_MS));
-    ui_npc_committed(&c);
-    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, 2500 + UI_SEEK_IDLE_MS - 1)); /* 3 s after the LAST turn, not after Select */
-    ASSERT_EQ(UI_WHEEL_SEEK, c.mode);
-    ASSERT_EQ(UI_NPC_TO_VOLUME, ui_npc_tick(&c, &k_wav, 2500 + UI_SEEK_IDLE_MS));
+    ASSERT_FALSE(c.pending); /* cancelled: nothing applied */
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, 60000)); /* once */
 }
 
 TEST(seek_mode_ends_when_the_track_cannot_seek_any_more) {
     ui_npc_t c;
     ui_npc_init(&c);
-    ASSERT_TRUE(ui_npc_select(&c, &k_wav, 0));
-    ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, 1, 100));
-    ASSERT_EQ(UI_NPC_TO_VOLUME, ui_npc_tick(&c, &k_mp3, 200)); /* a gapless handoff to an MP3: the scrub is dropped */
+    hold_select(&c, &k_wav, 0);
+    ui_npc_select_up(&c);
+    ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, 1, 1000));
+    ASSERT_EQ(UI_NPC_TO_VOLUME, ui_npc_tick(&c, &k_mp3, 1200)); /* a gapless handoff to an MP3: the scrub is dropped */
     ASSERT_FALSE(c.pending);
     ASSERT_EQ(UI_WHEEL_VOLUME, c.mode);
+}
+
+TEST(a_select_release_that_never_comes_does_not_stick) {
+    ui_npc_t c;
+    ui_npc_init(&c);
+    ui_npc_select_down(&c, 0);
+    ui_npc_tick(&c, &k_mp3, UI_HOLD_MAX_MS);
+    ASSERT_FALSE(c.sel_down);
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_select_up(&c));
 }
 
 TEST(short_press_skips_on_release) {
@@ -442,10 +472,11 @@ TEST(seek_timers_survive_the_tick_wrap) {
     ui_npc_t c;
     ui_npc_init(&c);
     uint32_t t0 = 0xFFFFFF00u;
-    ASSERT_TRUE(ui_npc_select(&c, &k_wav, t0));
-    ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, 1, t0 + 10u));
-    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, t0 + 10u + UI_SEEK_COMMIT_MS - 1u));
-    ASSERT_EQ(UI_NPC_COMMIT, ui_npc_tick(&c, &k_wav, t0 + 10u + UI_SEEK_COMMIT_MS)); /* across 2^32 */
+    ASSERT_EQ(UI_NPC_SEEK_ENTER, hold_select(&c, &k_wav, t0)); /* the hold ends at t0 + 500: across 2^32 */
+    ui_npc_select_up(&c);
+    ASSERT_TRUE(ui_npc_scroll(&c, &k_wav, 1, t0 + 600u));
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &k_wav, t0 + 600u + UI_SEEK_IDLE_MS - 1u));
+    ASSERT_EQ(UI_NPC_TO_VOLUME, ui_npc_tick(&c, &k_wav, t0 + 600u + UI_SEEK_IDLE_MS));
 }
 
 static ui_npc_track_t with_id(ui_npc_track_t t, uint32_t id) {
@@ -472,13 +503,14 @@ TEST(a_scrub_made_on_another_track_is_not_applied) {
     ui_npc_t c;
     ui_npc_init(&c);
     ui_npc_track_t a = with_id(k_wav, 1), b = with_id(k_wav, 2);
-    ASSERT_TRUE(ui_npc_select(&c, &a, 0));
-    ASSERT_TRUE(ui_npc_scroll(&c, &a, 5, 10));
+    hold_select(&c, &a, 0);
+    ui_npc_select_up(&c);
+    ASSERT_TRUE(ui_npc_scroll(&c, &a, 5, 600));
     ASSERT_TRUE(ui_npc_commit_valid(&c, &a));
     ASSERT_FALSE(ui_npc_commit_valid(&c, &b)); /* what np_commit asks just before it seeks */
-    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &b, 20)); /* the tick drops it before the commit delay */
+    ASSERT_EQ(UI_NPC_NONE, ui_npc_tick(&c, &b, 620)); /* the tick drops it before it can be applied */
     ASSERT_FALSE(c.pending);
-    ASSERT_TRUE(ui_npc_scroll(&c, &b, 1, 30)); /* a new scrub starts from the new track's position, not the old target */
+    ASSERT_TRUE(ui_npc_scroll(&c, &b, 1, 640)); /* a new scrub starts from the new track's position, not the old target */
     ASSERT_EQ(b.pos_frames + 4u * 44100u, c.target);
     ASSERT_EQ(2, c.id);
 }
@@ -773,13 +805,14 @@ int main(void) {
     RUN(idle_future_stamp_window);
     RUN(backlight_effective_level);
     RUN(global_keys_route_by_queue_state);
-    RUN(select_cycles_volume_and_seek);
-    RUN(select_on_a_track_that_cannot_seek_stays_on_volume);
-    RUN(seek_mode_scrubs_and_commits_after_the_wheel_rests);
+    RUN(a_short_select_press_opens_page_2_and_a_hold_enters_seek_mode);
+    RUN(select_on_a_track_that_cannot_seek_says_so_and_stays_on_volume);
+    RUN(seek_mode_scrubs_and_waits_for_select);
+    RUN(menu_cancels_seek_mode_and_applies_nothing);
     RUN(scrub_clamps_to_the_track);
-    RUN(seek_mode_drops_back_to_volume_after_three_seconds_idle);
-    RUN(wheel_input_restarts_the_idle_clock);
+    RUN(a_forgotten_seek_mode_is_cancelled_after_ten_seconds);
     RUN(seek_mode_ends_when_the_track_cannot_seek_any_more);
+    RUN(a_select_release_that_never_comes_does_not_stick);
     RUN(short_press_skips_on_release);
     RUN(hold_right_fast_forwards_and_commits_on_release);
     RUN(hold_left_rewinds_and_stops_at_the_start);

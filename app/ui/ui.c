@@ -22,6 +22,7 @@
 #include "runtime.h"
 #include "runtime_config.h"
 #include "ui.h"
+#include "ui_input.h"
 #include "ui_internal.h"
 
 #define SPLASH_MIN_MS RT_SPLASH_MIN_MS
@@ -188,6 +189,21 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
             return p;
         }
         g_script_sleeping = false;
+        return end;
+    }
+    if (strncmp(p, "sel:", 4) == 0) {
+        /* Tour only: Select held (sel:down ... sleep:MS ... sel:up): the hold that enters Now Playing's seek mode. */
+        input_event_t ev = {.type = strncmp(p + 4, "down", 4) == 0 ? INPUT_BUTTON_DOWN : INPUT_BUTTON_UP, .button = HAL_BTN_SELECT};
+        ui_frame_input(&ev, now);
+        return end;
+    }
+    if (strncmp(p, "vol:", 4) == 0) {
+        /* Tour only: the volume changes by N steps from outside the screen (a side key, like the Y2's): the HUD shows on screens that do not draw it. */
+        (void)player_volume_step(atoi(p + 4));
+        return end;
+    }
+    if (strncmp(p, "rail:", 5) == 0) {
+        ui_letter_overlay_tour_hold(strncmp(p + 5, "hold", 4) == 0); /* Tour only: keep the fast-scroll overlay up for a snapshot */
         return end;
     }
     if (strncmp(p, "pwr:", 4) == 0) {

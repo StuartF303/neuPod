@@ -20,6 +20,33 @@ static lib_err_t with_title(lib_err_t e, lvw_info_t *out, const char *name) {
     return e;
 }
 
+#define HEADER_SONGS_MAX 100u /* an album with more songs than this has its length and format summed over the first ones only */
+
+// The album header's facts: the album artist, the first year found, the summed length and the common codec. Best effort: a read error leaves
+// what was found so far (the header is decoration; the list itself must still open).
+static void album_header(lib_reader_t *r, const lib_entity_t *en, lvw_info_t *out) {
+    if (en->artist != LIB_NONE) {
+        lib_entity_t ar;
+        if (lib_artist(r, en->artist, &ar) == LIB_OK) lvw_copy(out->artist, sizeof out->artist, ar.name);
+    } else {
+        lvw_copy(out->artist, sizeof out->artist, "Various Artists");
+    }
+    bool first = true;
+    for (uint32_t i = 0; i < en->count && i < HEADER_SONGS_MAX; i++) {
+        uint32_t id;
+        lib_track_t t;
+        if (lib_by_album_at(r, en->first + i, &id) != LIB_OK || lib_track(r, id, &t) != LIB_OK) break;
+        out->total_s += t.duration_s;
+        if (out->year == 0) out->year = t.year;
+        if (first) {
+            out->codec = t.codec;
+            first = false;
+        } else if (out->codec != t.codec) {
+            out->codec = LIB_CODEC_NONE;
+        }
+    }
+}
+
 lib_err_t lvw_info(lib_reader_t *r, lvw_view_t v, lvw_info_t *out) {
     memset(out, 0, sizeof *out);
     lib_entity_t en;
@@ -47,6 +74,7 @@ lib_err_t lvw_info(lib_reader_t *r, lvw_view_t v, lvw_info_t *out) {
         out->count = en.count;
         out->songs = true;
         out->range = (pq_range_t){.order = LIB_ORDER_ALBUM, .first = en.first, .count = en.count};
+        album_header(r, &en, out);
         return with_title(e, out, en.name);
     case LVW_ARTIST_SONGS: { // the artist's albums are contiguous in the by-album order: from its first album's start to the next album's start
         e = lib_artist(r, v.id, &en);
@@ -94,6 +122,15 @@ static lib_err_t song_row(lib_reader_t *r, uint32_t track_id, sub_t sub, lvw_row
     lib_err_t e = lib_track(r, track_id, &t);
     if (e != LIB_OK) return e;
     lvw_copy(out->text, sizeof out->text, t.title);
+    out->track = t.track;
+    out->codec = t.codec;
+    {
+        lib_entity_t al;
+        char both[LIB_TEXT_MAX * 2 + 8];
+        const char *album = lib_album(r, t.album, &al) == LIB_OK ? al.name : "";
+        snprintf(both, sizeof both, "%s%s%s", t.artist_name, t.artist_name[0] != '\0' && album[0] != '\0' ? " \xC2\xB7 " : "", album);
+        lvw_copy(out->sub, sizeof out->sub, both);
+    }
     if (sub == SUB_ARTIST) {
         lvw_copy(out->detail, sizeof out->detail, t.artist_name);
     } else if (sub == SUB_ALBUM) {
@@ -138,6 +175,11 @@ lib_err_t lvw_row(lib_reader_t *r, lvw_view_t v, const lvw_info_t *info, uint32_
         if (e != LIB_OK) return e;
         lvw_copy(out->text, sizeof out->text, row.text);
         lvw_copy(out->detail, sizeof out->detail, row.sub);
+        {
+            char both[LIB_TEXT_MAX * 2 + 8];
+            snprintf(both, sizeof both, "%s%s%s", row.sub, row.sub[0] != '\0' && row.album[0] != '\0' ? " \xC2\xB7 " : "", row.album);
+            lvw_copy(out->sub, sizeof out->sub, both);
+        }
         out->play = row.play;
         return LIB_OK;
     case LVW_ARTIST:

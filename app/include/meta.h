@@ -37,6 +37,7 @@ typedef struct {
 typedef struct {
     char title[64], artist[64], album[64]; /**< UTF-8, cut at a character boundary; empty if absent */
     uint16_t track;                        /**< 0 = unknown */
+    uint16_t year;                         /**< the year of the release (DATE / TDRC / (c)day), 0 = unknown: Now Playing shows "Album . Year" */
     art_ref_t art;                         /**< best embedded picture: a JPEG over a PNG, a front cover over other types */
 } audio_tags_t;
 

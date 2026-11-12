@@ -434,6 +434,20 @@ void player_service(void) {
     run_action(&a);
 }
 
+bool player_now_path(char *out, size_t n) {
+    lock();
+    bool ok = g_info.src == PLAYER_SRC_FILE && g_q.count != 0 && queue_real_path(g_q.pos, out, n);
+    unlock();
+    return ok;
+}
+
+bool player_now_handle(char *out, size_t n) {
+    lock();
+    bool ok = g_info.src == PLAYER_SRC_FILE && g_q.count != 0 && pq_path(&g_q, g_q.pos, out, n) && pq_is_handle(out);
+    unlock();
+    return ok;
+}
+
 void player_get(player_info_t *out) {
     audio_stats_t st;
     bool have = audio_stats_get(&st);
@@ -451,6 +465,7 @@ void player_get(player_info_t *out) {
         g_error_stopped = true;
     }
     g_info.track_id = g_track_id;
+    g_info.file_size = g_info.src == PLAYER_SRC_FILE ? g_file_size : 0;
     g_info.pos_frames = have && g_info.rate != 0 && g_info.src == PLAYER_SRC_FILE ? g_base_frames + (uint64_t)st.pcm_frames : 0;
     g_info.queue_len = g_info.src == PLAYER_SRC_FILE ? g_q.count : 0;
     g_info.queue_pos = g_info.queue_len != 0 ? g_q.pos + 1u : 0;
@@ -752,6 +767,13 @@ void player_stop(void) {
     go_idle(&a);
     unlock();
     run_action(&a);
+}
+
+uint32_t player_volume_att(void) {
+    lock();
+    uint32_t v = g_vol_hold ? 0u : g_vol;
+    unlock();
+    return v;
 }
 
 uint32_t player_volume_step(int32_t steps) {

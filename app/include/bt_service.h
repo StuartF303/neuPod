@@ -50,6 +50,8 @@ void bt_service_forget(void);
 
 /** The headset is being reconnected automatically (after a lost link, or at power-up): "Reconnecting..." (bt_reconnect.h). */
 bool bt_service_reconnecting(void);
+/** Counts the times the automatic reconnect gave up (5 minutes of attempts, headset still remembered, the user did nothing): the UI says "Couldn't reconnect - paused". */
+uint32_t bt_service_gave_up_seq(void);
 
 /** Advance the simulator on the host; no-op on hardware. Cheap; called from the UI tick. */
 void bt_service_tick(void);

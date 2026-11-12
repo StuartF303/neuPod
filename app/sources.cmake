@@ -110,6 +110,7 @@ set(NEUPOD_RUNTIME_SOURCES
 # Settings store on the SD card (portable; needs the nfs API and hal_storage's write lock).
 set(NEUPOD_SETTINGS_SOURCES
   ${NEUPOD_APP_DIR}/settings/settings_store.c
+  ${NEUPOD_APP_DIR}/settings/ratings_store.c
 )
 # Music library index (docs/adr/0017-music-library-index.md): collation, scanner, reader. FatFs through ff.h (the host build's own
 # FatFs, the SD library's on the RP2350: platforms/rp2350/CMakeLists.txt adds these to its storage libraries).
@@ -133,6 +134,9 @@ set(NEUPOD_UI_SOURCES
   ${NEUPOD_APP_DIR}/ui/ui_files.c
   ${NEUPOD_APP_DIR}/ui/ui_library.c
   ${NEUPOD_APP_DIR}/ui/ui_audio.c
+  ${NEUPOD_APP_DIR}/ui/ui_nowplaying.c
+  ${NEUPOD_APP_DIR}/ui/ui_art.c
+  ${NEUPOD_APP_DIR}/ui/ui_rail.c
   ${NEUPOD_APP_DIR}/ui/ui_settings.c
   ${NEUPOD_APP_DIR}/ui/ui_bluetooth.c
   ${NEUPOD_APP_DIR}/ui/ui_licences.c
