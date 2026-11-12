@@ -15,8 +15,9 @@
 #   --no-build    use the existing build/y2 output.
 #   --dry-run     print what would run; no build, no ssh.
 # Touches only: /opt/neupod-fw (staged as /opt/neupod-fw.new, renamed in; the previous build is kept as /opt/neupod-fw.old
-# until the new one has stayed up, and restored if it does not), /etc/init.d/S91neupod-fw (new), /etc/init.d/S90neupod-demo
-# (refreshed so it honours /etc/neupod-ui), and /etc/neupod-ui with --select. No sudo, no flashing, no partition writes,
+# until the new one has stayed up, and restored if it does not), /etc/init.d/S91neupod-fw (new), /etc/init.d/S80mtk-bt (the
+# Bluetooth chip bring-up: only copied, nothing in it runs until the next boot or an explicit start, and it does nothing unless
+# /opt/mtk-wmt is staged), /etc/init.d/S90neupod-demo (refreshed so it honours /etc/neupod-ui), and /etc/neupod-ui with --select. No sudo, no flashing, no partition writes,
 # and the firmware never opens the internal eMMC (it only ever opens a removable microSD, see platforms/y2/hal/y2_sd.h).
 #
 # ssh host-key checking is left at its default. After the Y2 is reflashed or its rootfs is rebuilt, dropbear generates a
@@ -51,6 +52,7 @@ BIN="$BUILD_DIR/platforms/y2/neupod.stripped"
 OVERLAY="$HERE/../buildroot/board/y2/overlay/etc/init.d"
 INIT_FW="$OVERLAY/S91neupod-fw"
 INIT_DEMO="$OVERLAY/S90neupod-demo"
+INIT_BT="$OVERLAY/S80mtk-bt"
 
 SSH=(ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST")
 
@@ -60,6 +62,7 @@ run() {
 
 [ -f "$INIT_FW" ] || { echo "missing $INIT_FW" >&2; exit 1; }
 [ -f "$INIT_DEMO" ] || { echo "missing $INIT_DEMO" >&2; exit 1; }
+[ -f "$INIT_BT" ] || { echo "missing $INIT_BT" >&2; exit 1; }
 
 if [ "$DRY" = 0 ]; then
 	echo "==> check ssh to $HOST"
@@ -125,7 +128,8 @@ install_init() { # <local file> <remote path>
 		"${SSH[@]}" "set -e; cat > $2.new; chmod 755 $2.new; mv $2.new $2" < "$1"
 	fi
 }
-echo "==> install init scripts (S91neupod-fw, and S90neupod-demo so it honours /etc/neupod-ui)"
+echo "==> install init scripts (S80mtk-bt, S91neupod-fw, and S90neupod-demo so it honours /etc/neupod-ui)"
+install_init "$INIT_BT" /etc/init.d/S80mtk-bt
 install_init "$INIT_FW" /etc/init.d/S91neupod-fw
 install_init "$INIT_DEMO" /etc/init.d/S90neupod-demo
 

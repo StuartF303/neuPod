@@ -29,9 +29,9 @@ testbed/y2/scripts/select-ui.sh fw|demo [--dry-run]
 
 `deploy-fw.sh` cross-builds (Release, Buildroot toolchain from `~/y2-build/out-rootfs/host`, override with
 `NEUPOD_Y2_TOOLCHAIN` / `NEUPOD_Y2_TRIPLE`), copies the stripped binary over ssh into `/opt/neupod-fw.new`, checks its SHA-256 on
-the device, installs `/etc/init.d/S91neupod-fw` and a refreshed `S90neupod-demo`, then renames the new build into `/opt/neupod-fw`.
+the device, installs `/etc/init.d/S91neupod-fw`, `/etc/init.d/S80mtk-bt` (see below) and a refreshed `S90neupod-demo`, then renames the new build into `/opt/neupod-fw`.
 The previous build stays in `/opt/neupod-fw.old` until the new one has run 5 s without crashing, and is restored if it does not.
-`--no-restart` only stages. It never writes anything but `/opt/neupod-fw*`, the two init scripts and `/etc/neupod-ui`, and never
+`--no-restart` only stages. It never writes anything but `/opt/neupod-fw*`, the three init scripts and `/etc/neupod-ui`, and never
 a partition or the internal eMMC. A first install without `--select` leaves the screen with whatever UI it had.
 
 Both UIs want `/dev/fb0`, so `/etc/neupod-ui` (`fw` or `demo`; missing = `demo`) says which one the init scripts start.
@@ -40,6 +40,16 @@ checks the new UI is still running after 5 s, restoring the previous selection i
 device until the staged build matches its checksum and passes a self-test; if a `--select` deploy then fails, the previous
 build is restored, and the previous selection with it unless the firmware was already selected (then it stays, with the old build).
 `stop` signals the whole process group (the firmware shuts down in order, up to 2 s, `stop` waits up to 5 s) and removes the FIFO. `deploy-demo.sh` only stages while `fw` is selected.
+
+**Bluetooth (`S80mtk-bt`).** The firmware's Bluetooth runs BTstack over the MediaTek chip's `/dev/stpbt` (docs/bluetooth.md). `S80mtk-bt`
+runs before `S91neupod-fw` and does the stock bring-up: it makes the 128 KiB property area `/dev/__properties__` (0444, on tmpfs) if
+missing, runs `/system/bin/wmt_loader` once per boot (marker `/run/wmt_loader.done`; its exit 255 is expected), makes `/dev/stpwmt`,
+`/dev/stpbt` and `/dev/wmtWifi` from `/proc/devices` if missing, and starts `/system/bin/6620_launcher` in the background
+(`/run/6620_launcher.pid`, never twice), then waits up to about 5 s for it. The stock helpers are staged from the device backup under
+`/opt/mtk-wmt` (never committed); if that directory is absent the script does nothing, quietly, and the firmware reports Bluetooth
+unavailable. It never touches `/dev/mmcblk0*`, `/data/nvram` or `/data/BT_Addr` (the firmware only reads the address) and never runs
+`nvram_daemon`. `deploy-fw.sh` copies the script but does not run it; start it by hand with `/etc/init.d/S80mtk-bt start` or reboot.
+Test: `ctest -R y2_s80_mtk_bt` (fake `/dev`, `/run`, `/proc/devices` and helpers).
 
 On the device: log `/tmp/neupod-fw.log` (tmpfs, emptied past 256 KB), PID files `/run/neupod-fw.pid` (respawn wrapper, 2 s pause)
 and `/run/neupod-fw.app.pid`, keys from ssh with `echo s > /run/neupod.keys` (`w s` scroll, `e` select, `m` menu, `a d`, `p`).
