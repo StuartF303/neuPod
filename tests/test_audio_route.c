@@ -293,6 +293,16 @@ TEST(the_bluetooth_setting_is_the_output_with_or_without_a_headset_and_survives_
     audio_route_set_pref(AUDIO_ROUTE_AUTO);
 }
 
+TEST(leaving_the_bluetooth_setting_for_auto_with_no_headset_returns_to_wired) {
+    reset();
+    audio_route_set_pref(AUDIO_ROUTE_BLUETOOTH);
+    tick(100);
+    ASSERT_EQ(AUDIO_OUT_BT, audio_route_output());
+    audio_route_set_pref(AUDIO_ROUTE_AUTO);
+    for (int i = 0; i < 20; i++) tick(100);
+    ASSERT_EQ(AUDIO_OUT_WIRED, audio_route_output());
+}
+
 TEST(the_saved_output_setting_reads_back_and_an_unknown_value_is_auto) {
     audio_route_set_pref(AUDIO_ROUTE_WIRED);
     ASSERT_EQ(AUDIO_ROUTE_WIRED, audio_route_pref());
@@ -320,6 +330,7 @@ int main(void) {
     RUN(letting_the_headset_go_on_purpose_returns_to_wired);
     RUN(a_stream_released_by_the_headset_is_reopened_a_few_times_then_left);
     RUN(the_bluetooth_setting_is_the_output_with_or_without_a_headset_and_survives_a_disconnect);
+    RUN(leaving_the_bluetooth_setting_for_auto_with_no_headset_returns_to_wired);
     RUN(the_saved_output_setting_reads_back_and_an_unknown_value_is_auto);
     return RESULT();
 }

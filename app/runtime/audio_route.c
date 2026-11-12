@@ -47,6 +47,9 @@ audio_route_pref_t audio_route_pref(void) {
 }
 
 void audio_route_set_pref(audio_route_pref_t pref) {
+    if (pref == AUDIO_ROUTE_AUTO && audio_route_pref() == AUDIO_ROUTE_BLUETOOTH) {
+        audio_route_user_released(); /* Bluetooth -> Auto with no headset there: the user's own choice, so the output may return to wired (else it would sit on Bluetooth for ever) */
+    }
     settings_set_u8(SETTING_AUDIO_OUTPUT, pref == AUDIO_ROUTE_WIRED ? 1u : pref == AUDIO_ROUTE_BLUETOOTH ? 2u : 0u);
     g_pref = pref; /* applied by the next service tick */
 }
