@@ -16,6 +16,7 @@ set(NEUPOD_Y2_LOGIC_SOURCES
   ${Y2_HAL}/y2_haptic.c
   ${Y2_HAL}/y2_bt_addr.c
   ${Y2_HAL}/y2_bt_tlv.c
+  ${Y2_HAL}/y2_audio.c
 )
 set(NEUPOD_Y2_HAL_SOURCES
   ${NEUPOD_Y2_LOGIC_SOURCES}
