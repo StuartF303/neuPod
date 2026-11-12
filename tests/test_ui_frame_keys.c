@@ -22,6 +22,9 @@ uint32_t player_volume_att(void) { return 0; }
 int bt_volume_get(void) { return -1; }
 unsigned bt_vol_percent(uint8_t v) { return v; }
 uint32_t bt_service_gave_up_seq(void) { return 0; }
+uint32_t bt_service_lost_seq(void) { return 0; }
+bool bt_service_reconnecting(void) { return false; }
+uint32_t bt_service_reconnected_seq(void) { return 0; }
 void player_pause_toggle(void) { g_pause++; }
 void player_next(void) { g_next++; }
 void player_prev(void) { g_prev++; }
