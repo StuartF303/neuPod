@@ -1099,6 +1099,7 @@ static void rssi_tick(btstack_timer_source_t *ts) {
 }
 
 static void media_start(void) {
+    media_stop(); /* a second STARTED without a stop in between must not put the timers in BTstack's list twice (it does not check) */
     const hal_bt_pcm_source_t *src = g_pcm;
     int room = a2dp_max_media_payload_size(g_a2dp_cid, g_local_seid) - 1; /* minus the SBC payload header byte */
     g_max_payload = (uint16_t)btstack_min(room > 0 ? room : 0, (int)SBC_STORAGE_BYTES - 1);
