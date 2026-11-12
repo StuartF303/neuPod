@@ -2,8 +2,8 @@
 
 ## Status
 
-**Proposed** (12 Nov 2026). The owner decided to keep BTstack and to build the audio sink so the stack can be swapped
-cheaply. The open questions at the end need his answer before stage 2b code starts.
+**Accepted** (owner decisions, 12 Nov 2026): keep BTstack, and build the audio sink so the stack can be swapped cheaply. The
+owner's answers to the design questions are recorded at the end.
 
 ## Context
 
@@ -82,8 +82,8 @@ Every state that the boundary can report has a screen, and every one is in a hos
 | **Now Playing** | The format badge shows the negotiated codec on Bluetooth output (`SBC 44.1`, `SBC-XQ`); the source format stays in the stats. On Bluetooth the volume bar is the headset volume. |
 | **Volume** | With absolute volume the wheel sends `hal_bt_volume_set()` and the software volume stays at 0 dB; the headset's own volume changes move the bar. Without it, the wheel is the software volume, as on I2S. One mapping table, host-tested. |
 | **Headset buttons** | `HAL_BT_EVT_KEY` becomes the same player actions as Play / Right / Left, on every screen. |
-| **Link lost while playing** | The player pauses at once (ring emptied, position kept). A banner reads `Headset disconnected` for 3 s. Play then resumes on wired output only if the owner picks that (open question 2). |
-| **Settings > Bluetooth** | `Paired, no audio yet` is gone. The headset row shows `Connected - SBC-XQ` / `Streaming` / `Not connected` / `Failed: <reason>`. A new **Audio output** row (open question 3). The right-hand pane adds codec, bitpool, kbit/s, underruns. |
+| **Link lost while playing** | The player pauses at once (ring emptied, position kept). A banner reads `Headset disconnected` for 3 s. The output stays Bluetooth: nothing plays from the wired output by itself. |
+| **Settings > Bluetooth** | `Paired, no audio yet` is gone. The headset row shows `Connected - SBC-XQ` / `Streaming` / `Not connected` / `Failed: <reason>`. A new **Audio output: Auto / Wired** row (Auto = Bluetooth whenever a headset is connected; saved on the card). The right-hand pane adds codec, bitpool, kbit/s, underruns. |
 | **Devices** | Unchanged apart from the wording above. Pairing a second headset while one is remembered asks to replace it (one headset, as now). |
 | **Settings > About** | Bluetooth stats line (frames, underruns, drift corrections). |
 | **Errors** | Every new `hal_bt_fail_t` reason gets its phrase in `hal_bt_fail_text()` (19 characters max) and a tour snapshot. |
@@ -105,12 +105,12 @@ Tours: `--tour-bt` is extended with `bt-streaming`, `np-bt-badge`, `np-bt-volume
   state and media buffers are measured in 2b and come out of free SRAM (about 14.9 KB). The PCM ring reuses the I2S ring storage
   (ADR-0013 amendment). Y2: not constrained. Flash, RP2350: A2DP + AVRCP + SBC encoder, measured in 2b.
 
-## Open questions (owner)
+## Owner decisions (12 Nov 2026)
 
-1. **Split now?** Move the BTstack link logic out of `platforms/rp2350/hal/hal_radio_bt.c` into `hal/common/bt_btstack/` before 2b
-   (recommended), or give the Y2 its own copy and merge later.
-2. **Link lost while playing:** pause and stay on Bluetooth (recommended; no surprise speaker or line-out audio), or fall back to wired output?
-3. **Output selection:** automatic, so Bluetooth is used whenever a headset is connected (recommended, with an **Audio output: Auto / Wired** row
-   to force wired), or an explicit choice every time?
-4. **Volume:** absolute volume to the headset with the software volume at 0 dB (recommended; best SNR), or software volume only?
-5. **Y2 as a Bluetooth platform:** wire the real stack into the Y2 firmware (recommended) or keep Bluetooth on the Y2 to the bench tool?
+1. **Split now.** The BTstack link logic moves out of `platforms/rp2350/hal/hal_radio_bt.c` into `hal/common/bt_btstack/` before 2b,
+   as a no-behaviour-change refactor.
+2. **Link lost while playing:** pause and stay on Bluetooth (position kept, banner); no fallback to wired output.
+3. **Output selection:** automatic, with an **Audio output: Auto / Wired** row to force wired.
+4. **Volume:** AVRCP absolute volume to the headset with the software volume at 0 dB; software volume when the headset has no
+   absolute volume.
+5. **Y2 as a Bluetooth platform:** yes, the real stack goes into the Y2 firmware (taken as the default; not asked separately).
