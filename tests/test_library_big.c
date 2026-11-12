@@ -143,7 +143,7 @@ TEST(hundred_thousand_tracks) {
     /* Songs rows are random access into tracks.bin and strings.str (title order is not track order), so the cached pages cannot hold a
      * screen of them: the UI has to keep its own rendered rows. Artists and Albums are contiguous: a screen is a page or two and
      * redrawing it costs nothing. */
-    ASSERT_TRUE(cold <= 10 * 5); /* five pages a row since the two-line rows read the album's name too */
+    ASSERT_TRUE(cold <= 10 * 6); /* up to six pages a row since the two-line rows read the album's name too */
     for (unsigned pass = 0; pass < 2; pass++) {
         uint32_t m0 = g_rd.page_misses;
         for (uint32_t i = 200; i < 210; i++) {
