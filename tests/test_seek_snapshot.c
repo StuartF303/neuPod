@@ -49,11 +49,12 @@ static int dist(const ppm_t *p, int x, int y, uint32_t rgb) {
     return d > e ? (d > f ? d : f) : (e > f ? e : f);
 }
 
-#define COL_TRACK 0xE6E6E2
-#define COL_SEEK_TRACK 0xFFE2B8
-#define COL_SEEK 0xC77700 // UI_L_WARN
-#define COL_BLUE 0x2663C6 // UI_L_SEL_BOT
-#define COL_GREY 0x8F8F89 // UI_L_FAINT
+// design-system tokens, light theme (app/ui/ui_theme.c)
+#define COL_TRACK 0xE0E0E0      // line
+#define COL_SEEK_TRACK 0xF8E8C8 // amber_soft
+#define COL_SEEK 0xD08018       // amber
+#define COL_BLUE 0x1858C8       // accent
+#define COL_GREY 0xA0A0A0       // ink3
 #define TOL 14
 
 static const char *g_dir;

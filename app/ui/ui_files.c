@@ -23,7 +23,6 @@ typedef struct {
     ui_screen_t base;
     ui_list_t *list;
     char path[NFS_PATH_MAX];
-    char title[40];
     int32_t sel_stack[MAX_DEPTH];
     int depth;
     int32_t restore_sel; /* selection to restore after an ascend, -1 = none */
@@ -32,8 +31,6 @@ typedef struct {
     uint32_t count;
     bool truncated;
     char msg[72];
-    lv_obj_t *toast; /* short notice over the last row (unsupported file type) */
-    uint32_t toast_until;
     wi_letterjump_t lj;           /* letter overlay while scrolling fast (the list is sorted by name within dirs/files) */
     ui_letter_overlay_t *overlay;
 } files_t;
@@ -63,7 +60,8 @@ static void files_get(void *ctx, int32_t idx, ui_list_item_t *out) {
         out->dim = true;
     } else {
         const file_entry_t *e = &storage_list_entries()[idx];
-        snprintf(out->label, sizeof out->label, "%s %s", e->is_dir ? LV_SYMBOL_DIRECTORY : LV_SYMBOL_FILE, e->name);
+        snprintf(out->label, sizeof out->label, "%s", e->name);
+        out->icon = e->is_dir ? UI_ICON_FOLDER : UI_ICON_FILE;
         if (e->is_dir) {
             out->chevron = true;
         } else {
@@ -72,11 +70,17 @@ static void files_get(void *ctx, int32_t idx, ui_list_item_t *out) {
     }
 }
 
+/* The title stays "Files"; the folder is the status bar's left slot (design review 3.10). The slot is short: the root is "/", a folder under it
+ * "/Name", deeper ones ".../Name" (the last folder is what matters; a name too long for the slot ends in dots). */
 static void set_title(files_t *f) {
     const char *name = strrchr(f->path, '/');
-    snprintf(f->title, sizeof f->title, "%s", (name == NULL || name[1] == '\0') ? "Files" : name + 1);
-    f->base.title = f->title;
-    ui_frame_set_title(f->title);
+    char left[NFS_PATH_MAX + 8];
+    if (name == NULL || name == f->path) {
+        snprintf(left, sizeof left, "%s", f->path);
+    } else {
+        snprintf(left, sizeof left, ".../%s", name + 1);
+    }
+    ui_screen_set_left(&f->base, left);
 }
 
 static void fail(files_t *f, const char *msg) {
@@ -121,9 +125,8 @@ static bool has_ext(const char *name, const char *ext) {
 }
 
 static void show_toast(files_t *f, const char *text) {
-    ui_label_set_text(f->toast, text);
-    lv_obj_set_hidden(f->toast, false);
-    f->toast_until = os_tick_ms() + 3000u;
+    (void)f;
+    ui_toast_show(text, UI_TOAST_WARN, 0);
 }
 
 static void files_tick(ui_screen_t *s) {
@@ -131,10 +134,6 @@ static void files_tick(ui_screen_t *s) {
     if (f->lj.active) {
         wi_letterjump_tick(&f->lj, os_tick_ms());
         ui_letter_overlay_update(f->overlay, &f->lj);
-    }
-    if (f->toast_until != 0 && (int32_t)(os_tick_ms() - f->toast_until) >= 0) {
-        f->toast_until = 0;
-        lv_obj_set_hidden(f->toast, true);
     }
     storage_result_t r;
     while (f->state == LOADING && storage_result_poll(&r)) {
@@ -252,14 +251,6 @@ ui_screen_t *ui_screen_files_create(void) {
     strcpy(f->path, "/");
     f->restore_sel = -1;
     f->list = ui_list_create(f->base.root, UI_W, &(ui_list_model_t){.count = 1, .ctx = f, .get = files_get});
-    f->toast = ui_label(f->base.root, "", UI_L_TEXT);
-    lv_obj_set_size(f->toast, UI_W, UI_ROW_H);
-    lv_obj_set_style_bg_color(f->toast, lv_color_hex(0xFFF3CD), 0);
-    lv_obj_set_style_bg_opa(f->toast, LV_OPA_COVER, 0);
-    lv_obj_set_style_pad_all(f->toast, UIM->toast_pad, 0);
-    lv_obj_set_pos(f->toast, 0, UI_CONTENT_H - UI_ROW_H);
-    lv_label_set_long_mode(f->toast, LV_LABEL_LONG_DOT);
-    lv_obj_set_hidden(f->toast, true);
     wi_letterjump_init(&f->lj);
     f->overlay = ui_letter_overlay_create(f->base.root);
     load(f);

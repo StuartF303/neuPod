@@ -272,11 +272,13 @@ typedef struct {
     ui_list_t *list;
 } display_t;
 
-enum { D_BACKLIGHT, D_AUTODIM, D_DIM_AFTER, D_SCREEN_OFF, D_AUTOLOCK, D_COUNT };
+enum { D_THEME, D_BACKLIGHT, D_AUTODIM, D_DIM_AFTER, D_SCREEN_OFF, D_AUTOLOCK, D_COUNT };
 
 static void display_get(void *ctx, int32_t i, ui_list_item_t *o) {
     (void)ctx;
-    if (i == D_BACKLIGHT) {
+    if (i == D_THEME) {
+        put(o, "Theme", "%s", ui_theme_mode_name(g_ui_state.theme)); /* Light, Dark, or Auto (dark once the backlight dims) */
+    } else if (i == D_BACKLIGHT) {
         put(o, "Backlight", "%u %%", (unsigned)g_ui_state.backlight_pct);
         o->chevron = true;
     } else if (i == D_AUTODIM) {
@@ -299,6 +301,10 @@ static bool display_button(ui_screen_t *b, uint8_t btn) {
         return false;
     }
     switch (ui_list_selected(s->list)) {
+    case D_THEME:
+        g_ui_state.theme = ui_theme_mode_next(g_ui_state.theme);
+        ui_apply_theme(); /* Light and Dark switch at once; Auto follows the backlight */
+        break;
     case D_BACKLIGHT:
         open_backlight_slider();
         return true;
@@ -677,11 +683,8 @@ ui_screen_t *ui_screen_settings_create(void) {
     lv_obj_set_size(pane, pane_w, UI_CONTENT_H);
     lv_obj_set_pos(pane, UIM->set_list_w, 0);
     lv_obj_set_scrollable(pane, false);
-    lv_obj_set_style_bg_color(pane, lv_color_hex(UI_L_PANE), 0);
-    lv_obj_set_style_bg_opa(pane, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(pane, lv_color_hex(0xD9D9D4), 0);
-    lv_obj_set_style_border_width(pane, 1, 0);
-    lv_obj_set_style_border_side(pane, LV_BORDER_SIDE_LEFT, 0);
+    ui_obj_bg(pane, UI_C_SURFACE, 0);
+    ui_obj_border(pane, UI_C_LINE, 1, LV_BORDER_SIDE_LEFT);
     s->head = ui_label(pane, "", UI_L_TEXT);
     lv_obj_set_width(s->head, text_w);
     lv_obj_set_style_text_align(s->head, LV_TEXT_ALIGN_CENTER, 0);

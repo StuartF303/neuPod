@@ -127,6 +127,8 @@ set(NEUPOD_UI_SOURCES
   ${NEUPOD_APP_DIR}/ui/ui_splash.c
   ${NEUPOD_APP_DIR}/ui/ui_frame.c
   ${NEUPOD_APP_DIR}/ui/ui_list.c
+  ${NEUPOD_APP_DIR}/ui/ui_theme.c
+  ${NEUPOD_APP_DIR}/ui/ui_strips.c
   ${NEUPOD_APP_DIR}/ui/ui_screens.c
   ${NEUPOD_APP_DIR}/ui/ui_files.c
   ${NEUPOD_APP_DIR}/ui/ui_library.c

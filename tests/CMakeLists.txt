@@ -348,8 +348,8 @@ add_test(NAME boot_briefs COMMAND test_boot_briefs)
 set_source_files_properties(test_boot_briefs.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
 # UI metrics profiles (app/ui/ui_metrics.c): layout invariants of every compiled-in resolution profile, 320x240 pinned to its historic values.
-add_executable(test_ui_metrics test_ui_metrics.c ${CMAKE_SOURCE_DIR}/app/ui/ui_metrics.c)
-target_link_libraries(test_ui_metrics lvgl neupod_rt_core)
+add_executable(test_ui_metrics test_ui_metrics.c ${CMAKE_SOURCE_DIR}/app/ui/ui_metrics.c ${CMAKE_SOURCE_DIR}/app/ui/ui_theme.c)
+target_link_libraries(test_ui_metrics lvgl neupod_rt_core m)
 target_include_directories(test_ui_metrics PRIVATE ${CMAKE_SOURCE_DIR}/app/runtime)
 add_test(NAME ui_metrics COMMAND test_ui_metrics)
 set_source_files_properties(test_ui_metrics.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
@@ -554,6 +554,25 @@ if(NEUPOD_UI_HIRES)
   neupod_hold_tour(hires_hold_tour hires_hold "NEUPOD_DISPLAY_SIZE=480x360;" "480x360")
 endif()
 
+# The design system (DS-1 to DS-5): toast and HUD strips, the Theme row, dark and auto themes; own card, settings wiped first (the tour changes the theme).
+function(neupod_design_tour NAME CARD SIZE_ENV SIZE)
+  add_test(NAME ${NAME}
+    COMMAND neupod --run-ms 90000 --splash-hold-ms 1500 --tour-design --snapshots ${CMAKE_BINARY_DIR}/snapshots_${CARD})
+  set_tests_properties(${NAME} PROPERTIES
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;${SIZE_ENV}NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_${CARD};NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_${CARD}.img"
+    PASS_REGULAR_EXPRESSION "ui: audit 'ds-toast-warn' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: audit 'ds-toast-info' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: audit 'ds-hud' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: audit 'ds-display-dark' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: audit 'ds-music-dark' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: audit 'ds-home-auto' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: backlight dim.*ui: audit 'ds-home-auto-dim' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: backlight wake.*ui: audit 'ds-home-auto-wake' ${SIZE} objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+    FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    FIXTURES_REQUIRED ${CARD}_clean
+    TIMEOUT 150)
+endfunction()
+neupod_hold_card(design)
+neupod_design_tour(design_tour design "" "320x240")
+if(NEUPOD_UI_HIRES)
+  neupod_hold_card(hires_design)
+  neupod_design_tour(hires_design_tour hires_design "NEUPOD_DISPLAY_SIZE=480x360;" "480x360")
+endif()
+
 # Settings > About > Licences at both profiles: the lists and the longest notice, with the layout audit on every snapshot.
 function(neupod_licence_tour NAME CARD SIZE_ENV SIZE)
   add_test(NAME ${NAME}
@@ -689,7 +708,7 @@ set_tests_properties(library_big PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BI
 set_source_files_properties(test_library_big.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
 # ui_frame_input() routing of the transport keys (the real ui_frame.c with fakes for the player and services): consumed keys stay with the screen.
-add_executable(test_ui_frame_keys test_ui_frame_keys.c ${CMAKE_SOURCE_DIR}/app/ui/ui_metrics.c)
+add_executable(test_ui_frame_keys test_ui_frame_keys.c ${CMAKE_SOURCE_DIR}/app/ui/ui_metrics.c ${CMAKE_SOURCE_DIR}/app/ui/ui_theme.c ${CMAKE_SOURCE_DIR}/app/ui/ui_strips.c)
 target_include_directories(test_ui_frame_keys PRIVATE ${CMAKE_SOURCE_DIR}/app/ui ${CMAKE_SOURCE_DIR}/app/runtime)
 target_link_libraries(test_ui_frame_keys neupod_rt_core lvgl)
 add_test(NAME ui_frame_keys COMMAND test_ui_frame_keys)

@@ -209,7 +209,7 @@ bool ui_input_open(const wi_request_t *r) {
         lv_obj_set_width(s->value, UI_W - 2 * UIM->pad);
         lv_obj_set_pos(s->value, UIM->pad, UIM->in_text_value_y);
         for (int i = 0; i < CELLS; i++) {
-            s->cell[i] = ui_label(root, "", i == CELLS / 2 ? UI_L_SEL_BOT : UI_L_DIM);
+            s->cell[i] = ui_label(root, "", i == CELLS / 2 ? UI_C_ACCENT : UI_L_DIM);
             lv_obj_set_style_text_font(s->cell[i], i == CELLS / 2 ? UIM->font_large : UIM->font_body, 0);
             lv_obj_set_width(s->cell[i], UIM->in_cell_w);
             lv_obj_set_style_text_align(s->cell[i], LV_TEXT_ALIGN_CENTER, 0);
@@ -233,8 +233,8 @@ bool ui_input_open(const wi_request_t *r) {
             lv_obj_set_size(s->bar, UI_W - 2 * UIM->in_bar_x, UIM->in_bar_h);
             lv_obj_set_pos(s->bar, UIM->in_bar_x, UIM->in_bar_y);
             lv_bar_set_range(s->bar, r->min, r->max);
-            lv_obj_set_style_bg_color(s->bar, lv_color_hex(UI_L_BAR_BOT), 0);
-            lv_obj_set_style_bg_color(s->bar, lv_color_hex(UI_L_SEL_BOT), LV_PART_INDICATOR);
+            ui_obj_bg(s->bar, UI_C_LINE, 0);
+            ui_obj_bg(s->bar, UI_C_ACCENT, LV_PART_INDICATOR);
         }
         s->hint = ui_label(root, "Scroll: adjust  Play: ok  Menu: cancel", UI_L_FAINT);
         lv_obj_set_pos(s->hint, UIM->in_hint_x, UIM->in_hint_y);
@@ -282,11 +282,11 @@ ui_letter_overlay_t *ui_letter_overlay_create(void *parent) {
     lv_obj_remove_style_all(o->box);
     lv_obj_set_size(o->box, UIM->in_overlay, UIM->in_overlay);
     lv_obj_align(o->box, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_color(o->box, lv_color_hex(UI_COL_BG2), 0);
+    ui_obj_bg(o->box, UI_C_INK, 0);
     lv_obj_set_style_bg_opa(o->box, LV_OPA_80, 0);
     lv_obj_set_style_radius(o->box, UIM->in_overlay_radius, 0);
     lv_obj_set_hidden(o->box, true);
-    o->lbl = ui_label(o->box, "A", UI_COL_TEXT);
+    o->lbl = ui_label(o->box, "A", UI_C_SURFACE);
     lv_obj_set_style_text_font(o->lbl, UIM->font_large, 0);
     lv_obj_center(o->lbl);
     return o;
