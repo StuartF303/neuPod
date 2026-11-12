@@ -59,8 +59,8 @@ typedef struct {
     bool seekable;         /**< playing or paused on a track player_seek() can move within (WAV, FLAC with a seek table) */
     uint32_t vol_att_db;
     bool muted;            /**< output stage mute line asserted */
-    uint16_t queue_pos;    /**< file playback through a folder queue: 1-based position ("n of N"); 0 when there is no queue */
-    uint16_t queue_len;
+    uint32_t queue_pos;    /**< file playback through a queue: 1-based position ("n of N"); 0 when there is no queue */
+    uint32_t queue_len;
     uint8_t shuffle;       /**< pq_shuffle_t of the queue being played; 0 when there is no queue */
     uint8_t repeat;        /**< pq_repeat_t of the queue being played; 0 when there is no queue */
 } player_info_t;
@@ -80,6 +80,19 @@ void player_play_file(const char *path, const char *name);
  * listing order (play_queue.h); the files before it stay queued for Previous. The queue then plays through by itself.
  */
 void player_play_folder(const char *dir, const file_entry_t *entries, uint32_t count, uint32_t index);
+/**
+ * Play song @p start (an index into @p range) of a library range (play_queue.h, pq_range_t) and queue the whole range: an album in track
+ * order, an artist's songs, all songs, a genre. @p start PLAY_QUEUE_NO_ENTRY picks a random song. @p shuffle_all forces a shuffled queue
+ * (Shuffle Songs); otherwise the Shuffle setting applies, as for a folder. The queue holds only the range; the storage task finds each track
+ * ("@lib/..." handles, see storage_service.h). Nothing is started (and nothing changes) for an empty range.
+ */
+void player_play_library(const pq_range_t *range, uint32_t start, bool shuffle_all);
+/**
+ * How the player turns a library handle into the real path of the file that was opened for it (for the resume record). Set once by the storage
+ * service; false = not known yet. Called with the player lock held, so it must not call back into the player.
+ */
+typedef bool (*player_path_resolver_fn)(const char *handle, char *out, size_t n);
+void player_set_path_resolver(player_path_resolver_fn fn);
 /** Next queued track (hard start). On the last track: stop, and Now Playing goes idle. No-op without a queue. */
 void player_next(void);
 /** Previous queued track; more than 3 s into a track (or on the first one) it restarts the current track instead. No-op without a queue. */
