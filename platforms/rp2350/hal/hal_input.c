@@ -85,6 +85,12 @@ hal_status_t hal_input_init(void) {
 
 bool hal_input_is_simulated(void) { return false; }
 
+// The Pico 2 W bench rig has no Power key and no Hold switch: Hold is the console key 'l' there (docs/adr/0020-hold.md). The final board's
+// slide switch is a GPIO still to be assigned (TODO(hw)); until then no switch is reported.
+bool hal_input_power_key(void) { return false; }
+bool hal_input_has_power_key(void) { return false; }
+hal_hold_switch_t hal_input_hold_switch(void) { return HAL_HOLD_SWITCH_NONE; }
+
 hal_status_t hal_input_reinit(void) {
     if (!g_started) {
         return HAL_ENODEV;

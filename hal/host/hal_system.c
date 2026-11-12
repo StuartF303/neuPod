@@ -91,4 +91,13 @@ void hal_random(void *buf, size_t n) {
     }
 }
 
+static volatile uint32_t g_poweroff_requests;
+bool hal_system_can_poweroff(void) { return true; }
+bool hal_system_poweroff(void) {
+    g_poweroff_requests++;
+    printf("host: power-off requested (simulated: carrying on)\n");
+    return true;
+}
+uint32_t hal_host_poweroff_requests(void) { return g_poweroff_requests; }
+
 const char *hal_platform_name(void) { return "host"; }

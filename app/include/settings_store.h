@@ -63,6 +63,8 @@ extern "C" {
 #define SETTING_RESUME_PLAY SETTINGS_TAG('N', 'P', 'r', 'a')   /**< u8, 0 or 1: start playing at boot when the resume record says playing; absent = 0 (restore paused) */
 #define SETTING_AUTODIM SETTINGS_TAG('N', 'P', 'a', 'd')       /**< u8, 0 or 1: dim the backlight when idle; absent = 1 */
 #define SETTING_AUTODIM_IDX SETTINGS_TAG('N', 'P', 'a', 't')   /**< u8, 0..5: idle time before dimming (ui_logic.h: 10 s .. 5 min); absent = 2 (30 s) */
+#define SETTING_SCREENOFF_IDX SETTINGS_TAG('N', 'P', 's', 'o') /**< u8, 0..6: time after the dim until the backlight is fully off (ui_logic.h: Never .. 5 min); absent = 5 (3 min) */
+#define SETTING_AUTOLOCK SETTINGS_TAG('N', 'P', 'a', 'l')       /**< u8, 0 or 1: Hold turns on by itself when the screen goes off (docs/adr/0020-hold.md); absent = 1 */
 #define SETTING_BT_DEVICE SETTINGS_TAG('N', 'P', 'b', 'd')     /**< the one remembered headset: version, address, class, name (bt_saved.h; 10..58 bytes) */
 #define SETTING_AUDIO_OUTPUT SETTINGS_TAG('N', 'P', 'a', 'o') /**< u8, audio_route_pref_t: 0 Auto (Bluetooth whenever a headset's stream is open), 1 Wired; absent = Auto */
 #define SETTING_WIFI SETTINGS_TAG('N', 'P', 'w', 'f')            /**< 4 bytes: enabled, during playback, idle-off minutes, zone */

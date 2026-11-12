@@ -95,6 +95,24 @@
 // Settings > Repeat is set to One first so the player ends up paused on it (wait:pause) instead of dropping to idle.
 #define TOUR_TEXT "x s s s s _ s s s s s s _ m w _ _ x snap:text-files _ x snap:text-folder _ wait:pause x snap:text-nowplaying m m"
 
+// Hold (docs/adr/0020-hold.md): the Power key is simulated by pwr:down / pwr:up and sleep:MS lets time pass between them. A 1.2 s press shows the ring and
+// does nothing; 2.1 s locks (confirmation toast, lock icon); keys while locked only remind; held on to 5.9 s the power-off countdown shows (and the
+// 2 s mark unlocks again); 10.5 s asks for the power-off (the host only logs it) and locks once more; the hardware switch (sw:on / sw:off) takes it
+// off and on; a tap (down, then up one 300 ms step later) turns the screen off (auto-lock locks), the next key only wakes it, a 2.3 s hold unlocks and the keys work again; Settings >
+// Display shows the Screen off after and Auto-lock rows.
+#define TOUR_HOLD                                                                                  \
+    "x pwr:down sleep:800 snap:hold-ring pwr:up sleep:900 "                                        \
+    "pwr:down sleep:1800 snap:hold-locked pwr:up sleep:300 s s snap:hold-swallowed x x x x x x x "  \
+    "snap:hold-locked-idle pwr:down sleep:5400 snap:hold-countdown pwr:up sleep:600 snap:hold-cancelled "  \
+    "pwr:down sleep:10200 snap:hold-poweroff pwr:up sleep:600 "                                     \
+    "sw:off x x snap:hold-switch-off x x x x x sw:on x x snap:hold-switch-on sw:off x x x x x x x "    \
+    "pwr:down pwr:up sleep:600 snap:hold-screen-off s x snap:hold-woke x x x x x x x "    \
+    "pwr:down sleep:1800 pwr:up sleep:600 s snap:hold-unlocked-nav s s s _ s _ snap:hold-display "   \
+    "s s s s _ x snap:hold-autolock-off m m"
+
+// Settings > About > Licences (the third-party components and their licences): the About list, the Licences list, and the longest notice (BTstack).
+#define TOUR_LICENCES "x s s s s _ _ snap:about _ snap:licences 10*s _ snap:licence-btstack m m m"
+
 static unsigned g_expect = 18;
 static const char *g_snapshot_dir;
 static unsigned g_snapshots;
@@ -170,6 +188,14 @@ int main(int argc, char **argv) {
             cfg.ui_script = TOUR_LIBRARY_RO;
             cfgp_tour = true;
             g_expect = 4;
+        } else if (strcmp(argv[i], "--tour-licences") == 0) {
+            cfg.ui_script = TOUR_LICENCES;
+            cfgp_tour = true;
+            g_expect = 5; // the splash, home and the three named snapshots
+        } else if (strcmp(argv[i], "--tour-hold") == 0) {
+            cfg.ui_script = TOUR_HOLD;
+            cfgp_tour = true;
+            g_expect = 16; // the splash, home and the fourteen named snapshots
         } else if (strcmp(argv[i], "--tour-text") == 0) {
             cfg.ui_script = TOUR_TEXT;
             cfgp_tour = true;
@@ -181,7 +207,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--snapshots") == 0 && i + 1 < argc) {
             g_snapshot_dir = argv[++i];
         } else {
-            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek|--tour-library|--tour-library-ro|--tour-text] [--script KEYS] [--snapshots DIR]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek|--tour-library|--tour-library-ro|--tour-text|--tour-hold|--tour-licences] [--script KEYS] [--snapshots DIR]\n", argv[0]);
             return 64;
         }
     }

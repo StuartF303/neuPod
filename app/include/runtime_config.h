@@ -83,6 +83,9 @@
 /* Stacks, bytes. */
 #define RT_STACK_STORAGE 8192u /* file headers and tags are parsed here (about 1 KB of locals), on top of FatFs */
 #define RT_STACK_INPUT 2048u
+/* Input task to UI queue, in events (8 bytes each; a button press is two). The UI drains it once per pass, which can take a frame (about 30 ms)
+ * plus its sleep: 16 events (8 presses) overflowed under a UART burst and later keys vanished (UI-6). 64 covers 32 presses between two passes. */
+#define RT_INPUT_QUEUE_LEN 64u
 #define RT_STACK_UI 12288u
 #define RT_STACK_MONITOR 3072u
 #define RT_WIFI_JOIN_TIMEOUT_MS 60000u /* a join (associate + DHCP) not finished by then is abandoned and retried with backoff */

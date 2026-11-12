@@ -10,6 +10,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "hal_input.h"
 #include "hal_radio.h"
 
 #ifdef __cplusplus
@@ -52,6 +53,13 @@ void hal_host_bt_set_initial_volume(int volume);
 
 /** Tests: the headset's own volume changes (a swipe on the stem): HAL_BT_EVT_VOLUME. No-op without absolute volume. */
 void hal_host_bt_headset_volume(uint8_t volume);
+
+/** Tests: the simulated Power key goes down or up (hal_input_power_key). The window's F1 does the same. */
+void hal_host_power_key(bool down);
+/** Tests: the simulated hardware Hold switch (default: none fitted). */
+void hal_host_hold_switch(hal_hold_switch_t sw);
+/** Tests: how many times the UI asked for a power-off (the host only logs it and carries on). */
+uint32_t hal_host_poweroff_requests(void);
 
 /** Tests: a button on the headset: HAL_BT_EVT_KEY. No-op while there is no CONNECTED link. */
 void hal_host_bt_headset_key(hal_bt_key_t key);

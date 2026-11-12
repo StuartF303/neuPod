@@ -272,7 +272,7 @@ typedef struct {
     ui_list_t *list;
 } display_t;
 
-enum { D_BACKLIGHT, D_AUTODIM, D_DIM_AFTER, D_COUNT };
+enum { D_BACKLIGHT, D_AUTODIM, D_DIM_AFTER, D_SCREEN_OFF, D_AUTOLOCK, D_COUNT };
 
 static void display_get(void *ctx, int32_t i, ui_list_item_t *o) {
     (void)ctx;
@@ -281,9 +281,13 @@ static void display_get(void *ctx, int32_t i, ui_list_item_t *o) {
         o->chevron = true;
     } else if (i == D_AUTODIM) {
         put(o, "Auto-dim", "%s", g_ui_state.autodim ? "On" : "Off");
-    } else {
+    } else if (i == D_DIM_AFTER) {
         put(o, "Dim after", "%s", ui_autodim_name(g_ui_state.dim_idx));
         o->dim = !g_ui_state.autodim;
+    } else if (i == D_SCREEN_OFF) {
+        put(o, "Screen off after", "%s", ui_screenoff_name(g_ui_state.off_idx)); /* counted from the dim (from the last press when Auto-dim is off) */
+    } else {
+        put(o, "Auto-lock", "%s", g_ui_state.autolock ? "On" : "Off"); /* Hold turns on when the screen goes off */
     }
 }
 
@@ -301,11 +305,17 @@ static bool display_button(ui_screen_t *b, uint8_t btn) {
     case D_AUTODIM:
         g_ui_state.autodim = !g_ui_state.autodim;
         break;
-    default:
+    case D_DIM_AFTER:
         if (!g_ui_state.autodim) {
             return true; /* greyed: nothing to change */
         }
         g_ui_state.dim_idx = (uint8_t)((g_ui_state.dim_idx + 1u) % UI_AUTODIM_STEPS);
+        break;
+    case D_SCREEN_OFF:
+        g_ui_state.off_idx = (uint8_t)((g_ui_state.off_idx + 1u) % UI_SCREENOFF_STEPS);
+        break;
+    default:
+        g_ui_state.autolock = !g_ui_state.autolock;
         break;
     }
     ui_state_persist();

@@ -7,7 +7,7 @@
 |------|-------|--------|
 | Montserrat Medium (SIL OFL 1.1, `lib/lvgl/scripts/generators/built_in_font/Montserrat-Medium.ttf`) | 14, 20, 28 | U+0020-007E, U+00A0-00FF (Latin-1 without the soft hyphen U+00AD), U+2022, U+2013, U+2014, U+2018, U+2019, U+201C, U+201D, U+2026, U+20AC |
 | Montserrat Medium | 48 | U+0020-007E |
-| Font Awesome 5 Free Solid (`FontAwesome5-Solid+Brands+Regular.woff` beside it; icons CC BY 4.0, font files SIL OFL 1.1) | all four | the 19 `LV_SYMBOL_*` the UI uses (48: only `LV_SYMBOL_AUDIO`) |
+| Font Awesome 5 Free Solid (`FontAwesome5-Solid+Brands+Regular.woff` beside it; icons CC BY 4.0, font files SIL OFL 1.1) | all four | the 19 `LV_SYMBOL_*` the UI uses plus power, lock and unlock (`UI_SYM_*`, Hold; 48: only `LV_SYMBOL_AUDIO`) |
 
 4 bpp, uncompressed, fast-kerning format: the same options as LVGL's built-in fonts, so ASCII text renders pixel-for-pixel as before. The
 line height and baseline are set back to the built-in values (the generator would grow every line for the accented capitals), see `docs/ui.md`. The

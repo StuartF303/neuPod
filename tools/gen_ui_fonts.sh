@@ -16,8 +16,8 @@ REL="$(realpath --relative-to="$SRC" "$OUT")"
 # ASCII, Latin-1 (U+00A0..U+00FF without the soft hyphen U+00AD, which must not draw), bullet, en/em dash, curly quotes, ellipsis, euro.
 TEXT="0x20-0x7E,0xA0-0xAC,0xAE-0xFF,0x2022,0x2013,0x2014,0x2018,0x2019,0x201C,0x201D,0x2026,0x20AC"
 # Font Awesome code points of every LV_SYMBOL_* the UI uses: AUDIO OK IMAGE PLAY PAUSE RIGHT SHUFFLE LOOP DIRECTORY CHARGE FILE WIFI
-# BATTERY_FULL/3/2/1/EMPTY BLUETOOTH SD_CARD.
-SYMS="61441,61452,61502,61515,61516,61524,61556,61561,61563,61671,61787,61931,62016,62017,62018,62019,62020,62099,63426"
+# BATTERY_FULL/3/2/1/EMPTY BLUETOOTH SD_CARD, plus three Font Awesome glyphs with no LV_SYMBOL: lock U+F023, unlock U+F09C, power U+F011 (Hold, docs/adr/0020-hold.md).
+SYMS="61441,61452,61502,61515,61516,61524,61556,61561,61563,61671,61787,61931,62016,62017,62018,62019,62020,62099,63426,61475,61596,61457"
 
 # lv_font_conv sizes the line box to the tallest glyph, so adding accented capitals would make every line 2 to 5 px taller and move the whole
 # layout (ADR-0018 pins the metrics to LVGL's built-in Montserrat). The generated line_height / base_line are therefore set back to the

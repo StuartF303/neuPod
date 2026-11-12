@@ -35,6 +35,17 @@ void host_input_scroll(int steps) {
     g_dirty = true;
 }
 
+static volatile bool g_power_down;
+static volatile hal_hold_switch_t g_hold_switch = HAL_HOLD_SWITCH_NONE;
+
+void host_input_power(bool down) { g_power_down = down; }
+void hal_host_power_key(bool down) { g_power_down = down; }
+void hal_host_hold_switch(hal_hold_switch_t sw) { g_hold_switch = sw; }
+
+bool hal_input_power_key(void) { return g_power_down; }
+bool hal_input_has_power_key(void) { return true; } // F1
+hal_hold_switch_t hal_input_hold_switch(void) { return g_hold_switch; }
+
 hal_status_t hal_input_init(void) {
     g_sim = (hal_wheel_state){0};
     g_dirty = true;

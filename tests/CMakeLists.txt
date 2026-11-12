@@ -360,6 +360,13 @@ target_link_libraries(test_ui_logic neupod_rt_core)
 add_test(NAME ui_logic COMMAND test_ui_logic)
 set_source_files_properties(test_ui_logic.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
+# Hold and the Power-key gestures (ADR-0020): the 2 s toggle, the 10 s power-off and its countdown, the short press, the slide switch.
+add_executable(test_ui_hold test_ui_hold.c)
+target_include_directories(test_ui_hold PRIVATE ${CMAKE_SOURCE_DIR}/app/ui)
+target_link_libraries(test_ui_hold neupod_rt_core)
+add_test(NAME ui_hold COMMAND test_ui_hold)
+set_source_files_properties(test_ui_hold.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
 # The Licences screen's data against LICENSE.md (the standing rule: licence notes stay up to date).
 add_executable(test_licences test_licences.c)
 target_include_directories(test_licences PRIVATE ${CMAKE_SOURCE_DIR}/app/ui)
@@ -514,6 +521,54 @@ if(NEUPOD_UI_HIRES)
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     FIXTURES_REQUIRED hires_text_card
     TIMEOUT 90)
+endif()
+
+# Hold (ADR-0020): the Power key simulated by the tour (pwr:down / pwr:up / sleep:MS), the lock overlay, the countdown, the host's simulated power-off,
+# the hardware switch, the screen-off stage with auto-lock, and the new Display rows. The PASS pattern follows the whole story in log order and the audit
+# of the last snapshot; "AUDIT FAIL" fails it. Own fake card whose settings are wiped first (the tour turns Auto-lock off at the end).
+function(neupod_hold_card NAME)
+  set(FS ${CMAKE_BINARY_DIR}/fsroot_${NAME})
+  file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/assets/fsroot/ DESTINATION ${FS})
+  execute_process(COMMAND dd if=/dev/zero of=${CMAKE_BINARY_DIR}/disk_${NAME}.img bs=1024 count=2048 status=none)
+  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_${NAME})
+  add_test(NAME ${NAME}_reset COMMAND ${CMAKE_COMMAND} -E remove_directory ${FS}/.neupod)
+  set_tests_properties(${NAME}_reset PROPERTIES FIXTURES_SETUP ${NAME}_clean)
+endfunction()
+function(neupod_hold_tour NAME CARD SIZE_ENV SIZE)
+  add_test(NAME ${NAME}
+    COMMAND neupod --run-ms 90000 --splash-hold-ms 1500 --tour-hold --snapshots ${CMAKE_BINARY_DIR}/snapshots_${CARD})
+  set_tests_properties(${NAME} PROPERTIES
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;${SIZE_ENV}NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_${CARD};NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_${CARD}.img"
+    PASS_REGULAR_EXPRESSION "ui: audit 'hold-ring' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: hold on.*ui: audit 'hold-locked' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: audit 'hold-swallowed' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: hold off.*ui: audit 'hold-countdown' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: hold on.*ui: power-off requested.*host: power-off requested.*ui: hold off.*ui: hold on.*ui: backlight off 0%.*ui: audit 'hold-display' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: audit 'hold-autolock-off' ${SIZE} objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+    FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    FIXTURES_REQUIRED ${CARD}_clean
+    TIMEOUT 150)
+endfunction()
+neupod_hold_card(hold)
+neupod_hold_tour(hold_tour hold "" "320x240")
+if(NEUPOD_UI_HIRES)
+  neupod_hold_card(hires_hold)
+  neupod_hold_tour(hires_hold_tour hires_hold "NEUPOD_DISPLAY_SIZE=480x360;" "480x360")
+endif()
+
+# Settings > About > Licences at both profiles: the lists and the longest notice, with the layout audit on every snapshot.
+function(neupod_licence_tour NAME CARD SIZE_ENV SIZE)
+  add_test(NAME ${NAME}
+    COMMAND neupod --run-ms 30000 --splash-hold-ms 1500 --tour-licences --snapshots ${CMAKE_BINARY_DIR}/snapshots_${CARD})
+  set_tests_properties(${NAME} PROPERTIES
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;${SIZE_ENV}NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_${CARD};NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_${CARD}.img"
+    PASS_REGULAR_EXPRESSION "ui: audit 'about' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: audit 'licences' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: audit 'licence-btstack' ${SIZE} objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+    FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    FIXTURES_REQUIRED ${CARD}_clean
+    TIMEOUT 90)
+endfunction()
+neupod_hold_card(licences)
+neupod_licence_tour(licences_tour licences "" "320x240")
+if(NEUPOD_UI_HIRES)
+  neupod_hold_card(hires_licences)
+  neupod_licence_tour(hires_licences_tour hires_licences "NEUPOD_DISPLAY_SIZE=480x360;" "480x360")
 endif()
 
 # Optional AddressSanitizer + UBSan build of the codec / parser / handshake tests: cmake -DNEUPOD_HOST_ASAN=ON
