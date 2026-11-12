@@ -76,6 +76,7 @@ static void reset(bool queue, bool consume) {
     g_pause = g_next = g_prev = g_btn_calls = g_up_calls = g_scrolls = g_clicks = 0;
     g_consume = consume;
     g_swallowed = 0;
+    g_delivered = 0;
     g_idle.last_ms = 1000; /* not idle, not dimmed, not off */
     g_idle.dimmed = g_idle.off = g_idle.forced_off = false;
     ui_hold_init(&g_hold);
@@ -289,6 +290,18 @@ TEST(button_release_reaches_the_screen) {
     ASSERT_EQ(0, g_next); // a release never skips by itself
 }
 
+TEST(a_press_the_screen_saw_still_gets_its_release_when_hold_comes_on_in_between) {
+    reset(false, true);
+    press(HAL_BTN_SELECT); // delivered
+    input_event_t sw = {.type = INPUT_HOLD_SWITCH, .steps = 1};
+    ui_frame_input(&sw, 1000);
+    ASSERT_TRUE(ui_frame_locked());
+    release(HAL_BTN_SELECT); // the screen must not be left with a key that never comes up
+    ASSERT_EQ(1, g_up_calls);
+    release(HAL_BTN_SELECT); // a second release (never pressed) is swallowed
+    ASSERT_EQ(1, g_up_calls);
+}
+
 int main(void) {
     ui_stack_init(&g_stack);
     ui_idle_init(&g_idle, 1000);
@@ -312,5 +325,6 @@ int main(void) {
     RUN(holding_power_two_seconds_toggles_hold_and_the_power_key_still_works_when_locked);
     RUN(the_hardware_switch_sets_the_state_both_ways);
     RUN(a_dimmed_screen_that_is_not_off_still_delivers_the_input);
+    RUN(a_press_the_screen_saw_still_gets_its_release_when_hold_comes_on_in_between);
     return RESULT();
 }

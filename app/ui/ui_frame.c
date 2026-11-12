@@ -284,6 +284,7 @@ static bool queue_active(void) {
 
 static uint32_t g_htoast_until; /* a confirmation or the "Locked" reminder goes away at this time (0 = none showing) */
 static uint8_t g_swallowed;     /* buttons whose press was swallowed: their release is too */
+static uint8_t g_delivered;     /* buttons whose press reached a screen: their release does too, even if Hold came on in between */
 
 bool ui_frame_locked(void) { return g_hold.locked; }
 bool ui_locked(void) { return __atomic_load_n(&g_hold.locked, __ATOMIC_RELAXED); }
@@ -441,6 +442,10 @@ void ui_frame_input(const input_event_t *ev, uint32_t now_ms) {
             g_swallowed = (uint8_t)(g_swallowed & ~ev->button);
             return;
         }
+        if (ev->type == INPUT_BUTTON_UP && (g_delivered & ev->button) != 0) {
+            g_delivered = (uint8_t)(g_delivered & ~ev->button);
+            swallow = false; /* the screen saw this press: it must see the release (no stuck press-and-hold) */
+        }
         if (swallow) {
             if (ev->type == INPUT_BUTTON_DOWN) {
                 g_swallowed = (uint8_t)(g_swallowed | ev->button);
@@ -449,6 +454,9 @@ void ui_frame_input(const input_event_t *ev, uint32_t now_ms) {
                 hold_reminder(now_ms);
             }
             return;
+        }
+        if (ev->type == INPUT_BUTTON_DOWN) {
+            g_delivered = (uint8_t)(g_delivered | ev->button);
         }
     }
     ui_screen_t *top = ui_stack_top(&g_stack);
