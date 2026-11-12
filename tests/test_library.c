@@ -744,7 +744,7 @@ static bool manifest_set(unsigned word, uint32_t value) {
 static bool fresh_library(void) { return fx_volume(16u << 20, 0) && make_tree(false) && build(0, NULL) == LIB_OK; }
 
 TEST(hostile_manifest_is_refused) {
-    enum { W_TRACKS = 4, W_PLAYABLE = 5, W_ARTISTS = 6, W_ALBUMS = 7, W_COMP_FIRST = 10, W_LINKS = 11, W_JUMP = 12 + 2 * LIB_FILES };
+    enum { W_TRACKS = 4, W_PLAYABLE = 5, W_ARTISTS = 6, W_ALBUMS = 7, W_COMP_FIRST = 10, W_LINKS = 11, W_GENRE_TRACKS = 12, W_JUMP = 13 + 2 * LIB_FILES };
     static const struct {
         unsigned word;
         uint32_t value;
@@ -756,6 +756,8 @@ TEST(hostile_manifest_is_refused) {
         {W_ARTISTS, 11},
         {W_ALBUMS, 0},
         {W_LINKS, 7},
+        {W_GENRE_TRACKS, 18}, /* more genre tracks than tracks */
+        {W_GENRE_TRACKS, 3},  /* a count that does not match the by_genre file */
         {W_JUMP + 5, 11}, /* artists jump table pointing past the last row */
         {W_JUMP + 3, 0xFFFFFFFFu},
     };

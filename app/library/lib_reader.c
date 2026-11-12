@@ -7,7 +7,7 @@
 #include "lib_internal.h"
 #include "library.h"
 
-enum { T_TRACKS, T_STRINGS, T_ARTISTS, T_ALBUMS, T_GENRES, T_BY_ALBUM, T_BY_TITLE, T_BY_ALBUM_NAME, T_GENRE_ARTISTS, T_ENAMES, T_PERSISTENT, T_DIRS = T_PERSISTENT, T_NAMES };
+enum { T_TRACKS, T_STRINGS, T_ARTISTS, T_ALBUMS, T_GENRES, T_BY_ALBUM, T_BY_TITLE, T_BY_ALBUM_NAME, T_GENRE_ARTISTS, T_ENAMES, T_PERSISTENT, T_DIRS = T_PERSISTENT, T_NAMES, T_BY_GENRE };
 
 static const uint8_t k_file[T_PERSISTENT] = {LF_TRACKS, LF_STRINGS, LF_ARTISTS, LF_ALBUMS, LF_GENRES, LF_BY_ALBUM, LF_BY_TITLE, LF_BY_ALBUM_NAME, LF_GENRE_ARTISTS, LF_ENAMES};
 
@@ -63,7 +63,7 @@ static lib_table_t *table(lib_reader_t *r, unsigned id) {
     if (r->aux_which != (int)id) {
         table_close(&r->aux);
         r->aux_which = -1;
-        if (table_open(&r->aux, r->dir, id == T_DIRS ? LF_DIRS : LF_NAMES) != LIB_OK) return NULL;
+        if (table_open(&r->aux, r->dir, id == T_DIRS ? LF_DIRS : id == T_NAMES ? LF_NAMES : LF_BY_GENRE) != LIB_OK) return NULL;
         r->aux_which = (int)id;
     }
     return &r->aux;
@@ -187,7 +187,15 @@ static lib_err_t entity(lib_reader_t *r, unsigned tbl, uint32_t rs, uint32_t n, 
     uint32_t first = ld32(b + 12), next = ld32(b + rs + 12);
     out->first = first;
     out->count = next >= first ? next - first : 0;
-    out->artist = rs == LIB_REC_ALBUM ? ld32(b + 16) : LIB_NONE;
+    out->artist = LIB_NONE;
+    out->tfirst = out->tcount = 0;
+    if (tbl == T_ALBUMS) {
+        out->artist = ld32(b + 16);
+    } else if (tbl == T_GENRES) { // 20 B rows: the genre's tracks in by_genre start at +16
+        uint32_t tf = ld32(b + 16), tn = ld32(b + rs + 16);
+        out->tfirst = tf;
+        out->tcount = tn >= tf ? tn - tf : 0;
+    }
     return name_at(r, T_ENAMES, ld32(b), out->name);
 }
 
@@ -204,6 +212,7 @@ static lib_err_t u32_at(lib_reader_t *r, unsigned tbl, uint32_t n, uint32_t pos,
 }
 
 lib_err_t lib_by_album_at(lib_reader_t *r, uint32_t pos, uint32_t *track_id) { return u32_at(r, T_BY_ALBUM, r->m.tracks, pos, track_id); }
+lib_err_t lib_by_genre_at(lib_reader_t *r, uint32_t pos, uint32_t *track_id) { return u32_at(r, T_BY_GENRE, r->m.genre_tracks, pos, track_id); }
 lib_err_t lib_genre_artist_at(lib_reader_t *r, uint32_t pos, uint32_t *artist_id) {
     return u32_at(r, T_GENRE_ARTISTS, r->m.genre_artist_links, pos, artist_id);
 }
