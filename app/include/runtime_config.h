@@ -32,6 +32,13 @@
 #define NEUPOD_BT_WIFI_COEX_ALLOW 1
 #endif
 
+/* Bluetooth headset volume cap on connect (owner decision, 12 Nov 2026, docs/bluetooth.md): when absolute volume is first established on a connection and the
+ * headset reports more than this (0..127; 64 = 50 %), the player turns it down to this. Only ever down, never up; swipes and the wheel afterwards are
+ * respected. 127 disables the cap. */
+#ifndef NEUPOD_BT_VOLUME_CAP_ON_CONNECT
+#define NEUPOD_BT_VOLUME_CAP_ON_CONNECT 64u
+#endif
+
 /* Every RTOS task runs on core 0 (the only core the kernel owns). */
 #define RT_CORE_OTHER OS_CORE_0
 

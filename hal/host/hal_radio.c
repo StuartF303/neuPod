@@ -65,6 +65,24 @@ static uint32_t g_pace_t0, g_pace_frac; /* ms of the last consumption, and the s
 static uint32_t g_sbc_frames_frac;
 static hal_bt_fail_t g_force_stream_fail;
 
+/* AVRCP (stage 2c): the simulated headset has absolute volume unless it is the speaker or hal_host_bt_set_no_absolute_volume() says so. The first volume is
+ * reported SIM_AVRCP_MS after CONNECTED (the headset opens AVRCP once the link is up), a Set Absolute Volume is answered SIM_VOLUME_ANSWER_MS later. */
+#define SIM_AVRCP_MS 150u
+#define SIM_VOLUME_ANSWER_MS 30u
+static bool g_force_no_abs;
+static int g_initial_vol = -1;      /* hal_host_bt_set_initial_volume(): the volume a headset reports first (-1: 60, about 47 %; the WH-1000XM5 starts at 0) */
+static bool g_abs_cap;              /* the headset of this link has absolute volume */
+static bool g_avrcp_pending;        /* CONNECTED, the first volume report is still to come */
+static uint32_t g_avrcp_t0;
+static bool g_vol_known;
+static uint8_t g_vol;
+static bool g_ans_pending;
+static uint32_t g_ans_t0;
+static uint32_t g_vol_sets;         /* hal_bt_volume_set() calls that were accepted */
+static hal_bt_track_t g_track;
+static bool g_track_set;
+static uint32_t g_track_calls;
+
 /* link */
 static uint32_t g_attempt;
 static hal_bt_link_state_t g_link = HAL_BT_LINK_DISCONNECTED;
@@ -180,6 +198,24 @@ static void sim_codec_for(const uint8_t addr[6]) {
     }
 }
 
+/* The headset of this link: the speaker has no absolute volume; the WH-1000XM5 starts silent (like an AirPods Pro that was left at 0 %), the others at 60 (about 47 %: under the connect cap). */
+static void sim_avrcp_for(const uint8_t addr[6]) {
+    bool speaker = addr[0] == 0x70 && addr[1] == 0x99;
+    g_abs_cap = !speaker && !g_force_no_abs;
+    g_vol = addr[0] == 0x00 && addr[1] == 0x1B ? 0 : g_initial_vol >= 0 ? (uint8_t)g_initial_vol : 60;
+    g_vol_known = false;
+    g_ans_pending = false;
+    g_avrcp_pending = true;
+    g_avrcp_t0 = hal_millis();
+}
+
+static void emit_volume(void) {
+    if (g_cb != NULL) {
+        hal_bt_event_t ev = {.type = HAL_BT_EVT_VOLUME, .state = g_state, .dev = g_peer, .volume = g_vol};
+        g_cb(&ev, g_ctx);
+    }
+}
+
 static void stream_reset_stats(void) {
     memset(&g_stats, 0, sizeof g_stats);
     g_stats.link_quality = HAL_BT_RSSI_UNKNOWN;
@@ -192,6 +228,11 @@ static void emit_link(hal_bt_link_state_t s, hal_bt_fail_t reason) {
         g_start_pending = false;
         emit_stream(HAL_BT_STREAM_CLOSED, HAL_BT_FAIL_NONE); /* the audio connection goes with the link; announced first */
     }
+    if (s != HAL_BT_LINK_CONNECTED) {
+        g_vol_known = false; /* AVRCP goes with the link */
+        g_avrcp_pending = false;
+        g_ans_pending = false;
+    }
     g_link = s;
     g_reason = s == HAL_BT_LINK_FAILED ? reason : HAL_BT_FAIL_NONE;
     if (s != HAL_BT_LINK_PAIRING) {
@@ -203,6 +244,7 @@ static void emit_link(hal_bt_link_state_t s, hal_bt_fail_t reason) {
     }
     if (s == HAL_BT_LINK_CONNECTED) { /* the stream opens by itself once the link is up */
         sim_codec_for(g_peer.addr);
+        sim_avrcp_for(g_peer.addr);
         stream_reset_stats();
         g_stream_t0 = hal_millis();
         emit_stream(HAL_BT_STREAM_OPENING, HAL_BT_FAIL_NONE);
@@ -420,8 +462,29 @@ void hal_host_bt_remote_hangup(void) {
     }
 }
 
+static void avrcp_poll(void) {
+    uint32_t now = hal_millis();
+    if (g_link != HAL_BT_LINK_CONNECTED) {
+        return;
+    }
+    if (g_avrcp_pending && now - g_avrcp_t0 >= SIM_AVRCP_MS) {
+        g_avrcp_pending = false;
+        if (g_abs_cap) {
+            g_vol_known = true;
+            emit_volume();
+        }
+    }
+    if (g_ans_pending && now - g_ans_t0 >= SIM_VOLUME_ANSWER_MS) {
+        g_ans_pending = false;
+        if (g_vol_known) {
+            emit_volume();
+        }
+    }
+}
+
 static void link_poll(void) {
     stream_poll();
+    avrcp_poll();
     uint32_t dt = hal_millis() - g_link_t0;
     if (g_link == HAL_BT_LINK_PAIRING && dt >= SIM_PAIR_MS) {
         hal_bt_fail_t r = sim_outcome(g_peer.addr);
@@ -497,6 +560,62 @@ bool hal_bt_stream_codec(hal_bt_codec_t *out) {
 }
 
 void hal_bt_stats(hal_bt_stats_t *out) { *out = g_stats; }
+
+/* ---- AVRCP: volume, keys, track information ---- */
+
+bool hal_bt_volume_supported(void) { return g_link == HAL_BT_LINK_CONNECTED && g_vol_known; }
+int hal_bt_volume_get(void) { return hal_bt_volume_supported() ? (int)g_vol : -1; }
+
+hal_status_t hal_bt_volume_set(uint8_t volume) {
+    if (!hal_bt_volume_supported()) {
+        return HAL_ENODEV;
+    }
+    g_vol = volume > HAL_BT_VOLUME_MAX ? (uint8_t)HAL_BT_VOLUME_MAX : volume;
+    g_vol_sets++;
+    g_ans_pending = true;
+    g_ans_t0 = hal_millis();
+    return HAL_OK;
+}
+
+bool hal_bt_track_info(const hal_bt_track_t *info) {
+    g_track_calls++;
+    g_track_set = info != NULL;
+    if (info != NULL) {
+        g_track = *info;
+    }
+    return true;
+}
+
+void hal_host_bt_set_no_absolute_volume(bool on) { g_force_no_abs = on; }
+void hal_host_bt_set_initial_volume(int volume) { g_initial_vol = volume; }
+
+void hal_host_bt_headset_volume(uint8_t volume) {
+    if (!hal_bt_volume_supported()) {
+        return;
+    }
+    g_vol = volume > HAL_BT_VOLUME_MAX ? (uint8_t)HAL_BT_VOLUME_MAX : volume;
+    emit_volume();
+}
+
+void hal_host_bt_headset_key(hal_bt_key_t key) {
+    if (g_link != HAL_BT_LINK_CONNECTED || g_cb == NULL) {
+        return;
+    }
+    hal_bt_event_t ev = {.type = HAL_BT_EVT_KEY, .state = g_state, .dev = g_peer, .key = key};
+    g_cb(&ev, g_ctx);
+}
+
+bool hal_host_bt_track_info(hal_bt_track_t *out, uint32_t *calls) {
+    if (calls != NULL) {
+        *calls = g_track_calls;
+    }
+    if (out != NULL && g_track_set) {
+        *out = g_track;
+    }
+    return g_track_set;
+}
+
+uint32_t hal_host_bt_volume_sets(void) { return g_vol_sets; }
 
 void hal_host_bt_fail_next_stream(hal_bt_fail_t reason) { g_force_stream_fail = reason; }
 

@@ -130,6 +130,12 @@ void player_stop(void);
 uint32_t player_volume_step(int32_t steps);
 
 /**
+ * Hold the software volume at 0 dB (true) while the headset's absolute volume is the volume (bt_control.h), or give the user's software volume back
+ * (false). The software volume the user chose is kept, and its steps and restores change it without applying it while held.
+ */
+void player_volume_hold_unity(bool hold);
+
+/**
  * Apply a volume saved in the settings store (attenuation in dB) at boot, by player_volume_restore_att() with the output path saved beside
  * it. Ignored if the user already changed the volume this session.
  */

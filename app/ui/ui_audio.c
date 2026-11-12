@@ -4,13 +4,15 @@
  *
  * Both read the player (player.h) every 200 ms and only touch LVGL when a value changed. Volume is
  * software attenuation: on Now Playing the wheel sets it (Select hands the wheel to seek for a few seconds: ui_logic.h, ui_npc_*);
- * on Test tone use Left / Right.
+ * on Test tone use Left / Right. On the Bluetooth output with a headset that has absolute volume the volume is the headset's: the label reads
+ * "Headset 62%", the bar is the same 0..127 scale (bt_control.h) and the wheel moves the headset's own volume.
  */
 #include <stdio.h>
 #include <string.h>
 
 #include "art_service.h"
 #include "audio_route.h"
+#include "bt_control.h"
 #include "hal_radio.h"
 #include "os.h"
 #include "player.h"
@@ -34,6 +36,23 @@ static void vol_text(char *out, size_t n, uint32_t att) {
     }
 }
 
+/* The volume line: the headset's (hv >= 0, bt_volume_get()) or the software one. */
+static void vol_label(char *out, size_t n, uint32_t att, int hv) {
+    if (hv >= 0) {
+        snprintf(out, n, "Headset %u%%", bt_vol_percent((uint8_t)hv));
+    } else {
+        vol_text(out, n, att);
+    }
+}
+
+/* Width of the volume bar's fill out of @p w pixels. */
+static int32_t vol_fill_w(uint32_t att, int hv, int32_t w) {
+    if (hv >= 0) {
+        return (int32_t)((uint32_t)hv * (uint32_t)w / HAL_BT_VOLUME_MAX);
+    }
+    return att >= AUDIO_VOL_OFF_DB ? 0 : (int32_t)((AUDIO_VOL_OFF_DB - att) * (uint32_t)w / AUDIO_VOL_OFF_DB);
+}
+
 static lv_obj_t *bar_new(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int32_t h, uint32_t col) {
     lv_obj_t *b = lv_obj_create(parent);
     lv_obj_remove_style_all(b);
@@ -55,6 +74,7 @@ typedef struct {
     ui_list_t *list;
     lv_obj_t *vol, *level;
     player_info_t info;
+    int hv;               /* the headset's volume shown (-1: the software volume) */
     uint32_t last_ms;
 } tone_t;
 
@@ -72,14 +92,16 @@ static void tone_refresh(tone_t *t, bool force) {
     player_info_t n;
     player_get(&n);
     bool changed = force || n.src != t->info.src || n.tone != t->info.tone || n.state != t->info.state;
-    bool vol_changed = n.vol_att_db != t->info.vol_att_db || force;
+    int hv = bt_volume_get();
+    bool vol_changed = n.vol_att_db != t->info.vol_att_db || hv != t->hv || force;
     t->info = n;
+    t->hv = hv;
     if (changed) {
         ui_list_refresh(t->list);
     }
     if (vol_changed) {
         char b[64];
-        vol_text(b, sizeof b, n.vol_att_db);
+        vol_label(b, sizeof b, n.vol_att_db, hv);
         set_text(t->vol, b);
         if (n.vol_att_db >= AUDIO_VOL_OFF_DB) {
             snprintf(b, sizeof b, "Output: silent");
@@ -113,7 +135,7 @@ static bool tone_button(ui_screen_t *s, uint8_t btn) {
         return true;
     }
     if (btn == HAL_BTN_LEFT || btn == HAL_BTN_RIGHT) {
-        (void)player_volume_step(btn == HAL_BTN_RIGHT ? 1 : -1);
+        bt_volume_step(btn == HAL_BTN_RIGHT ? 1 : -1);
         tone_refresh(t, false);
         return true;
     }
@@ -284,6 +306,9 @@ static void np_update(np_t *p) {
         snprintf(stq, sizeof stq, "%s - %u of %u", st, (unsigned)n.queue_pos, (unsigned)n.queue_len); /* queue position on the status line */
         st = stq;
     }
+    if (bt_volume_get() == 0 && n.state == PLAYER_PLAYING) { /* the headset is at 0 %: it plays, but silently (an AirPods Pro left at 0 % by a phone): say so */
+        st = "Playing - headset volume 0%";
+    }
     if (p->msg != NULL && (int32_t)(p->msg_until - os_tick_ms()) > 0) {
         st = p->msg; /* a notice replaces the status line for a moment */
     } else {
@@ -336,14 +361,14 @@ static void np_update(np_t *p) {
             lv_obj_set_hidden(p->prog_fill, false);
         }
     }
+    const int hv = bt_volume_get();
     if (seek_mode) {
         mmss(b, sizeof b, "Seek ", el);
     } else {
-        vol_text(b, sizeof b, n.vol_att_db);
+        vol_label(b, sizeof b, n.vol_att_db, hv);
     }
     set_text(p->vol, b);
-    uint32_t span = AUDIO_VOL_OFF_DB;
-    int32_t vw = n.vol_att_db >= span ? 0 : (int32_t)((span - n.vol_att_db) * NP_VOL_W / span);
+    int32_t vw = vol_fill_w(n.vol_att_db, hv, NP_VOL_W);
     if (vw != p->vol_w) {
         p->vol_w = vw;
         lv_obj_set_width(p->vol_fill, vw > 0 ? vw : 1);
@@ -404,7 +429,7 @@ static void np_scroll(ui_screen_t *s, int32_t steps) {
     player_get(&p->info); /* a scrub starts from the position as it is now */
     ui_npc_track_t trk = np_track(&p->info);
     if (!ui_npc_scroll(&p->ctl, &trk, steps, os_tick_ms())) {
-        (void)player_volume_step(steps); // clockwise = louder
+        bt_volume_step(steps); // clockwise = louder
     }
     np_update(p);
 }

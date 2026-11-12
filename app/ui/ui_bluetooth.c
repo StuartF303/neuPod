@@ -79,8 +79,8 @@ void ui_bt_stream_pane_text(char *out, size_t n) {
     hal_bt_stream_state_t s = hal_bt_stream_state();
     if ((s == HAL_BT_STREAM_OPEN || s == HAL_BT_STREAM_STREAMING || s == HAL_BT_STREAM_SUSPENDED) && hal_bt_stream_codec(&c)) {
         hal_bt_stats(&st);
-        snprintf(out, n, "%s bitpool %u\n%u kbit/s\n%u underruns", c.codec == HAL_BT_CODEC_SBC_XQ ? "SBC-XQ" : "SBC", (unsigned)c.bitpool, (unsigned)c.kbps,
-                 (unsigned)st.underruns);
+        snprintf(out, n, "%s bitpool %u\n%u kbit/s\n%u underruns\nAbsolute volume: %s", c.codec == HAL_BT_CODEC_SBC_XQ ? "SBC-XQ" : "SBC", (unsigned)c.bitpool,
+                 (unsigned)c.kbps, (unsigned)st.underruns, hal_bt_volume_supported() ? "yes" : "no");
     }
 }
 
@@ -88,12 +88,12 @@ void ui_bt_stream_pane_text(char *out, size_t n) {
 static void link_text_for(const uint8_t addr[6], char *out, size_t n) {
     hal_bt_link_state_t l = hal_bt_link_state();
     if (!link_is_for(addr)) {
-        snprintf(out, n, "Not connected");
+        snprintf(out, n, "%s", bt_service_reconnecting() ? "Reconnecting..." : "Not connected");
         return;
     }
     switch (l) {
     case HAL_BT_LINK_PAIRING: snprintf(out, n, "Pairing..."); break;
-    case HAL_BT_LINK_CONNECTING: snprintf(out, n, "Connecting..."); break;
+    case HAL_BT_LINK_CONNECTING: snprintf(out, n, "%s", bt_service_reconnecting() ? "Reconnecting..." : "Connecting..."); break;
     case HAL_BT_LINK_CONNECTED:
         if (bt_saved_notice() == BT_SAVED_NOTICE_NOT_SAVED) {
             snprintf(out, n, "Paired - not saved (read-only)");
@@ -101,8 +101,14 @@ static void link_text_for(const uint8_t addr[6], char *out, size_t n) {
             stream_text(out, n);
         }
         break;
-    case HAL_BT_LINK_FAILED: snprintf(out, n, "Failed: %s", hal_bt_fail_text(hal_bt_link_reason())); break;
-    case HAL_BT_LINK_DISCONNECTED: snprintf(out, n, "Not connected"); break;
+    case HAL_BT_LINK_FAILED:
+        if (bt_service_reconnecting()) {
+            snprintf(out, n, "Reconnecting..."); /* the next attempt is on its way (bt_reconnect.h) */
+        } else {
+            snprintf(out, n, "Failed: %s", hal_bt_fail_text(hal_bt_link_reason()));
+        }
+        break;
+    case HAL_BT_LINK_DISCONNECTED: snprintf(out, n, "%s", bt_service_reconnecting() ? "Reconnecting..." : "Not connected"); break;
     }
 }
 
@@ -184,7 +190,7 @@ static void bt_get(void *ctx, int32_t idx, ui_list_item_t *o) {
         ui_display_name(nm, sizeof nm, b->saved.name);
         snprintf(o->label, sizeof o->label, "%s%s", b->saved.audio_sink ? LV_SYMBOL_AUDIO " " : "", nm[0] != '\0' ? nm : "Headset");
         link_text_for(b->saved.addr, o->detail, sizeof o->detail);
-        o->busy = link_busy(l) && link_is_for(b->saved.addr);
+        o->busy = (link_busy(l) && link_is_for(b->saved.addr)) || (bt_service_reconnecting() && l != HAL_BT_LINK_CONNECTED);
         return;
     }
     case ROW_ACTION: {

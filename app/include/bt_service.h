@@ -48,6 +48,9 @@ void bt_service_disconnect(void);
 /** Forget the remembered headset: drop the link, delete its link key, delete the record. */
 void bt_service_forget(void);
 
+/** The headset is being reconnected automatically (after a lost link, or at power-up): "Reconnecting..." (bt_reconnect.h). */
+bool bt_service_reconnecting(void);
+
 /** Advance the simulator on the host; no-op on hardware. Cheap; called from the UI tick. */
 void bt_service_tick(void);
 

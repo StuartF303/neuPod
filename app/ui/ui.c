@@ -13,6 +13,7 @@
 #include "boot.h"
 #include "capabilities.h"
 #include "hal_display.h"
+#include "hal_radio.h"
 #include "hal_system.h"
 #include "input_events.h"
 #include "library_service.h"
@@ -133,6 +134,8 @@ static uint32_t pump(void) {
 
 // Host tour: run the next token of the script. Returns the rest of the script.
 extern void hal_host_bt_drop_link(void) __attribute__((weak));
+extern void hal_host_bt_headset_volume(uint8_t volume) __attribute__((weak));
+extern void hal_host_bt_headset_key(hal_bt_key_t key) __attribute__((weak));
 static void screen_ready(const char *name);
 static const char *script_step(const char *p, uint32_t now, bool *done) {
     while (*p == ' ') {
@@ -175,6 +178,21 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
         /* Tour only (host simulator): the headset goes away now. Weak, so builds without the simulator simply skip it. */
         if (hal_host_bt_drop_link != NULL) {
             hal_host_bt_drop_link();
+        }
+        return end;
+    }
+    if (strncmp(p, "bt:vol:", 7) == 0) {
+        /* Tour only: the headset's own volume changes (a swipe on the stem), in percent. */
+        if (hal_host_bt_headset_volume != NULL) {
+            hal_host_bt_headset_volume((uint8_t)((unsigned)atoi(p + 7) * HAL_BT_VOLUME_MAX / 100u));
+        }
+        return end;
+    }
+    if (strncmp(p, "bt:key:", 7) == 0) {
+        /* Tour only: a button on the headset (next, prev, play, pause). */
+        hal_bt_key_t k = strncmp(p + 7, "next", 4) == 0 ? HAL_BT_KEY_NEXT : strncmp(p + 7, "prev", 4) == 0 ? HAL_BT_KEY_PREV : strncmp(p + 7, "pause", 5) == 0 ? HAL_BT_KEY_PAUSE : HAL_BT_KEY_PLAY;
+        if (hal_host_bt_headset_key != NULL) {
+            hal_host_bt_headset_key(k);
         }
         return end;
     }

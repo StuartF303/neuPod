@@ -11,6 +11,7 @@
 #include "audio_engine.h"
 #include "battery_store.h"
 #include "audio_route.h"
+#include "bt_control.h"
 #include "bt_service.h"
 #include "boot.h"
 #include "capabilities.h"
@@ -254,6 +255,7 @@ static void monitor_task(void *arg) {
         }
         player_service(); // the queue moves on even when no screen is polling the player
         audio_route_service(); // Bluetooth output: switch, start / suspend the stream, pause when the headset goes away
+        bt_control_service(); // headset volume policy, headset buttons, track information for the headset
         if (t >= next_beat) {
             next_beat += HEARTBEAT_MS;
             check_audio_alive();

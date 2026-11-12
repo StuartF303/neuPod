@@ -129,6 +129,14 @@ bool library_request_rows(lvw_view_t v, uint32_t first, uint32_t n, uint32_t seq
 
 bool library_request_build(uint32_t seq) {
     g_cancel = false;
+    // A paused track (the usual state after boot: resume brings the last track back paused) is stopped here, on the caller's task,
+    // keeping its place for resume, so the build is not refused for it. Something actually playing still refuses (LIBSVC_PLAYING).
+    // player_stop() queues its storage request before the build's, so the storage task handles it first.
+    player_info_t pi;
+    player_get(&pi);
+    if (pi.state == PLAYER_PAUSED) {
+        player_stop();
+    }
     return post(&(libsvc_req_t){.op = LIBSVC_REQ_BUILD, .seq = seq});
 }
 
