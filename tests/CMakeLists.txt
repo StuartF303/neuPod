@@ -56,6 +56,12 @@ add_test(NAME bt_saved COMMAND test_bt_saved)
 set_tests_properties(bt_saved PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_source_files_properties(test_bt_saved.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
+# Audio routing: Auto / Wired, the quiet change of output, pause on link loss, over the Bluetooth simulator and the real settings store.
+add_executable(test_audio_route test_audio_route.c ${CMAKE_SOURCE_DIR}/app/runtime/audio_route.c ${CMAKE_SOURCE_DIR}/app/audio/bt_pcm.c)
+target_link_libraries(test_audio_route neupod_settings hal_host neupod_rt_core)
+add_test(NAME audio_route COMMAND test_audio_route)
+set_source_files_properties(test_audio_route.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
 set_source_files_properties(test_nfs.c test_clickwheel.c test_fatfs.c test_gfx.c test_storage_decode.c
   PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
@@ -157,14 +163,19 @@ set_tests_properties(wifi_tour PROPERTIES
 # Bluetooth pairing tour (stage 2a): pair, remembered-headset rows and pane, Disconnect, Forget, a refused pairing; snapshots bt-pairing,
 # bt-paired, bt-saved, settings-bt-saved, bt-disconnected, bt-forget-asks, bt-forgotten, bt-failed. The run fails if the script does not
 # reach its last snapshot (the tour expects its 13 files).
+# Stage 2b adds the audio half: the headset's stream opens, a track from the WAV album plays on Bluetooth (np-bt-badge), Settings > Bluetooth shows
+# "Streaming" and the codec (bt-streaming), then the headset goes away (bt-dropped: the banner, the player paused). The tour pairs and keeps a
+# headset, so the card's settings are wiped first (bt_clean), and it has its own card with the 20 s WAV album (like the seek tour).
+add_test(NAME bt_tour_reset COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/fsroot_bt/.neupod)
+set_tests_properties(bt_tour_reset PROPERTIES FIXTURES_SETUP bt_clean)
 add_test(NAME bt_tour
-  COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --tour-bt --snapshots ${CMAKE_BINARY_DIR}/snapshots_bt)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_bt)
+  COMMAND neupod --run-ms 100000 --splash-hold-ms 1500 --tour-bt --snapshots ${CMAKE_BINARY_DIR}/snapshots_bt)
 set_tests_properties(bt_tour PROPERTIES
-  RESOURCE_LOCK neupod_shared_card
-  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_bt;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_bt;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_bt.img"
+  FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+  FIXTURES_REQUIRED bt_clean
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-  TIMEOUT 120)
+  TIMEOUT 200)
 
 # Album art tour: Now Playing with a cover file (Cover.JPG: upper-case on purpose), with a JPEG inside the FLAC, and with art it cannot
 # show (PNG inside, progressive cover.jpg beside). art_snapshot checks the pixels of the art box in the snapshots.
@@ -209,6 +220,7 @@ endfunction()
 add_executable(test_seek_snapshot test_seek_snapshot.c)
 set_source_files_properties(test_seek_snapshot.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 neupod_seek_card(seek)
+neupod_seek_card(bt) # the Bluetooth tour has the same WAV album
 add_test(NAME seek_tour_reset COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/fsroot_seek/.neupod)
 set_tests_properties(seek_tour_reset PROPERTIES FIXTURES_SETUP seek_clean)
 add_test(NAME seek_tour
@@ -245,16 +257,25 @@ foreach(T tour:hires:tour tour-input:hires_input:input_tour tour-wifi:hires_wifi
   list(GET TL 0 T_FLAG)
   list(GET TL 1 T_CARD)
   list(GET TL 2 T_NAME)
-  neupod_hires_card(${T_CARD})
+  if(T_CARD STREQUAL "hires_bt") # the Bluetooth tour pairs and plays: the WAV album card, settings wiped before each run
+    neupod_seek_card(hires_bt)
+    add_test(NAME hires_bt_tour_reset COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/fsroot_hires_bt/.neupod)
+    set_tests_properties(hires_bt_tour_reset PROPERTIES FIXTURES_SETUP hires_bt_clean)
+  else()
+    neupod_hires_card(${T_CARD})
+  endif()
   file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_${T_CARD})
   add_test(NAME hires_${T_NAME}
-    COMMAND neupod --run-ms 45000 --splash-hold-ms 1500 --${T_FLAG} --snapshots ${CMAKE_BINARY_DIR}/snapshots_${T_CARD})
+    COMMAND neupod --run-ms 100000 --splash-hold-ms 1500 --${T_FLAG} --snapshots ${CMAKE_BINARY_DIR}/snapshots_${T_CARD})
   set_tests_properties(hires_${T_NAME} PROPERTIES
     ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_DISPLAY_SIZE=480x360;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_${T_CARD};NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_${T_CARD}.img"
     PASS_REGULAR_EXPRESSION "${HIRES_PASS}"
     FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    TIMEOUT 120)
+    TIMEOUT 200)
+  if(T_CARD STREQUAL "hires_bt")
+    set_tests_properties(hires_${T_NAME} PROPERTIES FIXTURES_REQUIRED hires_bt_clean)
+  endif()
 endforeach()
 
 # Album art at 480x360: its own fake card (settings wiped first, like art_tour), then the pixel checks of the 168 / 144 px art boxes.
@@ -394,7 +415,7 @@ endif()
 # the vectors in tests/assets/audio; the sink output is compared with the tracks decoded on their own.
 add_executable(test_gapless test_gapless.c
   ${CMAKE_SOURCE_DIR}/app/audio/audio_shared.c ${CMAKE_SOURCE_DIR}/app/audio/audio_ctl.c ${CMAKE_SOURCE_DIR}/app/audio/codec.c
-  ${CMAKE_SOURCE_DIR}/app/audio/track_feed.c ${CMAKE_SOURCE_DIR}/app/audio/track_stream.c ${NEUPOD_CODEC_TEST_VENDOR})
+  ${CMAKE_SOURCE_DIR}/app/audio/bt_pcm.c ${CMAKE_SOURCE_DIR}/app/audio/track_feed.c ${CMAKE_SOURCE_DIR}/app/audio/track_stream.c ${NEUPOD_CODEC_TEST_VENDOR})
 target_include_directories(test_gapless PRIVATE ${CMAKE_SOURCE_DIR}/app/include ${CMAKE_SOURCE_DIR}/app/third_party/alac)
 target_compile_definitions(test_gapless PRIVATE NEUPOD_TEST_ASSETS="${CMAKE_SOURCE_DIR}/tests/assets/audio")
 target_link_libraries(test_gapless neupod_rt_core Threads::Threads m)

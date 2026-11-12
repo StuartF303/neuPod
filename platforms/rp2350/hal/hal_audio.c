@@ -25,6 +25,7 @@
 #include "hardware/structs/sio.h"
 #include "hardware/sync.h"
 #include "neupod_i2s.pio.h"
+#include "vclk.h"
 
 #define PIN_DATA 9u
 #define PIN_BCK 10u // BCK and LRCK must be consecutive: side-set base = BCK, base + 1 = LRCK
@@ -53,6 +54,8 @@ static uint32_t g_dma_buf[2][BLOCK_WORDS] __attribute__((aligned(BLOCK_BYTES)));
 
 static hal_audio_block_cb g_cb;
 static volatile bool g_open;
+static bool g_virtual_next;    // hal_audio_set_virtual(): the next open is a clock only (Bluetooth output)
+static volatile bool g_virtual; // the open stream is virtual
 static volatile bool g_muted = true;
 static volatile int g_sm = -1;
 static volatile int g_ch[2] = {-1, -1};
@@ -143,7 +146,12 @@ bool hal_audio_rate_supported(uint32_t sample_rate) {
     return sample_rate == 44100u || sample_rate == 48000u || sample_rate == 88200u || sample_rate == 96000u;
 }
 
-void hal_audio_set_block_callback(hal_audio_block_cb cb) { g_cb = cb; }
+void hal_audio_set_block_callback(hal_audio_block_cb cb) {
+    g_cb = cb;
+    vclk_set_callback(cb);
+}
+
+void hal_audio_set_virtual(bool virtual_sink) { g_virtual_next = virtual_sink; }
 
 // ---- DMA interrupt: a block has left the buffer, refill it ------------------------------------------------
 
@@ -215,6 +223,16 @@ hal_status_t hal_audio_open(const hal_audio_format *fmt) {
     }
     if (!hal_audio_rate_supported(fmt->sample_rate) || fmt->channels < 1 || fmt->channels > 2) {
         return HAL_ENOTSUP;
+    }
+    if (g_virtual_next) { // Bluetooth: no DAC, no pins, no DMA; the output stage stays muted
+        mute_pin_force();
+        hal_status_t st = vclk_open(fmt->sample_rate);
+        if (st == HAL_OK) {
+            g_rate = fmt->sample_rate;
+            g_virtual = true;
+            g_open = true;
+        }
+        return st;
     }
     mute_pin_force(); // nothing is claimed here: g_ch / g_sm are -1 after a close
 
@@ -310,6 +328,12 @@ void hal_audio_close(void) {
     if (!g_open) {
         return;
     }
+    if (g_virtual) {
+        g_open = false;
+        g_virtual = false;
+        vclk_close();
+        return;
+    }
     mute_pin_force();
     irq_set_enabled(DMA_IRQ_1, false); // before the channels stop: no ISR may refill or re-arm them now
     g_open = false;
@@ -331,6 +355,9 @@ void hal_audio_close(void) {
 // ---- Block interface for the audio core --------------------------------------------------------------------
 
 int32_t __not_in_flash_func(hal_audio_write)(const int32_t *samples, uint32_t frames) {
+    if (g_virtual) {
+        return (int32_t)frames; // discarded: the audio core sent the block to the Bluetooth ring
+    }
     uint32_t room = HAL_AUDIO_BLOCK_FRAMES - g_wpos;
     if (frames > room) {
         frames = room;
@@ -345,11 +372,11 @@ int32_t __not_in_flash_func(hal_audio_write)(const int32_t *samples, uint32_t fr
 
 uint32_t __not_in_flash_func(hal_audio_free_frames)(void) { return HAL_AUDIO_BLOCK_FRAMES - g_wpos; }
 
-uint32_t __not_in_flash_func(hal_audio_underruns)(void) { return g_late; }
+uint32_t __not_in_flash_func(hal_audio_underruns)(void) { return g_virtual ? vclk_underruns() : g_late; }
 
 void hal_audio_idle(void) { __wfi(); }
 
-const char *hal_audio_backend_name(void) { return "i2s"; }
+const char *hal_audio_backend_name(void) { return "i2s"; } // the boot check asks at start-up, when the output is wired
 
 void __not_in_flash_func(hal_audio_mute)(bool mute) {
     if (!mute && !g_open) {
@@ -361,7 +388,7 @@ void __not_in_flash_func(hal_audio_mute)(bool mute) {
 
 void hal_audio_get_info(hal_audio_info_t *out) {
     out->rate_hz = g_open ? g_rate : 0;
-    out->rate_actual_mhz = g_open ? g_rate_actual_mhz : 0;
-    out->clkdiv_x256 = g_open ? g_clkdiv_x256 : 0;
+    out->rate_actual_mhz = g_open && !g_virtual ? g_rate_actual_mhz : 0;
+    out->clkdiv_x256 = g_open && !g_virtual ? g_clkdiv_x256 : 0;
     out->muted = g_muted;
 }

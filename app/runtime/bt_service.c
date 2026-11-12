@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #include <stdio.h>
 
+#include "audio_route.h"
 #include "bt_saved.h"
 #include "bt_service.h"
 #include "os.h"
@@ -16,6 +17,9 @@ static os_queue_t *g_q;
 // with hal_bt_state().
 static void on_event(const hal_bt_event_t *ev, void *ctx) {
     (void)ctx;
+    if (ev->type == HAL_BT_EVT_STREAM) {
+        return; /* the audio routing reads the stream state itself (audio_route.c) */
+    }
     if (ev->type == HAL_BT_EVT_LINK) {
         /* Link changes are not queued: screens read hal_bt_link_state(). A finished Pair is remembered here, on the radio worker, so it does
          * not depend on any screen being open (the settings store takes its own lock; this is RAM only, the card is written by the storage task). */
@@ -76,9 +80,13 @@ hal_status_t bt_service_connect(void) {
     return hal_bt_connect(d.addr); /* coexistence policy point, as in bt_service_pair() */
 }
 
-void bt_service_disconnect(void) { hal_bt_disconnect(); }
+void bt_service_disconnect(void) {
+    audio_route_user_released(); /* a headset let go on purpose is no longer the output once its link is down */
+    hal_bt_disconnect();
+}
 
 void bt_service_forget(void) {
+    audio_route_user_released();
     hal_bt_device_t d;
     if (bt_saved_get(&d)) {
         /* Disconnects first if it is the current peer, and deletes the link key (straight from the store when the stack is down). If the radio

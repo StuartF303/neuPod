@@ -131,6 +131,7 @@ static uint32_t pump(void) {
 #define SCRIPT_STEP_MS 300u
 
 // Host tour: run the next token of the script. Returns the rest of the script.
+extern void hal_host_bt_drop_link(void) __attribute__((weak));
 static void screen_ready(const char *name);
 static const char *script_step(const char *p, uint32_t now, bool *done) {
     while (*p == ' ') {
@@ -167,6 +168,13 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
         bool ok = (strncmp(p + 5, "pause", 5) == 0 && pi.state == PLAYER_PAUSED) ||
                   (strncmp(p + 5, "art", 3) == 0 && pi.state == PLAYER_PAUSED && av.state == ART_VIEW_READY);
         return ok ? end : p;
+    }
+    if (strncmp(p, "bt:drop", 7) == 0) {
+        /* Tour only (host simulator): the headset goes away now. Weak, so builds without the simulator simply skip it. */
+        if (hal_host_bt_drop_link != NULL) {
+            hal_host_bt_drop_link();
+        }
+        return end;
     }
     if (strncmp(p, "snap:", 5) == 0) {
         char name[32];

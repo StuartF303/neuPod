@@ -140,6 +140,19 @@ TEST(test_record_round_trip_and_reboot) {
     ASSERT_FALSE(bt_saved_get(&got));
 }
 
+TEST(test_a_long_airpods_name_is_kept_whole) {
+    // "Stuart's AirPods Pro - Find My" with U+2019: 34 bytes, longer than the old 32-byte cap.
+    const char *name = "Stuart\xE2\x80\x99s AirPods Pro 3 - Find My";
+    ASSERT_TRUE(strlen(name) > 32 && strlen(name) <= HAL_BT_NAME_MAX);
+    settings_init(NULL);
+    settings_attach_storage(true);
+    (void)settings_load();
+    hal_bt_device_t d = dev_of(A_AIRPODS, name, 0x240404), got;
+    ASSERT_TRUE(bt_saved_put(&d));
+    ASSERT_TRUE(bt_saved_get(&got));
+    ASSERT_TRUE(strcmp(got.name, name) == 0); // the raw name stays stored; the UI normalises it for display
+}
+
 TEST(test_damaged_records_are_ignored) {
     hal_bt_device_t got;
     uint8_t v[BT_SAVED_MAX_LEN + 4];
@@ -530,6 +543,7 @@ int main(void) {
     setenv("NEUPOD_FS_ROOT", abs, 1);
     snprintf(g_root, sizeof g_root, "%s", abs);
     RUN(test_record_round_trip_and_reboot);
+    RUN(test_a_long_airpods_name_is_kept_whole);
     RUN(test_damaged_records_are_ignored);
     RUN(test_capacity_has_room_for_the_record);
     RUN(test_forget_while_the_stack_is_down_deletes_straight_from_the_store);

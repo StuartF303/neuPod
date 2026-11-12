@@ -9,6 +9,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "hal_radio.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -35,6 +37,12 @@ void hal_host_bt_drop_link(void);
  * board); a Pair in progress ends FAILED with HAL_BT_FAIL_BUSY and a Connect with HAL_BT_FAIL_NOT_FOUND, and the Pair window closes at once.
  */
 void hal_host_bt_remote_hangup(void);
+
+/** Tests: the next stream opening fails with @p reason (HAL_BT_STREAM_FAILED), then everything is normal again. */
+void hal_host_bt_fail_next_stream(hal_bt_fail_t reason);
+
+/** Tests: the headset releases the audio connection while the link stays up (stream CLOSED, link CONNECTED). */
+void hal_host_bt_stream_dropped_by_headset(void);
 
 /**
  * Tests only: say that a FatFs volume is mounted (the host's file API is POSIX and reports "not mounted"). Lets a test link the FatFs

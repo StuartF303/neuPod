@@ -117,6 +117,8 @@ void ui_log_screen(const char *title, const char *what, const char *now_top);
 
 /** Bars (1..4) of the joined Wi-Fi network as the status bar shows them (hysteresis applied); 0 when not joined. */
 int ui_wifi_bars(void);
+/** Settings pane lines for an open Bluetooth audio stream ("SBC-XQ bitpool 76\n455 kbit/s\n0 underruns"); "" when there is none. */
+void ui_bt_stream_pane_text(char *out, size_t n);
 
 /* ---- List widget (ui_list.c) ---------------------------------------------------------------------- */
 

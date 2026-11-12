@@ -13,6 +13,7 @@
 #include <unistd.h>
 
 #include "../app/audio/audio_core.c" /* white box: the test reads core 1's state */
+#include "bt_pcm.h"
 #include "hal_core.h"
 #include "hal_system.h"
 #include "os.h"
@@ -93,6 +94,7 @@ static void *clock_thread(void *arg) {
     }
     return NULL;
 }
+void hal_audio_set_virtual(bool v) { (void)v; }
 hal_status_t hal_audio_open(const hal_audio_format *fmt) {
     g_sink_rate = fmt->sample_rate;
     g_sink_opens++;
@@ -981,6 +983,64 @@ TEST(repeated_seeks_in_a_row_leave_only_the_last_one_playing) {
     ASSERT_EQ(0, g_ev.storms);
 }
 
+// ---- Bluetooth output (the same core-1 code, a fake consumer standing in for the encoder) ----
+
+static bool wait_stream_open(bool want) {
+    for (int i = 0; i < 1000 && g_stream_open != want; i++) usleep(1000);
+    return g_stream_open == want;
+}
+
+TEST(bluetooth_output_is_paced_by_the_ring_and_refuses_other_rates) {
+    ASSERT_TRUE(audio_stop());
+    ASSERT_TRUE(audio_close());
+    ASSERT_TRUE(wait_stream_open(false));
+    ASSERT_TRUE(audio_set_output(AUDIO_OUT_BT, 44100));
+    ASSERT_TRUE(audio_open(44100, 2, 16));
+    ASSERT_TRUE(wait_stream_open(true));
+    ASSERT_EQ(1, (int)g_out_bt);
+    ASSERT_EQ(PCM_FRAMES / 2u, g_pcm_ring.mask + 1u); // the decoder ring took the first half of the store
+    ASSERT_TRUE(audio_set_volume(0));
+    const hal_bt_pcm_source_t *src = bt_pcm_source();
+    ASSERT_EQ(PCM_FRAMES, src->capacity(src->ctx));
+    ASSERT_TRUE(audio_tone(TONE_1K));
+    usleep(400000); // nobody drains the ring: it fills, then the interrupt waits (the link is the pace)
+    audio_stats_t a, b;
+    ASSERT_TRUE(audio_stats_get(&a));
+    ASSERT_EQ(1, (int)a.output);
+    ASSERT_TRUE(a.bt_fill_frames >= PCM_FRAMES - HAL_AUDIO_BLOCK_FRAMES);
+    ASSERT_TRUE(a.bt_stall_blocks > 0);
+    usleep(200000);
+    ASSERT_TRUE(audio_stats_get(&b));
+    ASSERT_EQ(a.bt_fill_frames, b.bt_fill_frames); // nothing was lost or overrun while it waited
+    ASSERT_EQ(0, (int)b.underruns);
+    int16_t buf[1024 * 2];
+    ASSERT_EQ(1024, (int)src->read(src->ctx, buf, 1024)); // the encoder takes some audio: the interrupt goes on
+    bool nonzero = false;
+    for (int i = 0; i < 1024 * 2; i++) nonzero |= buf[i] != 0;
+    ASSERT_TRUE(nonzero);
+    usleep(100000);
+    ASSERT_TRUE(audio_stats_get(&b));
+    ASSERT_TRUE(b.bt_fill_frames >= PCM_FRAMES - HAL_AUDIO_BLOCK_FRAMES); // refilled to the brim by the next blocks
+    // another sample rate is refused (no resampling), with the reason in codec_error
+    ASSERT_TRUE(audio_stop());
+    usleep(50000);
+    uint32_t started = audio_pcm_started_count();
+    ASSERT_TRUE(audio_pcm_start(48000, 2, 16));
+    for (int i = 0; i < 500 && audio_pcm_started_count() == started; i++) usleep(1000);
+    ASSERT_EQ((int)AUDIO_ERR_RATE_NOT_ON_BT, (int)g_codec_err);
+    // back to the wired output
+    ASSERT_TRUE(audio_stop());
+    ASSERT_TRUE(audio_close());
+    ASSERT_TRUE(wait_stream_open(false));
+    ASSERT_TRUE(audio_set_output(AUDIO_OUT_WIRED, 0));
+    ASSERT_TRUE(audio_open(44100, 2, 32));
+    ASSERT_TRUE(wait_stream_open(true));
+    ASSERT_EQ(0, (int)g_out_bt);
+    ASSERT_EQ(PCM_FRAMES, g_pcm_ring.mask + 1u);
+    ASSERT_EQ(0, (int)src->available(src->ctx)); // detached
+    ASSERT_TRUE(audio_set_volume(0));
+}
+
 int main(void) {
     g_cap = malloc((size_t)CAP_MAX_FRAMES * 8u);
     g_jitter = getenv("NEUPOD_TEST_JITTER") != NULL;
@@ -1049,6 +1109,7 @@ int main(void) {
     RUN(seek_during_gapless_prefetch_keeps_the_handoff_sample_exact_wav);
     RUN(seek_during_gapless_prefetch_keeps_the_handoff_sample_exact_across_codecs);
     RUN(repeated_seeks_in_a_row_leave_only_the_last_one_playing);
+    RUN(bluetooth_output_is_paced_by_the_ring_and_refuses_other_rates);
     if (unit_failures) for (int i = 0; i < g_trace_n; i++) printf("  trace %d: changes=%u consumed=%u written=%u bound=%u have=%d\n", i, g_trace[i].changes, g_trace[i].consumed, g_trace[i].written, g_trace[i].bound, g_trace[i].have);
     unlink(P[1]);
     unlink(P[5]);

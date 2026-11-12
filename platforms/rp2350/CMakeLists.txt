@@ -28,6 +28,7 @@ add_library(hal_rp2350_core STATIC
   hal/hal_input.c
   hal/hal_i2c.c
   ${NEUPOD_AUDIO_SINK_SRC}   # core-1 code: no RTOS dependency (ADR-0011), shared by both builds
+  hal/hal_audio_vclk.c       # the virtual block clock: the null sink, and the I2S sink's Bluetooth mode
   hal/hal_core.c
   ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
 )
@@ -46,7 +47,7 @@ target_link_libraries(hal_rp2350_core PUBLIC
   pico_unique_id
 )
 set_source_files_properties(hal/hal_core.c hal/hal_i2c.c i2c_test_main.c ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
-  hal/hal_system.c hal/bt_port_cyw43.c hal/hal_wifi.c hal/hal_display.c hal/hal_console.c hal/hal_input.c hal/hal_audio.c hal/hal_audio_null.c main.c
+  hal/hal_system.c hal/bt_port_cyw43.c hal/hal_wifi.c hal/hal_display.c hal/hal_console.c hal/hal_input.c hal/hal_audio.c hal/hal_audio_null.c hal/hal_audio_vclk.c main.c
   ${CMAKE_SOURCE_DIR}/hal/common/bt_btstack/bt_btstack.c
   display_test_main.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 pico_generate_pio_header(hal_rp2350_core ${CMAKE_CURRENT_LIST_DIR}/hal/clickwheel_rx.pio)

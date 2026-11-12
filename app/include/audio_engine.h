@@ -55,7 +55,16 @@ typedef struct {
     uint32_t dec_us_block_avg; /**< window: decoder CPU per 256 output frames, microseconds (interrupt time subtracted) */
     uint32_t dec_us_block_max; /**< window: worst single decode call, scaled to 256 frames */
     uint32_t dec_pct_x10;      /**< window: decoder load, tenths of a percent of one core (avg / block period) */
+    uint32_t output;           /**< audio_output_t: where the block interrupt sends the audio */
+    uint32_t bt_ring_frames;   /**< Bluetooth ring capacity (0 on the wired output) */
+    uint32_t bt_fill_frames;   /**< frames waiting in the Bluetooth ring for the encoder */
+    uint32_t bt_stall_blocks;  /**< blocks the interrupt waited because the Bluetooth ring was full (the link was the pace) since the output was selected */
 } audio_stats_t;
+
+typedef enum { AUDIO_OUT_WIRED = 0, AUDIO_OUT_BT } audio_output_t;
+
+/** audio_stats_t.codec_error: a stream was refused because the Bluetooth stream carries another sample rate (codec_err_t has 1..5). */
+#define AUDIO_ERR_RATE_NOT_ON_BT 6u
 
 typedef enum { AUDIO_CODEC_PCM = 0, AUDIO_CODEC_FLAC, AUDIO_CODEC_MP3, AUDIO_CODEC_ALAC } audio_codec_t;
 typedef enum { AUDIO_VERIFY_NONE = 0, AUDIO_VERIFY_RUNNING, AUDIO_VERIFY_OK, AUDIO_VERIFY_MISMATCH, AUDIO_VERIFY_NO_MD5 } audio_verify_t;
@@ -97,6 +106,13 @@ bool audio_engine_start(void);
 bool audio_open(uint32_t sample_rate, uint8_t channels, uint8_t valid_bits);
 /** Ask the audio core to close the stream. */
 bool audio_close(void);
+/**
+ * Select where the audio goes. Takes effect when the core processes it, and only with the stream closed (otherwise the core reports
+ * AUDIO_EVT_CMD_ERROR): send audio_close(), audio_set_output(), audio_open() in that order. @p bt_rate: the sample rate the Bluetooth stream
+ * carries (the core refuses streams of any other rate on that output; no resampling). The core-1 to core-0 Bluetooth ring (bt_pcm.h) shares the
+ * 32 KB of the PCM ring (ADR-0013 amendment).
+ */
+bool audio_set_output(audio_output_t out, uint32_t bt_rate);
 /** Offer PCM bytes (little-endian integer samples of the format given to audio_pcm_start); returns the bytes accepted. */
 uint32_t audio_data_write(const void *data, uint32_t bytes);
 /** Bytes the data ring can take right now. */

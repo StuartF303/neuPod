@@ -10,6 +10,8 @@
 #include <string.h>
 
 #include "art_service.h"
+#include "audio_route.h"
+#include "hal_radio.h"
 #include "os.h"
 #include "player.h"
 #include "ui_internal.h"
@@ -251,7 +253,18 @@ static void np_update(np_t *p) {
     } else {
         set_text(p->album, "");
     }
-    set_text(p->badge, n.src == PLAYER_SRC_FILE ? n.format : n.src == PLAYER_SRC_TONE ? "TEST SIGNAL" : "");
+    char badge[32];
+    badge[0] = '\0';
+    if (n.src == PLAYER_SRC_FILE) {
+        snprintf(badge, sizeof badge, "%s", n.format);
+    } else if (n.src == PLAYER_SRC_TONE) {
+        snprintf(badge, sizeof badge, "TEST SIGNAL");
+    }
+    hal_bt_codec_t codec;
+    if (n.src != PLAYER_SRC_NONE && audio_route_output() == AUDIO_OUT_BT && hal_bt_stream_codec(&codec)) {
+        hal_bt_codec_label(&codec, badge, sizeof badge); /* on Bluetooth the badge is what the headset is sent; the source format stays in the stats */
+    }
+    set_text(p->badge, badge);
     const char *st = "Choose a file in Extras > Files, or a test tone";
     static const char *const verdict[] = {"", "Verifying", "MD5 OK: decoded audio matches the file", "MD5 MISMATCH: decoded audio differs",
                                           "No MD5 stored in this file"};
