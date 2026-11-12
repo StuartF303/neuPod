@@ -2,6 +2,8 @@
 
 Text, number, level, choice and date entry with the click wheel is one library: [Wheel input widgets](ui-input.md). Wi-Fi screens: [Wi-Fi](wifi.md).
 
+Design review of 12 November 2026 (colour tokens, type scale, new screens, owner decisions): [design review](design/2026-11-12-ui-review/README.md); its backlog is in [Backlog](backlog.md#design-review-2026-11-12).
+
 Target: the Phase 1 panel, **320×240 landscape**. Each screen is an original drawing at the
 panel's native size (SVG, `viewBox="0 0 320 240"`); the look follows the classic click-wheel
 player layout — split menu with artwork, blue selection bar — lightly modernised. These are
