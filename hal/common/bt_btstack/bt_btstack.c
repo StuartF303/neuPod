@@ -398,7 +398,11 @@ static void worker_scan_stop(void *arg) {
 /* The key record layout hal_bt_storage_delete_key() relies on (btstack_link_key_db_tlv.c, link_key_nvm_t: uint32 seq, bd_addr_t, link_key_t,
  * link_key_type_t): size = round_up(4 + 6 + 16 + sizeof(link_key_type_t), 4). The struct is private to BTstack, so the assert is on its parts. */
 _Static_assert(sizeof(bd_addr_t) == 6 && sizeof(link_key_t) == 16, "link key record layout");
-_Static_assert(HAL_BT_KEY_RECORD_LEN == ((4u + 6u + 16u + sizeof(link_key_type_t) + 3u) & ~3u), "HAL_BT_KEY_RECORD_LEN must match BTstack's link_key_nvm_t");
+/* The RP2350 toolchain uses short enums (1-byte key type: the record is exactly HAL_BT_KEY_RECORD_LEN = 28 bytes). The Y2's has 4-byte enums
+ * (a 32-byte record): HAL_BT_KEY_RECORD_LEN is then only the read buffer of hal_bt_storage_delete_key(), which needs the address at offset 4. */
+#define LINK_KEY_RECORD_LEN ((4u + 6u + 16u + sizeof(link_key_type_t) + 3u) & ~3u)
+_Static_assert(sizeof(link_key_type_t) != 1 || HAL_BT_KEY_RECORD_LEN == LINK_KEY_RECORD_LEN, "HAL_BT_KEY_RECORD_LEN must match BTstack's link_key_nvm_t");
+_Static_assert(LINK_KEY_RECORD_LEN >= HAL_BT_KEY_ADDR_OFFSET + 6u && LINK_KEY_RECORD_LEN <= 48u, "link key record size (y2_bt_tlv.c caches up to 48 bytes)");
 _Static_assert(HAL_BT_KEY_SLOTS == NVM_NUM_LINK_KEYS, "HAL_BT_KEY_SLOTS must match NVM_NUM_LINK_KEYS");
 
 /* HCI / SDP / L2CAP status to our reason. During a Pair, "the remote ended it" and "no resources" mean a headset that is busy or not in
@@ -922,7 +926,7 @@ hal_status_t hal_bt_init(hal_bt_event_fn cb, void *ctx, const hal_bt_storage_t *
     if (!bt_port_start()) {
         return HAL_ERR;
     }
-    g_init = (init_args_t){.cb = cb, .ctx = ctx, .storage = storage, .rc = 0};
+    g_init = (init_args_t){.cb = cb, .ctx = ctx, .storage = bt_port_storage(storage), .rc = 0};
     if (!bt_port_run_sync(worker_init, &g_init)) {
         return HAL_ERR;
     }

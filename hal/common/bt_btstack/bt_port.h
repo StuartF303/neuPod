@@ -26,6 +26,10 @@ extern "C" {
 /** Can the controller be used at all (RP2350: the radio driver is up; Y2: /dev/stpbt was opened)? false: hal_bt_init() is HAL_ENODEV. */
 bool bt_port_present(void);
 
+/** The storage BTstack's thread may use, made from the one hal_bt_init() was given (RTOS task context). RP2350: the same pointer, BTstack's
+ * thread is a task and may call the settings store. Y2: a RAM copy that is written back by bt_port_poll() (platforms/y2/hal/y2_bt_tlv.h). */
+const hal_bt_storage_t *bt_port_storage(const hal_bt_storage_t *backing);
+
 /** Called by hal_bt_init() before the first request is handed over. Make BTstack ready (memory, run loop, hci_init); idempotent. false: HAL_ERR. */
 bool bt_port_start(void);
 

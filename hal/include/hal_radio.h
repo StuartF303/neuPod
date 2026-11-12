@@ -11,7 +11,8 @@
  *
  * Threading: every hal_bt_* call may be made from any RTOS task on core 0. The event callback runs on the radio
  * worker (the CYW43 async-context task) with BTstack's lock held: it must be quick, must not block and must not call
- * back into hal_bt_*. Never call any of this from core 1.
+ * back into hal_bt_*. Never call any of this from core 1. On the Y2 the stack runs on a thread of its own that must not touch
+ * the RTOS, so the callback instead runs inside hal_bt_poll(), on the task that calls it (the UI frame); same rules.
  */
 #ifndef NEUPOD_HAL_RADIO_H
 #define NEUPOD_HAL_RADIO_H
@@ -62,6 +63,10 @@ typedef enum {
     HAL_WIFI_FAILED,   /**< the last join failed (network not found, link error) */
     HAL_WIFI_BAD_AUTH, /**< wrong password */
 } hal_wifi_status;
+
+/** false on a platform with no Wi-Fi chip (the Y2): the boot check then reports Wi-Fi unavailable even though the radio driver, which
+ * Bluetooth needs, came up. Every hal_wifi_* call on such a platform answers HAL_ENODEV / "down". */
+bool hal_wifi_present(void);
 
 /** Start the station interface (radio driver must be up). Cheap if already on. */
 hal_status_t hal_wifi_start(void);

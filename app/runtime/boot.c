@@ -265,7 +265,11 @@ static void check_radio(void *arg) {
     hal_status_led(true); // first LED write loads the chip firmware; do it here, not in the monitor
     hal_status_led(false);
     // "ok" means the driver and lwIP are up, not that a network is joined (joining is the Wi-Fi service's business).
-    caps_resolve(CAP_WIFI, true, NULL, "driver and lwIP up (joining is separate)");
+    if (hal_wifi_present()) {
+        caps_resolve(CAP_WIFI, true, NULL, "driver and lwIP up (joining is separate)");
+    } else {
+        caps_resolve(CAP_WIFI, false, BR_RADIO_NONE, "no Wi-Fi on this platform (Bluetooth only)");
+    }
 
     // Do not bring Bluetooth up before the settings store has loaded (link keys live there): wait briefly for the first load.
     while (os_tick_ms() - g_start_ms < 3500u) {

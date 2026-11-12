@@ -27,15 +27,18 @@ hal_status_t hal_system_init(void) {
     return HAL_OK;
 }
 
-// The Y2 has no Wi-Fi/Bluetooth chip we can drive. The boot check treats a failure here as "radio absent" and marks
-// Bluetooth and Wi-Fi unavailable, which is what makes the UI grey them out.
+// The radio on the Y2 is the combo chip's Bluetooth through /dev/stpbt (there is no Wi-Fi: hal_wifi_present() is false). The boot check
+// treats a failure here as "radio absent" and marks Bluetooth and Wi-Fi unavailable, which is what makes the UI grey them out. OK only if
+// the address file and the device are both usable; opening the device powers the chip (about 1.3 s).
 hal_status_t hal_system_late_init(void) {
     static bool logged;
+    bool ok = y2_bt_probe();
     if (!logged) {
         logged = true;
-        printf("radio: not present on the Y2 (Wi-Fi and Bluetooth unavailable)\n");
+        printf(ok ? "radio: Bluetooth present on /dev/stpbt (no Wi-Fi on the Y2)\n"
+                  : "radio: not present on the Y2 (Wi-Fi and Bluetooth unavailable)\n");
     }
-    return HAL_ENODEV;
+    return ok ? HAL_OK : HAL_ENODEV;
 }
 
 // FreeRTOS idle hook (configUSE_IDLE_HOOK, see hal/host/freertos/FreeRTOSConfig.h). The POSIX port's idle task is an

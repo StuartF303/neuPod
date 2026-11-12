@@ -39,6 +39,8 @@ void btstack_cyw43_deinit(__unused async_context_t *context) {
 
 bool bt_port_present(void) { return cyw43_arch_async_context() != NULL; }
 
+const hal_bt_storage_t *bt_port_storage(const hal_bt_storage_t *backing) { return backing; }
+
 bool bt_port_start(void) { return true; } /* cyw43_arch_init() did it, through btstack_cyw43_init() */
 
 bool bt_port_run_sync(bt_port_fn fn, void *arg) {

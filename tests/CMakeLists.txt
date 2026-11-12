@@ -437,14 +437,17 @@ add_library(neupod_y2_logic STATIC
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_sysfs.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_poweroff.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_charge.c
-  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_haptic.c)
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_haptic.c
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_bt_addr.c
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_bt_tlv.c)
 target_include_directories(neupod_y2_logic PUBLIC ${CMAKE_SOURCE_DIR}/platforms/y2/hal ${CMAKE_SOURCE_DIR}/hal/include)
 set_source_files_properties(${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_input.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_sd.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_power.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_fb.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_sysfs.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_poweroff.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_charge.c
-  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_haptic.c test_y2_haptic.c
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_haptic.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_bt_addr.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_bt_tlv.c
+  test_y2_haptic.c test_y2_bt_addr.c test_y2_bt_tlv.c
   test_y2_charge.c test_y2_input.c test_y2_sd.c test_y2_power.c test_y2_fb.c test_y2_sysfs.c test_y2_poweroff.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
-foreach(T y2_input y2_sd y2_power y2_fb y2_sysfs y2_poweroff y2_charge y2_haptic)
+foreach(T y2_input y2_sd y2_power y2_fb y2_sysfs y2_poweroff y2_charge y2_haptic y2_bt_addr y2_bt_tlv)
   add_executable(test_${T} test_${T}.c)
   target_link_libraries(test_${T} neupod_y2_logic neupod_rt_core) # neupod_rt_core: input_events_diff (the real app mapping)
   add_test(NAME ${T} COMMAND test_${T})
@@ -476,3 +479,7 @@ add_executable(test_ui_frame_keys test_ui_frame_keys.c ${CMAKE_SOURCE_DIR}/app/u
 target_include_directories(test_ui_frame_keys PRIVATE ${CMAKE_SOURCE_DIR}/app/ui ${CMAKE_SOURCE_DIR}/app/runtime)
 target_link_libraries(test_ui_frame_keys neupod_rt_core lvgl)
 add_test(NAME ui_frame_keys COMMAND test_ui_frame_keys)
+
+# The Y2 Bluetooth init script against fake /dev, /run and /proc/devices (needs only /bin/sh).
+add_test(NAME y2_s80_mtk_bt COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/test_y2_s80_mtk_bt.sh
+  ${CMAKE_SOURCE_DIR}/testbed/y2/buildroot/board/y2/overlay/etc/init.d/S80mtk-bt)

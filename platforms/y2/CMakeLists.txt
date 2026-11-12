@@ -14,6 +14,8 @@ set(NEUPOD_Y2_LOGIC_SOURCES
   ${Y2_HAL}/y2_poweroff.c
   ${Y2_HAL}/y2_charge.c
   ${Y2_HAL}/y2_haptic.c
+  ${Y2_HAL}/y2_bt_addr.c
+  ${Y2_HAL}/y2_bt_tlv.c
 )
 set(NEUPOD_Y2_HAL_SOURCES
   ${NEUPOD_Y2_LOGIC_SOURCES}
@@ -25,6 +27,10 @@ set(NEUPOD_Y2_HAL_SOURCES
   ${Y2_HAL}/hal_battery.c
   ${Y2_HAL}/hal_audio.c
   ${Y2_HAL}/hal_radio.c
+  ${Y2_HAL}/bt_port_stpbt.c
+  ${Y2_HAL}/btstack_uart_stpbt.c
+  ${Y2_HAL}/btstack_chipset_mtk_consys.c
+  ${CMAKE_SOURCE_DIR}/hal/common/bt_btstack/bt_btstack.c
   ${Y2_HAL}/hal_i2c.c
   ${Y2_HAL}/hal_haptic.c
   ${CMAKE_SOURCE_DIR}/hal/host/hal_core.c                 # core 1 = a native thread, portable POSIX
@@ -34,10 +40,16 @@ set(NEUPOD_Y2_HAL_SOURCES
 )
 
 add_executable(neupod main.c charging.c ${NEUPOD_Y2_HAL_SOURCES})
-target_include_directories(neupod PRIVATE ${Y2_HAL} ${CMAKE_SOURCE_DIR}/hal/include ${CMAKE_SOURCE_DIR}/hal/common)
+# Bluetooth: BTstack from the Pico SDK's copy (or -DBTSTACK_ROOT=), the same source list as the y2-a2dp tool. The adapter
+# (hal/common/bt_btstack) and the stpbt port are compiled into the executable like the rest of the HAL.
+include(${CMAKE_SOURCE_DIR}/cmake/btstack_posix.cmake)
+neupod_btstack_posix(btstack_y2 ${CMAKE_CURRENT_LIST_DIR}/btstack)
+
+target_include_directories(neupod PRIVATE ${Y2_HAL} ${CMAKE_SOURCE_DIR}/hal/include ${CMAKE_SOURCE_DIR}/hal/common
+                                          ${CMAKE_SOURCE_DIR}/hal/common/bt_btstack)
 set_source_files_properties(main.c charging.c ${NEUPOD_Y2_HAL_SOURCES} PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 # neupod_fatfs: FatFs + diskio over hal_storage (the raw block device). Libraries after the HAL objects.
-target_link_libraries(neupod PRIVATE neupod_runtime neupod_drivers neupod_fatfs)
+target_link_libraries(neupod PRIVATE neupod_runtime neupod_drivers neupod_fatfs btstack_y2 pthread)
 
 # A smaller image to copy over USB; the unstripped one stays in the build tree for debugging.
 add_custom_command(TARGET neupod POST_BUILD
