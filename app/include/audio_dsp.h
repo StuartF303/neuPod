@@ -50,6 +50,12 @@ bool audio_pcm_to_s32(int32_t *dst, const uint8_t *src, uint32_t frames, uint8_t
 /** Full-scale sine (peak 0x7FFFFFFF) for a 32-bit phase (2^32 = one cycle), table + linear interpolation. */
 int32_t audio_sine_q31(uint32_t phase);
 
+/**
+ * 32-bit left-justified stereo frames to 16-bit (rounded, saturated) for the Bluetooth encoder. @p dither adds TPDF dither of +-1 LSB16;
+ * @p rng is the generator state (any value, 0 is replaced). Without dither a 16-bit signal passes unchanged.
+ */
+void audio_s32_to_s16(const int32_t *in, int16_t *out, uint32_t frames, bool dither, uint32_t *rng);
+
 #define AUDIO_TONE_HZ 1000u
 #define AUDIO_TONE_LEVEL_Q31 214748365 /**< 0.1 = -20 dBFS peak */
 #define AUDIO_IDENT_SEGMENT_MS 1000u   /**< left, then right, 1 s each */

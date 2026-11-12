@@ -25,6 +25,11 @@ set(FILES
   app/include/audio_dsp.h
   platforms/rp2350/hal/hal_audio.c
   platforms/rp2350/hal/hal_audio_null.c
+  platforms/rp2350/hal/hal_audio_vclk.c
+  platforms/rp2350/hal/vclk.h
+  app/audio/bt_pcm.c
+  app/include/bt_pcm.h
+  hal/include/hal_bt_pcm.h
   hal/host/hal_audio.c)
 # Tokens are matched on code only (comments stripped first), at an identifier boundary on the left
 # (so "free(" does not match "spsc_ring_free(").

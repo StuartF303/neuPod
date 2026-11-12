@@ -21,6 +21,7 @@
 
 #include "audio_dsp.h"
 #include "audio_shared.h"
+#include "bt_pcm.h"
 #include "codec.h"
 #include "stream_io.h"
 #include "hal_audio.h"
@@ -41,8 +42,17 @@
 #define NEUPOD_DECODER_LOAD_PCT 0u
 #endif
 
+// One 32 KB store (ADR-0013 amendment of 4 Nov 2026), two layouts that never coexist. Wired output: the whole store is the decoder ring
+// (int32 stereo, PCM_FRAMES). Bluetooth output: its first half is the decoder ring (PCM_FRAMES / 2 frames) and its second half is the
+// Bluetooth ring (int16 stereo, PCM_FRAMES frames, bt_pcm.h). The layout changes only with the stream closed (AUDIO_CMD_OUTPUT).
 static int32_t g_pcm_store[PCM_FRAMES * 2u];
 static spsc_ring_t g_pcm_ring; // loop produces, block interrupt consumes
+static volatile uint32_t g_out_bt;   // 1 = Bluetooth output: the sink is virtual and the block interrupt feeds the Bluetooth ring
+static uint32_t g_bt_rate;           // the one sample rate the Bluetooth stream carries (0 = none yet)
+static uint32_t g_dither_rng;
+static uint32_t g_bt_stall_blocks;   // blocks the interrupt waited because the Bluetooth ring was full (the link is the pace)
+static int16_t g_block16[HAL_AUDIO_BLOCK_FRAMES * 2u];
+static volatile uint8_t g_pcm_bits; // bits of the stream being decoded (loop writes, the interrupt reads it to decide on dither)
 // Gapless: where each finished stream ends in the PCM ring, as a running frame count (free-running, wraps). The loop pushes
 // the count of frames written so far when it switches decoders; the interrupt pops it and reports end of track when the frames it
 // has served reach it. A handful of slots: a stream shorter than the ring can put several boundaries into it.
@@ -122,10 +132,17 @@ static void NEUPOD_RAM_FUNC(on_block)(uint32_t missed) {
     // Serve the block first: the bookkeeping below must never delay the sink.
     const bool audible = g_audible_req != 0 && g_storm == 0 && g_priming == 0;
     const uint32_t from = g_cur_gain;
-    const uint32_t target = audible ? g_vol_gain : 0u;
+    uint32_t target = audible ? g_vol_gain : 0u;
     const bool serve_ring = audible || from != 0u; // a paused, silent stream does not consume the ring
+    const bool bt = g_out_bt != 0u;
+    // Bluetooth: the ring to the encoder is the only buffer between us and the link. When it has no room for a block the link has not taken
+    // what we gave it: wait (consume nothing, advance nothing), so the decoder, the position and the track end are paced by the link.
+    const bool stalled = bt && serve_ring && bt_pcm_space() < HAL_AUDIO_BLOCK_FRAMES;
     bool starved = false;
-    if (serve_ring) {
+    if (stalled) {
+        target = from;
+        g_bt_stall_blocks++;
+    } else if (serve_ring) {
         uint32_t got = spsc_ring_read(&g_pcm_ring, g_block, HAL_AUDIO_BLOCK_FRAMES);
         starved = got < HAL_AUDIO_BLOCK_FRAMES;
         if (starved) {
@@ -156,17 +173,30 @@ static void NEUPOD_RAM_FUNC(on_block)(uint32_t missed) {
         memset(g_block, 0, sizeof g_block);
     }
     g_cur_gain = target;
-    (void)hal_audio_write(g_block, HAL_AUDIO_BLOCK_FRAMES);
+    if (bt) {
+        if (serve_ring && !stalled) {
+            // 16 bit for SBC: rounded, with TPDF dither when the volume or a deeper source left bits below the 16th
+            audio_s32_to_s16(g_block, g_block16, HAL_AUDIO_BLOCK_FRAMES, g_vol_att != 0u || g_pcm_bits > 16u, &g_dither_rng);
+            (void)bt_pcm_write(g_block16, HAL_AUDIO_BLOCK_FRAMES); // there is room: checked above
+        }
+        bt_pcm_set_active(audible);
+    } else {
+        (void)hal_audio_write(g_block, HAL_AUDIO_BLOCK_FRAMES);
+    }
 
-    // Amp mute line: open it just before audio ramps in, close it once two silent blocks have passed.
+    // Amp mute line: open it just before audio ramps in, close it once two silent blocks have passed (no amp on the Bluetooth output).
     if (target != 0u || from != 0u) {
         g_quiet_blocks = 0;
         if (g_mute_state) {
-            hal_audio_mute(false);
+            if (!bt) {
+                hal_audio_mute(false);
+            }
             g_mute_state = false;
         }
     } else if (++g_quiet_blocks >= 2u && !g_mute_state) {
-        hal_audio_mute(true);
+        if (!bt) {
+            hal_audio_mute(true);
+        }
         g_mute_state = true;
     }
 
@@ -228,6 +258,10 @@ static void NEUPOD_RAM_FUNC(on_block)(uint32_t missed) {
     s->dec_us_block_avg = g_dec_avg_us;
     s->dec_us_block_max = g_dec_max_us;
     s->dec_pct_x10 = g_dec_pct_x10;
+    s->output = bt ? 1u : 0u;
+    s->bt_ring_frames = bt ? PCM_FRAMES : 0u;
+    s->bt_fill_frames = bt ? PCM_FRAMES - bt_pcm_space() : 0u;
+    s->bt_stall_blocks = g_bt_stall_blocks;
 
     if (starved && g_eof == 0 && s->blocks - g_last_underrun_evt_block >= 172u) { // at most about one per second
         g_last_underrun_evt_block = s->blocks;
@@ -259,7 +293,7 @@ static bool g_stream_open;
 static uint32_t g_rate;        // sink rate while open
 static bool g_play;            // transport: playing (true) or paused (false)
 static tonegen_t g_tg;
-static uint8_t g_pcm_ch, g_pcm_bits;
+static uint8_t g_pcm_ch;
 static bool g_draining;
 static uint32_t g_drain_mark;
 
@@ -342,6 +376,27 @@ static void set_nominal(uint32_t rate) {
     g_isr_stats.period_nominal_us = (uint32_t)((uint64_t)HAL_AUDIO_BLOCK_FRAMES * 1000000u / (rate ? rate : 1u));
 }
 
+// Lay the 32 KB store out for the wired or the Bluetooth output (see g_pcm_store). Stream closed: neither ring has a reader or a writer that runs.
+static void set_output(bool bt, uint32_t bt_rate) {
+    bt_pcm_attach(NULL, 0); // detach first: the bytes change meaning below
+    g_out_bt = bt ? 1u : 0u;
+    g_bt_rate = bt ? bt_rate : 0u;
+    hal_audio_set_virtual(bt);
+    (void)spsc_ring_init(&g_pcm_ring, g_pcm_store, FRAME_BYTES, bt ? PCM_FRAMES / 2u : PCM_FRAMES);
+    g_pcm_consumed = g_pcm_written;
+    g_have_bound = false;
+    (void)spsc_ring_discard(&g_bound_ring, BOUND_SLOTS);
+    if (bt) {
+        bt_pcm_attach((uint8_t *)g_pcm_store + (size_t)(PCM_FRAMES / 2u) * FRAME_BYTES, PCM_FRAMES);
+    }
+    g_isr_stats.ring_frames = bt ? PCM_FRAMES / 2u : PCM_FRAMES;
+    g_isr_stats.ring_min_frames = g_isr_stats.ring_frames;
+    g_bt_stall_blocks = 0;
+}
+
+// Can the output carry @p rate without resampling? Bluetooth carries the one rate the stream was negotiated at.
+static bool output_rate_ok(uint32_t rate) { return g_out_bt != 0u ? rate == g_bt_rate : hal_audio_rate_supported(rate); }
+
 static bool open_sink(uint32_t rate, uint8_t channels, uint8_t bits) {
     hal_audio_format fmt = {.sample_rate = rate, .channels = channels, .valid_bits = bits};
     set_nominal(rate);
@@ -408,8 +463,11 @@ static void fail_stream(uint32_t err) {
 
 static void start_stream(const audio_stream_desc_t *d, uint32_t seq) {
     const bool codec = d->codec != AUDIO_CODEC_PCM;
-    if (!g_stream_open || !hal_audio_rate_supported(d->rate) || d->channels < 1 || d->channels > 2 ||
+    if (!g_stream_open || !output_rate_ok(d->rate) || d->channels < 1 || d->channels > 2 ||
         (!codec && d->bits != 16 && d->bits != 24 && d->bits != 32)) {
+        if (g_stream_open && g_out_bt != 0u && !output_rate_ok(d->rate)) {
+            g_codec_err = AUDIO_ERR_RATE_NOT_ON_BT; // the player says why ("... not supported on Bluetooth")
+        }
         push_event_loop(AUDIO_EVT_CMD_ERROR, AUDIO_CMD_STREAM_START);
         g_audio_pcm_started++; // the requester stops waiting; the error event says why
         return;
@@ -469,8 +527,8 @@ static void handle_command(const audio_cmd_t *c) {
         // Fresh stream: empty rings, fresh counters; the interrupt owns g_isr_stats but is not running yet.
         (void)spsc_ring_discard(&g_pcm_ring, PCM_FRAMES);
         memset(&g_isr_stats, 0, sizeof g_isr_stats);
-        g_isr_stats.ring_frames = PCM_FRAMES;
-        g_isr_stats.ring_min_frames = PCM_FRAMES;
+        g_isr_stats.ring_frames = g_out_bt != 0u ? PCM_FRAMES / 2u : PCM_FRAMES;
+        g_isr_stats.ring_min_frames = g_isr_stats.ring_frames;
         g_last_underrun_evt_block = 0;
         g_starved_run = 0;
         g_quiet_blocks = 0;
@@ -486,6 +544,13 @@ static void handle_command(const audio_cmd_t *c) {
         }
         break;
     }
+    case AUDIO_CMD_OUTPUT:
+        if (g_stream_open) { // only with the stream closed: the store's layout changes
+            push_event_loop(AUDIO_EVT_CMD_ERROR, c->type);
+        } else {
+            set_output(c->a != 0u, c->b);
+        }
+        break;
     case AUDIO_CMD_CLOSE:
         if (g_stream_open) {
             stop_source();
@@ -809,8 +874,8 @@ static bool pump_source(void) {
 }
 
 void audio_core_main(void) {
-    (void)spsc_ring_init(&g_pcm_ring, g_pcm_store, FRAME_BYTES, PCM_FRAMES);
     (void)spsc_ring_init(&g_bound_ring, g_bound_store, sizeof g_bound_store[0], BOUND_SLOTS);
+    set_output(false, 0); // wired until core 0 says otherwise
     (void)hal_audio_init();
     hal_audio_set_block_callback(on_block);
     g_vol_gain = audio_gain_q30(g_vol_att);

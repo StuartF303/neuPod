@@ -109,6 +109,8 @@ void player_set_repeat(pq_repeat_t mode);
 bool player_seek(uint64_t frame);
 /** Pause <-> resume. On a finished track (or a completed MD5 check) it plays the same file again from the start. Otherwise no-op. */
 void player_pause_toggle(void);
+/** Pause if playing (the headset went away: audio_route.h); position kept. No-op in any other state. */
+void player_pause(void);
 void player_stop(void);
 
 /** Volume steps: positive = louder, 2 dB each, clamped to [hard cap, off]. Returns the new attenuation in dB. */

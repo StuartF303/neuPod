@@ -683,6 +683,24 @@ void player_pause_toggle(void) {
     unlock();
 }
 
+void player_pause(void) {
+    audio_stats_t st;
+    bool have = audio_stats_get(&st);
+    lock();
+    if (g_info.state == PLAYER_PLAYING) {
+        g_info.state = PLAYER_PAUSED;
+        (void)audio_pause(true);
+        resume_state_t r;
+        if (rs_snapshot(&r, have, &st)) {
+            rs_queue(&r, RESUME_EVENT);
+        }
+        unlock();
+        rs_flush();
+        return;
+    }
+    unlock();
+}
+
 void player_stop(void) {
     action_t a = {0};
     audio_stats_t st;

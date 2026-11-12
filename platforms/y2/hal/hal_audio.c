@@ -48,6 +48,8 @@ bool hal_audio_rate_supported(uint32_t sample_rate) {
 
 void hal_audio_set_block_callback(hal_audio_block_cb cb) { g_cb = cb; }
 
+void hal_audio_set_virtual(bool virtual_sink) { (void)virtual_sink; } // the wired sink here is already only a clock
+
 static void nap_us(uint64_t us) {
     struct timespec ts = {.tv_sec = (time_t)(us / 1000000u), .tv_nsec = (long)(us % 1000000u) * 1000L};
     nanosleep(&ts, NULL);

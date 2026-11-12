@@ -394,7 +394,7 @@ endif()
 # the vectors in tests/assets/audio; the sink output is compared with the tracks decoded on their own.
 add_executable(test_gapless test_gapless.c
   ${CMAKE_SOURCE_DIR}/app/audio/audio_shared.c ${CMAKE_SOURCE_DIR}/app/audio/audio_ctl.c ${CMAKE_SOURCE_DIR}/app/audio/codec.c
-  ${CMAKE_SOURCE_DIR}/app/audio/track_feed.c ${CMAKE_SOURCE_DIR}/app/audio/track_stream.c ${NEUPOD_CODEC_TEST_VENDOR})
+  ${CMAKE_SOURCE_DIR}/app/audio/bt_pcm.c ${CMAKE_SOURCE_DIR}/app/audio/track_feed.c ${CMAKE_SOURCE_DIR}/app/audio/track_stream.c ${NEUPOD_CODEC_TEST_VENDOR})
 target_include_directories(test_gapless PRIVATE ${CMAKE_SOURCE_DIR}/app/include ${CMAKE_SOURCE_DIR}/app/third_party/alac)
 target_compile_definitions(test_gapless PRIVATE NEUPOD_TEST_ASSETS="${CMAKE_SOURCE_DIR}/tests/assets/audio")
 target_link_libraries(test_gapless neupod_rt_core Threads::Threads m)

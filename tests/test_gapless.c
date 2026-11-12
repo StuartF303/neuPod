@@ -93,6 +93,7 @@ static void *clock_thread(void *arg) {
     }
     return NULL;
 }
+void hal_audio_set_virtual(bool v) { (void)v; }
 hal_status_t hal_audio_open(const hal_audio_format *fmt) {
     g_sink_rate = fmt->sample_rate;
     g_sink_opens++;
