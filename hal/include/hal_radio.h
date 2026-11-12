@@ -128,7 +128,7 @@ typedef enum {
     HAL_BT_FAILED,   /**< the stack or the controller did not come up */
 } hal_bt_state_t;
 
-#define HAL_BT_NAME_MAX 32u         /**< bytes kept of a remote name (UTF-8, NUL-terminated copy) */
+#define HAL_BT_NAME_MAX 48u         /**< bytes kept of a remote name (UTF-8, NUL-terminated copy; 48 holds "Stuart's AirPods Pro - Find My" with its 3-byte apostrophe) */
 #define HAL_BT_RSSI_UNKNOWN 127     /**< rssi value when the inquiry result carried none */
 #define HAL_BT_COD_MAJOR_AUDIO_VIDEO 0x04u
 
