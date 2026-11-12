@@ -60,12 +60,12 @@ From the owner-commissioned [design review](design/2026-11-12-ui-review/README.m
 | LB-5 | Unplayable rows show codec; auto-skip with toast | Library | S | 2 | DS-5 | 4 | open |
 | LB-6 | Cover Flow (flat five-tile) view on Albums (UI-11) | Library | M | 2 | NP-5 | 4 | open |
 | LB-7 | Playlists screen (smart lists + .m3u) (UI-19) | Library | L | 2 | — | 4 | open |
-| BT-1 | Devices screen (known / found / scan), signal bars monochrome | Bluetooth | M | 3 | DS-6 | 3 | open |
-| BT-2 | Forget / pairing / reconnect flows with toasts; no self-mutating rows; link lost ends "Couldn't reconnect — paused" (never switches output) | Bluetooth | M | 3 | DS-5, BT-1 | 3 | open |
-| BT-3 | Bluetooth settings page; codec detail moves to Diagnostics | Bluetooth | S | 1 | BT-1 | 3 | open |
+| BT-1 | Devices screen (known / found / scan), signal bars monochrome | Bluetooth | M | 3 | DS-6 | 3 | built (phase 3) |
+| BT-2 | Forget / pairing / reconnect flows with toasts; no self-mutating rows; link lost ends "Couldn't reconnect — paused" (never switches output) | Bluetooth | M | 3 | DS-5, BT-1 | 3 | built (phase 3) |
+| BT-3 | Bluetooth settings page; codec detail moves to Diagnostics | Bluetooth | S | 1 | BT-1 | 3 | built (phase 3): Audio output Auto / Wired / Bluetooth, Devices, Absolute volume (read-only). Open: Bluetooth On / Off (no clean radio power-down in the HAL), an Absolute volume switch (no AVRCP code to ignore it), Rename a headset |
 | ST-1 | Settings right pane as key/value summary; toggles in place | Settings | S | 2 | DS-2 | 4 | open |
 | ST-2 | Display page (theme, brightness, timeouts); the Theme row itself is built with DS-1 | Settings | S | 2 | DS-1 | 4 | Theme row built (DS-1); the rest open |
-| ST-3 | About › Diagnostics, Licences screen | Settings | S | 1 | — | 4 | open (Licences screen built, UI-23) |
+| ST-3 | About › Diagnostics, Licences screen | Settings | S | 1 | — | 4 | built (Licences, UI-23; Diagnostics with the boot checks, audio and Bluetooth link counters, phase 3) |
 | IN-1 | Text entry: letter ring, mode chips, field box | Input | M | 2 | DS-2 | 4 | open |
 | IN-2 | Number/slider/date-time polish | Input | S | 1 | IN-1 | 4 | open |
 | FL-1 | Files: path in status bar, icons, paged "Load more" | Files | S | 1 | DS-3, DS-6 | 4 | open |

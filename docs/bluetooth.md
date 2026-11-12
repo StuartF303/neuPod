@@ -118,55 +118,14 @@ which carries neither. If the controller refuses the Inquiry command (BTstack gi
 After the inquiry the radio asks for the names of audio devices that had none, one at a time (at most 6; a name request cannot
 overlap an inquiry). Up to 12 devices are kept per scan. Stopping a scan skips the name requests.
 
-Settings > Bluetooth ([UI](ui.md)) shows the status, the address and a **Scan for devices** row. Select opens the **Devices** screen,
-which starts the scan as it opens and lists everything found as it arrives: audio devices with a speaker symbol first (after the scan
-ends), then others greyed out, with the signal on the right. Its first row is `Stop scanning` / `Scan again`. Selecting an audio device pairs
+Settings > Bluetooth ([UI](ui.md)) is a short page (Audio output, **Devices**, Absolute volume). **Devices** starts the scan as it opens (unless audio is streaming) and lists the remembered headset first, then everything found as it arrives: audio devices (strongest first once the scan ends), then others greyed out with "(phone)" and the like, each with a three-bar signal; the last row is `Stop scanning` / `Scan again` and four dots at the bottom show a scan running. Selecting an audio device pairs
 with it (stage 2a, below). Menu goes back and stops the scan.
 
-A device only answers an inquiry while it is **discoverable**: headphones in pairing mode, or a phone sitting on its Bluetooth
-settings page. Headphones that are connected to something else, or a phone with the screen off, do not appear.
-
-Console lines (UART), for testing without seeing the panel:
-
-```
-bt: scan start (10 s)
-bt: found 5C:xx:xx:xx:xx:xx cod=0x240404 rssi=-52 name='...' audio=yes
-bt: named 5C:xx:xx:xx:xx:xx cod=0x240404 rssi=-52 name='AirPods' audio=yes     (name arrived from a name request)
-bt: inquiry complete (3 results delivered by BTstack, 3 kept)
-bt: scan done, 3 devices
-```
-
-"Delivered by BTstack" counts every result before the 12-device limit; if it is 0 the controller heard nothing, if it is more than
-"kept" the limit was hit.
-
-## Pairing and the connection (stage 2a)
-
-Built and host-tested; Pair, save, reconnect and Forget passed on the bench (Sony WI-C200). Disconnect, re-pair after Forget, the refusal of a headset that wiped its key, and Wi-Fi + Bluetooth coexistence are **deferred to the stage 2b bench**. No audio: the connection ends at "the other side has an A2DP sink".
-
-**HAL** (`hal/include/hal_radio.h`, `hal_bt_*`; the hardware half is `hal/common/bt_btstack/bt_btstack.c`, the host simulator `hal/host/hal_radio.c`):
-
-| Call | What it does |
-| --- | --- |
-| `hal_bt_pair(dev)` | The Pair action. **Never discoverable.** Connectable and bondable **on** (with auto-accept and the "no input, no output" IO capability) for this headset only: a connection filter (`gap_register_classic_connection_filter`) rejects every other address, and a link key that appears for any other address is deleted at once. Outgoing ACL link, SSP "just works" authentication (the link key goes to the SD-card store), then an SDP query for an A2DP sink (UUID 0x110B) on the same link. Everything goes off again when it ends. 30 s limit (`HAL_BT_PAIR_TIMEOUT_MS`) |
-| `hal_bt_connect(addr)` | Connect to a device paired before: SDP query first (it creates the link), then authentication with the **stored key** (`gap_request_security_level`). Not connectable, not bondable, and the IO-capability request is refused (IO capability UNKNOWN), so no transient pairing can authenticate the link. A Connect with **no stored key** (checked before it starts, again before authenticating, and again on the result) fails with `HAL_BT_FAIL_AUTH`; so does a headset that lost its key, instead of silently pairing again. 20 s limit |
-| `hal_bt_disconnect()` | Cancels a Pair / Connect, or drops the link. Reported as DISCONNECTED, never as FAILED |
-| `hal_bt_forget(addr)` | Deletes the link key (drops the link first if it is the current peer). `HAL_EBUSY`: both request slots are busy, retry. `HAL_ENODEV`: the stack is OFF, STARTING or FAILED: delete the record straight from the store with `hal_bt_storage_delete_key()` (what `bt_saved_delete_key()` does; BTstack reads its keys from the store on demand) |
-| `hal_bt_link_state()` / `_link_reason()` / `_link_device()` / `hal_bt_accepting()` | State, failure reason, the device the state is about (also after a failure, so a screen can tell whose failure it is), and whether the radio is discoverable or connectable right now (only while Pair runs) |
-
-States (`hal_bt_link_state_t`): `DISCONNECTED`, `PAIRING`, `CONNECTING`, `CONNECTED`, `FAILED` (with `hal_bt_fail_t`: `NOT_FOUND` no answer, `AUTH` pairing refused or stored key rejected, `NO_SINK` no A2DP sink,
-`TIMEOUT`, `LINK_LOST` an established link ended by the other side, `INTERNAL` the stack refused or went down, `BUSY` a Pair the headset ended or had no resources for: busy with something else or not in pairing mode, `PIN` a pre-2.1 headset that asks for a PIN). One phrase per reason, `hal_bt_fail_text()`, serves the console and the UI. A link change is a `HAL_BT_EVT_LINK` event (state, reason, device). It is separate from the
-radio state (`hal_bt_state_t`), except that a Pair or Connect needs the radio ON and not scanning, and a scan is refused while a link is being set up (`HAL_EBUSY` both ways). One link at a time.
-There is **no reconnect** at power-up or after a drop: stage 3.
-
-**The saved headset** (`app/include/bt_saved.h`, `app/runtime/bt_saved.c`): settings key **`NPbd`** (`SETTING_BT_DEVICE`), 10 to 42 bytes: version 1, address, class (24 bit), name. The pairing key itself is BTstack's `BTL` record (tag "BTL" + raw slot number 0..7) in
-the same store (sealed). Capacity: the store holds 48 tags; the documented worst case (Wi-Fi networks, 8 link keys, resume, settings) was about 38, now about 41; a host test fills 47 other tags and still stores it, and checks that a full store refuses it
-cleanly. Rules, all tested: a device is remembered only after a Pair **ended CONNECTED**; a failed or cancelled Pair leaves the previous headset alone; a second headset **replaces** the first, and the first one's key is deleted
-(a queue of four addresses under a mutex, drained by `bt_service_tick`; an address stays queued until the radio takes it; a link event carries its attempt number and `bt_saved` ignores events of an attempt older than its pending Pair); a Pair that got as far as making a key and then failed (no A2DP sink) has its key deleted as well. If the store is **not writable** (card read-only or absent, so the store is RAM-only) a Pair still works for the session but the screen says "Paired - not saved (read-only)" and the console `bt: pair not persisted (store not writable)`; Forget then keeps the record and leaves the address in the stale queue until the card is writable (`bt: record kept ...`; the queue does no work, and does not touch the radio, while the store is unwritable: `bt: key delete waits ...`, then `bt: store writable, draining ...`; a new Pair of the same address removes its queue entry). A failed re-pair of the saved headset drops the record even then, since BTstack already deleted the key in RAM, because deleting only in RAM would bring the headset back at the next boot. `bt_saved_pair_begin` refuses (EBUSY) while another Pair candidate is live. If the record **cannot be saved** (store full) the new key is deleted, the link is dropped and the Devices screen says "Can't save: settings full". Re-pairing the **remembered** headset deletes its old key when the bonding starts (BTstack does that), so if that Pair fails or is cancelled the record is cleared too. Forget deletes the key and the record.
 `bt_service_pair` / `_connect` / `_disconnect` / `_forget` (`app/runtime/bt_service.c`) are what the UI calls. Link events are handled in the radio callback, not by a screen, so a Pair that finishes while the user has left the screen is still remembered.
 
-**UI** ([UI](ui.md)): Settings > Bluetooth gains, once a headset is saved, three rows under "Scan for devices": its **name** (state on the right: Not connected / Pairing... / Connecting... / Paired, no audio yet / Failed: reason, with busy dots while working),
-**Connect** (becomes **Disconnect**, or **Cancel** while working) and **Forget** (asks for a second Select within 4 s). The right-hand pane shows the radio state, the address, the headset and its state. On the Devices screen, Select on an audio device stops
-the scan if needed and starts the Pair action; the row shows busy dots, then "Paired, no audio yet" or Failed: reason; the first row becomes **Cancel pairing** meanwhile. Menu on the Devices screen cancels a Pair in progress (so the radio does not stay connectable for nobody).
+**UI** ([UI](ui.md), design review BT-1 to BT-3): on **Devices** the remembered headset is the first row, its state on the right (Connected / Streaming / Saved / Pairing... / Connecting... / Reconnecting... / No audio / Failed: reason, with busy dots while working); Select on it opens **Connect** (or **Disconnect**, **Cancel**) and **Forget** (a question screen: Select = Forget, Menu = Keep). Select on a found audio device stops the scan if needed and starts the Pair action; the row says "Pairing..." with busy dots, then the device becomes the remembered headset at the top, or the row says Failed: reason. **Menu cancels a Pair in progress** (so the radio does not stay connectable for nobody). With a headset already remembered the choice is "Replace <old> with <new>?" (Select = yes): the old one is disconnected, the new one paired once the radio is free, and the old key is deleted when the new one is saved. The audio output setting is Auto / Wired / **Bluetooth** (BT-3; stored as 0 / 1 / 2, a stored value this firmware does not know reads as Auto): Bluetooth makes the output Bluetooth at once and keeps it through a Disconnect; Play with no headset pauses with "Headset not connected" and nothing comes out of the wired output. Absolute volume is shown read-only. Not built: Bluetooth On / Off (the radio drivers have no clean power-down), renaming a headset.
+
+**The link as toasts.** The frame (`ui_frame.c`) turns the link's life into toasts: "<name> disconnected . reconnecting..." when a connected headset is lost (`bt_service_lost_seq()`: only for a loss, not for the power-up attempt), "<name> connected" (info, 1.2 s) when the automatic reconnect succeeds (`bt_service_reconnected_seq()`), "Couldn't reconnect - paused" when it gives up (`bt_service_gave_up_seq()`). ADR-0019 stands: playback pauses and stays on Bluetooth; the firmware never switches the output by itself.
 
 **Failure stance.** Fail closed for the radio: connectable and bondable go off on every way out of a Pair (success, failure, timeout, cancel, leaving the screen, the stack going down), and the 30 s timer is the backstop. Never discoverable. A saved device is written only on success.
 Fail open for the features: with no card the saved headset and the keys live in RAM for the session (as the store always does).

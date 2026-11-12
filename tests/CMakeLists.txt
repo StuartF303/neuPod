@@ -179,12 +179,9 @@ set_tests_properties(wifi_tour PROPERTIES
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   TIMEOUT 120)
 
-# Bluetooth pairing tour (stage 2a): pair, remembered-headset rows and pane, Disconnect, Forget, a refused pairing; snapshots bt-pairing,
-# bt-paired, bt-saved, settings-bt-saved, bt-disconnected, bt-forget-asks, bt-forgotten, bt-failed. The run fails if the script does not
-# reach its last snapshot (the tour expects its 13 files).
-# Stage 2b adds the audio half: the headset's stream opens, a track from the WAV album plays on Bluetooth (np-bt-badge), Settings > Bluetooth shows
-# "Streaming" and the codec (bt-streaming), then the headset goes away (bt-dropped: the banner, the player paused). The tour pairs and keeps a
-# headset, so the card's settings are wiped first (bt_clean), and it has its own card with the 20 s WAV album (like the seek tour).
+# Bluetooth tour (stage 2a pairing, 2b audio, design review phase 3 screens): Settings > Bluetooth, Devices (scan dots, found list), pair, options, Forget and Replace
+# questions, Disconnect, a refused pairing; then the audio half: playing on the headset, Diagnostics, streaming, the link lost and back as toasts. 24 snapshots (hal/host/main.c TOUR_BT).
+# The tour pairs and keeps a headset, so the card's settings are wiped first (bt_clean), and it has its own card with the 20 s WAV album (like the seek tour).
 add_test(NAME bt_tour_reset COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/fsroot_bt/.neupod)
 set_tests_properties(bt_tour_reset PROPERTIES FIXTURES_SETUP bt_clean)
 add_test(NAME bt_tour

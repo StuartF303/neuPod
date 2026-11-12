@@ -25,7 +25,7 @@
 #define TOUR                                                                                       \
     "snap:home _ snap:music-menu _ snap:music-empty m m s s s _ snap:extras _ snap:files _ "        \
     "snap:files-sub m s s _ snap:files-many 260*s snap:files-many-end m m m m s _ snap:settings "                \
-    "s s s snap:settings-bt _ snap:bt-idle s s _ snap:bt-scanning x x x x x x x x x snap:bt-found s _ snap:bt-pair "     \
+    "s s s snap:settings-bt _ snap:bt-idle s _ snap:bt-scanning x x x x x x x x x snap:bt-found _ snap:bt-pair "     \
     "m m w w w _ snap:about m m s s _ snap:nowplaying m"
 
 // Wheel input widgets (Extras > Input widgets): text, password with show, live search, number, slider, choice, multi choice, date/time.
@@ -46,17 +46,18 @@
 // goes away (bt:drop): the player pauses, the banner says so and the row says why. Stage 2c adds the headset's volume (the wheel moves it: np-bt-volume; a swipe on the stem
 // to 0 %: np-bt-volume0, bt:vol:N) and its buttons (bt:key:next: bt-key-next, the next track plays).
 #define TOUR_BT_AUDIO                                                                              \
-    "w w w w w s s s s _ x s s s s s s s s _ x s s _ x x x x x x x x x s _ x x x x x x x x m m m m "   \
-    "w w w w w s s s _ _ _ _ x x x x x x snap:np-bt-badge 4*s snap:np-bt-volume bt:vol:0 x x x snap:np-bt-volume0 bt:vol:48 x x bt:key:next x x x x snap:bt-key-next m m m m w w w w w s s s s _ x s s s s s s s s _ x x snap:bt-streaming m snap:settings-bt-streaming _ "  \
-    "bt:drop x x x snap:bt-dropped m m m"
+    "w w w w w s s s s _ x s s s s s s s s _ x s _ x x x x x x x x x _ x x x x x x x x m m m m "   \
+    "w w w w w s s s _ _ _ _ x x x x x x snap:np-bt-badge 4*s snap:np-bt-volume bt:vol:0 x x x snap:np-bt-volume0 bt:vol:48 x x bt:key:next x x x x snap:bt-key-next m m m m "  \
+    "w w w w w s s s s _ _ snap:bt-about s _ 14*s snap:bt-diag m m m m w w w w w s s s s _ x s s s s s s s s _ x s _ x x snap:bt-streaming m m snap:settings-bt-streaming _ s _ x "  \
+    "bt:drop x x x snap:bt-dropped x x x x snap:bt-reconnected toast:warn:Couldn't_reconnect_\xE2\x80\x94_paused x snap:bt-gave-up strips:off m m m m"
 
-// Bluetooth pairing (stage 2a): Settings > Bluetooth > Scan, pair the first headset (busy dots, then Connected), the Settings rows and right pane
-// with the remembered headset, Disconnect, Forget (asks twice), then a pairing the car kit refuses (Failed: pairing refused).
+// Bluetooth pairing (BT-1 to BT-3): Settings > Bluetooth (the Audio output row cycles Auto, Wired, Bluetooth, Auto), Devices (scanning dots, found list, three-bar signal),
+// pair the first headset (busy dots, then Connected), its options (Connect / Disconnect, Forget), Forget asks (Menu keeps it), a second headset asks "Replace ...?" (Menu keeps),
+// Disconnect (the row rests at Saved), Forget (Select = yes), then a pairing the car kit refuses (Failed: pairing refused).
 #define TOUR_BT                                                                                    \
-    "x x x x s s s s _ x s s s s s s s s snap:settings-bt _ snap:bt-idle s s _ x x x x x x x x x "  \
-    "snap:bt-found s _ snap:bt-pairing x x x x snap:bt-paired m snap:bt-saved m snap:settings-bt-saved _ s s s s s _ x "       \
-    "snap:bt-disconnected s _ snap:bt-forget-asks _ snap:bt-forgotten w _ x x x x x x x x x s s s s _ x x x x "           \
-    "snap:bt-failed m m m " TOUR_BT_AUDIO
+    "x x x x s s s s _ x s s s s s s s s snap:settings-bt _ snap:bt-idle _ _ snap:bt-output-bt _ s _ x x x x snap:bt-scanning x x x x x snap:bt-found "  \
+    "_ snap:bt-pairing x x x x snap:bt-paired _ snap:bt-options s _ snap:bt-forget-asks m m s _ snap:bt-replace-asks m w _ _ x x x snap:bt-disconnected "  \
+    "_ s _ _ x x x snap:bt-forgotten s s s _ x x x x snap:bt-failed m m m " TOUR_BT_AUDIO
 
 // Album art: Extras > Files > three albums, with a trip back to Home while the embedded-art album is paused (a Cover.JPG beside the track; a
 // JPEG inside the track; a PNG inside it plus a progressive cover.jpg beside it). The test tracks last 0.3 s: Settings > Repeat is set to
@@ -184,7 +185,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--tour-bt") == 0) {
             cfg.ui_script = TOUR_BT;
             cfgp_tour = true;
-            g_expect = 20; // the splash, home and the eighteen named snapshots
+            g_expect = 2 + 24; // the splash, home and the named snapshots of the script
         } else if (strcmp(argv[i], "--tour-art") == 0) {
             cfg.ui_script = TOUR_ART;
             cfgp_tour = true;
