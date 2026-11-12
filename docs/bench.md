@@ -14,7 +14,8 @@ How the Pico 2 W testbed is driven from the PC, and the agreed order of the next
 
 The wheel is not fitted (the host → wheel init packet is still unknown, see
 [Click-wheel protocol](click-wheel-protocol.md#open-questions)). UART keys: `w`/`s` scroll, `e` select, `m` back,
-`a`/`d` left/right, `p` play/pause.
+`a`/`d` left/right, `p` play/pause, `l` toggles Hold (the rig has no Power key, [ADR-0020](adr/0020-hold.md)). A burst of keys is
+queued (64 events); if the UI ever could not keep up the 10 s statistics print `input: WARNING n events dropped`.
 
 - Console lines end in `\r`; strip it before matching a line in a script.
 - Confirm the logged label of the highlighted row before sending Select (`e`); never press Select blind on a list row.
@@ -41,3 +42,19 @@ The wheel is not fitted (the host → wheel init packet is still unknown, see
 6. SD recovery: flash mid-playback.
 7. Bluetooth scan with the AirPods in pairing mode (expect `audio=yes`).
 8. Battery / charging detection (VBUS + CRATE heuristic, [Requirements → Power](requirements.md#power-and-battery)).
+
+## Hold (Y2)
+
+Steps for the Y2 after flashing a build with [ADR-0020](adr/0020-hold.md) (watch `/opt/neupod-logs` or the console for the `ui: hold`, `ui: backlight` and
+`y2: power held` lines):
+
+1. **Tap Power** (quick): the backlight goes off (`ui: backlight off 0%`) and `ui: hold on` follows (Auto-lock is On by default). Turn the wheel or press anything: the screen
+   wakes, shows "Locked, Hold Power to unlock", and nothing else happens (no click, no Play/Pause, no selection moved).
+2. **Hold Power**: after about 0.4 s a bar fills under "Hold to unlock"; let go at 1 s: nothing changes. Hold again to 2 s: "Unlocked", one haptic click, the lock glyph
+   leaves the status bar, `ui: hold off`. Keys work again.
+3. **Hold Power to 2 s and on**: "Locked" appears at 2 s; at 5 s "Powering off in 5" counts down with a draining bar; **let go at 7 s: nothing powers off** (and nothing
+   is lost). Repeat and hold to 10 s: `ui: power-off requested`, `y2: power held, shutting down`, the storage task stops, the player exits with status 77 and the device powers
+   off (the wrapper's `poweroff did not happen, restarting` must NOT appear).
+4. With music playing and the screen locked: the headset's buttons (play/pause, next, previous) still work; the wheel and the ring buttons do not.
+5. Settings > Display: **Screen off after** (try 15 s) and **Auto-lock** Off: the screen goes off with Hold left as it was; the waking press is lost, the next one works.
+6. Charging-only mode (USB with the player "off") is unchanged: Power held 2 s reboots.

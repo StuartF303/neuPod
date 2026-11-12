@@ -71,3 +71,4 @@ nav:
       - ADR-0017 Music library index: adr/0017-music-library-index.md
       - ADR-0018 UI resolution profiles: adr/0018-ui-resolution-profiles.md
       - ADR-0019 Bluetooth audio boundary: adr/0019-bluetooth-audio-sink-boundary.md
+      - ADR-0020 Hold: adr/0020-hold.md

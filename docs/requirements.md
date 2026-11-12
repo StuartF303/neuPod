@@ -152,7 +152,7 @@ Target: 2,000+ mAh in the thin shell, 3,000 mAh in the thick shell; 40 h Bluetoo
 | 2.4" AMOLED | off | 40–200 mA when on, content dependent |
 | Regulators, gauge, misc | ~1 mA | ~5 mA |
 
-Totals playing to BT, screen off: architecture A (RP2350 + CYW43439) ~80–110 mA → 23–30 h on 2,500 mAh; architecture B (ESP32-S3 + QCC) ~110–160 mA → 16–22 h. Standby target <0.5 mA: load switches on SD, DAC and radio rails; wake from hold switch or wheel. Backlight dims to ~10% within seconds and off within ~15 s; Wi-Fi off during playback; core clock scaled to the minimum that keeps the audio buffer full.
+Totals playing to BT, screen off: architecture A (RP2350 + CYW43439) ~80–110 mA → 23–30 h on 2,500 mAh; architecture B (ESP32-S3 + QCC) ~110–160 mA → 16–22 h. Standby target <0.5 mA: load switches on SD, DAC and radio rails; wake from hold switch or wheel. Backlight dims to ~10% after the idle time (default 30 s) and goes fully off 3 min after that (Settings > Display, both adjustable; [ADR-0020](adr/0020-hold.md); this replaces the earlier "off within ~15 s": the totals above assume the screen off, so a listening session pays the 3.5 minutes of display once, after each press); Wi-Fi off during playback; core clock scaled to the minimum that keeps the audio buffer full.
 
 ## Reused parts and mechanical
 
