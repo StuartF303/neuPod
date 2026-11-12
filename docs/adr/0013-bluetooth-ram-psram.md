@@ -1,5 +1,7 @@
 # ADR-0013: Bluetooth stage 2 RAM on the testbed, PSRAM on the final board
 
+> **12 Nov 2026:** the Pico 2 W's 520 KB SRAM is no longer a budget limit (the target is frozen as a compile check; the product target is the RP2350B with PSRAM): see the amendment in [ADR-0001](0001-rp2350-phase1-platform.md#amendment-12-november-2026-the-pico-2-w-is-frozen-the-product-target-is-the-rp2350b-with-psram). The memory figures below stay as the record of what the testbed ran.
+
 ## Status
 
 Accepted (design response, 3 Nov 2026).

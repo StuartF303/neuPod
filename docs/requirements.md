@@ -181,7 +181,7 @@ Click-wheel-driven UI recreating the Classic experience (menus, Cover Flow, podc
 - Wi-Fi use cases: podcast download, library sync from a NAS/PC, firmware OTA. Streaming (Spotify/Apple Music) needs a Linux module.
 - Host side: the iPod must mount as a plain USB drive — no iTunes dependency.
 - Keep the stock-panel driver and a new-panel driver behind one display abstraction so either screen works.
-- **RAM budget:** every feature ADR states its RAM cost. The final board has 8 MB PSRAM (APS6404L, QSPI CS1, [ADR-0013](adr/0013-bluetooth-ram-psram.md)); artwork, HTTP and AAC are PSRAM-only.
+- **RAM budget:** every feature ADR states its RAM cost (the Pico 2 W's 520 KB is no longer a limit since 12 Nov 2026: the product target is the RP2350B with PSRAM, [ADR-0001 amendment](adr/0001-rp2350-phase1-platform.md#amendment-12-november-2026-the-pico-2-w-is-frozen-the-product-target-is-the-rp2350b-with-psram)). The final board has 8 MB PSRAM (APS6404L, QSPI CS1, [ADR-0013](adr/0013-bluetooth-ram-psram.md)); artwork, HTTP and AAC are PSRAM-only.
 - **Flash and OTA:** final board 16 MB W25Q128; bootrom A/B partitions with TBYB ([ADR-0014](adr/0014-ota-ab-partitions.md)).
 - **Secrets:** RP2350 random 256-bit key in OTP at provisioning, chip-ID HKDF as the pre-provisioning fallback, no secure element; ESP32 route: eFuse key + flash encryption. Secure boot decided later ([Wi-Fi](wifi.md#secrets-at-rest)).
 - **Clock:** [ADR-0015](adr/0015-clock-plan.md).
