@@ -137,13 +137,18 @@ ui_key_action_t ui_global_key(uint8_t btn, bool queue_active);
 
 /* ---- Now Playing controls: wheel mode (volume / seek), scrubbing, hold-to-fast-forward ---------------------- */
 
-#define UI_SEEK_IDLE_MS 3000u   /**< the wheel drops back from seek to volume this long after the last seek-mode input (the iPod's 3 s) */
-#define UI_SEEK_COMMIT_MS 350u  /**< a scrub is applied (one restart of the track) this long after the wheel stops */
+#define UI_SEEK_IDLE_MS 10000u  /**< seek mode is cancelled (nothing applied) this long after its last input, so a forgotten seek never keeps the wheel */
+#define UI_SEEK_COMMIT_MS 350u  /**< a fast-forward / rewind scrub (hold Left / Right) is applied this long after it stops; seek mode applies on Select only */
+#define UI_SELHOLD_MS 500u      /**< Select held this long enters seek mode (a shorter press opens page 2) */
 #define UI_HOLD_MS 600u         /**< a Left / Right press held this long is a fast-forward / rewind, not a skip */
 #define UI_FF_SPEED 10u         /**< hold: track seconds covered per second held */
 #define UI_HOLD_MAX_MS 30000u   /**< a hold ends itself this long after the key went down (a release that never arrives must not leave it running) */
 
 typedef enum { UI_WHEEL_VOLUME = 0, UI_WHEEL_SEEK } ui_wheel_mode_t;
+/*
+ * Now Playing keys (owner decision, 12 Nov 2026): Select short press = page 2; HOLD Select (UI_SELHOLD_MS) = seek mode; in seek mode the wheel moves the
+ * target, Select applies it ("go") and Menu drops it ("cancel"). Hold Left / Right still scans the track at UI_FF_SPEED times and applies on release.
+ */
 
 /** Event flags returned by the ui_npc_* calls (a bit set). */
 enum {
@@ -152,6 +157,8 @@ enum {
     UI_NPC_TO_VOLUME = 1u << 1,   /**< the wheel went back to volume (idle, or the track cannot seek) */
     UI_NPC_SKIP = 1u << 2,        /**< a Left / Right press that was not a hold: skip (key_up) */
     UI_NPC_UNAVAILABLE = 1u << 3, /**< a hold on a track that cannot seek: say "Seek not available" */
+    UI_NPC_PAGE2 = 1u << 4,       /**< a short Select press was released: open page 2 */
+    UI_NPC_SEEK_ENTER = 1u << 5,  /**< the Select hold reached UI_SELHOLD_MS and seek mode began: tick the haptic */
 };
 
 typedef struct {
@@ -166,6 +173,9 @@ typedef struct {
     uint32_t step_ms;   /**< last fast-forward step */
     uint32_t id;        /**< the track the pending target belongs to (ui_npc_track_t.id) */
     uint32_t hold_id;   /**< the track the hold started on */
+    bool sel_down;      /**< Select is down (its press began a possible hold) */
+    bool sel_used;      /**< ... and was already used: the hold fired, or it applied / cancelled a seek: the release does nothing */
+    uint32_t sel_ms;    /**< when Select went down */
 } ui_npc_t;
 
 /** What the playing track offers (from player_info_t). */
@@ -177,8 +187,13 @@ typedef struct {
 } ui_npc_track_t;
 
 void ui_npc_init(ui_npc_t *c);
-/** Select: volume -> seek -> volume. A track that cannot seek stays on volume (false: show "Seek not available"). */
-bool ui_npc_select(ui_npc_t *c, const ui_npc_track_t *t, uint32_t now_ms);
+/** Select went down. In seek mode that is "go": the target is applied at once (UI_NPC_COMMIT when one is pending) and seek mode ends. Otherwise it starts
+ *  a possible hold (ui_npc_tick() enters seek mode after UI_SELHOLD_MS). */
+uint32_t ui_npc_select_down(ui_npc_t *c, uint32_t now_ms);
+/** Select went up: UI_NPC_PAGE2 for a short press that was not used for anything else. */
+uint32_t ui_npc_select_up(ui_npc_t *c);
+/** Menu in seek mode: drop the target and leave seek mode (true when it was in seek mode: the key is consumed; false: Menu goes back as usual). */
+bool ui_npc_menu(ui_npc_t *c);
 /** Wheel steps (already accelerated): in seek mode they move the target (true), else the caller changes the volume (false). */
 bool ui_npc_scroll(ui_npc_t *c, const ui_npc_track_t *t, int32_t steps, uint32_t now_ms);
 /** Left / Right went down: a candidate skip or hold. */
@@ -189,7 +204,7 @@ void ui_npc_cancel_hold(ui_npc_t *c);
 bool ui_npc_commit_valid(const ui_npc_t *c, const ui_npc_track_t *t);
 /** It went up: UI_NPC_SKIP when it was a short press, UI_NPC_COMMIT when a hold moved the target. */
 uint32_t ui_npc_key_up(ui_npc_t *c, int dir, uint32_t now_ms);
-/** Periodic: idle fall-back to volume, the scrub commit once the wheel rested, the fast-forward while held. */
+/** Periodic: the Select hold, the idle cancel of seek mode, the commit of a Left / Right scrub once it stopped, the fast-forward while held. */
 uint32_t ui_npc_tick(ui_npc_t *c, const ui_npc_track_t *t, uint32_t now_ms);
 /** The target was handed to the player. */
 void ui_npc_committed(ui_npc_t *c);
@@ -222,7 +237,7 @@ bool ui_text_is_clean(const char *raw);
 
 /* ---- Screen stack (opaque entries) ---------------------------------------------------------------- */
 
-#define UI_STACK_MAX 8
+#define UI_STACK_MAX 10
 
 typedef struct {
     void *items[UI_STACK_MAX];

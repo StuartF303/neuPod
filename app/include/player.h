@@ -55,6 +55,7 @@ typedef struct {
     uint64_t total_frames; /**< 0 for tones */
     uint32_t elapsed_s;    /**< from the audio core's own frame count */
     uint64_t pos_frames;   /**< the same position in frames of the track (a seek in progress shows its target) */
+    uint64_t file_size;    /**< bytes of the file playing (0 unknown): with its path the key of its rating (ratings_store.h) */
     uint32_t track_id;     /**< changes when another track plays (a start, a gapless handoff), not on a seek within the track */
     bool seekable;         /**< playing or paused on a track player_seek() can move within (WAV, ALAC, MP3, FLAC with a seek table) */
     uint32_t vol_att_db;
@@ -70,6 +71,10 @@ void player_init(void);
 
 /** Latest state (cheap; also folds in end-of-file and stream faults reported by the audio core). */
 void player_get(player_info_t *out);
+/** Real path of the file that plays now (a library queue entry is resolved: false until the storage task has done it) and, for a library queue, the
+ *  entry's handle ("@lib/<order>/<pos>"). Both false when no queue file plays. */
+bool player_now_path(char *out, size_t n);
+bool player_now_handle(char *out, size_t n);
 
 /** Start @p mode, or stop it if it is already the active test signal. TONE_OFF stops. */
 void player_tone_toggle(tone_mode_t mode);
@@ -128,6 +133,8 @@ void player_stop(void);
 
 /** Volume steps: positive = louder, 2 dB each, clamped to [hard cap, off]. Returns the new attenuation in dB. */
 uint32_t player_volume_step(int32_t steps);
+/** The attenuation shown to the user in dB (0 = unity; what player_info_t.vol_att_db says) without the rest of player_get(): cheap, for the volume HUD. */
+uint32_t player_volume_att(void);
 
 /**
  * Hold the software volume at 0 dB (true) while the headset's absolute volume is the volume (bt_control.h), or give the user's software volume back

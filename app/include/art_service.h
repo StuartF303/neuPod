@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
  * @file art_service.h
- * @brief Album art for Now Playing: finds the picture of the track that just started, decodes it into one 64 x 64 RGB565
- *        thumbnail (8 KB of static RAM) and hands it to the UI. Runs inside the storage task (it is the only user of FatFs,
+ * @brief Album art for Now Playing: finds the picture of the track that just started, decodes it into an RGB565 thumbnail
+ *        (160 x 160 with a cache of 24 albums on the hosted builds, one 64 x 64 on the Pico 2 W: art.h) and hands it to the UI.
+ *        Also decodes the picture of the album being browsed (the library's album header). Runs inside the storage task (it is the only user of FatFs,
  *        which is not re-entrant): between pieces of decoding it calls a yield hook that keeps the audio data ring fed, sleeps
  *        1 ms after each 2 ms of work so the input and UI tasks run, and aborts as soon as a new request is queued.
  *
@@ -43,6 +44,19 @@ typedef struct {
 /** UI side. */
 void art_view_get(art_view_t *out);
 void art_view_ack(uint32_t gen);
+
+/**
+ * The library's album header: the UI asks for the picture of the album whose first song is the library handle @p handle ("@lib/<order>/<pos>",
+ * play_queue.h); "" says it is no longer wanted. The storage task resolves the handle, finds the picture and decodes it into the cache (a hit
+ * when the album played before). Poll art_browse_get(): READY gives the thumbnail, FAILED means the album has no usable picture. Only the
+ * builds with a cache (ART_CACHE_N > 1) have it; the others always say NONE.
+ */
+void art_browse_want(const char *handle);
+void art_browse_get(art_view_t *out);
+
+/** Turns a library handle into a file path (library_service_resolve; storage task only). Set once at start-up. */
+typedef bool (*art_resolve_fn)(const char *handle, char *out, size_t n, const char **why);
+void art_service_set_resolver(art_resolve_fn fn);
 
 /** Storage task side. A track has just started: queue its art unless the cached one is for the same album. Cheap. */
 void art_service_track(const char *path, const audio_tags_t *tags);

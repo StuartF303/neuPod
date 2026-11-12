@@ -533,7 +533,7 @@ TEST(build_and_browse) {
     ASSERT_EQ(9, lib_list_jump(&g_rd, LIB_LIST_ARTISTS, 'Z'));
     for (unsigned b = 1; b < LIB_BUCKETS; b++) ASSERT_TRUE(m->jump[LIB_LIST_ARTISTS][b - 1] <= m->jump[LIB_LIST_ARTISTS][b]);
 
-    /* Page cache: 4 pages, hits and misses are counted */
+    /* Page cache: LIB_PAGES pages, hits and misses are counted */
     ASSERT_TRUE(g_rd.page_misses > 0);
     uint32_t misses = g_rd.page_misses;
     ASSERT_EQ(LIB_OK, lib_list_row(&g_rd, LIB_LIST_SONGS, 3, &r));

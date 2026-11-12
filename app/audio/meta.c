@@ -252,7 +252,7 @@ static void vorbis_field(audio_tags_t *t, const char *s, size_t k, const uint8_t
     audio_tags_ext_t *x = g_ext;
     for (size_t i = 0; i < sizeof keys / sizeof keys[0]; i++) {
         if (k != keys[i].len || !ieq(s, keys[i].key, k)) continue;
-        if (keys[i].id >= 4 && x == NULL) return; // library tags: not wanted
+        if (keys[i].id >= 4 && keys[i].id != 7 && x == NULL) return; // library tags: not wanted (the year is wanted by Now Playing too)
         char tmp[12];
         if (keys[i].id >= 3 && keys[i].id <= 8 && keys[i].id != 4 && keys[i].id != 5) { // numbers and flags: only the head matters
             size_t m = vl < 11 ? vl : 11;
@@ -272,7 +272,10 @@ static void vorbis_field(audio_tags_t *t, const char *s, size_t k, const uint8_t
             break;
         }
         case 6: x->disc = track_from(tmp); break;
-        case 7: x->year = meta_year_text(tmp); break;
+        case 7:
+            t->year = meta_year_text(tmp);
+            if (x != NULL) x->year = t->year;
+            break;
         case 8: x->compilation = flag_from(tmp); break;
         case 9: vorbis_text(x->sort_title, sizeof x->sort_title, v, vl); break;
         case 10: vorbis_text(x->sort_artist, sizeof x->sort_artist, v, vl); break;
@@ -429,10 +432,11 @@ static void id3_text_frame(const char *id, const uint8_t *d, uint32_t n, audio_t
         char tmp[16] = {0};
         meta_text_to_utf8(tmp, sizeof tmp, s, sl, enc);
         x->disc = track_from(tmp);
-    } else if (x != NULL && (!strcmp(id, "TDRC") || !strcmp(id, "TYER") || !strcmp(id, "TYE"))) {
+    } else if (!strcmp(id, "TDRC") || !strcmp(id, "TYER") || !strcmp(id, "TYE")) {
         char tmp[16] = {0};
         meta_text_to_utf8(tmp, sizeof tmp, s, sl, enc);
-        x->year = meta_year_text(tmp);
+        t->year = meta_year_text(tmp);
+        if (x != NULL) x->year = t->year;
     } else if (x != NULL && (!strcmp(id, "TCMP") || !strcmp(id, "TCP"))) {
         char tmp[8] = {0};
         meta_text_to_utf8(tmp, sizeof tmp, s, sl, enc);

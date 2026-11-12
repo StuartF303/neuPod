@@ -254,6 +254,10 @@ lib_err_t lib_list_row(lib_reader_t *r, lib_list_t l, uint32_t i, lib_row_t *out
         if (e != LIB_OK) return e;
         memcpy(out->text, t.title, sizeof out->text);
         memcpy(out->sub, t.artist_name, sizeof out->sub);
+        lib_entity_t al;
+        if (lib_album(r, t.album, &al) == LIB_OK) {
+            memcpy(out->album, al.name, sizeof out->album);
+        }
         out->play = t.play;
         return LIB_OK;
     }

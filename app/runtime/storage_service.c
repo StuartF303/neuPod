@@ -10,6 +10,7 @@
 #include "os.h"
 #include "play_queue.h"
 #include "player.h"
+#include "ratings_store.h"
 #include "resume.h"
 #include "settings_service.h"
 #include "settings_store.h"
@@ -36,6 +37,7 @@ void storage_service_init(void) {
     g_res_q = os_queue_create(sizeof(storage_result_t), 4);
     library_service_init();
     player_set_path_resolver(library_service_real_path);
+    art_service_set_resolver(library_service_resolve);
 }
 
 bool storage_service_ready(void) { return g_req_q != NULL && g_res_q != NULL; }
@@ -379,6 +381,7 @@ void storage_task(void *arg) {
         if (!os_queue_recv(g_req_q, &rq, track_stream_active() ? 1u : SETTINGS_POLL_MS)) {
             track_stream_pump();
             settings_poll();
+            ratings_poll(os_tick_ms());
             if (art_service_pending()) {
                 art_service_run(art_yield, NULL); // only when idle; it gives way to any request that arrives
             }

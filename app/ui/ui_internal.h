@@ -74,6 +74,7 @@ struct ui_screen {
     void (*suspend)(ui_screen_t *s);                  /* optional: another screen was pushed over this one (free what can be rebuilt) */
     void (*resume)(ui_screen_t *s);                   /* optional: it is on top again */
     bool suspended;
+    bool shows_volume; /* the screen draws the volume itself (Now Playing, Test tone): the volume HUD stays away while it is on top */
     char left[40]; /* text of the status bar's left slot while this screen is on top (ui_screen_set_left) */
     void *ud;
 };
@@ -150,6 +151,7 @@ void ui_bt_stream_pane_text(char *out, size_t n);
 typedef struct {
     char label[96];
     char detail[32]; /* right-aligned, optional */
+    char sub[48];    /* second line of a two-line list (ui_list_model_t.two_line): Small, ink2; "" = none */
     bool chevron;    /* the Lucide chevron at the right edge */
     const char *icon; /* a Lucide glyph (ui_icons.h, a string constant) before the label; NULL = none */
     bool dim;        /* greyed, not meant to be opened */
@@ -165,6 +167,8 @@ typedef struct {
     int32_t count;
     void *ctx;
     void (*get)(void *ctx, int32_t idx, ui_list_item_t *out);
+    int32_t top;   /* y of the list in its screen (an album's header sits above it; 0 = the whole content area) */
+    bool two_line; /* rows are UIM->row2_h high with a second line (Songs and the song lists): 5 rows instead of 7 */
 } ui_list_model_t;
 
 typedef struct ui_list ui_list_t;
@@ -190,7 +194,8 @@ void ui_list_resume(ui_list_t *l);
 ui_screen_t *ui_screen_home_create(void);
 ui_screen_t *ui_screen_music_create(void);
 ui_screen_t *ui_screen_placeholder_create(const char *title, const char *line1, const char *line2);
-ui_screen_t *ui_screen_nowplaying_create(void); /* ui_audio.c */
+ui_screen_t *ui_screen_nowplaying_create(void); /* ui_nowplaying.c */
+ui_screen_t *ui_screen_nowplaying_page2_create(void); /* ui_nowplaying.c: Select on Now Playing */
 ui_screen_t *ui_screen_testtone_create(void);   /* ui_audio.c */
 ui_screen_t *ui_screen_extras_create(void);
 ui_screen_t *ui_screen_files_create(void);
@@ -207,6 +212,14 @@ ui_screen_t *ui_screen_inputdemo_create(void); /* input/ui_input_demo.c */
 
 /** Small helpers shared by the screens. */
 lv_obj_t *ui_artwork(lv_obj_t *parent, int32_t x, int32_t y, int32_t size);
+
+/** The art box (ui_art.c): the placeholder with a thumbnail from the art service on top. The thumbnail is not copied (it must stay valid while shown:
+ *  the art service's contract, art_service.h) and is drawn scaled down into the box. */
+typedef struct ui_artbox ui_artbox_t;
+ui_artbox_t *ui_artbox_create(lv_obj_t *parent, int32_t x, int32_t y, int32_t size);
+/** Show the thumbnail @p px (@p w x @p h RGB565, generation @p gen: the same generation twice does nothing); NULL px = the placeholder. */
+void ui_artbox_show(ui_artbox_t *a, const uint16_t *px, uint16_t w, uint16_t h, uint32_t gen);
+void ui_artbox_destroy(ui_artbox_t *a);
 lv_obj_t *ui_label(lv_obj_t *parent, const char *text, uint32_t colour);
 /** Like ui_label() in the Small font (secondary lines, times, pills, hints). */
 lv_obj_t *ui_label_small(lv_obj_t *parent, const char *text, uint32_t colour);

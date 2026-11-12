@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "art_service.h"
 #include "input_events.h"
 #include "library_service.h"
 #include "os.h"
@@ -46,11 +47,49 @@ typedef struct {
     uint32_t shown_files, shown_ms;
     wi_letterjump_t lj;
     ui_letter_overlay_t *overlay;
+    /* An album's header (LVW_ALBUM): art, title, "Artist . year", "n songs . m:ss . FLAC", and the rule under it */
+    ui_artbox_t *hd_art;
+    lv_obj_t *hd_title, *hd_l2, *hd_l3, *hd_rule;
+    bool hd_filled;           /* the header text has been filled from the index */
+    char hd_handle[24];       /* library handle of the album's first song: what its art is asked for by */
 } lib_screen_t;
 
 static uint32_t g_seq;
 
+/* The letter the rail shows for a name: the first letter of its sort key (articles and accents do not count), '#' for anything else. */
+static char letter_of(const char *text) {
+    uint8_t key[8];
+    (void)lib_collate_key(text, NULL, key, sizeof key);
+    unsigned b = lib_collate_bucket(key);
+    return b == 0 ? '#' : (char)('A' + (b - 1u));
+}
+
 static bool is_top(uint8_t kind) { return kind <= LVW_COMPILATIONS; }
+
+/* Lists of songs show two lines per row: the title and "Artist . Album" (docs/ui.md "Library lists"). */
+static bool two_line_kind(uint8_t kind) { return kind == LVW_SONGS || kind == LVW_ARTIST_SONGS || kind == LVW_GENRE_SONGS; }
+
+static const char *codec_name(uint8_t c) {
+    switch (c) {
+    case LIB_CODEC_WAV: return "WAV";
+    case LIB_CODEC_FLAC: return "FLAC";
+    case LIB_CODEC_MP3: return "MP3";
+    case LIB_CODEC_ALAC: return "ALAC";
+    case LIB_CODEC_AAC: return "AAC";
+    default: return "";
+    }
+}
+
+/* 1204 -> "1,204" (the status bar's count) */
+static void fmt_count(char *out, size_t n, uint32_t v) {
+    if (v >= 1000000u) {
+        snprintf(out, n, "%u,%03u,%03u", (unsigned)(v / 1000000u), (unsigned)(v / 1000u % 1000u), (unsigned)(v % 1000u));
+    } else if (v >= 1000u) {
+        snprintf(out, n, "%u,%03u", (unsigned)(v / 1000u), (unsigned)(v % 1000u));
+    } else {
+        snprintf(out, n, "%u", (unsigned)v);
+    }
+}
 
 static const char *empty_text(uint8_t kind) {
     switch (kind) {
@@ -130,10 +169,26 @@ static void lib_get(void *ctx, int32_t idx, ui_list_item_t *out) {
             }
             return;
         }
-        snprintf(out->label, sizeof out->label, "%s", r.text);
-        snprintf(out->detail, sizeof out->detail, "%s", r.detail);
-        out->chevron = r.child.kind != LVW_KINDS;
         out->dim = r.child.kind == LVW_KINDS && r.play != LIB_PLAY_OK; /* a song the player cannot play (D6): listed, greyed */
+        if (s->view.kind == LVW_ALBUM) { /* "3   Title", the length at the right; a song that cannot play names its codec in brackets */
+            char num[12] = "";
+            if (r.track != 0) {
+                snprintf(num, sizeof num, "%u   ", (unsigned)r.track);
+            }
+            if (out->dim && r.codec != LIB_CODEC_NONE) {
+                snprintf(out->label, sizeof out->label, "%s%s (%s)", num, r.text, codec_name(r.codec));
+            } else {
+                snprintf(out->label, sizeof out->label, "%s%s", num, r.text);
+            }
+        } else {
+            snprintf(out->label, sizeof out->label, "%s", r.text);
+        }
+        if (two_line_kind(s->view.kind)) {
+            snprintf(out->sub, sizeof out->sub, "%s", r.sub); /* the artist moved to the second line: nothing at the right */
+        } else {
+            snprintf(out->detail, sizeof out->detail, "%s", r.detail);
+        }
+        out->chevron = r.child.kind != LVW_KINDS;
         return;
     }
     }
@@ -141,13 +196,89 @@ static void lib_get(void *ctx, int32_t idx, ui_list_item_t *out) {
 
 /* ---- requests ------------------------------------------------------------------------------------------------------------- */
 
+/* ---- album header (LB-3) --------------------------------------------------------------------------------------------------- */
+
+static void fmt_length(char *out, size_t n, uint32_t s) {
+    if (s >= 3600u) {
+        snprintf(out, n, "%u:%02u:%02u", (unsigned)(s / 3600u), (unsigned)(s / 60u % 60u), (unsigned)(s % 60u));
+    } else {
+        snprintf(out, n, "%u:%02u", (unsigned)(s / 60u), (unsigned)(s % 60u));
+    }
+}
+
+// Fill the header from the index once it is open: "Artist . 2019", "3 songs . 9:41 . FLAC"; ask for the album's art by its first song.
+static void header_fill(lib_screen_t *s) {
+    if (s->hd_title == NULL || s->hd_filled || s->st != S_READY) {
+        return;
+    }
+    s->hd_filled = true;
+    char b[LVW_TEXT_MAX + 16];
+    ui_label_set_text(s->hd_title, s->info.title);
+    if (s->info.year != 0) {
+        snprintf(b, sizeof b, "%s \xC2\xB7 %u", s->info.artist, (unsigned)s->info.year);
+    } else {
+        snprintf(b, sizeof b, "%s", s->info.artist);
+    }
+    ui_label_set_text(s->hd_l2, b);
+    char len[16];
+    fmt_length(len, sizeof len, s->info.total_s);
+    const char *codec = codec_name(s->info.codec);
+    snprintf(b, sizeof b, "%u %s%s%s%s%s", (unsigned)s->info.count, s->info.count == 1 ? "song" : "songs", s->info.total_s != 0 ? " \xC2\xB7 " : "",
+             s->info.total_s != 0 ? len : "", codec[0] != '\0' ? " \xC2\xB7 " : "", codec);
+    ui_label_set_text(s->hd_l3, b);
+    if (s->info.count > 0 && pq_format_handle(s->hd_handle, sizeof s->hd_handle, (uint8_t)s->info.range.order, s->info.range.first)) {
+        art_browse_want(s->hd_handle);
+    }
+}
+
+static void header_create(lib_screen_t *s, const char *title) {
+    lv_obj_t *r = s->base.root;
+    s->hd_art = ui_artbox_create(r, UIM->np_margin, UIM->hd_art_y, UIM->hd_art);
+    int32_t w = UI_W - UIM->hd_text_x - UIM->np_margin;
+    s->hd_title = ui_label(r, title, UI_C_INK);
+    lv_obj_set_style_text_font(s->hd_title, UIM->font_large, 0);
+    lv_obj_set_size(s->hd_title, w, UIM->np_title_h);
+    lv_label_set_long_mode(s->hd_title, LV_LABEL_LONG_DOT);
+    ui_label_ticker(s->hd_title, true);
+    lv_obj_set_pos(s->hd_title, UIM->hd_text_x, UIM->hd_line1_y);
+    s->hd_l2 = ui_label(r, "", UI_C_INK2);
+    lv_obj_set_size(s->hd_l2, w, UIM->line_h);
+    lv_label_set_long_mode(s->hd_l2, LV_LABEL_LONG_DOT);
+    ui_label_ticker(s->hd_l2, true);
+    lv_obj_set_pos(s->hd_l2, UIM->hd_text_x, UIM->hd_line2_y);
+    s->hd_l3 = ui_label_small(r, "", UI_C_INK3);
+    lv_obj_set_size(s->hd_l3, w, UIM->np_album_h);
+    lv_label_set_long_mode(s->hd_l3, LV_LABEL_LONG_DOT);
+    lv_obj_set_pos(s->hd_l3, UIM->hd_text_x, UIM->hd_line3_y);
+    s->hd_rule = lv_obj_create(r);
+    lv_obj_remove_style_all(s->hd_rule);
+    lv_obj_set_size(s->hd_rule, UI_W - 2 * UIM->np_margin, 1);
+    lv_obj_set_pos(s->hd_rule, UIM->np_margin, UIM->hd_rule_y);
+    ui_obj_bg(s->hd_rule, UI_C_LINE, 0);
+}
+
+// The header's art: the album's thumbnail once the art service has it, the placeholder before that (and when the album has no picture).
+static void header_art_tick(lib_screen_t *s) {
+    if (s->hd_art == NULL) {
+        return;
+    }
+    art_view_t v;
+    art_browse_get(&v);
+    if (v.state == ART_VIEW_READY && v.w != 0) {
+        ui_artbox_show(s->hd_art, v.px, v.w, v.h, v.gen);
+    } else {
+        ui_artbox_show(s->hd_art, NULL, 0, 0, v.gen);
+    }
+}
+
 // The list and the status bar's left slot (design review 3.10: lists show their count) move together.
 static void set_count(lib_screen_t *s) {
     ui_list_set_count(s->list, item_count(s));
     if (s->st == S_READY && s->mode == M_LIST) {
         char c[16];
-        snprintf(c, sizeof c, "%u", (unsigned)s->info.count);
-        ui_screen_set_left(&s->base, c);
+        fmt_count(c, sizeof c, s->info.count);
+        ui_screen_set_left(&s->base, s->view.kind == LVW_ALBUM ? s->info.title : c); /* an album: its name (the header shows it big) */
+        header_fill(s);
     } else {
         ui_screen_set_left(&s->base, "");
     }
@@ -234,9 +365,10 @@ static void lib_tick(ui_screen_t *b) {
         return;
     }
     uint32_t now = os_tick_ms();
-    if (s->lj.active) {
-        wi_letterjump_tick(&s->lj, now);
-        ui_letter_overlay_update(s->overlay, &s->lj);
+    wi_letterjump_tick(&s->lj, now);
+    ui_letter_overlay_update(s->overlay, &s->lj); /* every pass: it fades out once the wheel has rested */
+    if (s->st == S_READY) {
+        header_art_tick(s);
     }
     libsvc_status_t st;
     switch (s->st) {
@@ -322,7 +454,7 @@ static void lib_scroll(ui_screen_t *b, int32_t steps) {
         lvw_row_t r;
         int32_t i = ui_list_selected(s->list);
         if (library_row(s->view, (uint32_t)i, &r) && r.text[0] != '\0') {
-            wi_letterjump_scroll(&s->lj, steps, os_tick_ms(), r.text[0]);
+            wi_letterjump_scroll(&s->lj, steps, os_tick_ms(), letter_of(r.text)); /* by the sort key: "The Beatles" is under B, accents are folded */
             ui_letter_overlay_update(s->overlay, &s->lj);
         }
     }
@@ -396,6 +528,10 @@ static void lib_destroy(ui_screen_t *b) {
     }
     ui_letter_overlay_destroy(s->overlay);
     ui_list_destroy(s->list);
+    if (s->hd_art != NULL) {
+        art_browse_want(""); /* the header's art is no longer wanted */
+        ui_artbox_destroy(s->hd_art);
+    }
 }
 
 static ui_screen_t *screen_new(lvw_view_t view, mode_t_ mode, const char *title) {
@@ -414,7 +550,12 @@ static ui_screen_t *screen_new(lvw_view_t view, mode_t_ mode, const char *title)
     s->base.suspend = lib_suspend;
     s->base.resume = lib_resume;
     s->base.destroy = lib_destroy;
-    s->list = ui_list_create(s->base.root, UI_W, &(ui_list_model_t){.count = 1, .ctx = s, .get = lib_get});
+    bool header = view.kind == LVW_ALBUM && mode == M_LIST;
+    if (header) {
+        header_create(s, title);
+    }
+    s->list = ui_list_create(s->base.root, UI_W,
+                             &(ui_list_model_t){.count = 1, .ctx = s, .get = lib_get, .two_line = two_line_kind(view.kind), .top = header ? UIM->hd_rule_y + 2 : 0});
     wi_letterjump_init(&s->lj);
     s->overlay = ui_letter_overlay_create(s->base.root);
     return &s->base;

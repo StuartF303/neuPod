@@ -121,6 +121,9 @@ void bt_service_forget(void) {
     bt_saved_clear();
 }
 
+static volatile uint32_t g_gave_up;
+uint32_t bt_service_gave_up_seq(void) { return g_gave_up; }
+
 bool bt_service_reconnecting(void) { return bt_rc_active(&g_rc); }
 
 static void reconnect_tick(void) {
@@ -141,7 +144,12 @@ static void reconnect_tick(void) {
         }
     }
     bt_rc_in_t in = {.bt_on = hal_bt_state() == HAL_BT_ON, .have_saved = bt_saved_get(NULL), .link = hal_bt_link_state()};
-    if (bt_rc_step(&g_rc, now, &in)) {
+    const bool was_active = bt_rc_active(&g_rc);
+    const bool make_call = bt_rc_step(&g_rc, now, &in);
+    if (was_active && !bt_rc_active(&g_rc) && in.have_saved && in.link != HAL_BT_LINK_CONNECTED) {
+        g_gave_up++; /* the schedule ended with the headset still away (a user action ends it through bt_rc_user_action, not here) */
+    }
+    if (make_call) {
         if (do_connect() == HAL_OK) {
             bt_rc_attempt_made(&g_rc);
             printf("bt: reconnecting\n");

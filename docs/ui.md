@@ -55,6 +55,12 @@ songs kept for Previous. Gapless playback, repeat, shuffle (Settings) and resume
 more than two channels, damaged) is listed greyed; Select shows why (`Can't play: unsupported codec (AAC)`) and auto-advance skips it. **Home > Shuffle Songs** plays the whole library in a
 random order (every song once; the Shuffle setting is not changed). Playlists still say `None yet`.
 
+**Two-line rows and the album header (LB-1, LB-3).** Lists of songs (Songs, an artist's All Songs, a genre's All Songs) show **two lines per row**, 40 / 60 px, five rows: the title in Body and `Artist . Album` in Small ink2 below (the artist no longer sits at the right, where it collided with long titles); the focused row's two lines are tickers. The status bar shows the count with a
+thousands comma (`1,204`). An **album** opens with a header (art 64 / 96 px, the album in the large font, `Artist . 2019`, `3 songs . 9:41 . FLAC`, a hairline) over the track rows `3   Title` with the length at the right; a song the player cannot play is greyed with its codec in brackets (`Carrier Wave (AAC)`), so the reason is visible before pressing. The status bar's left slot holds the album's name.
+The header's facts come with the album's info request (`lvw_info_t`: artist, first year, summed length, common codec; read from the first 100 songs); its art is decoded by the art service (see Now Playing art).
+
+**Fast scroll (LB-2).** While the wheel spins a long list past the acceleration threshold, a dark **tile** with the letter of the focused row appears at the top right and an **index rail** runs down the right edge (A to Z, every second letter in ink3, the current letter in ink; the letters next to it make room). It stays while the wheel moves and fades out in 150 ms once the wheel has rested for 250 ms. It never covers the selection bar's row text beyond the right 14 px of the first lines. The letter is the first letter of the row's **collation key** (`lib_collate_key()`: a leading "The " is ignored, accents are folded, a number or symbol is `#`), so the rail agrees with the sort. The sort ignores "The " and accents already; "A " / "An " are not ignored yet (see Backlog). The same component (`ui_rail.c`, `ui_letter_overlay_*`) is used by Files, which sorts by plain name.
+
 A long list never holds more than a few screens of rows in memory: the storage task fills a window of 16 rows around the selection, and a row that has not arrived yet shows `...` for the
 moment it takes. Both resolution profiles use the same screens (the 480x360 layout audit runs on every snapshot of the `library_tour`).
 
@@ -68,14 +74,32 @@ card` (the card is write-protected, or the card refused the write), `Card is ful
 
 ![Now playing](assets/ui/now-playing.svg)
 
-- Shows artwork (see [Now Playing art](#now-playing-art)), title, artist, album, the format badge (e.g. FLAC 24/96, wired, bit-perfect)
-  and the progress bar with elapsed and remaining time.
-- Scroll adjusts **volume** by default; a first **Select** switches the scroll to **seek** (bar
-  highlights), a second Select returns to volume. Pressing Select again shows rating / shuffle /
-  repeat options (not drawn). Built: the volume / seek toggle (see the Now Playing row below); the options page is not.
-- **Play/Pause** toggles; **Left** / **Right** previous / next track (hold Right to fast-forward).
-- **Menu** returns to the list the track was chosen from.
-- On Bluetooth output the badge reads the negotiated codec: `SBC 44.1`, or `SBC-XQ` when the headset accepted a bitpool above 53 (the source format is not shown then). Built in stage 2b (`np-bt-badge` in `--tour-bt`). A track that is not 44.1 kHz cannot be played on Bluetooth yet and is refused with "not supported on Bluetooth" (see [Bluetooth](bluetooth.md#stage-2b-the-audio-stream-built)).
+Built in phase 2 of the [design review](design/2026-11-12-ui-review/README.md) (NP-1 to NP-5; mock-ups `np-*` there). Page 1:
+
+- Art (112 / 168 px) at the left; to its right **Title** (large), **Artist** (Body, ink2) and **Album . Year** (Small, ink3). A file with no title tag shows its file name as the title and its folder as the artist. Title, artist and album are
+  tickers: wider than the column, they scroll (the owner's rule above). While something other than plain playing is going on the third line says it instead: `Opening...`, the error text (red), `Finished`, the MD5 check and its verdict.
+- Under the text the **pill row**: a format pill (accent_soft, `FLAC 16/44.1`; on a Bluetooth output the codec that leaves the box: `SBC 44.1`, `SBC-XQ`, `AAC`) and an outline pill with the output (`Wired`, or the headset's name, cut with dots when long). A test tone shows `TEST SIGNAL`.
+- The **progress bar** is 4 px, elapsed on the left (a pause glyph before it while paused), remaining on the right (`-~` for an estimated MP3 length), and a quiet ink3 word in the middle while either is on: `shuffle`, `repeat`, `repeat 1`, `shuffle . repeat`.
+- The **volume strip** at the bottom: `Volume -18 dB` (or `Headset 62%` on a headset with absolute volume, same 0..127 scale) and a 4 px ink2 bar over the right 55 %. A headset left at 0 % while playing reads `Headset 0% . silent` in amber (the old "headset volume 0 %" hint).
+- Status bar: `n of m` at the left, `Now Playing` in the middle.
+- Scroll adjusts **volume**. **Select**: a short press opens **page 2**; **hold Select** (about 0.5 s, with a haptic tick) is **seek mode**. **Play/Pause** toggles; **Left** / **Right** previous / next track; hold Left / Right scans the track at 10x
+  and applies on release (the old behaviour). **Menu** returns to the list the track was chosen from (in seek mode it cancels the seek first).
+
+**Seek mode (NP-2).** The pills, the album line and the volume strip give way to the seek time in the Big font (amber), the progress bar becomes 6 px amber (soft amber track) with a knob, and the hint `Scroll: seek . Select: go . Menu: cancel` takes the bottom line.
+The wheel moves the target (about 1/60 of the track per step, 1 to 30 s); **Select applies it** (one restart of the track at that frame) and leaves seek mode; **Menu drops it**. Nothing is applied by the wheel resting, and a seek mode left alone for 10 s is cancelled (so a forgotten seek never keeps the wheel; the old 3 s fallback is gone).
+A track that cannot seek (a FLAC without a seek table, the MD5 check) answers the hold with the toast `Seek not available` and stays on volume. The volume HUD shows while seek mode hides the strip. Logic: `ui_npc_*` in `ui_logic.c` (`ui_npc_select_down` / `_up`, `ui_npc_menu`, tick), host-tested in `ui_logic`. The old "Select toggles volume / seek" path is gone.
+
+**Page 2 (NP-3).** Small art (64 / 96) and title, `Artist . Album`, then the **star rating** (five stars, lit ones accent): wheel up from the first row focuses the stars (a soft box behind them), the wheel then sets 0 to 5 stars, Select or Menu returns to the rows. Rows: **Shuffle** (Off / Songs), **Repeat** (Off / One / All), **Gapless** (On / Off), each toggled by Select
+(the same settings as Settings), **Add to playlist (phase 4)** (greyed; Select says `Playlists in phase 4`), **Go to album** and **Go to artist** (open that album / artist in the library with the track's own ids: the storage task keeps the album and album-artist id of the last two library tracks it resolved,
+`library_track_ids()`; greyed with `Not in the library` when the track plays from a folder or is a compilation, which has no album artist). Menu goes back to page 1. Page 2 needs a playing file; if playback stops under it, it closes.
+**Ratings are saved on the card** (`/.neupod/ratings.bin`, `ratings_store.[ch]`), keyed by file path and size so a rebuilt library keeps them; saved by the storage task under the settings store's write scope (confined to `/.neupod`), loaded when the card is ready. On a write-protected or failing card they stay in RAM and are written as soon as the card allows (retry every 30 s); up to 128 tracks (the least recently rated is dropped). The file is rewritten in place: a power cut during a save loses the ratings (the CRC makes it load as empty), nothing else.
+
+**Volume HUD (NP-4).** A volume change while another screen is on top (the Y2's side keys, the headset's own volume, anything that moves the player's volume) shows the HUD strip for 1.2 s: `Volume -18 dB` or `Headset 62%` with the bar (`update_volume_hud()`, `ui_frame.c`; it polls `player_volume_att()` and `bt_volume_get()`).
+Screens that draw the volume themselves (Now Playing page 1 outside seek mode, Test tone) set `ui_screen_t.shows_volume` and get no HUD. Not shown while the screen is off or Hold is on, nor when the volume in use changes (a headset taking over). List scrolling is unchanged: the wheel still only scrolls.
+
+**Bluetooth link lost.** Unchanged ADR-0019 behaviour, new words: playback pauses on the drop and stays on Bluetooth; when the five minutes of automatic reconnecting end with the headset still away the toast says `Couldn't reconnect - paused` (`bt_service_gave_up_seq()`).
+
+- On Bluetooth output the format pill reads the negotiated codec: `SBC 44.1`, or `SBC-XQ` when the headset accepted a bitpool above 53 (the source format is not shown then). A track that is not 44.1 kHz cannot be played on Bluetooth yet and is refused with "not supported on Bluetooth" (see [Bluetooth](bluetooth.md#stage-2b-the-audio-stream-built)).
 
 ## Album browser
 
@@ -221,6 +245,10 @@ Now Playing play / pause / shuffle / repeat. Battery and signal bars stay drawn 
 **Motion (DS-7).** Push slides the new screen in 24 px over 120 ms (ease-out), pop slides the revealed screen in from the left over 100 ms; no alpha, only the content area repaints. (The review fades the popped screen out; the popped screen is destroyed at once, so the mirror slide is used.)
 LVGL runs at 30 fps (`LV_DEF_REFR_PERIOD 33`, `lv_conf.h`) on every build; the Y2 stays at 30 until a vsync'd framebuffer is confirmed there. A snapshot or the layout audit first settles any slide or strip in flight (`ui_frame_settle()`).
 
+**Phase 2 (NP-1 to NP-5, LB-1 to LB-3)** is described under Now playing, Music lists and Now Playing art above. Layout numbers (320x240 / 480x360 = x1.5, `ui_metrics_t`): Now Playing art 112 at (10, 12) in the content area, text column at x 134, title y 10, artist y 40, album y 60, pills y 102 (18 px high), progress bar y 142 (4 px, 6 px in seek mode, knob 14), times y 152, volume strip y 190;
+two-line rows 40 px (title y 3, second line y 21); album header and page 2: art 64 at y 8, rule at y 76; letter tile 44 px at (w - 58, 14), rail from y 6 over 204 px. The tours `--tour-seek` (`seek-volume`, `np-nowplaying`, `seek-mode`, `seek-scrub`, `seek-cancel`, `seek-go`, `np-page2`, `np-volume-hud`, `seek-mp3`, `seek-unavailable`), `--tour-library` (`lib-songs` two-line, `lib-volume-hud`, `lib-songs-fastscroll`,
+`lib-album` with the header) and `--tour-art` snapshot the new screens at both resolutions with the layout audit on every one; the tour tokens `sel:down` / `sel:up` (with `sleep:MS`) hold Select, `vol:N` changes the volume from outside the screen and `rail:hold` / `rail:release` keep the fast-scroll overlay up for a snapshot.
+
 ## Implemented (stage 2: home menu)
 
 Firmware screens in `app/ui/` (LVGL, light theme as in the mock-ups above; all drawing is original). Rendering
@@ -255,8 +283,14 @@ when many counts arrive within 150 ms; the constants `UI_COUNTS_PER_STEP`, `UI_A
 
 ### Now Playing art
 
-The 112 x 112 box at the top left of Now Playing shows the album art of the track that is playing (the layout is unchanged: title, artist and album to its right,
-progress below, all at 320 x 240).
+The 112 x 112 box (168 at 480x360) at the top left of Now Playing shows the album art of the track that is playing; page 2 and the album header show it at 64 / 96 px.
+
+**Thumbnails and cache (NP-5).** Hosted builds (the simulator and the Y2; `NEUPOD_ART_HIRES`, on by default there) decode to a **160 x 160 RGB565 thumbnail** (50 KB) and keep the last **24** albums (1.2 MB static: 24 slots, least recently used replaced first, the slots on screen are never replaced);
+nothing is scaled up: LVGL draws the thumbnail smaller into the box (160 to 112, 96, 64), except Now Playing at 480x360 where the 168 px box shows it 5 % larger. The cache key is the one that already identified an album (folder, album tag, embedded picture size), so a track of an album played or browsed before shows its art at once. The **Pico 2 W** build (frozen, ADR-0001 amendment) keeps the 64 x 64 thumbnail (8 KB), no cache and no browse art
+(`ART_CACHE_N` 1, `art.h`); an RP2350B with PSRAM turns the large thumbnails on with `-DNEUPOD_ART_HIRES=ON`. Measured RAM: 24 x 51,200 B = 1,228,800 B of BSS on the host and the Y2 (the Y2 has plenty); RP2350 unchanged.
+The album header asks the art service for the album's picture by the library handle of its first song (`art_browse_want()`): the storage task resolves it, reads the file's header for an embedded picture, and decodes it into the cache when it is idle (the playing track's art always goes first).
+
+(The table and text below describe the decoder, written for the 64 px thumbnail.)
 
 | State | What the box shows |
 | --- | --- |
@@ -303,7 +337,6 @@ Left/Right, Space/`p` Play/Pause. The wheel, when it works, sends the same event
 
 - Hold-switch lock overlay, charging screen, USB mass-storage ("Connected") screen.
 - Podcasts and Photos browsers; the search screen.
-- Letter overlay during fast scroll; rating / shuffle / repeat sub-screens.
 
 ## Hold
 

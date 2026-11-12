@@ -98,17 +98,31 @@ TEST(every_profile_fits_its_panel) {
         ASSERT_TRUE(m->home_line_y[2] + lh(m->font_body) <= m->content_h);
         // Now Playing: the art box and the text column sit side by side, the bars fit under them
         ASSERT_TRUE(m->np_margin + m->np_art <= m->np_text_x);
-        ASSERT_TRUE(m->np_margin + m->np_art <= m->np_bar_y); // art box fits above the progress bar
+        ASSERT_TRUE(m->np_art_y + m->np_art <= m->np_bar_y); // art box fits above the progress bar
         ASSERT_TRUE(m->np_text_x < m->w - m->np_margin);
+        ASSERT_TRUE(m->np_margin + m->np_art < m->np_text_x);
         ASSERT_TRUE(m->np_title_y + lh(m->font_large) <= m->np_artist_y);
         ASSERT_TRUE(m->np_artist_y + lh(m->font_body) <= m->np_album_y);
-        ASSERT_TRUE(m->np_album_y + lh(m->font_body) <= m->np_badge_y);
-        ASSERT_TRUE(m->np_badge_y + lh(m->font_body) <= m->np_state_y);
-        ASSERT_TRUE(m->np_state_y + 2 * lh(m->font_body) <= m->np_bar_y); // two wrapped status lines
+        ASSERT_TRUE(m->np_album_y + lh(m->font_small) <= m->np_pill_y);
+        ASSERT_TRUE(m->np_pill_y + m->np_pill_h <= m->np_art_y + m->np_art); // the pills end with the art
+        ASSERT_TRUE(m->np_seek_y + lh(m->font_huge) <= m->np_bar_y);          // the big seek time fits above the bar
+        ASSERT_TRUE(m->np_bar_y + m->np_bar_h / 2 - m->np_bar_seek_h / 2 >= m->np_seek_y);
+        ASSERT_TRUE(m->np_bar_y + m->np_bar_h / 2 + m->np_knob / 2 <= m->np_time_y); // the knob stays above the times
         ASSERT_TRUE(m->np_bar_y + m->np_bar_h <= m->np_time_y);
-        ASSERT_TRUE(m->np_time_y + lh(m->font_body) <= m->np_vol_y);
-        ASSERT_TRUE(m->np_vol_y + lh(m->font_body) <= m->content_h);
+        ASSERT_TRUE(m->np_time_y + lh(m->font_small) <= m->np_vol_y);
+        ASSERT_TRUE(m->np_vol_y + lh(m->font_small) <= m->content_h);
+        ASSERT_TRUE(m->np_hint_y + lh(m->font_small) <= m->content_h);
         ASSERT_TRUE(m->np_vol_bar_y + m->np_vol_bar_h <= m->content_h);
+        ASSERT_TRUE(m->np_vol_x > m->np_margin && m->np_vol_x < m->w - m->np_margin);
+        // two-line rows, album header, letter rail
+        ASSERT_TRUE(m->rows2 >= 1 && m->rows2 * m->row2_h <= m->content_h && m->rows2 <= m->rows);
+        ASSERT_TRUE(m->row2_y1 + lh(m->font_body) <= m->row2_y2 && m->row2_y2 + lh(m->font_small) <= m->row2_h);
+        ASSERT_TRUE(m->hd_art_y + m->hd_art <= m->hd_rule_y);
+        ASSERT_TRUE(m->hd_line3_y + lh(m->font_small) <= m->hd_rule_y);
+        ASSERT_TRUE(m->hd_rule_y + 2 + m->row_h <= m->content_h); // at least one row under the header
+        ASSERT_TRUE(m->lr_tile + m->lr_tile_y <= m->content_h && m->lr_tile + m->lr_tile_inset < m->w);
+        ASSERT_TRUE(m->lr_rail_y + m->lr_rail_h <= m->content_h);
+        ASSERT_TRUE(m->lr_rail_h >= 13 * lh(m->font_small)); // every second letter of 26 fits one under the other
         // Test tone: its labels fit under the three list rows
         ASSERT_TRUE(3 * m->row_h + m->tt_y[3] + 2 * lh(m->font_body) <= m->content_h);
         // Settings: list + pane = the screen

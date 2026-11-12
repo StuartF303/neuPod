@@ -29,7 +29,9 @@ static union {
     file_entry_t entries[FILES_MAX_ENTRIES];
     lib_mem_t lib;
 } g_mem;
-_Static_assert(sizeof(lib_mem_t) <= sizeof(file_entry_t[FILES_MAX_ENTRIES]), "reader + row window must fit the Files listing buffer");
+// The reader plus the row window are a little larger than the folder listing since the two-line rows (a second text per row) and the fifth page of the cache
+// (a song row reads five table pages): the shared buffer grows to the larger of the two, which costs under 1 KB over the listing alone.
+_Static_assert(sizeof(lib_mem_t) <= sizeof(file_entry_t[FILES_MAX_ENTRIES]) + 1024u, "reader + row window must stay close to the Files listing buffer");
 
 // Is there a card the library can use? A mounted FatFs volume on the device; the simulator's card is a folder, which the storage check has vouched for.
 static bool card_ready(void) {
@@ -85,6 +87,7 @@ static volatile uint32_t g_last[4]; /* tracks, artists, albums, genres of the la
 static struct {
     char handle[24]; /* "@lib/2/4294967295" is 17 characters */
     char path[PLAYER_PATH_MAX];
+    uint32_t album, artist; /* the track's album and album artist ids (LIB_NONE: a compilation): Now Playing's "Go to album / artist" */
 } g_paths[PATH_CACHE];
 static unsigned g_path_next;
 static os_mutex_t *g_path_mu;
@@ -418,7 +421,8 @@ bool library_service_resolve(const char *handle, char *out, size_t n, const char
         *why = "No card";
         return false;
     }
-    lib_err_t e = lib_resolve(NULL, (lib_order_t)order, pos, out, n, &play);
+    uint32_t album = LIB_NONE, artist = LIB_NONE;
+    lib_err_t e = lib_resolve_ids(NULL, (lib_order_t)order, pos, out, n, &play, &album, &artist);
     if (e != LIB_OK) {
         *why = e == LIB_E_NONE || e == LIB_E_RANGE || e == LIB_E_FORMAT ? "Library changed: update it" : "Card read error";
         return false;
@@ -431,9 +435,27 @@ bool library_service_resolve(const char *handle, char *out, size_t n, const char
         unsigned k = g_path_next++ % PATH_CACHE;
         snprintf(g_paths[k].handle, sizeof g_paths[k].handle, "%s", handle);
         snprintf(g_paths[k].path, sizeof g_paths[k].path, "%s", out);
+        g_paths[k].album = album;
+        g_paths[k].artist = artist;
         os_mutex_unlock(g_path_mu);
     }
     return true;
+}
+
+bool library_track_ids(const char *handle, uint32_t *album, uint32_t *artist) {
+    bool found = false;
+    if (g_path_mu == NULL || !os_mutex_lock(g_path_mu, 20)) {
+        return false;
+    }
+    for (unsigned i = 0; i < PATH_CACHE && !found; i++) {
+        if (g_paths[i].handle[0] != '\0' && strcmp(g_paths[i].handle, handle) == 0) {
+            *album = g_paths[i].album;
+            *artist = g_paths[i].artist;
+            found = true;
+        }
+    }
+    os_mutex_unlock(g_path_mu);
+    return found;
 }
 
 bool library_service_real_path(const char *handle, char *out, size_t n) {

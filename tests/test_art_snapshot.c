@@ -4,7 +4,7 @@
 //   art-embedded  500x333 JPEG inside the FLAC        -> the quadrants, letterboxed (dark bars above and below)
 //   art-home      Home while the embedded-art album is paused -> the same quadrants in the 96 px box of the right pane, and the
 //                 title text under it (and no placeholder ring)
-//   art-none      PNG inside + progressive cover.jpg  -> the note placeholder, no picture colours
+//   art-none      PNG inside + progressive cover.jpg  -> the ring placeholder, no picture colours
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -46,9 +46,9 @@ static int dist(const ppm_t *p, int x, int y, int r, int g, int b) {
 
 static const char *g_dir;
 
-// The art box is 112 x 112 at (14, 38) on the 320 x 240 screen (status bar 24 px, box 14 px below it).
-#define BX 14
-#define BY 38
+// The art box is 112 x 112 at (10, 36) on the 320 x 240 screen (status bar 24 px, box 12 px below it).
+#define BX 10
+#define BY 36
 
 TEST(test_cover_quadrants) {
     ppm_t p;
@@ -83,15 +83,9 @@ TEST(test_none_shows_placeholder) {
     ASSERT_TRUE(dist(&p, BX + 28, BY + 28, 220, 40, 40) > 80); // no red quadrant ...
     ASSERT_TRUE(dist(&p, BX + 84, BY + 28, 40, 200, 60) > 80); // ... no green one ...
     ASSERT_TRUE(dist(&p, BX + 84, BY + 84, 230, 210, 40) > 80); // ... no yellow one
-    // the note glyph is light on the dark background: some pixel in the middle of the box is bright
-    int bright = 0;
-    for (int y = BY + 30; y < BY + 82; y++) {
-        for (int x = BX + 30; x < BX + 82; x++) {
-            const uint8_t *q = p.px + ((size_t)y * (size_t)p.w + (size_t)x) * 3u;
-            if (q[0] > 120 && q[1] > 130 && q[2] > 150) bright++;
-        }
-    }
-    ASSERT_TRUE(bright > 100);
+    // the placeholder's centre dot is a light spot on the dark gradient (no music-note glyph any more)
+    const uint8_t *q = p.px + ((size_t)(BY + 56) * (size_t)p.w + (size_t)(BX + 56)) * 3u;
+    ASSERT_TRUE(q[0] > 110 && q[1] > 110 && q[2] > 120);
     free(p.px);
 }
 

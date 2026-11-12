@@ -44,7 +44,7 @@ static lib_err_t lres_read(lres_t *l, uint32_t off, void *dst, uint32_t n, uint3
     return LIB_OK;
 }
 
-lib_err_t lib_resolve(const char *base, lib_order_t order, uint32_t pos, char *path, size_t cap, uint8_t *play) {
+lib_err_t lib_resolve_ids(const char *base, lib_order_t order, uint32_t pos, char *path, size_t cap, uint8_t *play, uint32_t *album, uint32_t *album_artist) {
     if (base == NULL) base = LIB_BASE_DEFAULT;
     if (strlen(base) > LIB_BASE_MAX || cap < 2 || (unsigned)order >= LIB_ORDERS) return LIB_E_RANGE;
     char dir[64];
@@ -65,6 +65,8 @@ lib_err_t lib_resolve(const char *base, lib_order_t order, uint32_t pos, char *p
     lres_close(&l);
     if (e != LIB_OK) return e;
     if (play != NULL) *play = w[TR_PLAY];
+    if (album != NULL) *album = ld32(w + TR_ALBUM);
+    if (album_artist != NULL) *album_artist = ld32(w + TR_AARTIST);
     uint32_t names[17], d = ld32(w + TR_DIR);
     unsigned n = 0;
     names[16] = ld32(w + TR_NAME);
@@ -103,4 +105,8 @@ lib_err_t lib_resolve(const char *base, lib_order_t order, uint32_t pos, char *p
     lres_close(&l);
     if (e == LIB_OK) path[at] = '\0';
     return e;
+}
+
+lib_err_t lib_resolve(const char *base, lib_order_t order, uint32_t pos, char *path, size_t cap, uint8_t *play) {
+    return lib_resolve_ids(base, order, pos, path, cap, play, NULL, NULL);
 }

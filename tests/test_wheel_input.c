@@ -262,9 +262,9 @@ TEST(test_letter_jump) {
     ASSERT_FALSE(wi_letterjump_scroll(&j, 1, 1100, 'a'));
     ASSERT_TRUE(wi_letterjump_scroll(&j, 5, 1200, 'm')); // fast
     ASSERT_EQ('M', j.letter);
-    wi_letterjump_tick(&j, 1500);
-    ASSERT_TRUE(j.active);
-    wi_letterjump_tick(&j, 2000);
+    wi_letterjump_tick(&j, 1200 + WI_LJ_HIDE_MS);
+    ASSERT_TRUE(j.active); // still within the rest delay
+    wi_letterjump_tick(&j, 1200 + WI_LJ_HIDE_MS + 1);
     ASSERT_FALSE(j.active);
     ASSERT_FALSE(wi_letterjump_scroll(&j, 1, 5000, '7')); // energy decayed
     wi_letterjump_scroll(&j, 8, 5050, '7');

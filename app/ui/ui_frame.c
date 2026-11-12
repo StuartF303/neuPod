@@ -13,6 +13,7 @@
 #include "audio_route.h"
 #include "battery_store.h"
 #include "bt_saved.h"
+#include "bt_control.h"
 #include "bt_service.h"
 #include "capabilities.h"
 #include "hal_display.h"
@@ -643,7 +644,13 @@ static void update_bt(void) {
 }
 
 // The audio route's notices ("Headset disconnected") are toasts now. Link loss keeps ADR-0019: playback pauses and stays on Bluetooth.
+static uint32_t g_gaveup_seen;
 static void update_banner(void) {
+    uint32_t gu = bt_service_gave_up_seq(); // the reconnect schedule ran out (owner decision: playback stays paused, on Bluetooth)
+    if (gu != g_gaveup_seen) {
+        g_gaveup_seen = gu;
+        ui_toast_show("Couldn't reconnect \xE2\x80\x94 paused", UI_TOAST_WARN, AUDIO_ROUTE_BANNER_MS);
+    }
     uint32_t seq;
     audio_route_notice_t n = audio_route_notice(&seq);
     if (seq != g_notice_seen) {
@@ -652,6 +659,56 @@ static void update_banner(void) {
             ui_toast_show(n == ROUTE_NOTICE_HEADSET_DROPPED ? "Headset disconnected" : "Headset not connected", UI_TOAST_WARN, AUDIO_ROUTE_BANNER_MS);
         }
     }
+}
+
+// NP-4: a volume change while another screen is on top (the Y2's side keys, the headset's own volume, the wheel on a screen that does not set it)
+// shows the volume HUD for 1.2 s. Screens that draw the volume themselves (Now Playing page 1, Test tone) say so with shows_volume. A change of
+// which volume is in use (a headset connecting takes over) is not a volume change and shows nothing; nor does anything while the screen is off or Hold is on.
+static int32_t g_vol_att = -1;
+static int g_vol_hv = -2;
+static uint32_t g_vol_gen = UINT32_MAX, g_vol_quiet_until;
+static bool g_vol_quiet;
+#define VOL_QUIET_MS 1500u /* after a settings load (the saved volume is restored a moment later) or a change of volume mode (the software volume follows the headset's) */
+
+static void update_volume_hud(void) {
+    uint32_t att = player_volume_att();
+    int hv = bt_volume_get();
+    const bool first = g_vol_att < 0;
+    const bool mode_same = (hv >= 0) == (g_vol_hv >= 0);
+    const bool changed = hv >= 0 ? hv != g_vol_hv : (int32_t)att != g_vol_att;
+    g_vol_att = (int32_t)att;
+    g_vol_hv = hv;
+    const uint32_t now = os_tick_ms();
+    const uint32_t gen = settings_generation();
+    if (gen != g_vol_gen || !mode_same) {
+        g_vol_gen = gen;
+        g_vol_quiet = true;
+        g_vol_quiet_until = now + VOL_QUIET_MS;
+    }
+    if (g_vol_quiet && (int32_t)(now - g_vol_quiet_until) >= 0) {
+        g_vol_quiet = false;
+    }
+    if (first || g_vol_quiet || !mode_same || !changed) {
+        return;
+    }
+    ui_screen_t *top = ui_stack_top(&g_stack);
+    if (top == NULL || top->shows_volume || g_hold.locked || g_idle.off) {
+        return;
+    }
+    char label[32];
+    int pct;
+    if (hv >= 0) {
+        pct = (int)bt_vol_percent((uint8_t)hv);
+        snprintf(label, sizeof label, "Headset %d%%", pct);
+    } else {
+        pct = att >= AUDIO_VOL_OFF_DB ? 0 : (int)((AUDIO_VOL_OFF_DB - att) * 100u / AUDIO_VOL_OFF_DB);
+        if (att >= AUDIO_VOL_OFF_DB) {
+            snprintf(label, sizeof label, "Volume off");
+        } else {
+            snprintf(label, sizeof label, att == 0 ? "Volume 0 dB" : "Volume -%u dB", (unsigned)att);
+        }
+    }
+    ui_hud_show(label, pct, 0);
 }
 
 // The haptic task applies the stored actuator and calibration once the settings are known: when they are (re)loaded,
@@ -693,6 +750,7 @@ void ui_frame_tick(uint32_t now_ms) {
     update_wifi();
     update_bt();
     update_banner();
+    update_volume_hud();
     update_battery();
     ui_strips_tick(now_ms);
     bt_service_tick(); /* the radio simulator on the host; stale pairing keys; cheap */
