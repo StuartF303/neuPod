@@ -266,6 +266,47 @@ TEST(a_stream_released_by_the_headset_is_reopened_a_few_times_then_left) {
     ASSERT_EQ(0, g_stops);
 }
 
+TEST(the_bluetooth_setting_is_the_output_with_or_without_a_headset_and_survives_a_disconnect) {
+    reset();
+    ASSERT_EQ(AUDIO_OUT_WIRED, audio_route_output());
+    audio_route_set_pref(AUDIO_ROUTE_BLUETOOTH);
+    ASSERT_EQ(AUDIO_ROUTE_BLUETOOTH, audio_route_pref());
+    tick(100);
+    ASSERT_EQ(AUDIO_OUT_BT, audio_route_output()); // no headset at all: Bluetooth anyway
+    ASSERT_TRUE(strcmp(g_calls, "CBO") == 0);
+    uint32_t seq0, seq1;
+    (void)audio_route_notice(&seq0);
+    g_pstate = PLAYER_PLAYING; // Play with nothing connected: paused again, never the wired output
+    tick(100);
+    ASSERT_EQ(PLAYER_PAUSED, g_pstate);
+    ASSERT_TRUE(audio_route_notice(&seq1) == ROUTE_NOTICE_NOT_CONNECTED && seq1 != seq0);
+    ASSERT_EQ(AUDIO_OUT_BT, audio_route_output());
+    connect_headset();
+    pump_stream(HAL_BT_STREAM_OPEN, 3000);
+    hal_bt_disconnect(); // Disconnect: under Auto this would return to wired
+    audio_route_user_released();
+    for (int i = 0; i < 80; i++) tick(100);
+    ASSERT_EQ(AUDIO_OUT_BT, audio_route_output());
+    audio_route_set_pref(AUDIO_ROUTE_WIRED); // only the setting moves it
+    tick(100);
+    ASSERT_EQ(AUDIO_OUT_WIRED, audio_route_output());
+    audio_route_set_pref(AUDIO_ROUTE_AUTO);
+}
+
+TEST(the_saved_output_setting_reads_back_and_an_unknown_value_is_auto) {
+    audio_route_set_pref(AUDIO_ROUTE_WIRED);
+    ASSERT_EQ(AUDIO_ROUTE_WIRED, audio_route_pref());
+    audio_route_set_pref(AUDIO_ROUTE_BLUETOOTH);
+    ASSERT_EQ(AUDIO_ROUTE_BLUETOOTH, audio_route_pref());
+    audio_route_set_pref(AUDIO_ROUTE_AUTO);
+    ASSERT_EQ(AUDIO_ROUTE_AUTO, audio_route_pref());
+    settings_set_u8(SETTING_AUDIO_OUTPUT, 9); // written by a newer firmware: Auto, as before the Bluetooth value existed
+    ASSERT_EQ(AUDIO_ROUTE_AUTO, audio_route_pref());
+    settings_set_u8(SETTING_AUDIO_OUTPUT, 1); // a card from before this change: Wired stays Wired
+    ASSERT_EQ(AUDIO_ROUTE_WIRED, audio_route_pref());
+    audio_route_set_pref(AUDIO_ROUTE_AUTO);
+}
+
 int main(void) {
     RUN(wired_until_a_stream_is_open_then_bluetooth_with_a_quiet_change);
     RUN(a_track_playing_is_stopped_for_the_change_of_output);
@@ -278,5 +319,7 @@ int main(void) {
     RUN(reconnecting_after_a_drop_lets_playback_resume_without_another_change);
     RUN(letting_the_headset_go_on_purpose_returns_to_wired);
     RUN(a_stream_released_by_the_headset_is_reopened_a_few_times_then_left);
+    RUN(the_bluetooth_setting_is_the_output_with_or_without_a_headset_and_survives_a_disconnect);
+    RUN(the_saved_output_setting_reads_back_and_an_unknown_value_is_auto);
     return RESULT();
 }
