@@ -17,7 +17,7 @@ scaler in the display path), or render natively at 480x360.
 * **320x240 is the product panel** and its profile holds the exact numbers the UI had before: the host snapshots at that size are
   unchanged (compared byte for byte against the previous build, apart from the build hash text and timing animation).
 * **480x360 is for the Y2 testbed** (and for testing the hires layout on the host): every length x 3/2, fonts one step up
-  (Montserrat 14 to 20, 20 to 28, 48 stays; it is the largest built-in), 9 rows per page in both.
+  (Montserrat 14 to 20, 20 to 28, 48 stays; it is the largest size built; the fonts are the project's own Latin-1 builds, see [UI](../ui.md#fonts-and-display-text)), 9 rows per page in both.
 * **Hires fonts and buffers are compiled only for hosted builds.** CMake option `NEUPOD_UI_HIRES` (default ON for `host` and `y2`,
   OFF for `rp2350` and `esp32s3`) gates the 480x360 profile, Montserrat 28 (`lv_conf.h`), the 480 x 36 render buffers, a 192 KB LVGL
   pool and the layout audit. The product build keeps its 72 KB pool and its 2 x 15 KB render buffers.
