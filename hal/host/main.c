@@ -67,11 +67,12 @@
     "m m m m wait:art x x snap:art-home _ _ s s _ s _ wait:pause x snap:art-none m"
 
 // Now Playing seek mode (UI-7): a 20 s WAV album (seekable) is paused, Select hands the wheel to seek, the wheel scrubs, 3 s of rest drops it back to
-// volume; then an MP3 (no frame index yet): Select answers "Seek not available". The tracks are paused at once (wait:pause) so the pictures do not
+// volume; then an MP3 (seekable too: seek-mp3) and a FLAC without a seek table: Select answers "Seek not available". Settings > Repeat is set to One first
+// (the MP3 and FLAC last 1 s: they must still be there to pause). The tracks are paused at once (wait:pause) so the pictures do not
 // depend on the clock; the fixture is made by ctest (tests/CMakeLists.txt, seek card).
 #define TOUR_SEEK                                                                                  \
-    "x s s s _ _ _ _ x wait:pause snap:seek-volume _ snap:seek-mode 8*s snap:seek-scrub "          \
-    "x x x x x x x x x x x x snap:seek-timeout m m s _ _ x wait:pause _ snap:seek-unavailable m"
+    "x s s s s _ s s s s s s _ m w _ _ _ _ x wait:pause snap:seek-volume _ snap:seek-mode 8*s snap:seek-scrub "  \
+    "x x x x x x x x x x x x snap:seek-timeout m m s _ _ x wait:pause _ snap:seek-mp3 m m s _ _ x wait:pause _ snap:seek-unavailable m"
 
 // Music library (ADR-0017, L2): every list of Music on a card with a small tagged library (tests/tools/make_library_card.py): the first open builds the
 // index (NEUPOD_LIB_SLOW_MS slows the scan so the progress screen can be seen), Artists > artist > album > songs with a greyed AAC track and a refused
@@ -160,7 +161,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--tour-seek") == 0) {
             cfg.ui_script = TOUR_SEEK;
             cfgp_tour = true;
-            g_expect = 7; // the splash, home and the five named snapshots
+            g_expect = 8; // the splash, home and the six named snapshots
         } else if (strcmp(argv[i], "--tour-library") == 0) {
             cfg.ui_script = TOUR_LIBRARY;
             cfgp_tour = true;

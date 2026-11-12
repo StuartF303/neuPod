@@ -218,15 +218,17 @@ set_source_files_properties(test_art_snapshot.c PROPERTIES COMPILE_OPTIONS "${NE
 add_test(NAME art_snapshot COMMAND test_art_snapshot ${CMAKE_BINARY_DIR}/snapshots_art)
 set_tests_properties(art_snapshot PROPERTIES FIXTURES_REQUIRED art_snapshots)
 
-# Now Playing seek mode (UI-7): a fake card with an album of three silent 20 s WAVs (seekable) and one MP3 (not yet), the tour pauses a
-# track, enters seek mode, scrubs, lets the 3 s idle timeout run, then presses Select on the MP3. test_seek_snapshot checks the pixels of
+# Now Playing seek mode (UI-7): a fake card with an album of three silent 20 s WAVs (seekable), an MP3 (seekable since UI-7) and a FLAC without a seek
+# table (not seekable), the tour pauses a track, enters seek mode, scrubs, lets the 3 s idle timeout run, then presses Select on the MP3 (seek mode) and
+# on the FLAC (stays on volume). test_seek_snapshot checks the pixels of
 # the progress / volume bars in the snapshots at both metrics profiles (this 320x240 one and, in hosted hires builds, 480x360).
 # The WAV is a 44-byte header (printf, octal escapes: 44.1 kHz, 16 bit, stereo, 3528000 data bytes) and zeros from dd, made at configure time.
 function(neupod_seek_card NAME)
   set(FS ${CMAKE_BINARY_DIR}/fsroot_${NAME})
-  file(MAKE_DIRECTORY "${FS}/Album" "${FS}/Other")
+  file(MAKE_DIRECTORY "${FS}/Album" "${FS}/Other" "${FS}/Zflac")
   execute_process(COMMAND sh -c "printf 'RIFF\\144\\354\\065\\000WAVEfmt \\020\\000\\000\\000\\001\\000\\002\\000\\104\\254\\000\\000\\020\\261\\002\\000\\004\\000\\020\\000data\\100\\354\\065\\000' > '${FS}/Album/01.wav' && dd if=/dev/zero bs=1000 count=3528 status=none >> '${FS}/Album/01.wav' && cp '${FS}/Album/01.wav' '${FS}/Album/02.wav' && cp '${FS}/Album/01.wav' '${FS}/Album/03.wav'")
   file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/mp3_44k_st.mp3 "${FS}/Other/track.mp3")
+  file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/flac16_44k_st.flac "${FS}/Zflac/track.flac") # no SEEKTABLE: Seek is not offered
   execute_process(COMMAND dd if=/dev/zero of=${CMAKE_BINARY_DIR}/disk_${NAME}.img bs=1024 count=2048 status=none)
   file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_${NAME})
 endfunction()

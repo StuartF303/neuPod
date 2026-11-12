@@ -7,7 +7,8 @@
 //   seek-mode         seek mode: tinted track, grey volume bar
 //   seek-scrub        a scrub in progress: the orange fill reaches part-way along the bar
 //   seek-timeout      3 s without input: back to volume mode
-//   seek-unavailable  MP3: Select did not enter seek mode
+//   seek-mp3          MP3: Select enters seek mode (seekable since UI-7: a frame found from the byte proportion / Xing table)
+//   seek-unavailable  FLAC without a seek table: Select did not enter seek mode
 // The geometry is the Now Playing metrics (ui_metrics_320.h / ui_metrics.c, np_*; status bar included), times 3/2 at 480 wide.
 #include <stdbool.h>
 #include <stdint.h>
@@ -111,7 +112,15 @@ TEST(three_seconds_of_rest_return_to_volume_colours) {
     free(p.px);
 }
 
-TEST(select_on_an_mp3_does_not_enter_seek_mode) {
+TEST(select_on_an_mp3_enters_seek_mode) {
+    ppm_t p;
+    ASSERT_TRUE(load("seek-mp3", &p));
+    ASSERT_TRUE(dist(&p, bar_x_end(), bar_y(), COL_SEEK_TRACK) < TOL);
+    ASSERT_TRUE(dist(&p, vol_x_start(), vol_y(), COL_GREY) < TOL);
+    free(p.px);
+}
+
+TEST(select_on_a_flac_without_a_seek_table_does_not_enter_seek_mode) {
     ppm_t p;
     ASSERT_TRUE(load("seek-unavailable", &p));
     ASSERT_TRUE(dist(&p, bar_x_end(), bar_y(), COL_TRACK) < TOL);
@@ -130,6 +139,7 @@ int main(int argc, char **argv) {
     RUN(seek_mode_highlights_the_progress_bar_and_greys_the_volume_bar);
     RUN(a_scrub_fills_the_bar_in_the_seek_colour_part_way);
     RUN(three_seconds_of_rest_return_to_volume_colours);
-    RUN(select_on_an_mp3_does_not_enter_seek_mode);
+    RUN(select_on_an_mp3_enters_seek_mode);
+    RUN(select_on_a_flac_without_a_seek_table_does_not_enter_seek_mode);
     return RESULT();
 }
