@@ -35,6 +35,12 @@ The sink is chosen at build time: `scripts/build.sh rp2350 -- -DNEUPOD_AUDIO_SIN
 (the old discard-on-a-clock sink, touches no pins). The host build uses SDL for audible output when SDL2 and an
 audio device exist (`NEUPOD_HOST_AUDIO=0` forces silence), otherwise it is the null sink.
 
+On the Innioasis Y2 the wired sink is the headphone jack's CS43131 DAC ([Y2](y2.md#what-each-hal-does), Audio): the audio core is unchanged
+(same 32-bit blocks, same software volume and ramps); the HAL converts to 16 bit (TPDF dither whenever the volume or a deeper source leaves
+bits below the 16th), queues the blocks in a ring, and a writer thread paces the whole player on the DAC's clock. 44.1 kHz only, with the null
+sink as the fallback when no headphones are plugged in. `hal_audio_wired_attached()` tells the audio route whether anything is on the jack
+(always true on the other platforms): headphones pulled out while playing pause the player with a "Headphones unplugged" banner.
+
 ### Interrupt flow
 
 1. Start: both buffers hold silence; DMA channel A is started, the PIO is enabled.
