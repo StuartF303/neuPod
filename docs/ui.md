@@ -27,11 +27,40 @@ Click-wheel vocabulary used below: **Menu** (top button, goes back), **Select** 
 ![Artists list](assets/ui/library-artists.svg)
 
 - Full-width list; scroll bar on the right shows position in long lists. Fast scrolling shows a
-  letter overlay (not drawn) so a 100k-track library is navigable.
+  letter overlay so a 100k-track library is navigable.
 - **Select** descends (artist → albums → tracks); **Menu** ascends one level.
 - **Right** on an artist jumps to All Albums for that artist; **Left** returns to the previous
-  level without animation.
-- The same template serves Albums, Songs, Genres, Composers, Playlists and Podcasts.
+  level without animation. (Design intent: Right / Left skip tracks in the built lists, as everywhere else.)
+- The same template serves Albums, Songs, Genres, Composers, Playlists and Podcasts. Built: see [Music lists](#music-lists).
+
+## Music lists
+
+The Music screens read the library index on the card ([ADR-0017](adr/0017-music-library-index.md), [how it is stored and built](storage.md#music-library-index)). Every list is the
+same screen: a full-width list with the usual scroll acceleration; the first line of a row is the name, the right-hand text is the second fact (an album's artist, a song's
+artist, the length of a track in an album, the number of songs in an artist's album); a chevron marks a row that opens another list.
+
+| List | Rows | Select |
+| --- | --- | --- |
+| Artists | album artists, collated (a leading "The " ignored, accents folded, symbols, then digits, then letters) | the artist: **All Songs**, then its albums |
+| Albums | every album by name, the album artist on the right | the album's songs in track order (disc, track, title) |
+| Songs | every song in title order | plays it |
+| Genres | genre names | the genre: **All Songs**, then its artists |
+| Compilations | albums flagged as compilations (or by "Various Artists") | the album's songs |
+| artist / genre | **All Songs** first | **All Songs** lists every song of the artist (album by album) or of the genre (album order) |
+
+**Select on a song plays it and queues the whole list it was chosen from**: an album in track order, an artist's songs, a genre, or all songs, starting at that song, with the earlier
+songs kept for Previous. Gapless playback, repeat, shuffle (Settings) and resume work as for a folder; Now Playing shows `n of N`. A file the player cannot play (AAC,
+more than two channels, damaged) is listed greyed; Select shows why (`Can't play: unsupported codec (AAC)`) and auto-advance skips it. **Home > Shuffle Songs** plays the whole library in a
+random order (every song once; the Shuffle setting is not changed). Playlists still say `None yet`.
+
+A long list never holds more than a few screens of rows in memory: the storage task fills a window of 16 rows around the selection, and a row that has not arrived yet shows `...` for the
+moment it takes. Both resolution profiles use the same screens (the 480x360 layout audit runs on every snapshot of the `library_tour`).
+
+**No index yet.** The first Artists / Albums / Songs / Genres / Compilations / Shuffle Songs opens the card's `/Music` and builds the index (a one-off; **Music > Update Library**
+rebuilds it later, for example after adding albums). Progress is a screen of three lines: `Building library...` with busy dots, `n songs found` and `Select to cancel` (Cancel or Menu
+leaves the old library untouched). It runs only with nothing playing: while music plays it says `Stop playback to update the library`. Other messages: `Library needs a writable
+card` (the card is write-protected, or the card refused the write), `Card is full`, `Card read error`, `No card`; each offers `Select to try again`. **Update Library** ends with
+`Library updated` and the counts.
 
 ## Now playing
 
@@ -133,8 +162,9 @@ when many counts arrive within 150 ms; the constants `UI_COUNTS_PER_STEP`, `UI_A
 | Screen | What it does now |
 | --- | --- |
 | Home | Left list: Music, Podcasts, Photos, Extras, Settings, Shuffle Songs, Now Playing. Right pane follows the player (polled on every UI tick, and at once when Home comes back on top; the clock and card summary refresh twice a second). Playing a file: the 96 px art box shows the album art thumbnail (the note when there is none), then title (file name when there is no title tag), artist, and a play or pause symbol with the queue position (`3 of 12`, or just `Playing` / `Paused` without a queue; `Finished` once the last track has ended, and `Error`, `Verifying` or `Verified` for those player states, detail stays on Now Playing). Test tone: note, tone name, `Test signal`, play symbol. Nothing playing: the artwork placeholder, `Nothing playing`, the clock (`--:--` until the time is set) and a card summary (type and size, or `No card`). |
-| Music | Artists, Albums, Songs, Genres, Playlists; each opens an `Empty - no library yet` list. |
-| Podcasts, Photos, Shuffle Songs | Placeholder screens saying what is missing. |
+| Music | Artists, Albums, Songs, Genres, Compilations, Playlists (`None yet`) and Update Library; the lists are described under [Music lists](#music-lists). |
+| Shuffle Songs | Plays the whole library shuffled, building the index first if there is none; Menu on Now Playing comes back to Home. |
+| Podcasts, Photos | Placeholder screens saying what is missing. |
 | Now Playing | Live: title, artist and album with track number from the file's tags (the file name if there is no title), a format badge such as `FLAC 24/96`, `MP3 320k` or `ALAC 16/44.1`, `Playing` / `Paused` / `Finished` or the error, elapsed and remaining time with a progress bar, and the volume with a level bar. **The wheel is the volume** (2 dB per step, starts at -30 dB); **Select hands the wheel to seek** (below) and back; **Play** pauses and resumes (Select no longer does), and on `Finished` (or after a FLAC MD5 check) plays the same file again from the start, with sound; **Right / Left = next / previous track of the queue** on a short press (acted on at release; Previous more than 3 s into a track restarts it; Next on the last track stops and the screen goes idle); **holding Right / Left for 0.6 s fast-forwards / rewinds** (10x: the bar and the times run ahead, the track jumps there when the key is released; it also ends by itself at the start or end of the track and after 30 s, and another key, the wheel or another screen opening drops it unapplied); with more than one track queued the status line reads `Playing - 3 of 12`; **Menu goes back while the sound continues**. Without anything playing it says `Nothing playing`. Play/Pause works on every screen, and so do **Right / Left (next / previous track) while a queue is playing**, on every screen that does not use them itself (the Files browser keeps Right for the MD5 check of a `.flac`, the Test tone screen and the sliders keep them for their values, text entry keeps them). **Seek mode** (WAV, and FLAC with a seek table; other tracks answer `Seek not available` for 2 s and the wheel stays on volume): the progress bar turns orange and the volume bar grey, the volume label becomes `Seek 1:23`, each wheel step moves the position by about 1/60 of the track (1 to 30 s, accelerated like list scrolling), the new position is applied 0.35 s after the wheel stops (the track restarts at that frame: a short mute, paused stays paused) and the wheel drops back to volume 3 s after the last turn. A scrub or hold is tied to the track it was made on: if another track starts first (gapless handoff, skip) it is dropped. A position at the very end is the end of the track (the queue moves on). |
 | Extras | Files, Test tone. |
 | Extras, Test tone | Three rows, each `On` / `Off`: **1 kHz tone**, **L/R ident** (1 s left, then 1 s right) and **Scale** (C4 up to C5 and back, looping). Select starts or stops the highlighted one (starting one stops the other); **Left / Right = volume**; the screen shows the volume and the level reaching the DAC. Leaving the screen stops the sound. See [Audio](audio.md). |
