@@ -347,7 +347,7 @@ set_source_files_properties(test_boot_briefs.c PROPERTIES COMPILE_OPTIONS "${NEU
 
 # UI metrics profiles (app/ui/ui_metrics.c): layout invariants of every compiled-in resolution profile, 320x240 pinned to its historic values.
 add_executable(test_ui_metrics test_ui_metrics.c ${CMAKE_SOURCE_DIR}/app/ui/ui_metrics.c)
-target_link_libraries(test_ui_metrics lvgl)
+target_link_libraries(test_ui_metrics lvgl neupod_rt_core)
 target_include_directories(test_ui_metrics PRIVATE ${CMAKE_SOURCE_DIR}/app/runtime)
 add_test(NAME ui_metrics COMMAND test_ui_metrics)
 set_source_files_properties(test_ui_metrics.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
@@ -469,6 +469,40 @@ if(NEUPOD_UI_HIRES)
     FAIL_REGULAR_EXPRESSION "AUDIT FAIL;library: build started"
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     FIXTURES_REQUIRED hires_library_ro_card
+    TIMEOUT 90)
+endif()
+
+# Text beyond ASCII (UI-17): Files and Now Playing on a card with accented / U+00BF / CJK / emoji names and tags (tests/tools/make_text_card.py).
+# The snapshots are for the eye; the test checks the run finished and the layout audit passed on every snapshot (at both profiles).
+function(neupod_text_card NAME)
+  set(FS ${CMAKE_BINARY_DIR}/fsroot_${NAME})
+  execute_process(COMMAND dd if=/dev/zero of=${CMAKE_BINARY_DIR}/disk_${NAME}.img bs=1024 count=2048 status=none)
+  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_${NAME})
+  add_test(NAME ${NAME}_card COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_text_card.py ${FS} ${CMAKE_CURRENT_SOURCE_DIR}/assets/audio)
+  set_tests_properties(${NAME}_card PROPERTIES FIXTURES_SETUP ${NAME}_card)
+endfunction()
+neupod_text_card(text)
+add_test(NAME text_tour
+  COMMAND neupod --run-ms 30000 --splash-hold-ms 1500 --tour-text --snapshots ${CMAKE_BINARY_DIR}/snapshots_text)
+set_tests_properties(text_tour PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_text;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_text.img"
+  PASS_REGULAR_EXPRESSION "host: run finished, status 0"
+  FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  FIXTURES_REQUIRED text_card
+  TIMEOUT 90)
+if(NEUPOD_UI_HIRES)
+  set_tests_properties(text_tour PROPERTIES PASS_REGULAR_EXPRESSION
+    "ui: audit 'text-files' 320x240 objects=[1-9][0-9]* violations=0.*ui: audit 'text-folder' 320x240 objects=[1-9][0-9]* violations=0.*ui: audit 'text-nowplaying' 320x240 objects=[1-9][0-9]* violations=0.*host: run finished, status 0")
+  neupod_text_card(hires_text)
+  add_test(NAME hires_text_tour
+    COMMAND neupod --run-ms 30000 --splash-hold-ms 1500 --tour-text --snapshots ${CMAKE_BINARY_DIR}/snapshots_hires_text)
+  set_tests_properties(hires_text_tour PROPERTIES
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_DISPLAY_SIZE=480x360;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_hires_text;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_hires_text.img"
+    PASS_REGULAR_EXPRESSION "ui: audit 'text-files' 480x360 objects=[1-9][0-9]* violations=0.*ui: audit 'text-folder' 480x360 objects=[1-9][0-9]* violations=0.*ui: audit 'text-nowplaying' 480x360 objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+    FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    FIXTURES_REQUIRED hires_text_card
     TIMEOUT 90)
 endif()
 

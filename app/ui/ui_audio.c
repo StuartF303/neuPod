@@ -20,11 +20,7 @@
 
 #define POLL_MS 200u
 
-static void set_text(lv_obj_t *l, const char *t) {
-    if (strcmp(lv_label_get_text(l), t) != 0) {
-        lv_label_set_text(l, t);
-    }
-}
+static void set_text(lv_obj_t *l, const char *t) { ui_label_set_text(l, t); } /* filters title / artist / album; skips an unchanged label */
 
 static void vol_text(char *out, size_t n, uint32_t att) {
     if (att >= AUDIO_VOL_OFF_DB) {

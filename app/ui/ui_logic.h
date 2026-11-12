@@ -172,11 +172,24 @@ uint32_t ui_seek_step_s(uint64_t total_s);
 /* ---- Display text ---- */
 
 /**
- * Copy @p raw (UTF-8) to @p out (capacity @p n) for a label: the typographic punctuation the UI font has no glyph for becomes its ASCII
- * look-alike (U+2018/2019 -> ', U+201C/201D -> ", U+2013/2014 -> -, U+2026 -> ...), other multi-byte characters are kept, and the copy is cut
- * only at a character boundary. The stored name is never changed. Always NUL-terminates (n > 0).
+ * True when the UI fonts (app/ui/fonts, tools/gen_ui_fonts.sh) have a glyph for code point @p cp: ASCII, Latin-1 without the soft hyphen,
+ * a few typographic marks (en/em dash, curly quotes, bullet, ellipsis, euro) and the LV_SYMBOL_* the UI draws. Keep it in step with the
+ * ranges in the font script; a host test checks it against the compiled fonts.
  */
-void ui_display_name(char *out, size_t n, const char *raw);
+bool ui_text_has_glyph(uint32_t cp);
+
+/**
+ * Copy @p raw (UTF-8) to @p out (capacity @p n) for drawing in a label: every character the fonts have is kept as it is; the rest becomes
+ * what draws instead of an empty box: nothing (zero-width marks, combining accents), a space (other control characters, odd spaces), an
+ * ASCII look-alike (other dashes and quotes), the base letter(s) (Latin Extended-A: Ł -> L, Œ -> OE; fullwidth forms), or '?' (CJK, emoji,
+ * other scripts; one '?' per character) so the length stays honest. '\n' is kept. Malformed UTF-8 becomes '?'; a sequence cut off at the
+ * end is dropped. The result is never longer than the input, so it may be built in a buffer of strlen(raw) + 1, and the copy is cut only
+ * at a character boundary. The stored string is never changed. Always NUL-terminates (n > 0).
+ */
+void ui_text_display(char *out, size_t n, const char *raw);
+
+/** True when ui_text_display() would return @p raw unchanged (the fast path: no copy needed). */
+bool ui_text_is_clean(const char *raw);
 
 /* ---- Screen stack (opaque entries) ---------------------------------------------------------------- */
 

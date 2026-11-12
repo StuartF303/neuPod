@@ -212,7 +212,7 @@ static void start_shuffle(lib_screen_t *s) {
 }
 
 static void show_toast(lib_screen_t *s, const char *text) {
-    lv_label_set_text(s->toast, text);
+    ui_label_set_text(s->toast, text);
     lv_obj_set_hidden(s->toast, false);
     s->toast_until = os_tick_ms() + 3000u;
 }

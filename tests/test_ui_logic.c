@@ -528,25 +528,116 @@ TEST(a_hold_that_reaches_the_end_of_the_track_applies_it_at_once) {
     ASSERT_EQ(UI_NPC_NONE, ui_npc_key_up(&c, 1, UI_HOLD_MS + 19500));
 }
 
-TEST(display_name_normalises_typographic_punctuation) {
-    char o[64];
-    ui_display_name(o, sizeof o, "Stuart\xE2\x80\x99s AirPods Pro \xE2\x80\x93 Find My");
-    ASSERT_EQ(0, strcmp("Stuart's AirPods Pro - Find My", o));
-    ui_display_name(o, sizeof o, "\xE2\x80\x9CQ\xE2\x80\x9D\xE2\x80\x98" "a\xE2\x80\x99 \xE2\x80\x94 x\xE2\x80\xA6");
-    ASSERT_EQ(0, strcmp("\"Q\"'a' - x...", o));
-    ui_display_name(o, sizeof o, "Caf\xC3\xA9"); // other characters are kept
-    ASSERT_EQ(0, strcmp("Caf\xC3\xA9", o));
+static void disp(char *o, size_t n, const char *raw) { ui_text_display(o, n, raw); }
+
+TEST(text_display_keeps_what_the_fonts_have) {
+    char o[96];
+    const char *keep = "Stuart\xE2\x80\x99s \xE2\x80\x9CQ\xE2\x80\x9D \xE2\x80\x93 \xE2\x80\x94 x\xE2\x80\xA6 \xE2\x82\xAC " // typographic marks, euro
+                       "Caf\xC3\xA9 \xC3\xBC\xC3\xB1\xC3\xB8\xC3\xA5\xC3\x9F \xC2\xBF? \xC2\xA0\xC2\xB0 "                 // Latin-1
+                       "\xEF\x81\xBB \xEF\x80\x81";                                                                      // LV_SYMBOL_DIRECTORY, AUDIO
+    ASSERT_TRUE(ui_text_is_clean(keep));
+    disp(o, sizeof o, keep);
+    ASSERT_EQ(0, strcmp(keep, o));
+    disp(o, sizeof o, "02 Have You Fed the Fish\xC2\xBF.flac"); // the ripper's stand-in for '?' is in the font
+    ASSERT_EQ(0, strcmp("02 Have You Fed the Fish\xC2\xBF.flac", o));
 }
 
-TEST(display_name_cuts_on_a_character_boundary) {
+TEST(text_display_maps_the_rest) {
+    char o[64];
+    disp(o, sizeof o, "\xE2\x80\x90-\xE2\x80\x91\xE2\x88\x92"); // other hyphens and the minus sign
+    ASSERT_EQ(0, strcmp("----", o));
+    disp(o, sizeof o, "\xE2\x80\x9A" "a\xE2\x80\x9B" "b\xE2\x80\x9E" "c\xE2\x80\xB2\xE2\x80\xB3");
+    ASSERT_EQ(0, strcmp(",a'b\"c'\"", o));
+    disp(o, sizeof o, "\xC5\x81\xC3\xB3" "d\xC5\xBA \xC5\x92uvre \xC4\xB2 \xC5\xA1\xC4\x8D\xC5\x91"); // Latin Extended-A: base letters
+    ASSERT_EQ(0, strcmp("L\xC3\xB3" "dz OEuvre IJ sco", o));
+    disp(o, sizeof o, "e\xCC\x81 a\xCC\x88"); // decomposed accents (macOS names): the combining mark is dropped, the letter stays
+    ASSERT_EQ(0, strcmp("e a", o));
+    disp(o, sizeof o, "\xEF\xBC\xA1\xEF\xBD\x82\xEF\xBC\x91"); // fullwidth A b 1
+    ASSERT_EQ(0, strcmp("Ab1", o));
+    disp(o, sizeof o, "a\xE2\x80\x8B" "b\xC2\xAD" "c\xEF\xBB\xBF" "d\xE2\x80\x83" "e\xE2\x84\xA2"); // zero width, soft hyphen, BOM, em space, TM
+    ASSERT_EQ(0, strcmp("abcd eTM", o));
+    disp(o, sizeof o, "a\tb\rc\x7F" "d\n" "e"); // controls to a space; a line break stays
+    ASSERT_EQ(0, strcmp("a b c d\ne", o));
+}
+
+TEST(text_display_replaces_scripts_and_emoji_with_a_question_mark) {
+    char o[64];
+    disp(o, sizeof o, "\xE4\xBD\xA0\xE5\xA5\xBD"); // CJK: one '?' per character
+    ASSERT_EQ(0, strcmp("??", o));
+    disp(o, sizeof o, "x\xF0\x9F\x8E\xB5y"); // emoji (4 bytes): one '?'
+    ASSERT_EQ(0, strcmp("x?y", o));
+    disp(o, sizeof o, "\xD0\x9F\xD1\x80\xD0\xB8"); // Cyrillic
+    ASSERT_EQ(0, strcmp("???", o));
+    disp(o, sizeof o, "\xEF\x80\x82"); // a private-use code point that is not one of our symbols
+    ASSERT_EQ(0, strcmp("?", o));
+    ASSERT_FALSE(ui_text_is_clean("\xE4\xBD\xA0"));
+    ASSERT_FALSE(ui_text_is_clean("a\nb"));
+}
+
+TEST(text_display_survives_malformed_utf8) {
+    char o[64];
+    disp(o, sizeof o, "a\x80" "b"); // stray continuation byte
+    ASSERT_EQ(0, strcmp("a?b", o));
+    disp(o, sizeof o, "a\xC3" "b"); // lead byte followed by an ASCII byte: the lead alone is replaced
+    ASSERT_EQ(0, strcmp("a?b", o));
+    disp(o, sizeof o, "a\xE2\x80" "b"); // 3-byte sequence broken at its third byte
+    ASSERT_EQ(0, strcmp("a?b", o));
+    disp(o, sizeof o, "a\xC0\x80" "b"); // overlong NUL
+    ASSERT_EQ(0, strcmp("a??b", o));
+    disp(o, sizeof o, "a\xED\xA0\x80" "b"); // UTF-16 surrogate
+    ASSERT_EQ(0, strcmp("a?b", o));
+    disp(o, sizeof o, "a\xF4\x90\x80\x80" "b"); // beyond U+10FFFF
+    ASSERT_EQ(0, strcmp("a?b", o));
+    disp(o, sizeof o, "ab\xE2\x80"); // cut off at the end of the string: dropped, not read past the NUL
+    ASSERT_EQ(0, strcmp("ab", o));
+    ASSERT_FALSE(ui_text_is_clean("ab\xE2\x80"));
+    disp(o, sizeof o, "");
+    ASSERT_EQ(0, strcmp("", o));
+}
+
+TEST(text_display_cuts_on_a_character_boundary) {
     char o[7];
-    ui_display_name(o, sizeof o, "abcde\xC3\xA9\xC3\xA9"); // 'e acute' is 2 bytes: 5 + 2 = 7 > 6 available
+    disp(o, sizeof o, "abcde\xC3\xA9\xC3\xA9"); // 'e acute' is 2 bytes: 5 + 2 = 7 > 6 available
     ASSERT_EQ(0, strcmp("abcde", o));
     char o2[5];
-    ui_display_name(o2, sizeof o2, "ab\xE2\x80\xA6"); // an ellipsis needs 3 bytes
+    disp(o2, sizeof o2, "ab\xE2\x80\xA6"); // an ellipsis needs 3 bytes
     ASSERT_EQ(0, strcmp("ab", o2));
-    ui_display_name(o2, sizeof o2, "ab\xE2\x80"); // truncated sequence
-    ASSERT_TRUE(strlen(o2) <= 4);
+    char o3[3];
+    disp(o3, sizeof o3, "\xC5\x92x"); // OE needs 2 bytes + NUL
+    ASSERT_EQ(0, strcmp("OE", o3));
+    char o4[1];
+    disp(o4, sizeof o4, "abc");
+    ASSERT_EQ(0, strcmp("", o4));
+}
+
+TEST(text_display_is_never_longer_than_its_input) {
+    // ui_label_set_text() builds the result in strlen(raw) + 1 bytes: every code point 1..0x10FFFF must respect that.
+    for (uint32_t cp = 1; cp <= 0x10FFFFu; cp++) {
+        char in[5] = {0};
+        if (cp < 0x80u) {
+            in[0] = (char)cp;
+        } else if (cp < 0x800u) {
+            in[0] = (char)(0xC0u | (cp >> 6));
+            in[1] = (char)(0x80u | (cp & 0x3Fu));
+        } else if (cp < 0x10000u) {
+            in[0] = (char)(0xE0u | (cp >> 12));
+            in[1] = (char)(0x80u | ((cp >> 6) & 0x3Fu));
+            in[2] = (char)(0x80u | (cp & 0x3Fu));
+        } else {
+            in[0] = (char)(0xF0u | (cp >> 18));
+            in[1] = (char)(0x80u | ((cp >> 12) & 0x3Fu));
+            in[2] = (char)(0x80u | ((cp >> 6) & 0x3Fu));
+            in[3] = (char)(0x80u | (cp & 0x3Fu));
+        }
+        char o[8];
+        memset(o, 'x', sizeof o);
+        ui_text_display(o, strlen(in) + 1, in);
+        ASSERT_TRUE(strlen(o) <= strlen(in));
+        if (ui_text_has_glyph(cp)) {
+            ASSERT_EQ(0, strcmp(in, o));
+            ASSERT_TRUE(ui_text_is_clean(in));
+        }
+    }
 }
 
 int main(void) {
@@ -590,7 +681,11 @@ int main(void) {
     RUN(another_key_or_the_wheel_drops_a_hold_whose_release_may_be_lost);
     RUN(a_hold_whose_release_never_comes_ends_itself);
     RUN(a_hold_that_reaches_the_end_of_the_track_applies_it_at_once);
-    RUN(display_name_normalises_typographic_punctuation);
-    RUN(display_name_cuts_on_a_character_boundary);
+    RUN(text_display_keeps_what_the_fonts_have);
+    RUN(text_display_maps_the_rest);
+    RUN(text_display_replaces_scripts_and_emoji_with_a_question_mark);
+    RUN(text_display_survives_malformed_utf8);
+    RUN(text_display_cuts_on_a_character_boundary);
+    RUN(text_display_is_never_longer_than_its_input);
     return RESULT();
 }
