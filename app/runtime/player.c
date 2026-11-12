@@ -84,6 +84,7 @@ static const char *codec_error_text(uint32_t e) {
     case 3: return "File does not match its header";
     case 4: return "Decoding error (damaged data)";
     case 5: return "File is truncated or damaged";
+    case AUDIO_ERR_RATE_NOT_ON_BT: return "Not supported on Bluetooth (44.1 kHz only)";
     default: return "Decoder error";
     }
 }

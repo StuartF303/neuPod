@@ -9,7 +9,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "audio_route.h"
 #include "battery_store.h"
+#include "bt_saved.h"
 #include "bt_service.h"
 #include "capabilities.h"
 #include "hal_display.h"
@@ -77,6 +79,12 @@ static lv_obj_t *g_title;
 static lv_obj_t *g_play;
 static lv_obj_t *g_batt;
 static lv_obj_t *g_wifi;
+static lv_obj_t *g_bt;     /* Bluetooth: dim = a remembered headset, not connected; dark = connected; accent = streaming; hidden = unavailable */
+static lv_obj_t *g_banner; /* a notice over the top of the content for a few seconds ("Headset disconnected") */
+static uint32_t g_banner_until;
+static uint32_t g_notice_seen;
+static int g_bt_shown = -1;
+static uint32_t g_bt_col = UI_L_FAINT;
 static hal_wifi_status g_wifi_shown = (hal_wifi_status)99;
 static uint32_t g_wifi_col = UI_L_DIM;
 static ui_stack_t g_stack;
@@ -121,6 +129,9 @@ void ui_frame_init(lv_obj_t *scr) {
     g_wifi = ui_label(bar, "", UI_L_DIM); /* Wi-Fi state: hidden when the station is off, dim while joining, green when up */
     lv_obj_align(g_wifi, LV_ALIGN_LEFT_MID, UIM->wifi_x, 0);
 
+    g_bt = ui_label(bar, "", UI_L_FAINT);
+    lv_obj_align(g_bt, LV_ALIGN_LEFT_MID, UIM->bt_x, 0);
+
     g_batt = ui_label(bar, LV_SYMBOL_BATTERY_EMPTY " --", UI_L_DIM);
     lv_obj_align(g_batt, LV_ALIGN_RIGHT_MID, -UIM->bar_inset, 0);
 
@@ -129,6 +140,16 @@ void ui_frame_init(lv_obj_t *scr) {
     lv_obj_set_size(g_content, UI_W, UI_CONTENT_H);
     lv_obj_set_pos(g_content, 0, UI_STATUS_H);
     lv_obj_set_scrollable(g_content, false);
+
+    g_banner = ui_label(scr, "", UI_L_TEXT);
+    lv_obj_set_size(g_banner, UI_W, UI_ROW_H);
+    lv_obj_set_style_bg_color(g_banner, lv_color_hex(0xFFF3CD), 0);
+    lv_obj_set_style_bg_opa(g_banner, LV_OPA_COVER, 0);
+    lv_obj_set_style_pad_all(g_banner, UIM->toast_pad, 0);
+    lv_obj_set_style_text_align(g_banner, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_pos(g_banner, 0, UI_STATUS_H);
+    lv_label_set_long_mode(g_banner, LV_LABEL_LONG_DOT);
+    lv_obj_set_hidden(g_banner, true);
 
     ui_stack_init(&g_stack);
     ui_accel_init(&g_accel);
@@ -319,6 +340,51 @@ static void update_wifi(void) {
     g_wifi_col = col;
 }
 
+/* Bluetooth glyph of the status bar. 0 hidden (no radio, or nothing remembered and no link), 1 remembered, not connected, 2 connected, 3 streaming. */
+static int bt_level(void) {
+    hal_bt_state_t st = hal_bt_state();
+    if (st != HAL_BT_ON && st != HAL_BT_SCANNING) {
+        return 0;
+    }
+    if (hal_bt_stream_state() == HAL_BT_STREAM_STREAMING) {
+        return 3;
+    }
+    hal_bt_link_state_t l = hal_bt_link_state();
+    if (l == HAL_BT_LINK_CONNECTED) {
+        return 2;
+    }
+    return bt_saved_get(NULL) || l != HAL_BT_LINK_DISCONNECTED ? 1 : 0;
+}
+
+static void update_bt(void) {
+    int lv = bt_level();
+    if (lv == g_bt_shown) {
+        return;
+    }
+    g_bt_shown = lv;
+    uint32_t col = lv == 3 ? UI_L_SEL_BOT : lv == 2 ? UI_L_TEXT : UI_L_FAINT; /* the bar is light: "white" for connected would not show, so it is the text colour */
+    lv_label_set_text(g_bt, lv == 0 ? "" : LV_SYMBOL_BLUETOOTH);
+    ui_label_recolour(g_bt, g_bt_col, col);
+    g_bt_col = col;
+}
+
+static void update_banner(uint32_t now_ms) {
+    uint32_t seq;
+    audio_route_notice_t n = audio_route_notice(&seq);
+    if (seq != g_notice_seen) {
+        g_notice_seen = seq;
+        if (n != ROUTE_NOTICE_NONE) {
+            lv_label_set_text(g_banner, n == ROUTE_NOTICE_HEADSET_DROPPED ? "Headset disconnected" : "Headset not connected");
+            lv_obj_set_hidden(g_banner, false);
+            g_banner_until = now_ms + AUDIO_ROUTE_BANNER_MS;
+        }
+    }
+    if (g_banner_until != 0 && (int32_t)(now_ms - g_banner_until) >= 0) {
+        g_banner_until = 0;
+        lv_obj_set_hidden(g_banner, true);
+    }
+}
+
 // The haptic task applies the stored actuator and calibration once the settings are known: when they are (re)loaded,
 // and once more when the boot checks have all resolved (a boot with no card never loads them, but storage is then settled).
 static void kick_haptics(void) {
@@ -340,6 +406,8 @@ void ui_frame_tick(uint32_t now_ms) {
     }
     kick_haptics();
     update_wifi();
+    update_bt();
+    update_banner(now_ms);
     update_battery();
     bt_service_tick(); /* the radio simulator on the host; stale pairing keys; cheap */
     ui_screen_t *top = ui_stack_top(&g_stack);

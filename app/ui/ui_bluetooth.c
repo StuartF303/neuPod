@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "audio_route.h"
 #include "bt_saved.h"
 #include "bt_service.h"
 #include "capabilities.h"
@@ -52,6 +53,37 @@ static bool link_is_for(const uint8_t addr[6]) {
     return hal_bt_link_state() != HAL_BT_LINK_DISCONNECTED && hal_bt_link_device(&peer) && memcmp(peer.addr, addr, 6) == 0;
 }
 
+/* The audio stream on a CONNECTED link as one phrase: what the headset got ("Connected - SBC"), "Streaming", or why it did not open. */
+static void stream_text(char *out, size_t n) {
+    hal_bt_codec_t c;
+    switch (hal_bt_stream_state()) {
+    case HAL_BT_STREAM_STREAMING: snprintf(out, n, "Streaming"); break;
+    case HAL_BT_STREAM_OPEN:
+    case HAL_BT_STREAM_SUSPENDED:
+        if (hal_bt_stream_codec(&c)) {
+            snprintf(out, n, "Connected - %s", c.codec == HAL_BT_CODEC_SBC_XQ ? "SBC-XQ" : "SBC");
+        } else {
+            snprintf(out, n, "Connected");
+        }
+        break;
+    case HAL_BT_STREAM_OPENING: snprintf(out, n, "Connecting audio..."); break;
+    case HAL_BT_STREAM_FAILED: snprintf(out, n, "Failed: %s", hal_bt_fail_text(hal_bt_stream_reason())); break;
+    case HAL_BT_STREAM_CLOSED: snprintf(out, n, "Connected"); break;
+    }
+}
+
+void ui_bt_stream_pane_text(char *out, size_t n) {
+    hal_bt_codec_t c;
+    hal_bt_stats_t st;
+    out[0] = '\0';
+    hal_bt_stream_state_t s = hal_bt_stream_state();
+    if ((s == HAL_BT_STREAM_OPEN || s == HAL_BT_STREAM_STREAMING || s == HAL_BT_STREAM_SUSPENDED) && hal_bt_stream_codec(&c)) {
+        hal_bt_stats(&st);
+        snprintf(out, n, "%s bitpool %u\n%u kbit/s\n%u underruns", c.codec == HAL_BT_CODEC_SBC_XQ ? "SBC-XQ" : "SBC", (unsigned)c.bitpool, (unsigned)c.kbps,
+                 (unsigned)st.underruns);
+    }
+}
+
 /* The link state as one phrase for that device; "Not connected" when the link is about something else. */
 static void link_text_for(const uint8_t addr[6], char *out, size_t n) {
     hal_bt_link_state_t l = hal_bt_link_state();
@@ -62,10 +94,12 @@ static void link_text_for(const uint8_t addr[6], char *out, size_t n) {
     switch (l) {
     case HAL_BT_LINK_PAIRING: snprintf(out, n, "Pairing..."); break;
     case HAL_BT_LINK_CONNECTING: snprintf(out, n, "Connecting..."); break;
-    /* There is no audio yet and nothing keeps an idle link open, so the link closes by itself a few seconds after it opens (docs/bluetooth.md):
-     * say what is true, "paired", not "connected" that will drop. */
     case HAL_BT_LINK_CONNECTED:
-        snprintf(out, n, bt_saved_notice() == BT_SAVED_NOTICE_NOT_SAVED ? "Paired - not saved (read-only)" : "Paired, no audio yet");
+        if (bt_saved_notice() == BT_SAVED_NOTICE_NOT_SAVED) {
+            snprintf(out, n, "Paired - not saved (read-only)");
+        } else {
+            stream_text(out, n);
+        }
         break;
     case HAL_BT_LINK_FAILED: snprintf(out, n, "Failed: %s", hal_bt_fail_text(hal_bt_link_reason())); break;
     case HAL_BT_LINK_DISCONNECTED: snprintf(out, n, "Not connected"); break;
@@ -90,11 +124,12 @@ void ui_bt_headset_text(char *out, size_t n) {
 #define ROW_STATUS 0
 #define ROW_ADDRESS 1
 #define ROW_SCAN 2
-#define ROWS_BT 3          /* ... plus these three while a headset is remembered: */
-#define ROW_DEVICE 3       /* its name, with the link state on the right */
-#define ROW_ACTION 4       /* Connect / Disconnect / Cancel */
-#define ROW_FORGET 5
-#define ROWS_BT_SAVED 6
+#define ROW_OUTPUT 3       /* Audio output: Auto / Wired (saved) */
+#define ROWS_BT 4          /* ... plus these three while a headset is remembered: */
+#define ROW_DEVICE 4       /* its name, with the link state on the right */
+#define ROW_ACTION 5       /* Connect / Disconnect / Cancel */
+#define ROW_FORGET 6
+#define ROWS_BT_SAVED 7
 
 typedef struct {
     ui_screen_t base;
@@ -109,7 +144,9 @@ typedef struct {
 } bt_screen_t;
 
 static uint32_t link_sig(const uint8_t saved_addr[6]) {
-    return (uint32_t)hal_bt_link_state() | (uint32_t)hal_bt_link_reason() << 4 | (link_is_for(saved_addr) ? 1u << 8 : 0u);
+    return (uint32_t)hal_bt_link_state() | (uint32_t)hal_bt_link_reason() << 4 | (link_is_for(saved_addr) ? 1u << 8 : 0u) |
+           (uint32_t)hal_bt_stream_state() << 9 | (uint32_t)hal_bt_stream_reason() << 12 | (uint32_t)audio_route_pref() << 17 |
+           (uint32_t)audio_route_output() << 18;
 }
 
 static int32_t bt_rows(const bt_screen_t *b) { return b->have_saved ? ROWS_BT_SAVED : ROWS_BT; }
@@ -135,6 +172,11 @@ static void bt_get(void *ctx, int32_t idx, ui_list_item_t *o) {
         snprintf(o->label, sizeof o->label, "Scan for devices");
         o->dim = !radio_usable(st);
         o->chevron = true;
+        return;
+    case ROW_OUTPUT:
+        snprintf(o->label, sizeof o->label, "Audio output");
+        snprintf(o->detail, sizeof o->detail, "%s", audio_route_pref() == AUDIO_ROUTE_WIRED ? "Wired" : audio_route_output() == AUDIO_OUT_BT ? "Auto: Bluetooth" : "Auto");
+        o->chevron = false;
         return;
     case ROW_DEVICE: {
         hal_bt_link_state_t l = hal_bt_link_state();
@@ -223,6 +265,9 @@ static bool bt_button(ui_screen_t *s, uint8_t btn) {
     }
     if (sel == ROW_SCAN && radio_usable(hal_bt_state())) {
         ui_frame_push(ui_screen_bt_devices_create());
+    } else if (sel == ROW_OUTPUT) {
+        audio_route_set_pref(audio_route_pref() == AUDIO_ROUTE_WIRED ? AUDIO_ROUTE_AUTO : AUDIO_ROUTE_WIRED);
+        ui_list_refresh(b->list);
     } else if (sel == ROW_ACTION && b->have_saved) {
         hal_bt_link_state_t l = hal_bt_link_state();
         bool mine = link_is_for(b->saved.addr) && l != HAL_BT_LINK_FAILED;

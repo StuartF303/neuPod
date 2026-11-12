@@ -38,6 +38,7 @@ typedef struct {
     int32_t buf_lines; /* LVGL partial-render buffer height */
     int32_t bar_inset; /* status bar: play glyph and battery inset from the edges */
     int32_t wifi_x;    /* status bar: Wi-Fi glyph x */
+    int32_t bt_x;      /* status bar: Bluetooth glyph x */
     int32_t title_w, title_h;
 
     /* Text */

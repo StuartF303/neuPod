@@ -63,7 +63,7 @@ typedef struct {
     uint32_t last_ms;
 } info_t;
 
-#define ABOUT_FIXED 9
+#define ABOUT_FIXED 10
 
 static int32_t info_count(const info_t *in) {
     switch (in->kind) {
@@ -89,6 +89,16 @@ static void about_get(const info_t *in, int32_t i, ui_list_item_t *o) {
     case 6: put(o, "Underruns", in->audio_ok ? "%u" : "-", (unsigned)in->audio.underruns); break;
     case 7: put(o, "Jitter max", in->audio_ok ? "%u us" : "-", (unsigned)in->audio.jitter_max_us); break;
     case 8: put(o, "Core 1 stack free", "%u B", (unsigned)hal_core1_stack_free_min()); break;
+    case 9: {
+        hal_bt_stats_t bs;
+        hal_bt_stats(&bs);
+        if (hal_bt_stream_state() == HAL_BT_STREAM_CLOSED && bs.frames_encoded == 0) {
+            put(o, "BT audio", "-");
+        } else {
+            put(o, "BT audio", "%u fr, %u under, %u drift", (unsigned)bs.frames_encoded, (unsigned)bs.underruns, (unsigned)bs.drift_corrections);
+        }
+        break;
+    }
     default: {
         cap_id_t c = (cap_id_t)(i - ABOUT_FIXED);
         if (in->caps.state[c] == CAP_OK) {
@@ -479,10 +489,15 @@ static void pane_text(int32_t g, char *out, size_t n) {
             } else {
                 snprintf(a, sizeof a, "-");
             }
-            char hs[80];
+            char hs[80], cs[64];
             ui_bt_headset_text(hs, sizeof hs);
-            snprintf(out, n, "%s\n%s\n%s%sSelect to %s", bs == HAL_BT_SCANNING ? "Scanning..." : "On", a, hs, hs[0] != '\0' ? "\n" : "",
-                     hs[0] != '\0' ? "manage" : "scan");
+            ui_bt_stream_pane_text(cs, sizeof cs);
+            if (cs[0] != '\0') { /* with a stream open the codec lines need the room: no address, no hint */
+                snprintf(out, n, "%s\n%s\n%s", bs == HAL_BT_SCANNING ? "Scanning..." : "On", hs, cs);
+            } else {
+                snprintf(out, n, "%s\n%s\n%s%sSelect to %s", bs == HAL_BT_SCANNING ? "Scanning..." : "On", a, hs, hs[0] != '\0' ? "\n" : "",
+                         hs[0] != '\0' ? "manage" : "scan");
+            }
         } else if (bs == HAL_BT_STARTING) {
             snprintf(out, n, "Starting...");
         } else {
