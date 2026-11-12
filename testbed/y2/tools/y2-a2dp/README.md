@@ -18,7 +18,7 @@ The Bluetooth address comes from `/data/BT_Addr` (first 6 bytes, MSB first) at s
 
 ## Build
 
-BTstack is used in place from the Pico SDK (`$PICO_SDK_PATH/lib/btstack`, v1.6.x) or from `-DBTSTACK_ROOT=<dir>`.
+BTstack is used in place from the Pico SDK (`$PICO_SDK_PATH/lib/btstack`; pico-sdk 2.3.1 ships v1.7-rc1-1219-geb0bb8b5e) or from `-DBTSTACK_ROOT=<dir>`.
 
 ```sh
 # Y2 binary: static ARM hard-float, built with the Buildroot toolchain (see cmake/toolchain-y2.cmake for overrides)
@@ -62,3 +62,9 @@ y2-a2dp play --hci-dump /tmp/bt.pklg           # HCI trace in PacketLogger forma
   ACL, zero-length events, writes, EOF), using a `SOCK_SEQPACKET` socket pair.
 - `chipset_mtk`: golden bytes of the four vendor commands.
 - `hci_preinit`: real BTstack HCI layer against a fake chip; checks the wire order (vendor script, then HCI_Reset).
+
+## Licence
+
+The sources in this directory are MPL-2.0, but `y2-a2dp` links BTstack statically, so the binary is also covered by
+BlueKitchen's BTstack licence, which permits non-commercial use only. Treat the binary as a testbed tool: do not
+redistribute it or ship it in a product without a commercial BTstack licence. BTstack itself is not vendored here.
