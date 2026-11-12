@@ -15,6 +15,7 @@
 #include "hal_display.h"
 #include "hal_system.h"
 #include "input_events.h"
+#include "library_service.h"
 #include "os.h"
 #include "player.h"
 #include "runtime.h"
@@ -165,7 +166,8 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
                 ui_frame_input(&evs[i], now);
             }
         }
-        bool ok = (strncmp(p + 5, "pause", 5) == 0 && pi.state == PLAYER_PAUSED) ||
+        bool ok = (strncmp(p + 5, "lib", 3) == 0 && library_known_ready()) || /* the library index has been opened (the first build is done) */
+                  (strncmp(p + 5, "pause", 5) == 0 && pi.state == PLAYER_PAUSED) ||
                   (strncmp(p + 5, "art", 3) == 0 && pi.state == PLAYER_PAUSED && av.state == ART_VIEW_READY);
         return ok ? end : p;
     }

@@ -10,6 +10,7 @@ add_library(hal_host STATIC
   hal_core.c
   hal_radio.c
   nfs_posix.c
+  lib_ff_posix.c            # FatFs-style file calls over POSIX, for the music library in the simulator (app/include/lib_ff_posix.h)
   ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c
   ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
   host_window.c
@@ -21,6 +22,11 @@ target_link_libraries(hal_host PUBLIC neupod_clickwheel Threads::Threads)
 target_compile_definitions(hal_host PRIVATE
   NEUPOD_DEFAULT_DISK_IMAGE="${CMAKE_BINARY_DIR}/disk.img"
   NEUPOD_DEFAULT_FS_ROOT="${CMAKE_BINARY_DIR}/fsroot")
+
+# The library's POSIX file layer (lib_ff_posix.c) lives in this HAL.
+if(TARGET neupod_library_posix)
+  target_link_libraries(neupod_library_posix PUBLIC hal_host)
+endif()
 
 add_executable(neupod main.c)
 # hal_host after the app libs: they reference HAL symbols.
@@ -54,7 +60,7 @@ target_link_libraries(now_playing neupod_app hal_host)
 set_source_files_properties(hal_i2c.c i2c_test_main.c ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
   hal_system.c hal_display.c hal_console.c hal_input.c hal_storage.c hal_audio.c hal_core.c hal_radio.c nfs_posix.c host_window.c
   ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c
-  main.c display_test_main.c now_playing_main.c storage_test_main.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+  lib_ff_posix.c main.c display_test_main.c now_playing_main.c storage_test_main.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
 # The crypto library needs hal_chip_id() / hal_random() (listed after it on the link line).
 target_link_libraries(neupod_crypto PUBLIC hal_host)

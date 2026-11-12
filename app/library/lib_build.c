@@ -23,7 +23,8 @@
 #define PROV_REC 24u /* provisional per-track strings: aa, album, genre, sort_title, sort_aa, sort_album (offsets in strings.str) */
 #define ENT_REC 40u  /* group u32, key[24], src_off u32, name_off u32, seq u32 */
 #define KEY_REC 32u  /* key[24], src_off u32, id u32 */
-#define ALB_REC 40u  /* album u32, disc<<16|track u32, key[24], src_off u32, id u32 */
+#define ALB_REC 44u  /* album u32, disc<<16|track u32, key[24], src_off u32, id u32, genre id u32 (LIB_NONE = none) */
+#define GEN_REC 12u  /* genre u32, position in by_album u32, track id u32 */
 
 typedef union {
     flac_info_t flac;
@@ -224,6 +225,11 @@ static int alb_cmp(const void *a, const void *b, void *ctx) { // ALB_REC: album,
     return r != 0 ? r : cmp_u32(ld32(x + 36), ld32(y + 36));
 }
 static int pair_cmp(const void *a, const void *b, void *ctx) {
+    (void)ctx;
+    int r = cmp_u32(ld32(a), ld32(b));
+    return r != 0 ? r : cmp_u32(ld32((const uint8_t *)a + 4), ld32((const uint8_t *)b + 4));
+}
+static int gen_cmp(const void *a, const void *b, void *ctx) { // GEN_REC: genre, album-order position (unique)
     (void)ctx;
     int r = cmp_u32(ld32(a), ld32(b));
     return r != 0 ? r : cmp_u32(ld32((const uint8_t *)a + 4), ld32((const uint8_t *)b + 4));
@@ -726,7 +732,7 @@ static lib_err_t stage_entity(bctx_t *c, ekind_t kind) {
         if (e != LIB_OK || eof) break;
         if (!have_prev || ent_cmp_key(prev, cur, pool) != 0) {
             uint8_t row[LIB_REC_ALBUM] = {0};
-            uint32_t rs = kind == K_ALBUM ? LIB_REC_ALBUM : LIB_REC_ARTIST;
+            uint32_t rs = kind == K_ARTIST ? LIB_REC_ARTIST : LIB_REC_ALBUM; /* albums and genres are both 20 B */
             const char *nm = pool_get(pool, 0, ld32(cur + 32));
             st32(row, c->en_len);
             e = wr(fen, nm, (uint32_t)strlen(nm) + 1);
@@ -761,7 +767,7 @@ static lib_err_t stage_entity(bctx_t *c, ekind_t kind) {
     }
     if (e == LIB_OK) { // sentinel row: its first-child field is patched when the children are known
         uint8_t row[LIB_REC_ALBUM] = {0};
-        e = wr(ftab, row, kind == K_ALBUM ? LIB_REC_ALBUM : LIB_REC_ARTIST);
+        e = wr(ftab, row, kind == K_ARTIST ? LIB_REC_ARTIST : LIB_REC_ALBUM);
     }
     if (fkey_open) {
         lib_err_t ec = close_f(fkey);
@@ -889,6 +895,7 @@ static lib_err_t stage_tracks(bctx_t *c) {
         memcpy(ar + 8, kr, LIB_KEY_PREFIX);
         st32(ar + 32, src);
         st32(ar + 36, id);
+        st32(ar + 40, gid == LIB_NONE || gid >= LIB_GENRE_NONE ? LIB_NONE : gid);
         e = wr(fal, ar, sizeof ar);
         id++;
     }
@@ -956,7 +963,7 @@ static lib_err_t finish_idlist(bctx_t *c, const char *sorted_p, unsigned lf, lib
 static lib_err_t stage_orders(bctx_t *c) {
     size_t mark = c->ar->used;
     pool_t *pool = lib_arena_alloc(c->ar, sizeof(pool_t));
-    char p_title[96], p_alb[96], p_pair[96], s_title[96], s_alb[96], s_pair[96], s_an[96], an[96];
+    char p_title[96], p_alb[96], p_pair[96], s_title[96], s_alb[96], s_pair[96], s_an[96], an[96], p_gen[96], s_gen[96];
     wpath(c, p_title, "title.rec");
     wpath(c, p_alb, "album.rec");
     wpath(c, p_pair, "pair.rec");
@@ -965,6 +972,8 @@ static lib_err_t stage_orders(bctx_t *c) {
     wpath(c, s_pair, "pair.sorted");
     wpath(c, an, "albname.rec");
     wpath(c, s_an, "albname.sorted");
+    wpath(c, p_gen, "gen.rec");
+    wpath(c, s_gen, "gen.sorted");
     if (pool == NULL) {
         pool_close(pool);
         c->ar->used = mark;
@@ -991,15 +1000,18 @@ static lib_err_t stage_orders(bctx_t *c) {
     (void)lib_unlink(p_alb);
     if (e == LIB_OK) {
         FIL *fin = lib_arena_alloc(c->ar, sizeof(FIL)), *fo = lib_arena_alloc(c->ar, sizeof(FIL)), *fa = lib_arena_alloc(c->ar, sizeof(FIL));
+        FIL *fgn = lib_arena_alloc(c->ar, sizeof(FIL));
         char pa[96];
         tpath(c, pa, lib_files[LF_ALBUMS].name);
-        if (fa == NULL) e = LIB_E_SCRATCH;
+        if (fgn == NULL) e = LIB_E_SCRATCH;
         if (e == LIB_OK) e = open_out(c, fo, lib_files[LF_BY_ALBUM].name);
-        bool fo_o = e == LIB_OK, fin_o = false, fa_o = false;
+        bool fo_o = e == LIB_OK, fin_o = false, fa_o = false, fgn_o = false;
         if (e == LIB_OK) e = lib_fopen(fin, s_alb, FA_READ);
         fin_o = e == LIB_OK;
         if (e == LIB_OK) e = lib_fopen(fa, pa, FA_READ | FA_WRITE);
         fa_o = e == LIB_OK;
+        if (e == LIB_OK) e = lib_fopen(fgn, p_gen, FA_CREATE_ALWAYS | FA_WRITE);
+        fgn_o = e == LIB_OK;
         uint32_t pos = 0, last = LIB_NONE;
         while (e == LIB_OK) {
             uint8_t ar[ALB_REC];
@@ -1012,8 +1024,19 @@ static lib_err_t stage_orders(bctx_t *c) {
                 last = album;
                 if (e != LIB_OK) break;
             }
-            e = wr(fo, ar + 36, 4);
+            if (e == LIB_OK) e = wr(fo, ar + 36, 4);
+            if (e == LIB_OK && ld32(ar + 40) != LIB_NONE) { // the genre order is this order, stably grouped by genre
+                uint8_t gr[GEN_REC];
+                st32(gr, ld32(ar + 40));
+                st32(gr + 4, pos);
+                st32(gr + 8, ld32(ar + 36));
+                e = wr(fgn, gr, sizeof gr);
+            }
             pos++;
+        }
+        if (fgn_o) {
+            lib_err_t ec = close_f(fgn);
+            if (e == LIB_OK) e = ec;
         }
         if (e == LIB_OK) e = patch32(fa, LIB_HDR + c->m.albums * LIB_REC_ALBUM + 12, pos); // sentinel: the total
         if (fa_o) {
@@ -1027,6 +1050,50 @@ static lib_err_t stage_orders(bctx_t *c) {
         }
     }
     (void)lib_unlink(s_alb);
+    /* genre -> tracks (play a genre): GEN_REC sorted by (genre, album-order position) */
+    if (e == LIB_OK) e = lib_esort(c->ar, c->work, p_gen, s_gen, GEN_REC, gen_cmp, NULL, &c->sst);
+    (void)lib_unlink(p_gen);
+    if (e == LIB_OK) {
+        FIL *fin = lib_arena_alloc(c->ar, sizeof(FIL)), *fo = lib_arena_alloc(c->ar, sizeof(FIL)), *fg = lib_arena_alloc(c->ar, sizeof(FIL));
+        char pg[96];
+        tpath(c, pg, lib_files[LF_GENRES].name);
+        if (fg == NULL) e = LIB_E_SCRATCH;
+        if (e == LIB_OK) e = open_out(c, fo, lib_files[LF_BY_GENRE].name);
+        bool fo_o = e == LIB_OK, fin_o = false, fg_o = false;
+        if (e == LIB_OK) e = lib_fopen(fin, s_gen, FA_READ);
+        fin_o = e == LIB_OK;
+        if (e == LIB_OK) e = lib_fopen(fg, pg, FA_READ | FA_WRITE);
+        fg_o = e == LIB_OK;
+        uint32_t pos = 0, next_g = 0;
+        while (e == LIB_OK) {
+            uint8_t gr[GEN_REC];
+            bool eof = false;
+            e = rd(fin, gr, GEN_REC, &eof);
+            if (e != LIB_OK || eof) break;
+            uint32_t g = ld32(gr);
+            while (next_g <= g && e == LIB_OK) { // every genre up to this one starts here (a genre cannot be empty, but stay safe)
+                e = patch32(fg, LIB_HDR + next_g * LIB_REC_GENRE + 16, pos);
+                next_g++;
+            }
+            if (e == LIB_OK) e = wr(fo, gr + 8, 4);
+            pos++;
+        }
+        while (e == LIB_OK && next_g <= c->m.genres) { // the rest, sentinel included
+            e = patch32(fg, LIB_HDR + next_g * LIB_REC_GENRE + 16, pos);
+            next_g++;
+        }
+        c->m.genre_tracks = pos;
+        if (fg_o) {
+            lib_err_t ec = close_f(fg);
+            if (e == LIB_OK) e = ec;
+        }
+        if (fin_o) f_close(fin);
+        if (fo_o) {
+            lib_err_t ec = close_f(fo);
+            if (e == LIB_OK) e = ec;
+        }
+    }
+    (void)lib_unlink(s_gen);
     /* genre -> artists */
     if (e == LIB_OK) e = lib_esort(c->ar, c->work, p_pair, s_pair, 8, pair_cmp, NULL, &c->sst);
     (void)lib_unlink(p_pair);

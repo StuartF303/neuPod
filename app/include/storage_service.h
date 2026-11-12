@@ -19,6 +19,7 @@
 #define NEUPOD_STORAGE_SERVICE_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -57,6 +58,11 @@ bool storage_service_idle(void);
 
 /** Task body. */
 void storage_task(void *arg);
+
+/** Library requests (library_service.h) travel through the same queue: @p blob is at most 128 bytes, handed to library_service_handle(). */
+bool storage_post_library(const void *blob, size_t n);
+/** True while a request waits for the storage task: a long job (the library build) gives way to it. */
+bool storage_request_waiting(void);
 
 /** Ask for the listing of @p path (absolute, e.g. "/"). False if the request queue is full. */
 bool storage_list_request(const char *path, uint32_t seq);

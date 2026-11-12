@@ -135,6 +135,22 @@ target_include_directories(neupod_runtime PUBLIC ${NEUPOD_APP_DIR}/include ${NEU
                                           PRIVATE ${NEUPOD_GEN_DIR})
 target_compile_features(neupod_runtime PUBLIC c_std_11)
 target_link_libraries(neupod_runtime PUBLIC neupod_rt_core neupod_drivers neupod_settings neupod_freertos lvgl)
+# The library's files (FatFs): hosted builds link them with the project's FatFs (neupod_fatfs); the RP2350's FatFs is the SD library's, which
+# platforms/rp2350/CMakeLists.txt compiles the library against, so it must not be linked here too.
+if(NEUPOD_PLATFORM STREQUAL "host")
+  # The simulator's card is a folder (nfs_posix.c), not a FatFs volume: the library is built against FatFs-style calls over POSIX there
+  # (app/include/lib_ff_posix.h, hal/host/lib_ff_posix.c). The unit tests use the real FatFs (neupod_library above).
+  add_library(neupod_library_posix STATIC ${NEUPOD_LIBRARY_SOURCES})
+  target_include_directories(neupod_library_posix PUBLIC ${NEUPOD_APP_DIR}/include ${NEUPOD_APP_DIR}/../hal/include)
+  target_compile_features(neupod_library_posix PUBLIC c_std_11)
+  target_compile_definitions(neupod_library_posix PRIVATE NEUPOD_LIB_POSIX=1)
+  target_link_libraries(neupod_library_posix PUBLIC neupod_rt_core)
+  set_source_files_properties(${NEUPOD_LIBRARY_SOURCES} PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+  target_compile_definitions(neupod_runtime PRIVATE NEUPOD_LIB_POSIX=1)
+  target_link_libraries(neupod_runtime PUBLIC neupod_library_posix)
+elseif(NOT NEUPOD_PLATFORM STREQUAL "rp2350")
+  target_link_libraries(neupod_runtime PUBLIC neupod_library)
+endif()
 set_source_files_properties(${NEUPOD_RT_CORE_SOURCES} ${NEUPOD_RUNTIME_SOURCES} ${NEUPOD_AUDIO_CORE_SOURCES} ${NEUPOD_UI_SOURCES}
   PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 set_source_files_properties(${NEUPOD_APP_DIR}/third_party/tjpgd/tjpgd.c PROPERTIES COMPILE_OPTIONS "-w")

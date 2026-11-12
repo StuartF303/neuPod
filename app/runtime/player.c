@@ -26,8 +26,8 @@ static play_queue_t g_q;      // the folder being played through (count 0: a sin
 static bool g_auto;           // the current track was started by the queue (not chosen by the user): a track that cannot be opened is skipped
 static bool g_next_valid;     // the audio core was told to continue with the next queued track by itself; its details:
 static player_file_t g_next_pf;
-static uint16_t g_next_entry = PLAY_QUEUE_NO_ENTRY; // queue entry the audio core was told to continue with (the modes may change after)
-static uint16_t g_offer_entry = PLAY_QUEUE_NO_ENTRY;
+static uint32_t g_next_entry = PLAY_QUEUE_NO_ENTRY; // queue entry the audio core was told to continue with (the modes may change after)
+static uint32_t g_offer_entry = PLAY_QUEUE_NO_ENTRY;
 // An announcement is only accepted for the offer it answers: any restart of playback (reset_info) bumps g_gen, so the answer to
 // an offer made before a skip, stop or new start is ignored instead of marking a successor that no longer exists.
 static pq_snapshot_t g_snap; // the queue before the move being started (under the lock; g_gen rejects a stale rollback)
@@ -71,7 +71,7 @@ typedef struct {
     uint64_t seek_prev_to;    // ... and the target of the seek that was under way
     player_state_t seek_prev; // a seek: the state to give back if the start cannot even be requested (PLAYER_IDLE = not a seek)
     bool rollback;     // the queue position was advanced for this start: put it back if the start cannot even be requested
-    uint16_t prev_pos;
+    uint32_t prev_pos;
     uint32_t gen;
     uint32_t frame;    // start position (resume), 0 = the beginning
     char path[PLAYER_PATH_MAX];
@@ -172,13 +172,33 @@ static void reset_info(player_src_t src, player_state_t state, const char *name)
 
 // ---- Resume bookkeeping: records are queued under the player lock and stored after it is released ----
 
+// Path of queue slot @p slot for the resume record: a library queue's entry is a handle, which the storage task has turned into the real path
+// when it started the track (the resolver, set by the storage service). False when it has not yet (the record waits for the next save).
+static player_path_resolver_fn g_resolver;
+void player_set_path_resolver(player_path_resolver_fn fn) { g_resolver = fn; }
+
+static bool queue_real_path(uint32_t slot, char *out, size_t n) {
+    if (!pq_path(&g_q, slot, out, n)) {
+        return false;
+    }
+    if (!pq_is_handle(out)) {
+        return true;
+    }
+    char handle[40];
+    if (strlen(out) >= sizeof handle) {
+        return false;
+    }
+    memcpy(handle, out, strlen(out) + 1u);
+    return g_resolver != NULL && g_resolver(handle, out, n);
+}
+
 // Describe what plays now. Lock held. Needs the audio core's count for the position.
 static bool rs_snapshot(resume_state_t *r, bool have, const audio_stats_t *st) {
     if (!have || g_info.src != PLAYER_SRC_FILE || g_q.count == 0 || (g_info.state != PLAYER_PLAYING && g_info.state != PLAYER_PAUSED) ||
-        !pq_path(&g_q, g_q.pos, r->path, sizeof r->path)) {
+        !queue_real_path(g_q.pos, r->path, sizeof r->path)) {
         return false;
     }
-    r->index = pq_entry(&g_q, g_q.pos); // the folder entry, not the slot: under shuffle the slot order is different at the next boot
+    r->index = g_q.lib ? 0 : (uint16_t)pq_entry(&g_q, g_q.pos); // the folder entry, not the slot: under shuffle the slot order is different at the next boot
     r->size = g_file_size;
     r->frame = g_base_frames + st->pcm_frames;
     r->playing = g_info.state == PLAYER_PLAYING;
@@ -196,8 +216,8 @@ static void rs_queue(const resume_state_t *r, resume_why_t why) {
 static void rs_queue_track_start(void) {
     resume_state_t r;
     memset(&r, 0, sizeof r);
-    if (g_q.count != 0 && pq_path(&g_q, g_q.pos, r.path, sizeof r.path)) {
-        r.index = pq_entry(&g_q, g_q.pos);
+    if (g_q.count != 0 && queue_real_path(g_q.pos, r.path, sizeof r.path)) {
+        r.index = g_q.lib ? 0 : (uint16_t)pq_entry(&g_q, g_q.pos);
         r.size = g_file_size;
         r.playing = true;
         rs_queue(&r, RESUME_EVENT);
@@ -432,7 +452,7 @@ void player_get(player_info_t *out) {
     g_info.track_id = g_track_id;
     g_info.pos_frames = have && g_info.rate != 0 && g_info.src == PLAYER_SRC_FILE ? g_base_frames + (uint64_t)st.pcm_frames : 0;
     g_info.queue_len = g_info.src == PLAYER_SRC_FILE ? g_q.count : 0;
-    g_info.queue_pos = g_info.queue_len != 0 ? (uint16_t)(g_q.pos + 1u) : 0;
+    g_info.queue_pos = g_info.queue_len != 0 ? g_q.pos + 1u : 0;
     g_info.shuffle = g_info.queue_len != 0 ? g_q.shuffle : 0;
     g_info.repeat = g_info.queue_len != 0 ? g_q.repeat : 0;
     *out = g_info;
@@ -481,6 +501,21 @@ void player_play_file(const char *path, const char *name) {
     if (!storage_play_request(path)) {
         player_file_failed("Storage busy, try again");
     }
+}
+
+void player_play_library(const pq_range_t *range, uint32_t start, bool shuffle_all) {
+    action_t a = {0};
+    lock();
+    reseed();
+    pq_set_repeat(&g_q, player_repeat());
+    g_q.shuffle = shuffle_all ? 1u : (uint8_t)player_shuffle(); // Shuffle Songs shuffles whatever the setting says; the setting itself is not changed
+    if (!pq_build_range(&g_q, range, start)) {
+        unlock();
+        return;
+    }
+    begin_track(&a, false, shuffle_all ? "shuffle all" : "start");
+    unlock();
+    run_action(&a);
 }
 
 void player_play_folder(const char *dir, const file_entry_t *entries, uint32_t count, uint32_t index) {
@@ -604,7 +639,7 @@ bool player_next_track(char *path, size_t n) {
     action_t a = {0};
     lock();
     service(&a, have, &st); // a handoff the audio core just completed must have moved the queue before we look at it
-    uint16_t entry;
+    uint32_t entry;
     bool ok = player_gapless_enabled() && g_info.src == PLAYER_SRC_FILE &&
               (g_info.state == PLAYER_PLAYING || g_info.state == PLAYER_PAUSED) && !g_next_valid && pq_peek_auto(&g_q, &entry) &&
               pq_entry_path(&g_q, entry, path, n);

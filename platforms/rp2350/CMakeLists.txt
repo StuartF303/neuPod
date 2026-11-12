@@ -154,7 +154,12 @@ set(NEUPOD_LIBRARY_SRC
   ${CMAKE_SOURCE_DIR}/app/library/lib_store.c
   ${CMAKE_SOURCE_DIR}/app/library/lib_esort.c
   ${CMAKE_SOURCE_DIR}/app/library/lib_build.c
-  ${CMAKE_SOURCE_DIR}/app/library/lib_reader.c)
+  ${CMAKE_SOURCE_DIR}/app/library/lib_reader.c
+  ${CMAKE_SOURCE_DIR}/app/library/lib_resolve.c
+  ${CMAKE_SOURCE_DIR}/app/library/lib_view.c)
+# The runtime's library service and Music screens use the library's types (library.h includes ff.h for the reader's FIL objects): give them the
+# same FatFs headers and configuration the library files are built with.
+target_include_directories(neupod_runtime BEFORE PRIVATE ${CMAKE_CURRENT_LIST_DIR}/ffconf ${NEUPOD_SD_LIB_DIR}/src/ff15/source)
 function(neupod_add_storage_lib name)
   add_library(${name} STATIC
     hal/hal_storage.c

@@ -127,6 +127,11 @@ static nfs_err_t resolve(const char *path, char *full, size_t cap, char *norm) {
     return inside_root(full) ? NFS_OK : NFS_ERR_BAD_PATH;
 }
 
+bool hal_host_resolve_path(const char *path, char *out, size_t cap) {
+    char norm[NFS_PATH_MAX];
+    return resolve(path, out, cap, norm) == NFS_OK;
+}
+
 #define RESOLVE(path)                                                                              \
     char full[1024];                                                                      \
     char norm[NFS_PATH_MAX];                                                                       \

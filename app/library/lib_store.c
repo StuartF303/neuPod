@@ -22,6 +22,7 @@ const lib_file_info_t lib_files[LIB_FILES + 1] = {
     [LF_BY_ALBUM_NAME] = {"by_album_name.u32", 4, 0},
     [LF_GENRE_ARTISTS] = {"genre_artists.u32", 4, 0},
     [LF_ENAMES] = {"enames.str", 1, 0},
+    [LF_BY_GENRE] = {"by_genre.u32", 4, 0},
     [LF_MANIFEST] = {"manifest.bin", 1, 0},
 };
 
@@ -174,8 +175,8 @@ lib_err_t lib_rmtree(const char *dir) {
 
 /* ---- manifest ----------------------------------------------------------------------------------------------------- */
 
-// payload: generation, decoder, fingerprint(2), tracks, playable, artists, albums, genres, dirs, comp_first, links, [crc,size]*11, jumps
-#define MF_WORDS (2 + 2 + 8 + 2 * LIB_FILES + LIB_LISTS * LIB_BUCKETS)
+// payload: generation, decoder, fingerprint(2), tracks, playable, artists, albums, genres, dirs, comp_first, links, genre_tracks, [crc,size]*13, jumps
+#define MF_WORDS (2 + 2 + 9 + 2 * LIB_FILES + LIB_LISTS * LIB_BUCKETS)
 #define MF_BYTES (MF_WORDS * 4u)
 
 size_t lib_manifest_bytes(void) { return LIB_HDR + MF_BYTES; }
@@ -196,6 +197,7 @@ void lib_manifest_encode(const lib_manifest_t *m, uint8_t *out) {
     w[k++] = m->dirs;
     w[k++] = m->comp_first;
     w[k++] = m->genre_artist_links;
+    w[k++] = m->genre_tracks;
     for (unsigned i = 0; i < LIB_FILES; i++) {
         w[k++] = m->file_crc[i];
         w[k++] = m->file_size[i];
@@ -223,9 +225,9 @@ static uint32_t list_rows(const lib_manifest_t *m, unsigned l) {
 }
 
 static bool manifest_consistent(const lib_manifest_t *m) {
-    if (m->playable > m->tracks || m->comp_first > m->albums) return false;
+    if (m->playable > m->tracks || m->comp_first > m->albums || m->genre_tracks > m->tracks) return false;
     static const int8_t kind[LIB_FILES] = {[LF_DIRS] = 1, [LF_TRACKS] = 2, [LF_ARTISTS] = 3, [LF_ALBUMS] = 4, [LF_GENRES] = 5, [LF_BY_ALBUM] = 2,
-                                           [LF_BY_TITLE] = 2, [LF_BY_ALBUM_NAME] = 4, [LF_GENRE_ARTISTS] = 6}; // which count sizes each file; 0 = a pool
+                                           [LF_BY_TITLE] = 2, [LF_BY_ALBUM_NAME] = 4, [LF_GENRE_ARTISTS] = 6, [LF_BY_GENRE] = 7}; // which count sizes each file; 0 = a pool
     for (unsigned i = 0; i < LIB_FILES; i++) {
         uint64_t n;
         switch (kind[i]) {
@@ -235,6 +237,7 @@ static bool manifest_consistent(const lib_manifest_t *m) {
         case 4: n = m->albums; break;
         case 5: n = m->genres; break;
         case 6: n = m->genre_artist_links; break;
+        case 7: n = m->genre_tracks; break;
         default: if (m->file_size[i] < LIB_HDR) return false; continue;
         }
         if ((uint64_t)m->file_size[i] != LIB_HDR + (uint64_t)lib_files[i].rec * (n + lib_files[i].sentinel)) return false;
@@ -269,6 +272,7 @@ static bool manifest_decode(const uint8_t *in, size_t n, lib_manifest_t *m) {
     m->dirs = w[k++];
     m->comp_first = w[k++];
     m->genre_artist_links = w[k++];
+    m->genre_tracks = w[k++];
     for (unsigned i = 0; i < LIB_FILES; i++) {
         m->file_crc[i] = w[k++];
         m->file_size[i] = w[k++];

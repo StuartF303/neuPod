@@ -22,6 +22,7 @@
 static FILE *g_img;
 static uint32_t g_sectors;
 static bool g_write_enabled;
+static bool g_read_only; // the image could only be opened read-only, or a test says the card is write-protected
 
 hal_storage_status_t hal_storage_init(void) {
     if (g_img != NULL) {
@@ -32,9 +33,12 @@ hal_storage_status_t hal_storage_init(void) {
     if (path == NULL || path[0] == '\0') {
         path = NEUPOD_DEFAULT_DISK_IMAGE;
     }
+    const char *ro = getenv("NEUPOD_DISK_READ_ONLY"); // tours: a write-protected card
+    g_read_only = ro != NULL && ro[0] == '1';
     g_img = fopen(path, "r+b");
     if (g_img == NULL) {
         g_img = fopen(path, "rb"); // read-only image is fine; writes will then fail
+        g_read_only = g_read_only || g_img != NULL;
     }
     if (g_img == NULL) {
         fprintf(stderr, "neuPod host: cannot open disk image '%s'\n", path);
@@ -89,6 +93,7 @@ hal_storage_status_t hal_storage_get_info(hal_card_info_t *out) {
     out->mdt_month = 1;
     out->csd_version = 1;
     out->bus_width = 1;
+    out->write_protected = g_read_only;
     return HAL_STORAGE_OK;
 }
 
@@ -114,7 +119,7 @@ void hal_storage_set_write_enabled(bool enabled) { g_write_enabled = enabled; }
 bool hal_storage_get_write_enabled(void) { return g_write_enabled; }
 
 hal_storage_status_t hal_storage_write(uint32_t lba, const void *buf, uint32_t count) {
-    if (!g_write_enabled) {
+    if (!g_write_enabled || g_read_only) {
         return HAL_STORAGE_WRITE_PROTECT;
     }
     if (buf == NULL) {
@@ -173,4 +178,5 @@ void hal_storage_unmount(void) {}
 static bool g_test_mounted;
 bool hal_storage_is_mounted(void) { return g_test_mounted; }
 void hal_host_storage_set_mounted(bool mounted) { g_test_mounted = mounted; }
+void hal_host_storage_set_read_only(bool read_only) { g_read_only = read_only; }
 hal_fs_type_t hal_storage_fs_type(void) { return HAL_FS_NONE; }

@@ -21,7 +21,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef NEUPOD_LIB_POSIX
+#include "lib_ff_posix.h" /* the host simulator's card is a folder: FatFs-style calls over POSIX */
+#else
 #include "ff.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -122,7 +126,7 @@ extern int lib_test_fail_rename; /**< tests: make the Nth rename of the swap / r
 /** Lists the UI browses. Row i of a list is an id in one of the tables. */
 typedef enum { LIB_LIST_ARTISTS = 0, LIB_LIST_ALBUMS, LIB_LIST_SONGS, LIB_LIST_GENRES, LIB_LIST_COMPILATIONS, LIB_LISTS } lib_list_t;
 
-#define LIB_FILES 12u /**< files of the set besides the manifest */
+#define LIB_FILES 13u /**< files of the set besides the manifest */
 
 typedef struct {
     uint32_t generation;
@@ -131,6 +135,7 @@ typedef struct {
     uint32_t tracks, playable, artists, albums, genres, dirs;
     uint32_t comp_first;          /**< first album that is a compilation (they follow all the artists' albums) */
     uint32_t genre_artist_links;
+    uint32_t genre_tracks;        /**< tracks that have a genre (the length of by_genre) */
     uint32_t file_crc[LIB_FILES], file_size[LIB_FILES];
     uint32_t jump[LIB_LISTS][LIB_BUCKETS]; /**< first row whose letter bucket is >= the index (the row count if none) */
 } lib_manifest_t;
@@ -175,6 +180,7 @@ typedef struct {
     uint32_t first;  /**< artist: first album id; album: first position in the by-album order; genre: first position in the genre-artist order */
     uint32_t count;  /**< albums of the artist / tracks of the album / artists of the genre */
     uint32_t artist; /**< albums only: the album artist's id (LIB_NONE for compilations) */
+    uint32_t tfirst, tcount; /**< genres only: its tracks, as positions in the by-genre order (album order within a genre) */
 } lib_entity_t;
 
 typedef struct {
@@ -231,10 +237,24 @@ lib_err_t lib_album(lib_reader_t *r, uint32_t id, lib_entity_t *out);  /**< firs
 lib_err_t lib_genre(lib_reader_t *r, uint32_t id, lib_entity_t *out);  /**< first / count = its artists, as positions in the genre-artist order */
 /** Track id at position @p pos of the by-album order (an album's tracks are contiguous, and so are an artist's albums' tracks). */
 lib_err_t lib_by_album_at(lib_reader_t *r, uint32_t pos, uint32_t *track_id);
+/** Track id at position @p pos of the by-genre order (all of a genre's tracks are contiguous). */
+lib_err_t lib_by_genre_at(lib_reader_t *r, uint32_t pos, uint32_t *track_id);
 /** Artist id at position @p pos of the genre-artist order. */
 lib_err_t lib_genre_artist_at(lib_reader_t *r, uint32_t pos, uint32_t *artist_id);
 /** Full path of a track ("/Music/Artist/Album/01 Song.flac"). */
 lib_err_t lib_track_path(lib_reader_t *r, uint32_t id, char *out, size_t cap);
+
+/* ---- playing from the library ------------------------------------------------------------------------------------- */
+
+/** The three orders a queue can run through (a range of one of them is "the album", "all songs", "this genre"): each file lists track ids. */
+typedef enum { LIB_ORDER_TITLE = 0, LIB_ORDER_ALBUM, LIB_ORDER_GENRE, LIB_ORDERS } lib_order_t;
+
+/**
+ * Path of the track at position @p pos of @p order, without a lib_reader_t: opens the few small files it needs one at a time on a local
+ * FIL (about 600 B of stack), so the storage task can resolve a queue entry while the browse reader is closed, busy or in use for another
+ * list. @p play (may be NULL) gets the track's lib_play_t. LIB_E_NONE if there is no library.
+ */
+lib_err_t lib_resolve(const char *base, lib_order_t order, uint32_t pos, char *path, size_t cap, uint8_t *play);
 
 #ifdef __cplusplus
 }

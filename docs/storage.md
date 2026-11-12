@@ -66,6 +66,32 @@ From `wiring-phase1.md` (3.3 V, DAT0-DAT3 must be consecutive GPIOs, CLK is DAT0
 - **Stack:** the main stack is 4 KB for the storage test (the most core 0's scratch RAM bank can
   hold); the lowest free stack seen is printed after each test.
 
+## Music library index
+
+The Music screens read an index of `/Music` that the firmware builds on the card itself ([ADR-0017](adr/0017-music-library-index.md); screens: [UI](ui.md#music-lists)).
+
+- **Where and how.** `/.neupod/lib/`: 13 immutable files plus a manifest (about 8 MB for 100,000 tracks, roughly 90 bytes a track), each written once per build, the manifest last. A build goes
+  to `/.neupod/lib.tmp/`, is synced, and replaces `lib` with two renames (`lib` to `lib.old`, `lib.tmp` to `lib`); a power cut leaves the old library or the new one (`lib_recover()` settles an
+  interrupted swap the first time the index is opened after boot). A failed or cancelled build deletes `lib.tmp` and leaves the old library.
+- **Writes.** The index is the second thing in the firmware that unlocks card writes, after the settings save: only the storage task, only for the length of a build, and only under `/.neupod` (the
+  nfs write scope; every folder-tree change is a real `nfs_mkdir` / `nfs_unlink` / `nfs_rename`, which nfs itself gates; `/Music` is never written). Nothing else in the library writes. A write-protected card is
+  answered up front with **"Library needs a writable card"**, before anything is attempted; a card that is full says so (`Card is full`).
+- **When.** The first time a list is opened with no index on the card, and **Music > Update Library**; never in the background, and only with nothing playing (the scanner borrows the audio
+  core's decoder memory as its scratch, 99 KB, and refuses to start while anything plays or is paused). A Play press, a folder listing, Cancel or Menu stop it at the next file. Shutting
+  the firmware down during a build is safe for the same reason a power cut is.
+- **What it costs.** Static RAM (RP2350 Release, measured): nothing for the reader and the row window (they share the Files screen's 20 KB listing buffer); **+760 B** for the service's bookkeeping and path cache, the queue and the
+  resume path (free SRAM 14,504 B to 13,744 B). Flash: **+40.6 KB**: the library itself (about 28 KB of scanner, reader, sort and collation that L1 did not link yet) and about 13 KB for the lists, the service, the range queue and the screens.
+  Reading: browsing keeps the audio ring topped up between rows; the reader holds 11 files open and a 4 x 2 KB page cache.
+- **How long a scan takes.** Host figure (POSIX files in the simulator, warm cache): 276 tracks in 131 ms, 1,016 tracks in 322 ms; L1's 100,000-file run on a FatFs disk image: 12 s. **On the card it is not measured yet**
+  (the bench has not run it). Estimate from the ADR's costs (0.2-0.4 ms per directory entry, 10-20 ms to open and parse a file) plus about 60 small index and run files to create: **about 260 FLACs in
+  5 to 8 seconds**, 5,000 tracks in about 1.5 minutes, 100,000 in half an hour. The progress screen counts files; the sort and write at the end add a second or two without a counter.
+- **The Y2 testbed.** The Y2 firmware opens the card read-only (`O_RDONLY`) and only reopens it `O_RDWR | O_SYNC` while the library or the settings store holds the write lock, so no change to the Y2's
+  storage is needed for the index to be written, and none was made. What it does need: the card's write-protect switch off (a write-protected card is opened read-only and the screen says
+  `Library needs a writable card`); nothing else mounting the same card at the same time (the firmware's FatFs and a kernel filesystem driver writing one volume would corrupt it; the Y2's
+  rootfs does not mount the card: its `mdev.conf` only sets the node's permissions and its `fstab` has no card entry; the rescue `diag.sh` is the one thing that mounts it, on demand, so check before
+  adding an automounter); and patience, since `O_SYNC` makes every write wait for the card (a build is many small writes, so the Y2 will be slower than the
+  estimate above). The boot line `read-only` is the default lock, not a mount option.
+
 ## Rules carried into the final board (3 Nov 2026)
 
 * SD clock from **integer dividers only**.
