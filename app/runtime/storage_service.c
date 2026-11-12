@@ -390,6 +390,7 @@ void storage_task(void *arg) {
             if (pq_is_handle(rq.path)) { // a library queue entry: find the file (FatFs is ours alone)
                 char real[NFS_PATH_MAX];
                 if (!library_service_resolve(rq.path, real, sizeof real, &why)) {
+                    track_stream_stop(); // as a start that fails to open does: the track that was playing is no longer fed
                     player_file_failed(why);
                     continue;
                 }
