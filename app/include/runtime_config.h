@@ -42,9 +42,9 @@
 /* Every RTOS task runs on core 0 (the only core the kernel owns). */
 #define RT_CORE_OTHER OS_CORE_0
 
-/* Boot splash: shown at least this long, and, if any check ends not fully correct, held this long
+/* Boot splash: shown at least this long, and, if any check ends not fully correct (or Menu is held at start), the debug splash is held this long
  * after the checks finish (any input event skips the hold). */
-#define RT_SPLASH_MIN_MS 1500u
+#define RT_SPLASH_MIN_MS 600u
 #define RT_SPLASH_HOLD_MS 8000u
 
 /* UI scrolling: Rockbox-style 4 wheel counts per list step, with velocity acceleration. The wheel

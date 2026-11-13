@@ -45,6 +45,20 @@ typedef struct {
 void art_view_get(art_view_t *out);
 void art_view_ack(uint32_t gen);
 
+#define ART_BROWSE_N 5u /**< albums that can be asked for at once (the five Cover Flow tiles) */
+
+/**
+ * The albums being browsed. The library's album header asks for one (art_browse_want, art_browse_get); the Cover Flow asks for up to ART_BROWSE_N at once
+ * with art_browse_want_set(): @p handles are library handles, most important first (the centre tile, then its neighbours), n = 0 says none is wanted
+ * any more. The storage task decodes them in that order into the cache; a wanted album already in the cache costs nothing. The wanted ones, and the
+ * ones wanted just before this call, are not evicted. art_browse_get_handle() answers for one handle (READY with the pixels, LOADING, FAILED for
+ * an album with no usable picture, NONE for one that is not wanted); a READY answer's gen differs from any other picture's. Reads are safe against the
+ * storage task changing the cache (the same retry counter as art_view_get()); the pixels stay valid until the next art_browse_want_set() call and the
+ * one after it (the call after that may reuse the slot). UI task only. Builds without a cache (ART_CACHE_N == 1) answer NONE.
+ */
+void art_browse_want_set(const char *const *handles, unsigned n);
+void art_browse_get_handle(const char *handle, art_view_t *out);
+
 /**
  * The library's album header: the UI asks for the picture of the album whose first song is the library handle @p handle ("@lib/<order>/<pos>",
  * play_queue.h); "" says it is no longer wanted. The storage task resolves the handle, finds the picture and decodes it into the cache (a hit

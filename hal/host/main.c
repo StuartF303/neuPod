@@ -24,14 +24,14 @@
 // Keys: s/w scroll, _ = Enter (Select), m = Menu, x = nothing (lets simulated time pass). snap:NAME writes NAME.ppm.
 #define TOUR                                                                                       \
     "snap:home _ snap:music-menu _ snap:music-empty m m s s s _ snap:extras _ snap:files _ "        \
-    "snap:files-sub m s s _ snap:files-many 260*s snap:files-many-end m m m m s _ snap:settings "                \
+    "snap:files-sub m s s _ snap:files-many 260*s snap:files-many-end _ x x snap:files-page2 w _ x x snap:files-page1-end m x x snap:files-plus m m m s _ snap:settings "                \
     "s s s snap:settings-bt _ snap:bt-idle s _ snap:bt-scanning x x x x x x x x x snap:bt-found _ snap:bt-pair "     \
     "m m w w w _ snap:about m m s s _ snap:nowplaying m"
 
 // Wheel input widgets (Extras > Input widgets): text, password with show, live search, number, slider, choice, multi choice, date/time.
 #define TOUR_INPUT                                                                                 \
-    "x s s s _ snap:extras-in s s _ snap:in-list s _ s _ s _ snap:in-text p snap:in-result "         \
-    "s _ _ s _ s s _ w w _ snap:in-password p s _ snap:in-search-empty _ snap:in-search m m "  \
+    "x s s s _ snap:extras-in s s _ snap:in-list s _ s _ s _ snap:in-text d d s _ snap:in-text-123 d d snap:in-text-space d snap:in-text-del menu:down sleep:700 menu:up x snap:in-text-cleared p snap:in-result "         \
+    "s _ _ s _ s s _ w w _ snap:in-password x x x x snap:in-password-dots p s _ snap:in-search-empty _ snap:in-search m m "  \
     "s _ s s s snap:in-number p s _ s s s s s snap:in-slider p s _ s snap:in-choice p "              \
     "s _ _ s s _ snap:in-multi p s _ s d s snap:in-datetime p snap:in-end"
 
@@ -84,7 +84,7 @@
 #define TOUR_LIBRARY                                                                                                                      \
     "x _ snap:lib-music-menu _ x x x x snap:lib-building wait:lib x x snap:lib-artists "                                                 \
     "_ x x snap:lib-artist s _ x x snap:lib-album m m s _ x x s _ x x s snap:lib-album-greyed _ x snap:lib-cant-play "                  \
-    "m m m s _ x x x snap:lib-albums m s _ x x x snap:lib-songs vol:2 x snap:lib-volume-hud strips:off 8*s rail:hold x snap:lib-songs-fastscroll rail:release x x x snap:lib-songs-scrolled "                                        \
+    "m m m s _ x x x snap:lib-albums d x x x x snap:lib-coverflow s x x x snap:lib-coverflow-next 2*s x x x snap:lib-coverflow-far w w w w w w w x x x snap:lib-coverflow-start a x snap:lib-coverflow-back m s _ x x x snap:lib-songs vol:2 x snap:lib-volume-hud strips:off 8*s rail:hold x snap:lib-songs-fastscroll rail:release x x x snap:lib-songs-scrolled "                                        \
     "m s _ x x x snap:lib-genres _ x x snap:lib-genre _ x x snap:lib-genre-songs "                                                     \
     "m m m s _ x x x snap:lib-comps _ x x snap:lib-comp-songs "                                                                          \
     "m m s s _ x x x snap:lib-update-building x x x x x x x x x x x x snap:lib-update-done m m "                                                             \
@@ -145,7 +145,7 @@
     "m s _ x x x snap:pl-m3u-night 3*s _ x snap:pl-m3u-greyed m s _ x x x strips:off x snap:pl-m3u-running "                                           \
     "2*s _ x wait:pause x _ x 3*s x snap:pl-np-page2 _ x x snap:pl-np-added m m m 6*w _ x x x snap:pl-otg-after m m m"
 
-static unsigned g_expect = 18;
+static unsigned g_expect = 21;
 static const char *g_snapshot_dir;
 static unsigned g_snapshots;
 static bool cfgp_tour; // a tour was requested: expect all its snapshots
@@ -195,7 +195,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--tour-input") == 0) {
             cfg.ui_script = TOUR_INPUT;
             cfgp_tour = true;
-            g_expect = 14;
+            g_expect = 19;
         } else if (strcmp(argv[i], "--tour-wifi") == 0) {
             cfg.ui_script = TOUR_WIFI;
             cfgp_tour = true;
@@ -215,7 +215,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--tour-library") == 0) {
             cfg.ui_script = TOUR_LIBRARY;
             cfgp_tour = true;
-            g_expect = 27; // the splash, home and the twenty-five named snapshots
+            g_expect = 32; // the splash, home and the thirty named snapshots
         } else if (strcmp(argv[i], "--tour-library-ro") == 0) {
             cfg.ui_script = TOUR_LIBRARY_RO;
             cfgp_tour = true;
@@ -246,12 +246,16 @@ int main(int argc, char **argv) {
             g_expect = 2 + 17; // the splash, home and the seventeen named snapshots
         } else if (strcmp(argv[i], "--script") == 0 && i + 1 < argc) {
             cfg.ui_script = argv[++i]; // ad-hoc key script, same tokens as the tour
+        } else if (strcmp(argv[i], "--splash-debug") == 0) {
+            cfg.splash_mode = 1; // the debug splash even when every check passed (as with Menu held at start)
+        } else if (strcmp(argv[i], "--splash-release") == 0) {
+            cfg.splash_mode = 2; // the release splash even where the host's checks fail (battery gauge, haptics)
         } else if (strcmp(argv[i], "--splash-hold-ms") == 0 && i + 1 < argc) {
             cfg.splash_hold_ms = (uint32_t)strtoul(argv[++i], NULL, 10);
         } else if (strcmp(argv[i], "--snapshots") == 0 && i + 1 < argc) {
             g_snapshot_dir = argv[++i];
         } else {
-            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek|--tour-library|--tour-library-ro|--tour-library-empty|--tour-playlists|--tour-text|--tour-hold|--tour-licences|--tour-design] [--script KEYS] [--snapshots DIR]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek|--tour-library|--tour-library-ro|--tour-library-empty|--tour-playlists|--tour-text|--tour-hold|--tour-licences|--tour-design] [--splash-debug|--splash-release] [--script KEYS] [--snapshots DIR]\n", argv[0]);
             return 64;
         }
     }

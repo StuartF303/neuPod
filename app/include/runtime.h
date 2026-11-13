@@ -36,6 +36,8 @@ typedef struct {
     uint32_t run_ms;
     /** Splash hold when a check failed, ms; 0 = RT_SPLASH_HOLD_MS. Tests shorten it. */
     uint32_t splash_hold_ms;
+    /** Tests: 1 = always show the debug splash (as with Menu held at start), 2 = always the release splash (failed checks hidden); 0 = by the checks. */
+    uint8_t splash_mode;
     /**
      * Host tour (tests): space-separated tokens, each either keys (e.g. "s", "\r") fed to the UI like a key
      * press, or "snap:NAME" which reports screen NAME through on_screen. One token per 300 ms after the home

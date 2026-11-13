@@ -101,6 +101,10 @@ typedef struct {
     /* Fast-scroll letter overlay: a tile at the top right and the index rail down the right edge (every second letter) */
     int32_t lr_tile, lr_tile_y, lr_tile_inset, lr_tile_radius, lr_rail_inset, lr_rail_y, lr_rail_h;
 
+    /* Cover Flow (Albums list, flat five tiles; docs/ui.md "Cover Flow"): tile sizes by distance from the centre (a sixth, hidden size lets a tile slide in from the
+     * edge), the tile row's top, the distance of each distance's tile centre from the screen centre, then title, subtitle and hint lines */
+    int32_t cf_c, cf_n, cf_o, cf_e, cf_y, cf_dx1, cf_dx2, cf_dx3, cf_title_y, cf_sub_y, cf_hint_y;
+
     /* Test tone: labels below the 3-row list */
     int32_t tt_y[4];
 
@@ -118,12 +122,16 @@ typedef struct {
     /* Full-pane states (ui_pane.c: library building / empty / error, the Update Library result) */
     int32_t st_bar_w, st_bar_h, st_btn_h, st_btn_pad, st_gap, st_hint_inset;
 
-    /* Input widgets (ui_input.c) */
-    int32_t in_text_value_y, in_cell_y, in_cell_w, in_hint_y, in_text_hint_x, in_hint_x;
-    int32_t in_num_value_y, in_bar_x, in_bar_y, in_bar_h;
-    int32_t in_dt_y, in_dt_time_shift; /* a time-only picker moves its two fields by the shift */
-    const int32_t *in_dt_x;            /* 5 field x positions */
-    int32_t in_overlay, in_overlay_radius;
+    /* Input widgets (ui_input.c, design review 3.7): the text field box, the ring of nine glyphs (cell width by distance from the current one), the mode chips,
+     * the hint; number / slider (the Big value, the bar, min / max under its ends); date / time (five fields, each with its name under it) */
+    int32_t in_field_y, in_field_h, in_field_radius;
+    int32_t in_ring_y, in_cw0, in_cw1, in_cw2, in_cw3, in_cw4;
+    int32_t in_chip_y, in_chip_h, in_chip_pad, in_chip_gap;
+    int32_t in_hint_y, in_hint_x;
+    int32_t in_num_value_y, in_bar_x, in_bar_y, in_bar_h, in_bar_label_y;
+    int32_t in_dt_y, in_dt_name_y;
+    int32_t in_dt_time_shift; /* a time-only picker moves its two fields by the shift */
+    const int32_t *in_dt_x;   /* 5 field x positions */
 
     /* Splash */
     int32_t sp_wordmark_y, sp_track_y, sp_track_w, sp_track_h, sp_shimmer_w;

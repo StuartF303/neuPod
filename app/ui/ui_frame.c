@@ -327,6 +327,9 @@ void ui_frame_settle(void) {
     ui_ticker_restart(); /* a snapshot shows every ticker at its start */
     slide_settle();
     ui_strips_settle();
+#ifdef NEUPOD_ART_HIRES
+    ui_flow_settle();
+#endif
 }
 
 bool ui_frame_push(ui_screen_t *s) {

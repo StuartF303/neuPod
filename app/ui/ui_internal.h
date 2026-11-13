@@ -57,8 +57,10 @@ int ui_layout_audit(const char *screen);
 /* ---- Boot splash (ui_splash.c) -------------------------------------------------------------------- */
 
 void ui_splash_create(void);
-void ui_splash_update(const capabilities_t *caps);
-void ui_splash_hold_update(const capabilities_t *caps, uint32_t elapsed_ms, uint32_t total_ms);
+/** The debug splash (a boot check failed, or Menu is held at start): adds the short list of failed checks and how many passed under the progress line. Once. */
+void ui_splash_show_debug(const capabilities_t *caps);
+/** Drains the hold bar along the bottom edge over a debug splash's hold. */
+void ui_splash_hold_update(uint32_t elapsed_ms, uint32_t total_ms);
 
 /* ---- Screen framework (ui_frame.c) ---------------------------------------------------------------- */
 
@@ -232,6 +234,26 @@ ui_screen_t *ui_screen_wifi_create(void); /* ui_wifi.c */
 ui_screen_t *ui_screen_wifi_networks_create(void); /* ui_wifi.c: starts a scan when it opens */
 ui_screen_t *ui_screen_nettest_create(void); /* ui_nettest.c */
 ui_screen_t *ui_screen_inputdemo_create(void); /* input/ui_input_demo.c */
+
+#ifdef NEUPOD_ART_HIRES
+/** Cover Flow (ui_coverflow.c; only the builds with the art cache): five flat album tiles with their pictures, a title and a subtitle line. @p get gives the art
+ *  handle (library_service.h / play_queue.h: "@lib/<order>/<pos>") of album @p idx; false = the row is not here yet (the tile shows its placeholder). */
+typedef struct ui_flow ui_flow_t;
+typedef bool (*ui_flow_get_fn)(void *ctx, int32_t idx, char *handle, size_t n);
+ui_flow_t *ui_flow_create(lv_obj_t *parent, ui_flow_get_fn get, void *ctx); /* hidden; covers the content area when shown */
+void ui_flow_destroy(ui_flow_t *f);                                           /* also withdraws the pictures it asked for */
+void ui_flow_show(ui_flow_t *f, bool on);
+bool ui_flow_shown(const ui_flow_t *f);
+void ui_flow_set_text(ui_flow_t *f, const char *title, const char *sub);
+/** Album @p centre of @p count is the centre tile: a step of one animates (90 ms), anything else jumps. Asks the art service for the five albums around it. */
+void ui_flow_move(ui_flow_t *f, int32_t centre, int32_t count);
+/** The rows or the pictures may have changed: look again (cheap; call when a row fill arrives, and on resume). */
+void ui_flow_refresh(ui_flow_t *f);
+/** Call every pass: pictures that have arrived appear. */
+void ui_flow_tick(ui_flow_t *f);
+/** Finish a step in flight now (snapshots and the layout audit look at settled screens). */
+void ui_flow_settle(void);
+#endif
 
 /** True while the library builds with its screen left (Menu on the progress pane: "run in background"); also takes the answer and toasts the outcome. Polled every UI pass
  *  by the frame, which shows three busy dots in the status bar's left slot while it is true (ui_library.c). */

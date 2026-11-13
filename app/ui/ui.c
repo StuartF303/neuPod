@@ -197,6 +197,12 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
         ui_frame_input(&ev, now);
         return end;
     }
+    if (strncmp(p, "menu:", 5) == 0) {
+        /* Tour only: Menu held (menu:down ... sleep:MS ... menu:up): the long press that clears a text entry. */
+        input_event_t ev = {.type = strncmp(p + 5, "down", 4) == 0 ? INPUT_BUTTON_DOWN : INPUT_BUTTON_UP, .button = HAL_BTN_MENU};
+        ui_frame_input(&ev, now);
+        return end;
+    }
     if (strncmp(p, "vol:", 4) == 0) {
         /* Tour only: the volume changes by N steps from outside the screen (a side key, like the Y2's): the HUD shows on screens that do not draw it. */
         (void)player_volume_step(atoi(p + 4));
@@ -315,13 +321,29 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
     return end;
 }
 
-// Any input event (wheel, buttons, testbed console keys, host keyboard: all arrive through the input
-// queue) skips the splash hold.
-static bool skip_requested(void) {
+// Input during the splash. Events that arrive while the checks run are kept (up to BOOT_KEYS) and handed to the UI once the splash is over, as before;
+// the state of the Menu key is followed so that Menu held at start (down, not yet released when the checks end) asks for the debug splash.
+// Any other input event skips the debug splash's hold; the event that does is dropped, and so is Menu's own press and release.
+#define BOOT_KEYS 16u
+typedef struct {
+    input_event_t ev[BOOT_KEYS];
+    unsigned n;
+    bool menu_down;
+} boot_in_t;
+
+static bool boot_input(boot_in_t *b, bool holding) {
     input_event_t ev;
     bool skip = false;
     while (os_queue_recv(rt_input_queue(), &ev, OS_NO_WAIT)) {
-        skip = skip || ev.type == INPUT_SCROLL || ev.type == INPUT_BUTTON_DOWN || ev.type == INPUT_BUTTON_UP || ev.type == INPUT_POWER_DOWN;
+        bool menu = (ev.type == INPUT_BUTTON_DOWN || ev.type == INPUT_BUTTON_UP) && ev.button == HAL_BTN_MENU;
+        if (menu) {
+            b->menu_down = ev.type == INPUT_BUTTON_DOWN;
+        } else if (holding) {
+            skip = skip || ev.type == INPUT_SCROLL || ev.type == INPUT_BUTTON_DOWN || ev.type == INPUT_BUTTON_UP || ev.type == INPUT_POWER_DOWN;
+        }
+        if (!holding && !menu && b->n < BOOT_KEYS) {
+            b->ev[b->n++] = ev;
+        }
     }
     return skip;
 }
@@ -373,47 +395,52 @@ void ui_task(void *arg) {
     caps_resolve(CAP_DISPLAY, true, NULL, "%s %ux%u", hal_display_name(), (unsigned)hal_display_width(),
                  (unsigned)hal_display_height());
     capabilities_t caps;
-    caps_get(&caps);
-    ui_splash_update(&caps);
     lv_refr_now(NULL);
     hal_display_backlight(255); // only now: no flash of garbage before the first frame
     uint32_t t0 = os_tick_ms();
     boot_start();
 
-    // --- Splash: animate while the checks run; hold if any came out not fully correct ---
+    // --- Splash: the release splash (wordmark, progress line, version) for at least SPLASH_MIN_MS while the checks run. If a check came out not fully
+    // correct, or Menu is held, it becomes the debug splash (the list of failures) and is held ---
     const uint32_t hold_ms = rt_config()->splash_hold_ms != 0 ? rt_config()->splash_hold_ms : RT_SPLASH_HOLD_MS;
+    const uint8_t mode = rt_config()->splash_mode;
+    boot_in_t boot_in = {.n = 0, .menu_down = false};
     bool holding = false;
     uint32_t hold_t0 = 0;
     for (;;) {
         bool all = boot_poll();
-        caps_get(&caps);
-        ui_splash_update(&caps);
+        (void)boot_input(&boot_in, false);
         uint32_t now = os_tick_ms();
         uint32_t elapsed = now - t0;
         if ((all && elapsed >= SPLASH_MIN_MS) || elapsed >= SPLASH_MAX_MS) {
             (void)boot_poll(); // anything still pending at the 5 s cap is marked degraded
             caps_get(&caps);
-            ui_splash_update(&caps);
             bool any_bad = false;
             for (int i = 0; i < CAP_COUNT; i++) {
                 any_bad = any_bad || caps.state[i] == CAP_DEGRADED;
             }
-            if (!any_bad) {
+            bool debug = mode == 1 || (mode != 2 && (any_bad || boot_in.menu_down));
+            if (!debug) {
                 break; // everything passed: no extra delay
             }
             if (!holding) {
                 holding = true;
                 hold_t0 = now; // the hold runs from the moment the checks are done (and the minimum has passed)
+                boot_in.n = 0; // the hold drops every key and release: a kept press whose release was dropped would reach Home as a press that never ends
+                ui_splash_show_debug(&caps);
             }
-            if (now - hold_t0 >= hold_ms || skip_requested()) {
+            if (now - hold_t0 >= hold_ms || boot_input(&boot_in, true)) {
                 break;
             }
-            ui_splash_hold_update(&caps, now - hold_t0, hold_ms);
+            ui_splash_hold_update(now - hold_t0, hold_ms);
         }
         os_delay_ms(pump());
     }
     screen_ready("splash"); // final state of the splash, for the host snapshot hook
 
+    for (unsigned i = 0; i < boot_in.n; i++) { // what was pressed while the splash showed goes to the UI now
+        (void)os_queue_send(rt_input_queue(), &boot_in.ev[i], OS_NO_WAIT);
+    }
     // --- Transition to the home menu ---
     lv_obj_t *scr = lv_obj_create(NULL);
     ui_frame_init(scr);

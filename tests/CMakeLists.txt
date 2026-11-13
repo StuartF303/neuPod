@@ -172,7 +172,8 @@ add_test(NAME input_tour
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_input)
 set_tests_properties(input_tour PROPERTIES
   RESOURCE_LOCK neupod_shared_card
-  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_fixture;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
+  FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_fixture;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   TIMEOUT 120)
 
@@ -590,6 +591,28 @@ if(NEUPOD_UI_HIRES)
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     FIXTURES_REQUIRED hires_text_card
     TIMEOUT 90)
+endif()
+
+# The splash (SP-1): the release splash (wordmark, progress line, version; the host's failing battery gauge and haptics checks are hidden with --splash-release)
+# and the debug splash (--splash-debug: the list of failed checks and how many passed, as when a check fails or Menu is held at start), at both sizes, each with the
+# layout audit on its snapshot. The splash has to stay up at least 600 ms: the run's own log line says when it finished.
+function(neupod_splash_tests NAME SIZE_ENV SIZE)
+  foreach(MODE release debug)
+    add_test(NAME ${NAME}_${MODE}
+      COMMAND neupod --run-ms 9000 --splash-hold-ms 1500 --splash-${MODE} --snapshots ${CMAKE_BINARY_DIR}/snapshots_${NAME}_${MODE})
+    file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_${NAME}_${MODE})
+    set_tests_properties(${NAME}_${MODE} PROPERTIES
+      ENVIRONMENT "SDL_VIDEODRIVER=dummy;${SIZE_ENV}NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_fixture;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
+      PASS_REGULAR_EXPRESSION "ui: audit 'splash' ${SIZE} objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+      FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+      RESOURCE_LOCK neupod_shared_card
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+      TIMEOUT 60)
+  endforeach()
+endfunction()
+if(NEUPOD_UI_HIRES)
+  neupod_splash_tests(splash "" "320x240")
+  neupod_splash_tests(hires_splash "NEUPOD_DISPLAY_SIZE=480x360;" "480x360")
 endif()
 
 # Hold (ADR-0020): the Power key simulated by the tour (pwr:down / pwr:up / sleep:MS), the lock overlay, the countdown, the host's simulated power-off,

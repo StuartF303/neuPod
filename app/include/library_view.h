@@ -65,6 +65,10 @@ typedef struct {
     char sub[LVW_SUB_MAX]; /**< songs: "Artist . Album" (second line of a two-line row); empty otherwise */
     uint16_t track;        /**< songs of an album: the track number, 0 = none */
     uint8_t codec;         /**< songs: lib_codec_t (the unplayable ones show it in brackets) */
+    /* Albums and Compilations rows (the Cover Flow, docs/ui.md): the album's songs as a range of the by-album order, and the year of its first song (0 = unknown) */
+    uint32_t first;        /**< position of the album's first song in LIB_ORDER_ALBUM */
+    uint32_t songs;        /**< songs in the album */
+    uint16_t year;
     lvw_view_t child; /**< the list a Select opens; kind LVW_KINDS for a song */
     uint8_t play;    /**< songs: lib_play_t (0 = playable; a Select shows why it is not) */
 } lvw_row_t;

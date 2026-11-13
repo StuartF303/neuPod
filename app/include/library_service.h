@@ -108,6 +108,9 @@ lib_reader_t *library_service_reader(libsvc_status_t *why);
  * when the track cannot be played or cannot be found. Keeps the answer for library_service_real_path(). Storage task only.
  */
 bool library_service_resolve(const char *handle, char *out, size_t n, const char **why);
+/** As library_service_resolve(), for album art: the file of any entry (an unplayable one too), and it does not take the place of a playing track's path in the cache the
+ *  resume record reads. Storage task only. */
+bool library_service_resolve_for_art(const char *handle, char *out, size_t n, const char **why);
 /** The real path a handle was resolved to a moment ago (for the resume record); any task. False if it is not one of the last two. */
 bool library_service_real_path(const char *handle, char *out, size_t n);
 

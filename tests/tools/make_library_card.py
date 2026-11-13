@@ -137,6 +137,11 @@ def main():
     put(os.path.join(music, "Cinders/Ash/02 Ember.mp3"),
         mp3_with_tags(mp3, [("TITLE", "Ember"), ("ARTIST", "The Cinders"), ("ALBUM", "An Unreasonably Long Album Title That Will Not Fit Either"),
                             ("GENRE", "Rock"), ("TRACKNUMBER", "2")]))
+    # cover files for three albums (the Cover Flow shows pictures for them and placeholders for the rest); the picture assets are next to the audio ones
+    art = os.path.join(os.path.dirname(assets.rstrip("/")), "art")
+    for rel, jpg in (("Aurora Lane/First Light", "q420_600x600.jpg"), ("Aurora Lane/Second Wind", "q444_128x128.jpg"), ("Beacon/Signal", "q422_517x389.jpg")):
+        with open(os.path.join(art, jpg), "rb") as f:
+            put(os.path.join(music, rel, "cover.jpg"), f.read())
     # a compilation
     flac("Various/Now 7/01 Hit A.flac", f44, "Hit A", "Zed Zed", "Now 7", None, 1, comp=True)
     flac("Various/Now 7/02 Hit B.flac", f48, "Hit B", "Quartz", "Now 7", None, 2, comp=True)

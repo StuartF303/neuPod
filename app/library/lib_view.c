@@ -169,6 +169,12 @@ lib_err_t lvw_row(lib_reader_t *r, lvw_view_t v, const lvw_info_t *info, uint32_
         lvw_copy(out->text, sizeof out->text, row.text);
         lvw_copy(out->detail, sizeof out->detail, row.sub); // the album artist (empty for a compilation)
         out->child = (lvw_view_t){LVW_ALBUM, row.id};
+        if (lib_album(r, row.id, &al) == LIB_OK) { // where its songs are, and a year from the first one: best effort, the row is useful without them
+            out->first = al.first;
+            out->songs = al.count;
+            lib_track_t t;
+            if (al.count > 0 && lib_by_album_at(r, al.first, &id) == LIB_OK && lib_track(r, id, &t) == LIB_OK) out->year = t.year;
+        }
         return LIB_OK;
     case LVW_SONGS:
         e = lib_list_row(r, LIB_LIST_SONGS, i, &row);
