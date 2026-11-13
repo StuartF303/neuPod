@@ -472,12 +472,48 @@ static void pair_case(const char *a, const char *b) {
 }
 // (Tracks in these vectors are a fraction of a second; one handoff must play out before the next can be announced, so chains of
 // very short tracks are tested pair by pair. Real tracks are minutes long.)
+// Regression (fix/gapless-wav-flac-crash): a WAV start never set up the codec byte source (g_sio), so a successor that needs a
+// codec read through a NULL ring on the first handoff after boot. Here the source is blanked as it is on a freshly booted core 1
+// (no codec stream played yet), then each codec follows a WAV; the tests before this one would otherwise leave a valid g_sio behind.
+TEST(a_codec_track_after_a_wav_works_with_no_codec_stream_played_before) {
+    const char *succ[] = {P[0], P[1], P[2]}; // flac, mp3, alac
+    for (int i = 0; i < 3; i++) {
+        wait_idle();
+        memset(&g_sio, 0, sizeof g_sio); // as at boot
+        pair_case(P[5], succ[i]);
+    }
+}
 TEST(every_codec_hands_over_to_every_other_codec) {
     pair_case(P[5], P[0]); // wav -> flac
     pair_case(P[0], P[1]); // flac -> mp3
     pair_case(P[1], P[2]); // mp3 -> alac
     pair_case(P[2], P[5]); // alac -> wav
     pair_case(P[0], P[0]); // the same file twice
+    pair_case(P[1], P[0]); // mp3 -> flac
+    pair_case(P[0], P[2]); // flac -> alac
+    pair_case(P[0], P[5]); // flac -> wav
+    pair_case(P[2], P[0]); // alac -> flac
+    pair_case(P[5], P[1]); // wav -> mp3
+    pair_case(P[5], P[2]); // wav -> alac
+}
+TEST(a_wav_followed_by_a_track_at_another_rate_is_started_normally_not_handed_over) {
+    wait_idle();
+    memset(&g_sio, 0, sizeof g_sio); // as at boot
+    const char *l[] = {P[5], P[6]}; // 44.1k wav, then 48k flac
+    set_list(2, l);
+    ASSERT_TRUE(play_list(8000));
+    ASSERT_EQ(0, g_ev.handoffs);
+    ASSERT_EQ(2, g_ev.final_ends);
+    ASSERT_EQ(0, g_announced);
+    ASSERT_EQ(0, g_ev.cmd_errors);
+    ASSERT_EQ(0, g_failed);
+    ASSERT_EQ(48000, g_sink_rate);
+    wait_idle();
+    // back to 44.1k for the tests that follow
+    const char *l2[] = {P[0]};
+    set_list(1, l2);
+    ASSERT_TRUE(play_list(8000));
+    wait_idle();
 }
 TEST(trimmed_alac_joins_a_mono_flac_exactly_both_ways) {
     pair_case(P[3], P[4]); // flac 48k mono -> alac 48k mono, edit list (6000 of 9600 frames)
@@ -1114,9 +1150,11 @@ int main(void) {
     for (int i = 0; i < 500 && !g_stream_open; i++) usleep(1000);
     ASSERT_TRUE(g_stream_open);
 
+    RUN(a_codec_track_after_a_wav_works_with_no_codec_stream_played_before);
     RUN(same_format_tracks_are_concatenated_sample_exactly);
     RUN(track_change_event_fires_when_the_last_sample_has_played);
     RUN(every_codec_hands_over_to_every_other_codec);
+    RUN(a_wav_followed_by_a_track_at_another_rate_is_started_normally_not_handed_over);
     RUN(trimmed_alac_joins_a_mono_flac_exactly_both_ways);
     RUN(rate_change_falls_back_to_a_reclock);
     RUN(second_track_after_a_reclock_is_exact);

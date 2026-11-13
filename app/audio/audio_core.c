@@ -469,6 +469,14 @@ static void fail_stream(uint32_t err) {
     push_event_loop(AUDIO_EVT_CMD_ERROR, 100u + err);
 }
 
+// (Re)build the decoders' byte source for stream @p seq. Done for EVERY stream, WAV included: a WAV start followed by a gapless
+// handoff to a codec track opens that codec on this source, so it must never be left as it is at boot (all NULL).
+static void sio_setup(uint32_t seq) {
+    g_sio = (sio_t){.ring = &g_audio_data_ring, .eof = &g_never_eof, .end = &g_audio_slot[seq & 1u].end,
+                    .poll = poll_while_waiting, .idle = hal_audio_idle, .seek_req = &g_audio_seek_req, .seek_off = &g_audio_seek_off, .seek_ack = &g_audio_seek_ack,
+                    .seek_done = &g_audio_seek_done, .seek_seq = g_audio_seek_req};
+}
+
 static void start_stream(const audio_stream_desc_t *d, uint32_t seq) {
     const bool codec = d->codec != AUDIO_CODEC_PCM;
     if (!g_stream_open || !output_rate_ok(d->rate) || d->channels < 1 || d->channels > 2 ||
@@ -511,10 +519,8 @@ static void start_stream(const audio_stream_desc_t *d, uint32_t seq) {
     g_src = AUDIO_SRC_PCM;
     g_play = !(codec && d->verify);
     update_audible();
+    sio_setup(seq);
     if (codec) {
-        g_sio = (sio_t){.ring = &g_audio_data_ring, .eof = &g_never_eof, .end = &g_audio_slot[seq & 1u].end,
-                        .poll = poll_while_waiting, .idle = hal_audio_idle, .seek_req = &g_audio_seek_req, .seek_off = &g_audio_seek_off, .seek_ack = &g_audio_seek_ack,
-                        .seek_done = &g_audio_seek_done, .seek_seq = g_audio_seek_req};
         if (d->verify) {
             g_verify = AUDIO_VERIFY_RUNNING;
         }
@@ -815,9 +821,7 @@ static sw_t try_switch_next(void) {
     g_audio_decoded_frames = 0;
     g_decoder_done = false;
     g_next_pending = false;
-    g_sio.end = &g_audio_slot[id & 1u].end;
-    g_sio.pos = 0;
-    g_sio.aborted = false;
+    sio_setup(id);
     g_codec_pending = d.codec != AUDIO_CODEC_PCM;
     if (!g_codec_pending) {
         g_audio_open_seq = id;
