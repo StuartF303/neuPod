@@ -34,9 +34,11 @@ chmod 755 "$T/bin/wmt_loader" "$T/bin/6620_launcher" "$T/fakebin/mknod"
 cat >"$T/devices" <<EOF
 Character devices:
   1 mem
-190 stpwmt
-192 stpbt
-193 wmtWifi
+141 mtk_stp_usktrk
+153 mtk_wmt_WIFI_chrdev
+190 mtk_stp_wmt
+191 mtk_stp_GPS_chrdev
+192 mtk_stp_BT_chrdev
 
 Block devices:
   1 ramdisk
@@ -70,7 +72,7 @@ check "loader marker written" test -e "$T/run/wmt_loader.done"
 check "exit 255 is logged, not fatal" grep -q "wmt_loader exited 255" "$T/out.txt"
 check "stpwmt node from /proc/devices" grep -q "stpwmt c 190 0" "$T/mknod.log"
 check "stpbt node from /proc/devices" grep -q "stpbt c 192 0" "$T/mknod.log"
-check "wmtWifi node from /proc/devices" grep -q "wmtWifi c 193 0" "$T/mknod.log"
+check "wmtWifi node from /proc/devices" grep -q "wmtWifi c 153 0" "$T/mknod.log"
 check "nodes are 0660" test "$(mode_of "$T/dev/stpbt")" = 660
 check "launcher started once" test "$(count "$T/launcher.count")" = 1
 check "launcher pid file" test -s "$T/run/6620_launcher.pid"
