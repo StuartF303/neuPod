@@ -651,7 +651,7 @@ static void settings_update_pane(settings_t *s) {
     lv_obj_set_hidden(s->help, !help);
     if (help) {
         ui_label_set_text(s->help, p.help);
-        lv_obj_set_y(s->help, UIM->set_body_y + p.n * pitch + UIM->set_body_line_space);
+        lv_obj_set_pos(s->help, UIM->set_pane_pad, UIM->set_body_y + p.n * pitch + UIM->set_body_line_space);
     }
     if (same && s->flip && p.n > 0) { /* a value changed in place flips; moving to another group does not */
         value_flip(s->val[0]);
