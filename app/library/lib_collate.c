@@ -65,12 +65,19 @@ static size_t put(uint8_t *key, size_t cap, size_t n, uint8_t b) {
     return n + 1;
 }
 
+// Length of a leading article ("The ", "An ", "A ", any case) that the sort key skips; 0 when the name is only the article or has none.
+static size_t article_len(const char *s) {
+    char a = (char)(s[0] | 0x20), b = s[0] != '\0' ? (char)(s[1] | 0x20) : '\0';
+    if (a == 't' && b == 'h' && (s[2] | 0x20) == 'e' && s[3] == ' ' && s[4] != '\0') return 4;
+    if (a == 'a' && s[1] == ' ' && s[2] != '\0') return 2;
+    if (a == 'a' && b == 'n' && s[2] == ' ' && s[3] != '\0') return 3;
+    return 0;
+}
+
 size_t lib_collate_key(const char *name, const char *sort, uint8_t *key, size_t cap) {
     const char *src = (sort != NULL && sort[0] != '\0') ? sort : name;
     if (cap == 0) return 0;
-    if ((src[0] == 'T' || src[0] == 't') && (src[1] == 'H' || src[1] == 'h') && (src[2] == 'E' || src[2] == 'e') && src[3] == ' ' && src[4] != '\0') {
-        src += 4; // "The Beatles" sorts under B
-    }
+    src += article_len(src); // "The Beatles" sorts under B, "A Perfect Circle" under P
     size_t n = 0;
     const uint8_t *p = (const uint8_t *)src;
     while (*p != 0 && n < cap) {

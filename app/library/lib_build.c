@@ -414,6 +414,44 @@ static lib_err_t index_file(bctx_t *c, uint32_t dir_id, const char *leaf) {
     return e;
 }
 
+// A quick first pass over the directory entries only (no tags, no decoding): how many audio files the walk will meet, so the progress is a
+// fraction. Same filters as walk_dir. Returns LIB_E_CANCELLED when the progress callback says stop, an unreadable folder just counts as empty.
+static bool is_audio_name(const char *name) {
+    return has_ext(name, ".wav") || has_ext(name, ".flac") || has_ext(name, ".mp3") || has_ext(name, ".m4a") || has_ext(name, ".mp4");
+}
+
+static lib_err_t count_dir(bctx_t *c, unsigned depth, uint32_t *total) {
+    DIR d;
+    if (f_opendir(&d, c->path) != FR_OK) return LIB_OK;
+    size_t dirlen = strlen(c->path);
+    lib_err_t res = LIB_OK;
+    uint32_t seen = 0;
+    for (;;) {
+        if (f_readdir(&d, &c->fno) != FR_OK) break;
+        const char *name = c->fno.fname;
+        if (name[0] == '\0') break;
+        if ((c->fno.fattrib & (AM_HID | AM_SYS)) || name[0] == '.') continue;
+        size_t nl = strlen(name);
+        if (dirlen + 1 + nl >= sizeof c->path) continue;
+        if (c->fno.fattrib & AM_DIR) {
+            if (depth >= MAX_DEPTH) continue;
+            c->path[dirlen] = '/';
+            memcpy(c->path + dirlen + 1, name, nl + 1);
+            res = count_dir(c, depth + 1, total);
+            c->path[dirlen] = '\0';
+            if (res != LIB_OK) break;
+        } else if (is_audio_name(name)) {
+            (*total)++;
+        }
+        if ((++seen & 255u) == 0 && c->cfg->progress != NULL && !c->cfg->progress(c->cfg->user, 0)) { // a card of 100k files: Cancel must work here too
+            res = LIB_E_CANCELLED;
+            break;
+        }
+    }
+    f_closedir(&d);
+    return res;
+}
+
 static lib_err_t walk_dir(bctx_t *c, uint32_t dir_id, unsigned depth) {
     DIR d;
     if (f_opendir(&d, c->path) != FR_OK) return LIB_OK; // an unreadable folder is skipped, like a missing one
@@ -437,10 +475,11 @@ static lib_err_t walk_dir(bctx_t *c, uint32_t dir_id, unsigned depth) {
             if (res != LIB_OK) break;
             c->path[dirlen] = '/';
             memcpy(c->path + dirlen + 1, name, nl + 1);
+            if (c->cfg->where != NULL) c->cfg->where(c->cfg->user, c->path);
             res = walk_dir(c, id, depth + 1);
             c->path[dirlen] = '\0';
             if (res != LIB_OK) break;
-        } else if (has_ext(name, ".wav") || has_ext(name, ".flac") || has_ext(name, ".mp3") || has_ext(name, ".m4a") || has_ext(name, ".mp4")) {
+        } else if (is_audio_name(name)) {
             const char *leaf = strrchr(c->path, '/');
             leaf = leaf != NULL ? leaf + 1 : c->path;
             char leafbuf[POOL_STR];
@@ -496,7 +535,13 @@ static lib_err_t stage_walk(bctx_t *c) {
         FILINFO fi;
         snprintf(c->path, sizeof c->path, "%s", c->root);
         e = dir_add(c, LIB_NONE, c->root, &root_id);
-        if (e == LIB_OK && f_stat(c->path, &fi) == FR_OK && (fi.fattrib & AM_DIR)) e = walk_dir(c, root_id, 0); // no folder = an empty library
+        if (e == LIB_OK && f_stat(c->path, &fi) == FR_OK && (fi.fattrib & AM_DIR)) {
+            uint32_t total = 0;
+            e = count_dir(c, 0, &total);
+            if (e == LIB_OK && c->cfg->total != NULL) c->cfg->total(c->cfg->user, total);
+            snprintf(c->path, sizeof c->path, "%s", c->root); // the count pass leaves the path as it found it, but be explicit
+            if (e == LIB_OK) e = walk_dir(c, root_id, 0);
+        } // no folder = an empty library
         meta_set_scratch(NULL, 0);
         meta_set_tags_ext(NULL);
     }

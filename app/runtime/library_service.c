@@ -78,7 +78,10 @@ static lvw_view_t g_rows_view;
 static uint32_t g_rows_first, g_rows_n;
 
 /* build progress */
-static volatile uint32_t g_prog_files;
+static volatile uint32_t g_prog_files, g_prog_total; /* files read so far; audio files the first quick pass found (0 = not counted yet) */
+static volatile uint32_t g_prog_dir_ver;               /* odd while g_prog_dir is being written */
+static char g_prog_dir[LIBSVC_FOLDER_MAX];             /* the folder the scan is in (its last path component) */
+static volatile bool g_prog_bg;                        /* the screen was left with the build running: it carries on in the background */
 static volatile bool g_prog_active, g_cancel;
 static volatile uint32_t g_last[4]; /* tracks, artists, albums, genres of the last finished build */
 
@@ -144,6 +147,7 @@ bool library_request_build(uint32_t seq) {
 }
 
 void library_cancel_build(void) { g_cancel = true; }
+void library_build_background(bool on) { g_prog_bg = on; }
 
 bool library_poll(libsvc_kind_t k, uint32_t seq, libsvc_status_t *status) {
     if (__atomic_load_n(&g_done[k].seq, __ATOMIC_ACQUIRE) != seq) {
@@ -167,7 +171,17 @@ bool library_row(lvw_view_t v, uint32_t idx, lvw_row_t *out) {
 
 void library_progress(library_progress_t *out) {
     out->active = g_prog_active;
+    out->background = g_prog_bg;
     out->files = g_prog_files;
+    out->total = g_prog_total;
+    for (int tries = 0; tries < 3; tries++) { /* a torn copy of the folder name is retried; after that, the last try's text is fine */
+        uint32_t v = __atomic_load_n(&g_prog_dir_ver, __ATOMIC_ACQUIRE);
+        memcpy(out->folder, g_prog_dir, sizeof out->folder);
+        if ((v & 1u) == 0 && __atomic_load_n(&g_prog_dir_ver, __ATOMIC_ACQUIRE) == v) {
+            break;
+        }
+    }
+    out->folder[sizeof out->folder - 1] = '\0';
     out->tracks = g_last[0];
     out->artists = g_last[1];
     out->albums = g_last[2];
@@ -294,6 +308,20 @@ static libsvc_status_t do_rows(const libsvc_req_t *rq) {
 
 /* ---- building --------------------------------------------------------------------------------------------------------------------- */
 
+static void build_total(void *user, uint32_t total) {
+    (void)user;
+    g_prog_total = total;
+}
+
+static void build_where(void *user, const char *folder) {
+    (void)user;
+    const char *leaf = strrchr(folder, '/');
+    leaf = leaf != NULL ? leaf + 1 : folder;
+    __atomic_add_fetch(&g_prog_dir_ver, 1u, __ATOMIC_ACQ_REL);
+    snprintf(g_prog_dir, sizeof g_prog_dir, "%s", leaf);
+    __atomic_add_fetch(&g_prog_dir_ver, 1u, __ATOMIC_ACQ_REL);
+}
+
 static bool build_progress(void *user, uint32_t done) {
     (void)user;
     g_prog_files = done;
@@ -367,14 +395,17 @@ static libsvc_status_t do_build(void) {
     g_cur_view.kind = LVW_KINDS;
     size_t scratch_n = 0;
     void *scratch = codec_arena_borrow(&scratch_n);
-    lib_build_cfg_t cfg = {.progress = build_progress};
+    lib_build_cfg_t cfg = {.progress = build_progress, .total = build_total, .where = build_where};
     lib_build_stats_t st = {0};
     g_prog_files = 0;
+    g_prog_total = 0;
+    g_prog_dir[0] = '\0';
     g_prog_active = true;
     printf("library: build started\n");
     uint32_t t0 = os_tick_ms();
     lib_err_t e = lib_build(&cfg, scratch, scratch_n, &st);
     g_prog_active = false;
+    g_prog_bg = false;
     printf("library: build %s in %u ms: %u tracks (%u playable), %u artists, %u albums, %u genres, %u sort runs, %u KB scratch\n",
            e == LIB_OK ? "finished" : lib_err_str(e), (unsigned)(os_tick_ms() - t0), (unsigned)st.tracks, (unsigned)st.playable,
            (unsigned)st.artists, (unsigned)st.albums, (unsigned)st.genres, (unsigned)st.sort_runs, (unsigned)(st.scratch_peak / 1024u));

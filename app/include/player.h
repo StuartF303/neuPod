@@ -71,6 +71,9 @@ void player_init(void);
 
 /** Latest state (cheap; also folds in end-of-file and stream faults reported by the audio core). */
 void player_get(player_info_t *out);
+/** Tracks the queue skipped because they cannot be played (LB-5): a counter that moves on every skip, and the reason of the last one ("Can't play: unsupported
+ *  codec (AAC)"). The UI shows a toast when the counter moves. Any task. */
+uint32_t player_skip_notice(char *reason, size_t n);
 /** Real path of the file that plays now (a library queue entry is resolved: false until the storage task has done it) and, for a library queue, the
  *  entry's handle ("@lib/<order>/<pos>"). Both false when no queue file plays. */
 bool player_now_path(char *out, size_t n);

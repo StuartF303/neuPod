@@ -68,6 +68,8 @@ From `wiring-phase1.md` (3.3 V, DAT0-DAT3 must be consecutive GPIOs, CLK is DAT0
 
 ## Music library index
 
+Index format 3 (12 Nov 2026): sort keys skip a leading "A " / "An " as well as "The "; an older index is "needs rebuilding" and the Music lists rebuild it by themselves. No new files under `/.neupod` in this phase (playlists, play counts and Cover Flow are not built yet; see the backlog).
+
 The Music screens read an index of `/Music` that the firmware builds on the card itself ([ADR-0017](adr/0017-music-library-index.md); screens: [UI](ui.md#music-lists)).
 
 - **Where and how.** `/.neupod/lib/`: 13 immutable files plus a manifest (about 8 MB for 100,000 tracks, roughly 90 bytes a track), each written once per build, the manifest last. A build goes

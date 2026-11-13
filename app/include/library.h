@@ -87,6 +87,10 @@ typedef struct {
     uint32_t decoder_version; /**< 0 = LIB_DECODER_SET_VERSION */
     /** Called after every audio file: files done so far. Return false to cancel (the old library is untouched). May be NULL. */
     bool (*progress)(void *user, uint32_t files_done);
+    /** Called once, before the walk, with the number of audio files a quick directory pass found (the progress's denominator). May be NULL. */
+    void (*total)(void *user, uint32_t files_total);
+    /** Called when the walk enters a folder, with its full path (valid during the call only). May be NULL. */
+    void (*where)(void *user, const char *folder);
     void *user;
 #ifdef NEUPOD_LIB_TEST_HOOKS /* only in the test library (neupod_library_test): production code carries none of this */
     int test_stop_step; /**< stop with LIB_E_TEST_STOP after this step (1 = tables written, before the manifest; 2 = tmp complete;

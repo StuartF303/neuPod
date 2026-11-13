@@ -777,14 +777,18 @@ static bool p2_button(ui_screen_t *s, uint8_t btn) {
     case P2_PLAYLIST: ui_toast_show("Playlists in phase 4", UI_TOAST_INFO, 0); return true;
     case P2_ALBUM:
         if (p->ids_known && p->album_id != LIB_NONE) {
-            ui_frame_push(ui_screen_library_view_create(LVW_ALBUM, p->album_id, p->info.tags.album));
+            if (!ui_frame_push(ui_screen_library_view_create(LVW_ALBUM, p->album_id, p->info.tags.album))) {
+                ui_toast_show("Can't open: too many screens", UI_TOAST_WARN, 0); /* the stack is full (phase-2 review) */
+            }
         } else {
             ui_toast_show("Not in the library", UI_TOAST_WARN, 0);
         }
         return true;
     case P2_ARTIST:
         if (p->ids_known && p->artist_id != LIB_NONE) {
-            ui_frame_push(ui_screen_library_view_create(LVW_ARTIST, p->artist_id, p->info.tags.artist));
+            if (!ui_frame_push(ui_screen_library_view_create(LVW_ARTIST, p->artist_id, p->info.tags.artist))) {
+                ui_toast_show("Can't open: too many screens", UI_TOAST_WARN, 0);
+            }
         } else {
             ui_toast_show("Not in the library", UI_TOAST_WARN, 0);
         }

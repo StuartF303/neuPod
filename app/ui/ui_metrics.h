@@ -80,6 +80,8 @@ typedef struct {
     /* Home: list on the left, art / status pane on the right */
     int32_t home_list_w;
     int32_t home_art, home_art_off;
+    int32_t home_title_y, home_artist_y, home_bar_y, home_bar_h, home_time_y; /* playing: title, artist, 3 px progress bar, elapsed / remaining */
+    int32_t home_clock_y, home_date_y, home_count_y;                        /* idle: the 48 px clock, the date, "1,204 songs . 72 %" */
     const int32_t *home_line_y; /* 3 text line y positions */
 
     /* Two-line list rows (Songs and the song lists, docs/ui.md "Library lists"): title in Body, "Artist . Album" in Small underneath */
@@ -112,6 +114,9 @@ typedef struct {
     int32_t pill_h, pill_margin, pill_pad; /* the lock pill: height, distance from the bottom edge, text inset */
     int32_t hold_line_h;                   /* the Power-hold progress line under the status bar */
     int32_t hud_bar_h;
+
+    /* Full-pane states (ui_pane.c: library building / empty / error, the Update Library result) */
+    int32_t st_bar_w, st_bar_h, st_btn_h, st_btn_pad, st_gap, st_hint_inset;
 
     /* Input widgets (ui_input.c) */
     int32_t in_text_value_y, in_cell_y, in_cell_w, in_hint_y, in_text_hint_x, in_hint_x;

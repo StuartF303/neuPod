@@ -60,6 +60,8 @@ bool library_request_rows(lvw_view_t v, uint32_t first, uint32_t n, uint32_t seq
 bool library_request_build(uint32_t seq);
 /** Ask a running build to stop at its next file. Harmless when none runs. */
 void library_cancel_build(void);
+/** Let the build carry on with its screen gone ("run in background"; any other request for the card still ends it, as for a Play press). The UI clears it again when it has taken the answer. */
+void library_build_background(bool on);
 
 /** True when request @p seq of kind @p k has finished; @p status gets its outcome. */
 bool library_poll(libsvc_kind_t k, uint32_t seq, libsvc_status_t *status);
@@ -68,9 +70,13 @@ void library_info(lvw_info_t *out);
 /** Row @p idx of @p v if it is in the window (the window is filled for one list at a time: another list's rows never match). */
 bool library_row(lvw_view_t v, uint32_t idx, lvw_row_t *out);
 
+#define LIBSVC_FOLDER_MAX 40u
 typedef struct {
     bool active;           /**< a build is running */
+    bool background;       /**< ... and its screen was left (library_build_background): the status bar shows busy dots */
     uint32_t files;        /**< audio files read so far */
+    uint32_t total;        /**< audio files the quick first pass counted (0 until it has: the bar is then indeterminate) */
+    char folder[LIBSVC_FOLDER_MAX]; /**< the folder being scanned (its own name, not the path) */
     uint32_t tracks, artists, albums, genres; /**< the last finished build */
 } library_progress_t;
 void library_progress(library_progress_t *out);

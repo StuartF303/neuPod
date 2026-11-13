@@ -32,6 +32,8 @@ static uint32_t g_offer_entry = PLAY_QUEUE_NO_ENTRY;
 // An announcement is only accepted for the offer it answers: any restart of playback (reset_info) bumps g_gen, so the answer to
 // an offer made before a skip, stop or new start is ignored instead of marking a successor that no longer exists.
 static pq_snapshot_t g_snap; // the queue before the move being started (under the lock; g_gen rejects a stale rollback)
+static volatile uint32_t g_skip_seq; // LB-5: unplayable tracks the queue skipped (player_skip_notice)
+static char g_skip_msg[sizeof(((player_info_t *)0)->msg)];
 static uint16_t g_skips;     // consecutive unplayable tracks skipped under repeat-all (reset by any successful start); capped at the queue length
 static uint32_t g_gen;
 static uint32_t g_offer_gen;
@@ -406,12 +408,21 @@ static void service(action_t *a, bool have, const audio_stats_t *st) {
         // A track the queue moved on to cannot be played: skip it rather than stopping the album. Under repeat-all this wraps at the end,
         // but never more than one lap of unplayable tracks in a row (an all-broken queue ends in the error).
         printf("player: skipping '%s' (%s)\n", g_info.name, g_info.msg);
+        snprintf(g_skip_msg, sizeof g_skip_msg, "%s", g_info.msg);
+        g_skip_seq++;
         g_skips++;
         prepare_rollback(a);
         (void)pq_next(&g_q);
         begin_track(a, true, "skip");
         a->stop = true; // the failed track may still be feeding or have left the audio core half set up
     }
+}
+
+uint32_t player_skip_notice(char *reason, size_t n) {
+    if (reason != NULL && n > 0) {
+        snprintf(reason, n, "%s", g_skip_msg); /* a torn copy is only text; the counter says it is new */
+    }
+    return g_skip_seq;
 }
 
 void player_service(void) {

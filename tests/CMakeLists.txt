@@ -494,6 +494,38 @@ if(NEUPOD_UI_HIRES)
     TIMEOUT 90)
 endif()
 
+# An empty library (LB-4): the empty pane, its Update Library button and the "0 songs" result (tests/tools/make_empty_card.py).
+set(EMPTY_FS ${CMAKE_BINARY_DIR}/fsroot_library_empty)
+execute_process(COMMAND dd if=/dev/zero of=${CMAKE_BINARY_DIR}/disk_library_empty.img bs=1024 count=2048 status=none)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_library_empty)
+add_test(NAME library_empty_card COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_empty_card.py ${EMPTY_FS})
+set_tests_properties(library_empty_card PROPERTIES FIXTURES_SETUP library_empty_card)
+add_test(NAME library_empty_tour
+  COMMAND neupod --run-ms 30000 --splash-hold-ms 1500 --tour-library-empty --snapshots ${CMAKE_BINARY_DIR}/snapshots_library_empty)
+set_tests_properties(library_empty_tour PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${EMPTY_FS};NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_library_empty.img"
+  PASS_REGULAR_EXPRESSION "library: build finished in [0-9]+ ms: 0 tracks.*host: run finished, status 0"
+  FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  FIXTURES_REQUIRED library_empty_card
+  TIMEOUT 90)
+if(NEUPOD_UI_HIRES)
+  set(HEMPTY_FS ${CMAKE_BINARY_DIR}/fsroot_hires_library_empty)
+  execute_process(COMMAND dd if=/dev/zero of=${CMAKE_BINARY_DIR}/disk_hires_library_empty.img bs=1024 count=2048 status=none)
+  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_hires_library_empty)
+  add_test(NAME hires_library_empty_card COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_empty_card.py ${HEMPTY_FS})
+  set_tests_properties(hires_library_empty_card PROPERTIES FIXTURES_SETUP hires_library_empty_card)
+  add_test(NAME hires_library_empty_tour
+    COMMAND neupod --run-ms 30000 --splash-hold-ms 1500 --tour-library-empty --snapshots ${CMAKE_BINARY_DIR}/snapshots_hires_library_empty)
+  set_tests_properties(hires_library_empty_tour PROPERTIES
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_DISPLAY_SIZE=480x360;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${HEMPTY_FS};NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_hires_library_empty.img"
+    PASS_REGULAR_EXPRESSION "library: build finished in [0-9]+ ms: 0 tracks.*host: run finished, status 0"
+    FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    FIXTURES_REQUIRED hires_library_empty_card
+    TIMEOUT 90)
+endif()
+
 # Text beyond ASCII (UI-17): Files and Now Playing on a card with accented / U+00BF / CJK / emoji names and tags (tests/tools/make_text_card.py).
 # The snapshots are for the eye; the test checks the run finished and the layout audit passed on every snapshot (at both profiles).
 function(neupod_text_card NAME)
