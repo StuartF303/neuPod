@@ -395,12 +395,14 @@ void ui_task(void *arg) {
     caps_resolve(CAP_DISPLAY, true, NULL, "%s %ux%u", hal_display_name(), (unsigned)hal_display_width(),
                  (unsigned)hal_display_height());
     capabilities_t caps;
+    caps_get(&caps);
+    ui_splash_update(&caps);
     lv_refr_now(NULL);
     hal_display_backlight(255); // only now: no flash of garbage before the first frame
     uint32_t t0 = os_tick_ms();
     boot_start();
 
-    // --- Splash: the release splash (wordmark, progress line, version) for at least SPLASH_MIN_MS while the checks run. If a check came out not fully
+    // --- Splash: the release splash (wordmark, progress line, check icons, version) for at least SPLASH_MIN_MS while the checks run. If a check came out not fully
     // correct, or Menu is held, it becomes the debug splash (the list of failures) and is held ---
     const uint32_t hold_ms = rt_config()->splash_hold_ms != 0 ? rt_config()->splash_hold_ms : RT_SPLASH_HOLD_MS;
     const uint8_t mode = rt_config()->splash_mode;
@@ -409,12 +411,15 @@ void ui_task(void *arg) {
     uint32_t hold_t0 = 0;
     for (;;) {
         bool all = boot_poll();
+        caps_get(&caps);
+        ui_splash_update(&caps);
         (void)boot_input(&boot_in, false);
         uint32_t now = os_tick_ms();
         uint32_t elapsed = now - t0;
         if ((all && elapsed >= SPLASH_MIN_MS) || elapsed >= SPLASH_MAX_MS) {
             (void)boot_poll(); // anything still pending at the 5 s cap is marked degraded
             caps_get(&caps);
+            ui_splash_update(&caps);
             bool any_bad = false;
             for (int i = 0; i < CAP_COUNT; i++) {
                 any_bad = any_bad || caps.state[i] == CAP_DEGRADED;

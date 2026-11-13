@@ -136,9 +136,7 @@ typedef struct {
     /* Splash */
     int32_t sp_wordmark_y, sp_track_y, sp_track_w, sp_track_h, sp_shimmer_w;
     int32_t sp_icon, sp_icon_gap, sp_icon_row_y, sp_icon_radius;
-    int32_t sp_caption_gap, sp_caption_h, sp_hold_h, sp_ver_inset;
-    int32_t sp_ring, sp_ring_dot, sp_shape_border;
-    int32_t sp_hap_w, sp_hap_h, sp_hap_radius, sp_hap_near_w, sp_hap_near_h, sp_hap_far_h, sp_hap_near_dx, sp_hap_far_dx;
+    int32_t sp_caption_gap, sp_hold_h, sp_ver_inset;
     int32_t sp_cross_under_w, sp_cross_w;
     const lv_point_precise_t *sp_diag_a, *sp_diag_b; /* the cross of a degraded icon (2 points each) */
 } ui_metrics_t;

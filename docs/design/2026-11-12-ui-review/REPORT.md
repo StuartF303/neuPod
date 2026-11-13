@@ -224,6 +224,8 @@ On the product board the physical Hold switch drives the same pill without the p
 
 **Proposed:** keep the wordmark and the progress line; move the self-test row to a debug splash (shown only when a check fails or when Menu is held at boot) and show it as a short list ("Battery gauge — no response") rather than crossed-out icons. Release splash: wordmark, progress line, version in `ink3`, 600 ms minimum.
 
+> **Owner amendment, 2026-11-13:** after testing on the Y2 the owner asked for the icon row back ("the device check screen has lost the icons and replaced with text - I want the icons back, that loading screen was good"). The release splash is now wordmark, progress line, **icon row** (Lucide icons, pulse / solid / red cross), version; the text list stays on the debug splash only.
+
 ### 3.10 Status bar (global)
 
 Left slot by screen: Home = clock · Now Playing = "n of m" · lists = count · Files = path · Album = album/artist name · Cover Flow = "n of m". Centre: screen title. Right: Bluetooth glyph (`ink3` saved, `ink` connected, `accent` streaming), battery outline with fill (`green` while charging, `red` below 15 %) and the percentage as text only below 20 % or while charging. Three busy dots replace the left slot when the library is building in the background.

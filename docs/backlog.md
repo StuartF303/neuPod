@@ -70,7 +70,7 @@ From the owner-commissioned [design review](design/2026-11-12-ui-review/README.m
 | IN-2 | Number/slider/date-time polish | Input | S | 1 | IN-1 | 4 | built (phase 4c): Big value, bar and min / max for number and slider, field names under date / time, choice stays a plain list
 | FL-1 | Files: path in status bar, icons, paged "Load more" | Files | S | 1 | DS-3, DS-6 | 4 | built (phase 4c): Load more / Earlier entries paging (`storage_list_request_page`), `256+` on a folder row once it has been opened (folders are not counted in advance); icons and the path in the status slot were already there
 | HM-1 | Home panel: playing (art, title, artist, progress, times) and idle (48 px clock, date, "N songs . NN %"), Now Playing greyed when nothing is queued, library-not-built prompt, card line behind `NEUPOD_UI_DEBUG` | Home | M | 3 | DS-3 | 4 | built |
-| SP-1 | Release splash; self-test to debug splash | Splash | S | 1 | — | 4 | built (phase 4c): release splash (wordmark, progress line, version, 600 ms minimum); debug splash with the failed-check list when a check fails or Menu is held at start
+| SP-1 | Release splash; self-test to debug splash | Splash | S | 1 | — | 4 | built (phase 4c): release splash (wordmark, progress line, version, 600 ms minimum; the check **icon row was reinstated at the owner's request on 2026-11-13** as Lucide icons, after the first cut replaced it with text); debug splash with the failed-check list when a check fails or Menu is held at start
 
 ## UI — blocked on other work
 
