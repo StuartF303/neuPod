@@ -34,6 +34,7 @@ typedef struct {
     bool truncated;
     uint32_t page;                 /* which page of the folder is listed (0 = the first) */
     uint32_t page_stack[MAX_DEPTH]; /* the page of each parent listing, for the way back */
+    uint32_t plus_page;            /* the page of that listing */
     int plus_depth;                /* the listing (by depth) that holds a folder known to be longer than a page, -1 = none ... */
     int32_t plus_row;              /* ... and its row there: it shows "256+" */
     char msg[72];
@@ -78,12 +79,12 @@ static void files_get(void *ctx, int32_t idx, ui_list_item_t *out) {
     } else if (entry_at(f, idx) == NULL) { /* the row after the last entry */
         snprintf(out->label, sizeof out->label, "Load more");
     } else {
-        const file_entry_t *e = entry_at(f, idx);
+        const file_entry_t *e = entry_at(f, idx); /* not NULL: tested above */
         snprintf(out->label, sizeof out->label, "%s", e->name);
         out->icon = e->is_dir ? UI_ICON_FOLDER : UI_ICON_FILE;
         if (e->is_dir) {
             out->chevron = true;
-            if (f->plus_depth == f->depth && f->plus_row == idx) {
+            if (f->plus_depth == f->depth && f->plus_page == f->page && f->plus_row == idx) {
                 snprintf(out->detail, sizeof out->detail, "%u+", (unsigned)FILES_MAX_ENTRIES); /* opened before: it had more than a page, so 256 is a floor */
             }
         } else {
@@ -171,7 +172,8 @@ static void files_tick(ui_screen_t *s) {
             if (f->truncated || f->page > 0) {
                 f->plus_depth = f->depth - 1;
                 f->plus_row = f->sel_stack[f->depth - 1];
-            } else if (f->plus_depth == f->depth - 1 && f->plus_row == f->sel_stack[f->depth - 1]) {
+                f->plus_page = f->page_stack[f->depth - 1];
+            } else if (f->plus_depth == f->depth - 1 && f->plus_page == f->page_stack[f->depth - 1] && f->plus_row == f->sel_stack[f->depth - 1]) {
                 f->plus_depth = -1;
             }
         }
@@ -198,7 +200,7 @@ static bool files_button(ui_screen_t *s, uint8_t btn) {
     if (btn == HAL_BTN_SELECT && f->state == READY) {
         int32_t i = ui_list_selected(f->list);
         const file_entry_t *ent = entry_at(f, i);
-        if (ent == NULL && i >= 0 && f->count != 0) { /* "Earlier entries" / "Load more": another page of the same folder */
+        if (ent == NULL && i >= 0 && (f->count != 0 || (head_rows(f) != 0 && i == 0))) { /* "Earlier entries" / "Load more": another page of the same folder */
             if (head_rows(f) != 0 && i == 0) {
                 f->page--;
                 f->restore_sel = (f->page > 0 ? 1 : 0) + (int32_t)FILES_MAX_ENTRIES; /* the "Load more" row of that page */

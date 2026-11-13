@@ -426,6 +426,7 @@ void ui_task(void *arg) {
             if (!holding) {
                 holding = true;
                 hold_t0 = now; // the hold runs from the moment the checks are done (and the minimum has passed)
+                boot_in.n = 0; // the hold drops every key and release: a kept press whose release was dropped would reach Home as a press that never ends
                 ui_splash_show_debug(&caps);
             }
             if (now - hold_t0 >= hold_ms || boot_input(&boot_in, true)) {

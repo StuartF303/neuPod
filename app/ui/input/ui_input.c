@@ -97,7 +97,7 @@ static void set_chip_look(in_screen_t *s, int c, bool on) {
 
 static void draw_text(in_screen_t *s) {
     const wi_text_t *t = &s->m.text;
-    char line[2 * WI_TEXT_MAX + 4];
+    char line[3 * WI_TEXT_MAX + 4]; /* a password is one 3-byte bullet per character */
     field_text(s, line, sizeof line);
     ui_label_set_text(s->value, line);
     lv_obj_update_layout(s->value); /* its width, to put the caret after it and keep the end of a long text in view */

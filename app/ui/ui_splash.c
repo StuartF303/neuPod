@@ -139,7 +139,8 @@ void ui_splash_show_debug(const capabilities_t *caps) {
         }
         if (row >= room - 1 && bad > (unsigned)row + 1u) { // not room for all of them: say how many more
             snprintf(b, sizeof b, "+%u more", bad - (unsigned)row);
-            list_line(row++, top + row * pitch, b, UI_COL_ERR);
+            list_line(row, top + row * pitch, b, UI_COL_ERR);
+            row++;
             break;
         }
         snprintf(b, sizeof b, "%s \xE2\x80\x94 %s", k_check_name[i], caps->brief[i][0] != '\0' ? caps->brief[i] : "failed");
