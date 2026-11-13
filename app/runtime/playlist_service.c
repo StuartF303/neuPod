@@ -569,12 +569,7 @@ static pls_status_t open_plays(uint8_t kind) {
         }
         char sub[48];
         sub_with(sub, sizeof sub, best.artist, tail);
-        uint8_t state = classify(best.path);
-        if (state == PLS_ENT_OK) {
-            (void)add_entry(best.path, best.title[0] != '\0' ? best.title : "?", sub, state);
-        } else {
-            add_classified(best.path, best.title, "");
-        }
+        add_classified(best.path, best.title, sub); /* an untagged track has no title: the file name stands in */
         track_stream_pump();
     }
     return PLS_OK;

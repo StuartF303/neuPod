@@ -142,8 +142,8 @@
     "_ x x x snap:pl-otg 3*s _ x snap:pl-otg-greyed sel:down sleep:700 sel:up x x snap:pl-otg-removed 4*w _ x x x x snap:pl-np "         \
     "sleep:1800 wait:pause m x x snap:pl-otg-back m x x x snap:pl-catalog "                                                                          \
     "s _ x x x x x snap:pl-recent m s _ x x x snap:pl-most m s _ x x x snap:pl-top-empty m s _ x x x x x snap:pl-unplayed "              \
-    "m s _ x x x snap:pl-m3u-night 3*s _ x snap:pl-m3u-greyed m s _ x x x snap:pl-m3u-running "                                           \
-    "2*s _ x wait:pause x _ x 3*s x snap:pl-np-page2 _ x x snap:pl-np-added m m m m m s s s s s s _ x x x snap:pl-otg-after m m m"
+    "m s _ x x x snap:pl-m3u-night 3*s _ x snap:pl-m3u-greyed m s _ x x x strips:off x snap:pl-m3u-running "                                           \
+    "2*s _ x wait:pause x _ x 3*s x snap:pl-np-page2 _ x x snap:pl-np-added m m m 6*w _ x x x snap:pl-otg-after m m m"
 
 static unsigned g_expect = 18;
 static const char *g_snapshot_dir;
