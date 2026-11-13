@@ -22,6 +22,11 @@ option(NEUPOD_UI_HIRES "Compile the 480x360 UI profile and its fonts (hosted bui
 if(NEUPOD_UI_HIRES)
   add_compile_definitions(NEUPOD_UI_HIRES=1)
 endif()
+# Debug lines on screens (Home: the card summary "SDHC 32 GB"; the boot self-test list instead of the release splash's progress line): off in the product build.
+option(NEUPOD_UI_DEBUG "Debug lines on the UI (Home card summary, debug splash)" OFF)
+if(NEUPOD_UI_DEBUG)
+  add_compile_definitions(NEUPOD_UI_DEBUG=1)
+endif()
 # Album art (docs/ui.md "Album art"): 160 x 160 thumbnails and a 24-album cache (1.2 MB) need RAM the Pico 2 W does not have (ADR-0001 amendment:
 # frozen). ON for the hosted builds; an RP2350B board with PSRAM turns it on with -DNEUPOD_ART_HIRES=ON.
 option(NEUPOD_ART_HIRES "160x160 album-art thumbnails with a 24-album cache (hosted builds, RP2350B with PSRAM)" ${NEUPOD_UI_HIRES_DEFAULT})

@@ -80,6 +80,8 @@ typedef struct {
     /* Home: list on the left, art / status pane on the right */
     int32_t home_list_w;
     int32_t home_art, home_art_off;
+    int32_t home_title_y, home_artist_y, home_bar_y, home_bar_h, home_time_y; /* playing: title, artist, 3 px progress bar, elapsed / remaining */
+    int32_t home_clock_y, home_date_y, home_count_y;                        /* idle: the 48 px clock, the date, "1,204 songs . 72 %" */
     const int32_t *home_line_y; /* 3 text line y positions */
 
     /* Two-line list rows (Songs and the song lists, docs/ui.md "Library lists"): title in Body, "Artist . Album" in Small underneath */
