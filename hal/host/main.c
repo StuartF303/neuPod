@@ -246,12 +246,16 @@ int main(int argc, char **argv) {
             g_expect = 2 + 17; // the splash, home and the seventeen named snapshots
         } else if (strcmp(argv[i], "--script") == 0 && i + 1 < argc) {
             cfg.ui_script = argv[++i]; // ad-hoc key script, same tokens as the tour
+        } else if (strcmp(argv[i], "--splash-debug") == 0) {
+            cfg.splash_mode = 1; // the debug splash even when every check passed (as with Menu held at start)
+        } else if (strcmp(argv[i], "--splash-release") == 0) {
+            cfg.splash_mode = 2; // the release splash even where the host's checks fail (battery gauge, haptics)
         } else if (strcmp(argv[i], "--splash-hold-ms") == 0 && i + 1 < argc) {
             cfg.splash_hold_ms = (uint32_t)strtoul(argv[++i], NULL, 10);
         } else if (strcmp(argv[i], "--snapshots") == 0 && i + 1 < argc) {
             g_snapshot_dir = argv[++i];
         } else {
-            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek|--tour-library|--tour-library-ro|--tour-library-empty|--tour-playlists|--tour-text|--tour-hold|--tour-licences|--tour-design] [--script KEYS] [--snapshots DIR]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek|--tour-library|--tour-library-ro|--tour-library-empty|--tour-playlists|--tour-text|--tour-hold|--tour-licences|--tour-design] [--splash-debug|--splash-release] [--script KEYS] [--snapshots DIR]\n", argv[0]);
             return 64;
         }
     }
