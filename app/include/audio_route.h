@@ -3,8 +3,9 @@
  * @file audio_route.h
  * @brief Where the sound goes (core 0): the wired output or the Bluetooth headset, and what happens to playback when the headset goes away.
  *
- * ADR-0019 (owner decisions 2 and 3): the saved setting "Audio output" is Auto or Wired. Auto: Bluetooth as soon as a headset's audio stream is
- * open, otherwise wired. Wired: never Bluetooth. Once the output is Bluetooth it stays Bluetooth until the headset is deliberately let go
+ * ADR-0019 (owner decisions 2 and 3): the saved setting "Audio output" is Auto, Wired or (BT-3, design review 2026-11-12) Bluetooth. Auto: Bluetooth as soon as a headset's audio stream is
+ * open, otherwise wired. Wired: never Bluetooth. Bluetooth: the output is Bluetooth at once, headset or not (Play with none pauses with "Headset not connected"), and it stays Bluetooth through a Disconnect; the setting is the
+ * only thing that moves it. Once the output is Bluetooth it stays Bluetooth until the headset is deliberately let go
  * (Disconnect / Forget) or the setting says Wired: a headset that is switched off or walks out of range pauses the player (position kept, ring
  * emptied) and shows a banner, and nothing comes out of the wired output by itself. Changing the output needs a quiet audio core
  * (ADR-0013): playback is stopped (its place is kept, as for Stop), the audio stream is closed, the output is selected and the stream reopened.
@@ -22,7 +23,7 @@
 extern "C" {
 #endif
 
-typedef enum { AUDIO_ROUTE_AUTO = 0, AUDIO_ROUTE_WIRED } audio_route_pref_t;
+typedef enum { AUDIO_ROUTE_AUTO = 0, AUDIO_ROUTE_WIRED, AUDIO_ROUTE_BLUETOOTH } audio_route_pref_t;
 
 typedef enum {
     ROUTE_NOTICE_NONE = 0,

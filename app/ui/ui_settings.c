@@ -47,7 +47,7 @@ static void put(ui_list_item_t *o, const char *label, const char *fmt, ...) {
 
 /* ---- detail screens: a live read-only list -------------------------------------------------------- */
 
-typedef enum { INFO_ABOUT, INFO_STORAGE, INFO_BATTERY } info_kind_t;
+typedef enum { INFO_ABOUT, INFO_DIAG, INFO_STORAGE, INFO_BATTERY } info_kind_t;
 
 typedef struct {
     ui_screen_t base;
@@ -63,12 +63,15 @@ typedef struct {
     uint32_t last_ms;
 } info_t;
 
-#define ABOUT_FIXED 10
+#define ABOUT_ROWS 6 /* Licences, Diagnostics, Version, Build, Platform, Uptime */
+#define DIAG_FIXED 11 /* Heap free, Core 1 stack free, audio stats, Bluetooth link stats; the boot checks follow */
 
 static int32_t info_count(const info_t *in) {
     switch (in->kind) {
     case INFO_ABOUT:
-        return 1 + ABOUT_FIXED + CAP_COUNT; /* row 0 opens the Licences screen */
+        return ABOUT_ROWS; /* rows 0 and 1 open Licences and Diagnostics */
+    case INFO_DIAG:
+        return CAP_COUNT + DIAG_FIXED;
     case INFO_STORAGE:
         return 5;
     case INFO_BATTERY:
@@ -78,35 +81,23 @@ static int32_t info_count(const info_t *in) {
 }
 
 static void about_get(const info_t *in, int32_t i, ui_list_item_t *o) {
+    (void)in;
     char b[24];
-    if (i == 0) {
-        snprintf(o->label, sizeof o->label, "Licences");
-        o->chevron = true;
-        return;
-    }
-    i--; /* the rows below are the live read-outs */
     switch (i) {
-    case 0: put(o, "Version", "%s", NEUPOD_VERSION); break;
-    case 1: put(o, "Build", "%s", NEUPOD_GIT_HASH); break;
-    case 2: put(o, "Platform", "%s", hal_platform_name()); break;
-    case 3: fmt_uptime(b, sizeof b); put(o, "Uptime", "%s", b); break;
-    case 4: ui_format_size(os_heap_free(), b, sizeof b); put(o, "Heap free", "%s", b); break;
-    case 5: put(o, "Audio blocks", in->audio_ok ? "%u" : "-", (unsigned)in->audio.blocks); break;
-    case 6: put(o, "Underruns", in->audio_ok ? "%u" : "-", (unsigned)in->audio.underruns); break;
-    case 7: put(o, "Jitter max", in->audio_ok ? "%u us" : "-", (unsigned)in->audio.jitter_max_us); break;
-    case 8: put(o, "Core 1 stack free", "%u B", (unsigned)hal_core1_stack_free_min()); break;
-    case 9: {
-        hal_bt_stats_t bs;
-        hal_bt_stats(&bs);
-        if (hal_bt_stream_state() == HAL_BT_STREAM_CLOSED && bs.frames_encoded == 0) {
-            put(o, "BT audio", "-");
-        } else {
-            put(o, "BT audio", "%u fr, %u under, %u drift", (unsigned)bs.frames_encoded, (unsigned)bs.underruns, (unsigned)bs.drift_corrections);
-        }
-        break;
+    case 0: snprintf(o->label, sizeof o->label, "Licences"); o->chevron = true; break;
+    case 1: snprintf(o->label, sizeof o->label, "Diagnostics"); o->chevron = true; break;
+    case 2: put(o, "Version", "%s", NEUPOD_VERSION); break;
+    case 3: put(o, "Build", "%s", NEUPOD_GIT_HASH); break;
+    case 4: put(o, "Platform", "%s", hal_platform_name()); break;
+    default: fmt_uptime(b, sizeof b); put(o, "Uptime", "%s", b); break;
     }
-    default: {
-        cap_id_t c = (cap_id_t)(i - ABOUT_FIXED);
+}
+
+/* Diagnostics: the boot checks, then memory and audio counters, then the Bluetooth link (what moved here from the Settings pane) */
+static void diag_get(const info_t *in, int32_t i, ui_list_item_t *o) {
+    char b[24];
+    if (i < CAP_COUNT) {
+        cap_id_t c = (cap_id_t)i;
         if (in->caps.state[c] == CAP_OK) {
             put(o, cap_name(c), "ok");
         } else if (in->caps.state[c] == CAP_PENDING) {
@@ -115,7 +106,25 @@ static void about_get(const info_t *in, int32_t i, ui_list_item_t *o) {
             put(o, cap_name(c), "%s", in->caps.brief[c]);
             o->dim = true;
         }
+        return;
     }
+    hal_bt_codec_t codec;
+    hal_bt_stats_t bs;
+    hal_bt_stats(&bs);
+    hal_bt_stream_state_t ss = hal_bt_stream_state();
+    const bool have_codec = (ss == HAL_BT_STREAM_OPEN || ss == HAL_BT_STREAM_STREAMING || ss == HAL_BT_STREAM_SUSPENDED) && hal_bt_stream_codec(&codec);
+    switch (i - CAP_COUNT) {
+    case 0: ui_format_size(os_heap_free(), b, sizeof b); put(o, "Heap free", "%s", b); break;
+    case 1: put(o, "Core 1 stack free", "%u B", (unsigned)hal_core1_stack_free_min()); break;
+    case 2: put(o, "Audio blocks", in->audio_ok ? "%u" : "-", (unsigned)in->audio.blocks); break;
+    case 3: put(o, "Audio underruns", in->audio_ok ? "%u" : "-", (unsigned)in->audio.underruns); break;
+    case 4: put(o, "Jitter max", in->audio_ok ? "%u us" : "-", (unsigned)in->audio.jitter_max_us); break;
+    case 5: put(o, "BT codec", "%s", have_codec ? (codec.codec == HAL_BT_CODEC_SBC_XQ ? "SBC-XQ" : "SBC") : "-"); break;
+    case 6: put(o, "BT bitpool", have_codec ? "%u" : "-", (unsigned)codec.bitpool); break;
+    case 7: put(o, "BT bit rate", have_codec ? "%u kbit/s" : "-", (unsigned)codec.kbps); break;
+    case 8: put(o, "BT underruns", have_codec ? "%u" : "-", (unsigned)bs.underruns); break;
+    case 9: put(o, "BT frames", have_codec ? "%u" : "-", (unsigned)bs.frames_encoded); break;
+    default: put(o, "BT drift trims", have_codec ? "%u" : "-", (unsigned)bs.drift_corrections); break;
     }
 }
 
@@ -168,6 +177,7 @@ static void info_get(void *ctx, int32_t i, ui_list_item_t *o) {
     const info_t *in = ctx;
     switch (in->kind) {
     case INFO_ABOUT: about_get(in, i, o); break;
+    case INFO_DIAG: diag_get(in, i, o); break;
     case INFO_STORAGE: storage_get(in, i, o); break;
     case INFO_BATTERY: battery_get(in, i, o); break;
     }
@@ -200,7 +210,8 @@ static void info_tick(ui_screen_t *s) {
 
 static void info_scroll(ui_screen_t *s, int32_t steps) { ui_list_move(((info_t *)s)->list, steps); }
 
-/* About: Select on the first row opens Licences (the third-party components and their licences, kept in step with LICENSE.md) */
+/* About: Select on the first row opens Licences (the third-party components and their licences, kept in step with LICENSE.md), on the second Diagnostics */
+static ui_screen_t *info_create(const char *title, info_kind_t kind);
 static bool info_button(ui_screen_t *s, uint8_t btn) {
     info_t *in = (info_t *)s;
     if (btn != HAL_BTN_SELECT || in->kind != INFO_ABOUT) {
@@ -208,6 +219,8 @@ static bool info_button(ui_screen_t *s, uint8_t btn) {
     }
     if (ui_list_selected(in->list) == 0) {
         ui_frame_push(ui_screen_licences_create());
+    } else if (ui_list_selected(in->list) == 1) {
+        ui_frame_push(info_create("Diagnostics", INFO_DIAG));
     }
     return true;
 }
@@ -517,22 +530,10 @@ static void pane_text(int32_t g, char *out, size_t n) {
         break;
     case G_BLUETOOTH: {
         hal_bt_state_t bs = hal_bt_state();
-        uint8_t addr[6];
         if (bs == HAL_BT_ON || bs == HAL_BT_SCANNING) {
-            if (hal_bt_local_address(addr)) {
-                snprintf(a, sizeof a, "%02X:%02X:%02X:%02X:%02X:%02X", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
-            } else {
-                snprintf(a, sizeof a, "-");
-            }
-            char hs[80], cs[96];
-            ui_bt_headset_text(hs, sizeof hs);
-            ui_bt_stream_pane_text(cs, sizeof cs);
-            if (cs[0] != '\0') { /* with a stream open the codec lines (and the absolute-volume line) need the room: no address, no hint, no "On" */
-                snprintf(out, n, "%s%s\n%s", bs == HAL_BT_SCANNING ? "Scanning...\n" : "", hs, cs); /* "On" is not said: the headset line says more */
-            } else {
-                snprintf(out, n, "%s\n%s\n%s%sSelect to %s", bs == HAL_BT_SCANNING ? "Scanning..." : "On", a, hs, hs[0] != '\0' ? "\n" : "",
-                         hs[0] != '\0' ? "manage" : "scan");
-            }
+            char hs[80];
+            ui_bt_headset_text(hs, sizeof hs); /* "Name\nState", or "" when no headset is remembered */
+            snprintf(out, n, "%s%sSelect to %s", hs, hs[0] != '\0' ? "\n" : "No headset saved\n", hs[0] != '\0' ? "manage" : "pair one");
         } else if (bs == HAL_BT_STARTING) {
             snprintf(out, n, "Starting...");
         } else {

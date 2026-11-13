@@ -40,11 +40,17 @@ void audio_route_init(void) { hal_bt_set_pcm_source(bt_pcm_source()); }
 
 audio_route_pref_t audio_route_pref(void) {
     uint8_t v;
-    return settings_get_u8(SETTING_AUDIO_OUTPUT, &v) && v == 1 ? AUDIO_ROUTE_WIRED : AUDIO_ROUTE_AUTO; /* default Auto */
+    if (!settings_get_u8(SETTING_AUDIO_OUTPUT, &v)) {
+        return AUDIO_ROUTE_AUTO; /* default Auto */
+    }
+    return v == 1 ? AUDIO_ROUTE_WIRED : v == 2 ? AUDIO_ROUTE_BLUETOOTH : AUDIO_ROUTE_AUTO; /* 0 and anything unknown: Auto (a card written by a newer firmware) */
 }
 
 void audio_route_set_pref(audio_route_pref_t pref) {
-    settings_set_u8(SETTING_AUDIO_OUTPUT, pref == AUDIO_ROUTE_WIRED ? 1u : 0u);
+    if (pref == AUDIO_ROUTE_AUTO && audio_route_pref() == AUDIO_ROUTE_BLUETOOTH) {
+        audio_route_user_released(); /* Bluetooth -> Auto with no headset there: the user's own choice, so the output may return to wired (else it would sit on Bluetooth for ever) */
+    }
+    settings_set_u8(SETTING_AUDIO_OUTPUT, pref == AUDIO_ROUTE_WIRED ? 1u : pref == AUDIO_ROUTE_BLUETOOTH ? 2u : 0u);
     g_pref = pref; /* applied by the next service tick */
 }
 
@@ -78,7 +84,7 @@ static void apply_output(audio_output_t out) {
     bt_pcm_request_flush();
     g_out = out;
     player_set_output_path(out == AUDIO_OUT_BT ? OUT_PATH_BT : OUT_PATH_WIRED);
-    g_was_up = out == AUDIO_OUT_BT;
+    g_was_up = out == AUDIO_OUT_BT && stream_usable(); /* the Bluetooth setting can make Bluetooth the output with no headset: Play then says "not connected", not "dropped" */
     g_quiet_since = os_tick_ms();
     g_reopen_tries = 0;
     printf("route: output %s\n", out == AUDIO_OUT_BT ? "Bluetooth" : "wired");
@@ -94,7 +100,7 @@ void audio_route_service(void) {
     const bool up = stream_usable();
 
     if (g_out == AUDIO_OUT_WIRED) {
-        if (g_pref == AUDIO_ROUTE_AUTO && up) {
+        if (g_pref == AUDIO_ROUTE_BLUETOOTH || (g_pref == AUDIO_ROUTE_AUTO && up)) {
             apply_output(AUDIO_OUT_BT);
         }
         return;
@@ -104,7 +110,7 @@ void audio_route_service(void) {
     if (g_release_armed && (int32_t)(now - g_release_until) >= 0) {
         g_release_armed = false; /* the headset did not go away after all */
     }
-    if (g_pref == AUDIO_ROUTE_WIRED || (g_release_armed && !up && hal_bt_link_state() != HAL_BT_LINK_CONNECTED)) {
+    if (g_pref == AUDIO_ROUTE_WIRED || (g_pref != AUDIO_ROUTE_BLUETOOTH && g_release_armed && !up && hal_bt_link_state() != HAL_BT_LINK_CONNECTED)) {
         g_release_armed = false;
         apply_output(AUDIO_OUT_WIRED);
         return;

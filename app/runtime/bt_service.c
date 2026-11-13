@@ -123,6 +123,9 @@ void bt_service_forget(void) {
 
 static volatile uint32_t g_gave_up;
 uint32_t bt_service_gave_up_seq(void) { return g_gave_up; }
+static volatile uint32_t g_lost_seq, g_back_seq;
+uint32_t bt_service_lost_seq(void) { return g_lost_seq; }
+uint32_t bt_service_reconnected_seq(void) { return g_back_seq; }
 
 bool bt_service_reconnecting(void) { return bt_rc_active(&g_rc); }
 
@@ -134,6 +137,7 @@ static void reconnect_tick(void) {
          * fresh loss; re-arming would restart the 2 s step and the 5 minute give-up for ever. */
         if (!bt_rc_active(&g_rc) && bt_saved_get(NULL)) {
             bt_rc_lost(&g_rc, now);
+            g_lost_seq++; /* a headset that was connected went away (not a power-up attempt, not a failed attempt): the UI says so */
         }
     }
     if (!g_powerup_done && hal_bt_state() == HAL_BT_ON && settings_generation() != 0u) { /* the settings are loaded: the remembered headset is known */
@@ -148,6 +152,8 @@ static void reconnect_tick(void) {
     const bool make_call = bt_rc_step(&g_rc, now, &in);
     if (was_active && !bt_rc_active(&g_rc) && in.have_saved && in.link != HAL_BT_LINK_CONNECTED) {
         g_gave_up++; /* the schedule ended with the headset still away (a user action ends it through bt_rc_user_action, not here) */
+    } else if (was_active && !bt_rc_active(&g_rc) && in.have_saved) {
+        g_back_seq++; /* the schedule ended because the link is up again */
     }
     if (make_call) {
         if (do_connect() == HAL_OK) {

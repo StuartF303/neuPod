@@ -20,8 +20,11 @@
 #define GLYPH_N UI_METER_BARS
 /* Metrics: glyph_bar_w (4 px at 320x240), glyph_step (6), glyph_gap to the detail text, row_inset / chev_w (right insets). */
 static int32_t glyph_w(void) { return (GLYPH_N - 1) * UIM->glyph_step + UIM->glyph_bar_w; }
+#define MONO_N 3 /* the monochrome meter has three bars: its width is that of the first three */
+static int32_t mono_w(void) { return (MONO_N - 1) * UIM->glyph_step + UIM->glyph_bar_w; }
+static int32_t row_glyph_w(bool mono, bool busy) { return mono && !busy ? mono_w() : glyph_w(); }
 
-enum { GS_GREEN, GS_YELLOW, GS_RED, GS_OFF, GS_OFF_SEL, GS_DOT0, GS_DOT1, GS_DOT2, GS_DOT0_SEL, GS_DOT1_SEL, GS_DOT2_SEL, GS_N };
+enum { GS_GREEN, GS_YELLOW, GS_RED, GS_OFF, GS_OFF_SEL, GS_DOT0, GS_DOT1, GS_DOT2, GS_DOT0_SEL, GS_DOT1_SEL, GS_DOT2_SEL, GS_MONO, GS_MONO_SEL, GS_N };
 static lv_style_t g_gs[GS_N]; /* shared by every glyph rectangle: no per-object style memory */
 
 typedef struct {
@@ -29,6 +32,7 @@ typedef struct {
     lv_obj_t *g[GLYPH_N]; /* created the first time the row needs a glyph */
     const lv_style_t *gs[GLYPH_N];
     uint8_t bars;
+    bool mono; /* three monochrome bars (Bluetooth) instead of four traffic-light ones */
     bool busy;
     bool chevron;
     int32_t idx; /* bound item, -1 = unbound/hidden */
@@ -50,6 +54,7 @@ static void glyph_styles_apply(void) {
         [GS_DOT1] = {UI_C_INK2, LV_OPA_60, 2},          [GS_DOT2] = {UI_C_INK2, LV_OPA_COVER, 2},
         [GS_DOT0_SEL] = {UI_C_ON_ACCENT, LV_OPA_60, 2}, [GS_DOT1_SEL] = {UI_C_ON_ACCENT, LV_OPA_80, 2},
         [GS_DOT2_SEL] = {UI_C_ON_ACCENT, LV_OPA_COVER, 2},
+        [GS_MONO] = {UI_C_INK, LV_OPA_COVER, 0},        [GS_MONO_SEL] = {UI_C_ON_ACCENT, LV_OPA_COVER, 0},
     };
     for (int i = 0; i < GS_N; i++) {
         lv_style_set_bg_color(&g_gs[i], ui_color(d[i].col));
@@ -170,9 +175,17 @@ static void glyph_apply(ui_list_t *l, row_t *r, bool restyle_only) {
         }
         return;
     }
-    int32_t x0 = l->w - (r->chevron ? UIM->chev_w : UIM->row_inset) - glyph_w();
+    const bool mono = r->mono && !r->busy;
+    const int32_t n = mono ? MONO_N : GLYPH_N;
+    int32_t x0 = l->w - (r->chevron ? UIM->chev_w : UIM->row_inset) - row_glyph_w(mono, r->busy);
     bool on = r->sel && l->focus;
     for (int i = 0; i < GLYPH_N; i++) {
+        if (i >= n) { /* the monochrome meter has no fourth bar */
+            if (r->g[i] != NULL) {
+                lv_obj_set_hidden(r->g[i], true);
+            }
+            continue;
+        }
         if (r->g[i] == NULL) {
             r->g[i] = lv_obj_create(r->obj);
             lv_obj_remove_style_all(r->g[i]);
@@ -190,9 +203,10 @@ static void glyph_apply(ui_list_t *l, row_t *r, bool restyle_only) {
             y = l->row_h / 2 - h / 2;
         } else {
             int cls = ui_signal_class(r->bars);
-            h = UIM->meter_h[i];
+            h = UIM->meter_h[mono ? i + 1 : i]; /* the three bars are the taller three of the set, so they rise as the four do */
             y = l->row_h / 2 + UIM->meter_h[GLYPH_N - 1] / 2 - h;
-            gs = i < r->bars ? (cls == 3 ? GS_GREEN : cls == 2 ? GS_YELLOW : GS_RED) : (on ? GS_OFF_SEL : GS_OFF);
+            int lit = mono ? ui_signal_bars3(r->bars) : r->bars;
+            gs = i < lit ? (mono ? (on ? GS_MONO_SEL : GS_MONO) : cls == 3 ? GS_GREEN : cls == 2 ? GS_YELLOW : GS_RED) : (on ? GS_OFF_SEL : GS_OFF);
         }
         if (!restyle_only) { /* the busy timer only swaps styles: the geometry was set when the row was bound */
             lv_obj_set_size(r->g[i], UIM->glyph_bar_w, h);
@@ -257,7 +271,8 @@ static void bind_row(ui_list_t *l, row_t *r, int32_t idx) {
     r->chevron = it.chevron;
     r->busy = it.busy;
     r->bars = it.bars > 4 ? 4 : it.bars;
-    int32_t gw = (r->busy || r->bars != 0) ? glyph_w() + UIM->glyph_gap : 0;
+    r->mono = it.mono;
+    int32_t gw = (r->busy || r->bars != 0) ? row_glyph_w(r->mono, r->busy) + UIM->glyph_gap : 0;
     int32_t detail_w = it.detail[0] ? (int32_t)strlen(it.detail) * UIM->detail_char_w + UIM->detail_pad : 0; /* about 7.5 px per character at 14 pt */
     int32_t lx = UIM->pad + (has_icon ? UIM->icon_w : 0);
     int32_t label_w = l->w - lx - (it.chevron ? UIM->chev_w : UIM->row_inset) - gw - detail_w;
@@ -376,6 +391,7 @@ static void build(ui_list_t *l) {
         memset(r->g, 0, sizeof r->g);
         memset(r->gs, 0, sizeof r->gs);
         r->bars = 0;
+        r->mono = false;
         r->busy = false;
         r->obj = lv_obj_create(l->box);
 #ifdef NEUPOD_UI_HIRES
@@ -429,8 +445,8 @@ ui_list_t *ui_list_create(lv_obj_t *parent, int32_t w, const ui_list_model_t *mo
     l->model = *model;
     l->row_h = model->two_line ? UIM->row2_h : UI_ROW_H;
     l->top = model->top;
-    l->box_h = UI_CONTENT_H - model->top;
-    l->rows = model->top > 0 ? l->box_h / l->row_h : model->two_line ? UIM->rows2 : UI_ROWS_VISIBLE;
+    l->box_h = UI_CONTENT_H - model->top - model->bottom;
+    l->rows = model->top > 0 || model->bottom > 0 ? l->box_h / l->row_h : model->two_line ? UIM->rows2 : UI_ROWS_VISIBLE;
     if (l->rows < 1) {
         l->rows = 1;
     }

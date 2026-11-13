@@ -132,6 +132,18 @@ int ui_signal_bars(int32_t rssi, const ui_signal_thr_t *thr, int prev, int32_t h
 
 int ui_signal_class(int bars) { return bars >= 3 ? 3 : bars == 2 ? 2 : 1; }
 
+int ui_signal_bars3(int bars) { return bars <= 0 ? 0 : bars == 1 ? 1 : bars >= 4 ? 3 : 2; }
+
+const char *ui_bt_class_word(uint32_t cod) {
+    switch ((cod >> 8) & 0x1Fu) { /* major device class */
+    case 0x01: return "computer";
+    case 0x02: return "phone";
+    case 0x04: return "";
+    case 0x07: return "wearable";
+    default: return "other";
+    }
+}
+
 const char *ui_signal_word(int bars) { return bars <= 0 ? "-" : bars >= 4 ? "Excellent" : bars == 3 ? "Good" : bars == 2 ? "Fair" : "Weak"; }
 
 /* ---- Backlight auto-dim -------------------------------------------------------------------------- */

@@ -143,8 +143,6 @@ void ui_log_screen(const char *title, const char *what, const char *now_top);
 
 /** Bars (1..4) of the joined Wi-Fi network as the status bar shows them (hysteresis applied); 0 when not joined. */
 int ui_wifi_bars(void);
-/** Settings pane lines for an open Bluetooth audio stream ("SBC-XQ bitpool 76\n455 kbit/s\n0 underruns"); "" when there is none. */
-void ui_bt_stream_pane_text(char *out, size_t n);
 
 /* ---- List widget (ui_list.c) ---------------------------------------------------------------------- */
 
@@ -156,6 +154,7 @@ typedef struct {
     const char *icon; /* a Lucide glyph (ui_icons.h, a string constant) before the label; NULL = none */
     bool dim;        /* greyed, not meant to be opened */
     uint8_t bars;    /* signal meter at the right edge, 1..4 (ui_signal_bars; 0 = none) */
+    bool mono;       /* the meter is the monochrome three-bar one of the Bluetooth lists (ink and line, never traffic-light colours): bars 1..4 still, shown as 1..3 */
     bool busy;       /* pulsing dots at the right edge instead of the meter: the row's action is still running.
                         The model sets it for as long as the work lasts and clears it on completion; a row driven by
                         an action the screen started (a Networks join) also gives up after UI_BUSY_TIMEOUT_MS, while
@@ -168,6 +167,7 @@ typedef struct {
     void *ctx;
     void (*get)(void *ctx, int32_t idx, ui_list_item_t *out);
     int32_t top;   /* y of the list in its screen (an album's header sits above it; 0 = the whole content area) */
+    int32_t bottom; /* pixels kept free below the list (the Bluetooth scan strip); the window is a whole number of rows of what is left */
     bool two_line; /* rows are UIM->row2_h high with a second line (Songs and the song lists): 5 rows instead of 7 */
 } ui_list_model_t;
 

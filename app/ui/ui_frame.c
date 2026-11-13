@@ -643,20 +643,64 @@ static void update_bt(void) {
     g_bt_col = col;
 }
 
-// The audio route's notices ("Headset disconnected") are toasts now. Link loss keeps ADR-0019: playback pauses and stays on Bluetooth.
-static uint32_t g_gaveup_seen;
+// BT-2: the link's life as toasts (owner decision 2: playback pauses and stays on Bluetooth; the firmware never switches the output by itself).
+// "<name> disconnected . reconnecting..." when a connected headset goes away (warning), "<name> connected" for 1.2 s (info) when the automatic
+// reconnect succeeds, "Couldn't reconnect - paused" when its schedule runs out (warning). The name is the remembered headset's, cut so the one-row strip holds it.
+#define BT_NAME_CHARS 16u
+#define BT_BACK_TOAST_MS 1200u
+static uint32_t g_lost_seen, g_back_seen, g_gaveup_seen;
+
+static void bt_toast_name(char *out, size_t n) {
+    hal_bt_device_t d;
+    char raw[HAL_BT_NAME_MAX + 8];
+    raw[0] = '\0';
+    if (bt_saved_get(&d)) {
+        ui_text_display(raw, sizeof raw, d.name);
+    }
+    if (raw[0] == '\0') {
+        snprintf(out, n, "Headset");
+        return;
+    }
+    size_t i = 0, chars = 0;
+    while (raw[i] != '\0' && (chars < BT_NAME_CHARS || ((unsigned char)raw[i] & 0xC0u) == 0x80u)) { /* whole characters only */
+        chars += ((unsigned char)raw[i] & 0xC0u) != 0x80u;
+        i++;
+    }
+    const bool cut = raw[i] != '\0';
+    snprintf(out, n, "%.*s%s", (int)i, raw, cut ? "\xE2\x80\xA6" : "");
+}
+
 static void update_banner(void) {
-    uint32_t gu = bt_service_gave_up_seq(); // the reconnect schedule ran out (owner decision: playback stays paused, on Bluetooth)
-    if (gu != g_gaveup_seen) {
-        g_gaveup_seen = gu;
+    char nm[HAL_BT_NAME_MAX + 8], txt[HAL_BT_NAME_MAX + 48];
+    uint32_t v = bt_service_lost_seq();
+    if (v != g_lost_seen) {
+        g_lost_seen = v;
+        bt_toast_name(nm, sizeof nm);
+        snprintf(txt, sizeof txt, "%s disconnected \xC2\xB7 reconnecting\xE2\x80\xA6", nm);
+        ui_toast_show(txt, UI_TOAST_WARN, AUDIO_ROUTE_BANNER_MS);
+    }
+    v = bt_service_reconnected_seq();
+    if (v != g_back_seen) {
+        g_back_seen = v;
+        bt_toast_name(nm, sizeof nm);
+        snprintf(txt, sizeof txt, "%s connected", nm);
+        ui_toast_show(txt, UI_TOAST_INFO, BT_BACK_TOAST_MS);
+    }
+    v = bt_service_gave_up_seq(); // the reconnect schedule ran out (owner decision: playback stays paused, on Bluetooth)
+    if (v != g_gaveup_seen) {
+        g_gaveup_seen = v;
         ui_toast_show("Couldn't reconnect \xE2\x80\x94 paused", UI_TOAST_WARN, AUDIO_ROUTE_BANNER_MS);
     }
     uint32_t seq;
     audio_route_notice_t n = audio_route_notice(&seq);
     if (seq != g_notice_seen) {
         g_notice_seen = seq;
-        if (n != ROUTE_NOTICE_NONE) {
-            ui_toast_show(n == ROUTE_NOTICE_HEADSET_DROPPED ? "Headset disconnected" : "Headset not connected", UI_TOAST_WARN, AUDIO_ROUTE_BANNER_MS);
+        if (n == ROUTE_NOTICE_NOT_CONNECTED) {
+            ui_toast_show("Headset not connected", UI_TOAST_WARN, AUDIO_ROUTE_BANNER_MS);
+        } else if (n == ROUTE_NOTICE_HEADSET_DROPPED && !bt_service_reconnecting()) { /* with a reconnect running, the loss toast already said it */
+            bt_toast_name(nm, sizeof nm);
+            snprintf(txt, sizeof txt, "%s disconnected", nm);
+            ui_toast_show(txt, UI_TOAST_WARN, AUDIO_ROUTE_BANNER_MS);
         }
     }
 }
