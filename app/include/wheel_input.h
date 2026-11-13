@@ -7,10 +7,10 @@
  * widget is still running, was confirmed (WI_OK) or cancelled. The LVGL view (app/ui/input/ui_input.c) draws the state and
  * feeds the events. Key semantics are the same everywhere:
  *   scroll  = change the thing under the cursor (character, value, choice); steps arrive already accelerated
- *   Select  = choose / type / toggle / next field
- *   Menu    = back: backspace when there is something to delete, else cancel
+ *   Select  = choose / type / next field
+ *   Menu    = back: backspace when there is something to delete, else cancel (the view clears the text on a long press: wi_text_clear)
  *   Play    = confirm / done
- *   Left/Right = move the cursor, or the field
+ *   Left/Right = the mode chip of a text entry (abc / ABC / 123 / #!? / space / delete), the field of a date / time
  */
 #ifndef NEUPOD_WHEEL_INPUT_H
 #define NEUPOD_WHEEL_INPUT_H
@@ -31,7 +31,9 @@ typedef enum { WI_RUNNING = 0, WI_OK, WI_CANCELLED } wi_result_t;
 #define WI_TEXT_MAX 64u /* bytes of text, excluding the NUL */
 typedef enum { WI_CS_ANY, WI_CS_DIGITS, WI_CS_HEX } wi_charset_t;
 typedef enum { WI_PAGE_LOWER, WI_PAGE_UPPER, WI_PAGE_DIGITS, WI_PAGE_SYMBOLS, WI_PAGE_COUNT } wi_page_t;
-typedef enum { WI_KEY_CHAR, WI_KEY_PAGE, WI_KEY_SPACE, WI_KEY_SHOW, WI_KEY_DONE } wi_key_kind_t;
+/** The mode chips under the letter ring: four pages of characters (the wheel turns through the page), then two actions (Select types a space / deletes one). */
+typedef enum { WI_CHIP_LOWER, WI_CHIP_UPPER, WI_CHIP_DIGITS, WI_CHIP_SYMBOLS, WI_CHIP_SPACE, WI_CHIP_DELETE, WI_CHIP_COUNT } wi_chip_t;
+typedef enum { WI_KEY_CHAR, WI_KEY_SPACE, WI_KEY_DELETE } wi_key_kind_t;
 
 typedef struct {
     char text[WI_TEXT_MAX + 1];
@@ -40,12 +42,12 @@ typedef struct {
     uint32_t max_chars; /* code points, <= WI_TEXT_MAX */
     uint32_t max_bytes; /* byte limit (<= WI_TEXT_MAX); for fields that are limited in bytes, e.g. an SSID */
     wi_charset_t charset;
-    bool masked;        /* password: shown as dots unless show */
-    bool show;
+    bool masked;        /* password: shown as dots (the view shows the last typed one for a moment) */
+    bool typed;         /* the last event inserted a character: the view reveals it while it is new */
     bool search;        /* incremental: `changed` is raised after every edit */
     bool changed;       /* set by an edit; the view/caller clears it after reading */
-    wi_page_t page;
-    uint32_t sel;       /* index into the current key strip */
+    wi_chip_t chip;     /* the mode chip in use */
+    uint32_t sel;       /* index into the current key strip (the ring) */
 } wi_text_t;
 
 void wi_text_init(wi_text_t *t, const char *initial, uint32_t max_chars, wi_charset_t cs, bool masked, bool search);
@@ -55,7 +57,11 @@ wi_result_t wi_text_event(wi_text_t *t, wi_ev_t ev, int32_t steps);
 /** Type a code point directly (host keyboard shortcut / UART). False if rejected (charset, length). */
 bool wi_text_insert(wi_text_t *t, uint32_t cp);
 uint32_t wi_text_chars(const wi_text_t *t);
-/** The strip of the current page: number of keys and the key at @p i (character text for WI_KEY_CHAR, label otherwise). */
+/** Delete the whole text (a long press of Menu). Counts as an edit (changed). */
+void wi_text_clear(wi_text_t *t);
+/** The chips this entry offers, in order (the pages with a usable character, space only for free text, delete always); returns how many. */
+uint32_t wi_text_chips(const wi_text_t *t, wi_chip_t out[WI_CHIP_COUNT]);
+/** The ring of the current chip: number of keys and the key at @p i (character text for WI_KEY_CHAR, "space" / "del" for the action chips: one key each). */
 uint32_t wi_text_strip_len(const wi_text_t *t);
 wi_key_kind_t wi_text_strip_key(const wi_text_t *t, uint32_t i, char out[8]);
 

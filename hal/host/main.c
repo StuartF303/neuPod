@@ -30,8 +30,8 @@
 
 // Wheel input widgets (Extras > Input widgets): text, password with show, live search, number, slider, choice, multi choice, date/time.
 #define TOUR_INPUT                                                                                 \
-    "x s s s _ snap:extras-in s s _ snap:in-list s _ s _ s _ snap:in-text p snap:in-result "         \
-    "s _ _ s _ s s _ w w _ snap:in-password p s _ snap:in-search-empty _ snap:in-search m m "  \
+    "x s s s _ snap:extras-in s s _ snap:in-list s _ s _ s _ snap:in-text d d s _ snap:in-text-123 d d snap:in-text-space d snap:in-text-del menu:down sleep:700 menu:up x snap:in-text-cleared p snap:in-result "         \
+    "s _ _ s _ s s _ w w _ snap:in-password x x x x snap:in-password-dots p s _ snap:in-search-empty _ snap:in-search m m "  \
     "s _ s s s snap:in-number p s _ s s s s s snap:in-slider p s _ s snap:in-choice p "              \
     "s _ _ s s _ snap:in-multi p s _ s d s snap:in-datetime p snap:in-end"
 
@@ -195,7 +195,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--tour-input") == 0) {
             cfg.ui_script = TOUR_INPUT;
             cfgp_tour = true;
-            g_expect = 14;
+            g_expect = 19;
         } else if (strcmp(argv[i], "--tour-wifi") == 0) {
             cfg.ui_script = TOUR_WIFI;
             cfgp_tour = true;

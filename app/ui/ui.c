@@ -197,6 +197,12 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
         ui_frame_input(&ev, now);
         return end;
     }
+    if (strncmp(p, "menu:", 5) == 0) {
+        /* Tour only: Menu held (menu:down ... sleep:MS ... menu:up): the long press that clears a text entry. */
+        input_event_t ev = {.type = strncmp(p + 5, "down", 4) == 0 ? INPUT_BUTTON_DOWN : INPUT_BUTTON_UP, .button = HAL_BTN_MENU};
+        ui_frame_input(&ev, now);
+        return end;
+    }
     if (strncmp(p, "vol:", 4) == 0) {
         /* Tour only: the volume changes by N steps from outside the screen (a side key, like the Y2's): the HUD shows on screens that do not draw it. */
         (void)player_volume_step(atoi(p + 4));

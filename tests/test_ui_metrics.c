@@ -16,7 +16,6 @@
 #include "ui_theme.h"
 #include "unit.h"
 
-#define CELLS 5 /* ui_input.c: letters shown in the text picker */
 #define CAPS 8  /* capabilities.h CAP_COUNT: subsystem icons on the splash */
 
 void neupod_panic_assert(const char *file, int line) {
@@ -137,17 +136,21 @@ TEST(every_profile_fits_its_panel) {
         ASSERT_TRUE(m->set_list_w < m->w && m->w - m->set_list_w > 4 * m->set_pane_pad);
         ASSERT_TRUE(m->set_body_y + 4 * lh(m->font_body) <= m->content_h);
         // Input widgets
-        ASSERT_TRUE(m->in_cell_w * CELLS <= m->w);
-        ASSERT_TRUE(m->in_text_value_y + lh(m->font_large) <= m->in_cell_y);
-        ASSERT_TRUE(m->in_cell_y + lh(m->font_large) <= m->in_hint_y);
-        ASSERT_TRUE(m->in_hint_y + lh(m->font_body) <= m->content_h);
-        ASSERT_TRUE(m->in_num_value_y + lh(m->font_large) <= m->in_bar_y);
-        ASSERT_TRUE(m->in_bar_y + m->in_bar_h <= m->in_hint_y);
+        ASSERT_TRUE(m->in_cw0 + 2 * (m->in_cw1 + m->in_cw2 + m->in_cw3 + m->in_cw4) <= m->w - 2 * m->pad); // the nine cells fit
+        ASSERT_TRUE(m->in_cw0 > m->in_cw1 && m->in_cw1 > m->in_cw2 && m->in_cw2 > m->in_cw3 && m->in_cw3 > m->in_cw4);
+        ASSERT_TRUE(m->in_field_y + m->in_field_h <= m->in_ring_y);
+        ASSERT_TRUE(m->in_ring_y + lh(m->font_huge) <= m->in_chip_y);
+        ASSERT_TRUE(m->in_chip_y + m->in_chip_h <= m->in_hint_y);
+        ASSERT_TRUE(m->in_chip_h >= lh(m->font_small));
+        ASSERT_TRUE(m->in_hint_y + lh(m->font_small) <= m->content_h);
+        ASSERT_TRUE(m->in_num_value_y + lh(m->font_huge) <= m->in_bar_y);
+        ASSERT_TRUE(m->in_bar_y + m->in_bar_h <= m->in_bar_label_y);
+        ASSERT_TRUE(m->in_bar_label_y + lh(m->font_small) <= m->in_hint_y);
         ASSERT_TRUE(m->in_bar_x * 2 < m->w);
         ASSERT_TRUE(m->in_dt_x[4] + 2 * lh(m->font_large) <= m->w); // two digits are about one line height wide
-        ASSERT_TRUE(m->in_dt_y + lh(m->font_large) <= m->in_hint_y);
+        ASSERT_TRUE(m->in_dt_y + lh(m->font_large) <= m->in_dt_name_y);
+        ASSERT_TRUE(m->in_dt_name_y + lh(m->font_small) <= m->in_hint_y);
         ASSERT_TRUE(m->in_dt_x[3] + m->in_dt_time_shift >= 0); // time-only: the two time fields move left
-        ASSERT_TRUE(m->in_overlay <= m->content_h && m->in_overlay <= m->w);
         // Splash: icons, caption, version line and the hold bar stack up inside the panel, the icon row is not wider than it
         ASSERT_TRUE(CAPS * m->sp_icon + (CAPS - 1) * m->sp_icon_gap <= m->w);
         ASSERT_TRUE(m->sp_wordmark_y + lh(m->font_huge) <= m->sp_track_y);
