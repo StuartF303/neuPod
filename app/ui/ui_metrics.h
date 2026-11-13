@@ -113,6 +113,9 @@ typedef struct {
     int32_t hold_line_h;                   /* the Power-hold progress line under the status bar */
     int32_t hud_bar_h;
 
+    /* Full-pane states (ui_pane.c: library building / empty / error, the Update Library result) */
+    int32_t st_bar_w, st_bar_h, st_btn_h, st_btn_pad, st_gap, st_hint_inset;
+
     /* Input widgets (ui_input.c) */
     int32_t in_text_value_y, in_cell_y, in_cell_w, in_hint_y, in_text_hint_x, in_hint_x;
     int32_t in_num_value_y, in_bar_x, in_bar_y, in_bar_h;

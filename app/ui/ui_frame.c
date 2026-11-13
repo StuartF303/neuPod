@@ -114,11 +114,14 @@ static void sync_from_settings(void) {
 static lv_obj_t *g_content;
 static lv_obj_t *g_title;
 static lv_obj_t *g_left;     /* the left context slot (Small, ink2): clock, "n of m", a count, a path */
+static lv_obj_t *g_dots[3];  /* three busy dots that take the slot's place while the library builds in the background (LB-4) */
+static int g_dots_phase = -1; /* -1: not showing */
+static uint32_t g_dots_col[3];
 static lv_obj_t *g_right;    /* the right-hand group, a flex row: Wi-Fi, Bluetooth, lock, battery percentage, battery */
 static lv_obj_t *g_wifi, *g_bt, *g_lock, *g_pct;
 static lv_obj_t *g_batt, *g_batt_fill; /* the drawn battery: outline with a terminal, and the fill inside it */
 static lv_obj_t *g_frame_scr;          /* the screen the frame lives on (the strips are children of it) */
-static uint32_t g_notice_seen;
+static uint32_t g_notice_seen, g_skip_seen;
 static int g_bt_shown = -1;
 static uint32_t g_bt_col = UI_C_INK3;
 static hal_wifi_status g_wifi_shown = (hal_wifi_status)99;
@@ -180,6 +183,18 @@ void ui_frame_init(lv_obj_t *scr) {
     lv_obj_set_size(g_left, UIM->slot_w, lv_font_get_line_height(UIM->font_small)); /* one line: a long path ends in dots instead of wrapping */
     lv_label_set_long_mode(g_left, LV_LABEL_LONG_DOT);
     lv_obj_align(g_left, LV_ALIGN_LEFT_MID, UIM->bar_inset, 0);
+
+    for (int i = 0; i < 3; i++) { /* busy dots: one bright, the others dim, moving along (the same dots the list rows use) */
+        g_dots[i] = lv_obj_create(bar);
+        lv_obj_remove_style_all(g_dots[i]);
+        lv_obj_set_size(g_dots[i], UIM->glyph_bar_w, UIM->glyph_bar_w);
+        lv_obj_set_style_radius(g_dots[i], UIM->glyph_bar_w / 2, 0);
+        lv_obj_align(g_dots[i], LV_ALIGN_LEFT_MID, UIM->bar_inset + i * UIM->glyph_step * 2, 0);
+        g_dots_col[i] = UI_C_INK3;
+        ui_obj_bg(g_dots[i], g_dots_col[i], 0);
+        lv_obj_set_hidden(g_dots[i], true);
+    }
+    g_dots_phase = -1;
 
     // Right-hand group: hidden members take no room, so the rest closes up (flex row, right-aligned).
     g_right = lv_obj_create(bar);
@@ -314,9 +329,9 @@ void ui_frame_settle(void) {
     ui_strips_settle();
 }
 
-void ui_frame_push(ui_screen_t *s) {
+bool ui_frame_push(ui_screen_t *s) {
     if (s == NULL) {
-        return;
+        return false;
     }
     ui_screen_t *cur = ui_stack_top(&g_stack);
     if (!ui_stack_push(&g_stack, s)) {
@@ -325,7 +340,7 @@ void ui_frame_push(ui_screen_t *s) {
         }
         lv_obj_delete(s->root);
         lv_free(s);
-        return;
+        return false;
     }
     if (cur != NULL) {
         lv_obj_set_hidden(cur->root, true);
@@ -341,6 +356,7 @@ void ui_frame_push(ui_screen_t *s) {
         slide_in(s->root, 24, 120); /* the first screen (Home) just appears */
     }
     ui_log_screen(s->title, "push", NULL);
+    return true;
 }
 
 void ui_frame_pop(void) {
@@ -691,6 +707,14 @@ static void update_banner(void) {
         g_gaveup_seen = v;
         ui_toast_show("Couldn't reconnect \xE2\x80\x94 paused", UI_TOAST_WARN, AUDIO_ROUTE_BANNER_MS);
     }
+    char why[80];
+    v = player_skip_notice(why, sizeof why); // LB-5: the queue skipped a track it cannot play
+    if (v != g_skip_seen) {
+        g_skip_seen = v;
+        const char *r = strncmp(why, "Can't play: ", 12) == 0 ? why + 12 : why;
+        snprintf(txt, sizeof txt, "Skipped: %s", r);
+        ui_toast_show(txt, UI_TOAST_WARN, 0);
+    }
     uint32_t seq;
     audio_route_notice_t n = audio_route_notice(&seq);
     if (seq != g_notice_seen) {
@@ -769,6 +793,36 @@ static void kick_haptics(void) {
     }
 }
 
+// LB-4: while the library builds with its screen left, three busy dots replace the left slot on every screen.
+static void update_busy_dots(uint32_t now_ms) {
+    const bool on = ui_library_background() && !g_idle.off;
+    if (!on && g_dots_phase < 0) {
+        return;
+    }
+    if (!on) {
+        g_dots_phase = -1;
+        for (int i = 0; i < 3; i++) {
+            lv_obj_set_hidden(g_dots[i], true);
+        }
+        lv_obj_set_hidden(g_left, false);
+        return;
+    }
+    int phase = (int)((now_ms / 250u) % 3u);
+    if (phase == g_dots_phase) {
+        return;
+    }
+    if (g_dots_phase < 0) {
+        lv_obj_set_hidden(g_left, true);
+    }
+    g_dots_phase = phase;
+    for (int i = 0; i < 3; i++) {
+        uint32_t c = i == phase ? UI_C_INK : UI_C_INK3;
+        ui_obj_bg_swap(g_dots[i], g_dots_col[i], c, 0);
+        g_dots_col[i] = c;
+        lv_obj_set_hidden(g_dots[i], false);
+    }
+}
+
 void ui_frame_tick(uint32_t now_ms) {
     sync_from_settings();
     bool dim_changed = ui_idle_tick(&g_idle, now_ms, g_ui_state.autodim, g_idle_inhibit, ui_autodim_seconds(g_ui_state.dim_idx) * 1000u);
@@ -795,6 +849,7 @@ void ui_frame_tick(uint32_t now_ms) {
     update_bt();
     update_banner();
     update_volume_hud();
+    update_busy_dots(now_ms);
     update_battery();
     ui_strips_tick(now_ms);
     bt_service_tick(); /* the radio simulator on the host; stale pairing keys; cheap */

@@ -127,7 +127,9 @@ ui_screen_t *ui_screen_new(size_t size, const char *title);
 void ui_frame_suspend_top(void);
 /** Undo ui_frame_suspend_top() when the modal could not be built. */
 void ui_frame_resume_top(void);
-void ui_frame_push(ui_screen_t *s);
+/** Push @p s on the screen stack (it is then owned by the frame). False when it could not be: @p s was NULL (out of memory) or the stack is full (UI_STACK_MAX);
+ *  a full stack destroys @p s. A caller that has no other way to say so shows a toast. */
+bool ui_frame_push(ui_screen_t *s);
 void ui_frame_pop(void);
 /** Route one input event (wheel counts are accelerated here). */
 void ui_frame_input(const input_event_t *ev, uint32_t now_ms);
@@ -189,6 +191,24 @@ void ui_list_set_focus(ui_list_t *l, bool focus);
 void ui_list_suspend(ui_list_t *l);
 void ui_list_resume(ui_list_t *l);
 
+/* ---- Full-pane states (ui_pane.c) ------------------------------------------------------------------------------------------------ */
+
+/** A state that fills the content area instead of a list row (design review 3.3): a heading, up to two Small lines, an optional bar with a caption,
+ *  an optional accent button (what Select does) and a hint line at the bottom. Hidden parts take no room; the block is centred. */
+typedef struct ui_pane ui_pane_t;
+#define UI_PANE_BAR_NONE (-1)
+#define UI_PANE_BAR_SWEEP (-2) /* a segment travelling along the track: the total is not known yet */
+ui_pane_t *ui_pane_create(lv_obj_t *parent);
+void ui_pane_destroy(ui_pane_t *p);
+/** Texts are raw (file names): NULL or "" hides that part. */
+void ui_pane_set(ui_pane_t *p, const char *heading, const char *l1, const char *l2, const char *button, const char *hint);
+/** The bar: @p pct 0..100, UI_PANE_BAR_SWEEP, or UI_PANE_BAR_NONE (hidden); @p caption sits under it (NULL = none). */
+void ui_pane_set_bar(ui_pane_t *p, int32_t pct, const char *caption);
+/** Shows / hides every part (a list shows instead). */
+void ui_pane_show(ui_pane_t *p, bool on);
+/** Moves the sweeping segment (about 8 steps a second; cheap to call every pass). */
+void ui_pane_tick(ui_pane_t *p, uint32_t now_ms);
+
 /* ---- Screens (ui_screens.c, ui_files.c, ui_settings.c, ui_bluetooth.c) ------------------------------------------- */
 
 ui_screen_t *ui_screen_home_create(void);
@@ -209,6 +229,10 @@ ui_screen_t *ui_screen_wifi_create(void); /* ui_wifi.c */
 ui_screen_t *ui_screen_wifi_networks_create(void); /* ui_wifi.c: starts a scan when it opens */
 ui_screen_t *ui_screen_nettest_create(void); /* ui_nettest.c */
 ui_screen_t *ui_screen_inputdemo_create(void); /* input/ui_input_demo.c */
+
+/** True while the library builds with its screen left (Menu on the progress pane: "run in background"); also takes the answer and toasts the outcome. Polled every UI pass
+ *  by the frame, which shows three busy dots in the status bar's left slot while it is true (ui_library.c). */
+bool ui_library_background(void);
 
 /** Small helpers shared by the screens. */
 lv_obj_t *ui_artwork(lv_obj_t *parent, int32_t x, int32_t y, int32_t size);

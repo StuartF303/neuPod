@@ -14,7 +14,7 @@
 
 /* ---- on-card layout ----------------------------------------------------------------------------------------------- */
 
-#define LIB_VERSION 2u /* 2: by_genre.u32, genres.bin 20 B (first track position), manifest genre_tracks */
+#define LIB_VERSION 3u /* 3: sort keys skip "A " / "An " too (an older index sorts them under A: rebuilt on the next open); 2: by_genre.u32, genres.bin 20 B (first track position), manifest genre_tracks */
 #define LIB_HDR 16u /**< magic, version, count, crc32 (of the payload) */
 
 /** Files of the set. Order = manifest order; LF_MANIFEST is the 14th file and is not in the manifest's own table. */

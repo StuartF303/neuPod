@@ -137,6 +137,7 @@ set(NEUPOD_UI_SOURCES
   ${NEUPOD_APP_DIR}/ui/ui_nowplaying.c
   ${NEUPOD_APP_DIR}/ui/ui_art.c
   ${NEUPOD_APP_DIR}/ui/ui_rail.c
+  ${NEUPOD_APP_DIR}/ui/ui_pane.c
   ${NEUPOD_APP_DIR}/ui/ui_settings.c
   ${NEUPOD_APP_DIR}/ui/ui_bluetooth.c
   ${NEUPOD_APP_DIR}/ui/ui_licences.c

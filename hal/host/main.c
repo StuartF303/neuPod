@@ -88,10 +88,15 @@
     "m s _ x x x snap:lib-genres _ x x snap:lib-genre _ x x snap:lib-genre-songs "                                                     \
     "m m m s _ x x x snap:lib-comps _ x x snap:lib-comp-songs "                                                                          \
     "m m s s _ x x x snap:lib-update-building x x x x x x x x x x x x snap:lib-update-done m m "                                                             \
-    "5*s _ wait:pause snap:lib-shuffle m x x 5*w _ s _ x x 2*s _ x x snap:lib-longplay _ x x x x x x x x x x x x x x wait:pause snap:lib-nowplaying"
+    "_ 6*s _ x snap:lib-bg-building m x snap:lib-bg-dots x x x x x snap:lib-bg-done strips:off m m "                                                    \
+    "5*s _ wait:pause snap:lib-shuffle m x x 5*w _ s _ x x s _ x x snap:lib-longplay _ x x x x x x x x x x x x x x wait:pause snap:lib-nowplaying"
 
 // The same on a write-protected card (NEUPOD_DISK_READ_ONLY=1): the first open and Update Library both say "Library needs a writable card" and offer to try again.
 #define TOUR_LIBRARY_RO "x _ _ x x x x x snap:lib-needs-writable m 6*s _ x x x x snap:lib-update-needs-writable"
+
+// An empty library (LB-4): a card whose Music folder holds no audio. Artists builds the index at once, finds nothing and shows the empty pane; its button runs Update Library,
+// which finishes with "0 songs" (the Done pane); Select returns and the list looks again.
+#define TOUR_LIBRARY_EMPTY "x _ _ x x x x snap:lib-empty _ x x x snap:lib-empty-done _ x x snap:lib-empty-again m m"
 
 // Text beyond ASCII (UI-17): Extras > Files on a card whose names hold accents, the ripper's U+00BF, curly quotes, CJK and an emoji
 // (tests/tools/make_text_card.py), into the accented folder, then its FLAC (accented tags) on Now Playing. The track lasts 0.3 s: as in the art tour,
@@ -197,11 +202,15 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--tour-library") == 0) {
             cfg.ui_script = TOUR_LIBRARY;
             cfgp_tour = true;
-            g_expect = 24; // the splash, home and the twenty-two named snapshots
+            g_expect = 27; // the splash, home and the twenty-five named snapshots
         } else if (strcmp(argv[i], "--tour-library-ro") == 0) {
             cfg.ui_script = TOUR_LIBRARY_RO;
             cfgp_tour = true;
             g_expect = 4;
+        } else if (strcmp(argv[i], "--tour-library-empty") == 0) {
+            cfg.ui_script = TOUR_LIBRARY_EMPTY;
+            cfgp_tour = true;
+            g_expect = 5; // the splash, home and the three named snapshots
         } else if (strcmp(argv[i], "--tour-licences") == 0) {
             cfg.ui_script = TOUR_LICENCES;
             cfgp_tour = true;
@@ -225,7 +234,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--snapshots") == 0 && i + 1 < argc) {
             g_snapshot_dir = argv[++i];
         } else {
-            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek|--tour-library|--tour-library-ro|--tour-text|--tour-hold|--tour-licences|--tour-design] [--script KEYS] [--snapshots DIR]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek|--tour-library|--tour-library-ro|--tour-library-empty|--tour-text|--tour-hold|--tour-licences|--tour-design] [--script KEYS] [--snapshots DIR]\n", argv[0]);
             return 64;
         }
     }

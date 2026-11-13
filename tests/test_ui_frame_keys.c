@@ -23,6 +23,13 @@ int bt_volume_get(void) { return -1; }
 unsigned bt_vol_percent(uint8_t v) { return v; }
 uint32_t bt_service_gave_up_seq(void) { return 0; }
 uint32_t bt_service_lost_seq(void) { return 0; }
+uint32_t player_skip_notice(char *reason, size_t n) {
+    if (n > 0) {
+        reason[0] = '\0';
+    }
+    return 0;
+}
+bool ui_library_background(void) { return false; }
 bool bt_service_reconnecting(void) { return false; }
 uint32_t bt_service_reconnected_seq(void) { return 0; }
 void player_pause_toggle(void) { g_pause++; }
