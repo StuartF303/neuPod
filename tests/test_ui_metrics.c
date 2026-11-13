@@ -123,6 +123,14 @@ TEST(every_profile_fits_its_panel) {
         ASSERT_TRUE(m->lr_tile + m->lr_tile_y <= m->content_h && m->lr_tile + m->lr_tile_inset < m->w);
         ASSERT_TRUE(m->lr_rail_y + m->lr_rail_h <= m->content_h);
         ASSERT_TRUE(m->lr_rail_h >= 13 * lh(m->font_small)); // every second letter of 26 fits one under the other
+        // Cover Flow: sizes fall away from the centre, the visible tiles stay on the panel, the text lines fit below the tiles and above the hint
+        ASSERT_TRUE(m->cf_c > m->cf_n && m->cf_n > m->cf_o && m->cf_o > m->cf_e);
+        ASSERT_TRUE(m->cf_dx1 > 0 && m->cf_dx1 < m->cf_dx2 && m->cf_dx2 < m->cf_dx3);
+        ASSERT_TRUE(m->w / 2 + m->cf_dx2 + m->cf_o / 2 <= m->w); // the outer tile is whole
+        ASSERT_TRUE(m->cf_y + m->cf_c <= m->cf_title_y);
+        ASSERT_TRUE(m->cf_title_y + lh(m->font_body) <= m->cf_sub_y);
+        ASSERT_TRUE(m->cf_sub_y + lh(m->font_small) <= m->cf_hint_y);
+        ASSERT_TRUE(m->cf_hint_y + lh(m->font_small) <= m->content_h);
         // Test tone: its labels fit under the three list rows
         ASSERT_TRUE(3 * m->row_h + m->tt_y[3] + 2 * lh(m->font_body) <= m->content_h);
         // Settings: list + pane = the screen

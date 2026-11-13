@@ -37,6 +37,7 @@ void player_next(void) { g_next++; }
 void player_prev(void) { g_prev++; }
 
 // ---- fakes: everything else ui_frame.c links against ---------------------------------------------------------------------------
+void ui_flow_settle(void) {}
 uint32_t os_tick_ms(void) { return 1000; }
 bool battery_store_get(hal_battery_status_t *b) { (void)b; return false; }
 void bt_service_tick(void) {}

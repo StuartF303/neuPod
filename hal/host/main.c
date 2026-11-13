@@ -24,7 +24,7 @@
 // Keys: s/w scroll, _ = Enter (Select), m = Menu, x = nothing (lets simulated time pass). snap:NAME writes NAME.ppm.
 #define TOUR                                                                                       \
     "snap:home _ snap:music-menu _ snap:music-empty m m s s s _ snap:extras _ snap:files _ "        \
-    "snap:files-sub m s s _ snap:files-many 260*s snap:files-many-end m m m m s _ snap:settings "                \
+    "snap:files-sub m s s _ snap:files-many 260*s snap:files-many-end _ x x snap:files-page2 w _ x x snap:files-page1-end m x x snap:files-plus m m m s _ snap:settings "                \
     "s s s snap:settings-bt _ snap:bt-idle s _ snap:bt-scanning x x x x x x x x x snap:bt-found _ snap:bt-pair "     \
     "m m w w w _ snap:about m m s s _ snap:nowplaying m"
 
@@ -84,7 +84,7 @@
 #define TOUR_LIBRARY                                                                                                                      \
     "x _ snap:lib-music-menu _ x x x x snap:lib-building wait:lib x x snap:lib-artists "                                                 \
     "_ x x snap:lib-artist s _ x x snap:lib-album m m s _ x x s _ x x s snap:lib-album-greyed _ x snap:lib-cant-play "                  \
-    "m m m s _ x x x snap:lib-albums m s _ x x x snap:lib-songs vol:2 x snap:lib-volume-hud strips:off 8*s rail:hold x snap:lib-songs-fastscroll rail:release x x x snap:lib-songs-scrolled "                                        \
+    "m m m s _ x x x snap:lib-albums d x x x x snap:lib-coverflow s x x x snap:lib-coverflow-next 2*s x x x snap:lib-coverflow-far w w w w w w w x x x snap:lib-coverflow-start a x snap:lib-coverflow-back m s _ x x x snap:lib-songs vol:2 x snap:lib-volume-hud strips:off 8*s rail:hold x snap:lib-songs-fastscroll rail:release x x x snap:lib-songs-scrolled "                                        \
     "m s _ x x x snap:lib-genres _ x x snap:lib-genre _ x x snap:lib-genre-songs "                                                     \
     "m m m s _ x x x snap:lib-comps _ x x snap:lib-comp-songs "                                                                          \
     "m m s s _ x x x snap:lib-update-building x x x x x x x x x x x x snap:lib-update-done m m "                                                             \
@@ -145,7 +145,7 @@
     "m s _ x x x snap:pl-m3u-night 3*s _ x snap:pl-m3u-greyed m s _ x x x strips:off x snap:pl-m3u-running "                                           \
     "2*s _ x wait:pause x _ x 3*s x snap:pl-np-page2 _ x x snap:pl-np-added m m m 6*w _ x x x snap:pl-otg-after m m m"
 
-static unsigned g_expect = 18;
+static unsigned g_expect = 21;
 static const char *g_snapshot_dir;
 static unsigned g_snapshots;
 static bool cfgp_tour; // a tour was requested: expect all its snapshots
@@ -215,7 +215,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--tour-library") == 0) {
             cfg.ui_script = TOUR_LIBRARY;
             cfgp_tour = true;
-            g_expect = 27; // the splash, home and the twenty-five named snapshots
+            g_expect = 32; // the splash, home and the thirty named snapshots
         } else if (strcmp(argv[i], "--tour-library-ro") == 0) {
             cfg.ui_script = TOUR_LIBRARY_RO;
             cfgp_tour = true;

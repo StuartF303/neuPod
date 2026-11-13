@@ -105,6 +105,13 @@ TEST(top_level_lists) {
     ASSERT_EQ(0, strcmp(r.text, albums[0]));
     ASSERT_EQ(0, strcmp(r.detail, "Abba")); /* the album artist as the second text */
     ASSERT_EQ(LVW_ALBUM, r.child.kind);
+    { /* the Cover Flow's facts: the album's songs as a range of the by-album order, the first song's year */
+        lvw_info_t ai;
+        ASSERT_EQ(LIB_OK, lvw_info(&g_rd, r.child, &ai));
+        ASSERT_EQ(ai.range.first, r.first);
+        ASSERT_EQ(ai.range.count, r.songs);
+        ASSERT_TRUE(r.songs > 0);
+    }
     static const char *const genres[] = {"Pop", "Rock"};
     rows((lvw_view_t){LVW_GENRES, 0}, 2, genres);
     static const char *const comps[] = {"Now 1"};

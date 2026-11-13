@@ -20,18 +20,28 @@ typedef struct {
 } art_key_t;
 
 // ART_CACHE_N thumbnails (24 x 50 KB on the hosted builds, one 8 KB one on the Pico 2 W): the last albums decoded, least recently used replaced
-// first. The track playing shows one of them (the "view"); the album being browsed (the library's album header) another. The view's slot, the one
-// before it (the UI may still be drawing it for a frame) and the browse slot are never replaced while there is another to take.
+// first. The track playing shows one of them (the "view"); the albums being browsed (the library's album header, the Cover Flow tiles: up to
+// ART_BROWSE_N of them, asked for by library handle) show others. The view's slot, the one before it (the UI may still be drawing it for a frame)
+// and the slots of the browse handles (the ones wanted now and the ones wanted just before) are never replaced while there is another to take.
+#define BROWSE_HANDLE_MAX 24u
 typedef struct {
     art_key_t key;
     bool used;
     uint16_t w, h;
     uint32_t stamp;
+    uint32_t ver;                    // changes every time the slot is filled: the UI's "same picture as before" test
+    char handle[BROWSE_HANDLE_MAX]; // the library handle a browse request got this picture for ("" = it came from the track playing)
     uint16_t px[ART_PIXELS];
 } art_slot_t;
 static art_slot_t g_slot[ART_CACHE_N];
-static uint32_t g_clock;
-static int g_cur = -1, g_prev = -1, g_browse = -1;
+static uint32_t g_clock, g_ver;
+static int g_cur = -1, g_prev = -1;
+
+// The slots' key / handle / size change on the storage task while the UI reads them (art_browse_get_handle): the same odd-while-changing counter as
+// the track playing's view, and the reader retries.
+static volatile uint32_t g_hseq;
+static void meta_begin(void) { g_hseq++; }
+static void meta_end(void) { g_hseq++; }
 
 static volatile uint32_t g_seq; // odd while the state is being changed: the reader retries
 static volatile art_view_state_t g_state;
@@ -66,6 +76,58 @@ static bool key_eq(const art_key_t *a, const art_key_t *b) { // field by field: 
     return a->folder == b->folder && a->album == b->album && a->emb_len == b->emb_len && a->emb_kind == b->emb_kind;
 }
 
+#if ART_CACHE_N > 1u
+static struct { // what the UI wants of the browse pictures: written by the UI task, copied by the storage task (odd gen = being written)
+    volatile uint32_t gen;
+    char want[ART_BROWSE_N][BROWSE_HANDLE_MAX];
+    char prev[ART_BROWSE_N][BROWSE_HANDLE_MAX]; // the set before: still pinned (the UI may draw one of them for a frame yet)
+    unsigned n, np;
+    volatile bool pending;
+    volatile bool clear_failed;
+} g_ws;
+typedef struct {
+    char want[ART_BROWSE_N][BROWSE_HANDLE_MAX];
+    char prev[ART_BROWSE_N][BROWSE_HANDLE_MAX];
+    unsigned n, np;
+} wset_t;
+static wset_t g_pins; // the last whole copy: pinning falls back to it when the UI is in the middle of a change
+
+static bool wset_copy(wset_t *out, uint32_t *gen) {
+    uint32_t g = g_ws.gen;
+    if ((g & 1u) != 0) {
+        return false;
+    }
+    memcpy(out->want, g_ws.want, sizeof out->want);
+    memcpy(out->prev, g_ws.prev, sizeof out->prev);
+    out->n = g_ws.n;
+    out->np = g_ws.np;
+    if (g != g_ws.gen) {
+        return false;
+    }
+    *gen = g;
+    return true;
+}
+static bool wset_has(const wset_t *w, const char *h) {
+    for (unsigned i = 0; i < w->n; i++) {
+        if (strncmp(w->want[i], h, BROWSE_HANDLE_MAX) == 0) return true;
+    }
+    for (unsigned i = 0; i < w->np; i++) {
+        if (strncmp(w->prev[i], h, BROWSE_HANDLE_MAX) == 0) return true;
+    }
+    return false;
+}
+// Handles that have no picture (the album has none, or it cannot be read): not asked for again until the browse screen is left.
+#define FAILED_MAX 8u
+static char g_failed[FAILED_MAX][BROWSE_HANDLE_MAX];
+static unsigned g_failed_next;
+static bool failed_has(const char *h) {
+    for (unsigned i = 0; i < FAILED_MAX; i++) {
+        if (g_failed[i][0] != '\0' && strncmp(g_failed[i], h, BROWSE_HANDLE_MAX) == 0) return true;
+    }
+    return false;
+}
+#endif
+
 static int slot_find(const art_key_t *k) {
     for (unsigned i = 0; i < ART_CACHE_N; i++) {
         if (g_slot[i].used && key_eq(&g_slot[i].key, k)) {
@@ -82,7 +144,10 @@ static int slot_victim(void) {
         if (!g_slot[i].used) {
             return (int)i;
         }
-        bool pinned = ART_CACHE_N > 3u && ((int)i == g_cur || (int)i == g_prev || (int)i == g_browse);
+        bool pinned = ART_CACHE_N > 3u && ((int)i == g_cur || (int)i == g_prev);
+#if ART_CACHE_N > 1u
+        pinned = pinned || (g_slot[i].handle[0] != '\0' && wset_has(&g_pins, g_slot[i].handle));
+#endif
         if (!pinned && (best < 0 || (int32_t)(g_slot[i].stamp - g_slot[best].stamp) < 0)) {
             best = (int)i;
         }
@@ -91,6 +156,35 @@ static int slot_victim(void) {
 }
 
 static void slot_touch(int i) { g_slot[i].stamp = ++g_clock; }
+
+// A slot is about to be decoded into: nobody may find it (or its old picture) until it is published again.
+static int slot_claim(void) {
+#if ART_CACHE_N > 1u
+    uint32_t gen;
+    wset_t w;
+    if (wset_copy(&w, &gen)) { // pin what the UI shows now (and just showed), not what it showed a while ago
+        g_pins = w;
+    }
+#endif
+    int i = slot_victim();
+    meta_begin();
+    g_slot[i].used = false;
+    g_slot[i].handle[0] = '\0';
+    meta_end();
+    return i;
+}
+
+static void slot_publish(int i, const art_key_t *k, uint16_t w, uint16_t h, const char *handle) {
+    meta_begin();
+    g_slot[i].key = *k;
+    g_slot[i].w = w;
+    g_slot[i].h = h;
+    g_slot[i].ver = ++g_ver;
+    snprintf(g_slot[i].handle, sizeof g_slot[i].handle, "%s", handle);
+    g_slot[i].used = true;
+    meta_end();
+    slot_touch(i);
+}
 
 static void show_slot(int i) { // the track playing now has its thumbnail: publish it
     slot_touch(i);
@@ -103,57 +197,100 @@ static void show_slot(int i) { // the track playing now has its thumbnail: publi
     g_seq++;
 }
 
-// ---- the album being browsed (the album header of the library) -------------------------------------------------------------
+// ---- the albums being browsed (the library's album header, the Cover Flow tiles) ---------------------------------------------
 
-#define BROWSE_HANDLE_MAX 24u
-static struct {
-    char handle[BROWSE_HANDLE_MAX]; // library handle of the album's first song ("@lib/1/12"); "" = nothing wanted
-    volatile bool pending;
-    volatile art_view_state_t state;
-    volatile uint32_t gen;
-    uint16_t w, h;
-    art_key_t key;
-    bool failed_known;
-} g_b;
 static art_resolve_fn g_resolve;
 
 void art_service_set_resolver(art_resolve_fn fn) { g_resolve = fn; }
 
-void art_browse_want(const char *handle) {
 #if ART_CACHE_N > 1u
+static char g_header[BROWSE_HANDLE_MAX]; // the album header's handle (art_browse_want)
+
+void art_browse_want_set(const char *const *handles, unsigned n) {
+    if (n > ART_BROWSE_N) {
+        n = ART_BROWSE_N;
+    }
+    g_ws.gen++; // odd: the storage task does not copy it now
+    memcpy(g_ws.prev, g_ws.want, sizeof g_ws.prev);
+    g_ws.np = g_ws.n;
+    g_ws.n = 0;
+    for (unsigned i = 0; i < n; i++) {
+        if (handles[i] != NULL && handles[i][0] != '\0') {
+            snprintf(g_ws.want[g_ws.n++], BROWSE_HANDLE_MAX, "%s", handles[i]);
+        }
+    }
+    if (g_ws.n == 0) {
+        g_ws.np = 0; // nothing is shown any more: nothing stays pinned
+        g_ws.clear_failed = true;
+    }
+    g_ws.gen++;
+    g_ws.pending = true;
+}
+
+void art_browse_want(const char *handle) {
     if (handle == NULL || handle[0] == '\0') {
-        g_b.handle[0] = '\0';
-        g_b.pending = false;
-        g_b.state = ART_VIEW_NONE;
-        g_b.gen++;
-        g_browse = -1;
+        g_header[0] = '\0';
+        art_browse_want_set(NULL, 0);
         return;
     }
-    if (strncmp(g_b.handle, handle, sizeof g_b.handle) == 0 && g_b.state != ART_VIEW_NONE) {
-        return;
-    }
-    snprintf(g_b.handle, sizeof g_b.handle, "%s", handle);
-    g_b.state = ART_VIEW_LOADING;
-    g_b.pending = true;
-    g_b.gen++;
-#else
-    (void)handle; // no cache, no browse art
-#endif
+    snprintf(g_header, sizeof g_header, "%s", handle);
+    const char *h[1] = {g_header};
+    art_browse_want_set(h, 1);
+}
+
+void art_browse_get_handle(const char *handle, art_view_t *out) {
+    uint32_t s;
+    do {
+        while (((s = g_hseq) & 1u) != 0) {
+            os_yield();
+        }
+        out->state = ART_VIEW_NONE;
+        out->gen = 0;
+        out->w = out->h = 0;
+        out->px = NULL;
+        for (unsigned i = 0; i < ART_CACHE_N; i++) {
+            if (g_slot[i].used && g_slot[i].handle[0] != '\0' && strncmp(g_slot[i].handle, handle, BROWSE_HANDLE_MAX) == 0) {
+                out->state = ART_VIEW_READY;
+                out->gen = g_slot[i].ver;
+                out->w = g_slot[i].w;
+                out->h = g_slot[i].h;
+                out->px = g_slot[i].px;
+                break;
+            }
+        }
+        if (out->state == ART_VIEW_NONE) {
+            if (failed_has(handle)) {
+                out->state = ART_VIEW_FAILED;
+            } else {
+                for (unsigned i = 0; i < g_ws.n; i++) {
+                    if (strncmp(g_ws.want[i], handle, BROWSE_HANDLE_MAX) == 0) {
+                        out->state = ART_VIEW_LOADING;
+                    }
+                }
+            }
+        }
+    } while (s != g_hseq);
 }
 
 void art_browse_get(art_view_t *out) {
-    out->state = g_b.state;
-    out->gen = g_b.gen;
-    out->w = g_b.w;
-    out->h = g_b.h;
-    out->px = g_browse >= 0 ? g_slot[g_browse].px : NULL;
-    if (out->state != ART_VIEW_READY || g_browse < 0) {
-        out->px = NULL;
-        if (out->state == ART_VIEW_READY) {
-            out->state = ART_VIEW_LOADING;
-        }
+    if (g_header[0] == '\0') {
+        memset(out, 0, sizeof *out);
+        return;
     }
+    art_browse_get_handle(g_header, out);
 }
+#else
+void art_browse_want_set(const char *const *handles, unsigned n) {
+    (void)handles;
+    (void)n; // no cache, no browse art
+}
+void art_browse_want(const char *handle) { (void)handle; }
+void art_browse_get_handle(const char *handle, art_view_t *out) {
+    (void)handle;
+    memset(out, 0, sizeof *out);
+}
+void art_browse_get(art_view_t *out) { memset(out, 0, sizeof *out); }
+#endif
 
 // ---- what is wanted -------------------------------------------------------------------------------------------------
 
@@ -204,7 +341,11 @@ void art_service_track(const char *path, const audio_tags_t *tags) {
     set_state(ART_VIEW_LOADING, 0, 0);
 }
 
-bool art_service_pending(void) { return g_job.pending || g_b.pending; }
+#if ART_CACHE_N > 1u
+bool art_service_pending(void) { return g_job.pending || g_ws.pending; }
+#else
+bool art_service_pending(void) { return g_job.pending; }
+#endif
 
 // ---- finding and decoding -------------------------------------------------------------------------------------------
 
@@ -348,7 +489,7 @@ static void run_current(art_yield_fn caller_yield, void *caller_ctx) {
         g_job.wait_ack = false;
     }
     uint32_t t0 = os_tick_ms();
-    int dst = slot_victim();
+    int dst = slot_claim();
     art_info_t info = {0};
     const char *used;
     bool nocover;
@@ -365,10 +506,7 @@ static void run_current(art_yield_fn caller_yield, void *caller_ctx) {
     }
     g_job.pending = false;
     if (err == ART_OK) {
-        g_slot[dst].key = job_key;
-        g_slot[dst].used = true;
-        g_slot[dst].w = info.w;
-        g_slot[dst].h = info.h;
+        slot_publish(dst, &job_key, info.w, info.h, "");
         show_slot(dst);
         printf("art: %s %ux%u -> %ux%u (1/%u) %u ms\n", used, (unsigned)info.src_w, (unsigned)info.src_h, (unsigned)info.w, (unsigned)info.h,
                1u << info.scale, (unsigned)(os_tick_ms() - t0));
@@ -424,73 +562,101 @@ static bool read_art_ref(const char *path, art_ref_t *out, char *album, size_t a
     return ok;
 }
 
-static void run_browse(art_yield_fn caller_yield, void *caller_ctx) {
+// A browse request is stale once its handle is not wanted any more (the UI looked elsewhere): its decode stops. One that is still wanted carries
+// on whatever else changed, so a wheel that never rests does not starve the pictures of the tiles it passes.
+typedef struct {
+    art_yield_fn yield;
+    void *ctx;
     char handle[BROWSE_HANDLE_MAX];
-    uint32_t want_gen = g_b.gen; // read first: the UI writes the handle before it bumps the generation, so an unchanged one means a whole handle
-    snprintf(handle, sizeof handle, "%s", g_b.handle);
-    if (g_b.gen != want_gen) {
-        return; // retargeted while copying: the request stays pending and restarts
+} bguard_t;
+static bool bguard_yield(void *vctx) {
+    bguard_t *g = vctx;
+    if (!g->yield(g->ctx)) {
+        return false;
     }
-    guard_t guard = {.yield = caller_yield, .ctx = caller_ctx, .gen = want_gen, .live_gen = &g_b.gen};
+    uint32_t gen;
+    wset_t w;
+    return !wset_copy(&w, &gen) || wset_has(&w, g->handle); // a copy that failed (the UI is mid-change): carry on
+}
+
+static void run_browse(art_yield_fn caller_yield, void *caller_ctx) {
+    wset_t w;
+    uint32_t gen;
+    if (!wset_copy(&w, &gen)) {
+        return; // the UI is changing it: stays pending, the next run copies it
+    }
+    g_pins = w;
+    if (g_ws.clear_failed) {
+        g_ws.clear_failed = false;
+        memset(g_failed, 0, sizeof g_failed);
+    }
+    // The first wanted picture that is neither here nor known to be missing (the centre tile first, then its neighbours).
+    const char *handle = NULL;
+    for (unsigned i = 0; i < w.n && handle == NULL; i++) {
+        bool have = false;
+        for (unsigned k = 0; k < ART_CACHE_N && !have; k++) {
+            have = g_slot[k].used && strncmp(g_slot[k].handle, w.want[i], BROWSE_HANDLE_MAX) == 0;
+        }
+        if (!have && !failed_has(w.want[i])) {
+            handle = w.want[i];
+        }
+    }
+    if (handle == NULL) {
+        if (g_ws.gen == gen) {
+            g_ws.pending = false; // everything wanted is in the cache
+        }
+        return;
+    }
+    bguard_t guard = {.yield = caller_yield, .ctx = caller_ctx};
+    snprintf(guard.handle, sizeof guard.handle, "%s", handle);
     char path[NFS_PATH_MAX];
     const char *why = "";
-    if (handle[0] == '\0' || g_resolve == NULL || !g_resolve(handle, path, sizeof path, &why)) {
-        if (g_b.gen == want_gen) {
-            g_b.pending = false;
-            g_b.state = ART_VIEW_FAILED;
-        }
-        return;
-    }
+    bool ok = g_resolve != NULL && g_resolve(guard.handle, path, sizeof path, &why);
     art_ref_t emb;
     char album[64];
-    if (!read_art_ref(path, &emb, album, sizeof album)) {
-        memset(&emb, 0, sizeof emb);
-        album[0] = '\0';
-    }
-    // The same key the track playing makes (folder, album name, embedded picture): an album played earlier is a hit, and playing it later is too.
-    art_key_t k = {.folder = fnv(path, dir_len(path)), .album = fnv(album, strlen(album)), .emb_len = emb.length, .emb_kind = emb.kind};
-    int hit = slot_find(&k);
-    if (hit >= 0) {
-        g_browse = hit;
-        slot_touch(hit);
-        g_b.w = g_slot[hit].w;
-        g_b.h = g_slot[hit].h;
-        if (g_b.gen == want_gen) {
-            g_b.pending = false;
-            g_b.state = ART_VIEW_READY;
+    art_key_t k = {0};
+    if (ok) {
+        if (!read_art_ref(path, &emb, album, sizeof album)) {
+            memset(&emb, 0, sizeof emb);
+            album[0] = '\0';
         }
-        return;
+        // The same key the track playing makes (folder, album name, embedded picture): an album played earlier is a hit, and playing it later is too.
+        k = (art_key_t){.folder = fnv(path, dir_len(path)), .album = fnv(album, strlen(album)), .emb_len = emb.length, .emb_kind = emb.kind};
+        int hit = slot_find(&k);
+        if (hit >= 0 && g_slot[hit].handle[0] != '\0' && wset_has(&w, g_slot[hit].handle)) {
+            ok = false; // two wanted albums with one picture key (same folder and album name): the first keeps it, this one shows the placeholder
+            why = "same picture as another album";
+        } else if (hit >= 0) { // the same album under another handle (or the track playing's picture): tag it for this one too
+            meta_begin();
+            snprintf(g_slot[hit].handle, sizeof g_slot[hit].handle, "%s", guard.handle);
+            meta_end();
+            slot_touch(hit);
+            return;
+        }
     }
-    int dst = slot_victim();
     art_info_t info = {0};
-    const char *used;
-    bool nocover;
-    art_err_t emb_err;
-    size_t n;
+    const char *used = "";
+    bool nocover = false;
+    art_err_t emb_err = ART_OK, err = ART_E_FORMAT;
+    size_t n = 0;
+    int dst = -1;
     uint32_t t0 = os_tick_ms();
-    art_err_t err = find_and_decode(path, &emb, g_slot[dst].px, &info, guarded_yield, &guard, &used, &nocover, &emb_err, &n);
-    if (err == ART_E_ABORTED || g_b.gen != want_gen) {
-        g_slot[dst].used = false; // half a picture: not a hit for anyone
-        return;                   // wanted something else meanwhile (or the stream needs the task): a pending request restarts from scratch
+    if (ok) {
+        dst = slot_claim();
+        err = find_and_decode(path, &emb, g_slot[dst].px, &info, bguard_yield, &guard, &used, &nocover, &emb_err, &n);
+        if (err == ART_E_ABORTED) {
+            return; // not wanted any more (or the stream needs the task): the slot stays free, a pending request restarts from scratch
+        }
     }
-    g_b.pending = false;
-    if (err == ART_OK) {
-        g_slot[dst].key = k;
-        g_slot[dst].used = true;
-        g_slot[dst].w = info.w;
-        g_slot[dst].h = info.h;
-        slot_touch(dst);
-        g_browse = dst;
-        g_b.w = info.w;
-        g_b.h = info.h;
-        g_b.state = ART_VIEW_READY;
-        printf("art: album header %s %ux%u -> %ux%u %u ms\n", used, (unsigned)info.src_w, (unsigned)info.src_h, (unsigned)info.w, (unsigned)info.h,
+    if (ok && err == ART_OK) {
+        slot_publish(dst, &k, info.w, info.h, guard.handle);
+        printf("art: browse %s %ux%u -> %ux%u %u ms\n", used, (unsigned)info.src_w, (unsigned)info.src_h, (unsigned)info.w, (unsigned)info.h,
                (unsigned)(os_tick_ms() - t0));
     } else {
-        g_slot[dst].used = false;
-        g_browse = -1;
-        g_b.state = ART_VIEW_FAILED;
-        printf("art: album header none (%s) %u ms\n", art_err_str(err), (unsigned)(os_tick_ms() - t0));
+        meta_begin();
+        snprintf(g_failed[g_failed_next++ % FAILED_MAX], BROWSE_HANDLE_MAX, "%s", guard.handle);
+        meta_end();
+        printf("art: browse none (%s) %u ms\n", ok ? art_err_str(err) : why, (unsigned)(os_tick_ms() - t0));
     }
 }
 #endif
@@ -501,7 +667,7 @@ void art_service_run(art_yield_fn caller_yield, void *caller_ctx) {
         return;
     }
 #if ART_CACHE_N > 1u
-    if (g_b.pending) {
+    if (g_ws.pending) {
         run_browse(caller_yield, caller_ctx);
     }
 #endif

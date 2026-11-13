@@ -452,7 +452,7 @@ void library_service_handle(const void *blob, size_t n) {
 
 /* ---- queue handles ------------------------------------------------------------------------------------------------------------------ */
 
-bool library_service_resolve(const char *handle, char *out, size_t n, const char **why) {
+static bool resolve(const char *handle, char *out, size_t n, const char **why, bool for_play) {
     uint8_t order;
     uint32_t pos;
     uint8_t play = 0;
@@ -470,6 +470,9 @@ bool library_service_resolve(const char *handle, char *out, size_t n, const char
         *why = e == LIB_E_NONE || e == LIB_E_RANGE || e == LIB_E_FORMAT ? "Library changed: update it" : "Card read error";
         return false;
     }
+    if (!for_play) {
+        return true; // a picture is looked for in any file, playable or not; the path caches below belong to the tracks that play
+    }
     if (play != LIB_PLAY_OK) {
         *why = lib_cant_play_str(play);
         return false;
@@ -484,6 +487,9 @@ bool library_service_resolve(const char *handle, char *out, size_t n, const char
     }
     return true;
 }
+
+bool library_service_resolve(const char *handle, char *out, size_t n, const char **why) { return resolve(handle, out, n, why, true); }
+bool library_service_resolve_for_art(const char *handle, char *out, size_t n, const char **why) { return resolve(handle, out, n, why, false); }
 
 bool library_track_ids(const char *handle, uint32_t *album, uint32_t *artist) {
     bool found = false;

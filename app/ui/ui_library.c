@@ -9,6 +9,10 @@
  * building, a message (with a Try again button where that can help), done (Update Library). Every state but a list with rows is a full-pane layout
  * (ui_pane.c, design review 3.3 / LB-4): the empty list, the build with its progress bar (files counted first, so a fraction), the error. Menu on the
  * build pane runs it in the background: the screen goes, the status bar shows busy dots, and a toast says how it ended (ui_library_background()).
+ *
+ * The Albums list has a second view (LB-6, builds with the art cache): Right turns it into a Cover Flow of flat album tiles (ui_coverflow.c), Left or Right
+ * turns it back. The list keeps the selection while the flow shows (its rows are freed, its position is not), so Select, the row fills and "the same focus on
+ * the way back" all work on the list's selection; the wheel moves it one album per detent.
  */
 #include <stdio.h>
 #include <string.h>
@@ -60,6 +64,10 @@ typedef struct {
     lv_obj_t *hd_title, *hd_l2, *hd_l3, *hd_rule;
     bool hd_filled;           /* the header text has been filled from the index */
     char hd_handle[24];       /* library handle of the album's first song: what its art is asked for by */
+#ifdef NEUPOD_ART_HIRES
+    ui_flow_t *flow;          /* the Albums list's Cover Flow view (NULL on every other list) */
+    bool flow_on;
+#endif
 } lib_screen_t;
 
 static uint32_t g_seq;
@@ -231,6 +239,90 @@ static void header_art_tick(lib_screen_t *s) {
     }
 }
 
+static void set_count_left(lib_screen_t *s);
+
+#ifdef NEUPOD_ART_HIRES
+/* ---- Cover Flow (LB-6) ----------------------------------------------------------------------------------------------------- */
+
+/* The art handle of album @p idx (the Cover Flow asks): its first song in the by-album order. A row that is not in the window yet is a miss: the next fill covers it. */
+static bool flow_get(void *ctx, int32_t idx, char *handle, size_t n) {
+    lib_screen_t *s = ctx;
+    lvw_row_t r;
+    if (!library_row(s->view, (uint32_t)idx, &r)) {
+        if (s->miss_idx < 0) {
+            s->miss_idx = idx;
+        }
+        return false;
+    }
+    return r.songs > 0 && pq_format_handle(handle, n, LIB_ORDER_ALBUM, r.first);
+}
+
+static bool flow_able(const lib_screen_t *s) { return s->flow != NULL && s->st == S_READY && s->info.count > 0; }
+
+/* The centre album's title and "Artist . 2019 . 3 songs", and "7 of 31" in the status bar. */
+static void flow_texts(lib_screen_t *s) {
+    int32_t idx = ui_list_selected(s->list);
+    char c[40], b[LVW_TEXT_MAX * 2 + 40];
+    lvw_row_t r;
+    char of[16], total[16];
+    fmt_count(of, sizeof of, (uint32_t)idx + 1u);
+    fmt_count(total, sizeof total, s->info.count);
+    snprintf(c, sizeof c, "%s of %s", of, total);
+    ui_screen_set_left(&s->base, c);
+    if (!library_row(s->view, (uint32_t)idx, &r)) {
+        if (s->miss_idx < 0) {
+            s->miss_idx = idx;
+        }
+        ui_flow_set_text(s->flow, "", "");
+        return;
+    }
+    size_t o = 0;
+    b[0] = '\0';
+    if (r.detail[0] != '\0') {
+        o += (size_t)snprintf(b + o, sizeof b - o, "%s", r.detail);
+    }
+    if (r.year != 0) {
+        o += (size_t)snprintf(b + o, sizeof b - o, "%s%u", o != 0 ? " \xC2\xB7 " : "", (unsigned)r.year);
+    }
+    if (r.songs != 0) {
+        snprintf(b + o, sizeof b - o, "%s%u %s", o != 0 ? " \xC2\xB7 " : "", (unsigned)r.songs, r.songs == 1 ? "song" : "songs");
+    }
+    ui_flow_set_text(s->flow, r.text, b);
+}
+
+/* The selection moved (or the rows arrived): the tiles, the texts and the count follow. */
+static void flow_update(lib_screen_t *s) {
+    ui_flow_move(s->flow, ui_list_selected(s->list), (int32_t)s->info.count);
+    flow_texts(s);
+}
+
+static void flow_toggle(lib_screen_t *s, bool on) {
+    if (on == s->flow_on) {
+        return;
+    }
+    s->flow_on = on;
+    if (on) {
+        ui_list_suspend(s->list); /* its rows are not needed while the tiles show: the pool is freed, the selection stays */
+        ui_flow_show(s->flow, true);
+        flow_update(s);
+    } else {
+        ui_flow_show(s->flow, false);
+        ui_list_resume(s->list);
+        set_count_left(s);
+    }
+}
+
+static void flow_play(lib_screen_t *s) { /* Play: the whole album, from its first song */
+    lvw_row_t r;
+    if (!library_row(s->view, (uint32_t)ui_list_selected(s->list), &r) || r.songs == 0) {
+        return;
+    }
+    pq_range_t range = {.order = LIB_ORDER_ALBUM, .first = r.first, .count = r.songs};
+    player_play_library(&range, 0, false);
+    ui_frame_push(ui_screen_nowplaying_create());
+}
+#endif
+
 /* "552 of 1,204 songs . Aurora Lane" (the count is known), "552 songs found . Aurora Lane" (the first pass has not finished or found none) */
 static void build_caption(const library_progress_t *p, char *out, size_t n) {
     char a[16], b[16];
@@ -294,10 +386,8 @@ static void pane_update(lib_screen_t *s) {
     }
 }
 
-// The list and the status bar's left slot (design review 3.10: lists show their count) move together; the pane follows the state.
-static void set_count(lib_screen_t *s) {
-    ui_list_set_count(s->list, item_count(s));
-    pane_update(s);
+// The status bar's left slot (design review 3.10: lists show their count; an album its name; the Cover Flow "n of m").
+static void set_count_left(lib_screen_t *s) {
     if (s->st == S_READY && s->mode == M_LIST && s->info.count > 0) { /* an empty list shows no count */
         char c[16];
         fmt_count(c, sizeof c, s->info.count);
@@ -306,6 +396,22 @@ static void set_count(lib_screen_t *s) {
     } else {
         ui_screen_set_left(&s->base, "");
     }
+}
+
+// The list and the status bar's left slot move together; the pane follows the state.
+static void set_count(lib_screen_t *s) {
+    ui_list_set_count(s->list, item_count(s));
+    pane_update(s);
+    set_count_left(s);
+#ifdef NEUPOD_ART_HIRES
+    if (s->flow_on) {
+        if (flow_able(s)) {
+            flow_update(s);
+        } else {
+            flow_toggle(s, false); /* the list went away (an error, a rebuild): back to the plain state */
+        }
+    }
+#endif
 }
 
 static void show_msg(lib_screen_t *s, libsvc_status_t st, const char *text, const char *hint, bool retry) {
@@ -433,6 +539,9 @@ static void lib_tick(ui_screen_t *b) {
     ui_letter_overlay_update(s->overlay, &s->lj); /* every pass: it fades out once the wheel has rested */
     if (s->st == S_READY) {
         header_art_tick(s);
+#ifdef NEUPOD_ART_HIRES
+        ui_flow_tick(s->flow);
+#endif
     }
     libsvc_status_t st;
     switch (s->st) {
@@ -493,6 +602,12 @@ static void lib_tick(ui_screen_t *b) {
             s->rows_pending = false;
             if (st == LIBSVC_OK) {
                 ui_list_refresh(s->list);
+#ifdef NEUPOD_ART_HIRES
+                if (s->flow_on) {
+                    ui_flow_refresh(s->flow); /* the rows of the tiles have arrived */
+                    flow_texts(s);
+                }
+#endif
             } else {
                 show_msg(s, st, NULL, NULL, true);
                 break;
@@ -517,6 +632,19 @@ static void lib_tick(ui_screen_t *b) {
 
 static void lib_scroll(ui_screen_t *b, int32_t steps) {
     lib_screen_t *s = (lib_screen_t *)b;
+#ifdef NEUPOD_ART_HIRES
+    if (s->flow_on) { /* one album per detent, up to three when the wheel is fast */
+        int32_t n = steps > 3 ? 3 : steps < -3 ? -3 : steps;
+        int32_t cur = ui_list_selected(s->list), to = cur + n;
+        to = to < 0 ? 0 : to >= (int32_t)s->info.count ? (int32_t)s->info.count - 1 : to;
+        if (to != cur) {
+            ui_list_set_selected(s->list, to);
+            ui_feedback_step();
+            flow_update(s);
+        }
+        return;
+    }
+#endif
     ui_list_move(s->list, steps);
     if (s->st == S_READY && is_top(s->view.kind) && s->info.count > 0) {
         lvw_row_t r;
@@ -559,6 +687,22 @@ static bool lib_button(ui_screen_t *b, uint8_t btn) {
         library_build_background(true);
         return false;
     }
+#ifdef NEUPOD_ART_HIRES
+    if (flow_able(s)) {
+        if (btn == HAL_BTN_RIGHT) { /* Right toggles the Cover Flow, Left leaves it */
+            flow_toggle(s, !s->flow_on);
+            return true;
+        }
+        if (s->flow_on && btn == HAL_BTN_LEFT) {
+            flow_toggle(s, false);
+            return true;
+        }
+        if (s->flow_on && btn == HAL_BTN_PLAY) {
+            flow_play(s);
+            return true;
+        }
+    }
+#endif
     if (btn != HAL_BTN_SELECT) {
         return false; /* Menu leaves (the frame pops), Play/Pause and Left/Right keep their global meaning */
     }
@@ -592,7 +736,10 @@ static void lib_resume(ui_screen_t *b) {
     if (s->played) { /* Shuffle Songs: Now Playing was left, so is this */
         s->pop_me = true;
     }
-    ui_list_resume(s->list);
+#ifdef NEUPOD_ART_HIRES
+    if (!s->flow_on)
+#endif
+        ui_list_resume(s->list);
     if (s->st == S_READY && s->info.count == 0) { /* Update Library was run from the empty pane: look again */
         open_info(s);
         return;
@@ -602,6 +749,12 @@ static void lib_resume(ui_screen_t *b) {
     s->rows_pending = false;
     s->miss_idx = -1;
     ui_list_refresh(s->list); /* the window may belong to another list now: the misses ask for a new fill */
+#ifdef NEUPOD_ART_HIRES
+    if (s->flow_on) { /* a child screen took the art service's attention: the tiles ask again */
+        ui_flow_refresh(s->flow);
+        flow_texts(s);
+    }
+#endif
 }
 
 static void lib_destroy(ui_screen_t *b) {
@@ -609,6 +762,9 @@ static void lib_destroy(ui_screen_t *b) {
     if (s->st == S_BUILD && !s->bg) {
         library_cancel_build();
     }
+#ifdef NEUPOD_ART_HIRES
+    ui_flow_destroy(s->flow);
+#endif
     ui_pane_destroy(s->pane);
     ui_letter_overlay_destroy(s->overlay);
     ui_list_destroy(s->list);
@@ -640,6 +796,11 @@ static ui_screen_t *screen_new(lvw_view_t view, mode_t_ mode, const char *title)
     }
     s->list = ui_list_create(s->base.root, UI_W,
                              &(ui_list_model_t){.count = 1, .ctx = s, .get = lib_get, .two_line = two_line_kind(view.kind), .top = header ? UIM->hd_rule_y + 2 : 0});
+#ifdef NEUPOD_ART_HIRES
+    if (view.kind == LVW_ALBUMS && mode == M_LIST) {
+        s->flow = ui_flow_create(s->base.root, flow_get, s);
+    }
+#endif
     s->pane = ui_pane_create(s->base.root); /* above the list: a state without rows covers it */
     wi_letterjump_init(&s->lj);
     s->overlay = ui_letter_overlay_create(s->base.root);
