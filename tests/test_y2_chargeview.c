@@ -115,6 +115,39 @@ TEST(key_while_on_extends_without_a_second_backlight_write) {
     ASSERT_TRUE(!y2_cview_is_awake(&v, 18000));
 }
 
+TEST(a_noisy_wheel_cannot_hold_the_screen_on_forever) {
+    y2_cview_t v;
+    y2_cview_scene_t s = {.pct = 40};
+    y2_cview_init(&v, 0);
+    (void)y2_cview_tick(&v, 0, &s);
+    uint32_t t = 0;
+    for (; t < 3 * Y2_CVIEW_MAX_MOTION_MS; t += 250) { // a wheel that never stops
+        y2_cview_wake_motion(&v, t);
+        (void)y2_cview_tick(&v, t, &s);
+    }
+    // it went dark within 10 s of the cap and stays dark while the noise carries on
+    ASSERT_TRUE(!y2_cview_is_awake(&v, Y2_CVIEW_MAX_MOTION_MS + Y2_CVIEW_AWAKE_MS + 250));
+    // a key always wakes it
+    y2_cview_wake(&v, t);
+    ASSERT_TRUE(y2_cview_is_awake(&v, t + 1));
+    // ordinary use: one wheel tick wakes a dark screen
+    y2_cview_t w;
+    y2_cview_init(&w, 0);
+    (void)y2_cview_tick(&w, Y2_CVIEW_AWAKE_MS, &s);
+    y2_cview_wake_motion(&w, 20000);
+    ASSERT_TRUE(y2_cview_is_awake(&w, 20001));
+}
+
+TEST(motion_extension_keeps_the_animation_running) {
+    y2_cview_t v;
+    y2_cview_scene_t s = {.pct = 60};
+    y2_cview_init(&v, 0);
+    (void)y2_cview_tick(&v, 0, &s);
+    y2_cview_wake_motion(&v, 1300); // does not restart the animation
+    (void)y2_cview_tick(&v, 1300, &s);
+    ASSERT_EQ(2, s.frame);
+}
+
 TEST(timer_survives_the_32_bit_clock_wrapping) {
     y2_cview_t v;
     y2_cview_scene_t s = {.pct = 40};
@@ -224,6 +257,8 @@ int main(int argc, char **argv) {
     RUN(wake_events);
     RUN(awake_for_ten_seconds_then_off_then_key_wakes);
     RUN(key_while_on_extends_without_a_second_backlight_write);
+    RUN(a_noisy_wheel_cannot_hold_the_screen_on_forever);
+    RUN(motion_extension_keeps_the_animation_running);
     RUN(timer_survives_the_32_bit_clock_wrapping);
     RUN(hold_bar_quantised_and_shown);
     RUN(draws_at_320x240);

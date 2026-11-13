@@ -94,18 +94,32 @@ static void panel_open(panel_t *p) {
     }
     p->map = m;
     p->pages = y2_fb_page_count(p->map_len, v->yres_virtual, p->line_bytes, v->yres);
+    p->cur = v->yres > 0 ? v->yoffset / v->yres : 0; // a previous run can leave another page showing: never draw onto it
+    if (p->cur >= p->pages) {
+        p->cur = 0;
+    }
     p->ok = true;
 }
 
+static int ioctl_retry(int fd, unsigned long req, void *arg) {
+    int r;
+    do {
+        r = ioctl(fd, req, arg);
+    } while (r != 0 && errno == EINTR);
+    return r;
+}
+
+// The same two steps as the player's display HAL (hal_display.c pan_to): FBIOPAN_DISPLAY, then FBIOPUT_VSCREENINFO with
+// FB_ACTIVATE_NOW, which is what makes mtkfb latch the new page.
 static bool panel_pan(panel_t *p, unsigned page) {
     struct fb_var_screeninfo var = p->var;
     var.xoffset = 0;
     var.yoffset = page * p->var.yres;
-    int r;
-    do {
-        r = ioctl(p->fd, FBIOPAN_DISPLAY, &var);
-    } while (r != 0 && errno == EINTR);
-    return r == 0;
+    if (ioctl_retry(p->fd, FBIOPAN_DISPLAY, &var) != 0) {
+        return false;
+    }
+    var.activate = FB_ACTIVATE_NOW;
+    return ioctl_retry(p->fd, FBIOPUT_VSCREENINFO, &var) == 0;
 }
 
 // Draw one scene into the next page and show it (black frame when @p scene is NULL).
@@ -135,7 +149,7 @@ static void panel_close(panel_t *p) {
 }
 
 // Read one node. Wake on any wake event; only the side-key node (@p keys) feeds the Power-hold logic.
-static void drain(int fd, y2_charge_t *c, bool keys, bool *woke) {
+static void drain(int fd, y2_charge_t *c, bool keys, bool *woke, bool *pressed) {
     uint8_t buf[Y2_EVENT_SIZE * 32];
     for (;;) {
         ssize_t r = read(fd, buf, sizeof buf);
@@ -150,7 +164,9 @@ static void drain(int fd, y2_charge_t *c, bool keys, bool *woke) {
         size_t cnt = y2_evdev_decode(buf, (size_t)r, ev, 32, &used);
         uint32_t now = now_ms();
         for (size_t i = 0; i < cnt; i++) {
-            if (y2_cview_is_wake_event(&ev[i])) {
+            if (y2_cview_is_key_press(&ev[i])) {
+                *pressed = true;
+            } else if (y2_cview_is_wake_event(&ev[i])) {
                 *woke = true;
             }
             if (keys) {
@@ -225,15 +241,17 @@ int y2_charging_main(void) {
     bool gauge_logged = false;
     int rc = 0;
     while (!g_term) {
-        bool woke = false;
+        bool woke = false, pressed = false;
         for (int i = 0; i < 2; i++) {
             if (fds[i] >= 0) {
-                drain(fds[i], &c, i == 0, &woke);
+                drain(fds[i], &c, i == 0, &woke, &pressed);
             }
         }
         uint32_t now = now_ms();
-        if (woke) {
+        if (pressed) {
             y2_cview_wake(&view, now);
+        } else if (woke) {
+            y2_cview_wake_motion(&view, now);
         }
         y2_charge_online_t online = y2_charge_read_online(Y2_POWER_SUPPLY);
         y2_charge_action_t act = y2_charge_step(&c, now, online);
@@ -250,8 +268,8 @@ int y2_charging_main(void) {
         if (todo & Y2_CVIEW_BACKLIGHT_ON) {
             backlight_set(panel.ok ? BACKLIGHT_ON_LEVEL : 0); // never light a panel we cannot draw on
         }
-        if (todo & Y2_CVIEW_BACKLIGHT_OFF) {
-            backlight_set(0);
+        if ((todo & Y2_CVIEW_BACKLIGHT_OFF) || !y2_cview_is_awake(&view, now)) {
+            backlight_set(0); // also retried every pass while asleep, in case an earlier write failed (no-op once it is 0)
         }
         if (act == Y2_CHARGE_REBOOT) {
             printf("charging: power held, requesting reboot (%s)\n", y2_reboot_command());

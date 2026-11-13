@@ -13,6 +13,8 @@
 #define C_AMBER 0xFFE89828u
 #define C_RED 0xFFE84840u
 
+bool y2_cview_is_key_press(const y2_event_t *ev) { return ev->type == Y2_EV_KEY && ev->value == 1; }
+
 bool y2_cview_is_wake_event(const y2_event_t *ev) {
     if (ev->type == 0u || ev->type == 4u) { // EV_SYN, EV_MSC
         return false;
@@ -202,13 +204,37 @@ void y2_cview_render(uint32_t *px, unsigned w, unsigned h, unsigned stride_px, c
 void y2_cview_init(y2_cview_t *v, uint32_t now_ms) {
     memset(v, 0, sizeof *v);
     v->awake = true;
-    v->wake_ms = now_ms;
+    v->wake_ms = v->anim_ms = v->session_ms = v->motion_ok_ms = now_ms;
+}
+
+static void wake_from_dark(y2_cview_t *v, uint32_t now_ms) {
+    v->awake = true;
+    v->have_drawn = false; // the panel content is stale; draw before lighting it
+    v->anim_ms = now_ms;   // the animation restarts from empty only when the screen was dark, not on every extension
+    v->session_ms = now_ms;
 }
 
 void y2_cview_wake(y2_cview_t *v, uint32_t now_ms) {
     if (!v->awake) {
-        v->awake = true;
-        v->have_drawn = false; // the panel content is stale; draw before lighting it
+        wake_from_dark(v, now_ms);
+    }
+    v->wake_ms = now_ms;
+    v->session_ms = now_ms;
+    v->motion_ok_ms = now_ms;
+}
+
+void y2_cview_wake_motion(y2_cview_t *v, uint32_t now_ms) {
+    if (!v->awake) {
+        if ((int32_t)(now_ms - v->motion_ok_ms) < 0) {
+            return; // recently cut off for endless motion
+        }
+        wake_from_dark(v, now_ms);
+        v->wake_ms = now_ms;
+        return;
+    }
+    if ((uint32_t)(now_ms - v->session_ms) >= Y2_CVIEW_MAX_MOTION_MS) {
+        v->motion_ok_ms = now_ms + Y2_CVIEW_MAX_MOTION_MS; // no more extension; it goes dark within 10 s, then stays so
+        return;
     }
     v->wake_ms = now_ms;
 }
@@ -227,7 +253,7 @@ unsigned y2_cview_tick(y2_cview_t *v, uint32_t now_ms, y2_cview_scene_t *scene) 
     }
     unsigned mask = 0;
     unsigned target = scene->full ? Y2_CVIEW_CELLS : y2_cview_target_cells(scene->pct);
-    scene->frame = scene->full ? 0u : ((now_ms - v->wake_ms) / Y2_CVIEW_FRAME_MS) % y2_cview_frame_count(target);
+    scene->frame = scene->full ? 0u : ((now_ms - v->anim_ms) / Y2_CVIEW_FRAME_MS) % y2_cview_frame_count(target);
     // Quantise the hold bar so it redraws about every 100 ms, not every pass.
     scene->hold_ms = scene->hold_ms / 100u * 100u + (scene->hold_ms > 0u && scene->hold_ms < 100u ? 100u : 0u);
     if (!v->have_drawn) {
