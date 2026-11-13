@@ -62,7 +62,8 @@ patched in the installed copy to honour `Y2_DIAG_NO_SD`).
 ## Escape hatch
 
 After `switch_root` a PID 1 failure panics and reboots into the same hand-off, so a broken rootfs would loop. To stay
-in rescue instead: hold any wheel/ring button during rescue's 5 s hold window, or put a `y2-hold` file on the microSD.
+in rescue instead: hold (do not just tap) any wheel/ring button for a moment during rescue's 5 s hold window (presses shorter
+than 30 ms are treated as electrical noise from the touch wheel at power-on and ignored), or put a `y2-hold` file on the microSD.
 
 ## Access and security
 
