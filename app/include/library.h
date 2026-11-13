@@ -241,6 +241,8 @@ lib_err_t lib_list_id(lib_reader_t *r, lib_list_t l, uint32_t i, uint32_t *id);
 uint32_t lib_list_jump(const lib_reader_t *r, lib_list_t l, char ch);
 
 lib_err_t lib_track(lib_reader_t *r, uint32_t id, lib_track_t *out);
+/** Just the file's modified time, size and play verdict (lib_play_t) of track @p id: one 48-byte record, no strings (the Recently added pass over every track). */
+lib_err_t lib_track_stamp(lib_reader_t *r, uint32_t id, uint32_t *mtime, uint32_t *size, uint8_t *play);
 lib_err_t lib_artist(lib_reader_t *r, uint32_t id, lib_entity_t *out); /**< first / count = its albums (ids first .. first+count-1) */
 lib_err_t lib_album(lib_reader_t *r, uint32_t id, lib_entity_t *out);  /**< first / count = its tracks, as positions in the by-album order */
 lib_err_t lib_genre(lib_reader_t *r, uint32_t id, lib_entity_t *out);  /**< first / count = its artists, as positions in the genre-artist order */

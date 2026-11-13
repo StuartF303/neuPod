@@ -349,6 +349,11 @@ with a haptic tick and a 60 ms flip of the value in the pane. Settings > Display
 (one Info request for the song count when the panel goes idle; "No library yet" and "Open Music to build it" when there is no index). "Now Playing" is greyed while nothing is queued (Select says "Nothing playing"); Shuffle Songs has no chevron.
 The card summary line ("SDHC 32 GB") exists only with `-DNEUPOD_UI_DEBUG=ON`.
 
+### Playlists (phase 4b, LB-7)
+
+Music > Playlists (`ui_playlists.c`, over `playlist_service.h` on the storage task; not on the frozen Pico 2 W, where the row still says `None yet`). The list of lists: **On-The-Go, Recently added, Most played, Top rated, Unplayed**, then every `.m3u` / `.m3u8` found in `/`, `/Playlists` and `/Music`, each with its count at the right (`128+` where the count is a floor). Select opens a list as two-line rows (title, then artist or folder); Select on a song plays the whole list from it (`player_play_paths`: the queue holds whole paths, Shuffle and Repeat apply). A row the card cannot play (file missing, path that is not on the card, not a music file) is greyed with the reason on its second line and answers Select with a toast. Empty lists, loading and errors are full-pane layouts like the library's. Entries are read like a player would: `#EXTM3U` / `#EXTINF`, relative and absolute paths, Windows separators and drive letters, `file://`, byte-order mark, Latin-1 or UTF-8 (`pl_m3u.h`).
+Smart lists: Recently added = the 50 newest files by modified time (one pass over the index), Most played = the 25 with most counted plays, Top rated = four stars or more, Unplayed = library songs with no counted play, in title order, the first 128. **On-The-Go**: Now Playing page 2 > **Add to On-The-Go** (toast `Added to On-The-Go`, `Already in On-The-Go`, or why not); in the list a long press of Select (0.5 s) takes the song off, and a last row **Clear On-The-Go** asks first. Files and formats: [Storage](storage.md#playlists-play-counts-and-on-the-go-design-review-lb-7). Tour `--tour-playlists` (ctest `playlists_tour`, `hires_playlists_tour`; snapshots `pl-*`).
+
 ## Not yet drawn
 
 - Hold-switch lock overlay, charging screen, USB mass-storage ("Connected") screen.

@@ -10,6 +10,8 @@
 #include "os.h"
 #include "play_queue.h"
 #include "player.h"
+#include "playlist_service.h"
+#include "plays_store.h"
 #include "ratings_store.h"
 #include "resume.h"
 #include "settings_service.h"
@@ -20,7 +22,7 @@
 #include "track_stream.h"
 #include "wav.h"
 
-typedef enum { REQ_LIST, REQ_SPACE, REQ_PREFETCH, REQ_PLAY, REQ_STOP, REQ_VERIFY, REQ_SETTINGS_LOAD, REQ_LIBRARY } req_kind_t;
+typedef enum { REQ_LIST, REQ_SPACE, REQ_PREFETCH, REQ_PLAY, REQ_STOP, REQ_VERIFY, REQ_SETTINGS_LOAD, REQ_LIBRARY, REQ_PLAYLIST } req_kind_t;
 
 typedef struct {
     req_kind_t kind;
@@ -62,6 +64,14 @@ bool storage_verify_request(const char *path) { return path != NULL && post(REQ_
 bool storage_list_request(const char *path, uint32_t seq) { return post(REQ_LIST, path, seq); }
 bool storage_post_library(const void *blob, size_t n) {
     storage_req_t r = {.kind = REQ_LIBRARY};
+    if (blob == NULL || n > 128u) {
+        return false;
+    }
+    memcpy(r.path, blob, n);
+    return g_req_q != NULL && os_queue_send(g_req_q, &r, OS_NO_WAIT);
+}
+bool storage_post_playlist(const void *blob, size_t n) {
+    storage_req_t r = {.kind = REQ_PLAYLIST};
     if (blob == NULL || n > 128u) {
         return false;
     }
@@ -382,6 +392,7 @@ void storage_task(void *arg) {
             track_stream_pump();
             settings_poll();
             ratings_poll(os_tick_ms());
+            plays_poll(os_tick_ms());
             if (art_service_pending()) {
                 art_service_run(art_yield, NULL); // only when idle; it gives way to any request that arrives
             }
@@ -408,6 +419,10 @@ void storage_task(void *arg) {
         case REQ_LIBRARY:
             g_ui_listed = true; /* the shared buffer is the library's now: the boot resume must not list into it */
             library_service_handle(rq.path, sizeof rq.path);
+            continue;
+        case REQ_PLAYLIST:
+            g_ui_listed = true; /* the smart lists borrow the library reader (the shared buffer): the boot resume must not list into it */
+            pls_service_handle(rq.path, sizeof rq.path);
             continue;
         case REQ_VERIFY:
             track_stream_start(rq.path, true);

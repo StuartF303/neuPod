@@ -47,6 +47,12 @@ target_link_libraries(test_ratings neupod_settings hal_host)
 add_test(NAME ratings COMMAND test_ratings)
 set_source_files_properties(test_ratings.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
+# Plays store (LB-7): counting, eviction, the card file and its save through a temp file.
+add_executable(test_plays test_plays.c)
+target_link_libraries(test_plays neupod_settings hal_host)
+add_test(NAME plays COMMAND test_plays)
+set_source_files_properties(test_plays.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
 # Resume record over the real settings store: round trip through the store's write path, rate limiting, missing / changed file decisions.
 add_executable(test_resume test_resume.c ${CMAKE_SOURCE_DIR}/app/runtime/resume.c)
 target_compile_definitions(test_resume PRIVATE NEUPOD_TEST_ASSETS="${CMAKE_SOURCE_DIR}/tests/assets/audio")
@@ -436,8 +442,8 @@ function(neupod_library_card NAME)
   set(FS ${CMAKE_BINARY_DIR}/fsroot_${NAME})
   execute_process(COMMAND dd if=/dev/zero of=${CMAKE_BINARY_DIR}/disk_${NAME}.img bs=1024 count=2048 status=none)
   file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_${NAME})
-  # the card folder is (re)made by a test so every run starts from no index and the default settings
-  add_test(NAME ${NAME}_card COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_library_card.py ${FS} ${CMAKE_CURRENT_SOURCE_DIR}/assets/audio)
+  # the card folder is (re)made by a test so every run starts from no index and the default settings (extra arguments: --playlists ...)
+  add_test(NAME ${NAME}_card COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_library_card.py ${FS} ${CMAKE_CURRENT_SOURCE_DIR}/assets/audio ${ARGN})
   set_tests_properties(${NAME}_card PROPERTIES FIXTURES_SETUP ${NAME}_card)
 endfunction()
 # --run-ms is the end of the run (the tour must have finished its script by then, or the snapshot count check fails): the script itself takes ~55 s of wall
@@ -466,6 +472,32 @@ if(NEUPOD_UI_HIRES)
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     FIXTURES_REQUIRED hires_library_card
     TIMEOUT 200)
+endif()
+
+# Music > Playlists (LB-7): the library card plus playlist files and a seeded On-The-Go; checks the layout audit on every snapshot and that the plays reached the card.
+neupod_library_card(playlists --playlists)
+add_test(NAME playlists_tour
+  COMMAND neupod --run-ms 90000 --splash-hold-ms 1500 --tour-playlists --snapshots ${CMAKE_BINARY_DIR}/snapshots_playlists)
+set_tests_properties(playlists_tour PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_playlists;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_playlists.img"
+  PASS_REGULAR_EXPRESSION "library: build finished in [0-9]+ ms: 16 tracks.*host: run finished, status 0"
+  FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  FIXTURES_REQUIRED playlists_card
+  TIMEOUT 150)
+if(NEUPOD_UI_HIRES)
+  set_tests_properties(playlists_tour PROPERTIES PASS_REGULAR_EXPRESSION
+    "library: build finished in [0-9]+ ms: 16 tracks.*ui: audit '[^']*' 320x240 objects=[1-9][0-9]* violations=0.*host: run finished, status 0")
+  neupod_library_card(hires_playlists --playlists)
+  add_test(NAME hires_playlists_tour
+    COMMAND neupod --run-ms 90000 --splash-hold-ms 1500 --tour-playlists --snapshots ${CMAKE_BINARY_DIR}/snapshots_hires_playlists)
+  set_tests_properties(hires_playlists_tour PROPERTIES
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_DISPLAY_SIZE=480x360;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_hires_playlists;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_hires_playlists.img"
+    PASS_REGULAR_EXPRESSION "library: build finished in [0-9]+ ms: 16 tracks.*ui: audit '[^']*' 480x360 objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+    FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    FIXTURES_REQUIRED hires_playlists_card
+    TIMEOUT 150)
 endif()
 
 # The same on a write-protected card (NEUPOD_DISK_READ_ONLY=1): "Library needs a writable card" from the first open and from Update Library, and no scan is started.
@@ -660,6 +692,12 @@ add_executable(test_play_queue test_play_queue.c)
 target_link_libraries(test_play_queue neupod_rt_core)
 add_test(NAME play_queue COMMAND test_play_queue)
 set_source_files_properties(test_play_queue.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+# Playlists (LB-7), the pure parts: the .m3u / .m3u8 reader and path resolution, the On-The-Go text, the queue built from paths, the play-count rule.
+add_executable(test_playlists test_playlists.c)
+target_link_libraries(test_playlists neupod_rt_core)
+add_test(NAME playlists COMMAND test_playlists)
+set_source_files_properties(test_playlists.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
 # art_service retargeted by a track change in the middle of a decode (gapless handoff): the old picture must not be published.
 add_executable(test_art_service test_art_service.c ${CMAKE_SOURCE_DIR}/app/runtime/art_service.c)

@@ -19,6 +19,8 @@
 #include "library_service.h"
 #include "os.h"
 #include "player.h"
+#include "playlist_service.h"
+#include "plays_store.h"
 #include "ratings_store.h"
 #include "ui_internal.h"
 #include "ui_library.h"
@@ -609,6 +611,8 @@ ui_screen_t *ui_screen_nowplaying_create(void) {
 
 /* ---- page 2 ---------------------------------------------------------------------------------------------------------------------------- */
 
+static uint32_t g_otg_seq = 0x9000u;
+
 typedef enum { P2_SHUFFLE, P2_REPEAT, P2_GAPLESS, P2_PLAYLIST, P2_ALBUM, P2_ARTIST, P2_ROWS } p2_row_t;
 
 typedef struct {
@@ -623,6 +627,8 @@ typedef struct {
     uint32_t last_ms, track_seen;
     uint32_t album_id, artist_id; /* library ids of the playing track (LIB_NONE: not from the library / a compilation) */
     bool ids_known;
+    uint32_t otg_seq;      /* an Add to On-The-Go is out (playlist_service.h) */
+    bool otg_pending;
 } p2_t;
 
 static const char *rep_text(uint8_t r) { return r == PQ_REPEAT_ONE ? "One" : r == PQ_REPEAT_ALL ? "All" : "Off"; }
@@ -643,9 +649,8 @@ static void p2_get(void *ctx, int32_t idx, ui_list_item_t *out) {
         snprintf(out->detail, sizeof out->detail, "%s", player_gapless_enabled() ? "On" : "Off");
         break;
     case P2_PLAYLIST:
-        snprintf(out->label, sizeof out->label, "Add to playlist (phase 4)");
-        out->chevron = true;
-        out->dim = true; /* playlists arrive in phase 4 of the design review: the row is here so the page is complete, and says so when pressed */
+        snprintf(out->label, sizeof out->label, "Add to On-The-Go");
+        out->dim = !PLS_AVAILABLE || p->otg_pending; /* the frozen Pico 2 W has no playlists; one add at a time */
         break;
     case P2_ALBUM:
         snprintf(out->label, sizeof out->label, "Go to album");
@@ -659,6 +664,51 @@ static void p2_get(void *ctx, int32_t idx, ui_list_item_t *out) {
         break;
     case P2_ROWS: break;
     }
+}
+
+/* Note the playing track in the plays store (zero plays): a rated or added track is then known to the smart lists, which have to open its file again
+ * without the library. False when it has no path (not a file the player resolved yet). */
+static bool p2_note_track(const p2_t *p, char *path, size_t n) {
+    if (!player_now_path(path, n)) {
+        return false;
+    }
+    (void)plays_record(path, p->info.file_size, p->info.title_is_name ? "" : p->info.tags.title, p->info.tags.artist, false);
+    return true;
+}
+
+static void p2_add_otg(p2_t *p) {
+    if (!PLS_AVAILABLE || p->otg_pending) {
+        ui_toast_show(PLS_AVAILABLE ? "Adding..." : "Playlists need the RP2350B board", UI_TOAST_INFO, 0);
+        return;
+    }
+    static char path[PLAYER_PATH_MAX]; /* UI task only */
+    if (!player_now_path(path, sizeof path)) {
+        ui_toast_show("Can't add this track", UI_TOAST_WARN, 0);
+        return;
+    }
+    uint32_t secs = p->info.rate != 0 ? (uint32_t)(p->info.total_frames / p->info.rate) : 0;
+    p->otg_seq = ++g_otg_seq;
+    p->otg_pending = pls_otg_add(path, p->info.title_is_name ? "" : p->info.tags.title, p->info.tags.artist, secs, p->otg_seq);
+    if (!p->otg_pending) {
+        ui_toast_show(pls_status_text(PLS_BUSY), UI_TOAST_WARN, 0);
+        return;
+    }
+    (void)plays_record(path, p->info.file_size, p->info.title_is_name ? "" : p->info.tags.title, p->info.tags.artist, false);
+    ui_list_refresh(p->list);
+}
+
+static void p2_otg_poll(p2_t *p) {
+    pls_status_t st;
+    if (!p->otg_pending || !pls_otg_poll(p->otg_seq, &st)) {
+        return;
+    }
+    p->otg_pending = false;
+    if (st == PLS_OK) {
+        ui_toast_show("Added to On-The-Go", UI_TOAST_INFO, 0);
+    } else {
+        ui_toast_show(pls_status_text(st), st == PLS_DUPLICATE ? UI_TOAST_INFO : UI_TOAST_WARN, 0);
+    }
+    ui_list_refresh(p->list);
 }
 
 static void stars_set(p2_t *p, uint8_t stars) {
@@ -732,6 +782,7 @@ static void p2_tick(ui_screen_t *s) {
     }
     p->last_ms = now ? now : 1u;
     p2_update(p, false);
+    p2_otg_poll(p);
 }
 
 static void p2_scroll(ui_screen_t *s, int32_t steps) {
@@ -741,6 +792,10 @@ static void p2_scroll(ui_screen_t *s, int32_t steps) {
         v = v < 0 ? 0 : v > 5 ? 5 : v;
         if ((uint8_t)v != p->stars) {
             rating_set(p->key, (uint8_t)v);
+            if (v >= 4) { /* a well rated track is noted with its path, so Top rated can open it later */
+                char path[PLAYER_PATH_MAX];
+                (void)p2_note_track(p, path, sizeof path);
+            }
             stars_set(p, (uint8_t)v);
             ui_feedback_step();
         }
@@ -774,7 +829,7 @@ static bool p2_button(ui_screen_t *s, uint8_t btn) {
     case P2_SHUFFLE: player_set_shuffle(player_shuffle() == PQ_SHUFFLE_SONGS ? PQ_SHUFFLE_OFF : PQ_SHUFFLE_SONGS); break;
     case P2_REPEAT: player_set_repeat(player_repeat() == PQ_REPEAT_OFF ? PQ_REPEAT_ONE : player_repeat() == PQ_REPEAT_ONE ? PQ_REPEAT_ALL : PQ_REPEAT_OFF); break;
     case P2_GAPLESS: player_set_gapless(!player_gapless_enabled()); break;
-    case P2_PLAYLIST: ui_toast_show("Playlists in phase 4", UI_TOAST_INFO, 0); return true;
+    case P2_PLAYLIST: p2_add_otg(p); return true;
     case P2_ALBUM:
         if (p->ids_known && p->album_id != LIB_NONE) {
             if (!ui_frame_push(ui_screen_library_view_create(LVW_ALBUM, p->album_id, p->info.tags.album))) {

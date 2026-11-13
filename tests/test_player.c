@@ -7,6 +7,7 @@
 
 #include "os.h"
 #include "player.h"
+#include "plays_store.h"
 #include "resume.h"
 #include "settings_store.h"
 #include "unit.h"
@@ -47,6 +48,17 @@ bool storage_play_request_at(const char *path, uint32_t frame) {
     return ok;
 }
 bool storage_verify_request(const char *p) { (void)p; return true; }
+// the plays store: what the player noted as played
+static int g_plays_calls;
+static char g_plays_path[300];
+bool plays_record(const char *path, uint64_t size, const char *title, const char *artist, bool played) {
+    (void)size, (void)title, (void)artist;
+    if (played) {
+        g_plays_calls++;
+        snprintf(g_plays_path, sizeof g_plays_path, "%s", path);
+    }
+    return true;
+}
 bool storage_stop_request(void) { return true; }
 static uint8_t *slot(uint32_t tag) { return tag == SETTING_SHUFFLE ? &g_shuffle_setting : tag == SETTING_REPEAT ? &g_repeat_setting : tag == SETTING_RESUME_PLAY ? &g_resume_play_setting : &g_gapless_setting; }
 bool settings_get_u8(uint32_t tag, uint8_t *out) {

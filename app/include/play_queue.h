@@ -32,9 +32,14 @@
 extern "C" {
 #endif
 
+#ifdef NEUPOD_ART_HIRES
+#define PLAY_QUEUE_POOL_BYTES 8192u /**< packed names (NUL included): a folder's names, or the whole paths of a playlist (about 130 tracks of typical paths) */
+#else
 #define PLAY_QUEUE_POOL_BYTES 3072u /**< packed names (NUL included): about 100 tracks of typical names */
+#endif
 #define PLAY_QUEUE_MAX_TRACKS 128u
 #define PLAY_QUEUE_DIR_MAX 256u
+#define PLAY_QUEUE_PATH_MAX 256u /**< longest whole path a playlist queue entry may have (NUL included) */
 #define PLAY_QUEUE_NO_ENTRY 0xFFFFFFFFu
 #define PLAY_QUEUE_LIB_MAX 0x7FFFFFFFu /**< most songs a library queue can hold */
 #define PLAY_QUEUE_RESTART_S 3u /**< Previous after more than this many seconds into a track restarts it (iPod behaviour) */
@@ -93,6 +98,14 @@ bool pq_build_range(play_queue_t *q, const pq_range_t *range, uint32_t start);
  * the queue is the window of playable files around the chosen one (from it onwards first).
  */
 bool pq_build(play_queue_t *q, const char *dir, const file_entry_t *entries, uint32_t count, uint32_t start_index);
+
+/**
+ * Queue a playlist: the files at @p paths (absolute paths; @p count of them) in that order, entry @p start current. The queue is then a folder queue with no
+ * folder (dir ""): each name is a whole path, and pq_name() gives the file's own name. Entries that are not audio files by name are skipped. When the
+ * paths do not fit the pool (PLAY_QUEUE_POOL_BYTES, PLAY_QUEUE_MAX_TRACKS) the window around @p start is kept (from it onwards first). False (queue left
+ * empty) when @p start is not a playable entry or a path is 256 bytes or longer.
+ */
+bool pq_build_paths(play_queue_t *q, const char *const *paths, uint32_t count, uint32_t start);
 
 /** Seed the shuffle generator (0 is replaced by a constant). Call before pq_set_shuffle() / pq_build() with something unpredictable. */
 void pq_seed(play_queue_t *q, uint32_t seed);

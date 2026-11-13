@@ -89,6 +89,12 @@ void player_play_file(const char *path, const char *name);
  */
 void player_play_folder(const char *dir, const file_entry_t *entries, uint32_t count, uint32_t index);
 /**
+ * Play a playlist (Music > Playlists): the files at @p paths (absolute, @p count of them) form the queue, in that order, and entry @p start plays first. The
+ * paths are copied. The queue works like a folder's (Shuffle and Repeat apply); what does not fit the queue pool (play_queue.h) is dropped from the far end,
+ * keeping a window around @p start. Nothing is started for an empty list or a start outside it.
+ */
+void player_play_paths(const char *const *paths, uint32_t count, uint32_t start);
+/**
  * Play song @p start (an index into @p range) of a library range (play_queue.h, pq_range_t) and queue the whole range: an album in track
  * order, an artist's songs, all songs, a genre. @p start PLAY_QUEUE_NO_ENTRY picks a random song. @p shuffle_all forces a shuffled queue
  * (Shuffle Songs); otherwise the Shuffle setting applies, as for a folder. The queue holds only the range; the storage task finds each track

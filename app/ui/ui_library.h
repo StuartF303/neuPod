@@ -11,6 +11,8 @@
 ui_screen_t *ui_screen_library_view_create(uint8_t kind, uint32_t id, const char *title);
 /** Music > Update Library: rebuild the index now, with progress and Cancel; says what it found, or why it could not. */
 ui_screen_t *ui_screen_library_update_create(void);
+/** One Playlists list (ui_playlists.c): @p kind a pls_kind_t, @p file the playlist file's number when it is PLS_FILE, @p name what the status bar shows. */
+ui_screen_t *ui_screen_playlist_view_create(uint8_t kind, uint8_t file, const char *name);
 /** Home > Shuffle Songs: play the whole library in random order (building the index first if there is none). */
 ui_screen_t *ui_screen_shuffle_create(void);
 
