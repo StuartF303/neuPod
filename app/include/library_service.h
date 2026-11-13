@@ -99,6 +99,11 @@ void library_service_handle(const void *blob, size_t n);
 /** The shared buffer's Files-listing view; taking it for a listing closes the reader and forgets the row window. */
 file_entry_t *library_service_take_listing(void);
 /**
+ * The open library reader for another storage-task service (the playlists' smart lists): the index is opened afresh, the row window is dropped (a list screen asks
+ * again when it is shown), and the reader stays valid until the next library or Files request. NULL with @p why set when there is no card or no usable index. Storage task only.
+ */
+lib_reader_t *library_service_reader(libsvc_status_t *why);
+/**
  * Turn a queue handle ("@lib/<order>/<pos>", play_queue.h) into the file path to open. False with @p why set (a message for the user)
  * when the track cannot be played or cannot be found. Keeps the answer for library_service_real_path(). Storage task only.
  */

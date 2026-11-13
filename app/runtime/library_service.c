@@ -306,6 +306,18 @@ static libsvc_status_t do_rows(const libsvc_req_t *rq) {
     return st;
 }
 
+lib_reader_t *library_service_reader(libsvc_status_t *why) {
+    rows_invalidate();
+    reader_close(); /* afresh: a card that was swapped or an index that was rebuilt since the last use is never read through stale handles */
+    g_cur_view.kind = LVW_KINDS;
+    libsvc_status_t s = reader_ensure();
+    if (s != LIBSVC_OK) {
+        *why = s;
+        return NULL;
+    }
+    return &g_mem.lib.r;
+}
+
 /* ---- building --------------------------------------------------------------------------------------------------------------------- */
 
 static void build_total(void *user, uint32_t total) {

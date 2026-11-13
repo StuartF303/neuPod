@@ -5,7 +5,9 @@
 #include "audio_engine.h"
 #include "os.h"
 #include "play_queue.h"
+#include "play_tracker.h"
 #include "player.h"
+#include "plays_store.h"
 #include "resume.h"
 #include "settings_store.h"
 #include "storage_service.h"
@@ -425,6 +427,35 @@ uint32_t player_skip_notice(char *reason, size_t n) {
     return g_skip_seq;
 }
 
+/* A track counts as played once half of it was heard, or it ran to its end (play_tracker.h): noted in the plays store (plays_store.h), which the
+ * Playlists smart lists read. Monitor task only. */
+#if PLAYS_MAX > 0
+static ptrk_t g_ptrk;
+static player_info_t g_cp_pi, g_cp_again; /* monitor task only: off its small stack */
+static char g_cp_path[PLAYER_PATH_MAX];
+static void count_plays(void) {
+    player_get(&g_cp_pi);
+    if (g_cp_pi.src != PLAYER_SRC_FILE) {
+        ptrk_init(&g_ptrk);
+        return;
+    }
+    uint32_t dur_ms = g_cp_pi.rate != 0 ? (uint32_t)(g_cp_pi.total_frames * 1000u / g_cp_pi.rate) : 0;
+    if (!ptrk_update(&g_ptrk, os_tick_ms(), g_cp_pi.state == PLAYER_PLAYING, g_cp_pi.state == PLAYER_ENDED, g_cp_pi.track_id, dur_ms)) {
+        return;
+    }
+    if (!player_now_path(g_cp_path, sizeof g_cp_path)) {
+        return;
+    }
+    player_get(&g_cp_again);
+    if (g_cp_again.track_id != g_cp_pi.track_id) {
+        return; /* a handoff between the two reads: the path is the next track's */
+    }
+    (void)plays_record(g_cp_path, g_cp_pi.file_size, g_cp_pi.title_is_name ? "" : g_cp_pi.tags.title, g_cp_pi.tags.artist, true);
+}
+#else
+static void count_plays(void) {}
+#endif
+
 void player_service(void) {
     audio_stats_t st;
     bool have = audio_stats_get(&st);
@@ -443,6 +474,7 @@ void player_service(void) {
 #endif
     unlock();
     run_action(&a);
+    count_plays();
 }
 
 bool player_now_path(char *out, size_t n) {
@@ -552,6 +584,21 @@ void player_play_folder(const char *dir, const file_entry_t *entries, uint32_t c
     pq_set_repeat(&g_q, player_repeat()); // the saved modes apply to the queue being built (the settings may have loaded since boot)
     g_q.shuffle = (uint8_t)player_shuffle();
     if (!pq_build(&g_q, dir, entries, count, index)) {
+        unlock();
+        return;
+    }
+    begin_track(&a, false, "start");
+    unlock();
+    run_action(&a);
+}
+
+void player_play_paths(const char *const *paths, uint32_t count, uint32_t start) {
+    action_t a = {0};
+    lock();
+    reseed();
+    pq_set_repeat(&g_q, player_repeat());
+    g_q.shuffle = (uint8_t)player_shuffle();
+    if (!pq_build_paths(&g_q, paths, count, start)) {
         unlock();
         return;
     }

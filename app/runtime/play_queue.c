@@ -304,12 +304,76 @@ bool pq_build(play_queue_t *q, const char *dir, const file_entry_t *entries, uin
     return true;
 }
 
+bool pq_build_paths(play_queue_t *q, const char *const *paths, uint32_t count, uint32_t start) {
+    pq_clear(q);
+    if (paths == NULL || start >= count || paths[start] == NULL || paths[start][0] != '/' || !pq_is_audio(paths[start])) {
+        return false;
+    }
+    // the same window rule as pq_build(): from the chosen entry forward as far as it fits, then backwards while room remains
+    uint32_t used = 0, tracks = 0, hi = start, lo = start;
+    for (uint32_t i = start; i < count && tracks < PLAY_QUEUE_MAX_TRACKS; i++) {
+        if (paths[i] == NULL || paths[i][0] != '/' || !pq_is_audio(paths[i])) {
+            continue;
+        }
+        size_t need = strlen(paths[i]) + 1u;
+        if (need > PLAY_QUEUE_PATH_MAX || used + need > PLAY_QUEUE_POOL_BYTES) {
+            if (i == start) {
+                return false;
+            }
+            break;
+        }
+        used += (uint32_t)need;
+        tracks++;
+        hi = i + 1u;
+    }
+    for (uint32_t i = start; i-- > 0;) {
+        if (paths[i] == NULL || paths[i][0] != '/' || !pq_is_audio(paths[i])) {
+            continue;
+        }
+        size_t need = strlen(paths[i]) + 1u;
+        if (need > PLAY_QUEUE_PATH_MAX || used + need > PLAY_QUEUE_POOL_BYTES || tracks >= PLAY_QUEUE_MAX_TRACKS) {
+            break;
+        }
+        used += (uint32_t)need;
+        tracks++;
+        lo = i;
+    }
+    q->dir[0] = '\0';
+    uint32_t w = 0, n = 0;
+    for (uint32_t i = lo; i < hi; i++) {
+        if (paths[i] == NULL || paths[i][0] != '/' || !pq_is_audio(paths[i])) {
+            continue;
+        }
+        size_t len = strlen(paths[i]) + 1u;
+        if (len > PLAY_QUEUE_PATH_MAX || w + len > PLAY_QUEUE_POOL_BYTES || n >= PLAY_QUEUE_MAX_TRACKS) {
+            continue; // cannot happen after the windowing above; never overrun the pool
+        }
+        if (i == start) {
+            q->pos = n;
+        }
+        memcpy(q->pool + w, paths[i], len);
+        q->off[n++] = (uint16_t)w;
+        w += (uint32_t)len;
+    }
+    q->count = n;
+    identity(q);
+    if (q->shuffle) {
+        shuffle_from(q, (uint16_t)q->pos);
+    }
+    return true;
+}
+
 static const char *entry_name(const play_queue_t *q, uint32_t e) { return e < q->count ? q->pool + q->off[e] : NULL; }
 const char *pq_name(const play_queue_t *q, uint32_t i) {
     if (q->lib) {
         return i < q->count ? "" : NULL; // the name is not known until the storage task has looked the track up
     }
-    return i < q->count ? entry_name(q, q->order[i]) : NULL;
+    const char *name = i < q->count ? entry_name(q, q->order[i]) : NULL;
+    if (name != NULL && q->dir[0] == '\0') { // a playlist queue holds whole paths: the name is the file's own
+        const char *slash = strrchr(name, '/');
+        name = slash != NULL ? slash + 1 : name;
+    }
+    return name;
 }
 uint32_t pq_entry(const play_queue_t *q, uint32_t i) {
     if (i >= q->count) {
@@ -325,6 +389,14 @@ bool pq_entry_path(const play_queue_t *q, uint32_t e, char *out, size_t n) {
     const char *name = entry_name(q, (uint16_t)e);
     if (name == NULL || e >= PLAY_QUEUE_MAX_TRACKS) {
         return false;
+    }
+    if (q->dir[0] == '\0') { // a playlist queue: the name is the whole path
+        size_t l = strlen(name);
+        if (l + 1u > n) {
+            return false;
+        }
+        memcpy(out, name, l + 1u);
+        return true;
     }
     int w = strcmp(q->dir, "/") == 0 ? snprintf(out, n, "/%s", name) : snprintf(out, n, "%s/%s", q->dir, name);
     return w > 0 && (size_t)w < n;

@@ -222,6 +222,9 @@ ui_screen_t *ui_screen_files_create(void);
 ui_screen_t *ui_screen_settings_create(void);
 ui_screen_t *ui_screen_bluetooth_create(void); /* ui_bluetooth.c */
 ui_screen_t *ui_screen_licences_create(void);  /* ui_licences.c: Settings > About > Licences */
+ui_screen_t *ui_screen_playlists_create(void); /* ui_playlists.c: Music > Playlists (PLS_AVAILABLE builds) */
+/** A yes / no question (ui_bluetooth.c): @p head and @p sub are raw text, Select runs @p yes(ctx) once the question has closed, Menu = no. */
+ui_screen_t *ui_confirm_create(const char *title, const char *head, const char *sub, const char *yes_word, const char *no_word, void (*yes)(void *), void *ctx);
 ui_screen_t *ui_screen_bt_devices_create(void); /* ui_bluetooth.c: starts a scan when it opens */
 /** "Name\nState" of the remembered Bluetooth headset ("Connected", "Pairing...", "Failed: not found", "Not connected"); "" if none (ui_bluetooth.c). */
 void ui_bt_headset_text(char *out, size_t n);

@@ -163,7 +163,7 @@ static bool confirm_button(ui_screen_t *s, uint8_t btn) {
 }
 
 /* @p head and @p sub are shown through the display filter (they carry device names); @p yes_word and @p no_word name the two keys. */
-static ui_screen_t *confirm_create(const char *title, const char *head, const char *sub, const char *yes_word, const char *no_word, void (*yes)(void *), void *ctx) {
+ui_screen_t *ui_confirm_create(const char *title, const char *head, const char *sub, const char *yes_word, const char *no_word, void (*yes)(void *), void *ctx) {
     confirm_t *c = (confirm_t *)ui_screen_new(sizeof *c, title);
     if (c == NULL) {
         return NULL;
@@ -192,6 +192,8 @@ static ui_screen_t *confirm_create(const char *title, const char *head, const ch
     lv_obj_align(k, LV_ALIGN_BOTTOM_MID, 0, -UIM->pad);
     return &c->base;
 }
+
+#define confirm_create ui_confirm_create
 
 /* ---- the remembered headset's options: Connect / Disconnect / Cancel, Forget ---- */
 

@@ -132,6 +132,19 @@
     "x snap:ds-home-dark w w w w _ x snap:ds-music-dark m theme:auto x x snap:ds-home-auto "          \
     "dim:10 sleep:11500 snap:ds-home-auto-dim s x snap:ds-home-auto-wake theme:light x x"
 
+// Music > Playlists (LB-7) on the library card with its playlist files (tests/tools/make_library_card.py --playlists: On-The-Go seeded with three
+// songs and a deleted one, /Playlists/Night drive.m3u with relative paths and bad entries, /Running.m3u8 with a byte-order mark and CRLF). Artists builds
+// the index first. The catalog; On-The-Go with its greyed row (Select: toast), a long press of Select removing it; a song played from the list for
+// more than half of its 3 s (Most played then has it); the empty states (Top rated); Recently added, Unplayed; the two playlist files; and Add to
+// On-The-Go from Now Playing page 2 (the track is paused first so the pictures do not depend on the clock).
+#define TOUR_PLAYLISTS                                                                                                                    \
+    "x _ _ wait:lib x x m 5*s _ x x x snap:pl-catalog-first "                                                                           \
+    "_ x x x snap:pl-otg 3*s _ x snap:pl-otg-greyed sel:down sleep:700 sel:up x x snap:pl-otg-removed 4*w _ x x x x snap:pl-np "         \
+    "sleep:1800 wait:pause m x x snap:pl-otg-back m x x x snap:pl-catalog "                                                                          \
+    "s _ x x x x x snap:pl-recent m s _ x x x snap:pl-most m s _ x x x snap:pl-top-empty m s _ x x x x x snap:pl-unplayed "              \
+    "m s _ x x x snap:pl-m3u-night 3*s _ x snap:pl-m3u-greyed m s _ x x x snap:pl-m3u-running "                                           \
+    "2*s _ x wait:pause x _ x 3*s x snap:pl-np-page2 _ x x snap:pl-np-added m m m m m s s s s s s _ x x x snap:pl-otg-after m m m"
+
 static unsigned g_expect = 18;
 static const char *g_snapshot_dir;
 static unsigned g_snapshots;
@@ -227,6 +240,10 @@ int main(int argc, char **argv) {
             cfg.ui_script = TOUR_TEXT;
             cfgp_tour = true;
             g_expect = 7; // the splash, home and the five named snapshots
+        } else if (strcmp(argv[i], "--tour-playlists") == 0) {
+            cfg.ui_script = TOUR_PLAYLISTS;
+            cfgp_tour = true;
+            g_expect = 2 + 17; // the splash, home and the seventeen named snapshots
         } else if (strcmp(argv[i], "--script") == 0 && i + 1 < argc) {
             cfg.ui_script = argv[++i]; // ad-hoc key script, same tokens as the tour
         } else if (strcmp(argv[i], "--splash-hold-ms") == 0 && i + 1 < argc) {
@@ -234,7 +251,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--snapshots") == 0 && i + 1 < argc) {
             g_snapshot_dir = argv[++i];
         } else {
-            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek|--tour-library|--tour-library-ro|--tour-library-empty|--tour-text|--tour-hold|--tour-licences|--tour-design] [--script KEYS] [--snapshots DIR]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek|--tour-library|--tour-library-ro|--tour-library-empty|--tour-playlists|--tour-text|--tour-hold|--tour-licences|--tour-design] [--script KEYS] [--snapshots DIR]\n", argv[0]);
             return 64;
         }
     }

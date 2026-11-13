@@ -15,6 +15,7 @@
 #include "os.h"
 #include "player.h"
 #include "sys_clock.h"
+#include "playlist_service.h"
 #include "ui_internal.h"
 #include "ui_library.h"
 
@@ -191,7 +192,7 @@ static ui_screen_t *make_albums(void) { return ui_screen_library_view_create(LVW
 static ui_screen_t *make_songs(void) { return ui_screen_library_view_create(LVW_SONGS, 0, "Songs"); }
 static ui_screen_t *make_genres(void) { return ui_screen_library_view_create(LVW_GENRES, 0, "Genres"); }
 static ui_screen_t *make_comps(void) { return ui_screen_library_view_create(LVW_COMPILATIONS, 0, "Compilations"); }
-static ui_screen_t *make_playlists(void) { return empty_list("Playlists"); }
+static ui_screen_t *make_playlists(void) { return PLS_AVAILABLE ? ui_screen_playlists_create() : empty_list("Playlists"); } /* the frozen Pico 2 W has no playlists */
 
 static const menu_entry_t k_music[] = {{"Artists", make_artists},         {"Albums", make_albums},      {"Songs", make_songs},
                                        {"Genres", make_genres},           {"Compilations", make_comps}, {"Playlists", make_playlists},

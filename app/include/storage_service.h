@@ -61,6 +61,8 @@ void storage_task(void *arg);
 
 /** Library requests (library_service.h) travel through the same queue: @p blob is at most 128 bytes, handed to library_service_handle(). */
 bool storage_post_library(const void *blob, size_t n);
+/** Playlist requests (playlist_service.h) travel through the same queue: @p blob is at most 128 bytes, handed to pls_service_handle(). */
+bool storage_post_playlist(const void *blob, size_t n);
 /** True while a request waits for the storage task: a long job (the library build) gives way to it. */
 bool storage_request_waiting(void);
 

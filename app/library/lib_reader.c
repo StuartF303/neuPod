@@ -178,6 +178,17 @@ lib_err_t lib_track(lib_reader_t *r, uint32_t id, lib_track_t *out) {
     return e;
 }
 
+lib_err_t lib_track_stamp(lib_reader_t *r, uint32_t id, uint32_t *mtime, uint32_t *size, uint8_t *play) {
+    if (id >= r->m.tracks) return LIB_E_RANGE;
+    uint8_t b[LIB_REC_TRACK];
+    lib_err_t e = read_bytes(r, T_TRACKS, id * LIB_REC_TRACK, b, sizeof b);
+    if (e != LIB_OK) return e;
+    *mtime = ld32(b + TR_MTIME);
+    *size = ld32(b + TR_SIZE);
+    *play = b[TR_PLAY];
+    return LIB_OK;
+}
+
 // artists, albums, genres: name, key8, first [, album artist]; the row after it (the sentinel for the last) gives the child count
 static lib_err_t entity(lib_reader_t *r, unsigned tbl, uint32_t rs, uint32_t n, uint32_t id, lib_entity_t *out) {
     if (id >= n) return LIB_E_RANGE;

@@ -61,6 +61,8 @@ set(NEUPOD_RT_CORE_SOURCES               # pure logic, no OS: host-testable on t
   ${NEUPOD_APP_DIR}/audio/art.c          # album art: source order + streamed JPEG thumbnail (core 0 only)
   ${NEUPOD_APP_DIR}/third_party/tjpgd/tjpgd.c  # ChaN's TJpgDec; third party, compiled without warning flags (app/CMakeLists.txt)
   ${NEUPOD_APP_DIR}/runtime/play_queue.c
+  ${NEUPOD_APP_DIR}/runtime/play_tracker.c
+  ${NEUPOD_APP_DIR}/playlist/pl_m3u.c
   ${NEUPOD_APP_DIR}/runtime/haptic_logic.c
 )
 # Bare-metal audio core (core 1). Subject to the core-1 rules (cmake/check_core1_rules.cmake):
@@ -91,6 +93,7 @@ set(NEUPOD_RUNTIME_SOURCES
   ${NEUPOD_APP_DIR}/runtime/panic.c
   ${NEUPOD_APP_DIR}/runtime/storage_service.c
   ${NEUPOD_APP_DIR}/runtime/library_service.c
+  ${NEUPOD_APP_DIR}/runtime/playlist_service.c
   ${NEUPOD_APP_DIR}/runtime/art_service.c
   ${NEUPOD_APP_DIR}/runtime/haptic_service.c
   ${NEUPOD_APP_DIR}/runtime/player.c
@@ -111,6 +114,7 @@ set(NEUPOD_RUNTIME_SOURCES
 set(NEUPOD_SETTINGS_SOURCES
   ${NEUPOD_APP_DIR}/settings/settings_store.c
   ${NEUPOD_APP_DIR}/settings/ratings_store.c
+  ${NEUPOD_APP_DIR}/settings/plays_store.c
 )
 # Music library index (docs/adr/0017-music-library-index.md): collation, scanner, reader. FatFs through ff.h (the host build's own
 # FatFs, the SD library's on the RP2350: platforms/rp2350/CMakeLists.txt adds these to its storage libraries).
@@ -133,6 +137,7 @@ set(NEUPOD_UI_SOURCES
   ${NEUPOD_APP_DIR}/ui/ui_screens.c
   ${NEUPOD_APP_DIR}/ui/ui_files.c
   ${NEUPOD_APP_DIR}/ui/ui_library.c
+  ${NEUPOD_APP_DIR}/ui/ui_playlists.c
   ${NEUPOD_APP_DIR}/ui/ui_audio.c
   ${NEUPOD_APP_DIR}/ui/ui_nowplaying.c
   ${NEUPOD_APP_DIR}/ui/ui_art.c
