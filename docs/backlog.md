@@ -58,7 +58,7 @@ From the owner-commissioned [design review](design/2026-11-12-ui-review/README.m
 | NP-6 | Ratings in the library: show them in lists, a Rated / Top rated smart list (the stars are saved in `/.neupod/ratings.bin` by path and size) | Now Playing | S | 1 | NP-3, LB-7 | 4 | built (phase 4b): the Top rated smart list (four stars or more, from the plays store); ratings are not shown in song rows yet |
 | LB-4 | Empty / error / busy states as full-pane layouts, determinate progress | Library | M | 3 | DS-5 | 4 | built (full-pane states, counted progress, run in background with status-bar dots) |
 | LB-5 | Unplayable rows show codec; auto-skip with toast | Library | S | 2 | DS-5 | 4 | built (codec on greyed rows, skip toast in queues) |
-| LB-6 | Cover Flow (flat five-tile) view on Albums (UI-11) | Library | M | 2 | NP-5 | 4 | open (not started in 4b). Needs: five tile art requests at once (`art_browse_want()` holds one handle: make it a small set, 5 handles, decoded by the storage task into the existing 24-slot cache), a flat tile view toggled with Right on the Albums list, 90 ms step animation re-blitting the tiles only, Pico 2 W compiled out |
+| LB-6 | Cover Flow (flat five-tile) view on Albums (UI-11) | Library | M | 2 | NP-5 | 4 | built (phase 4c; not on the frozen Pico 2 W): Right on Albums, flat five tiles, 90 ms step, `art_browse_want_set()` with 5 handles. Open: the year is the first song's only; Compilations has no Cover Flow
 | LB-7 | Playlists screen (smart lists + .m3u) (UI-19) | Library | L | 2 | — | 4 | built (phase 4b; not on the frozen Pico 2 W). Open: long-press Select on a song row to add it to On-The-Go (only Now Playing page 2 adds), a count shown for Unplayed beyond the first 128, reordering On-The-Go, writing .m3u files |
 | BT-1 | Devices screen (known / found / scan), signal bars monochrome | Bluetooth | M | 3 | DS-6 | 3 | built (phase 3) |
 | BT-2 | Forget / pairing / reconnect flows with toasts; no self-mutating rows; link lost ends "Couldn't reconnect — paused" (never switches output) | Bluetooth | M | 3 | DS-5, BT-1 | 3 | built (phase 3) |
@@ -66,18 +66,18 @@ From the owner-commissioned [design review](design/2026-11-12-ui-review/README.m
 | ST-1 | Settings right pane as key/value summary; toggles in place | Settings | S | 2 | DS-2 | 4 | built (key/value pane, toggles in place with tick and 60 ms flip; list order unchanged: About is still first) |
 | ST-2 | Display page (theme, brightness, timeouts); the Theme row itself is built with DS-1 | Settings | S | 2 | DS-1 | 4 | built (Theme, Brightness, Dim after incl. Off, Off after, Auto-lock) |
 | ST-3 | About › Diagnostics, Licences screen | Settings | S | 1 | — | 4 | built (Licences, UI-23; Diagnostics with the boot checks, audio and Bluetooth link counters, phase 3) |
-| IN-1 | Text entry: letter ring, mode chips, field box | Input | M | 2 | DS-2 | 4 | open (not started in 4b). Letter ring + mode chips + field box over `app/ui/input/` (`ui_input.c`), password reveal 800 ms then a dot |
-| IN-2 | Number/slider/date-time polish | Input | S | 1 | IN-1 | 4 | open (after IN-1) |
-| FL-1 | Files: path in status bar, icons, paged "Load more" | Files | S | 1 | DS-3, DS-6 | 4 | open (not started in 4b). Needs a paged listing in `storage_service` (the 256-entry cap becomes a page request), "Load more" row, "256+" on the folder row |
+| IN-1 | Text entry: letter ring, mode chips, field box | Input | M | 2 | DS-2 | 4 | built (phase 4c): ring of nine glyphs, mode chips, field box with caret, password reveal 800 ms, Menu hold clears; the text no longer has a movable cursor (Left / Right are the chips)
+| IN-2 | Number/slider/date-time polish | Input | S | 1 | IN-1 | 4 | built (phase 4c): Big value, bar and min / max for number and slider, field names under date / time, choice stays a plain list
+| FL-1 | Files: path in status bar, icons, paged "Load more" | Files | S | 1 | DS-3, DS-6 | 4 | built (phase 4c): Load more / Earlier entries paging (`storage_list_request_page`), `256+` on a folder row once it has been opened (folders are not counted in advance); icons and the path in the status slot were already there
 | HM-1 | Home panel: playing (art, title, artist, progress, times) and idle (48 px clock, date, "N songs . NN %"), Now Playing greyed when nothing is queued, library-not-built prompt, card line behind `NEUPOD_UI_DEBUG` | Home | M | 3 | DS-3 | 4 | built |
-| SP-1 | Release splash; self-test to debug splash | Splash | S | 1 | — | 4 | open (not started in 4b). Release splash 600 ms minimum; the self-test row moves to a debug splash shown when a check fails or Menu is held at boot |
+| SP-1 | Release splash; self-test to debug splash | Splash | S | 1 | — | 4 | built (phase 4c): release splash (wordmark, progress line, version, 600 ms minimum); debug splash with the failed-check list when a check fails or Menu is held at start
 
 ## UI — blocked on other work
 
 | ID | Item | Source | Needs |
 | --- | --- | --- | --- |
 | UI-10 | **Podcasts** list and per-episode resume. | spec | library |
-| UI-11 | **Album browser (Cover Flow)**: full-screen art carousel with reflection. | spec | RP2350B + PSRAM board ([ADR-0001 amendment](adr/0001-rp2350-phase1-platform.md#amendment-12-november-2026-the-pico-2-w-is-frozen-the-product-target-is-the-rp2350b-with-psram), [ADR-0013](adr/0013-bluetooth-ram-psram.md)); art at more than 64 px |
+| UI-11 | **Album browser (Cover Flow), the 3D version**: full-screen art carousel with reflection (the flat five-tile view is built: LB-6). | spec | RP2350B + PSRAM board ([ADR-0001 amendment](adr/0001-rp2350-phase1-platform.md#amendment-12-november-2026-the-pico-2-w-is-frozen-the-product-target-is-the-rp2350b-with-psram), [ADR-0013](adr/0013-bluetooth-ram-psram.md)); art at more than 64 px |
 | UI-13 | **Settings → Output** (headphone / line / optical / USB) when jack detect cannot decide. | spec | final board jack detect |
 | UI-14 | **Click: Piezo** actually clicks (setting exists, shows `Piezo not fitted yet`). | #23 | piezo driver + part on the testbed |
 | UI-15 | **Photos** browser. | spec | RP2350B + PSRAM, JPEG decode at screen size |
