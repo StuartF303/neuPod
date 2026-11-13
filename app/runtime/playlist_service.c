@@ -749,6 +749,14 @@ static pls_status_t otg_save(const char *add_path, uint32_t remove_idx, bool cle
     if (e != NFS_OK) {
         return map_write(e);
     }
+    /* A cut between the unlink and the rename of the last save leaves the complete list only as the temp file: make it the list again before the temp file
+     * is truncated for this rewrite (it is also what the rewrite reads), or the whole list would be lost. */
+    if (nfs_stat(PLS_OTG_FILE, &st) != NFS_OK && strcmp(otg_read_path(), PLS_OTG_TMP) == 0) {
+        e = nfs_rename(PLS_OTG_TMP, PLS_OTG_FILE);
+        if (e != NFS_OK) {
+            return map_write(e);
+        }
+    }
     nfs_file_t *f;
     e = nfs_open(&f, PLS_OTG_TMP, NFS_O_WRITE | NFS_O_CREATE | NFS_O_TRUNC);
     if (e != NFS_OK) {
