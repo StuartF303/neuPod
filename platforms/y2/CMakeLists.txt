@@ -13,6 +13,7 @@ set(NEUPOD_Y2_LOGIC_SOURCES
   ${Y2_HAL}/y2_sysfs.c
   ${Y2_HAL}/y2_poweroff.c
   ${Y2_HAL}/y2_charge.c
+  ${Y2_HAL}/y2_chargeview.c
   ${Y2_HAL}/y2_haptic.c
   ${Y2_HAL}/y2_bt_addr.c
   ${Y2_HAL}/y2_bt_tlv.c

@@ -7,8 +7,7 @@
  *        backlight and the framebuffer are in platforms/y2/charging.c.
  *
  * Behaviour: Power held Y2_CHARGE_REBOOT_HOLD_MS asks for a reboot (once per press); the charger being offline continuously for
- * Y2_CHARGE_UNPLUG_MS asks for a power-off (once); a short Power press does nothing (the screen stays dark; a battery
- * percentage flash is a later idea).
+ * Y2_CHARGE_UNPLUG_MS asks for a power-off (once); a short Power press does nothing here (it wakes the screen: y2_chargeview.h).
  */
 #ifndef NEUPOD_Y2_CHARGE_H
 #define NEUPOD_Y2_CHARGE_H
@@ -86,6 +85,9 @@ void y2_charge_feed(y2_charge_t *c, const y2_event_t *ev, uint32_t now_ms);
  * y2_charge_failed(). Reboot takes priority over poweroff when both fire in the same poll.
  */
 y2_charge_action_t y2_charge_step(y2_charge_t *c, uint32_t now_ms, y2_charge_online_t online);
+
+/** How long Power has been held at @p now_ms (0 when it is not down); drives the "hold to restart" bar. */
+uint32_t y2_charge_hold_ms(const y2_charge_t *c, uint32_t now_ms);
 
 /** The command for @p action could not be started: allow it again (next press / after another 3 s offline). */
 void y2_charge_failed(y2_charge_t *c, y2_charge_action_t action, uint32_t now_ms);
