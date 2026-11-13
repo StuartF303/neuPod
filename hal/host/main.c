@@ -128,7 +128,7 @@
 #define TOUR_DESIGN                                                                                \
     "x snap:ds-home toast:warn:Headset_disconnected x snap:ds-toast-warn strips:off x "            \
     "toast:info:Headset_connected x snap:ds-toast-info strips:off x hud:Volume_-18_dB:62 x snap:ds-hud strips:off x " \
-    "s s s s _ x snap:ds-settings s _ x snap:ds-display _ x snap:ds-display-dark m m "              \
+    "s s s s _ x snap:ds-settings s x snap:ds-settings-display s s s x snap:ds-settings-gapless _ x snap:ds-settings-toggled _ w w w _ x snap:ds-display _ x snap:ds-display-dark m m "  \
     "x snap:ds-home-dark w w w w _ x snap:ds-music-dark m theme:auto x x snap:ds-home-auto "          \
     "dim:10 sleep:11500 snap:ds-home-auto-dim s x snap:ds-home-auto-wake theme:light x x"
 
@@ -222,7 +222,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--tour-design") == 0) {
             cfg.ui_script = TOUR_DESIGN;
             cfgp_tour = true;
-            g_expect = 14; // the splash, home and the twelve named snapshots
+            g_expect = 17; // the splash, home and the fifteen named snapshots
         } else if (strcmp(argv[i], "--tour-text") == 0) {
             cfg.ui_script = TOUR_TEXT;
             cfgp_tour = true;

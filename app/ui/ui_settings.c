@@ -272,35 +272,33 @@ static void backlight_done(void *ctx, bool ok, const wi_value_t *v) {
 static void open_backlight_slider(void) {
     /* never fully dark: you could not find the way back */
     ui_idle_inhibit(true); /* the preview must stay at the live level */
-    if (!ui_input_open(&(wi_request_t){.kind = WI_K_SLIDER, .title = "Backlight", .done = backlight_done, .change = backlight_change,
+    if (!ui_input_open(&(wi_request_t){.kind = WI_K_SLIDER, .title = "Brightness", .done = backlight_done, .change = backlight_change,
                                        .value = g_ui_state.backlight_pct, .min = 5, .max = 100, .step = 5, .unit = "%"})) {
         ui_idle_inhibit(false);
     }
 }
 
-/* Display: a two-level list like Haptics (Backlight opens the slider, the other two rows toggle in place) */
+/* Display (ST-2, design review 3.5): Theme, Brightness (opens the slider), Dim after (10 s ... 5 min, then Off: that is Auto-dim), Off after, Auto-lock.
+ * The other rows change in place with a tick. */
 
 typedef struct {
     ui_screen_t base;
     ui_list_t *list;
 } display_t;
 
-enum { D_THEME, D_BACKLIGHT, D_AUTODIM, D_DIM_AFTER, D_SCREEN_OFF, D_AUTOLOCK, D_COUNT };
+enum { D_THEME, D_BACKLIGHT, D_DIM_AFTER, D_SCREEN_OFF, D_AUTOLOCK, D_COUNT };
 
 static void display_get(void *ctx, int32_t i, ui_list_item_t *o) {
     (void)ctx;
     if (i == D_THEME) {
         put(o, "Theme", "%s", ui_theme_mode_name(g_ui_state.theme)); /* Light, Dark, or Auto (dark once the backlight dims) */
     } else if (i == D_BACKLIGHT) {
-        put(o, "Backlight", "%u %%", (unsigned)g_ui_state.backlight_pct);
+        put(o, "Brightness", "%u %%", (unsigned)g_ui_state.backlight_pct);
         o->chevron = true;
-    } else if (i == D_AUTODIM) {
-        put(o, "Auto-dim", "%s", g_ui_state.autodim ? "On" : "Off");
     } else if (i == D_DIM_AFTER) {
-        put(o, "Dim after", "%s", ui_autodim_name(g_ui_state.dim_idx));
-        o->dim = !g_ui_state.autodim;
+        put(o, "Dim after", "%s", g_ui_state.autodim ? ui_autodim_name(g_ui_state.dim_idx) : "Off");
     } else if (i == D_SCREEN_OFF) {
-        put(o, "Screen off after", "%s", ui_screenoff_name(g_ui_state.off_idx)); /* counted from the dim (from the last press when Auto-dim is off) */
+        put(o, "Off after", "%s", ui_screenoff_name(g_ui_state.off_idx)); /* counted from the dim (from the last press when Dim after is Off) */
     } else {
         put(o, "Auto-lock", "%s", g_ui_state.autolock ? "On" : "Off"); /* Hold turns on when the screen goes off */
     }
@@ -321,14 +319,15 @@ static bool display_button(ui_screen_t *b, uint8_t btn) {
     case D_BACKLIGHT:
         open_backlight_slider();
         return true;
-    case D_AUTODIM:
-        g_ui_state.autodim = !g_ui_state.autodim;
-        break;
-    case D_DIM_AFTER:
+    case D_DIM_AFTER: /* Off -> 10 s -> ... -> 5 min -> Off */
         if (!g_ui_state.autodim) {
-            return true; /* greyed: nothing to change */
+            g_ui_state.autodim = true;
+            g_ui_state.dim_idx = 0;
+        } else if (g_ui_state.dim_idx + 1u < UI_AUTODIM_STEPS) {
+            g_ui_state.dim_idx++;
+        } else {
+            g_ui_state.autodim = false;
         }
-        g_ui_state.dim_idx = (uint8_t)((g_ui_state.dim_idx + 1u) % UI_AUTODIM_STEPS);
         break;
     case D_SCREEN_OFF:
         g_ui_state.off_idx = (uint8_t)((g_ui_state.off_idx + 1u) % UI_SCREENOFF_STEPS);
@@ -339,6 +338,7 @@ static bool display_button(ui_screen_t *b, uint8_t btn) {
     }
     ui_state_persist();
     ui_list_refresh(s->list);
+    ui_feedback_step(); /* the tick says it changed */
     return true;
 }
 
@@ -442,13 +442,22 @@ static ui_screen_t *make_haptics(void) {
 
 enum { G_ABOUT, G_DISPLAY, G_CLICK, G_HAPTICS, G_GAPLESS, G_SHUFFLE, G_REPEAT, G_RESUME, G_BLUETOOTH, G_WIFI, G_STORAGE, G_BATTERY, G_COUNT };
 
+#define PANE_ROWS 4
+typedef struct {
+    char kv[PANE_ROWS][2][28]; /* key, value */
+    char help[64];
+    int8_t n;
+} pane_t;
+
 typedef struct {
     ui_screen_t base;
     ui_list_t *list;
-    lv_obj_t *head, *body;
+    lv_obj_t *head, *help;
+    lv_obj_t *key[PANE_ROWS], *val[PANE_ROWS];
     int32_t shown_sel;
     uint32_t last_ms;
-    char text[200];
+    pane_t shown; /* what the pane shows now: a change is written once */
+    bool flip;    /* the next pane update flips the first value (a toggle changed it in place) */
 } settings_t;
 
 static const char *const k_group[G_COUNT] = {"About", "Display", "Click", "Haptics", "Gapless playback", "Shuffle", "Repeat", "Resume playing", "Bluetooth", "Wi-Fi", "Storage", "Battery"};
@@ -482,8 +491,23 @@ static void settings_get(void *ctx, int32_t i, ui_list_item_t *o) {
     }
 }
 
-static void pane_text(int32_t g, char *out, size_t n) {
-    char a[24], b[24];
+/* The right pane (ST-1): the group's name, up to four key / value lines (Small, keys ink2 at the left, values ink at the right) and a line of help (Small, ink3). */
+static void kv(pane_t *p, const char *key, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
+static void kv(pane_t *p, const char *key, const char *fmt, ...) {
+    if (p->n >= PANE_ROWS) {
+        return;
+    }
+    snprintf(p->kv[p->n][0], sizeof p->kv[0][0], "%s", key);
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(p->kv[p->n][1], sizeof p->kv[0][1], fmt, ap);
+    va_end(ap);
+    p->n++;
+}
+
+static void pane_fill(int32_t g, pane_t *p) {
+    char a[24];
+    memset(p, 0, sizeof *p);
     switch (g) {
     case G_ABOUT: {
         capabilities_t c;
@@ -492,54 +516,70 @@ static void pane_text(int32_t g, char *out, size_t n) {
         for (int i = 0; i < CAP_COUNT; i++) {
             ok += c.state[i] == CAP_OK;
         }
-        snprintf(out, n, "%s\n%s\n%s\n%d of %d checks ok", NEUPOD_VERSION, NEUPOD_GIT_HASH, hal_platform_name(), ok, (int)CAP_COUNT);
+        kv(p, "Version", "%s", NEUPOD_VERSION);
+        kv(p, "Build", "%s", NEUPOD_GIT_HASH);
+        kv(p, "Platform", "%s", hal_platform_name());
+        kv(p, "Checks", "%d of %d ok", ok, (int)CAP_COUNT);
         break;
     }
     case G_DISPLAY:
-        if (g_ui_state.autodim) {
-            snprintf(out, n, "Backlight\n%u %%\n%s %u %% after %s", (unsigned)g_ui_state.backlight_pct,
-                     g_ui_state.backlight_pct > UI_DIM_PCT ? "Dims to" : "Stays at", (unsigned)ui_backlight_effective(g_ui_state.backlight_pct, true),
-                     ui_autodim_name(g_ui_state.dim_idx));
-        } else {
-            snprintf(out, n, "Backlight\n%u %%\nAuto-dim off", (unsigned)g_ui_state.backlight_pct);
+        kv(p, "Theme", "%s", ui_theme_mode_name(g_ui_state.theme));
+        kv(p, "Brightness", "%u %%", (unsigned)g_ui_state.backlight_pct);
+        kv(p, "Dim after", "%s", g_ui_state.autodim ? ui_autodim_name(g_ui_state.dim_idx) : "Off");
+        kv(p, "Off after", "%s", ui_screenoff_name(g_ui_state.off_idx));
+        if (g_ui_state.theme == UI_THEME_AUTO) {
+            snprintf(p->help, sizeof p->help, "Dark when dimmed");
         }
         break;
     case G_CLICK:
-        snprintf(out, n, "Click\n%s\n%s", click_mode_name(g_ui_state.click_mode),
+        kv(p, "Click", "%s", click_mode_name(g_ui_state.click_mode));
+        snprintf(p->help, sizeof p->help, "%s",
                  click_mode_uses_haptic(g_ui_state.click_mode) && !caps_available(CAP_HAPTICS) ? "No haptic driver"
                  : click_mode_uses_piezo(g_ui_state.click_mode) ? "Piezo not fitted yet"
                                                                  : "Select to change");
         break;
     case G_HAPTICS:
-        snprintf(out, n, "Haptics\n%s\nCalibration: %s", rt_haptic_actuator() == HAL_HAPTIC_LRA ? "LRA" : "ERM", cal_text());
+        kv(p, "Actuator", "%s", rt_haptic_actuator() == HAL_HAPTIC_LRA ? "LRA" : "ERM");
+        kv(p, "Calibration", "%s", cal_text());
         break;
     case G_GAPLESS:
-        snprintf(out, n, "Gapless\n%s\n%s", player_gapless_enabled() ? "On" : "Off",
-                 player_gapless_enabled() ? "Tracks of one album play without a break" : "Short pause between tracks");
+        kv(p, "Gapless", "%s", player_gapless_enabled() ? "On" : "Off");
+        snprintf(p->help, sizeof p->help, "%s", player_gapless_enabled() ? "Tracks of one album play without a break" : "Short pause between tracks");
         break;
     case G_SHUFFLE:
-        snprintf(out, n, "Shuffle\n%s\n%s", shuffle_text(), player_shuffle() == PQ_SHUFFLE_SONGS ? "Folder plays in random order" : "Folder plays in order");
+        kv(p, "Shuffle", "%s", shuffle_text());
+        snprintf(p->help, sizeof p->help, "%s", player_shuffle() == PQ_SHUFFLE_SONGS ? "Folder plays in random order" : "Folder plays in order");
         break;
     case G_REPEAT:
-        snprintf(out, n, "Repeat\n%s\n%s", repeat_text(),
+        kv(p, "Repeat", "%s", repeat_text());
+        snprintf(p->help, sizeof p->help, "%s",
                  player_repeat() == PQ_REPEAT_ONE ? "Current track loops" : player_repeat() == PQ_REPEAT_ALL ? "Folder starts over at the end" : "Stops at the end of the folder");
         break;
     case G_RESUME:
-        snprintf(out, n, "At power-up\n%s\n%s", player_resume_autoplay() ? "On" : "Off",
-                 player_resume_autoplay() ? "Plays on power-up if it was playing" : "Power-up leaves the track paused");
+        kv(p, "At power-up", "%s", player_resume_autoplay() ? "On" : "Off");
+        snprintf(p->help, sizeof p->help, "%s", player_resume_autoplay() ? "Plays on power-up if it was playing" : "Power-up leaves the track paused");
         break;
     case G_BLUETOOTH: {
         hal_bt_state_t bs = hal_bt_state();
         if (bs == HAL_BT_ON || bs == HAL_BT_SCANNING) {
             char hs[80];
             ui_bt_headset_text(hs, sizeof hs); /* "Name\nState", or "" when no headset is remembered */
-            snprintf(out, n, "%s%sSelect to %s", hs, hs[0] != '\0' ? "\n" : "No headset saved\n", hs[0] != '\0' ? "manage" : "pair one");
+            char *nl = strchr(hs, '\n');
+            if (nl != NULL) {
+                *nl = '\0';
+                kv(p, "Headset", "%s", hs);
+                kv(p, "State", "%s", nl + 1);
+            } else {
+                kv(p, "Headset", "None saved");
+            }
+            snprintf(p->help, sizeof p->help, "Select to %s", hs[0] != '\0' ? "manage" : "pair one");
         } else if (bs == HAL_BT_STARTING) {
-            snprintf(out, n, "Starting...");
+            kv(p, "State", "Starting...");
         } else {
             capabilities_t c;
             caps_get(&c);
-            snprintf(out, n, "Unavailable\n%s", c.brief[CAP_BLUETOOTH]);
+            kv(p, "State", "Unavailable");
+            snprintf(p->help, sizeof p->help, "%s", c.brief[CAP_BLUETOOTH]);
         }
         break;
     }
@@ -547,11 +587,14 @@ static void pane_text(int32_t g, char *out, size_t n) {
         wifi_info_t wi;
         wifi_get_info(&wi);
         if (wi.state == HAL_WIFI_UP) {
-            snprintf(out, n, "%s\n%s\nSignal: %s", wi.ssid, wi.ip, ui_signal_word(ui_wifi_bars()));
+            kv(p, "Network", "%s", wi.ssid);
+            kv(p, "Address", "%s", wi.ip);
+            kv(p, "Signal", "%s", ui_signal_word(ui_wifi_bars()));
         } else if (wi.saved == 0) {
-            snprintf(out, n, "No network saved\nSelect to add one");
+            kv(p, "Network", "None saved");
+            snprintf(p->help, sizeof p->help, "Select to add one");
         } else {
-            snprintf(out, n, "%s", wi.state == HAL_WIFI_DOWN ? "Radio idle" : wi.state == HAL_WIFI_JOINING ? "Connecting..." : "Not connected");
+            kv(p, "State", "%s", wi.state == HAL_WIFI_DOWN ? "Radio idle" : wi.state == HAL_WIFI_JOINING ? "Connecting..." : "Not connected");
         }
         break;
     }
@@ -559,36 +602,83 @@ static void pane_text(int32_t g, char *out, size_t n) {
         hal_card_info_t ci;
         if (hal_storage_ready() && hal_storage_get_info(&ci) == HAL_STORAGE_OK) {
             ui_format_size(ci.capacity_bytes, a, sizeof a);
-            snprintf(out, n, "%s\n%s\n%s", hal_storage_card_type_str(ci.type), a, hal_storage_get_write_enabled() ? "read-write" : "read-only");
+            kv(p, "Card", "%s", hal_storage_card_type_str(ci.type));
+            kv(p, "Size", "%s", a);
+            kv(p, "Mode", "%s", hal_storage_get_write_enabled() ? "read-write" : "read-only");
         } else {
-            snprintf(out, n, "No card");
+            kv(p, "Card", "None");
         }
         break;
     }
     case G_BATTERY: {
         hal_battery_status_t bs;
         if (battery_store_get(&bs)) {
-            snprintf(a, sizeof a, "%u %%", (unsigned)bs.soc_pct);
-            snprintf(b, sizeof b, "%u mV", (unsigned)bs.mv);
-            snprintf(out, n, "%s\n%s\n%s", a, b, bs.rate_mpct_per_h > 2000 ? "charging" : bs.rate_mpct_per_h < -2000 ? "discharging" : "idle");
+            kv(p, "Charge", "%u %%", (unsigned)bs.soc_pct);
+            kv(p, "Voltage", "%u mV", (unsigned)bs.mv);
+            kv(p, "State", "%s", bs.rate_mpct_per_h > 2000 ? "charging" : bs.rate_mpct_per_h < -2000 ? "discharging" : "idle");
         } else {
-            snprintf(out, n, "No gauge");
+            kv(p, "Gauge", "None");
         }
         break;
     }
     }
 }
 
+static void value_flip(lv_obj_t *l);
 static void settings_update_pane(settings_t *s) {
     int32_t g = ui_list_selected(s->list);
-    char text[sizeof s->text];
-    pane_text(g, text, sizeof text);
-    if (strcmp(text, s->text) != 0 || g != s->shown_sel) {
-        snprintf(s->text, sizeof s->text, "%s", text);
-        s->shown_sel = g;
-        lv_label_set_text(s->head, k_group[g]);
-        ui_label_set_text(s->body, s->text);
+    pane_t p;
+    pane_fill(g, &p);
+    if (memcmp(&p, &s->shown, sizeof p) == 0 && g == s->shown_sel) {
+        s->flip = false;
+        return;
     }
+    const bool same = g == s->shown_sel;
+    s->shown = p;
+    s->shown_sel = g;
+    lv_label_set_text(s->head, k_group[g]);
+    const int32_t pitch = lv_font_get_line_height(UIM->font_small) + UIM->set_body_line_space * 2 / 3;
+    for (int i = 0; i < PANE_ROWS; i++) {
+        const bool on = i < p.n;
+        lv_obj_set_hidden(s->key[i], !on);
+        lv_obj_set_hidden(s->val[i], !on);
+        if (on) {
+            ui_label_set_text(s->key[i], p.kv[i][0]);
+            ui_label_set_text(s->val[i], p.kv[i][1]);
+        }
+    }
+    const bool help = p.help[0] != '\0';
+    lv_obj_set_hidden(s->help, !help);
+    if (help) {
+        ui_label_set_text(s->help, p.help);
+        lv_obj_set_y(s->help, UIM->set_body_y + p.n * pitch + UIM->set_body_line_space);
+    }
+    if (same && s->flip && p.n > 0) { /* a value changed in place flips; moving to another group does not */
+        value_flip(s->val[0]);
+    }
+    s->flip = false;
+}
+
+/* ST-1: a toggle changed in place: its value in the pane flips in 60 ms (the haptic tick is the click feedback) */
+static void flip_cb(void *o, int32_t v) { lv_obj_set_style_text_opa(o, (lv_opa_t)v, 0); }
+
+static void value_flip(lv_obj_t *l) {
+    lv_anim_delete(l, flip_cb);
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, l);
+    lv_anim_set_exec_cb(&a, flip_cb);
+    lv_anim_set_values(&a, 60, 255);
+    lv_anim_set_duration(&a, 60);
+    lv_anim_start(&a);
+}
+
+/* A toggle row changed: refresh the list and the pane, flip the value, tick. */
+static void toggled(settings_t *s) {
+    ui_list_refresh(s->list);
+    s->flip = true;
+    settings_update_pane(s);
+    ui_feedback_step();
 }
 
 static void settings_scroll(ui_screen_t *b, int32_t steps) {
@@ -609,30 +699,24 @@ static bool settings_button(ui_screen_t *b, uint8_t btn) {
     case G_CLICK:
         g_ui_state.click_mode = click_mode_next(g_ui_state.click_mode);
         ui_state_persist();
-        ui_list_refresh(s->list);
-        settings_update_pane(s);
-        ui_feedback_step(); /* a click when switched on is the confirmation */
+        toggled(s); /* the tick is the click mode's own confirmation */
         return true;
     case G_HAPTICS: next = make_haptics(); break;
     case G_GAPLESS:
         player_set_gapless(!player_gapless_enabled()); /* saved with the other settings; read when the next track is prepared */
-        ui_list_refresh(s->list);
-        settings_update_pane(s);
+        toggled(s);
         return true;
     case G_SHUFFLE:
         player_set_shuffle(player_shuffle() == PQ_SHUFFLE_SONGS ? PQ_SHUFFLE_OFF : PQ_SHUFFLE_SONGS);
-        ui_list_refresh(s->list);
-        settings_update_pane(s);
+        toggled(s);
         return true;
     case G_REPEAT:
         player_set_repeat((pq_repeat_t)(((unsigned)player_repeat() + 1u) % 3u)); /* Off -> One -> All -> Off */
-        ui_list_refresh(s->list);
-        settings_update_pane(s);
+        toggled(s);
         return true;
     case G_RESUME:
         player_set_resume_autoplay(!player_resume_autoplay());
-        ui_list_refresh(s->list);
-        settings_update_pane(s);
+        toggled(s);
         return true;
     case G_BLUETOOTH: next = make_bluetooth(); break;
     case G_WIFI: next = ui_screen_wifi_create(); break;
@@ -678,6 +762,7 @@ ui_screen_t *ui_screen_settings_create(void) {
     s->list = ui_list_create(s->base.root, UIM->set_list_w, &(ui_list_model_t){.count = G_COUNT, .ctx = s, .get = settings_get});
     const int32_t pane_w = UI_W - UIM->set_list_w;
     const int32_t text_w = pane_w - 2 * UIM->set_pane_pad;
+    const int32_t key_w = text_w * 54 / 100;
 
     lv_obj_t *pane = lv_obj_create(s->base.root);
     lv_obj_remove_style_all(pane);
@@ -688,13 +773,27 @@ ui_screen_t *ui_screen_settings_create(void) {
     ui_obj_border(pane, UI_C_LINE, 1, LV_BORDER_SIDE_LEFT);
     s->head = ui_label(pane, "", UI_L_TEXT);
     lv_obj_set_width(s->head, text_w);
-    lv_obj_set_style_text_align(s->head, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(s->head, LV_LABEL_LONG_DOT);
+    lv_obj_set_height(s->head, UIM->line_h);
     lv_obj_set_pos(s->head, UIM->set_pane_pad, UIM->set_head_y);
-    s->body = ui_label(pane, "", UI_L_DIM);
-    lv_obj_set_width(s->body, text_w);
-    lv_obj_set_style_text_align(s->body, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_line_space(s->body, UIM->set_body_line_space, 0);
-    lv_obj_set_pos(s->body, UIM->set_pane_pad, UIM->set_body_y);
+    const int32_t pitch = lv_font_get_line_height(UIM->font_small) + UIM->set_body_line_space * 2 / 3;
+    for (int i = 0; i < PANE_ROWS; i++) {
+        s->key[i] = ui_label_small(pane, "", UI_L_DIM);
+        lv_obj_set_size(s->key[i], key_w, lv_font_get_line_height(UIM->font_small));
+        lv_label_set_long_mode(s->key[i], LV_LABEL_LONG_DOT);
+        lv_obj_set_pos(s->key[i], UIM->set_pane_pad, UIM->set_body_y + i * pitch);
+        s->val[i] = ui_label_small(pane, "", UI_L_TEXT);
+        lv_obj_set_size(s->val[i], text_w - key_w, lv_font_get_line_height(UIM->font_small));
+        lv_label_set_long_mode(s->val[i], LV_LABEL_LONG_DOT);
+        lv_obj_set_style_text_align(s->val[i], LV_TEXT_ALIGN_RIGHT, 0);
+        lv_obj_set_pos(s->val[i], UIM->set_pane_pad + key_w, UIM->set_body_y + i * pitch);
+        lv_obj_set_hidden(s->key[i], true);
+        lv_obj_set_hidden(s->val[i], true);
+    }
+    s->help = ui_label_small(pane, "", UI_L_FAINT);
+    lv_obj_set_width(s->help, text_w);
+    lv_label_set_long_mode(s->help, LV_LABEL_LONG_WRAP);
+    lv_obj_set_hidden(s->help, true);
     settings_update_pane(s);
     return &s->base;
 }
