@@ -423,7 +423,7 @@ static void home_tick(ui_screen_t *s) {
         home_set(m->hint, "");
     } else if (m->lib_state == 2) {
         snprintf(buf, sizeof buf, "No library yet%s%s", pct[0] != '\0' ? " \xC2\xB7 " : "", pct);
-        home_set(m->hint, "Music > Update Library");
+        home_set(m->hint, "Open Music to build it");
     } else {
         snprintf(buf, sizeof buf, "%s", pct);
         home_set(m->hint, "");

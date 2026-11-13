@@ -332,6 +332,23 @@ Left/Right, Space/`p` Play/Pause. The wheel, when it works, sends the same event
 `ctest` runs it as `runtime_smoke` against a small fixture card (`build/host/fsroot_fixture`,
 `NEUPOD_FS_ROOT`) and writes `build/host/snapshots/`.
 
+### Phase 4 (built part): library states, Settings pane, Home
+
+**Full-pane states (LB-4, `ui_pane.c`).** A state with no rows covers the list: heading (Title font), up to two Small lines, a bar with a Small caption, an accent button naming what Select does, and a hint line at the bottom.
+`ui_library.c` uses it for opening (shown only after 300 ms), building, an error (with "Try again"), the Update Library result ("Done") and an empty list ("No artists yet", "Update Library"). "Library needs a writable card" is also a toast.
+**Determinate progress:** the build first counts the audio files (directory entries only, same filters as the scan; Cancel works during the count), so the bar is `files / total` and the caption reads "552 of 1,204 songs . Aurora Lane"
+(folder name from the scan). **Run in background:** Menu on the build pane leaves the screen, the build carries on and the status bar's left slot shows three busy dots on every screen; a toast says how it ended
+("Library updated . 1,204 songs", or "Library update stopped" if the card was wanted for something else: any other card request, e.g. Play, still ends a build, the old index stands). Opening Update Library while one runs in the background takes it over.
+**Greyed songs (LB-5):** the codec at the right of a greyed two-line row (an album track already showed it in brackets); a queue that skips an unplayable track toasts "Skipped: unsupported codec (AAC)" (`player_skip_notice`).
+`ui_frame_push` returns false when the stack is full; Go to album / artist then toast "Can't open: too many screens".
+
+**Settings (ST-1, ST-2).** The right pane is a left-aligned summary: group name (Body), up to four key / value lines (Small, key ink2, value ink right-aligned) and one help line (Small, ink3). Gapless, Shuffle, Repeat, Resume and Click change in place on Select
+with a haptic tick and a 60 ms flip of the value in the pane. Settings > Display is Theme, Brightness (the slider), Dim after (10 s to 5 min, then Off: that is Auto-dim), Off after, Auto-lock.
+
+**Home (3.1).** Playing: art, title and artist (tickers), a 3 px progress bar, elapsed (pause glyph in front when paused) and remaining. Idle: the clock at 48 px and the date once the clock is set (otherwise "Nothing playing"), then "1,204 songs . 72 %"
+(one Info request for the song count when the panel goes idle; "No library yet" and "Open Music to build it" when there is no index). "Now Playing" is greyed while nothing is queued (Select says "Nothing playing"); Shuffle Songs has no chevron.
+The card summary line ("SDHC 32 GB") exists only with `-DNEUPOD_UI_DEBUG=ON`.
+
 ## Not yet drawn
 
 - Hold-switch lock overlay, charging screen, USB mass-storage ("Connected") screen.
