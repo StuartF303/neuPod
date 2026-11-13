@@ -209,7 +209,7 @@ sd_mount() {
 HOLD_MIN_US=30000
 key_held() {
 	od -An -v -tu1 "$1" 2>/dev/null | {
-		s0=; down=0; tdown=0
+		s0=; down=0; tdown=0; dcode=
 		while read -r b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15; do
 			[ -n "$b15" ] || continue # truncated last record
 			[ "$b8" = 1 ] && [ "$b9" = 0 ] || continue # EV_KEY only
@@ -217,9 +217,10 @@ key_held() {
 			sec=$((b0 + b1 * 256 + b2 * 65536 + b3 * 16777216))
 			[ -n "$s0" ] || s0=$sec
 			t=$(((sec - s0) * 1000000 + b4 + b5 * 256 + b6 * 65536 + b7 * 16777216))
+			code=$((b10 + b11 * 256))
 			if [ "$val" = 1 ]; then
-				[ "$down" = 1 ] || { down=1; tdown=$t; }
-			elif [ "$val" = 0 ] && [ "$down" = 1 ]; then
+				[ "$down" = 1 ] || { down=1; tdown=$t; dcode=$code; }
+			elif [ "$val" = 0 ] && [ "$down" = 1 ] && [ "$code" = "$dcode" ]; then # only the tracked key's release counts
 				[ $((t - tdown)) -ge "$HOLD_MIN_US" ] && exit 0
 				down=0
 			fi

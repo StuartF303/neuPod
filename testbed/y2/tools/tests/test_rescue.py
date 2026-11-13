@@ -68,6 +68,13 @@ class KeyHeld(unittest.TestCase):
         t = 1790000421
         self.assertTrue(self.held(self.GHOST + self.ev(t, 0, 1, 0x67, 1) + self.ev(t + 1, 0, 1, 0x67, 0)))
 
+    def test_glitch_on_another_key_during_a_real_hold(self):
+        t = 1790000421
+        self.assertTrue(self.held(self.ev(t, 0, 1, 103, 1) + self.ev(t, 1000, 1, 108, 1) +
+                                  self.ev(t, 11000, 1, 108, 0) + self.ev(t, 100000, 1, 103, 0)))
+        self.assertTrue(self.held(self.ev(t, 0, 1, 108, 1) + self.ev(t, 100, 1, 103, 1) +
+                                  self.ev(t, 150, 1, 103, 0) + self.ev(t + 1, 0, 1, 108, 0)))
+
     def test_non_key_events_and_empty_file_do_not_hold(self):
         self.assertFalse(self.held(self.ev(1, 0, 3, 0x30, 1)))  # EV_ABS with value 1
         self.assertFalse(self.held(b""))
