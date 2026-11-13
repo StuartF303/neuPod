@@ -101,8 +101,10 @@ bool plays_record(const char *path, uint64_t size, const char *title, const char
     if (path == NULL || path[0] != '/' || strlen(path) >= PLAYS_PATH_MAX) {
         return false;
     }
-    while (__atomic_exchange_n(&g_in_lock, 1, __ATOMIC_ACQUIRE) != 0) {
-        /* another producer is copying a record: a handful of instructions */
+    if (__atomic_exchange_n(&g_in_lock, 1, __ATOMIC_ACQUIRE) != 0) {
+        /* another producer is mid-copy. Never spin: all tasks share core 0 and the UI (priority 2) outranks the monitor (1), so a UI task spinning on a lock
+         * held by a preempted monitor would never let it finish. A record lost to this is as acceptable as one lost to a full inbox. */
+        return false;
     }
     bool ok = g_in_head - g_in_tail < INBOX_N;
     if (ok) {

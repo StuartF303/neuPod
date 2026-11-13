@@ -300,7 +300,7 @@ static nfs_err_t parse_file(const char *path, pl_entry_fn fn, void *user, bool *
     }
     pl_m3u_init(&g_parser, dir);
     uint8_t buf[512];
-    uint32_t total = 0;
+    uint32_t total = 0, since_pump = 0;
     if (cut != NULL) {
         *cut = false;
     }
@@ -312,7 +312,9 @@ static nfs_err_t parse_file(const char *path, pl_entry_fn fn, void *user, bool *
         }
         pl_m3u_feed(&g_parser, buf, got, fn, user);
         total += (uint32_t)got;
-        if ((total & 4095u) == 0) {
+        since_pump += (uint32_t)got;
+        if (since_pump >= 4096u) { /* by bytes read, not by alignment: a short read must not skip a pump */
+            since_pump = 0;
             track_stream_pump(); /* keep the audio ring topped up between pieces */
         }
         if (total >= PARSE_MAX_BYTES) {
@@ -505,7 +507,12 @@ static pls_status_t do_catalog(void) {
     for (uint8_t f = 0; f < g_nfiles; f++) {
         uint32_t n = 0;
         bool big = false;
-        nfs_err_t pe = parse_file(g_fpath[f], count_cb, &n, &big);
+        nfs_err_t pe = NFS_OK;
+        if (storage_request_waiting()) {
+            big = true; /* another request (Play ...) is waiting: list the file without counting it ("n+" shown as unknown) */
+        } else {
+            pe = parse_file(g_fpath[f], count_cb, &n, &big);
+        }
         set_item(i++, PLS_FILE, f, g_fname[f], pe == NFS_OK, n, big);
     }
     g_stage_n = i;
@@ -748,6 +755,14 @@ static pls_status_t otg_save(const char *add_path, uint32_t remove_idx, bool cle
     }
     if (e != NFS_OK) {
         return map_write(e);
+    }
+    /* A cut between the unlink and the rename of the last save leaves the complete list only as the temp file: make it the list again before the temp file
+     * is truncated for this rewrite (it is also what the rewrite reads), or the whole list would be lost. */
+    if (nfs_stat(PLS_OTG_FILE, &st) != NFS_OK && strcmp(otg_read_path(), PLS_OTG_TMP) == 0) {
+        e = nfs_rename(PLS_OTG_TMP, PLS_OTG_FILE);
+        if (e != NFS_OK) {
+            return map_write(e);
+        }
     }
     nfs_file_t *f;
     e = nfs_open(&f, PLS_OTG_TMP, NFS_O_WRITE | NFS_O_CREATE | NFS_O_TRUNC);
