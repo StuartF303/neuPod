@@ -16,7 +16,7 @@ extern "C" {
 /**
  * Run charging-only mode until Power is held 2 s (spawns /sbin/reboot, returns 77), the charger has been gone for 3 s
  * (spawns /sbin/poweroff, returns 77) or SIGTERM arrives (returns 0). Starts no UI, storage, audio or RTOS. Keeps the
- * backlight off and the framebuffer black, polls every 250 ms. If a command cannot be started it logs and keeps waiting.
+ * backlight on only for 10 s after entry or a key (animated battery, y2_chargeview.h), polls every 250 ms. If a command cannot be started it logs and keeps waiting.
  */
 int y2_charging_main(void);
 

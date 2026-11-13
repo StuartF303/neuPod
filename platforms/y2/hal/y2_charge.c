@@ -82,6 +82,8 @@ void y2_charge_feed(y2_charge_t *c, const y2_event_t *ev, uint32_t now_ms) {
     y2_input_feed(&c->in, ev, now_ms);
 }
 
+uint32_t y2_charge_hold_ms(const y2_charge_t *c, uint32_t now_ms) { return c->pw_down ? now_ms - c->pw_ms : 0u; }
+
 y2_charge_action_t y2_charge_step(y2_charge_t *c, uint32_t now_ms, y2_charge_online_t online) {
     power_hold_check(c, now_ms);
     (void)y2_input_take_volume(&c->in); // side keys and the wheel mean nothing here: drain them so they cannot pile up

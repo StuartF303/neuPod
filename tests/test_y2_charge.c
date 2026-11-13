@@ -145,6 +145,16 @@ TEST(short_press_and_other_keys_do_nothing) {
     ASSERT_EQ(Y2_CHARGE_NONE, y2_charge_step(&c, 20000, Y2_CHARGE_ONLINE));
 }
 
+TEST(hold_ms_counts_only_while_power_is_down) {
+    y2_charge_t c;
+    y2_charge_init(&c);
+    ASSERT_EQ(0, y2_charge_hold_ms(&c, 500));
+    key(&c, Y2_KEY_POWER, 1, 1000);
+    ASSERT_EQ(700, y2_charge_hold_ms(&c, 1700));
+    key(&c, Y2_KEY_POWER, 0, 1800);
+    ASSERT_EQ(0, y2_charge_hold_ms(&c, 1900));
+}
+
 int main(void) {
     RUN(online_reads_usb_and_ac_and_ignores_the_battery);
     RUN(online_ignores_missing_or_odd_values);
@@ -154,5 +164,6 @@ int main(void) {
     RUN(step_requests_poweroff_once_after_a_clean_three_seconds);
     RUN(power_hold_requests_reboot_exactly_once);
     RUN(short_press_and_other_keys_do_nothing);
+    RUN(hold_ms_counts_only_while_power_is_down);
     return RESULT();
 }
