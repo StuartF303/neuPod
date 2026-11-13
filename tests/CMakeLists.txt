@@ -687,6 +687,20 @@ set_source_files_properties(test_gapless.c PROPERTIES COMPILE_OPTIONS "-Wall;-We
 add_test(NAME gapless COMMAND test_gapless)
 set_tests_properties(gapless PROPERTIES TIMEOUT 120)
 
+# The same gapless test under AddressSanitizer + UBSan (-DNEUPOD_HOST_ASAN=ON): the core-1 loop, the codecs and the handoff.
+if(NEUPOD_HOST_ASAN)
+  add_executable(test_gapless_asan test_gapless.c
+    ${CMAKE_SOURCE_DIR}/app/audio/audio_shared.c ${CMAKE_SOURCE_DIR}/app/audio/audio_ctl.c ${CMAKE_SOURCE_DIR}/app/audio/codec.c
+    ${CMAKE_SOURCE_DIR}/app/audio/bt_pcm.c ${CMAKE_SOURCE_DIR}/app/audio/track_feed.c ${CMAKE_SOURCE_DIR}/app/audio/track_stream.c ${NEUPOD_CODEC_TEST_VENDOR})
+  target_include_directories(test_gapless_asan PRIVATE ${CMAKE_SOURCE_DIR}/app/include ${CMAKE_SOURCE_DIR}/app/third_party/alac)
+  target_compile_definitions(test_gapless_asan PRIVATE NEUPOD_TEST_ASSETS="${CMAKE_SOURCE_DIR}/tests/assets/audio")
+  target_compile_options(test_gapless_asan PRIVATE -fsanitize=address,undefined -fno-sanitize=signed-integer-overflow,shift -fno-omit-frame-pointer -g -Wno-multichar)
+  target_link_options(test_gapless_asan PRIVATE -fsanitize=address,undefined)
+  target_link_libraries(test_gapless_asan neupod_rt_core Threads::Threads m)
+  add_test(NAME gapless_asan COMMAND test_gapless_asan)
+  set_tests_properties(gapless_asan PROPERTIES TIMEOUT 240)
+endif()
+
 # Play queue: folder order, skipping non-audio entries, next / previous rules, end of queue.
 add_executable(test_play_queue test_play_queue.c)
 target_link_libraries(test_play_queue neupod_rt_core)

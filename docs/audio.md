@@ -207,7 +207,8 @@ bytes live in `g_audio_slot[seq & 1]`. The data ring carries streams back to bac
    because of trimming (see below) skip the rest of the stream up to the boundary.
 4. The decoder returns its last frame: core 1 looks at the command ring once more (an announcement sent just before the end is not missed),
    then, if the announcement is still valid (`g_audio_next_valid` re-read after copying the description), closes the decoder, opens the next one
-   on the same sink, PCM ring and volume, and pushes the number of PCM frames written so far into a small boundary ring. The block interrupt
+   on the same sink, PCM ring and volume (the decoders' byte source `g_sio` is rebuilt for every stream, WAV included, so a WAV that hands
+   over to a codec track never opens it on an unset source), and pushes the number of PCM frames written so far into a small boundary ring. The block interrupt
    counts the frames it serves; when they reach the boundary it reports `END_OF_TRACK` with value 1 and `elapsed` restarts. So the event
    fires in the block that carries the old track's last sample (within 256 frames), not when decoding ends. No mute change, no ramp.
 5. Nothing announced (last track, gapless off, other rate or channel count, unreadable file, a track too short to chain): the track ends
@@ -325,7 +326,8 @@ announced length is an error ("File is truncated or damaged"), so a damaged FLAC
 Once a command has interrupted the decoder's wait, every further read fails until the engine has handled it. Core 1's stack has a hardware limit
 (MSPLIM) 256 bytes above its bottom, so an overflow faults instead of corrupting RAM. The tests truncate every vector at each early byte and at 40 further
 points and flip random bits (fixed seed) in all of FLAC, MP3 and M4A; `-DNEUPOD_HOST_ASAN=ON` adds `test_codecs_asan`, the same tests under AddressSanitizer
-and UBSan (signed-overflow and shift reports are switched off: the vendored decoders wrap on corrupt data, which is harmless on ARM).
+and UBSan (signed-overflow and shift reports are switched off: the vendored decoders wrap on corrupt data, which is harmless on ARM), and
+`test_gapless_asan`, the gapless test (the real core-1 loop, every codec pair) under the same sanitizers.
 
 ### Test vectors
 
