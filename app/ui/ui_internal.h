@@ -57,7 +57,9 @@ int ui_layout_audit(const char *screen);
 /* ---- Boot splash (ui_splash.c) -------------------------------------------------------------------- */
 
 void ui_splash_create(void);
-/** The debug splash (a boot check failed, or Menu is held at start): adds the short list of failed checks and how many passed under the progress line. Once. */
+/** Brings the icon row up to date: each icon pulses while its check is pending, then goes solid with an accent border (ok) or gets a red cross (degraded). */
+void ui_splash_update(const capabilities_t *caps);
+/** The debug splash (a boot check failed, or Menu is held at start): adds the short list of failed checks and how many passed under the icon row. Once. */
 void ui_splash_show_debug(const capabilities_t *caps);
 /** Drains the hold bar along the bottom edge over a debug splash's hold. */
 void ui_splash_hold_update(uint32_t elapsed_ms, uint32_t total_ms);

@@ -54,7 +54,7 @@ TEST(profile_320_is_the_design_system_layout) {
     ASSERT_EQ(179, m->home_list_w); /* 56 % */
     ASSERT_EQ(179, m->set_list_w);
     ASSERT_EQ(32, m->sp_icon);
-    ASSERT_EQ(142, m->sp_icon_row_y);
+    ASSERT_EQ(116, m->sp_icon_row_y);
 }
 
 TEST(every_profile_fits_its_panel) {
@@ -151,16 +151,19 @@ TEST(every_profile_fits_its_panel) {
         ASSERT_TRUE(m->in_dt_y + lh(m->font_large) <= m->in_dt_name_y);
         ASSERT_TRUE(m->in_dt_name_y + lh(m->font_small) <= m->in_hint_y);
         ASSERT_TRUE(m->in_dt_x[3] + m->in_dt_time_shift >= 0); // time-only: the two time fields move left
-        // Splash: icons, caption, version line and the hold bar stack up inside the panel, the icon row is not wider than it
+        // Splash: wordmark, progress line, icon row, debug list, version line and the hold bar stack up inside the panel, the icon row is not wider than it
         ASSERT_TRUE(CAPS * m->sp_icon + (CAPS - 1) * m->sp_icon_gap <= m->w);
         ASSERT_TRUE(m->sp_wordmark_y + lh(m->font_huge) <= m->sp_track_y);
         ASSERT_TRUE(m->sp_track_y + m->sp_track_h <= m->sp_icon_row_y);
         ASSERT_TRUE(m->sp_track_w <= m->w && m->sp_shimmer_w < m->sp_track_w);
-        const int32_t cap_y = m->sp_icon_row_y + m->sp_icon + m->sp_caption_gap;
-        ASSERT_TRUE(cap_y + m->sp_caption_h <= m->h - m->sp_ver_inset - lh(m->font_body)); // caption above the version line
         ASSERT_TRUE(m->sp_hold_h <= m->sp_ver_inset);
-        ASSERT_TRUE(m->sp_ring <= m->sp_icon && m->sp_hap_h <= m->sp_icon);
-        ASSERT_TRUE(lh(m->font_large) <= m->sp_icon);
+        ASSERT_TRUE(lh(m->font_icon_lg) <= m->sp_icon);
+        // the debug list (failed checks, then the pass count) sits between the icon row and the version line and has room for at least three lines
+        {
+            const int32_t pitch = lh(m->font_body) + m->sp_caption_gap / 2;
+            const int32_t top = m->sp_icon_row_y + m->sp_icon + m->sp_caption_gap;
+            ASSERT_TRUE((m->h - m->sp_ver_inset - lh(m->font_small) - top) / pitch >= 3);
+        }
         ASSERT_TRUE(m->sp_diag_a[1].x < m->sp_icon && m->sp_diag_a[1].y < m->sp_icon && m->sp_diag_b[0].x < m->sp_icon);
         ASSERT_TRUE(m->sp_wordmark_y > 0);
     }

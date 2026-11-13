@@ -17,16 +17,17 @@ REL="$(realpath --relative-to="$SRC" "$OUT")"
 # ASCII, Latin-1 (U+00A0..U+00FF without the soft hyphen U+00AD, which must not draw), bullet, en/em dash, curly quotes, ellipsis, euro.
 TEXT="0x20-0x7E,0xA0-0xAC,0xAE-0xFF,0x2022,0x2013,0x2014,0x2018,0x2019,0x201C,0x201D,0x2026,0x20AC"
 # Font Awesome code points of every LV_SYMBOL_* the UI still draws from the fonts: AUDIO (the note), OK, IMAGE, WIFI, BATTERY_3, BLUETOOTH and
-# SD_CARD (the boot splash's icon row, the Wi-Fi list's tick and the headset note). Everything else (chevron, play, pause, shuffle, repeat, folder, file,
+# SD_CARD (the Wi-Fi list's tick and the headset note; the boot splash's icon row is Lucide since 2026-11-13). Everything else (chevron, play, pause, shuffle, repeat, folder, file,
 # lock, battery, power ...) is a Lucide icon or a drawn shape now (DS-6, docs/ui.md "Icons"). Keep ui_text_has_glyph() (app/ui/ui_logic.c) in step.
 SYMS="61441,61445,61452,61502,61931,62017,62099,63426"
 
-# Lucide icons (https://lucide.dev), as the font the Lucide project publishes: the 14 glyphs of the design review plus lock-open. The code points are
+# Lucide icons (https://lucide.dev), as the font the Lucide project publishes: the 14 glyphs of the design review plus lock-open and the boot splash's check icons. The code points are
 # the Lucide font's own (UI_ICON_* in app/ui/ui_icons.h). lucide-static is pinned by version and by the tarball's integrity hash.
 LUCIDE_VER="1.72.0"
 LUCIDE_INTEGRITY="sha512-QhdZ60O7Zcs/e8gw40uMfEn055xZTHBZoNi0xb+/1R2dTd0v4FXS46VL6rKSwC+V92tLBiqsAbCcijy7Wy4j4w=="
 # chevron-right play pause skip-back skip-forward shuffle repeat repeat-1 volume-2 bluetooth wifi lock folder file lock-open
-ICONS="0xe06f,0xe13c,0xe12e,0xe15f,0xe160,0xe15e,0xe146,0xe1fd,0xe1ab,0xe05c,0xe1ae,0xe10b,0xe0d7,0xe0c0,0xe10c"
+# then the boot splash's check row (reinstated 2026-11-13; it also uses volume-2, bluetooth and wifi): monitor hard-drive battery-medium vibrate circle-dot
+ICONS="0xe06f,0xe13c,0xe12e,0xe15f,0xe160,0xe15e,0xe146,0xe1fd,0xe1ab,0xe05c,0xe1ae,0xe10b,0xe0d7,0xe0c0,0xe10c,0xe11d,0xe0ed,0xe057,0xe223,0xe345"
 
 # lv_font_conv sizes the line box to the tallest glyph, so adding accented capitals would make every line 2 to 5 px taller and move the whole
 # layout (ADR-0018 pins the metrics to LVGL's built-in Montserrat). The generated line_height / base_line are therefore set back to the

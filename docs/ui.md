@@ -142,7 +142,7 @@ read `UIM->...` (the active profile); `UI_W`, `UI_H`, `UI_STATUS_H`, `UI_CONTENT
 | Home split (list / pane), art box | 179 / 141 (56 %), 117 px | 269 / 211, 175 px |
 | Now Playing art box, text column | 112 px at (14, 14), x = 140 | 168 px at (21, 21), x = 210 |
 | Settings split (groups / summary) | 179 / 141 | 269 / 211 |
-| Splash icon, icon row, wordmark | 32 px, y = 142, 48 pt | 48 px, y = 213, 48 pt (the largest size built) |
+| Splash icon, icon row, wordmark | 32 px, y = 116, 48 pt | 48 px, y = 174, 48 pt (the largest size built) |
 | LVGL partial-render buffers | 2 x 320 x 24 RGB565 (15 KB each) | 2 x 480 x 36 (34 KB each; hosted builds only) |
 | Toast / HUD strip, lock pill | 22 / 26 / 24 px | 33 / 39 / 36 px |
 
@@ -150,7 +150,7 @@ The 480x360 profile is every length of the 320x240 one times 3/2 (the `S()` macr
 table), and fonts step to the next size (14 to 20, 20 to 28: 1.43x and 1.4x, a little under 1.5x, so text that fits at 320
 fits at 480). Row counts do not change: both profiles show 7 rows. Adding a profile is one more initialiser in
 `ui_metrics.c`; `tests/test_ui_metrics.c` checks every compiled-in profile (title bar and rows fit the height, art box fits
-above the progress bar, text lines stack without overlapping, splash captions fit one line, the static LVGL buffers are big
+above the progress bar, text lines stack without overlapping, the splash debug list fits between the icon row and the version, the static LVGL buffers are big
 enough) and pins the 320x240 numbers to what the UI had before profiles existed.
 
 **What is compiled where.** `NEUPOD_UI_HIRES` (CMake option; default ON for `NEUPOD_PLATFORM=host` and `y2`, OFF for rp2350 and
@@ -176,7 +176,7 @@ test menu) are 320x240 only.
 ## Fonts and display text
 
 The UI draws with its own builds of Montserrat Medium (SIL OFL 1.1) at 12 (Small), 14, 16 (Small at 480x360, hosted builds only), 20, 28 (480x360, hosted builds only) and 48 pt, 4 bpp, merged with
-the few Font Awesome symbols that are still drawn from the fonts (`LV_SYMBOL_*`: note, tick, image, Wi-Fi, battery 3, Bluetooth, SD card; the rest of the symbols moved to the Lucide icons, below). They are generated files in `app/ui/fonts/` (`tools/gen_ui_fonts.sh` rebuilds them; the
+the few Font Awesome symbols that are still drawn from the fonts (`LV_SYMBOL_*`: note, tick, image, Wi-Fi, battery 3, Bluetooth, SD card, none of which the boot splash uses any more; the rest of the symbols moved to the Lucide icons, below). They are generated files in `app/ui/fonts/` (`tools/gen_ui_fonts.sh` rebuilds them; the
 command line, sources and licences are in `app/ui/fonts/README.md`) and replace LVGL's built-in `lv_font_montserrat_*`, which are switched off in
 `lv_conf.h` so the flash is not paid twice (the themes' default font is the 14 too). The metrics profiles point at them (`neupod_font_14` and so on).
 
@@ -240,9 +240,9 @@ in the firmware.) `ui_hud_show(label, pct, ms)`: the bottom strip (ink, Small te
 `ui_pill_show()` / `ui_hold_line_set()`: the lock pill and the Power-hold line (see Hold). None of them dims or blends anything behind it. The host tour tokens `toast:warn:Text_with_underscores`, `toast:info:...`, `hud:Label:PCT`, `strips:off` and `theme:light|dark|auto`
 drive them for `--tour-design` (ctest `design_tour`, `hires_design_tour`).
 
-**Icons (DS-6).** The Lucide set (ISC; chevron-right and lock derive from Feather, MIT) as 1-bit bitmaps at 16 / 24 px (320x240) and 24 / 36 px (480x360): chevron-right, play, pause, skip-back, skip-forward, shuffle, repeat, repeat-1, volume-2, bluetooth, wifi, lock, folder, file, and lock-open (`ui_icons.h`). They are generated from the pinned `lucide-static`
+**Icons (DS-6).** The Lucide set (ISC; chevron-right and lock derive from Feather, MIT) as 1-bit bitmaps at 16 / 24 px (320x240) and 24 / 36 px (480x360): chevron-right, play, pause, skip-back, skip-forward, shuffle, repeat, repeat-1, volume-2, bluetooth, wifi, lock, folder, file, lock-open, and the boot splash's check icons monitor, hard-drive, battery-medium, vibrate and circle-dot (`ui_icons.h`). They are generated from the pinned `lucide-static`
 package by `tools/gen_ui_fonts.sh` into `neupod_icons_*.c` and drawn with `ui_icon()` like a label, so they take a theme colour. Lists use the chevron, the Files rows the folder and file icons (`ui_list_item_t.icon`), the status bar Wi-Fi, Bluetooth and lock,
-Now Playing play / pause / shuffle / repeat. Battery and signal bars stay drawn shapes. The licence text is `app/ui/fonts/LICENSE-Lucide.txt`.
+Now Playing play / pause / shuffle / repeat. Battery and signal bars stay drawn shapes (the splash's battery-gauge icon is the Lucide glyph). The licence text is `app/ui/fonts/LICENSE-Lucide.txt`.
 
 **Motion (DS-7).** Push slides the new screen in 24 px over 120 ms (ease-out), pop slides the revealed screen in from the left over 100 ms; no alpha, only the content area repaints. (The review fades the popped screen out; the popped screen is destroyed at once, so the mirror slide is used.)
 LVGL runs at 30 fps (`LV_DEF_REFR_PERIOD 33`, `lv_conf.h`) on every build; the Y2 stays at 30 until a vsync'd framebuffer is confirmed there. A snapshot or the layout audit first settles any slide or strip in flight (`ui_frame_settle()`).
@@ -372,7 +372,7 @@ A folder with more than 256 entries (`FILES_MAX_ENTRIES`) is read a page at a ti
 
 ### Splash (phase 4c, SP-1)
 
-The **release splash** is the wordmark, the progress line (the shimmer under it) and the version in the dim ink, shown at least 600 ms (`RT_SPLASH_MIN_MS`). The **debug splash** replaces nothing but adds a short text list under the line when a boot check ended not fully correct, or when Menu is held while the unit starts: one red line per failed check (`Battery gauge - no response`, with `+n more` if they do not fit), then `6 of 8 checks passed` (`All 8 checks passed` when Menu was held and nothing failed); the bar along the bottom drains over the 8 s hold (any other key skips it). Keys pressed while the splash shows go to the home screen afterwards. The icon row and the red caption are gone. Host: `--splash-debug` / `--splash-release`; ctest `splash_*` and `hires_splash_*`.
+The **release splash** is the wordmark, the progress line (the shimmer under it), the **icon row** and the version in the dim ink, shown at least 600 ms (`RT_SPLASH_MIN_MS`). The icon row has one Lucide icon per boot check (Display = monitor, Storage = hard-drive, Battery gauge = battery-medium, Haptics = vibrate, Click wheel = circle-dot, Audio = volume-2, Bluetooth, Wi-Fi), in a 32 px box (48 px at 480x360) at y = 116 (174): the icon pulses while its check runs, goes solid with an accent border when it passes and gets a red cross when the subsystem is not fully correct. **The icon row was reinstated at the owner's request on 2026-11-13** (Y2 test: "I want the icons back, that loading screen was good"); the first SP-1 cut had replaced it with text. The **debug splash** keeps the icons and adds a short text list under them when a boot check ended not fully correct, or when Menu is held while the unit starts: one red line per failed check (`Battery gauge - no response`, with `+n more` if they do not fit), then `6 of 8 checks passed` (`All 8 checks passed` when Menu was held and nothing failed); the bar along the bottom drains over the 8 s hold (any other key skips it). Keys pressed while the splash shows go to the home screen afterwards. The red caption under the icons is gone (the debug list replaces it); the list has room for three lines at both sizes (`test_ui_metrics` pins it). Host: `--splash-debug` / `--splash-release`; ctest `splash_*` and `hires_splash_*`.
 
 ## Not yet drawn
 
