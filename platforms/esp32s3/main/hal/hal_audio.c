@@ -16,7 +16,7 @@
 #include "hal_audio.h"
 
 #define VCLK_TASK_PRIORITY 20 /* above everything of ours: the block callback must run on time */
-#define VCLK_TASK_STACK 3072
+#define VCLK_TASK_STACK 5120 /* the block callback runs here; 2.3 KB of 3 KB was free idle, the decoder path is deeper */
 #define MIN_LEAD_TICKS 20u /* an alarm closer than this to "now" is treated as already late */
 
 static hal_audio_block_cb g_cb;
@@ -112,6 +112,7 @@ hal_status_t hal_audio_open(const hal_audio_format *fmt) {
     g_late = g_late_seen = 0;
     g_underruns = 0;
     g_stop = false;
+    (void)ulTaskNotifyTake(pdTRUE, 0); // a wake-up left over from the previous stream must not fire a block early
     advance_deadline(); /* first block one period from now */
     gptimer_alarm_config_t a = {.alarm_count = g_next, .reload_count = 0, .flags.auto_reload_on_alarm = false};
     if (gptimer_register_event_callbacks(g_timer, &cbs, NULL) != ESP_OK || gptimer_set_raw_count(g_timer, 0) != ESP_OK ||

@@ -43,6 +43,7 @@ static uint8_t s_madctl = 0x30;
 static bool s_inverted;
 static uint8_t s_brightness;
 static bool s_asleep;
+// Threading: every display call comes from the UI task (init, blit, sleep, backlight), so there is no lock here.
 
 /* The write window and the cursor in it (hal_display_set_window / blit). */
 static uint16_t s_wx, s_wy, s_ww, s_wh, s_cx, s_cy;
@@ -139,6 +140,19 @@ static bool push_rect(int x0, int y0, int x1, int y1) {
     return ok;
 }
 
+static void release_buffers(void) {
+    heap_caps_free(s_fb);
+    s_fb = NULL;
+    for (int i = 0; i < 2; i++) {
+        heap_caps_free(s_bounce[i]);
+        s_bounce[i] = NULL;
+    }
+    if (s_done != NULL) {
+        vSemaphoreDelete(s_done);
+        s_done = NULL;
+    }
+}
+
 hal_status_t hal_display_init(void) {
     if (s_up) {
         return HAL_OK;
@@ -156,6 +170,7 @@ hal_status_t hal_display_init(void) {
     }
     if (s_done == NULL || s_fb == NULL || s_bounce[0] == NULL || s_bounce[1] == NULL) {
         printf("display: out of memory (shadow %p, strips %p/%p)\n", (void *)s_fb, (void *)s_bounce[0], (void *)s_bounce[1]);
+        release_buffers();
         return HAL_ERR;
     }
     memset(s_fb, 0, (size_t)LAND_W * LAND_H * 2u);
@@ -171,6 +186,7 @@ hal_status_t hal_display_init(void) {
     esp_err_t e = spi_bus_initialize(LCD_HOST, &bus, SPI_DMA_CH_AUTO);
     if (e != ESP_OK) {
         printf("display: spi bus: %s\n", esp_err_to_name(e));
+        release_buffers();
         return HAL_ERR;
     }
     esp_lcd_panel_io_spi_config_t io_cfg = {
@@ -188,6 +204,8 @@ hal_status_t hal_display_init(void) {
     e = esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)LCD_HOST, &io_cfg, &s_io);
     if (e != ESP_OK) {
         printf("display: panel io: %s\n", esp_err_to_name(e));
+        spi_bus_free(LCD_HOST);
+        release_buffers();
         return HAL_ERR;
     }
 
@@ -263,6 +281,9 @@ hal_status_t hal_display_blit(const hal_pixel_t *pixels, size_t count) {
     }
     if (pixels == NULL || s_ww == 0) {
         return HAL_EINVAL;
+    }
+    if (count == 0) {
+        return HAL_OK;
     }
     uint16_t first_row = s_cy, last_row = s_cy;
     size_t i = 0;

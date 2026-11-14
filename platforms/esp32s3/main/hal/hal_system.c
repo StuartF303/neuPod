@@ -7,6 +7,7 @@
 #include <stdlib.h>
 
 #include "board.h"
+#include "bootloader_random.h"
 #include "driver/gpio.h"
 #include "esp_mac.h"
 #include "esp_random.h"
@@ -20,6 +21,9 @@ hal_status_t hal_system_init(void) {
     // Latch battery power, start the I2C bus and power the panel. A failure here is not fatal to the system: the display and
     // touch HALs report their own state and the boot checks degrade the matching capabilities.
     (void)board_init();
+    // The radio is off, so the RNG would not get its noise: keep the SAR-ADC entropy source on (the battery divider is on ADC2 and is
+    // not read; turn this off before anything uses the ADC or starts the radio, which feeds the RNG itself).
+    bootloader_random_enable();
     return HAL_OK;
 }
 
@@ -60,18 +64,20 @@ bool hal_chip_id(uint8_t id[8]) {
     return true;
 }
 
-// The hardware RNG register. With the radio off (it is, for now) the IDF documents it as pseudo-random from a free-running noise
-// source, not a certified TRNG; fine for the per-record nonces of the secrets file, to be revisited when Wi-Fi/BLE are on
-// (the RNG is then fed by the RF noise).
+// The hardware RNG register, fed by the SAR-ADC entropy source that hal_system_init() enables while the radio is off (the IDF's
+// way to get true random numbers without Wi-Fi/BLE); revisit when the radio goes on.
 void hal_random(void *buf, size_t n) { esp_fill_random(buf, n); }
 
 bool hal_system_can_poweroff(void) { return true; }
 
 bool hal_system_poweroff(void) {
-    // Drop the battery latch. On battery the board switches off as soon as the side key is released; on USB power the board
-    // stays alive (the charger feeds it), which is a property of the board, not something this call can change.
+    // Drop the battery latch. On battery the board loses power (once the side key is released, if it is still held: the key itself
+    // keeps the power path on). On USB power the charger keeps it alive: that is probed here, not assumed. If we are still running
+    // after the settle time the request did nothing, and the caller (ui_frame) is told so and takes its "powering off" overlay away.
     gpio_set_level(PIN_BAT_CTRL, 0);
-    return true;
+    vTaskDelay(pdMS_TO_TICKS(200));
+    gpio_set_level(PIN_BAT_CTRL, 1); // still alive: hold the latch again, nothing is switching off
+    return false;
 }
 
 const char *hal_platform_name(void) { return "esp32s3"; }

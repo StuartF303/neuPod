@@ -12,6 +12,16 @@ file(GLOB_RECURSE NEUPOD_LVGL_SOURCES ${NEUPOD_LVGL_DIR}/src/*.c)
 # The UI's own fonts (generated, app/ui/fonts). All of them: flash is plentiful here (16 MB) and the set follows the UI profile.
 file(GLOB NEUPOD_UI_FONT_SOURCES ${NEUPOD_APP_DIR}/ui/fonts/*.c)
 
+# UI profile: one compiled-in profile, as app/CMakeLists.txt / the top-level CMakeLists.txt do for the other MCU builds.
+if(NOT NEUPOD_UI_PROFILE) # IDF's requirements pass runs this file in script mode, without the project's cache
+  set(NEUPOD_UI_PROFILE "600x450")
+endif()
+if(NEUPOD_UI_PROFILE STREQUAL "600x450")
+  set(NEUPOD_UI_PROFILE_DEFS NEUPOD_UI_PROFILE_600=1)
+elseif(NOT NEUPOD_UI_PROFILE STREQUAL "320x240")
+  message(FATAL_ERROR "NEUPOD_UI_PROFILE must be 320x240 or 600x450 (got '${NEUPOD_UI_PROFILE}')")
+endif()
+
 # --- Secrets at rest: the same crypto_secret.c / key provider, over IDF's mbed TLS (hardware AES/SHA) ---
 set(NEUPOD_CRYPTO_SOURCES
   ${NEUPOD_APP_DIR}/crypto/crypto_secret.c
@@ -79,6 +89,7 @@ idf_component_register(
     heap
     mbedtls
     sdmmc
+    bootloader_support
 )
 # (no "fatfs" here: see ../CMakeLists.txt)
 
@@ -93,10 +104,7 @@ target_include_directories(${COMPONENT_LIB} PRIVATE
   ${CMAKE_BINARY_DIR}/gen
 )
 # LVGL's pool lives in PSRAM here (main/linker.lf), so it is sized like the hosted builds (192 KB), not the RP2350's 72 KB of internal RAM.
-target_compile_definitions(${COMPONENT_LIB} PRIVATE LV_CONF_INCLUDE_SIMPLE LV_LVGL_H_INCLUDE_SIMPLE NEUPOD_LVGL_POOL_BYTES=196608u)
-# IDF compiles with -Werror=all. The portable app code builds with plain warnings on the other platforms, and this toolchain's
-# GCC 13 reports snprintf truncation in two UI files that the others do not: keep it a visible warning, not a stop.
-target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-error=format-truncation)
+target_compile_definitions(${COMPONENT_LIB} PRIVATE LV_CONF_INCLUDE_SIMPLE LV_LVGL_H_INCLUDE_SIMPLE NEUPOD_LVGL_POOL_BYTES=196608u ${NEUPOD_UI_PROFILE_DEFS})
 
 # Warning flags for project code only (never for third_party or the SDK), as in app/CMakeLists.txt.
 set_source_files_properties(${NEUPOD_PROJECT_SOURCES} PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")

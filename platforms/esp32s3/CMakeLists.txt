@@ -11,5 +11,8 @@ set(SDKCONFIG_DEFAULTS ${CMAKE_CURRENT_LIST_DIR}/sdkconfig.defaults)
 # is kept out of the build entirely: no second ff.h on any include path, no duplicate f_* symbols at link time.
 set(EXCLUDE_COMPONENTS fatfs)
 
+# UI profile (docs/ui.md): this board's panel is 600x450. Override with -DNEUPOD_UI_PROFILE=320x240 (idf.py build -D...).
+set(NEUPOD_UI_PROFILE "600x450" CACHE STRING "UI profile: 320x240 or 600x450")
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(neupod)

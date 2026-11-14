@@ -13,6 +13,7 @@
 #include "board.h"
 #include "driver/sdspi_host.h"
 #include "driver/spi_master.h"
+#include "esp_memory_utils.h"
 #include "ff.h"
 #include "hal_storage.h"
 #include "hal_storage_decode.h"
@@ -30,6 +31,14 @@ static bool g_write_enabled;
 static bool g_write_fault;
 static hal_card_info_t g_info;
 static uint32_t g_sectors;
+
+// The sdspi host copes with PSRAM buffers itself in most cases, but the library scan and the codecs hand it big PSRAM buffers at
+// high rates: anything that is not word-aligned internal (DMA-capable) memory goes through this internal staging buffer, a few
+// sectors at a time, so a read or write cannot fail on a bounce-buffer allocation.
+#define STAGE_SECTORS 4u
+static uint8_t g_stage[STAGE_SECTORS * HAL_STORAGE_SECTOR_SIZE] __attribute__((aligned(4)));
+
+static bool direct_ok(const void *p) { return esp_ptr_dma_capable(p) && ((uintptr_t)p & 3u) == 0; }
 
 static FATFS g_fatfs;
 static bool g_mounted;
@@ -154,7 +163,22 @@ hal_storage_status_t hal_storage_read(uint32_t lba, void *buf, uint32_t count) {
     if ((uint64_t)lba + count > g_sectors) {
         return HAL_STORAGE_BAD_PARAM;
     }
-    return map_err(sdmmc_read_sectors(&g_card, buf, lba, count));
+    if (direct_ok(buf)) {
+        return map_err(sdmmc_read_sectors(&g_card, buf, lba, count));
+    }
+    uint8_t *dst = buf;
+    while (count > 0) {
+        uint32_t n = count < STAGE_SECTORS ? count : STAGE_SECTORS;
+        esp_err_t e = sdmmc_read_sectors(&g_card, g_stage, lba, n);
+        if (e != ESP_OK) {
+            return map_err(e);
+        }
+        memcpy(dst, g_stage, (size_t)n * HAL_STORAGE_SECTOR_SIZE);
+        dst += (size_t)n * HAL_STORAGE_SECTOR_SIZE;
+        lba += n;
+        count -= n;
+    }
+    return HAL_STORAGE_OK;
 }
 
 void hal_storage_set_write_enabled(bool enabled) { g_write_enabled = enabled; }
@@ -176,7 +200,20 @@ hal_storage_status_t hal_storage_write(uint32_t lba, const void *buf, uint32_t c
     if ((uint64_t)lba + count > g_sectors) {
         return HAL_STORAGE_BAD_PARAM;
     }
-    esp_err_t e = sdmmc_write_sectors(&g_card, buf, lba, count);
+    esp_err_t e = ESP_OK;
+    if (direct_ok(buf)) {
+        e = sdmmc_write_sectors(&g_card, buf, lba, count);
+    } else {
+        const uint8_t *src = buf;
+        while (count > 0 && e == ESP_OK) {
+            uint32_t n = count < STAGE_SECTORS ? count : STAGE_SECTORS;
+            memcpy(g_stage, src, (size_t)n * HAL_STORAGE_SECTOR_SIZE);
+            e = sdmmc_write_sectors(&g_card, g_stage, lba, n);
+            src += (size_t)n * HAL_STORAGE_SECTOR_SIZE;
+            lba += n;
+            count -= n;
+        }
+    }
     if (e != ESP_OK) {
         g_write_fault = true;
     }

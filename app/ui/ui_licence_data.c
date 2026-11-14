@@ -3,6 +3,9 @@
 
 #include <string.h>
 
+// The trailing platform flags of an entry are false unless given: the table leaves them out on purpose.
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+
 // Keep in step with the table in LICENSE.md. Notices are short plain sentences (no code, no paths): they are read on a 2.5 inch screen.
 static const ui_licence_t k_licences[] = {
     {"neuPod firmware", "MPL-2.0",
@@ -10,7 +13,7 @@ static const ui_licence_t k_licences[] = {
      "Source: github.com/StuartF303/neuPod",
      "Firmware and software", "Mozilla", false},
     {"FreeRTOS kernel", "MIT",
-     "Copyright Amazon.com, Inc. or its affiliates. The Raspberry Pi port files carry a BSD-3-Clause notice. Runs the tasks of the player.",
+     "Copyright Amazon.com, Inc. or its affiliates. The port to each chip carries its maker's own notice (Raspberry Pi: BSD-3-Clause; Espressif: its port in ESP-IDF). Runs the tasks of the player.",
      "FreeRTOS", "MIT", false},
     {"LVGL", "MIT", "Copyright (c) LVGL Kft. The graphics library that draws every screen.", "LVGL", "MIT", false},
     {"Montserrat font", "SIL OFL 1.1",
@@ -36,7 +39,7 @@ static const ui_licence_t k_licences[] = {
      "Copyright (c) 2011 Apple Inc. The ALAC decoder, changed to C with its own memory handling. The licence text is in the source tree. Plays ALAC files.",
      "Apple Lossless", "Apache", false},
     {"mbed TLS", "Apache-2.0",
-     "Copyright The Mbed TLS Contributors, used under the Apache 2.0 option. AES-GCM, SHA-256 and HKDF keep the saved Wi-Fi passwords safe on the card.",
+     "Copyright The Mbed TLS Contributors, used under the Apache 2.0 option. AES-GCM, SHA-256 and HKDF keep saved secrets, such as Wi-Fi passwords, safe on the card.",
      "mbed TLS 3.6", "Apache-2.0", false},
     {"BTstack", "Non-commercial",
      "BlueKitchen GmbH. Free for non-commercial use only: any commercial product needs a licence from BlueKitchen (bluekitchen-gmbh.com). "

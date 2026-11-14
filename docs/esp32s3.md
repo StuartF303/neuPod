@@ -7,7 +7,7 @@ product target is the RP2350B, [ADR-0001](adr/0001-rp2350-phase1-platform.md)); 
 panel and to prove the HAL interfaces on a third architecture.
 
 **Not in yet:** Wi-Fi and BLE (the radio HAL answers "not present" and nothing joins a network), a battery gauge (the board has no
-fuel gauge; the battery divider on GPIO17 is not read), the IMU and RTC, and a 600 x 450 UI profile (see below).
+fuel gauge; the battery divider on GPIO17 is not read), the IMU and RTC.
 
 | | |
 |---|---|
@@ -61,7 +61,7 @@ the 8 KB storage stack on the bench (the hardware stack-end watchpoint, `CONFIG_
 | Where | What |
 |---|---|
 | CPU 0 | every RTOS task of the runtime (storage, UI, input, monitor, check tasks, haptic, wifi) and all IDF service tasks |
-| CPU 1 | `audio`: the audio core loop (`audio_core_main`, priority 5, 20 KB stack), and `vclk`: the block clock task (priority 20) |
+| CPU 1 | `audio`: the audio core loop (`audio_core_main`, priority 5, 28 KB stack), and `vclk`: the block clock task (priority 20) |
 
 `hal_audio.c` is the null sink with a real-time block clock: a 1 MHz general-purpose timer interrupt on CPU 1 (allocated by the core that calls
 `hal_audio_open()`, deadlines absolute and drift-free) wakes `vclk`, which calls the block callback. The callback was written for interrupt context,
@@ -74,11 +74,12 @@ in `main/linker.lf` (no attributes in `app/`):
 | In PSRAM | Why there |
 |---|---|
 | codec arena (99 KB), compressed-data ring (32 KB) | decoder working memory and the SD-to-decoder ring; not latency critical |
+| UI render buffers (72 KB at 600x450) | too big for internal RAM next to the stacks |
 | LVGL's pool (192 KB, `NEUPOD_LVGL_POOL_BYTES`) | widgets, styles, layers; sized like the hosted builds: 72 KB ran out on the Music screens |
 | display shadow (527 KB, allocated at run time) | see below |
 
-Internal: the PCM ring (32 KB), the UI's two render strips, the library buffers, the display's two DMA strips (19 KB each), task stacks. After boot about 59 KB of
-internal heap is free (22 KB at the lowest, while the six boot-check tasks run together): enough now, but the Wi-Fi/BLE stacks will need to
+Internal: the PCM ring (32 KB), the library buffers, a 2 KB SD staging buffer (PSRAM or unaligned buffers are copied through it, so no read or write depends on a bounce-buffer allocation), the display's two DMA strips (19 KB each), task stacks. After boot about 76 KB of
+internal heap is free (32 KB at the lowest, while the boot-check tasks run together): enough now, but the Wi-Fi/BLE stacks will need to
 be budgeted against it (trim the doubled stacks that measure small: the monitor line prints each task's stack-free minimum).
 
 **Display.** `hal_display.c` talks to the RM690B0 through `esp_lcd`'s SPI panel IO in QSPI mode (SH8601 framing: opcode 0x02 for commands,
@@ -87,10 +88,13 @@ windows that start even and end odd, and LVGL hands over arbitrary partial areas
 byte order, takes each `hal_display_blit()` and the area is pushed from it widened to even edges, whatever the caller's alignment. Landscape is
 MADCTL 0x30 and a 16-row offset. `hal_display_name()` is `RM690B0`; brightness is command 0x51.
 
-**Input.** One side key (`hal_input_power_key()`, GPIO15) and the touch panel (`hal_touch.h`). There is no wheel and no Hold switch: the wheel is declared a
-simulation (`hal_input_is_simulated()`, as on the Y2), sends one valid idle frame so the boot check passes, and never fails the boot. The touch HAL maps the
-controller's portrait coordinates to landscape (`x = 599 - y`, `y = x`, the factory demo's mapping). **This mapping and the Power-key polarity were not
-confirmed against a finger on the bench yet**; the three `TOUCH_*` switches at the top of `hal_touch.c` are the one place to change it.
+**Input.** One side key (`hal_input_power_key()`, GPIO15, active low) and the touch panel (`hal_touch.h`). There is no wheel and no Hold switch: `hal_input_init()`
+answers `HAL_ENODEV`, so the boot check marks the wheel degraded, exactly as on the RP2350 AMOLED board (touch and the console keys do not depend on it). A key press
+that is already down at power-on is ignored until it has been released once. The runtime's input task owns the touch controller: it calls `hal_touch_init()` under the
+I2C mutex once the bus is up and polls `hal_touch_read()` every 2 ms (`app/input/touch_gesture.c`, [Touch](touch.md)); `hal_touch.c` throttles the bus to one read per 8 ms and
+uses the i2c_master driver, which locks the bus per transaction, so it shares the bus safely with `hal_i2c`. The touch HAL maps the controller's portrait coordinates to landscape
+(`x = 599 - y`, `y = x`, the factory demo's mapping). **This mapping and the display image were not confirmed against a finger and by eye yet**; the three `TOUCH_*`
+switches at the top of `hal_touch.c` are the one place to change the mapping.
 
 **Radio.** `hal_wifi_present()` is false, every Wi-Fi call answers `HAL_ENODEV`, and `hal_bt_init()` answers `HAL_ENOTSUP`; the boot check reports both as
 unavailable. No network is ever joined. `hal_system_late_init()` has nothing to start.
@@ -98,14 +102,23 @@ unavailable. No network is ever joined. `hal_system_late_init()` has nothing to 
 **Crypto.** `app/crypto` is compiled against IDF's mbed TLS (hardware AES/SHA); `hal_chip_id()` is the factory MAC. `hal_random()` is the hardware RNG register, which
 without the radio on is a noise source rather than a certified TRNG: fine for the secrets file's per-record nonces, to be revisited when Wi-Fi/BLE are.
 
-**Power.** `hal_system_init()` latches `BAT_CTRL` high before anything else; `hal_system_poweroff()` drops it. On USB power the board stays on whatever the pin does.
+**Power.** `BAT_CTRL` is latched high by the first start-up init function of the image (`ESP_SYSTEM_INIT_FN` in `board.c`, before the heap and PSRAM are up), and the 0.3 s PSRAM
+memory test is off, to keep the window in which a power-on key press could be released early as short as possible. `hal_system_poweroff()` drops the latch, waits 200 ms and
+**returns false if the board is still running** (USB power: the charger keeps it alive; it is probed, not assumed), so the UI takes its "powering off" overlay away; on battery
+the power simply goes. `hal_random()` is fed by the SAR-ADC entropy source (`bootloader_random_enable()`) while the radio is off.
 
-## UI size
+## UI profile
 
-The UI renders at its compile-time profile (320 x 240), in the top-left corner of the 600 x 450 panel, until the `NEUPOD_UI_PROFILE=600x450` single-profile option lands;
-the boot log says so (`ui: WARNING panel 600x450 is larger than the 320x240 profile`).
+The build sets `NEUPOD_UI_PROFILE=600x450` (default for this platform, `platforms/esp32s3/CMakeLists.txt`; `-DNEUPOD_UI_PROFILE=320x240` gives the small one, which then sits in
+the top-left corner). The profile is a compile-time constant, wired through the IDF component as `NEUPOD_UI_PROFILE_600`. Its two partial-render buffers (600 x 30 x 2 bytes each,
+72 KB together) are placed in PSRAM with the other big buffers (`ui` in `linker.lf`): they would not fit the internal RAM next to the stacks. Bench, 600x450:
+boot frame 7.5 ms average, a full-pane Settings screen about 40 ms average (the pane is redrawn whole), internal heap free 76 KB after boot (32 KB at the lowest).
 
-## Bench result (14 Nov 2026)
+Measured stack minimums (bench, idle UI): `audio` 27.2 KB free of 28 KB, `vclk` 4.3 KB of 5 KB, `input` 1.8 KB of 4 KB, `storage` 9.4 KB of 16 KB, `ui` 16.5 KB of 24 KB. A decode
+on the audio core has not been measured (there is no music on the bench card yet): the audio stack is 28 KB and `vclk` 5 KB so that the deeper decoder path has room; re-check
+`core1_stack_free` in the monitor line the first time a FLAC and an MP3 play.
+
+## Bench result (14 Nov 2026, 600x450 profile)
 
 Boot log, USB console, on the board with a 32 GB FAT32 card (no music on it):
 
@@ -119,9 +132,9 @@ boot: audio     DEGRADED: output is the null sink (no DAC output)
 boot: wifi      DEGRADED: no Wi-Fi on this platform (Bluetooth only)
 boot: storage   ok      : SDHC 31.2 GB, FAT32, read-only
 boot: bluetooth DEGRADED: Bluetooth start failed: not supported
+boot: wheel     DEGRADED: receiver: no response
 touch: FT6336 chip id 0x64 (0x64 = FT6336) firmware 0x01 vendor 0x11
-input: power key (GPIO15) reads 1, pressed level 0
-boot: wheel     ok      : frames valid (init packet: ok)
+input: touch panel ready (600x450)
 ```
 
 The UI navigates from the console keys (Home, Music, Extras, Settings), the library scan runs and finishes, and a changed setting is written to the card and read back after a

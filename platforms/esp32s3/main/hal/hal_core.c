@@ -11,7 +11,7 @@
 
 // The MP3 decoder alone keeps about 10 KB of scratch on the stack (minimp3), FLAC and ALAC a few KB (same sizing as the RP2350).
 #ifndef NEUPOD_CORE1_STACK_BYTES
-#define NEUPOD_CORE1_STACK_BYTES 20480u
+#define NEUPOD_CORE1_STACK_BYTES 28672u
 #endif
 #define CORE1_TASK_PRIORITY 5 /* below the block clock task (hal_audio.c), above the idle task */
 

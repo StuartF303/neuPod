@@ -14,6 +14,7 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "esp_heap_caps.h"
 #else
 #include "FreeRTOS.h"
 #include "event_groups.h"
@@ -246,8 +247,14 @@ size_t os_task_stats(os_task_info_t *out, size_t max) {
     return count;
 }
 
+#ifdef ESP_PLATFORM
+// The tight resource on the S3 is internal RAM (stacks, DMA buffers, drivers); the PSRAM pool would hide it.
+size_t os_heap_free(void) { return heap_caps_get_free_size(MALLOC_CAP_INTERNAL); }
+size_t os_heap_free_min(void) { return heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL); }
+#else
 size_t os_heap_free(void) { return xPortGetFreeHeapSize(); }
 size_t os_heap_free_min(void) { return xPortGetMinimumEverFreeHeapSize(); }
+#endif
 
 // --- Run-time-stats clock (portGET_RUN_TIME_COUNTER_VALUE in the FreeRTOSConfig.h files) ------
 

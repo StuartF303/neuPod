@@ -137,7 +137,11 @@ uint32_t os_event_wait(os_event_t *e, uint32_t bits, bool all, bool clear_on_exi
 
 /* ---- Diagnostics (monitor task) ----------------------------------------------------------- */
 
+#ifdef ESP_PLATFORM
+#define OS_STATS_MAX_TASKS 32u /* IDF adds idle x2, ipc x2, esp_timer and more: the kernel call returns 0 if the array is smaller than the task count */
+#else
 #define OS_STATS_MAX_TASKS 16u
+#endif
 
 typedef struct {
     char name[12];
