@@ -5,7 +5,9 @@
  *    safety allow-lists and the state machine are in y2_audio.c, host-tested). The block clock follows a ring that a plain
  *    pthread drains with blocking write() on /dev/eac, so the DAC's own clock paces the player. That thread never calls the RTOS.
  *    Used only while /sys/class/switch/h2w reports headphones, and only for 44.1 kHz.
- *  - otherwise a timed null sink (no speaker on the Y2): a timer thread calls the block callback on absolute deadlines, like the
+ *  - the internal speaker, when the audio route allows it (hal_audio_set_speaker) and the jack is empty: the same stream with the DAC in its
+ *    mono mode and the speaker amplifier switched on by the kernel once silence is streaming (y2_audio.c; amplifier off first on every way out).
+ *  - otherwise a timed null sink: a timer thread calls the block callback on absolute deadlines, like the
  *    RP2350's alarm interrupt, so the player, gapless hand-off, progress and underrun accounting behave normally. This is also the
  *    Bluetooth route's virtual clock.
  * hal_audio_backend_name() is "cs43131" when both device nodes open (the boot check then reports audio OK), "null" otherwise.
@@ -17,6 +19,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
 #include <sys/ioctl.h>
 #include <time.h>
 #include <unistd.h>
@@ -24,6 +27,7 @@
 #include "hal_audio.h"
 #include "hal_system.h"
 #include "y2_audio.h"
+#include "y2_hal.h"
 
 static hal_audio_block_cb g_cb;
 static uint32_t g_rate;
@@ -149,6 +153,20 @@ static void *worker_thread(void *arg) {
     return NULL;
 }
 
+// A crash or a terminating signal that nothing else handles: the speaker amplifier must not stay on. ioctl() is async-signal-safe and this
+// is the one command, already on the allow-list; then the signal runs its default action again.
+void y2_audio_emergency_pa_off(void) {
+    if (g_dev_ready && g_fd_eac >= 0) {
+        (void)ioctl(g_fd_eac, Y2_EAC_SPEAKER_OFF, 0);
+    }
+}
+
+static void on_fatal_signal(int sig) {
+    y2_audio_emergency_pa_off();
+    signal(sig, SIG_DFL);
+    raise(sig);
+}
+
 // Process exit (a clean stop, the power key): power the DAC down with its volume muted first, then let go of the nodes. Registered after
 // main()'s own handlers, so it runs before them (atexit is last-in first-out).
 static void shutdown_hook(void) {
@@ -188,7 +206,7 @@ static void probe(void) {
                           .sleep_ms = op_sleep_ms,
                           .log = op_log,
                           .ctx = NULL};
-    y2_audio_init(&g_y2, &ops, getenv(Y2_AUDIO_DAC_INDEX_ENV));
+    y2_audio_init(&g_y2, &ops, getenv(Y2_AUDIO_DAC_INDEX_ENV), getenv(Y2_AUDIO_SPK_INDEX_ENV));
     if (pthread_create(&g_worker, NULL, worker_thread, NULL) != 0) {
         printf("audio: cannot start the writer thread, null sink\n");
         close(g_fd_dac);
@@ -199,8 +217,13 @@ static void probe(void) {
     pthread_detach(g_worker);
     g_dev_ready = true;
     atexit(shutdown_hook);
-    printf("audio: CS43131 wired output available (DAC volume index %u, reg 0x%02x), used while headphones are plugged in\n",
-           (unsigned)g_y2.dac_index, (unsigned)y2_audio_dac_volume_reg(g_y2.dac_index));
+    // SIGTERM / SIGINT are main()'s orderly stop (exit() then runs shutdown_hook); these are the ones that would skip it.
+    static const int fatal[] = {SIGSEGV, SIGBUS, SIGABRT, SIGFPE, SIGILL, SIGHUP, SIGQUIT};
+    for (size_t i = 0; i < sizeof fatal / sizeof fatal[0]; i++) {
+        signal(fatal[i], on_fatal_signal);
+    }
+    printf("audio: CS43131 wired output available (DAC volume index %u, reg 0x%02x), used while headphones are plugged in; speaker (index %u, at most %u) when the route allows it\n",
+           (unsigned)g_y2.dac_index, (unsigned)y2_audio_dac_volume_reg(g_y2.dac_index), (unsigned)g_y2.spk_index, (unsigned)Y2_AUDIO_SPK_INDEX_MAX);
 }
 
 static void ensure_probe(void) { pthread_once(&g_probe_once, probe); }
@@ -285,7 +308,7 @@ hal_status_t hal_audio_open(const hal_audio_format *fmt) {
     }
     if (!g_logged) {
         g_logged = true;
-        printf("audio: %s\n", g_dev_ready ? "CS43131 when headphones are in, otherwise a null sink (no speaker)" : "null sink (no wired output)");
+        printf("audio: %s\n", g_dev_ready ? "CS43131 when headphones are in, the speaker when the route allows it, otherwise a null sink" : "null sink (no wired output)");
     }
     g_rate = fmt->sample_rate;
     g_t0_us = hal_micros();
@@ -348,7 +371,33 @@ void hal_audio_force_mute(void) {
     }
 }
 
-bool hal_audio_wired_attached(void) { return !g_dev_ready || y2_audio_headphones(&g_y2); }
+bool hal_audio_wired_attached(void) { return !g_dev_ready || y2_audio_headphones(&g_y2) || y2_audio_speaker_allowed(&g_y2); }
+
+bool hal_audio_headphones_in(void) { return g_dev_ready && y2_audio_headphones(&g_y2); }
+
+bool hal_audio_speaker_available(void) {
+    ensure_probe();
+    return g_dev_ready;
+}
+
+bool hal_audio_line_out_available(void) {
+    ensure_probe();
+    return g_dev_ready;
+}
+
+void hal_audio_set_line_out(bool allow) {
+    ensure_probe();
+    if (g_dev_ready) {
+        y2_audio_set_line_out(&g_y2, allow);
+    }
+}
+
+void hal_audio_set_speaker(bool allow) {
+    ensure_probe();
+    if (g_dev_ready) {
+        y2_audio_set_speaker(&g_y2, allow);
+    }
+}
 
 void hal_audio_get_info(hal_audio_info_t *out) {
     out->rate_hz = g_open ? g_rate : 0;

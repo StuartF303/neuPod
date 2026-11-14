@@ -19,9 +19,12 @@
 #define EAC_SET_AFE_CLK 0xc0044351ul
 #define EAC_SET_I2S_CLK 0xc0044354ul
 #define EAC_SET_ANA_CLK 0xc0044355ul
+#define EAC_SPEAKER_ON Y2_EAC_SPEAKER_ON   // kernel: oca72559_on on the speaker amplifier (I2C 1-0058); arg 0
+#define EAC_SPEAKER_OFF Y2_EAC_SPEAKER_OFF // oca72559_off
 // /dev/cs43131_dac commands (recon section 4)
 #define DAC_ON 0x4302ul
 #define DAC_OFF 0x4303ul
+#define DAC_MONO 0x4306ul // cs43131_set_mono: differential output for the speaker amplifier
 #define DAC_STEREO 0x4307ul
 #define DAC_VOLUME 0x40044304ul // arg is the index by value
 // AFE register offsets
@@ -40,10 +43,10 @@ bool y2_audio_afe_offset_ok(uint32_t o) {
 
 bool y2_audio_eac_cmd_ok(unsigned long c) {
     return c == EAC_SET_AUDSYS_REG || c == EAC_ALLOC_DL1 || c == EAC_FREE_DL1 || c == EAC_START_MEMIF || c == EAC_STANDBY_MEMIF ||
-           c == EAC_SET_AFE_CLK || c == EAC_SET_I2S_CLK || c == EAC_SET_ANA_CLK;
+           c == EAC_SET_AFE_CLK || c == EAC_SET_I2S_CLK || c == EAC_SET_ANA_CLK || c == EAC_SPEAKER_ON || c == EAC_SPEAKER_OFF;
 }
 
-bool y2_audio_dac_cmd_ok(unsigned long c) { return c == DAC_ON || c == DAC_OFF || c == DAC_STEREO || c == DAC_VOLUME; }
+bool y2_audio_dac_cmd_ok(unsigned long c) { return c == DAC_ON || c == DAC_OFF || c == DAC_STEREO || c == DAC_MONO || c == DAC_VOLUME; }
 
 static const uint8_t k_vol_reg[16] = {0x00, 0x6e, 0x68, 0x62, 0x5c, 0x56, 0x50, 0x4a, 0x44, 0x3b, 0x32, 0x29, 0x20, 0x17, 0x0e, 0x06};
 
@@ -59,6 +62,18 @@ uint32_t y2_audio_dac_index_from_env(const char *env) {
         return Y2_AUDIO_DAC_INDEX;
     }
     return v < 0 ? 0u : v > (long)Y2_AUDIO_DAC_INDEX_MAX ? Y2_AUDIO_DAC_INDEX_MAX : (uint32_t)v;
+}
+
+uint32_t y2_audio_spk_index_from_env(const char *env) {
+    if (env == NULL || env[0] == '\0') {
+        return Y2_AUDIO_SPK_INDEX_MAX;
+    }
+    char *end = NULL;
+    long v = strtol(env, &end, 10);
+    if (end == env || *end != '\0') {
+        return Y2_AUDIO_SPK_INDEX_MAX;
+    }
+    return v < 0 ? 0u : v > (long)Y2_AUDIO_SPK_INDEX_MAX ? Y2_AUDIO_SPK_INDEX_MAX : (uint32_t)v;
 }
 
 bool y2_audio_h2w_headphones(int state) { return state == 1 || state == 2; }
@@ -107,8 +122,15 @@ static void logf_(const y2_audio_t *a, const char *fmt, ...) {
     a->ops.log(a->ops.ctx, line);
 }
 
+// The jack must be known and empty for anything that serves the speaker.
+static bool speaker_jack_ok(const y2_audio_t *a) { return a->jack_ok && atomic_load(&a->headphones) == 0u; }
+
 static int dac_cmd(y2_audio_t *a, unsigned long cmd, unsigned long arg) {
-    if (!y2_audio_dac_cmd_ok(cmd) || (cmd == DAC_VOLUME && arg > Y2_AUDIO_DAC_INDEX_MAX)) { // the volume cap is enforced here, whoever asks
+    // 9 on the speaker; 11 on the jack; 15 only for Line out: the route allows it, this session started under it, and a plug is in the jack now
+    const bool line = a->mode == Y2_OUT_HP && a->line_session && atomic_load(&a->line_allow) != 0u && a->jack_ok && atomic_load(&a->headphones) != 0u;
+    const unsigned long cap = a->mode == Y2_OUT_SPK ? Y2_AUDIO_SPK_INDEX_MAX : line ? Y2_AUDIO_LINE_INDEX : Y2_AUDIO_DAC_INDEX_MAX;
+    if (!y2_audio_dac_cmd_ok(cmd) || (cmd == DAC_VOLUME && arg > cap) || // the volume cap is enforced here, whoever asks
+        (cmd == DAC_MONO && (a->mode != Y2_OUT_SPK || !speaker_jack_ok(a)))) {
         a->stats.refused++;
         return -1;
     }
@@ -124,7 +146,7 @@ static int dac_cmd(y2_audio_t *a, unsigned long cmd, unsigned long arg) {
 }
 
 static int eac_cmd(y2_audio_t *a, unsigned long cmd, unsigned long arg) {
-    if (!y2_audio_eac_cmd_ok(cmd)) {
+    if (!y2_audio_eac_cmd_ok(cmd) || (cmd == EAC_SPEAKER_ON && (a->mode != Y2_OUT_SPK || !speaker_jack_ok(a)))) { // never with headphones in
         a->stats.refused++;
         return -1;
     }
@@ -182,10 +204,11 @@ static bool write_silence(y2_audio_t *a, uint32_t frames) {
 
 // ---- Producer ----
 
-void y2_audio_init(y2_audio_t *a, const y2_audio_ops_t *ops, const char *env_index) {
+void y2_audio_init(y2_audio_t *a, const y2_audio_ops_t *ops, const char *env_index, const char *env_spk_index) {
     memset(a, 0, sizeof *a);
     a->ops = *ops;
     a->dac_index = y2_audio_dac_index_from_env(env_index);
+    a->spk_index = y2_audio_spk_index_from_env(env_spk_index);
     (void)spsc_ring_init(&a->ring, a->store, 2u * sizeof(int16_t), Y2_AUDIO_RING_FRAMES);
     a->st = Y2_DAC_OFF;
 }
@@ -216,11 +239,27 @@ uint32_t y2_audio_space(const y2_audio_t *a) { return spsc_ring_space(&a->ring);
 
 bool y2_audio_clock_follows_device(const y2_audio_t *a) { return atomic_load(&a->want_dev) != 0u && atomic_load(&a->virt) == 0u; }
 
-void y2_audio_set_open(y2_audio_t *a, bool open) { atomic_store(&a->stream_open, open ? 1u : 0u); }
+void y2_audio_set_open(y2_audio_t *a, bool open) {
+    atomic_store(&a->stream_open, open ? 1u : 0u);
+    if (!open && atomic_load(&a->spk_session) != 0u) {
+        atomic_store(&a->force_off, 1u); // the audio core closed the stream (a route or format change): the amplifier goes off now, not after the silence
+    }
+}
 
 void y2_audio_set_virtual(y2_audio_t *a, bool virt) { atomic_store(&a->virt, virt ? 1u : 0u); }
 
 bool y2_audio_headphones(const y2_audio_t *a) { return atomic_load(&a->headphones) != 0u; }
+
+void y2_audio_set_speaker(y2_audio_t *a, bool allow) {
+    if (!allow) {
+        atomic_store(&a->spk_reset, 1u);
+    }
+    atomic_store(&a->spk_allow, allow ? 1u : 0u);
+}
+
+bool y2_audio_speaker_allowed(const y2_audio_t *a) { return atomic_load(&a->spk_allow) != 0u; }
+
+void y2_audio_set_line_out(y2_audio_t *a, bool allow) { atomic_store(&a->line_allow, allow ? 1u : 0u); }
 
 // ---- Worker ----
 
@@ -247,8 +286,25 @@ static void afe_teardown(y2_audio_t *a) {
     (void)eac_cmd(a, EAC_SET_ANA_CLK, 0);
 }
 
+// The speaker amplifier off. Always the first thing on the way out of a speaker session, before the volume, clocks or memory interface.
+// Sent whenever a speaker session exists, even if the amplifier was never switched on (it costs nothing and an error path may not know).
+static void pa_off(y2_audio_t *a) {
+    if ((a->mode != Y2_OUT_SPK && !a->pa_on) || (a->pa_off_done && !a->pa_on)) {
+        return;
+    }
+    a->pa_off_done = true;
+    if (eac_cmd(a, EAC_SPEAKER_OFF, 0) < 0 && eac_cmd(a, EAC_SPEAKER_OFF, 0) < 0) {
+        return; // counted as errors; pa_on stays set so the shutdown tries again
+    }
+    if (a->pa_on) {
+        logf_(a, "audio: speaker amplifier off");
+    }
+    a->pa_on = false;
+}
+
 // Stop the AFE stream with the DAC muted first (a stream torn down under an audible DAC clicks). Leaves the DAC powered and muted.
 static void stop_afe(y2_audio_t *a) {
+    pa_off(a);
     (void)dac_cmd(a, DAC_VOLUME, 0);
     sleep_ms(a, Y2_AUDIO_VOL_SETTLE_MS);
     afe_teardown(a);
@@ -262,14 +318,23 @@ static void power_down(y2_audio_t *a) {
         stop_afe(a);
     }
     if (a->st != Y2_DAC_OFF) {
+        pa_off(a);
         if (!a->dac_muted) {
             (void)dac_cmd(a, DAC_VOLUME, 0);
             sleep_ms(a, Y2_AUDIO_VOL_SETTLE_MS);
+        }
+        if (a->mode == Y2_OUT_SPK) {
+            (void)dac_cmd(a, DAC_STEREO, 0); // back to the headphone mode after the stream is down
         }
         (void)dac_cmd(a, DAC_OFF, 0);
         sleep_ms(a, 20);
         a->st = Y2_DAC_OFF;
         logf_(a, "audio: DAC powered down");
+    }
+    if (a->st == Y2_DAC_OFF) {
+        a->mode = Y2_OUT_NONE;
+        a->line_session = false;
+        atomic_store(&a->spk_session, 0u);
     }
     drop_ring(a);
 }
@@ -287,7 +352,7 @@ static bool start_dac(y2_audio_t *a) {
     }
     a->st = Y2_DAC_ON; // from here a failure powers it down again (fault)
     a->on_since_us = now_us(a);
-    if (dac_cmd(a, DAC_STEREO, 0) < 0) {
+    if (dac_cmd(a, a->mode == Y2_OUT_SPK ? DAC_MONO : DAC_STEREO, 0) < 0) {
         return false;
     }
     // 0x4302 restores the last volume: mute at once, nothing is streaming yet
@@ -300,7 +365,12 @@ static bool start_dac(y2_audio_t *a) {
 }
 
 // The verified bring-up order (12 Nov 2026), then the volume is restored and silence runs while the kernel applies it.
-static bool start_afe(y2_audio_t *a) {
+static uint32_t out_index(const y2_audio_t *a) { return a->mode == Y2_OUT_SPK ? a->spk_index : a->line_session ? Y2_AUDIO_LINE_INDEX : a->dac_index; } // both already clamped to their caps
+
+static void jack_update(y2_audio_t *a, int s);
+
+// 1 = streaming, 0 = a fault, -1 = the headphones went in while it started (nothing is wrong; the amplifier was never switched on)
+static int start_afe(y2_audio_t *a) {
     const uint32_t period_frames = Y2_AUDIO_BUF_BYTES / 4u / Y2_AUDIO_BYTES_PER_FRAME;
     const uint32_t con3 = (9u << 8) | (1u << 3) | (1u << 1); // 44.1 kHz, I2S format, 32-bit slot, master
     bool ok = eac_cmd(a, EAC_SET_ANA_CLK, 1) >= 0 && eac_cmd(a, EAC_SET_AFE_CLK, 1) >= 0 && eac_cmd(a, EAC_SET_I2S_CLK, 1) >= 0 &&
@@ -312,27 +382,58 @@ static bool start_afe(y2_audio_t *a) {
               write_silence(a, Y2_AUDIO_BUF_BYTES / 2u / Y2_AUDIO_BYTES_PER_FRAME) && // prefill before the AFE and its interrupt start
               afe_set(a, AFE_DAC_CON0, 3u, 3u) >= 0 && afe_set(a, AFE_IRQ_MCU_CON, 1u, 1u) >= 0;
     if (ok) {
-        ok = dac_cmd(a, DAC_VOLUME, a->dac_index) >= 0 &&
+        ok = dac_cmd(a, DAC_VOLUME, out_index(a)) >= 0 &&
              write_silence(a, (Y2_AUDIO_RATE / 1000u) * Y2_AUDIO_WARMUP_MS); // audio waits in the ring until the volume has taken
     }
+    if (ok && a->mode == Y2_OUT_SPK) {
+        // Silence is streaming: only now the amplifier, and only after a last look at the jack (the kernel switches to the speaker on its own
+        // on a jack event, but we never switch the amplifier on over headphones).
+        jack_update(a, a->ops.headphones(a->ops.ctx));
+        if (!speaker_jack_ok(a)) {
+            stop_afe(a); // mutes, tears down; the state is Y2_DAC_ON and the next pass sees the jack and powers down
+            return -1;
+        }
+        ok = eac_cmd(a, EAC_SPEAKER_ON, 0) >= 0;
+        if (ok) {
+            a->pa_on = true;
+            a->pa_off_done = false;
+            logf_(a, "audio: speaker amplifier on");
+        }
+    }
     if (!ok) {
+        pa_off(a); // before the clocks and the memory interface stop
         afe_teardown(a);
-        return false;
+        return 0;
     }
     a->st = Y2_DAC_STREAMING;
     a->stats.starts++;
-    logf_(a, "audio: stream started (44100 Hz S16 stereo, %u-byte DMA buffer)", (unsigned)Y2_AUDIO_BUF_BYTES);
-    return true;
+    logf_(a, "audio: stream started (44100 Hz S16 stereo, %u-byte DMA buffer, %s)", (unsigned)Y2_AUDIO_BUF_BYTES, a->mode == Y2_OUT_SPK ? "speaker" : "headphones");
+    return 1;
+}
+
+static void jack_update(y2_audio_t *a, int s) {
+    const bool hp = s >= 0 && y2_audio_h2w_headphones(s);
+    atomic_store(&a->headphones, hp ? 1u : 0u);
+    if (a->hp_read && a->hp_prev && !hp) {
+        a->spk_block = true; // pulled out: the route pauses; the speaker must not take over under the pause
+    }
+    a->hp_prev = hp;
+    a->jack_ok = s >= 0; // an unreadable jack is never taken for an empty one where the speaker is concerned
 }
 
 bool y2_audio_work(y2_audio_t *a) {
     const uint64_t now = now_us(a);
+    if (!a->boot_off_sent) { // a previous run may have died with the amplifier on
+        a->boot_off_sent = true;
+        (void)eac_cmd(a, EAC_SPEAKER_OFF, 0);
+    }
+    const bool speaker_up = a->st != Y2_DAC_OFF && a->mode == Y2_OUT_SPK;
     if (!a->hp_read || now >= a->next_hp_poll_us) {
         const int s = a->ops.headphones(a->ops.ctx);
-        atomic_store(&a->headphones, s >= 0 && y2_audio_h2w_headphones(s) ? 1u : 0u);
         const bool had = a->hp_read;
+        jack_update(a, s);
         a->hp_read = true;
-        a->next_hp_poll_us = now + (uint64_t)Y2_AUDIO_HP_POLL_MS * 1000u;
+        a->next_hp_poll_us = now + (uint64_t)(speaker_up ? Y2_AUDIO_HP_POLL_SPK_MS : Y2_AUDIO_HP_POLL_MS) * 1000u;
         if (!had) {
             logf_(a, "audio: jack state %d (%s)", s, y2_audio_h2w_headphones(s) ? "headphones" : "nothing plugged in");
         }
@@ -341,15 +442,34 @@ bool y2_audio_work(y2_audio_t *a) {
     const bool sd = atomic_load(&a->shutdown) != 0u;
     const bool fo = atomic_exchange(&a->force_off, 0u) != 0u;
     const bool virt = atomic_load(&a->virt) != 0u; // Bluetooth took over: the DAC must not stay streaming under it
-    atomic_store(&a->dev_ok, hp && !sd && atomic_load(&a->virt) == 0u && now >= a->retry_at_us ? 1u : 0u);
-    const bool ok = atomic_load(&a->dev_ok) != 0u;
+    const bool allow = atomic_load(&a->spk_allow) != 0u;
+    if (atomic_exchange(&a->spk_reset, 0u) != 0u) {
+        a->spk_block = false; // the route took the speaker away (or the user changed the setting): a later Play starts clean
+    }
+    if (a->spk_block && !hp && now - atomic_load(&a->last_audible_us) >= (uint64_t)Y2_AUDIO_SPK_BLOCK_CLEAR_MS * 1000u) {
+        a->spk_block = false;
+    }
+    const y2_out_t target = hp ? Y2_OUT_HP : allow && a->jack_ok && !a->spk_block ? Y2_OUT_SPK : Y2_OUT_NONE;
+    const bool usable = target != Y2_OUT_NONE && !sd && !virt && now >= a->retry_at_us;
+    atomic_store(&a->dev_ok, usable ? 1u : 0u);
+    const bool ok = usable;
 
-    if (a->st != Y2_DAC_OFF && (!hp || sd || fo || virt)) {
-        if (!hp) {
+    const bool line_now = hp && atomic_load(&a->line_allow) != 0u;
+    if (a->st != Y2_DAC_OFF && (target == Y2_OUT_NONE || target != a->mode || sd || fo || virt || (a->mode == Y2_OUT_HP && line_now != a->line_session))) {
+        if (a->mode == Y2_OUT_HP && hp && line_now != a->line_session) {
+            logf_(a, "audio: Line out %s, restarting the stream muted", line_now ? "on" : "off");
+        }
+        if (a->mode == Y2_OUT_HP && !hp) {
             logf_(a, "audio: headphones unplugged");
+        } else if (a->mode == Y2_OUT_SPK) {
+            logf_(a, "audio: leaving the speaker (%s)", hp ? "headphones in" : sd ? "shutdown" : virt ? "Bluetooth" : fo ? "stopped" : "not allowed");
         }
         power_down(a);
         return true;
+    }
+    if (sd && a->st == Y2_DAC_OFF && !a->exit_off_sent) {
+        a->exit_off_sent = true;
+        (void)eac_cmd(a, EAC_SPEAKER_OFF, 0); // belt and braces on the way out
     }
 
     switch (a->st) {
@@ -361,9 +481,19 @@ bool y2_audio_work(y2_audio_t *a) {
             drop_ring(a);
             return false;
         }
-        if (!start_dac(a) || !start_afe(a)) {
+        a->mode = target;
+        a->line_session = target == Y2_OUT_HP && line_now;
+        a->pa_off_done = false;
+        atomic_store(&a->spk_session, target == Y2_OUT_SPK ? 1u : 0u);
+        if (!start_dac(a)) {
             fault(a, "starting the DAC");
             return true;
+        }
+        {
+            const int r = start_afe(a);
+            if (r == 0) {
+                fault(a, "starting the DAC");
+            }
         }
         return true;
 
@@ -373,7 +503,7 @@ bool y2_audio_work(y2_audio_t *a) {
                 drop_ring(a);
                 return false;
             }
-            if (!start_afe(a)) {
+            if (start_afe(a) == 0) {
                 fault(a, "starting the stream");
             }
             return true;
@@ -391,7 +521,13 @@ bool y2_audio_work(y2_audio_t *a) {
     // Streaming. Digital silence for long enough: stop the stream (the DAC stays on). Samples queued by the clock before this point are
     // silent too, unless a non-silent block arrives while the stream is stopping (audible_seq moved): then they are kept and the next
     // pass restarts the stream.
-    if (now - atomic_load(&a->last_audible_us) >= (uint64_t)Y2_AUDIO_SILENCE_HOLD_MS * 1000u) {
+    if (a->mode == Y2_OUT_SPK && now - atomic_load(&a->last_audible_us) >= (uint64_t)Y2_AUDIO_SPK_SILENCE_HOLD_MS * 1000u) {
+        // On the speaker silence ends the session: amplifier off, stream down, DAC back to stereo and off (a pause is over its fade by now).
+        logf_(a, "audio: speaker idle, powering down");
+        power_down(a);
+        return true;
+    }
+    if (a->mode != Y2_OUT_SPK && now - atomic_load(&a->last_audible_us) >= (uint64_t)Y2_AUDIO_SILENCE_HOLD_MS * 1000u) {
         const uint32_t seq0 = atomic_load(&a->audible_seq);
         stop_afe(a);
         atomic_store(&a->want_dev, 0u);

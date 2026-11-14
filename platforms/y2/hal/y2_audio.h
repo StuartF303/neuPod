@@ -10,9 +10,16 @@
  * of digital silence and the DAC powers down after a longer idle, always with the DAC volume at mute first (clicks).
  * Output happens only while /sys/class/switch/h2w reports headphones; otherwise the stream is discarded (the null sink).
  *
+ * The internal speaker (owner-approved 2026-11-14, bench-verified): the same AFE / DL1 / 2nd-I2S stream, but the DAC runs in its mono
+ * (differential) mode (0x4306) and, once silence is streaming, the kernel's SET_SPEAKER_ON (0x400443a1, which runs oca72559_on on the
+ * speaker amplifier) switches the amplifier on. It is used only while the route allows it (y2_audio_set_speaker) and nothing is
+ * in the jack. The amplifier goes off FIRST on every way out: stop, pause (silence), route change, headphones in, Bluetooth, error,
+ * shutdown (SET_SPEAKER_OFF 0x400443a2, then the clocks and memory interface stop, then the DAC returns to stereo, 0x4307).
+ *
  * SAFETY (owner rules, enforced here and tested): only the AFE offsets and device commands listed below ever reach the
- * kernel. Never the PMIC analog registers (SET_ANAAFE_REG 0xc0044302), never the speaker amplifier ioctls (0x400443a0..a7),
- * never the CS43131 mono path (0x4306), hardware init (0x4301) or its debug register file.
+ * kernel. Never the PMIC analog registers (SET_ANAAFE_REG 0xc0044302), never the other speaker amplifier ioctls (0x400443a0 and
+ * 0x400443a3..a7), never hardware init (0x4301) or the CS43131 debug register file. SET_SPEAKER_ON is refused while the jack shows
+ * headphones, and the DAC volume is capped at index 9 while the speaker is the output (11 on the headphones).
  */
 #ifndef NEUPOD_Y2_AUDIO_H
 #define NEUPOD_Y2_AUDIO_H
@@ -37,6 +44,16 @@ extern "C" {
  * volume is the software volume in the audio core. An override from the environment is clamped to Y2_AUDIO_DAC_INDEX_MAX. */
 #define Y2_AUDIO_DAC_INDEX 11u
 #define Y2_AUDIO_DAC_INDEX_MAX 11u
+/** Line out (Settings > Line out, owner decision 2026-11-14): the one case above Y2_AUDIO_DAC_INDEX_MAX. DAC index 15 (full level) for an external amplifier,
+ * only while the route allows it (y2_audio_set_line_out), the output is the jack and the jack shows a plug (h2w != 0). Never on the speaker (cap 9). */
+#define Y2_AUDIO_LINE_INDEX 15u
+/** The speaker's DAC index: the default is the cap; NEUPOD_Y2_SPK_INDEX can only lower it. Enforced in the command gate. */
+#define Y2_AUDIO_SPK_INDEX_MAX 9u
+#define Y2_AUDIO_SPK_INDEX_ENV "NEUPOD_Y2_SPK_INDEX"
+
+/** Commands used outside this file by the crash handler (hal_audio.c): the amplifier off. */
+#define Y2_EAC_SPEAKER_ON 0x400443a1ul
+#define Y2_EAC_SPEAKER_OFF 0x400443a2ul
 
 /** Kernel DL1 buffer (bytes) and what the AFE interrupts on: a quarter of it. */
 #define Y2_AUDIO_BUF_BYTES 16384u
@@ -50,6 +67,9 @@ extern "C" {
 #define Y2_AUDIO_VOL_SETTLE_MS 100u      /**< the kernel applies a volume change by delayed work 80 ms later */
 #define Y2_AUDIO_WARMUP_MS 100u          /**< silence streamed after the volume is restored, before audio is let through */
 #define Y2_AUDIO_HP_POLL_MS 200u
+#define Y2_AUDIO_HP_POLL_SPK_MS 50u      /**< the jack is polled faster while the amplifier is up: headphones going in cut it quickly */
+#define Y2_AUDIO_SPK_SILENCE_HOLD_MS 1000u /**< on the speaker, this much digital silence (a pause after its fade, a stop) powers everything down */
+#define Y2_AUDIO_SPK_BLOCK_CLEAR_MS 1000u  /**< after the headphones are pulled out the speaker waits for this much silence (the route pauses) */
 #define Y2_AUDIO_RETRY_MS 5000u          /**< after a device error the real output is not tried again for this long */
 
 /* ---- The allow-lists ---- */
@@ -57,15 +77,17 @@ extern "C" {
 /** AFE register offsets we may touch. 0x10 is AFE_DAC_CON0 (bit 0 AFE on, bit 1 DL1 on): without it the DL1 memory interface
  * never starts, and the verified tone path (12 Nov 2026) sets it. */
 bool y2_audio_afe_offset_ok(uint32_t offset);
-/** /dev/eac commands: SET_AUDSYS_REG, ALLOCATE/FREE_MEMIF_DL1, START/STANDBY_MEMIF, AUD_SET_ANA/AFE/I2S_CLOCK. */
+/** /dev/eac commands: SET_AUDSYS_REG, ALLOCATE/FREE_MEMIF_DL1, START/STANDBY_MEMIF, AUD_SET_ANA/AFE/I2S_CLOCK, SET_SPEAKER_ON/OFF. */
 bool y2_audio_eac_cmd_ok(unsigned long cmd);
-/** /dev/cs43131_dac commands: on (0x4302), off (0x4303), set volume (0x40044304), stereo (0x4307). */
+/** /dev/cs43131_dac commands: on (0x4302), off (0x4303), set volume (0x40044304), mono / speaker (0x4306), stereo (0x4307). */
 bool y2_audio_dac_cmd_ok(unsigned long cmd);
 
 /** The kernel's volume-register value for a volume index (0 = mute .. 15), for the log. */
 uint8_t y2_audio_dac_volume_reg(uint32_t index);
 /** The DAC index to use: @p env (decimal, e.g. getenv()) or the default; clamped to 0..Y2_AUDIO_DAC_INDEX_MAX. Unparseable = default. */
 uint32_t y2_audio_dac_index_from_env(const char *env);
+/** The speaker's DAC index: @p env or the default Y2_AUDIO_SPK_INDEX_MAX; clamped to 0..Y2_AUDIO_SPK_INDEX_MAX. */
+uint32_t y2_audio_spk_index_from_env(const char *env);
 /** h2w switch state: 1 (headset) and 2 (headphones) have something on the jack. */
 bool y2_audio_h2w_headphones(int state);
 /** Parse the text of the h2w state file; -1 if it is not a number. */
@@ -96,6 +118,12 @@ typedef struct {
 } y2_audio_ops_t;
 
 typedef enum {
+    Y2_OUT_NONE = 0,
+    Y2_OUT_HP,  /**< the headphone jack (stereo) */
+    Y2_OUT_SPK, /**< the internal speaker (mono / differential, amplifier on) */
+} y2_out_t;
+
+typedef enum {
     Y2_DAC_OFF = 0,   /**< powered down (or never started by us) */
     Y2_DAC_ON,        /**< powered, volume muted, no AFE stream */
     Y2_DAC_STREAMING, /**< AFE running, writer feeding the DMA ring */
@@ -115,6 +143,7 @@ typedef struct {
 typedef struct {
     y2_audio_ops_t ops;
     uint32_t dac_index;
+    uint32_t spk_index;
     y2_audio_stats_t stats;
 
     /* shared by the block clock (producer) and the worker */
@@ -129,6 +158,10 @@ typedef struct {
     _Atomic uint32_t headphones;    /**< last h2w reading */
     _Atomic uint32_t shutdown;
     _Atomic uint32_t force_off;
+    _Atomic uint32_t spk_allow;     /**< the route allows the speaker while nothing is in the jack */
+    _Atomic uint32_t line_allow;    /**< the route allows Line out (the setting is On and the output is the jack) */
+    _Atomic uint32_t spk_session;   /**< mirror of mode == Y2_OUT_SPK for the producer side */
+    _Atomic uint32_t spk_reset;     /**< the route took the speaker away: forget the unplug latch */
     _Atomic uint32_t underruns;
     uint32_t dither_rng;            /**< producer's */
     int16_t chunk16[Y2_AUDIO_CHUNK_FRAMES * 2u]; /**< producer's conversion scratch */
@@ -141,11 +174,20 @@ typedef struct {
     uint64_t last_log_us;
     bool dac_muted;                 /**< the last volume command was mute (index 0) */
     bool hp_read;                   /**< the first reading has been taken */
+    bool line_session;              /**< the current headphone session runs at the Line out level */
+    bool jack_ok;                   /**< the last jack reading was a number */
+    bool hp_prev;                   /**< the previous jack reading (headphones in) */
+    y2_out_t mode;                  /**< the output of the current session (st != Y2_DAC_OFF) */
+    bool pa_off_done;               /**< SET_SPEAKER_OFF was sent in this session (one is enough) */
+    bool pa_on;                     /**< SET_SPEAKER_ON was sent and not yet undone */
+    bool spk_block;                 /**< headphones were just pulled out: no speaker until the audio has been silent for a moment */
+    bool boot_off_sent;             /**< the startup SET_SPEAKER_OFF */
+    bool exit_off_sent;             /**< the shutdown SET_SPEAKER_OFF */
     int16_t wchunk[Y2_AUDIO_CHUNK_FRAMES * 2u];
 } y2_audio_t;
 
-/** @p env_index: the NEUPOD_Y2_DAC_INDEX text or NULL. Nothing touches the device. */
-void y2_audio_init(y2_audio_t *a, const y2_audio_ops_t *ops, const char *env_index);
+/** @p env_index, @p env_spk_index: the NEUPOD_Y2_DAC_INDEX / NEUPOD_Y2_SPK_INDEX texts or NULL. Nothing touches the device. */
+void y2_audio_init(y2_audio_t *a, const y2_audio_ops_t *ops, const char *env_index, const char *env_spk_index);
 
 /* Producer side (the block clock; never blocks). */
 
@@ -160,6 +202,11 @@ void y2_audio_set_open(y2_audio_t *a, bool open);
 void y2_audio_set_virtual(y2_audio_t *a, bool virt);
 /** Headphones in (as of the last reading). */
 bool y2_audio_headphones(const y2_audio_t *a);
+/** The route lets the wired sink use the speaker while the jack is empty (never with headphones in). Turning it off also forgets the unplug latch. */
+void y2_audio_set_speaker(y2_audio_t *a, bool allow);
+bool y2_audio_speaker_allowed(const y2_audio_t *a);
+/** The route allows Line out (index 15) on the jack. It takes effect only with a plug in; a change restarts the stream muted, so the level never steps under sound. */
+void y2_audio_set_line_out(y2_audio_t *a, bool allow);
 
 /* Worker side. */
 

@@ -97,8 +97,9 @@ static void setup(int h2w, const char *env) {
     g_written_bytes = 0;
     g_on_sleep = NULL;
     y2_audio_ops_t ops = {.dac_ioctl = f_dac, .eac_ioctl = f_eac, .eac_write = f_write, .headphones = f_hp, .now_us = f_now, .sleep_ms = f_sleep, .log = NULL, .ctx = NULL};
-    y2_audio_init(&g_dev, &ops, env);
+    y2_audio_init(&g_dev, &ops, env, NULL);
     g_a = &g_dev;
+    g_dev.boot_off_sent = true; // the startup SET_SPEAKER_OFF has its own test; the sequence tests below look at the stream only
     y2_audio_set_open(&g_dev, true);
 }
 
@@ -176,15 +177,17 @@ TEST(only_the_whitelisted_afe_offsets_are_allowed) {
 }
 
 TEST(forbidden_device_commands_are_refused) {
-    // PMIC (SET_ANAAFE_REG / GET), the speaker amplifier ioctls, the CS43131 mono path, hardware init and the frequency command
+    // PMIC (SET_ANAAFE_REG / GET), the speaker amplifier ioctls other than on / off, hardware init and the frequency command
     ASSERT_FALSE(y2_audio_eac_cmd_ok(0xc0044302ul));
     ASSERT_FALSE(y2_audio_eac_cmd_ok(0xc0044303ul));
     ASSERT_FALSE(y2_audio_eac_cmd_ok(0xc0044301ul)); // read: not needed
     for (unsigned long c = 0x400443a0ul; c <= 0x400443a7ul; c++) {
-        ASSERT_FALSE(y2_audio_eac_cmd_ok(c));
+        ASSERT_EQ(c == 0x400443a1ul || c == 0x400443a2ul, y2_audio_eac_cmd_ok(c)); // only SET_SPEAKER_ON / OFF of the amplifier ioctls
         ASSERT_FALSE(y2_audio_dac_cmd_ok(c));
     }
-    ASSERT_FALSE(y2_audio_dac_cmd_ok(0x4306ul));
+    ASSERT_TRUE(y2_audio_dac_cmd_ok(0x4306ul)); // mono: the speaker path (the gate refuses it outside a speaker session)
+    ASSERT_FALSE(y2_audio_dac_cmd_ok(0x4305ul));
+    ASSERT_FALSE(y2_audio_dac_cmd_ok(0x4308ul));
     ASSERT_FALSE(y2_audio_dac_cmd_ok(0x4301ul));
     ASSERT_FALSE(y2_audio_dac_cmd_ok(0x40044305ul));
     ASSERT_FALSE(y2_audio_dac_cmd_ok(0xc0044302ul));
@@ -613,12 +616,16 @@ TEST(shutdown_and_force_off_power_everything_down) {
     ASSERT_EQ(0, g_dev.stats.refused);
 }
 
-TEST(a_shutdown_with_the_dac_never_started_touches_nothing) {
+TEST(a_shutdown_with_the_dac_never_started_only_sends_the_amplifier_off) {
     setup(2, NULL);
     settle();
     y2_audio_request_shutdown(&g_dev);
     ASSERT_FALSE(y2_audio_work(&g_dev));
-    ASSERT_EQ(0, g_n);
+    ASSERT_EQ(1, g_n); // belt and braces: SET_SPEAKER_OFF once, nothing else (no DAC, no clocks)
+    ASSERT_EQ('E', g_log[0].kind);
+    ASSERT_EQ(0x400443a2ul, g_log[0].cmd);
+    ASSERT_FALSE(y2_audio_work(&g_dev));
+    ASSERT_EQ(1, g_n);
 }
 
 TEST(the_bluetooth_virtual_clock_never_starts_the_dac) {
@@ -676,6 +683,452 @@ TEST(the_volume_index_from_the_environment_is_what_the_stream_starts_with) {
     ASSERT_EQ(-1, find('D', 0x40044304ul, 15, 0));
 }
 
+// ---- the internal speaker ----
+
+#define PA_ON 0x400443a1ul
+#define PA_OFF 0x400443a2ul
+#define DAC_VOL 0x40044304ul
+#define CLK_ANA 0xc0044355ul
+#define CLK_AFE 0xc0044351ul
+#define CLK_I2S 0xc0044354ul
+#define MEM_STANDBY 0xc0044321ul
+
+// The jack is empty (h2w 0) and the route allows the speaker.
+static void setup_spk(int h2w, const char *spk_env) {
+    setup(h2w, NULL);
+    y2_audio_ops_t ops = {.dac_ioctl = f_dac, .eac_ioctl = f_eac, .eac_write = f_write, .headphones = f_hp, .now_us = f_now, .sleep_ms = f_sleep, .log = NULL, .ctx = NULL};
+    y2_audio_init(&g_dev, &ops, NULL, spk_env);
+    g_dev.boot_off_sent = true;
+    y2_audio_set_open(&g_dev, true);
+    y2_audio_set_speaker(&g_dev, true);
+}
+
+static void start_speaker(void) {
+    settle();
+    (void)produce(1 << 20, 1 << 20);
+    settle();
+}
+
+// First index (from `from`) of a command that stops the stream: memory interface standby, a clock off, or the AFE switched off.
+static int first_stream_stop(int from) {
+    for (int i = from; i < g_n; i++) {
+        if (g_log[i].kind == 'E' && g_log[i].arg == 0 && (g_log[i].cmd == MEM_STANDBY || g_log[i].cmd == CLK_ANA || g_log[i].cmd == CLK_AFE || g_log[i].cmd == CLK_I2S)) {
+            return i;
+        }
+        if (g_log[i].kind == 'R' && g_log[i].cmd == 0x10 && g_log[i].arg == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+TEST(the_speaker_path_runs_mono_then_the_stream_then_the_amplifier_after_the_silence_prefill) {
+    setup_spk(0, NULL);
+    ASSERT_TRUE(y2_audio_speaker_allowed(&g_dev));
+    start_speaker();
+    ASSERT_EQ(Y2_DAC_STREAMING, y2_audio_state(&g_dev));
+    ASSERT_EQ(0, g_dev.stats.refused);
+    const int on = find('D', 0x4302, 0, 0);
+    const int mono = find('D', 0x4306, 0, 0);
+    const int mute = find('D', DAC_VOL, 0, 0);
+    const int ana = find('E', CLK_ANA, 1, 0);
+    const int start = find('E', 0xc0044320ul, 0, 0);
+    const int vol = find('D', DAC_VOL, 9, 0);
+    const int pa = find('E', PA_ON, 0, 0);
+    ASSERT_TRUE(on >= 0 && on < mono && mono < mute && mute < ana && ana < start && start < vol && vol < pa);
+    ASSERT_EQ(-1, find('D', 0x4307, 0, 0)); // no stereo while the speaker runs
+    ASSERT_EQ(1, count('E', PA_ON));
+    // silence was written before the amplifier: the prefill (before the AFE starts) and the warm-up after the volume
+    int writes_before_pa = 0;
+    for (int i = 0; i < pa; i++) {
+        writes_before_pa += g_log[i].kind == 'W';
+    }
+    ASSERT_TRUE(writes_before_pa >= 3);
+    int writes_after_vol = 0;
+    for (int i = vol; i < pa; i++) {
+        writes_after_vol += g_log[i].kind == 'W';
+    }
+    ASSERT_TRUE(writes_after_vol >= 1); // the warm-up silence is streaming when the amplifier comes on
+}
+
+TEST(the_amplifier_goes_off_before_the_clocks_and_memory_interface_stop_and_stereo_returns_after) {
+    setup_spk(0, NULL);
+    start_speaker();
+    const int mark = g_n;
+    advance_ms(Y2_AUDIO_SPK_SILENCE_HOLD_MS + 100); // a pause: its fade is over, only silence is left
+    ASSERT_TRUE(y2_audio_work(&g_dev));
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev));
+    const int off = find('E', PA_OFF, 0, mark);
+    const int stop = first_stream_stop(mark);
+    const int mute = find('D', DAC_VOL, 0, mark);
+    const int stereo = find('D', 0x4307, 0, mark);
+    const int dac_off = find('D', 0x4303, 0, mark);
+    ASSERT_TRUE(off >= mark && off < stop);
+    ASSERT_TRUE(off < mute && mute < stop); // amplifier, then mute, then the stream comes down
+    int last_clock = -1;
+    for (int i = mark; i < g_n; i++) {
+        if (g_log[i].kind == 'E' && g_log[i].arg == 0 && (g_log[i].cmd == CLK_ANA || g_log[i].cmd == CLK_AFE || g_log[i].cmd == CLK_I2S)) {
+            last_clock = i;
+        }
+    }
+    ASSERT_TRUE(last_clock > stop && stereo > last_clock && dac_off > stereo);
+    ASSERT_EQ(1, count('E', PA_OFF));
+}
+
+TEST(pause_and_resume_on_the_speaker_cycle_the_amplifier) {
+    setup_spk(0, NULL);
+    start_speaker();
+    ASSERT_EQ(1, count('E', PA_ON));
+    advance_ms(500); // not yet idle long enough: still streaming, amplifier on
+    (void)y2_audio_work(&g_dev);
+    ASSERT_EQ(Y2_DAC_STREAMING, y2_audio_state(&g_dev));
+    ASSERT_EQ(0, count('E', PA_OFF));
+    advance_ms(Y2_AUDIO_SPK_SILENCE_HOLD_MS);
+    (void)y2_audio_work(&g_dev);
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev));
+    ASSERT_EQ(1, count('E', PA_OFF));
+    (void)produce(1 << 20, 1 << 20); // resume
+    settle();
+    ASSERT_EQ(Y2_DAC_STREAMING, y2_audio_state(&g_dev));
+    ASSERT_EQ(2, count('E', PA_ON));
+    ASSERT_EQ(0, g_dev.stats.refused);
+}
+
+TEST(the_amplifier_is_never_switched_on_with_headphones_in) {
+    for (int h2w = 1; h2w <= 2; h2w++) {
+        setup_spk(h2w, NULL);
+        start_speaker();
+        ASSERT_EQ(Y2_DAC_STREAMING, y2_audio_state(&g_dev)); // the headphone path
+        ASSERT_EQ(0, count('E', PA_ON));
+        ASSERT_EQ(0, count('D', 0x4306));
+        ASSERT_EQ(1, count('D', 0x4307));
+        ASSERT_EQ(0, g_dev.stats.refused);
+    }
+}
+
+static void plug_in_during_startup(void) { g_h2w = 2; }
+
+TEST(headphones_plugged_in_during_the_startup_never_get_the_amplifier) {
+    setup_spk(0, NULL);
+    settle();
+    g_on_sleep = plug_in_during_startup; // the jack changes inside the DAC bring-up
+    (void)produce(1 << 20, 1 << 20);
+    settle();
+    ASSERT_EQ(0, count('E', PA_ON));
+    ASSERT_EQ(0, g_dev.stats.refused);
+    ASSERT_TRUE(y2_audio_headphones(&g_dev));
+    // the next passes power the speaker session down (amplifier off first, nothing wrong), then the headphone path takes the audio
+    advance_ms(Y2_AUDIO_HP_POLL_SPK_MS);
+    for (int i = 0; i < 4; i++) {
+        (void)y2_audio_work(&g_dev);
+    }
+    ASSERT_EQ(0, count('E', PA_ON));
+    (void)produce(1 << 20, 1 << 20);
+    settle();
+    ASSERT_EQ(Y2_DAC_STREAMING, y2_audio_state(&g_dev));
+    ASSERT_EQ(0, count('E', PA_ON));
+}
+
+TEST(plugging_headphones_in_while_on_the_speaker_cuts_the_amplifier_first_and_continues_on_the_jack) {
+    setup_spk(0, NULL);
+    start_speaker();
+    ASSERT_EQ(1, count('E', PA_ON));
+    const int mark = g_n;
+    g_h2w = 2;
+    advance_ms(Y2_AUDIO_HP_POLL_SPK_MS); // the speaker session polls the jack fast
+    (void)y2_audio_work(&g_dev);
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev));
+    const int off = find('E', PA_OFF, 0, mark);
+    ASSERT_TRUE(off >= mark && off < first_stream_stop(mark));
+    ASSERT_TRUE(find('D', 0x4307, 0, mark) > off); // stereo back
+    (void)produce(1 << 20, 1 << 20); // the music goes on, now on the jack
+    settle();
+    ASSERT_EQ(Y2_DAC_STREAMING, y2_audio_state(&g_dev));
+    ASSERT_EQ(1, count('E', PA_ON));  // no second switch-on
+    ASSERT_EQ(1, count('D', 0x4306)); // mono only the once, from the speaker session
+    ASSERT_TRUE(find('D', DAC_VOL, 11, mark) > off); // the headphone volume (cap 11), not the speaker's
+    ASSERT_EQ(0, g_dev.stats.refused);
+}
+
+TEST(pulling_the_headphones_out_does_not_start_the_speaker_under_the_pause_but_a_later_play_does) {
+    setup_spk(2, NULL);
+    start_speaker();
+    ASSERT_EQ(0, count('E', PA_ON));
+    g_h2w = 0;
+    advance_ms(Y2_AUDIO_HP_POLL_MS);
+    (void)y2_audio_work(&g_dev);
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev));
+    // the fade of the pause is still producing audible blocks for a moment: they must not wake the speaker
+    advance_ms(50);
+    (void)produce(1 << 20, 1 << 20);
+    settle();
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev));
+    ASSERT_EQ(0, count('E', PA_ON));
+    advance_ms(Y2_AUDIO_SPK_BLOCK_CLEAR_MS + 100); // silence: the pause has happened
+    (void)y2_audio_work(&g_dev);
+    (void)produce(1 << 20, 1 << 20); // the user presses Play
+    settle();
+    ASSERT_EQ(Y2_DAC_STREAMING, y2_audio_state(&g_dev));
+    ASSERT_EQ(1, count('E', PA_ON));
+}
+
+TEST(bluetooth_taking_over_cuts_the_amplifier_first) {
+    setup_spk(0, NULL);
+    start_speaker();
+    const int mark = g_n;
+    y2_audio_set_virtual(&g_dev, true);
+    (void)y2_audio_work(&g_dev);
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev));
+    const int off = find('E', PA_OFF, 0, mark);
+    ASSERT_TRUE(off >= mark && off < first_stream_stop(mark));
+    (void)produce(1 << 20, 1 << 20); // a clock only now
+    settle();
+    ASSERT_EQ(1, count('E', PA_ON));
+    ASSERT_FALSE(y2_audio_clock_follows_device(&g_dev));
+}
+
+TEST(the_route_taking_the_speaker_away_cuts_the_amplifier_first_and_audio_is_discarded) {
+    setup_spk(0, NULL);
+    start_speaker();
+    const int mark = g_n;
+    y2_audio_set_speaker(&g_dev, false); // route change, or Settings > Speaker turned Off
+    (void)y2_audio_work(&g_dev);
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev));
+    const int off = find('E', PA_OFF, 0, mark);
+    ASSERT_TRUE(off >= mark && off < first_stream_stop(mark));
+    ASSERT_EQ(Y2_AUDIO_CHUNK_FRAMES, produce(1 << 20, 1 << 20)); // the null sink swallows it
+    settle();
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev));
+    ASSERT_EQ(1, count('E', PA_ON));
+}
+
+TEST(a_speaker_that_is_not_allowed_is_never_used) {
+    setup(0, NULL); // the route has not allowed it (Speaker Off, or Audio output Wired)
+    settle();
+    ASSERT_FALSE(y2_audio_speaker_allowed(&g_dev));
+    ASSERT_EQ(Y2_AUDIO_CHUNK_FRAMES, produce(1 << 20, 1 << 20));
+    ASSERT_FALSE(y2_audio_clock_follows_device(&g_dev));
+    settle();
+    ASSERT_EQ(0, g_n);
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev));
+}
+
+TEST(an_unreadable_jack_never_gets_the_speaker) {
+    setup_spk(-1, NULL);
+    start_speaker();
+    ASSERT_EQ(0, g_n);
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev));
+}
+
+TEST(the_speaker_volume_is_capped_at_9_and_the_headphones_at_11) {
+    const char *envs[] = {NULL, "15", "9", "4", "garbage", "-3"};
+    const unsigned want[] = {9, 9, 9, 4, 9, 0};
+    for (int k = 0; k < 6; k++) {
+        setup_spk(0, envs[k]);
+        start_speaker();
+        ASSERT_EQ(Y2_DAC_STREAMING, y2_audio_state(&g_dev));
+        for (int i = 0; i < g_n; i++) {
+            ASSERT_TRUE(g_log[i].kind != 'D' || g_log[i].cmd != DAC_VOL || g_log[i].arg <= 9); // never above 9 on the speaker
+        }
+        ASSERT_TRUE(find('D', DAC_VOL, want[k], 0) >= 0);
+        ASSERT_EQ(0, g_dev.stats.refused);
+    }
+    ASSERT_EQ(9u, y2_audio_spk_index_from_env("99"));
+    setup(2, "15"); // the headphones keep their own cap
+    settle();
+    (void)produce(1 << 20, 1 << 20);
+    settle();
+    ASSERT_TRUE(find('D', DAC_VOL, 11, 0) >= 0);
+}
+
+TEST(startup_sends_the_amplifier_off_once_whatever_the_jack_says) {
+    for (int h2w = 0; h2w <= 2; h2w += 2) {
+        setup(h2w, NULL);
+        g_dev.boot_off_sent = false;
+        (void)y2_audio_work(&g_dev);
+        ASSERT_TRUE(g_n >= 1);
+        ASSERT_EQ('E', g_log[0].kind);
+        ASSERT_EQ(PA_OFF, g_log[0].cmd);
+        ASSERT_EQ(1, g_n); // and nothing else: no DAC, no clocks
+        (void)y2_audio_work(&g_dev);
+        (void)y2_audio_work(&g_dev);
+        ASSERT_EQ(1, count('E', PA_OFF));
+    }
+}
+
+TEST(a_failing_amplifier_switch_on_is_a_fault_with_the_amplifier_off_before_the_teardown) {
+    setup_spk(0, NULL);
+    g_fail_cmd = PA_ON;
+    settle();
+    (void)produce(1 << 20, 1 << 20);
+    settle();
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev));
+    const int off = find('E', PA_OFF, 0, 0);
+    ASSERT_TRUE(off >= 0);
+    ASSERT_TRUE(off < find('E', CLK_ANA, 0, 0));
+    ASSERT_TRUE(find('D', 0x4307, 0, 0) > off);
+    ASSERT_FALSE(y2_audio_clock_follows_device(&g_dev)); // back on the null sink
+}
+
+TEST(a_failed_write_on_the_speaker_cuts_the_amplifier_first) {
+    setup_spk(0, NULL);
+    start_speaker();
+    const int mark = g_n;
+    g_fail_write = 1;
+    (void)produce(1 << 20, 1 << 20);
+    (void)y2_audio_work(&g_dev);
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev));
+    const int off = find('E', PA_OFF, 0, mark);
+    ASSERT_TRUE(off >= mark && off < first_stream_stop(mark));
+}
+
+TEST(closing_the_stream_or_shutting_down_on_the_speaker_cuts_the_amplifier_first) {
+    setup_spk(0, NULL);
+    start_speaker();
+    int mark = g_n;
+    y2_audio_set_open(&g_dev, false); // the audio core closed the stream (a route or format change)
+    (void)y2_audio_work(&g_dev);
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev));
+    int off = find('E', PA_OFF, 0, mark);
+    ASSERT_TRUE(off >= mark && off < first_stream_stop(mark));
+
+    setup_spk(0, NULL);
+    start_speaker();
+    mark = g_n;
+    y2_audio_request_shutdown(&g_dev); // firmware exit (SIGTERM / SIGINT go through the same exit path)
+    (void)y2_audio_work(&g_dev);
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev));
+    off = find('E', PA_OFF, 0, mark);
+    ASSERT_TRUE(off >= mark && off < first_stream_stop(mark));
+    ASSERT_FALSE(y2_audio_work(&g_dev));
+    ASSERT_EQ(2, count('E', PA_OFF)); // the session's, and the final one on the way out
+}
+
+TEST(nothing_outside_the_lists_is_ever_sent_on_the_speaker_path) {
+    setup_spk(0, NULL);
+    start_speaker();
+    advance_ms(Y2_AUDIO_SPK_SILENCE_HOLD_MS + 100);
+    (void)y2_audio_work(&g_dev);
+    ASSERT_EQ(0, g_dev.stats.refused);
+    for (int i = 0; i < g_n; i++) {
+        if (g_log[i].kind == 'D') {
+            ASSERT_TRUE(y2_audio_dac_cmd_ok(g_log[i].cmd));
+        } else if (g_log[i].kind == 'E') {
+            ASSERT_TRUE(y2_audio_eac_cmd_ok(g_log[i].cmd));
+            ASSERT_TRUE(g_log[i].cmd != 0xc0044302ul && g_log[i].cmd != 0x400443a0ul && (g_log[i].cmd < 0x400443a3ul || g_log[i].cmd > 0x400443a7ul));
+        } else if (g_log[i].kind == 'R') {
+            ASSERT_TRUE(y2_audio_afe_offset_ok((uint32_t)g_log[i].cmd));
+        }
+    }
+}
+
+// ---- Line out (the jack at DAC index 15 for an external amplifier) ----
+
+static int max_volume_arg(void) {
+    int m = -1;
+    for (int i = 0; i < g_n; i++) {
+        if (g_log[i].kind == 'D' && g_log[i].cmd == DAC_VOL && (int)g_log[i].arg > m) {
+            m = (int)g_log[i].arg;
+        }
+    }
+    return m;
+}
+
+TEST(line_out_runs_the_jack_at_index_15_only_with_the_route_allowing_it_and_a_plug_in) {
+    setup(2, NULL); // plug in, route says nothing: the normal cap
+    settle();
+    (void)produce(1 << 20, 1 << 20);
+    settle();
+    ASSERT_EQ(11, max_volume_arg());
+
+    setup(2, "15");
+    y2_audio_set_line_out(&g_dev, true);
+    settle();
+    (void)produce(1 << 20, 1 << 20);
+    settle();
+    ASSERT_EQ(Y2_DAC_STREAMING, y2_audio_state(&g_dev));
+    ASSERT_EQ(15, max_volume_arg());
+    ASSERT_TRUE(find('D', DAC_VOL, 15, 0) >= 0);
+    ASSERT_EQ(0, g_dev.stats.refused);
+    ASSERT_EQ(0, count('E', PA_ON));
+
+    setup(1, NULL); // a headset plug counts as a plug
+    y2_audio_set_line_out(&g_dev, true);
+    settle();
+    (void)produce(1 << 20, 1 << 20);
+    settle();
+    ASSERT_EQ(15, max_volume_arg());
+}
+
+TEST(line_out_never_reaches_the_speaker_or_an_empty_jack) {
+    setup_spk(0, NULL);
+    y2_audio_set_line_out(&g_dev, true); // the setting is on but the jack is empty and the speaker is the output
+    start_speaker();
+    ASSERT_EQ(Y2_DAC_STREAMING, y2_audio_state(&g_dev));
+    ASSERT_EQ(9, max_volume_arg());
+    ASSERT_EQ(0, g_dev.stats.refused);
+    // nothing in the jack and no speaker: nothing starts at all
+    setup(0, NULL);
+    y2_audio_set_line_out(&g_dev, true);
+    settle();
+    (void)produce(1 << 20, 1 << 20);
+    settle();
+    ASSERT_EQ(0, g_n);
+}
+
+TEST(unplugging_the_jack_with_line_out_on_mutes_first_and_the_next_plug_runs_at_the_normal_level) {
+    setup(2, NULL);
+    y2_audio_set_line_out(&g_dev, true);
+    settle();
+    (void)produce(1 << 20, 1 << 20);
+    settle();
+    ASSERT_EQ(15, max_volume_arg());
+    const int mark = g_n;
+    g_h2w = 0; // pulled out
+    advance_ms(Y2_AUDIO_HP_POLL_MS);
+    (void)y2_audio_work(&g_dev);
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev));
+    const int mute = find('D', DAC_VOL, 0, mark);
+    ASSERT_TRUE(mute >= mark && mute < first_stream_stop(mark));
+    // the route has switched Line out off; in-ear headphones go in
+    y2_audio_set_line_out(&g_dev, false);
+    g_h2w = 2;
+    advance_ms(Y2_AUDIO_HP_POLL_MS);
+    (void)y2_audio_work(&g_dev); // the jack is read again
+    g_n = 0;
+    (void)produce(1 << 20, 1 << 20);
+    settle();
+    ASSERT_EQ(Y2_DAC_STREAMING, y2_audio_state(&g_dev));
+    ASSERT_EQ(11, max_volume_arg());
+}
+
+TEST(line_out_switched_off_while_streaming_drops_to_the_normal_level_muted_first_and_on_again_restarts_at_15) {
+    setup(2, NULL);
+    y2_audio_set_line_out(&g_dev, true);
+    settle();
+    (void)produce(1 << 20, 1 << 20);
+    settle();
+    ASSERT_EQ(15, max_volume_arg());
+    int mark = g_n;
+    y2_audio_set_line_out(&g_dev, false);
+    (void)y2_audio_work(&g_dev);
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev)); // restarted: the level never steps under sound
+    ASSERT_TRUE(find('D', DAC_VOL, 0, mark) >= mark && find('D', DAC_VOL, 0, mark) < first_stream_stop(mark));
+    g_n = 0;
+    (void)produce(1 << 20, 1 << 20);
+    settle();
+    ASSERT_EQ(Y2_DAC_STREAMING, y2_audio_state(&g_dev));
+    ASSERT_EQ(11, max_volume_arg()); // nothing above 11 any more
+    mark = g_n;
+    y2_audio_set_line_out(&g_dev, true);
+    (void)y2_audio_work(&g_dev);
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev));
+    (void)produce(1 << 20, 1 << 20);
+    settle();
+    ASSERT_TRUE(find('D', DAC_VOL, 15, mark) >= 0);
+    ASSERT_EQ(0, g_dev.stats.refused);
+}
+
 int main(void) {
     RUN(only_the_whitelisted_afe_offsets_are_allowed);
     RUN(forbidden_device_commands_are_refused);
@@ -697,10 +1150,31 @@ int main(void) {
     RUN(a_failing_device_falls_back_to_the_null_sink_powered_down_and_retries_later);
     RUN(a_failed_write_is_a_fault_too);
     RUN(shutdown_and_force_off_power_everything_down);
-    RUN(a_shutdown_with_the_dac_never_started_touches_nothing);
+    RUN(a_shutdown_with_the_dac_never_started_only_sends_the_amplifier_off);
     RUN(the_bluetooth_virtual_clock_never_starts_the_dac);
     RUN(switching_to_the_bluetooth_clock_while_streaming_powers_the_dac_down_at_once);
     RUN(a_volume_command_above_the_cap_never_reaches_the_dac);
     RUN(the_volume_index_from_the_environment_is_what_the_stream_starts_with);
+    RUN(the_speaker_path_runs_mono_then_the_stream_then_the_amplifier_after_the_silence_prefill);
+    RUN(the_amplifier_goes_off_before_the_clocks_and_memory_interface_stop_and_stereo_returns_after);
+    RUN(pause_and_resume_on_the_speaker_cycle_the_amplifier);
+    RUN(the_amplifier_is_never_switched_on_with_headphones_in);
+    RUN(headphones_plugged_in_during_the_startup_never_get_the_amplifier);
+    RUN(plugging_headphones_in_while_on_the_speaker_cuts_the_amplifier_first_and_continues_on_the_jack);
+    RUN(pulling_the_headphones_out_does_not_start_the_speaker_under_the_pause_but_a_later_play_does);
+    RUN(bluetooth_taking_over_cuts_the_amplifier_first);
+    RUN(the_route_taking_the_speaker_away_cuts_the_amplifier_first_and_audio_is_discarded);
+    RUN(a_speaker_that_is_not_allowed_is_never_used);
+    RUN(an_unreadable_jack_never_gets_the_speaker);
+    RUN(the_speaker_volume_is_capped_at_9_and_the_headphones_at_11);
+    RUN(startup_sends_the_amplifier_off_once_whatever_the_jack_says);
+    RUN(a_failing_amplifier_switch_on_is_a_fault_with_the_amplifier_off_before_the_teardown);
+    RUN(a_failed_write_on_the_speaker_cuts_the_amplifier_first);
+    RUN(closing_the_stream_or_shutting_down_on_the_speaker_cuts_the_amplifier_first);
+    RUN(nothing_outside_the_lists_is_ever_sent_on_the_speaker_path);
+    RUN(line_out_runs_the_jack_at_index_15_only_with_the_route_allowing_it_and_a_plug_in);
+    RUN(line_out_never_reaches_the_speaker_or_an_empty_jack);
+    RUN(unplugging_the_jack_with_line_out_on_mutes_first_and_the_next_plug_runs_at_the_normal_level);
+    RUN(line_out_switched_off_while_streaming_drops_to_the_normal_level_muted_first_and_on_again_restarts_at_15);
     return RESULT();
 }
