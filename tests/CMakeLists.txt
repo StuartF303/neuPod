@@ -447,32 +447,33 @@ function(neupod_library_card NAME)
   add_test(NAME ${NAME}_card COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_library_card.py ${FS} ${CMAKE_CURRENT_SOURCE_DIR}/assets/audio ${ARGN})
   set_tests_properties(${NAME}_card PROPERTIES FIXTURES_SETUP ${NAME}_card)
 endfunction()
-# --run-ms is the end of the run (the tour must have finished its script by then, or the snapshot count check fails): the script itself takes ~55 s of wall
-# clock on an idle machine, so 60 s flaked on a loaded CI runner; 80 s leaves headroom.
+# --run-ms is the latest end of the run (the host exits as soon as the tour script is done; if the script has not finished by then, the snapshot count
+# check fails): the script takes ~70 s of wall clock on an idle machine and flaked at 140 s on loaded CI runners (Nov 2026), so 240 s, test TIMEOUT 300.
+# The real fix is event-driven tours (backlog TS-1).
 set(LIB_GAPLESS "player: track 2/3 .*\\(gapless\\)")
 neupod_library_card(library)
 add_test(NAME library_tour
-  COMMAND neupod --run-ms 140000 --splash-hold-ms 1500 --tour-library --snapshots ${CMAKE_BINARY_DIR}/snapshots_library)
+  COMMAND neupod --run-ms 240000 --splash-hold-ms 1500 --tour-library --snapshots ${CMAKE_BINARY_DIR}/snapshots_library)
 set_tests_properties(library_tour PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_UI_AUDIT=1;NEUPOD_LIB_SLOW_MS=100;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_library;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_library.img"
   PASS_REGULAR_EXPRESSION "library: build finished in [0-9]+ ms: 16 tracks.*${LIB_GAPLESS}.*host: run finished, status 0"
   FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   FIXTURES_REQUIRED library_card
-  TIMEOUT 200)
+  TIMEOUT 300)
 if(NEUPOD_UI_HIRES)
   set_tests_properties(library_tour PROPERTIES PASS_REGULAR_EXPRESSION
     "library: build finished in [0-9]+ ms: 16 tracks.*${LIB_GAPLESS}.*ui: audit '[^']*' 320x240 objects=[1-9][0-9]* violations=0.*host: run finished, status 0")
   neupod_library_card(hires_library)
   add_test(NAME hires_library_tour
-    COMMAND neupod --run-ms 140000 --splash-hold-ms 1500 --tour-library --snapshots ${CMAKE_BINARY_DIR}/snapshots_hires_library)
+    COMMAND neupod --run-ms 240000 --splash-hold-ms 1500 --tour-library --snapshots ${CMAKE_BINARY_DIR}/snapshots_hires_library)
   set_tests_properties(hires_library_tour PROPERTIES
     ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_DISPLAY_SIZE=480x360;NEUPOD_UI_AUDIT=1;NEUPOD_LIB_SLOW_MS=100;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_hires_library;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_hires_library.img"
     PASS_REGULAR_EXPRESSION "library: build finished in [0-9]+ ms: 16 tracks.*${LIB_GAPLESS}.*ui: audit '[^']*' 480x360 objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
     FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     FIXTURES_REQUIRED hires_library_card
-    TIMEOUT 200)
+    TIMEOUT 300)
 endif()
 
 # Music > Playlists (LB-7): the library card plus playlist files and a seeded On-The-Go; checks the layout audit on every snapshot and that the plays reached the card.
