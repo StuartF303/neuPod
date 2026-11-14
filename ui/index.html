@@ -1,0 +1,2601 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/ui/">
+      
+      
+        <link rel="prev" href="../reference/">
+      
+      
+        <link rel="next" href="../runtime/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>UI - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#ui-mock-ups" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              UI
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#main-menu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Main menu
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#library-artists" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Library — artists
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#music-lists" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Music lists
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#now-playing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Now playing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#album-browser" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Album browser
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolution-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolution profiles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fonts-and-display-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fonts and display text
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-system-2026-11-12-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design system (2026-11-12 review)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implemented-stage-2-home-menu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implemented (stage 2: home menu)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implemented (stage 2: home menu)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#now-playing-art" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Now Playing art
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-built-part-library-states-settings-pane-home" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4 (built part): library states, Settings pane, Home
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#playlists-phase-4b-lb-7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Playlists (phase 4b, LB-7)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cover-flow-phase-4c-lb-6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cover Flow (phase 4c, LB-6)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#text-entry-number-slider-date-time-phase-4c-in-1-in-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Text entry, number, slider, date / time (phase 4c, IN-1, IN-2)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#files-long-folders-phase-4c-fl-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files, long folders (phase 4c, FL-1)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#splash-phase-4c-sp-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Splash (phase 4c, SP-1)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#not-yet-drawn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not yet drawn
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hold" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hold
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#licences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Licences
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bluetooth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wifi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../y2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Innioasis Y2 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../i2c-peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-music-library-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0018-ui-resolution-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0018 UI resolution profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0019-bluetooth-audio-sink-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0019 Bluetooth audio boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0020-hold/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0020 Hold
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#main-menu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Main menu
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#library-artists" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Library — artists
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#music-lists" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Music lists
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#now-playing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Now playing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#album-browser" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Album browser
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolution-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolution profiles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fonts-and-display-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fonts and display text
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-system-2026-11-12-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design system (2026-11-12 review)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implemented-stage-2-home-menu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implemented (stage 2: home menu)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implemented (stage 2: home menu)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#now-playing-art" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Now Playing art
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-built-part-library-states-settings-pane-home" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4 (built part): library states, Settings pane, Home
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#playlists-phase-4b-lb-7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Playlists (phase 4b, LB-7)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cover-flow-phase-4c-lb-6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cover Flow (phase 4c, LB-6)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#text-entry-number-slider-date-time-phase-4c-in-1-in-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Text entry, number, slider, date / time (phase 4c, IN-1, IN-2)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#files-long-folders-phase-4c-fl-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files, long folders (phase 4c, FL-1)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#splash-phase-4c-sp-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Splash (phase 4c, SP-1)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#not-yet-drawn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not yet drawn
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hold" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hold
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#licences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Licences
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="ui-mock-ups">UI mock-ups<a class="headerlink" href="#ui-mock-ups" title="Permanent link">&para;</a></h1>
+<p>Text, number, level, choice and date entry with the click wheel is one library: <a href="../ui-input/">Wheel input widgets</a>. Wi-Fi screens: <a href="../wifi/">Wi-Fi</a>.</p>
+<p>Design review of 12 November 2026 (colour tokens, type scale, new screens, owner decisions): <a href="../design/2026-11-12-ui-review/">design review</a>; its backlog is in <a href="../backlog/#design-review-2026-11-12">Backlog</a>.</p>
+<p>Target: the Phase 1 panel, <strong>320×240 landscape</strong>. Each screen is an original drawing at the
+panel's native size (SVG, <code>viewBox="0 0 320 240"</code>); the look follows the classic click-wheel
+player layout — split menu with artwork, blue selection bar — lightly modernised. These are
+design intent, not screenshots of any existing firmware.</p>
+<p>Click-wheel vocabulary used below: <strong>Menu</strong> (top button, goes back), <strong>Select</strong> (centre),
+<strong>Play/Pause</strong> (bottom), <strong>Left</strong> / <strong>Right</strong> (previous / next), <strong>scroll</strong> (finger on the ring).</p>
+<h2 id="main-menu">Main menu<a class="headerlink" href="#main-menu" title="Permanent link">&para;</a></h2>
+<p><img alt="Main menu" src="../assets/ui/main-menu.svg" /></p>
+<ul>
+<li>Scroll moves the selection bar through Music, Podcasts, Photos, Extras, Settings, Shuffle
+  Songs, Now Playing. Scroll acceleration follows the Rockbox constants (4 counts per step,
+  velocity-based acceleration).</li>
+<li><strong>Select</strong> opens the highlighted item. <strong>Menu</strong> does nothing at the top level.</li>
+<li><strong>Play/Pause</strong> toggles playback without leaving the menu; the right pane shows the current
+  track's artwork and title, or a clock when nothing is playing.</li>
+<li><strong>Left</strong> / <strong>Right</strong> skip tracks in the background.</li>
+</ul>
+<h2 id="library-artists">Library — artists<a class="headerlink" href="#library-artists" title="Permanent link">&para;</a></h2>
+<p><img alt="Artists list" src="../assets/ui/library-artists.svg" /></p>
+<ul>
+<li>Full-width list; scroll bar on the right shows position in long lists. Fast scrolling shows a
+  letter overlay so a 100k-track library is navigable.</li>
+<li><strong>Select</strong> descends (artist → albums → tracks); <strong>Menu</strong> ascends one level.</li>
+<li><strong>Right</strong> on an artist jumps to All Albums for that artist; <strong>Left</strong> returns to the previous
+  level without animation. (Design intent: Right / Left skip tracks in the built lists, as everywhere else.)</li>
+<li>The same template serves Albums, Songs, Genres, Composers, Playlists and Podcasts. Built: see <a href="#music-lists">Music lists</a>.</li>
+</ul>
+<h2 id="music-lists">Music lists<a class="headerlink" href="#music-lists" title="Permanent link">&para;</a></h2>
+<p>The Music screens read the library index on the card (<a href="../adr/0017-music-library-index/">ADR-0017</a>, <a href="../storage/#music-library-index">how it is stored and built</a>). Every list is the
+same screen: a full-width list with the usual scroll acceleration; the first line of a row is the name, the right-hand text is the second fact (an album's artist, a song's
+artist, the length of a track in an album, the number of songs in an artist's album); a chevron marks a row that opens another list.</p>
+<table>
+<thead>
+<tr>
+<th>List</th>
+<th>Rows</th>
+<th>Select</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Artists</td>
+<td>album artists, collated (a leading "The " ignored, accents folded, symbols, then digits, then letters)</td>
+<td>the artist: <strong>All Songs</strong>, then its albums</td>
+</tr>
+<tr>
+<td>Albums</td>
+<td>every album by name, the album artist on the right</td>
+<td>the album's songs in track order (disc, track, title)</td>
+</tr>
+<tr>
+<td>Songs</td>
+<td>every song in title order</td>
+<td>plays it</td>
+</tr>
+<tr>
+<td>Genres</td>
+<td>genre names</td>
+<td>the genre: <strong>All Songs</strong>, then its artists</td>
+</tr>
+<tr>
+<td>Compilations</td>
+<td>albums flagged as compilations (or by "Various Artists")</td>
+<td>the album's songs</td>
+</tr>
+<tr>
+<td>artist / genre</td>
+<td><strong>All Songs</strong> first</td>
+<td><strong>All Songs</strong> lists every song of the artist (album by album) or of the genre (album order)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Select on a song plays it and queues the whole list it was chosen from</strong>: an album in track order, an artist's songs, a genre, or all songs, starting at that song, with the earlier
+songs kept for Previous. Gapless playback, repeat, shuffle (Settings) and resume work as for a folder; Now Playing shows <code>n of N</code>. A file the player cannot play (AAC,
+more than two channels, damaged) is listed greyed; Select shows why (<code>Can't play: unsupported codec (AAC)</code>) and auto-advance skips it. <strong>Home &gt; Shuffle Songs</strong> plays the whole library in a
+random order (every song once; the Shuffle setting is not changed). Playlists still say <code>None yet</code>.</p>
+<p><strong>Two-line rows and the album header (LB-1, LB-3).</strong> Lists of songs (Songs, an artist's All Songs, a genre's All Songs) show <strong>two lines per row</strong>, 40 / 60 px, five rows: the title in Body and <code>Artist . Album</code> in Small ink2 below (the artist no longer sits at the right, where it collided with long titles); the focused row's two lines are tickers. The status bar shows the count with a
+thousands comma (<code>1,204</code>). An <strong>album</strong> opens with a header (art 64 / 96 px, the album in the large font, <code>Artist . 2019</code>, <code>3 songs . 9:41 . FLAC</code>, a hairline) over the track rows <code>3   Title</code> with the length at the right; a song the player cannot play is greyed with its codec in brackets (<code>Carrier Wave (AAC)</code>), so the reason is visible before pressing. The status bar's left slot holds the album's name.
+The header's facts come with the album's info request (<code>lvw_info_t</code>: artist, first year, summed length, common codec; read from the first 100 songs); its art is decoded by the art service (see Now Playing art).</p>
+<p><strong>Fast scroll (LB-2).</strong> While the wheel spins a long list past the acceleration threshold, a dark <strong>tile</strong> with the letter of the focused row appears at the top right and an <strong>index rail</strong> runs down the right edge (A to Z, every second letter in ink3, the current letter in ink; the letters next to it make room). It stays while the wheel moves and fades out in 150 ms once the wheel has rested for 250 ms. It never covers the selection bar's row text beyond the right 14 px of the first lines. The letter is the first letter of the row's <strong>collation key</strong> (<code>lib_collate_key()</code>: a leading "The " is ignored, accents are folded, a number or symbol is <code>#</code>), so the rail agrees with the sort. The sort ignores "The " and accents already; "A " / "An " are not ignored yet (see Backlog). The same component (<code>ui_rail.c</code>, <code>ui_letter_overlay_*</code>) is used by Files, which sorts by plain name.</p>
+<p>A long list never holds more than a few screens of rows in memory: the storage task fills a window of 16 rows around the selection, and a row that has not arrived yet shows <code>...</code> for the
+moment it takes. Both resolution profiles use the same screens (the 480x360 layout audit runs on every snapshot of the <code>library_tour</code>).</p>
+<p><strong>No index yet.</strong> The first Artists / Albums / Songs / Genres / Compilations / Shuffle Songs opens the card's <code>/Music</code> and builds the index (a one-off; <strong>Music &gt; Update Library</strong>
+rebuilds it later, for example after adding albums). Progress is a screen of three lines: <code>Building library...</code> with busy dots, <code>n songs found</code> and <code>Select to cancel</code> (Cancel or Menu
+leaves the old library untouched). It runs only with nothing playing: while music plays it says <code>Stop playback to update the library</code>. Other messages: <code>Library needs a writable
+card</code> (the card is write-protected, or the card refused the write), <code>Card is full</code>, <code>Card read error</code>, <code>No card</code>; each offers <code>Select to try again</code>. <strong>Update Library</strong> ends with
+<code>Library updated</code> and the counts.</p>
+<h2 id="now-playing">Now playing<a class="headerlink" href="#now-playing" title="Permanent link">&para;</a></h2>
+<p><img alt="Now playing" src="../assets/ui/now-playing.svg" /></p>
+<p>Built in phase 2 of the <a href="../design/2026-11-12-ui-review/">design review</a> (NP-1 to NP-5; mock-ups <code>np-*</code> there). Page 1:</p>
+<ul>
+<li>Art (112 / 168 px) at the left; to its right <strong>Title</strong> (large), <strong>Artist</strong> (Body, ink2) and <strong>Album . Year</strong> (Small, ink3). A file with no title tag shows its file name as the title and its folder as the artist. Title, artist and album are
+  tickers: wider than the column, they scroll (the owner's rule above). While something other than plain playing is going on the third line says it instead: <code>Opening...</code>, the error text (red), <code>Finished</code>, the MD5 check and its verdict.</li>
+<li>Under the text the <strong>pill row</strong>: a format pill (accent_soft, <code>FLAC 16/44.1</code>; on a Bluetooth output the codec that leaves the box: <code>SBC 44.1</code>, <code>SBC-XQ</code>, <code>AAC</code>) and an outline pill with the output (<code>Wired</code>, or the headset's name, cut with dots when long). A test tone shows <code>TEST SIGNAL</code>.</li>
+<li>The <strong>progress bar</strong> is 4 px, elapsed on the left (a pause glyph before it while paused), remaining on the right (<code>-~</code> for an estimated MP3 length), and a quiet ink3 word in the middle while either is on: <code>shuffle</code>, <code>repeat</code>, <code>repeat 1</code>, <code>shuffle . repeat</code>.</li>
+<li>The <strong>volume strip</strong> at the bottom: <code>Volume -18 dB</code> (or <code>Headset 62%</code> on a headset with absolute volume, same 0..127 scale) and a 4 px ink2 bar over the right 55 %. A headset left at 0 % while playing reads <code>Headset 0% . silent</code> in amber (the old "headset volume 0 %" hint).</li>
+<li>Status bar: <code>n of m</code> at the left, <code>Now Playing</code> in the middle.</li>
+<li>Scroll adjusts <strong>volume</strong>. <strong>Select</strong>: a short press opens <strong>page 2</strong>; <strong>hold Select</strong> (about 0.5 s, with a haptic tick) is <strong>seek mode</strong>. <strong>Play/Pause</strong> toggles; <strong>Left</strong> / <strong>Right</strong> previous / next track; hold Left / Right scans the track at 10x
+  and applies on release (the old behaviour). <strong>Menu</strong> returns to the list the track was chosen from (in seek mode it cancels the seek first).</li>
+</ul>
+<p><strong>Seek mode (NP-2).</strong> The pills, the album line and the volume strip give way to the seek time in the Big font (amber), the progress bar becomes 6 px amber (soft amber track) with a knob, and the hint <code>Scroll: seek . Select: go . Menu: cancel</code> takes the bottom line.
+The wheel moves the target (about 1/60 of the track per step, 1 to 30 s); <strong>Select applies it</strong> (one restart of the track at that frame) and leaves seek mode; <strong>Menu drops it</strong>. Nothing is applied by the wheel resting, and a seek mode left alone for 10 s is cancelled (so a forgotten seek never keeps the wheel; the old 3 s fallback is gone).
+A track that cannot seek (a FLAC without a seek table, the MD5 check) answers the hold with the toast <code>Seek not available</code> and stays on volume. The volume HUD shows while seek mode hides the strip. Logic: <code>ui_npc_*</code> in <code>ui_logic.c</code> (<code>ui_npc_select_down</code> / <code>_up</code>, <code>ui_npc_menu</code>, tick), host-tested in <code>ui_logic</code>. The old "Select toggles volume / seek" path is gone.</p>
+<p><strong>Page 2 (NP-3).</strong> Small art (64 / 96) and title, <code>Artist . Album</code>, then the <strong>star rating</strong> (five stars, lit ones accent): wheel up from the first row focuses the stars (a soft box behind them), the wheel then sets 0 to 5 stars, Select or Menu returns to the rows. Rows: <strong>Shuffle</strong> (Off / Songs), <strong>Repeat</strong> (Off / One / All), <strong>Gapless</strong> (On / Off), each toggled by Select
+(the same settings as Settings), <strong>Add to playlist (phase 4)</strong> (greyed; Select says <code>Playlists in phase 4</code>), <strong>Go to album</strong> and <strong>Go to artist</strong> (open that album / artist in the library with the track's own ids: the storage task keeps the album and album-artist id of the last two library tracks it resolved,
+<code>library_track_ids()</code>; greyed with <code>Not in the library</code> when the track plays from a folder or is a compilation, which has no album artist). Menu goes back to page 1. Page 2 needs a playing file; if playback stops under it, it closes.
+<strong>Ratings are saved on the card</strong> (<code>/.neupod/ratings.bin</code>, <code>ratings_store.[ch]</code>), keyed by file path and size so a rebuilt library keeps them; saved by the storage task under the settings store's write scope (confined to <code>/.neupod</code>), loaded when the card is ready. On a write-protected or failing card they stay in RAM and are written as soon as the card allows (retry every 30 s); up to 128 tracks (the least recently rated is dropped). The file is rewritten in place: a power cut during a save loses the ratings (the CRC makes it load as empty), nothing else.</p>
+<p><strong>Volume HUD (NP-4).</strong> A volume change while another screen is on top (the Y2's side keys, the headset's own volume, anything that moves the player's volume) shows the HUD strip for 1.2 s: <code>Volume -18 dB</code> or <code>Headset 62%</code> with the bar (<code>update_volume_hud()</code>, <code>ui_frame.c</code>; it polls <code>player_volume_att()</code> and <code>bt_volume_get()</code>).
+Screens that draw the volume themselves (Now Playing page 1 outside seek mode, Test tone) set <code>ui_screen_t.shows_volume</code> and get no HUD. Not shown while the screen is off or Hold is on, nor when the volume in use changes (a headset taking over). List scrolling is unchanged: the wheel still only scrolls.</p>
+<p><strong>Bluetooth link lost.</strong> Unchanged ADR-0019 behaviour, new words: playback pauses on the drop and stays on Bluetooth; when the five minutes of automatic reconnecting end with the headset still away the toast says <code>Couldn't reconnect - paused</code> (<code>bt_service_gave_up_seq()</code>).</p>
+<ul>
+<li>On Bluetooth output the format pill reads the negotiated codec: <code>SBC 44.1</code>, or <code>SBC-XQ</code> when the headset accepted a bitpool above 53 (the source format is not shown then). A track that is not 44.1 kHz cannot be played on Bluetooth yet and is refused with "not supported on Bluetooth" (see <a href="../bluetooth/#stage-2b-the-audio-stream-built">Bluetooth</a>).</li>
+</ul>
+<h2 id="album-browser">Album browser<a class="headerlink" href="#album-browser" title="Permanent link">&para;</a></h2>
+<p><img alt="Album browser" src="../assets/ui/album-browser.svg" /></p>
+<p><em>The flat Cover Flow built in phase 4c (LB-6) replaces this mock-up's 3D carousel, see <a href="#cover-flow-phase-4c-lb-6">Cover Flow</a>.</em></p>
+<ul>
+<li>Dark full-screen carousel of album artwork; the centre album is enlarged with a reflection.</li>
+<li>Scroll flips through albums with acceleration; <strong>Select</strong> opens the centre album's track
+  list; <strong>Menu</strong> returns to the library.</li>
+<li>This view is the one place the UI uses the panel's colour depth heavily; on the AMOLED
+  candidate the black background also saves power.</li>
+</ul>
+<h2 id="settings">Settings<a class="headerlink" href="#settings" title="Permanent link">&para;</a></h2>
+<p><img alt="Settings" src="../assets/ui/settings.svg" /></p>
+<ul>
+<li>Two-pane: list of settings groups on the left, a live detail pane on the right for the
+  highlighted group (shown: Bluetooth — connected device, codec, battery).</li>
+<li><strong>Select</strong> enters a group; inside, scroll changes the value and Select confirms.</li>
+<li>"Click" is where the piezo / haptic / both / off choice lives (the piezo has no driver yet), and "Haptics" holds the
+  actuator (ERM / LRA) and Calibrate rows; hardware decision in <a href="../requirements/#reused-parts-and-mechanical">Requirements → Reused parts and mechanical</a>.</li>
+<li>"Output" chooses headphone / line / optical / USB when the jack detect cannot decide.</li>
+</ul>
+<h2 id="resolution-profiles">Resolution profiles<a class="headerlink" href="#resolution-profiles" title="Permanent link">&para;</a></h2>
+<p>The product panel is 320x240 and the mock-ups above are drawn at that size, but the firmware UI is resolution-independent
+(<a href="../adr/0018-ui-resolution-profiles/">ADR-0018</a>): every pixel size lives in one struct, <code>ui_metrics_t</code>
+(<code>app/ui/ui_metrics.h</code>, values in <code>app/ui/ui_metrics.c</code>), and <code>ui_task</code> picks the profile once, after <code>hal_display_init()</code>, from
+<code>hal_display_width()</code> / <code>hal_display_height()</code> (the largest profile that fits the panel; 320x240 when none does). Screens
+read <code>UIM-&gt;...</code> (the active profile); <code>UI_W</code>, <code>UI_H</code>, <code>UI_STATUS_H</code>, <code>UI_CONTENT_H</code>, <code>UI_ROW_H</code> and <code>UI_ROWS_VISIBLE</code> in
+<code>ui_internal.h</code> are shorthands for its first fields. Nothing outside <code>ui_metrics.c</code> scales a length.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>320x240 (product panel)</th>
+<th>480x360 (Y2 testbed, host <code>NEUPOD_DISPLAY_SIZE=480x360</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Status bar / list row</td>
+<td>24 / 30 px</td>
+<td>36 / 45 px</td>
+</tr>
+<tr>
+<td>Content area, rows per page</td>
+<td>216 px, 7</td>
+<td>324 px, 7</td>
+</tr>
+<tr>
+<td>Fonts small / body / large / huge</td>
+<td>Montserrat 12 / 14 / 20 / 48 (own build, Latin-1)</td>
+<td>Montserrat 16 / 20 / 28 / 48</td>
+</tr>
+<tr>
+<td>Icons (Lucide, 1-bit) small / large</td>
+<td>16 / 24 px</td>
+<td>24 / 36 px</td>
+</tr>
+<tr>
+<td>Home split (list / pane), art box</td>
+<td>179 / 141 (56 %), 117 px</td>
+<td>269 / 211, 175 px</td>
+</tr>
+<tr>
+<td>Now Playing art box, text column</td>
+<td>112 px at (14, 14), x = 140</td>
+<td>168 px at (21, 21), x = 210</td>
+</tr>
+<tr>
+<td>Settings split (groups / summary)</td>
+<td>179 / 141</td>
+<td>269 / 211</td>
+</tr>
+<tr>
+<td>Splash icon, icon row, wordmark</td>
+<td>32 px, y = 116, 48 pt</td>
+<td>48 px, y = 174, 48 pt (the largest size built)</td>
+</tr>
+<tr>
+<td>LVGL partial-render buffers</td>
+<td>2 x 320 x 24 RGB565 (15 KB each)</td>
+<td>2 x 480 x 36 (34 KB each; hosted builds only)</td>
+</tr>
+<tr>
+<td>Toast / HUD strip, lock pill</td>
+<td>22 / 26 / 24 px</td>
+<td>33 / 39 / 36 px</td>
+</tr>
+</tbody>
+</table>
+<p>The 480x360 profile is every length of the 320x240 one times 3/2 (the <code>S()</code> macro in <code>ui_metrics.c</code>, used only in that
+table), and fonts step to the next size (14 to 20, 20 to 28: 1.43x and 1.4x, a little under 1.5x, so text that fits at 320
+fits at 480). Row counts do not change: both profiles show 7 rows. Adding a profile is one more initialiser in
+<code>ui_metrics.c</code>; <code>tests/test_ui_metrics.c</code> checks every compiled-in profile (title bar and rows fit the height, art box fits
+above the progress bar, text lines stack without overlapping, the splash debug list fits between the icon row and the version, the static LVGL buffers are big
+enough) and pins the 320x240 numbers to what the UI had before profiles existed.</p>
+<p><strong>What is compiled where.</strong> <code>NEUPOD_UI_HIRES</code> (CMake option; default ON for <code>NEUPOD_PLATFORM=host</code> and <code>y2</code>, OFF for rp2350 and
+esp32s3) adds the 480x360 profile, Montserrat 28 (<code>lv_conf.h</code>), 480-wide render buffers (<code>UI_BUF_W_MAX</code>), a 192 KB LVGL pool
+(<code>memory_budget.h</code>) and the layout audit (<code>ui_audit.c</code>). Without it the product build has the one 320x240 profile as a compile-time constant, so
+the RP2350 image is unchanged (flash and RAM identical in size; see the ADR). A hosted build still picks its profile at run time,
+so a host built with the option runs the 320x240 layout byte for byte as before unless told otherwise.</p>
+<p><strong>Host.</strong> <code>NEUPOD_DISPLAY_SIZE=WxH</code> (read once; between 320x240 and 640x480, default 320x240) sets the simulated panel size.
+<code>NEUPOD_UI_AUDIT=1</code> makes every snapshot also walk the widget tree and print <code>ui: AUDIT FAIL ...</code> for a visible widget that
+lies outside the panel or its container (one pixel over the container's far edge is tolerated; only the list's off-window pool rows
+may be clipped away) and for a label whose text does not fit its box (dots / scrolling labels are not measured). Each snapshot prints
+<code>ui: audit '&lt;name&gt;' WxH objects=N violations=V</code>; the tests require that line. At start-up the UI logs <code>ui: profile WxH on WxH panel</code>
+and warns when the panel is bigger than the profile (including a build without <code>NEUPOD_UI_HIRES</code> on a panel above 320x240). ctest runs
+the tours at 480x360 as <code>hires_tour</code>, <code>hires_input_tour</code>, <code>hires_wifi_tour</code>, <code>hires_bt_tour</code> and <code>hires_art_tour</code> (snapshots in
+<code>build/host/snapshots_hires*</code>, checked by <code>hires_art_snapshot</code>), and the default <code>runtime_smoke</code> tour runs the audit at 320x240. Each hires test has its own fake card, so <code>ctest -j3</code> (as CI runs it) is safe; the 320x240 tours share one card and hold a resource lock. <code>neupod</code> exits 3 when fewer snapshots were written than the tour promised (typically <code>--run-ms</code> too short), 2 when the audio task starved, 4 without audio stats.</p>
+<p><strong>Known limits at 480x360.</strong> The album art is still decoded to a 64 x 64 thumbnail (<code>ART_MAX_DIM</code>, art.h; 8 KB of static RAM on
+the product build) and scaled up by LVGL, 2.6x into the 168 px box, so it is softer than at 320x240. The 48 pt splash wordmark and
+the note glyph do not grow (48 is the largest size built). The bring-up scenes (<code>gfx_strip</code>, <code>now_playing_draw</code>, the display
+test menu) are 320x240 only.</p>
+<h2 id="fonts-and-display-text">Fonts and display text<a class="headerlink" href="#fonts-and-display-text" title="Permanent link">&para;</a></h2>
+<p>The UI draws with its own builds of Montserrat Medium (SIL OFL 1.1) at 12 (Small), 14, 16 (Small at 480x360, hosted builds only), 20, 28 (480x360, hosted builds only) and 48 pt, 4 bpp, merged with
+the few Font Awesome symbols that are still drawn from the fonts (<code>LV_SYMBOL_*</code>: note, tick, image, Wi-Fi, battery 3, Bluetooth, SD card, none of which the boot splash uses any more; the rest of the symbols moved to the Lucide icons, below). They are generated files in <code>app/ui/fonts/</code> (<code>tools/gen_ui_fonts.sh</code> rebuilds them; the
+command line, sources and licences are in <code>app/ui/fonts/README.md</code>) and replace LVGL's built-in <code>lv_font_montserrat_*</code>, which are switched off in
+<code>lv_conf.h</code> so the flash is not paid twice (the themes' default font is the 14 too). The metrics profiles point at them (<code>neupod_font_14</code> and so on).</p>
+<table>
+<thead>
+<tr>
+<th>Font</th>
+<th>Characters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>12, 14, 16, 20, 28</td>
+<td>ASCII (U+0020 to 007E), Latin-1 (U+00A0 to 00FF, without the soft hyphen), bullet, en and em dash, curly single and double quotes, ellipsis, euro, and the 7 symbols still drawn from the fonts</td>
+</tr>
+<tr>
+<td>48</td>
+<td>ASCII and the note symbol only (the splash wordmark and the art-less note; it never shows a name)</td>
+</tr>
+</tbody>
+</table>
+<p>Latin-1 covers the accented letters of Western European names (é ü ñ ø å ß ...) and <code>¿ ¡</code>: some rippers write <code>¿</code> where the title had a <code>?</code>, and it is a
+real glyph here. Line heights and baselines are set back to the built-in Montserrat values (the generator would otherwise grow every line by 2 to 5 px
+for the accented capitals), so every profile's layout is unchanged; an accent on a capital may reach a pixel or two above the line box.</p>
+<p><strong>Display-text filter.</strong> <code>ui_text_display()</code> (<code>ui_logic.c</code>, host-tested) turns a raw UTF-8 string into what the fonts can draw, so nothing renders as an
+empty box. It keeps every character the fonts have (<code>ui_text_has_glyph()</code> is that list, and a host test checks it against the compiled fonts) and maps the
+rest: combining accents and zero-width marks are dropped (a name stored as <code>e</code> plus a combining acute shows as <code>e</code>), other control characters and odd
+spaces become a space (a <code>\n</code> is kept for the multi-line panes), other dashes, quotes and the minus sign become their ASCII look-alikes, Latin
+Extended-A letters become the base letter (<code>Ł</code> to <code>L</code>, <code>Œ</code> to <code>OE</code>), fullwidth forms become ASCII, and anything else (CJK, Cyrillic, emoji) becomes one <code>?</code>
+per character. Malformed UTF-8 becomes <code>?</code>; a sequence cut off at the end of the string is dropped. The result is never longer than the input and the
+copy is cut only at a character boundary. Stored names and tags are never changed: the filter runs only on the way to a label, so a file is still found
+and opened by its real name.</p>
+<p><code>ui_label_set_text()</code> (<code>ui_frame.c</code>) applies it: it is how a label gets text from a file name, a tag, a device name or a network name, and it leaves the
+label alone when the result is what it already shows. Everything drawn from such a string goes through it: the Files and library rows (and their detail
+text), the screen titles (a folder name), Now Playing title, artist and album, the Home screen's playing lines, the toasts, the Settings panes
+(Bluetooth and Wi-Fi names) and the Bluetooth and Wi-Fi lists. Text the wheel keyboards build is typed from their own character sets and drawn as is.
+New code that puts a media string into a label must use it, and a new <code>LV_SYMBOL_*</code> needs its code point in <code>tools/gen_ui_fonts.sh</code> and
+<code>ui_text_has_glyph()</code>. Lucide icons are drawn with <code>ui_icon()</code> (an icon-font label, never run through the filter).</p>
+<p>Flash cost on the RP2350 (Release): see the CHANGELOG entry for UI-17.</p>
+<h2 id="design-system-2026-11-12-review">Design system (2026-11-12 review)<a class="headerlink" href="#design-system-2026-11-12-review" title="Permanent link">&para;</a></h2>
+<p>From the owner-commissioned <a href="../design/2026-11-12-ui-review/">design review</a>; phase 1 (the foundation, backlog <code>DS-1</code> to <code>DS-7</code> and <code>HL-1</code>, see <a href="../backlog/#design-review-2026-11-12">Backlog</a>)
+is built. The decisions the owner took where the review conflicted with earlier ones are in the README of the review and apply to every phase (Now Playing: Select opens page 2, hold Select seeks;
+a lost Bluetooth link stays paused on Bluetooth, ADR-0019; Light by default; the Pico 2 W is frozen; every third-party asset goes into <code>LICENSE.md</code> and the Licences screen).</p>
+<p><strong>Colour tokens and themes (DS-1).</strong> Every colour the UI draws is one of 14 tokens (<code>ui_theme.h</code>: bg, surface, bar, line, ink, ink2, ink3, accent, on_accent, accent_soft, amber, amber_soft, green, red),
+each with a Light and a Dark value from the review (RGB565-safe: red and blue multiples of 8, green of 4; <code>test_ui_metrics</code> checks it and the text contrast). Code names a token (<code>UI_C_INK</code>), never a hex value: labels,
+backgrounds and borders use shared styles that read the active theme (<code>ui_style_text()</code>, <code>ui_obj_bg()</code> ...), so switching rewrites those styles and restyles everything at once (one full repaint). The boot splash keeps its own fixed
+palette, and the art placeholder is not themed. <strong>Settings &gt; Display &gt; Theme</strong> is Light (default), Dark or Auto and is stored (<code>SETTING_THEME</code>, <code>NPth</code>); Auto is dark exactly while the backlight is dimmed or off (<code>ui_theme_is_dark()</code>), so with Auto-dim off it behaves like Light until the screen goes off (owner decision),
+switched before the backlight comes back on a wake. Contrast: the dark theme's white-on-accent is 4.2:1 (below 4.5:1) and the light one 6.4:1 (the review quotes 7.3:1).</p>
+<p><strong>Type scale (DS-2).</strong> Title = the large font (20 / 28), Body = 14 / 20, <strong>Small</strong> = 12 / 16 (secondary lines, times, pills, hints, the status bar's left slot; built from the same Montserrat Medium and the same glyph coverage), Big = 48.</p>
+<p><strong>Text that does not fit (ticker).</strong> Owner decision: one-line text wider than its box scrolls round instead of ending in dots, and a one-line label is always one line high (a dotted or scrolling label with a taller box would wrap). <code>ui_label_ticker(label, on)</code> (<code>ui_frame.c</code>) switches a label between dots and LVGL's circular scroll: 1 s pause, then <code>ticker_px_s</code> (35 px/s, 52 at 480x360) with a gap of three spaces between repeats, only while the text overflows. Used for the Home track title and artist, the focused list row's main text (<code>style_row</code>; the other rows keep dots and the label goes back to dots, rewound, when focus leaves) and the status-bar title. Only the label's own box is invalidated per frame. At most eight tickers exist at once. <code>ui_ticker_set_active(false)</code> (screen off) parks every ticker; <code>ui_frame_settle()</code> rewinds them, so snapshots always show the start position. Rule for later phases: Now Playing title, artist and album use it. Tour: <code>text-home</code> (Home with a long title and artist) and <code>text-longrow</code> (a focused Files row that is too long), ctest <code>text_tour</code> / <code>hires_text_tour</code>; the layout audit fails a dotted or ticker label whose box is two lines high.</p>
+<p><strong>Metrics.</strong> Status bar 24 / 36, row 30 / 45 (7 rows in both profiles), padding 10 / 15, selection bar inset 3 / 4 and radius 4 / 6, Home and Settings split 56 / 44, scroll bar 2 px wide with a track, toast strip one row high (30 / 45),
+HUD strip 26 / 39, lock pill 24 / 36, Power-hold line 3 / 4 (all in <code>ui_metrics_t</code>).</p>
+<p><strong>Status bar (DS-3).</strong> Left slot (Small, ink2), centred title, right-hand group (Wi-Fi, Bluetooth, lock, battery percentage, battery; hidden members close up). The slot belongs to the screen on top:
+<code>ui_screen_set_left(screen, text)</code> (the text is kept with the screen, so a pop restores it). Built so far: the clock on Home, "n of m" on Now Playing (while a queue plays), the item count on the Music lists, the path in Files
+(the title stays "Files"). The battery is drawn (outline, terminal, fill), never "--": the fill is ink, green while charging, red below 15 %, and the percentage shows only below 20 % or while charging.
+The Bluetooth icon is ink3 for a saved headset that is not connected, ink connected, accent streaming, hidden with no radio or no headset. (The three busy dots of a background library build are not drawn yet; the slot is the place.)</p>
+<p><strong>Selection bar (DS-4).</strong> One rounded bar, inset from the list edges, behind the rows (<code>ui_list.c</code>); the rows are transparent. It slides to an adjacent row in 80 ms; a move of more than three rows (a fast spin) and a new list
+jump without animation. The selected row's text, detail and chevron use on_accent, the rest ink / ink2 (greyed rows ink3).</p>
+<p><strong>Strips (DS-5, HL-1; <code>ui_strips.c</code>).</strong> <code>ui_toast_show(text, WARN | INFO, ms)</code>: a one-line strip under the status bar (amber_soft for a problem, accent_soft for information), slides down from under the bar in 150 ms and out in 200 ms. The
+audio route's "Headset disconnected" / "Headset not connected", the Files notices ("Not a playable file", "Path too long") and the library's "Can't play" are toasts now (they were a banner over the first row and a row at the bottom). (There is no "Headphones unplugged" notice
+in the firmware.) <code>ui_hud_show(label, pct, ms)</code>: the bottom strip (ink, Small text and a bar) for a value changing from any screen, 120 ms in, 1200 ms hold, 200 ms out, the fill follows in 60 ms; the volume HUD itself is NP-4 (phase 2).
+<code>ui_pill_show()</code> / <code>ui_hold_line_set()</code>: the lock pill and the Power-hold line (see Hold). None of them dims or blends anything behind it. The host tour tokens <code>toast:warn:Text_with_underscores</code>, <code>toast:info:...</code>, <code>hud:Label:PCT</code>, <code>strips:off</code> and <code>theme:light|dark|auto</code>
+drive them for <code>--tour-design</code> (ctest <code>design_tour</code>, <code>hires_design_tour</code>).</p>
+<p><strong>Icons (DS-6).</strong> The Lucide set (ISC; chevron-right and lock derive from Feather, MIT) as 1-bit bitmaps at 16 / 24 px (320x240) and 24 / 36 px (480x360): chevron-right, play, pause, skip-back, skip-forward, shuffle, repeat, repeat-1, volume-2, bluetooth, wifi, lock, folder, file, lock-open, and the boot splash's check icons monitor, hard-drive, battery-medium, vibrate and circle-dot (<code>ui_icons.h</code>). They are generated from the pinned <code>lucide-static</code>
+package by <code>tools/gen_ui_fonts.sh</code> into <code>neupod_icons_*.c</code> and drawn with <code>ui_icon()</code> like a label, so they take a theme colour. Lists use the chevron, the Files rows the folder and file icons (<code>ui_list_item_t.icon</code>), the status bar Wi-Fi, Bluetooth and lock,
+Now Playing play / pause / shuffle / repeat. Battery and signal bars stay drawn shapes (the splash's battery-gauge icon is the Lucide glyph). The licence text is <code>app/ui/fonts/LICENSE-Lucide.txt</code>.</p>
+<p><strong>Motion (DS-7).</strong> Push slides the new screen in 24 px over 120 ms (ease-out), pop slides the revealed screen in from the left over 100 ms; no alpha, only the content area repaints. (The review fades the popped screen out; the popped screen is destroyed at once, so the mirror slide is used.)
+LVGL runs at 30 fps (<code>LV_DEF_REFR_PERIOD 33</code>, <code>lv_conf.h</code>) on every build; the Y2 stays at 30 until a vsync'd framebuffer is confirmed there. A snapshot or the layout audit first settles any slide or strip in flight (<code>ui_frame_settle()</code>).</p>
+<p><strong>Phase 2 (NP-1 to NP-5, LB-1 to LB-3)</strong> is described under Now playing, Music lists and Now Playing art above. Layout numbers (320x240 / 480x360 = x1.5, <code>ui_metrics_t</code>): Now Playing art 112 at (10, 12) in the content area, text column at x 134, title y 10, artist y 40, album y 60, pills y 102 (18 px high), progress bar y 142 (4 px, 6 px in seek mode, knob 14), times y 152, volume strip y 190;
+two-line rows 40 px (title y 3, second line y 21); album header and page 2: art 64 at y 8, rule at y 76; letter tile 44 px at (w - 58, 14), rail from y 6 over 204 px. The tours <code>--tour-seek</code> (<code>seek-volume</code>, <code>np-nowplaying</code>, <code>seek-mode</code>, <code>seek-scrub</code>, <code>seek-cancel</code>, <code>seek-go</code>, <code>np-page2</code>, <code>np-volume-hud</code>, <code>seek-mp3</code>, <code>seek-unavailable</code>), <code>--tour-library</code> (<code>lib-songs</code> two-line, <code>lib-volume-hud</code>, <code>lib-songs-fastscroll</code>,
+<code>lib-album</code> with the header) and <code>--tour-art</code> snapshot the new screens at both resolutions with the layout audit on every one; the tour tokens <code>sel:down</code> / <code>sel:up</code> (with <code>sleep:MS</code>) hold Select, <code>vol:N</code> changes the volume from outside the screen and <code>rail:hold</code> / <code>rail:release</code> keep the fast-scroll overlay up for a snapshot.</p>
+<h2 id="implemented-stage-2-home-menu">Implemented (stage 2: home menu)<a class="headerlink" href="#implemented-stage-2-home-menu" title="Permanent link">&para;</a></h2>
+<p>Firmware screens in <code>app/ui/</code> (LVGL, light theme as in the mock-ups above; all drawing is original). Rendering
+is partial (two 320x24 strip buffers at 320x240; see Resolution profiles); the list scrolls with one short animation, everything else is static.
+Nothing persists across a reboot yet (settings are RAM only).</p>
+<p><strong>Common frame.</strong> A status bar on every screen: title in the middle, battery icon and percentage on the right
+("--" when the gauge failed its check; green with a charge symbol while charging, red at 15 % or less), and a
+play/pause glyph slot on the left (empty: nothing plays yet), then the Wi-Fi glyph and the <strong>Bluetooth glyph</strong>: grey = a headset is remembered but not
+connected, dark = connected, accent blue = streaming audio, hidden when Bluetooth is not up or no headset is remembered and nothing is connected (the bar is light, so the
+"connected" colour is the text colour and not white). A <strong>toast</strong> (the strip under the status bar, 3 s, on any screen): "Headset disconnected" when the headset goes away
+while playing (the player is paused at once, the position kept, and the output stays Bluetooth), "Headset not connected" when Play is pressed on the Bluetooth output with no
+headset. <strong>Menu</strong> goes back one screen (nothing at the top
+level), <strong>Select</strong> enters. Lists clamp at both ends (no wrap), the selection bar jumps and the list scrolls
+smoothly when the selection leaves the window; a thin scroll bar shows on long lists.</p>
+<p><strong>Scrolling.</strong> The wheel reports counts; 4 counts make one list step, and fast movement multiplies it (2x, 4x, 8x
+when many counts arrive within 150 ms; the constants <code>UI_COUNTS_PER_STEP</code>, <code>UI_ACCEL_*</code> are in
+<code>app/include/runtime_config.h</code>). Each testbed key press is exactly one step.</p>
+<table>
+<thead>
+<tr>
+<th>Screen</th>
+<th>What it does now</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Home</td>
+<td>Left list: Music, Podcasts, Photos, Extras, Settings, Shuffle Songs, Now Playing. Right pane follows the player (polled on every UI tick, and at once when Home comes back on top; the clock and card summary refresh twice a second). Playing a file: the 96 px art box shows the album art thumbnail (the note when there is none), then title (file name when there is no title tag), artist, and a play or pause symbol with the queue position (<code>3 of 12</code>, or just <code>Playing</code> / <code>Paused</code> without a queue; <code>Finished</code> once the last track has ended, and <code>Error</code>, <code>Verifying</code> or <code>Verified</code> for those player states, detail stays on Now Playing). Test tone: note, tone name, <code>Test signal</code>, play symbol. Nothing playing: the artwork placeholder, <code>Nothing playing</code>, the clock (<code>--:--</code> until the time is set) and a card summary (type and size, or <code>No card</code>).</td>
+</tr>
+<tr>
+<td>Music</td>
+<td>Artists, Albums, Songs, Genres, Compilations, Playlists (<code>None yet</code>) and Update Library; the lists are described under <a href="#music-lists">Music lists</a>.</td>
+</tr>
+<tr>
+<td>Shuffle Songs</td>
+<td>Plays the whole library shuffled, building the index first if there is none; Menu on Now Playing comes back to Home.</td>
+</tr>
+<tr>
+<td>Podcasts, Photos</td>
+<td>Placeholder screens saying what is missing.</td>
+</tr>
+<tr>
+<td>Now Playing</td>
+<td>Live: title, artist and album with track number from the file's tags (the file name if there is no title), a format badge such as <code>FLAC 24/96</code>, <code>MP3 320k</code> or <code>ALAC 16/44.1</code>, <code>Playing</code> / <code>Paused</code> / <code>Finished</code> or the error, elapsed and remaining time with a progress bar, and the volume with a level bar. <strong>The wheel is the volume</strong> (2 dB per step, starts at -30 dB; on the Bluetooth output with a headset that has absolute volume it is <strong>the headset's volume</strong>: the label reads <code>Headset 62%</code>, the bar is the same scale, a swipe on the headset's stem moves it, and a headset at 0 % shows <code>Headset 0%</code> with <code>Playing - headset volume 0%</code> on the status line; the software volume then sits at 0 dB, see <a href="../bluetooth/#stage-2c-avrcp-volume-buttons-metadata-built">Bluetooth</a>); <strong>Select hands the wheel to seek</strong> (below) and back; <strong>Play</strong> pauses and resumes (Select no longer does), and on <code>Finished</code> (or after a FLAC MD5 check) plays the same file again from the start, with sound; <strong>Right / Left = next / previous track of the queue</strong> on a short press (acted on at release; Previous more than 3 s into a track restarts it; Next on the last track stops and the screen goes idle); <strong>holding Right / Left for 0.6 s fast-forwards / rewinds</strong> (10x: the bar and the times run ahead, the track jumps there when the key is released; it also ends by itself at the start or end of the track and after 30 s, and another key, the wheel or another screen opening drops it unapplied); with more than one track queued the status line reads <code>Playing - 3 of 12</code>; <strong>Menu goes back while the sound continues</strong>. Without anything playing it says <code>Nothing playing</code>. Play/Pause works on every screen, and so do <strong>Right / Left (next / previous track) while a queue is playing</strong>, on every screen that does not use them itself (the Files browser keeps Right for the MD5 check of a <code>.flac</code>, the Test tone screen and the sliders keep them for their values, text entry keeps them). <strong>Seek mode</strong> (WAV, ALAC, MP3, and FLAC with a seek table; other tracks answer <code>Seek not available</code> for 2 s and the wheel stays on volume; WAV, ALAC and FLAC land on the exact frame, an MP3 on a frame header found from the Xing or VBRI table or, for constant bit rate, the byte proportion, so within a frame for CBR and within about 1 % of the track for a VBR file, and the bar then shows where it really landed): the progress bar turns orange and the volume bar grey, the volume label becomes <code>Seek 1:23</code>, each wheel step moves the position by about 1/60 of the track (1 to 30 s, accelerated like list scrolling), the new position is applied 0.35 s after the wheel stops (the track restarts at that frame: a short mute, paused stays paused) and the wheel drops back to volume 3 s after the last turn. A scrub or hold is tied to the track it was made on: if another track starts first (gapless handoff, skip) it is dropped. A position at the very end is the end of the track (the queue moves on).</td>
+</tr>
+<tr>
+<td>Extras</td>
+<td>Files, Test tone.</td>
+</tr>
+<tr>
+<td>Extras, Test tone</td>
+<td>Three rows, each <code>On</code> / <code>Off</code>: <strong>1 kHz tone</strong>, <strong>L/R ident</strong> (1 s left, then 1 s right) and <strong>Scale</strong> (C4 up to C5 and back, looping). Select starts or stops the highlighted one (starting one stops the other); <strong>Left / Right = volume</strong>; the screen shows the volume and the level reaching the DAC. Leaving the screen stops the sound. See <a href="../audio/">Audio</a>.</td>
+</tr>
+<tr>
+<td>Extras, Files</td>
+<td><strong>Read-only</strong> browser of the card: folders first then files, alphabetical, hidden entries skipped (a name starting with a dot, or the FAT hidden / system attribute: <code>System Volume Information</code>, <code>$RECYCLE.BIN</code>; the host build has no such attribute, so only the dot rule applies there), size on the right, a chevron on folders. Select opens a folder, Menu goes up (at the root it leaves). <strong>Select on a <code>.wav</code>, <code>.flac</code>, <code>.mp3</code> or <code>.m4a</code> (ALAC) plays it</strong> and opens Now Playing; the rest of that folder (playable files only, in the order shown, from the chosen one) is queued and plays on by itself, gaplessly when the rate matches; <strong>Right on a <code>.flac</code> verifies its MD5 without sound</strong> (see <a href="../audio/">Audio</a>). Other files show <code>Not a playable file</code> for 3 s; an AAC <code>.m4a</code> opens Now Playing with <code>AAC not supported yet</code>. At most 256 entries per folder are kept (<code>... more (first 256 shown)</code> row after them); names longer than 63 bytes are cut at a character boundary. Directory reads run in the storage task, so the screen shows <code>Loading...</code> and keeps responding; without a working card it says why (<code>Storage unavailable: no card</code>).</td>
+</tr>
+<tr>
+<td>Settings</td>
+<td>Two panes (groups left, live summary right). <strong>About</strong>: first row <strong>Licences</strong> (Select opens the list of third-party components and their licences; Select on one shows its licence and a short notice; kept in step with <code>LICENSE.md</code> by a test, see <a href="#licences">Licences</a> below), then <strong>Diagnostics</strong> (Select opens a list: the result of every boot check, heap free, core 1 stack, audio blocks / underruns / jitter, and the Bluetooth link: codec, bitpool, bit rate, underruns, frames, drift trims), then version, build hash, platform and uptime. <strong>Display</strong>: Select opens a five-row list: <strong>Backlight</strong> (Select, then scroll adjusts it in 5 % steps, never below 5 %), <strong>Auto-dim</strong> (Select toggles On/Off, default On), <strong>Dim after</strong> (Select cycles 10 s / 15 s / 30 s / 1 min / 2 min / 5 min, default 30 s; greyed and inert while Auto-dim is Off), <strong>Screen off after</strong> (Select cycles Never / 15 s / 30 s / 1 min / 2 min / 3 min / 5 min, default 3 min; counted from the dim, or from the last input when Auto-dim is Off) and <strong>Auto-lock</strong> (Select toggles On/Off, default On: Hold turns on when the screen goes off, <a href="#hold">Hold</a>); all saved on the card. After the idle time with no input the backlight steps down to 10 % (a set level below 10 % is left alone, idle never brightens); any input restores the set level at once and is delivered to the screen as normal. After the Screen off time the backlight goes fully off; <strong>the input that wakes it is not delivered</strong> to the screen (and with Hold on, nothing is). The idle clock starts when the menu appears. <strong>Click</strong>: Select cycles Haptic / Off today (default Haptic, which needs the haptic driver); Piezo and Both join the cycle once a piezo driver exists; saved on the card, and an older saved On/Off still reads as Haptic/Off. <strong>Haptics</strong>: Select opens a two-row list: <strong>Actuator</strong> (Select toggles ERM / LRA; a changed type calibrates itself) and <strong>Calibrate</strong> (Select runs the auto-calibration, about a second; shows Not needed / Not done / Running... / Done / Failed); see <a href="../i2c-peripherals/">I2C peripherals</a>. <strong>Gapless playback</strong>: Select toggles On/Off (default On); saved on the card; Off keeps the auto-advance but with the ordinary stop and start between tracks. <strong>Resume playing</strong>: Select toggles On/Off (default Off); saved on the card. Off: the last track comes back paused at its place. On: if the player was playing when it was last used, it plays on again at boot (if it was paused or stopped, it still comes back paused). <strong>Bluetooth</strong> (design review BT-1 to BT-3): the right pane names the remembered headset and its state (or "No headset saved"); Select opens a short page: <strong>Audio output</strong> (Select cycles Auto / Wired / Bluetooth, saved on the card; Auto = Bluetooth whenever a headset's stream is open, shown as "Auto: Bluetooth" while it is; <strong>Bluetooth</strong> makes Bluetooth the output at once, headset or not, and keeps it through a Disconnect; Wired never uses Bluetooth; changing the output while a track plays stops it, the place is kept, like Stop), <strong>Devices</strong> (chevron; the remembered headset's state, "None", or why the radio is not usable) and <strong>Absolute volume</strong> (greyed, read-only: Yes when the connected headset reports one, No, or "-" with no link; the firmware has no switch for it). There is no Bluetooth On / Off row: the radio drivers have no clean power-down (backlog). <strong>Devices</strong> starts a scan as it opens (not while audio is streaming: an inquiry would stutter it; then "Scan again" does it on request) and fills in live: the <strong>remembered headset first</strong> with its state on the right (Connected, Streaming, Saved, Pairing..., Connecting..., Reconnecting... with busy dots, No audio, Failed: reason), then the <strong>devices found</strong> (audio devices first, strongest first once the scan ends; phones and other non-audio devices are greyed and carry "(phone)", "(computer)", "(wearable)" or "(other)"), each with the <strong>monochrome three-bar signal</strong> (ink and line, no traffic-light colours), then <strong>Scan again</strong> (<strong>Stop scanning</strong> while it runs). While a scan runs a strip at the bottom says "Scanning" with four dots filling in ink3; the status bar's left slot counts what was found. <strong>Select on a found audio device pairs</strong> (<a href="../bluetooth/#pairing-and-the-connection-stage-2a">Bluetooth</a>): the scan stops, the row's right text becomes "Pairing..." with busy dots, then the device moves to the top as the remembered headset ("Connected", "Streaming") or the row says "Failed: <reason>"; <strong>Menu cancels a pairing</strong> (the next Menu leaves). One headset is remembered: with one already saved, Select on a found device asks <strong>"Replace <old> with <new>?"</strong> (Select = replace, Menu = keep). A non-audio row answers with the toast "Not an audio device". <strong>Select on the remembered headset opens a small list</strong>: <strong>Connect</strong> (Disconnect while connected, Cancel while working; greyed while a scan runs) and <strong>Forget</strong>, which asks <strong>"Forget <name>?"</strong> (Select = Forget, Menu = Keep: a question screen, no row ever changes its own meaning). Renaming a headset is not offered. The link's life is told by toasts: "<name> disconnected . reconnecting..." (warning) when a connected headset goes away, "<name> connected" (info, 1.2 s) when the automatic reconnect gets it back, "Couldn't reconnect - paused" (warning) when the five minutes run out; playback stays paused on Bluetooth and the output is never switched by itself (ADR-0019). Names from the headset go through the display-text filter (<a href="#fonts-and-display-text">Fonts and display text</a>; the stored name is untouched); up to 48 bytes are kept. <strong>Wi-Fi</strong>: on/off, status (name, address, signal as a meter), <strong>Scan for networks</strong> (opens the <strong>Networks</strong> screen: it scans as it opens; first row Scan again, then the networks found and the remembered ones, a name with <code>*</code> is remembered; each name once, with its strongest access point; Select on one starts the join flow, Menu goes back), Other network..., time zone, the time (set by hand if there is no network), Wi-Fi while playing; see <a href="../wifi/">Wi-Fi</a>. <strong>Storage</strong>: card type, size, filesystem, mode, free space (computed by the storage task, <code>computing...</code> until done). <strong>Battery</strong>: voltage, charge, rate, state, alerts, gauge status; live, once a second.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="now-playing-art">Now Playing art<a class="headerlink" href="#now-playing-art" title="Permanent link">&para;</a></h3>
+<p>The 112 x 112 box (168 at 480x360) at the top left of Now Playing shows the album art of the track that is playing; page 2 and the album header show it at 64 / 96 px.</p>
+<p><strong>Thumbnails and cache (NP-5).</strong> Hosted builds (the simulator and the Y2; <code>NEUPOD_ART_HIRES</code>, on by default there) decode to a <strong>160 x 160 RGB565 thumbnail</strong> (50 KB) and keep the last <strong>24</strong> albums (1.2 MB static: 24 slots, least recently used replaced first, the slots on screen are never replaced);
+nothing is scaled up: LVGL draws the thumbnail smaller into the box (160 to 112, 96, 64), except Now Playing at 480x360 where the 168 px box shows it 5 % larger. The cache key is the one that already identified an album (folder, album tag, embedded picture size), so a track of an album played or browsed before shows its art at once. The <strong>Pico 2 W</strong> build (frozen, ADR-0001 amendment) keeps the 64 x 64 thumbnail (8 KB), no cache and no browse art
+(<code>ART_CACHE_N</code> 1, <code>art.h</code>); an RP2350B with PSRAM turns the large thumbnails on with <code>-DNEUPOD_ART_HIRES=ON</code>. Measured RAM: 24 x 51,200 B = 1,228,800 B of BSS on the host and the Y2 (the Y2 has plenty); RP2350 unchanged.
+The album header asks the art service for the album's picture by the library handle of its first song (<code>art_browse_want()</code>): the storage task resolves it, reads the file's header for an embedded picture, and decodes it into the cache when it is idle (the playing track's art always goes first).</p>
+<p>(The table and text below describe the decoder, written for the 64 px thumbnail.)</p>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>What the box shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Track just started, art being found or decoded</td>
+<td>The dark box with a note glyph (the audio always starts first; art never delays it)</td>
+</tr>
+<tr>
+<td>JPEG found</td>
+<td>The picture, kept in proportion and centred, with the dark box as letterbox bars</td>
+</tr>
+<tr>
+<td>No art, PNG, progressive JPEG, damaged JPEG, picture too large (over 5120 px)</td>
+<td>The note glyph</td>
+</tr>
+<tr>
+<td>Nothing playing, a test tone, an error, or still opening</td>
+<td>The note glyph</td>
+</tr>
+</tbody>
+</table>
+<p>Where the picture comes from, in order: the picture inside the file (MP3 ID3v2 <code>APIC</code> / <code>PIC</code>, FLAC <code>PICTURE</code>, MP4 <code>covr</code>; a JPEG is preferred to a PNG, a front cover
+to other types), then <code>cover.jpg</code>, <code>folder.jpg</code>, <code>front.jpg</code> in the track's folder (any letter case; that order). An embedded PNG is skipped without being read, and the
+folder is then tried. A JPEG that is embedded but progressive or damaged also falls back to the folder files. PNG and progressive JPEG need the PSRAM board
+(<a href="../adr/0013-bluetooth-ram-psram/">ADR-0013</a>, amendment of 3 Nov 2026).</p>
+<p>How it works: after the track has started, the storage task (core 0, the only user of the card) decodes the JPEG with TJpgDec straight from the card in 512-byte reads, shrunk by the
+decoder to 1/1, 1/2, 1/4 or 1/8 (the largest shrink that keeps the long side at 64 pixels or more), one MCU row at a time, and averages it into one <strong>64 x 64 RGB565 thumbnail (8 KB of static RAM)</strong>; the
+whole picture is never in RAM. LVGL shows the thumbnail scaled to fit the box (1.75 times for a full-size thumbnail; soft edges are the price of the RAM). While it decodes, the task keeps the audio data ring topped up, sleeps 1 ms
+after every 2 ms of work (so input and UI keep running, the storage task outranks them) and stops as soon as another request is queued (it restarts afterwards). The result is
+kept for the album: a track whose folder, album tag and embedded picture size match the last one shows it at once, without decoding again. A big picture takes
+roughly a second or two on the bench (the card read dominates); the <code>art:</code> line on the UART gives source, size, scale and time. Decoder working memory (about 8.6 KB at most) comes from the
+heap for the length of one decode; if it is not available the note stays. Colour order: the thumbnail is native-order RGB565 like LVGL's draw buffers (the display driver swaps for the panel).</p>
+<p><strong>Click feedback.</strong> Every list step asks the haptic task for a click (ROM effect 3, a gentle click). The request is
+a non-blocking queue write: the UI never waits on the I2C bus, requests closer than 35 ms are dropped, and the
+driver goes back to standby after 2 s without a click or at any error.</p>
+<p><strong>Keys.</strong> UART testbed: <code>w</code>/<code>k</code> up, <code>s</code>/<code>j</code> down, Enter or <code>e</code> Select, <code>m</code> or Backspace Menu, <code>a</code> Left, <code>d</code> Right,
+<code>p</code> or Space Play/Pause. Host window: Up/Down arrows and mouse wheel scroll, Enter Select, Esc/Backspace/<code>m</code> Menu,
+Left/Right, Space/<code>p</code> Play/Pause. The wheel, when it works, sends the same events.</p>
+<p><strong>Signal meter and busy dots.</strong> Wi-Fi network rows and the Wi-Fi status row show signal as four small bars at the right edge instead of dBm (Bluetooth device rows use the monochrome three-bar meter, <code>ui_list_item_t.mono</code>: ink bars on line-grey, <code>ui_signal_bars3()</code> folds the four levels to three, no colour): 4 or 3 bars green, 2 yellow, 1 red (the unlit bars are grey). Wi-Fi: 4 bars at -60 dBm or stronger, 3 down to -70, 2 down to -80, else 1; Bluetooth is 5 dB stronger (-55 / -65 / -75). The thresholds and the 3 dB hysteresis are <code>UI_SIG_*</code> in <code>runtime_config.h</code>; <code>ui_signal_bars()</code> (<code>ui_logic.c</code>, host-tested in <code>test_ui_logic</code>) is a pure function. The Wi-Fi icon in the status bar takes the colour of the joined network's bars and changes only after the signal has moved 3 dB past a threshold, so it does not flicker. A list row whose action is still running (a join started from the Networks list, a Wi-Fi or Bluetooth scan, the radio starting) shows four pulsing dots in the same place: set <code>busy</code> on the row in the list model (<code>ui_list_item_t</code>, alongside <code>bars</code>) for as long as the work lasts and call <code>ui_list_refresh</code> when it changes; the list animates it with one timer that runs only while a visible row is busy. The model owns the end: a Networks join ends when the station is up, the join fails, or <code>UI_BUSY_TIMEOUT_MS</code> (the join deadline) passes.</p>
+<p><strong>Console log (UART).</strong> Every screen push and pop prints <code>ui: screen 'Title' push|pop [-&gt; 'Revealed'] depth=N lvgl_mem=used/totalB</code> (modals too), and every list step prints <code>ui: sel &lt;screen&gt; &lt;index&gt; '&lt;label&gt;'</code>, so the UI can be driven with the testbed keys without seeing the panel. Passwords are never printed: the text widget is not a list.</p>
+<p><strong>Host tour.</strong> <code>neupod --tour --snapshots DIR</code> walks through the screens by script and writes <code>home</code>, <code>music-menu</code>,
+<code>music-empty</code>, <code>extras</code>, <code>files</code>, <code>files-sub</code>, <code>files-many</code>, <code>files-many-end</code>, <code>settings</code>, <code>settings-bt</code>, <code>bt-idle</code>, <code>bt-scanning</code> and <code>bt-found</code> (the Devices screen), <code>bt-pair</code>, <code>about</code>, <code>nowplaying</code>
+(PPM) into <code>DIR</code> (the tour's key script predates the longer Settings list, so several of these names no longer show the screen they are named for; use <code>--tour-bt</code> for Bluetooth);
+<code>neupod --tour-bt --snapshots DIR</code> walks the Bluetooth screens and writes <code>settings-bt</code> (the Settings pane), <code>settings-lineout</code> and <code>settings-speaker</code> (the two toggle rows before Bluetooth: Settings &gt; <strong>Speaker</strong> On / Off and <strong>Line out</strong> On / Off, grey with <code>Plug into the jack first</code> / <code>None</code> when unavailable), <code>bt-output-speaker</code> (Audio output cycles Auto, Wired, Bluetooth, Speaker; the toast <code>Speaker is off: turn it on in Settings</code>), <code>bt-idle</code> (Settings &gt; Bluetooth), <code>bt-output-bt</code> (Audio output set to Bluetooth), <code>bt-scanning</code> (Devices with the four dots), <code>bt-found</code>, <code>bt-pairing</code> (the row's "Pairing..." with busy dots), <code>bt-paired</code> (the headset on top, Connected), <code>bt-options</code> (Disconnect / Forget), <code>bt-forget-asks</code> and <code>bt-replace-asks</code> (the question screens), <code>bt-disconnected</code> (Saved), <code>bt-forgotten</code>, <code>bt-failed</code> (a pairing the simulated car kit refuses), then the audio half on a card with a 20 s WAV album: <code>np-bt-badge</code> (Now Playing, <code>SBC 44.1</code>), <code>np-bt-volume</code>, <code>np-bt-volume0</code>, <code>bt-key-next</code>, <code>bt-about</code> and <code>bt-diag</code> (About with Diagnostics, and the Diagnostics list scrolled to the Bluetooth link rows), <code>bt-streaming</code> (Devices: Streaming, no scan started), <code>settings-bt-streaming</code>, <code>bt-dropped</code> (the <code>bt:drop</code> token makes the simulated headset vanish: the toast "... disconnected . reconnecting...", the player paused), <code>bt-reconnected</code> (the info toast, about 2.5 s later) and <code>bt-gave-up</code> (the give-up toast, set with the <code>toast:</code> token: the five minutes are not simulated); ctest <code>bt_tour</code> and, at 480x360 with the layout audit, <code>hires_bt_tour</code>; <code>neupod --tour-art --snapshots DIR</code> plays three one-track albums (cover file, JPEG inside the FLAC, PNG inside plus a progressive cover) and writes <code>art-cover</code>, <code>art-embedded</code>, <code>art-none</code> (ctest <code>art_tour</code>, checked by <code>art_snapshot</code>).
+<code>neupod --tour-text --snapshots DIR</code> (UI-17) walks Extras &gt; Files on a card with accented, <code>¿</code>, curly-quote, CJK and emoji names (<code>tests/tools/make_text_card.py</code>) and plays a FLAC with accented tags: <code>text-files</code>, <code>text-folder</code>, <code>text-nowplaying</code>, <code>text-home</code> (Home with the long accented title: one line, ending in dots) (ctest <code>text_tour</code> and <code>hires_text_tour</code>);
+<code>ctest</code> runs it as <code>runtime_smoke</code> against a small fixture card (<code>build/host/fsroot_fixture</code>,
+<code>NEUPOD_FS_ROOT</code>) and writes <code>build/host/snapshots/</code>.</p>
+<h3 id="phase-4-built-part-library-states-settings-pane-home">Phase 4 (built part): library states, Settings pane, Home<a class="headerlink" href="#phase-4-built-part-library-states-settings-pane-home" title="Permanent link">&para;</a></h3>
+<p><strong>Full-pane states (LB-4, <code>ui_pane.c</code>).</strong> A state with no rows covers the list: heading (Title font), up to two Small lines, a bar with a Small caption, an accent button naming what Select does, and a hint line at the bottom.
+<code>ui_library.c</code> uses it for opening (shown only after 300 ms), building, an error (with "Try again"), the Update Library result ("Done") and an empty list ("No artists yet", "Update Library"). "Library needs a writable card" is also a toast.
+<strong>Determinate progress:</strong> the build first counts the audio files (directory entries only, same filters as the scan; Cancel works during the count), so the bar is <code>files / total</code> and the caption reads "552 of 1,204 songs . Aurora Lane"
+(folder name from the scan). <strong>Run in background:</strong> Menu on the build pane leaves the screen, the build carries on and the status bar's left slot shows three busy dots on every screen; a toast says how it ended
+("Library updated . 1,204 songs", or "Library update stopped" if the card was wanted for something else: any other card request, e.g. Play, still ends a build, the old index stands). Opening Update Library while one runs in the background takes it over.
+<strong>Greyed songs (LB-5):</strong> the codec at the right of a greyed two-line row (an album track already showed it in brackets); a queue that skips an unplayable track toasts "Skipped: unsupported codec (AAC)" (<code>player_skip_notice</code>).
+<code>ui_frame_push</code> returns false when the stack is full; Go to album / artist then toast "Can't open: too many screens".</p>
+<p><strong>Settings (ST-1, ST-2).</strong> The right pane is a left-aligned summary: group name (Body), up to four key / value lines (Small, key ink2, value ink right-aligned) and one help line (Small, ink3). Gapless, Shuffle, Repeat, Resume and Click change in place on Select
+with a haptic tick and a 60 ms flip of the value in the pane. Settings &gt; Display is Theme, Brightness (the slider), Dim after (10 s to 5 min, then Off: that is Auto-dim), Off after, Auto-lock.</p>
+<p><strong>Home (3.1).</strong> Playing: art, title and artist (tickers), a 3 px progress bar, elapsed (pause glyph in front when paused) and remaining. Idle: the clock at 48 px and the date once the clock is set (otherwise "Nothing playing"), then "1,204 songs . 72 %"
+(one Info request for the song count when the panel goes idle; "No library yet" and "Open Music to build it" when there is no index). "Now Playing" is greyed while nothing is queued (Select says "Nothing playing"); Shuffle Songs has no chevron.
+The card summary line ("SDHC 32 GB") exists only with <code>-DNEUPOD_UI_DEBUG=ON</code>.</p>
+<h3 id="playlists-phase-4b-lb-7">Playlists (phase 4b, LB-7)<a class="headerlink" href="#playlists-phase-4b-lb-7" title="Permanent link">&para;</a></h3>
+<p>Music &gt; Playlists (<code>ui_playlists.c</code>, over <code>playlist_service.h</code> on the storage task; not on the frozen Pico 2 W, where the row still says <code>None yet</code>). The list of lists: <strong>On-The-Go, Recently added, Most played, Top rated, Unplayed</strong>, then every <code>.m3u</code> / <code>.m3u8</code> found in <code>/</code>, <code>/Playlists</code> and <code>/Music</code>, each with its count at the right (<code>128+</code> where the count is a floor). Select opens a list as two-line rows (title, then artist or folder); Select on a song plays the whole list from it (<code>player_play_paths</code>: the queue holds whole paths, Shuffle and Repeat apply). A row the card cannot play (file missing, path that is not on the card, not a music file) is greyed with the reason on its second line and answers Select with a toast. Empty lists, loading and errors are full-pane layouts like the library's. Entries are read like a player would: <code>#EXTM3U</code> / <code>#EXTINF</code>, relative and absolute paths, Windows separators and drive letters, <code>file://</code>, byte-order mark, Latin-1 or UTF-8 (<code>pl_m3u.h</code>).
+Smart lists: Recently added = the 50 newest files by modified time (one pass over the index), Most played = the 25 with most counted plays, Top rated = four stars or more, Unplayed = library songs with no counted play, in title order, the first 128. <strong>On-The-Go</strong>: Now Playing page 2 &gt; <strong>Add to On-The-Go</strong> (toast <code>Added to On-The-Go</code>, <code>Already in On-The-Go</code>, or why not); in the list a long press of Select (0.5 s) takes the song off, and a last row <strong>Clear On-The-Go</strong> asks first. Files and formats: <a href="../storage/#playlists-play-counts-and-on-the-go-design-review-lb-7">Storage</a>. Tour <code>--tour-playlists</code> (ctest <code>playlists_tour</code>, <code>hires_playlists_tour</code>; snapshots <code>pl-*</code>).</p>
+<h3 id="cover-flow-phase-4c-lb-6">Cover Flow (phase 4c, LB-6)<a class="headerlink" href="#cover-flow-phase-4c-lb-6" title="Permanent link">&para;</a></h3>
+<p>On the <strong>Albums</strong> list, <strong>Right</strong> turns the list into five flat album tiles (centre 96 px, neighbours 64, outer 48 at 320x240; 144 / 96 / 72 at 480x360; no rotation or reflection; the nearer tile overlaps the farther by a few pixels). Under the centre tile: the title (Body, ticker if long) and <code>Artist . 2019 . 3 songs</code> (Small, ink2, ticker). The status bar's left slot reads <code>7 of 31</code>. The wheel moves <strong>one album per detent</strong> (up to three when it spins fast); a single step slides the tiles over 90 ms (size and position only, the tile row is the only area redrawn), a jump just moves them. <strong>Play</strong> plays the album from its first song, <strong>Select</strong> opens it, <strong>Left or Right</strong> goes back to the list on the same album. Placeholder tiles (the art-less gradient) show until a picture arrives.
+<code>ui_coverflow.c</code> holds the tiles: seven tile objects as a ring (the tile of album <em>a</em> is tile <em>a</em> mod 7, so a step only moves geometry), each an image that points straight at the art service's thumbnail (not copied). <code>ui_library.c</code> owns the data and frees the list's rows while the flow shows (the list keeps its selection). Albums rows carry <code>first</code>, <code>songs</code> and <code>year</code> (the year of the first song) for this (<code>lvw_row_t</code>). The year is missing from the subtitle for an album whose first song has none.
+<strong>Art service</strong> (<code>art_service.h</code>): <code>art_browse_want_set()</code> takes up to <code>ART_BROWSE_N</code> (5) library handles, centre first; the storage task decodes them in that order into the existing 24-slot cache (a cache hit by album key costs one file header read; a handle already cached costs nothing, so a step decodes only the one new tile). Wanted handles, and the set wanted just before, are never evicted; <code>art_browse_get_handle()</code> answers by handle (READY / LOADING / FAILED / NONE) under the same retry counter as the playing track's view. A decode in progress is abandoned only when its handle is no longer wanted, so a wheel that never rests does not starve the tiles it passes. The art lookup uses <code>library_service_resolve_for_art()</code>, which does not take the place of a playing track's path in the resume cache and also finds the picture of a track the player cannot play. Compiled out where there is no art cache (<code>NEUPOD_ART_HIRES</code> off: the frozen Pico 2 W; Right then keeps its usual meaning). Tour: <code>lib-coverflow</code>, <code>lib-coverflow-next</code>, <code>lib-coverflow-far</code>, <code>lib-coverflow-start</code>, <code>lib-coverflow-back</code> in <code>--tour-library</code>.</p>
+<h3 id="text-entry-number-slider-date-time-phase-4c-in-1-in-2">Text entry, number, slider, date / time (phase 4c, IN-1, IN-2)<a class="headerlink" href="#text-entry-number-slider-date-time-phase-4c-in-1-in-2" title="Permanent link">&para;</a></h3>
+<p>Described in <a href="../ui-input/#widgets">Input widgets</a>: the letter ring with mode chips, the password reveal (800 ms), hold Menu to clear, the Big value with the bar and its min / max, the date / time field names. The Wi-Fi password and name, Test URL and the search use the same modal; the request API (<code>wi_request_t</code>) is unchanged, the model lost its cursor, page, show and done keys (<code>wheel_input.h</code>). Tour <code>--tour-input</code>: <code>in-text</code>, <code>in-text-123</code>, <code>in-text-space</code>, <code>in-text-del</code>, <code>in-text-cleared</code>, <code>in-password</code>, <code>in-password-dots</code>, ...</p>
+<h3 id="files-long-folders-phase-4c-fl-1">Files, long folders (phase 4c, FL-1)<a class="headerlink" href="#files-long-folders-phase-4c-fl-1" title="Permanent link">&para;</a></h3>
+<p>A folder with more than 256 entries (<code>FILES_MAX_ENTRIES</code>) is read a page at a time (<code>storage_list_request_page()</code>: the page is the entries 256 * n onwards in the order directories then files, each page sorted by name on its own). The list ends in a plain <strong>Load more</strong> row (it replaces the old greyed "... more" row) that shows the next page; a later page starts with <strong>Earlier entries</strong>. A folder found to hold more than a page shows <code>256+</code> at the right of its row when its parent is listed again (it is learnt on opening: the folders are not counted before). Icons (folder / file) and the path in the status bar's left slot were built in phase 1 (<code>/</code>, <code>/Name</code>, <code>.../Name</code>). Tour: <code>files-page2</code>, <code>files-page1-end</code>, <code>files-plus</code>.</p>
+<h3 id="splash-phase-4c-sp-1">Splash (phase 4c, SP-1)<a class="headerlink" href="#splash-phase-4c-sp-1" title="Permanent link">&para;</a></h3>
+<p>The <strong>release splash</strong> is the wordmark, the progress line (the shimmer under it), the <strong>icon row</strong> and the version in the dim ink, shown at least 600 ms (<code>RT_SPLASH_MIN_MS</code>). The icon row has one Lucide icon per boot check (Display = monitor, Storage = hard-drive, Battery gauge = battery-medium, Haptics = vibrate, Click wheel = circle-dot, Audio = volume-2, Bluetooth, Wi-Fi), in a 32 px box (48 px at 480x360) at y = 116 (174): the icon pulses while its check runs, goes solid with an accent border when it passes and gets a red cross when the subsystem is not fully correct. <strong>The icon row was reinstated at the owner's request on 2026-11-13</strong> (Y2 test: "I want the icons back, that loading screen was good"); the first SP-1 cut had replaced it with text. The <strong>debug splash</strong> keeps the icons and adds a short text list under them when a boot check ended not fully correct, or when Menu is held while the unit starts: one red line per failed check (<code>Battery gauge - no response</code>, with <code>+n more</code> if they do not fit), then <code>6 of 8 checks passed</code> (<code>All 8 checks passed</code> when Menu was held and nothing failed); the bar along the bottom drains over the 8 s hold (any other key skips it). Keys pressed while the splash shows go to the home screen afterwards. The red caption under the icons is gone (the debug list replaces it); the list has room for three lines at both sizes (<code>test_ui_metrics</code> pins it). Host: <code>--splash-debug</code> / <code>--splash-release</code>; ctest <code>splash_*</code> and <code>hires_splash_*</code>.</p>
+<h2 id="not-yet-drawn">Not yet drawn<a class="headerlink" href="#not-yet-drawn" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Hold-switch lock overlay, charging screen, USB mass-storage ("Connected") screen.</li>
+<li>Podcasts and Photos browsers; the search screen.</li>
+</ul>
+<h2 id="hold">Hold<a class="headerlink" href="#hold" title="Permanent link">&para;</a></h2>
+<p>Decision: <a href="../adr/0020-hold/">ADR-0020</a>. Hold is the iPod's lock switch, on every platform. While it is on, the wheel and every button do nothing:
+<code>ui_frame_input()</code> swallows them before any screen sees them (so there is no click, no Play/Pause, no scroll), and each one only restarts the idle clock and
+shows the lock pill ("Locked · hold Power 2 s to unlock"). Headset buttons (AVRCP) keep working; the Y2's side volume keys are locked with the rest. A lock icon sits in the status bar's right-hand group while Hold is on.</p>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>How</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Auto-lock</td>
+<td>the screen goes fully off (Screen off after, or a Power tap) and Settings &gt; Display &gt; Auto-lock is On</td>
+</tr>
+<tr>
+<td>Gesture</td>
+<td><strong>Power held 2 s</strong> toggles Hold: from 0.4 s a 3 px accent line grows under the status bar and a dark pill at the bottom says "Keep holding to lock · 10 s = off" (or "... to unlock"; letting go early does nothing), at 2 s the pill says "Locked" / "Unlocked" and a haptic click plays</td>
+</tr>
+<tr>
+<td>Power-off</td>
+<td>still held: at 5 s the line turns red and grows again while the pill counts "Release to cancel · shutting down in 5 ... 1" (letting go cancels), at 10 s the power-off is requested (Y2; the Pico rig cannot, and shows no countdown)</td>
+</tr>
+<tr>
+<td>Tap</td>
+<td><strong>Power tapped</strong> (under 0.4 s) turns the screen off now; the next input wakes it (and is lost)</td>
+</tr>
+<tr>
+<td>Switch</td>
+<td>the iPod 6G donor board's slide switch (<code>hal_input_hold_switch()</code>), same state; none on the Y2 or the Pico rig</td>
+</tr>
+<tr>
+<td>Console / simulator</td>
+<td>no Power key on the Pico rig: the console key <code>l</code> toggles Hold. Simulator: <strong>F1</strong> is Power (hold it)</td>
+</tr>
+</tbody>
+</table>
+<p>The reminder ("Locked · hold Power 2 s to unlock"), the confirmations and the countdown are the lock pill and the Power-hold line of the design system (<code>ui_strips.c</code>; HL-1): nothing is dimmed, blended or covered except the pill itself. They are drawn at both UI profiles and covered by
+the layout audit (<code>hold_tour</code>, <code>hires_hold_tour</code>: ring, locked, swallowed keys, countdown, power-off, switch, screen off, wake, unlock, the Display rows).</p>
+<h2 id="licences">Licences<a class="headerlink" href="#licences" title="Permanent link">&para;</a></h2>
+<p>Settings &gt; About &gt; <strong>Licences</strong> lists the third-party parts of the firmware and their licences (<code>app/ui/ui_licence_data.c</code>): the neuPod licences, FreeRTOS, LVGL,
+Montserrat, Lucide, Font Awesome, FatFs, TJpgDec, dr_flac / dr_mp3, Apple Lossless, mbed TLS, BTstack (with the non-commercial note), the Android SBC codec and, on the
+RP2350 build only, lwIP, cyw43-driver, the SD card driver and the Pico SDK. Select on a row shows the licence as a headline and a short plain notice (no
+scrolling: at most 400 characters). The table is the on-device copy of the one in <a href="https://github.com/StuartF303/neuPod/blob/main/LICENSE.md">LICENSE.md</a>; <code>ctest -R licences</code>
+fails if a component is listed on the device but not named, with its licence, in LICENSE.md. Adding a dependency means adding it to both.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

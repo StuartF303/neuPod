@@ -1,0 +1,2046 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/y2/">
+      
+      
+        <link rel="prev" href="../ui-input/">
+      
+      
+        <link rel="next" href="../wiring-phase1/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Innioasis Y2 platform - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#innioasis-y2-platform-neupod_platformy2" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Innioasis Y2 platform
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bluetooth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wifi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Innioasis Y2 platform
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Innioasis Y2 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-code-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the code is
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-each-hal-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What each HAL does
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What each HAL does">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#internal-speaker-and-line-out" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Internal speaker and Line out
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wired-audio-bench-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wired audio: bench steps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#storage-and-the-card-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage and the card rule
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-measured-and-what-is-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is measured and what is not
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../i2c-peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-music-library-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0018-ui-resolution-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0018 UI resolution profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0019-bluetooth-audio-sink-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0019 Bluetooth audio boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0020-hold/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0020 Hold
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-code-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the code is
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-each-hal-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What each HAL does
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What each HAL does">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#internal-speaker-and-line-out" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Internal speaker and Line out
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wired-audio-bench-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wired audio: bench steps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#storage-and-the-card-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage and the card rule
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-measured-and-what-is-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is measured and what is not
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="innioasis-y2-platform-neupod_platformy2">Innioasis Y2 platform (<code>NEUPOD_PLATFORM=y2</code>)<a class="headerlink" href="#innioasis-y2-platform-neupod_platformy2" title="Permanent link">&para;</a></h1>
+<p>The same firmware as the host build (FreeRTOS tasks, LVGL UI, boot checks, player, FatFs storage), running as a Linux
+process on the Innioasis Y2 testbed (MT6582, armv7 hard-float, stock kernel 3.4.67, our Buildroot glibc rootfs). It is a
+testbed target for the UI and the library engine, not a product. Nothing here flashes the Y2: the firmware is copied into
+<code>/opt</code> over ssh. Background on the device itself is in <code>testbed/y2/README.md</code>.</p>
+<h2 id="where-the-code-is">Where the code is<a class="headerlink" href="#where-the-code-is" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>What</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>platforms/y2/</code></td>
+<td>the target: <code>main.c</code>, <code>CMakeLists.txt</code>, <code>hal/</code></td>
+</tr>
+<tr>
+<td><code>platforms/y2/hal/y2_*.c</code></td>
+<td>portable logic, also built and unit-tested on the PC: evdev decoding and the wheel mapping (<code>y2_input</code>), SD device selection (<code>y2_sd</code>), power_supply parsing (<code>y2_power</code>), the poweroff and reboot requests (<code>y2_poweroff</code>), boot-mode detection (<code>y2_sysfs</code>), charging-only mode logic (<code>y2_charge</code>) and its screen (<code>y2_chargeview</code>: the battery drawing and the screen-on timer), RGB565 to XRGB8888 and the page flipper (<code>y2_fb</code>), the wired audio path (<code>y2_audio</code>: allow-lists, S16 conversion, ring, DAC state machine)</td>
+</tr>
+<tr>
+<td><code>platforms/y2/hal/hal_*.c</code></td>
+<td>the HALs that touch the device (display, input, console, storage, battery, audio, radio, i2c, system)</td>
+</tr>
+<tr>
+<td><code>cmake/toolchain-y2.cmake</code></td>
+<td>the cross toolchain</td>
+</tr>
+<tr>
+<td><code>hal/host/freertos</code>, <code>hal/host/hal_core.c</code></td>
+<td>reused from the host build: the FreeRTOS POSIX port, and core 1 as a native thread</td>
+</tr>
+<tr>
+<td><code>tests/test_y2_*.c</code></td>
+<td>host unit tests (<code>ctest -R y2_</code>)</td>
+</tr>
+<tr>
+<td><code>testbed/y2/scripts/deploy-fw.sh</code>, <code>select-ui.sh</code></td>
+<td>deploy and UI selection</td>
+</tr>
+</tbody>
+</table>
+<p>The layout follows the RP2350 target (<code>platforms/&lt;name&gt;/</code> with its own <code>main.c</code> and <code>hal/</code>), not <code>hal/host</code>, because this
+target has its own toolchain and device HALs. The host build stays the place where HALs are simulated.</p>
+<h2 id="build">Build<a class="headerlink" href="#build" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>scripts/build.sh y2                      # build/y2/platforms/y2/neupod (and neupod.stripped)
+</code></pre></div>
+<p>The compiler is the Buildroot cross toolchain that built the rootfs, so the C library matches the device exactly. By
+default <code>~/y2-build/out-rootfs/host/bin/arm-buildroot-linux-gnueabihf-gcc</code>; point somewhere else with
+<code>-DNEUPOD_Y2_TOOLCHAIN_DIR=&lt;dir&gt;</code> and <code>-DNEUPOD_Y2_TRIPLE=&lt;triple&gt;</code> or the environment variables <code>NEUPOD_Y2_TOOLCHAIN</code> /
+<code>NEUPOD_Y2_TRIPLE</code>. The secrets code needs mbed TLS from the Pico SDK (<code>PICO_SDK_PATH</code>) as on the other targets.</p>
+<p>CI cannot use the Buildroot toolchain, so the <code>y2</code> job in <code>.github/workflows/firmware.yml</code> cross-builds with the Ubuntu
+<code>gcc-arm-linux-gnueabihf</code> package (about 20 s of installing) and checks that the result is a 32-bit ARM hard-float
+executable. That binary is a compile check; only the Buildroot-built one is deployed. The portable Y2 logic is also
+covered by the host job's <code>ctest</code>.</p>
+<h2 id="what-each-hal-does">What each HAL does<a class="headerlink" href="#what-each-hal-does" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>HAL</th>
+<th>On the Y2</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Display</td>
+<td><code>/dev/fb0</code> (mtkfb, 480x360, three pages, XRGB8888). The HAL keeps an RGB565 shadow frame with the ST7789-style window and cursor, so the UI draws as on every target, and <code>hal_display_present()</code> converts only the rows that changed into the next page and flips to it with pan plus put (about 64 fps for full frames measured on the device). Nothing is flipped when nothing was drawn. A previous run can leave the pan offset on another page, so the HAL pans to page 0 when it opens. <code>hal_display_width()/height()</code> report 480x360. Brightness is <code>/sys/class/leds/lcd-backlight/brightness</code> (0..255); sleep and wake switch the backlight off and on.</td>
+</tr>
+<tr>
+<td>Input</td>
+<td>The wheel and ring buttons are the <code>mtk-tpd</code> evdev node, the side keys <code>mtk-kpd</code>, found by name under <code>/sys/class/input</code>. A wheel detent is one <code>KEY_DOWN</code> (clockwise) or <code>KEY_UP</code> press; it moves a virtual finger by 4 wheel positions, the same as a console <code>s</code> or <code>w</code>, so each detent is one list step and the UI's scroll acceleration applies as on the real wheel. Centre (<code>KEY_ENTER</code>) keeps its real hold time, Menu is <code>KEY_BACK</code>, Prev/Next are <code>KEY_LEFT</code>/<code>KEY_RIGHT</code>, Play/Pause is <code>KEY_PLAYPAUSE</code>. A wheel tick within 150 ms after a Centre, Prev or Next press is dropped (a finger brushing the wheel on its way to the button); Menu and Play do not suppress the wheel, because the usual thing after Menu is to scroll the list that appears. A button pressed and released between two polls (the nodes are read every 8 ms) still gives its press and release, one poll apart. Vol+/Vol- call <code>player_volume_step()</code> (one step per press, repeating while held). <strong>Power key</strong> (since <a href="../adr/0020-hold/">ADR-0020</a>; the HAL only reports it as a level, <code>hal_input_power_key()</code>, and the UI decides what a press means, see <a href="../ui/#hold">UI</a>): a <strong>tap</strong> (under 0.4 s) turns the screen off at once (backlight off; with Auto-lock on, Hold turns on) and the next input of any kind wakes it and is not delivered; held <strong>2 s</strong> (it fires at 2 s while still held, once, not on release) it <strong>toggles Hold</strong> (lock / unlock, with a bar from 0.4 s, a confirmation, a haptic click and a lock glyph in the status bar); held on, a <strong>"Powering off in 5"</strong> countdown appears at 5 s (letting go cancels) and at <strong>10 s</strong> it logs <code>y2: power held, shutting down</code> and runs the firmware's ordinary clean stop (the same path as SIGTERM: the storage task finishes, card writes are locked, the card is synced and unmounted), then starts <code>/sbin/poweroff</code> detached in its own session and exits with status 77, which tells the <code>S91neupod-fw</code> respawn wrapper not to restart it at once. The wrapper waits 15 s (<code>NEUPOD_POWEROFF_WAIT</code> overrides, for tests); init's stop scripts end it during that wait, and nothing waits on anything else, so there is no double stop. If the system is still up after 15 s the wrapper logs <code>poweroff did not happen, restarting</code> and respawns the firmware, so a failed poweroff never leaves a dead screen. If <code>/sbin/poweroff</code> cannot be started at all the firmware exits 0 and is respawned. (Before ADR-0020 the HAL itself slept the screen on a short press, swallowed input while asleep except Power and Centre/Menu, and powered off at 2 s. All of that moved to the UI; if the side-key node closes mid-press the held Power press is forgotten and reported as released.) The Y2 has no Hold slide switch (<code>hal_input_hold_switch()</code> says none). The command can be replaced with the environment variable <code>NEUPOD_Y2_POWEROFF</code> (absolute path, no arguments) or <code>-DY2_POWEROFF_CMD=...</code>; host tests use it so they never power off the PC. The nodes are drained every 8 ms.</td>
+</tr>
+<tr>
+<td>Console keys</td>
+<td><code>w s</code> scroll, <code>e</code> select, <code>m</code> menu, <code>a d</code> left/right, <code>p</code> play. Read from stdin when it is a terminal or pipe, and from a control FIFO, <code>/run/neupod.keys</code> (<code>NEUPOD_KEYS_FIFO</code> overrides the path): <code>ssh root@y2 'echo s &gt; /run/neupod.keys'</code>. On the FIFO and on piped stdin a newline is ignored, so <code>echo s</code> is one scroll step and not also Select. A stdin that is <code>/dev/null</code> or ends is dropped; the process keeps running.</td>
+</tr>
+<tr>
+<td>Storage</td>
+<td>The microSD as a raw block device under FatFs, the same layering as the Pico (see below).</td>
+</tr>
+<tr>
+<td>Charging-only mode</td>
+<td>When the Y2 is "off" with USB attached, stock LK boots the kernel again in power-off-charging mode: <code>/proc/cmdline</code> shows <code>boot_reason=1</code> (BR_USB) and <code>/sys/class/BOOT/BOOT/boot/boot_mode</code> reads 8 (KERNEL_POWER_OFF_CHARGING) or 9 (LOW_POWER_OFF_CHARGING). <code>main()</code> reads that file first (before any HAL init) and logs <code>y2: boot_mode N (charging|normal)</code>; an absent, empty or unreadable file counts as a normal boot. In mode 8 or 9 the firmware starts no UI, storage, audio or FreeRTOS and runs <code>y2_charging_main()</code> (<code>platforms/y2/charging.c</code>): framebuffer mapped once and cleared, then a 250 ms sleep loop (idles near 0 % CPU) reading the <code>mtk-kpd</code> (side keys) and <code>mtk-tpd</code> (wheel) nodes. <strong>Screen</strong>: for 10 s after entering the mode, and again after every key press or wheel touch, the backlight is on (brightness 255) and an own-artwork animated battery is drawn straight into the framebuffer (<code>y2_chargeview.c</code>, no LVGL: dark theme colours, 5 segments that fill one by one up to the current level, hold one step and start again every 600 ms; green, red at 15 % or less; the percentage and CHARGING below). The gauge saying Full or Not charging with the charger present shows a still full battery captioned CHARGED. No gauge reading shows an empty battery and <code>--%</code>. While Power is held an amber HOLD TO RESTART caption and a bar fill over the 2 s. After the 10 s the backlight goes to 0 and nothing is read or drawn until the next key. Only the backlight node and <code>/dev/fb0</code> are written. The picture is size-independent (the panel is 480x360; the tests draw 320x240 as well, <code>ctest -R y2_chargeview</code>, snapshots in <code>build/host/snapshots_charging</code>). <strong>Power held 2 s</strong> (this mode has its own loop and timer, <code>y2_charge</code>; the 10 s player gesture does not apply): logs, spawns <code>/sbin/reboot</code> detached (override <code>NEUPOD_Y2_REBOOT</code> or <code>-DY2_REBOOT_CMD=...</code>) once per press and exits 77, so <code>S91neupod-fw</code> does not respawn at once (the 15 s "still up, restarting" fallback applies as in normal mode). <strong>Charger removed</strong>: every <code>/sys/class/power_supply/*</code> that is not the battery is read (<code>online</code>; every non-battery supply, on the device <code>ac</code>, <code>usb</code> and <code>wireless</code>; any one online counts; a missing or non-0/1 value counts as unreadable); after it has been continuously offline for 3 s (any online reading restarts the timer) it spawns <code>/sbin/poweroff</code> and exits 77. The 3 s timer is only armed once an online reading has been seen since the loop started (the charger can read 0 early in a charger boot); a charger that never reads online leaves the device up. If no charger supply can be read the state is "unknown" and never powers off. A <strong>short Power press</strong> only wakes the screen. SIGTERM exits 0 (the wrapper would respawn it, but init stop kills the whole group first). If a command cannot be started it is logged and retried (next hold, or after another 3 s offline). <code>S90neupod-demo</code> skips itself in boot mode 8 or 9 when <code>/opt/neupod-fw/neupod</code> is executable (on a demo-only device it behaves as before); command line arguments such as <code>--run-ms</code> are ignored in charging mode and logged as such. <code>S91neupod-fw</code> starts the firmware in that mode whatever <code>/etc/neupod-ui</code> says; both read the mode from <code>NEUPOD_BOOT_MODE_FILE</code> (default the sysfs path) so they can be tested in a sandbox. <code>select-ui.sh demo</code> run while the device is in charging-only mode will not start the demo (and will roll back). Not tried on the device yet: the picture, its timing and the backlight on/off have only been checked on the PC (rendering and timer tests, snapshots); the loop, the Power hold and the unplug path are unit-tested (<code>y2_charge</code>, <code>y2_sysfs</code>) and the init-script logic was run in a sandbox with fake sysfs and binaries; on the bench, <code>reboot</code> from this mode with USB attached came back with boot_mode=0 and boot_reason=4, a normal boot, so there is no charging loop (real power_supply nodes: ac, battery, usb, wireless; usb/online=1 when plugged).</td>
+</tr>
+<tr>
+<td>Battery</td>
+<td><code>/sys/class/power_supply/battery</code>: <code>capacity</code>, <code>batt_vol</code> (mV; <code>voltage_now</code> in microvolts is also accepted) and <code>status</code>. There is no charge-rate reading, so while charging or discharging the rate is a fixed plus or minus 10 %/h, which is what makes the UI show "charging" or "discharging". Gauge-chip calls (alert threshold, hibernate, reset) answer "not supported".</td>
+</tr>
+<tr>
+<td>Audio</td>
+<td><strong>Wired headphones</strong>: the CS43131 DAC behind the MT6582's audio unit, through <code>/dev/cs43131_dac</code> and <code>/dev/eac</code> (<code>hal_audio.c</code>; the logic, with its safety allow-lists and state machine, is <code>y2_audio.c</code>, host test <code>y2_audio</code>). Used only while <code>/sys/class/switch/h2w</code> reports headphones (state 1 or 2; the DAC driver does the detect), 44.1 kHz / 16 bit only (other rates are resampled or refused as for any fixed-rate sink), and the backend is <code>cs43131</code> when both nodes open, which is what makes the boot check pass; otherwise it is a timed null sink and the check says audio is degraded. The same stream also drives the <strong>internal speaker</strong> and <strong>Line out</strong> (below). The audio core's 32-bit blocks go through a lock-free ring (4096 frames) to a plain pthread that does blocking <code>write()</code> on <code>/dev/eac</code>, so the DAC's own clock paces the player (the block clock waits for room in the ring instead of a timer); that thread never calls the RTOS. 32 to 16 bit is rounded with TPDF dither whenever bits below the 16th are set (any volume below 0 dB), bit-exact otherwise. <strong>Volume</strong>: the CS43131's hardware index is fixed at 11 (register 0x29, -20.5 dB, about 0.2 Vrms at full scale) and the user volume stays the software volume (2 dB steps, -30 dB at power-up); <code>NEUPOD_Y2_DAC_INDEX=n</code> in <code>/etc/neupod-fw.env</code> overrides it (0 to 11, clamped; unparseable = 11). <strong>Clicks</strong>: the DAC is powered (0x4302, stereo 0x4307) by the first audible block, not at boot, and stays on across tracks and pauses; its volume is set to mute (index 0, the kernel applies it 80 ms later) before the stream is torn down or the DAC powered down and restored after the stream is running, followed by 100 ms of silence before the audio. Digital silence for 3 s stops the AFE stream (DAC stays on); 30 s after that the DAC is powered down (0x4303); a clean stop does it too. Headphones pulled out: stream and DAC stopped at once (within the 200 ms jack poll), and while playing on the wired output the audio route pauses with the banner <code>Headphones unplugged</code> (plugging back in does not resume). Output routing: Auto uses Bluetooth while a headset stream is open (the DAC is left alone), else the jack when headphones are in, else the speaker when Settings &gt; Speaker is On (see below). A device error falls back to the null sink for 5 s, then retries. Only whitelisted AFE offsets (0x10, 0x14, 0x20, 0x4c, 0x3a0, 0x3ac, 0x4c4) and device commands are ever issued: never the PMIC registers, the speaker amplifier ioctls other than SET_SPEAKER_ON / OFF (0x400443a1 / a2), the CS43131 init or debug register file; 0x4306 (mono) only in a speaker session. Log lines: <code>audio: DAC on</code>, <code>stream started</code>, <code>stream stopped after 3 s of silence</code>, <code>DAC powered down</code>, and every 10 s while streaming <code>underruns=... write_us avg/max=...</code>.</td>
+</tr>
+<tr>
+<td>Radio</td>
+<td>Bluetooth only (docs/bluetooth.md): BTstack over the combo chip's <code>/dev/stpbt</code> on a thread of its own, started by <code>hal_bt_init()</code>. <code>hal_system_late_init()</code> reports the radio present only if <code>/data/BT_Addr</code> is a valid address and <code>/dev/stpbt</code> opens (the init script <code>S80mtk-bt</code> makes that so; without <code>/opt/mtk-wmt</code> staged it does nothing and Bluetooth is greyed out). Wi-Fi is not present: the boot check marks it unavailable and the <code>hal_wifi_*</code> calls answer "no device".</td>
+</tr>
+<tr>
+<td>Haptics</td>
+<td>The ERM motor behind <code>/sys/class/timed_output/vibrator/enable</code> (writing N switches it on for N ms), through <code>platforms/y2/hal/hal_haptic.c</code>, which implements <code>hal_haptic.h</code> in place of the DRV2605L driver (no I2C is faked; <code>hal_i2c</code> stays a stub). The boot check opens the node for writing and logs <code>haptics: timed_output vibrator (ERM)</code>; if it is missing or not writable the check reports haptics unavailable as <code>timed_output vibrator: no response</code> (and the full reason on the console). The app's click (one per wheel detent, the ERM click effect 3) is a <strong>tick</strong>. Calls come from the app's haptic task, never from the input or UI path (the UI only drops a byte in a non-blocking queue), and each pulse is one short write opened with <code>O_CLOEXEC</code>. A rest of 45 ms after each pulse (on top of the task's 35 ms request gap) coalesces a fast scroll into separate taps, not a continuous buzz. Pulse lengths, one table: tick 15 ms, click 30 ms, strong 60 ms (DRV2605 ROM ids 3, 6, 9, 12, 24-26 are ticks; 1, 4, 10, 14 strong; the rest clicks). An ERM needs time to spin up, so very short pulses may not be felt: tune on the bench with <code>NEUPOD_Y2_HAPTIC_MS="tick,click,strong"</code> (decimal ms, 1 to 500; an empty field keeps its default, e.g. <code>20,,80</code>; a fourth field, even a blank one, counts as bad; bad fields are ignored and logged). On the device write it to <code>/etc/neupod-fw.env</code>, then run <code>/etc/init.d/S91neupod-fw restart</code>, for example <code>echo 'NEUPOD_Y2_HAPTIC_MS="20,40,90"' &gt; /etc/neupod-fw.env</code> (the same file carries <code>NEUPOD_Y2_POWEROFF</code> and <code>NEUPOD_Y2_REBOOT</code>). <code>S91neupod-fw</code> sources it before starting the app, only if it is a regular file (not a symlink) owned by root, not writable by group or others and valid shell; otherwise it logs that it was ignored. The file is optional and <code>deploy-fw.sh</code> never creates or overwrites it. Calibration, actuator choice, LRA, sequences and RTP are not supported (<code>HAL_ENOTSUP</code>); the actuator reads as ERM, open loop, so Settings shows calibration as not needed. Host test: <code>y2_haptic</code>.</td>
+</tr>
+<tr>
+<td>Stopping</td>
+<td>SIGTERM (or SIGINT) only sets a flag. The monitor sees it within 100 ms, waits up to 2 s for the storage task to go idle (no queued request, no settings write in flight), locks card writes (fsync, back to read-only), unmounts and exits with status 0. Settings that were changed less than a few seconds before the stop and not yet saved are not forced out.</td>
+</tr>
+<tr>
+<td>Time</td>
+<td>Monotonic clock only; the device's wall clock is wrong and nothing depends on it. The chip ID that binds the secrets file is a hash of the eMMC's CID read from the MMC host's sysfs entry.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="internal-speaker-and-line-out">Internal speaker and Line out<a class="headerlink" href="#internal-speaker-and-line-out" title="Permanent link">&para;</a></h3>
+<p><strong>Wired output is live</strong> (the static heard on the bench was a ground loop with a USB-powered amplifier, not the Y2: clean on battery with Bluetooth scanning).</p>
+<p><strong>Speaker</strong> (owner-approved 2026-11-14; bench-proven chain in <code>y2_audio.c</code>). Settings &gt; <strong>Speaker</strong> On / Off, default <strong>Off</strong> (pocket safety); Off means the speaker is never used, also when Settings &gt; Bluetooth &gt; Audio output is Speaker (the row greys and says <code>Speaker (off)</code>). Audio output is now Auto / Wired / Bluetooth / Speaker (stored value 3; an older firmware reads it as Auto). Auto: Bluetooth if a headset stream is open, else the jack if headphones are in (h2w 1 or 2), else the speaker if Speaker is On, else no output (silent null sink; a track that was playing pauses with <code>No audio output</code> when the speaker is turned off under it). Headphones always win over the speaker (the kernel switches the amplifier on jack events itself); pulling them out while playing pauses with <code>Headphones unplugged</code> and the speaker waits for silence plus a new Play (never jumps in unasked). Sequence: DAC on (0x4302), mono (0x4306), volume muted, the same AFE / DL1 / 2nd-I2S bring-up as the jack with silence prefilled, volume to the speaker index, 100 ms of warm-up silence, a last read of h2w, then <code>SET_SPEAKER_ON</code> (0x400443a1, arg 0). Way out (every one of: 1 s of digital silence = pause after its fade or stop, a route change, Speaker turned Off, audio stream closed, headphones in (jack polled every 50 ms in a speaker session), Bluetooth taking over, any error, firmware exit): <code>SET_SPEAKER_OFF</code> (0x400443a2) <strong>first</strong>, then mute, clocks and memory interface stop, stereo (0x4307), DAC off. The command gate refuses <code>SET_SPEAKER_ON</code> and mono while h2w shows a plug or cannot be read. A startup step sends <code>SET_SPEAKER_OFF</code> once (a crash may have left the amplifier on); SIGTERM / SIGINT go through the normal exit hook, and the console's signal handler and a crash handler (SIGSEGV, SIGBUS, SIGABRT, SIGFPE, SIGILL, SIGHUP, SIGQUIT) send it directly. <strong>Volume cap</strong>: DAC index at most 9 on the speaker (default 9, <code>NEUPOD_Y2_SPK_INDEX</code> can only lower it), 11 on the jack, both enforced in the command gate.</p>
+<p><strong>Line out</strong> (owner decision 2026-11-14, for an external amplifier). Settings &gt; <strong>Line out</strong> On / Off, default Off, only turns on with a plug in the jack (otherwise the row is grey, <code>Plug into the jack first</code>). Active only on the jack output (h2w not 0); ignored on the speaker and Bluetooth. Active means: DAC index 15 (the one case above 11, enforced in the same gate: Line out allowed by the route, the session started under it, plug present), software volume held at 0 dB (the audio core's unity, no boost) and the wheel and volume keys ignored, answering <code>Line out: fixed level</code>. It switches itself <strong>Off</strong> (saved) when the jack is unplugged (toast <code>Line out off</code>) and at boot with an empty jack, so in-ear headphones plugged in later never get full level. Changing it restarts the stream muted (the level never steps under sound), and turning it Off returns the DAC to index 11 before anything plays.</p>
+<h3 id="wired-audio-bench-steps">Wired audio: bench steps<a class="headerlink" href="#wired-audio-bench-steps" title="Permanent link">&para;</a></h3>
+<p>Not yet heard in the firmware with the speaker. Speaker and Line out bench steps: Settings &gt; Speaker On, headphones out, Audio output Auto, Play: log <code>speaker amplifier on</code>, sound from the speaker, quiet at the default, no pop; Pause: after 1 s <code>speaker amplifier off</code> then <code>DAC powered down</code>; plug headphones in while playing: amplifier off (log), music continues on the jack; pull them out: pauses, <code>Headphones unplugged</code>; Speaker Off while playing: pauses, <code>No audio output</code>; kill the firmware while playing on the speaker (<code>kill -9</code>): the next start logs nothing but sends the startup off (check silence); Line out with an amplifier: wheel does nothing and shows <code>Line out: fixed level</code>, unplug turns it Off. Jack, with headphones in: boot log shows <code>audio: CS43131 wired output available</code>
+and <code>boot: audio ok</code>; play a 44.1 kHz track: <code>audio: DAC on</code>, <code>stream started</code>, sound after about 0.3 s, no clicks between tracks, <code>underruns=0</code> in
+the 10 s lines (a few at start-up are the ring filling). Pause 4 s: <code>stream stopped after 3 s of silence</code>; Play again: sound resumes, no <code>DAC on</code>
+(the DAC stayed powered). Pause 35 s: <code>DAC powered down</code>. Pull the headphones while playing: sound stops, the player pauses, banner <code>Headphones
+unplugged</code>, log <code>audio: headphones unplugged</code>. Too loud or quiet at the default: set <code>NEUPOD_Y2_DAC_INDEX</code> (lower is quieter, 11 at most) in
+<code>/etc/neupod-fw.env</code> and restart the firmware. A 48 kHz track is resampled or refused by the player, never played at the wrong speed.</p>
+<h3 id="storage-and-the-card-rule">Storage and the card rule<a class="headerlink" href="#storage-and-the-card-rule" title="Permanent link">&para;</a></h3>
+<p><code>hal_storage</code> reads and writes with <code>pread</code>/<code>pwrite</code> at sector offsets, under the same write lock as everywhere. The device is
+open <code>O_RDONLY</code> while writes are locked; unlocking writes reopens it <code>O_RDWR | O_SYNC</code> (validated again first), and locking them
+again fsyncs and goes back to read-only. All descriptor changes are under one lock (taken with try-lock and a scheduler sleep:
+a blocking native lock could starve a preempted lower-priority task under the FreeRTOS POSIX port). It opens the whole card, usually <code>/dev/mmcblk1</code>, and
+FatFs finds the partition from the MBR exactly as on the Pico; it uses partition 1 (<code>/dev/mmcblk1p1</code>) only if the whole-disk node is
+missing. A write-protected card is opened read-only and writes report write-protect. Formatting is not offered on the Y2.</p>
+<p><strong>Hard rule: the firmware never opens <code>mmcblk0</code> or any of its partitions</strong> (the internal eMMC with the boot chain and the
+rootfs). <code>y2_sd_pick()</code> scans <code>/sys/block</code> and accepts a disk only when all of these hold:</p>
+<ul>
+<li>the name is <code>mmcblk&lt;N&gt;</code> (or <code>mmcblk&lt;N&gt;p&lt;M&gt;</code> for a partition) with N at least 1, digits only and no leading zeros, so <code>mmcblk0*</code>,
+  <code>mmcblk0boot0</code>, <code>mmcblk1boot0</code> and <code>mmcblk01</code> are refused by name whatever sysfs says;</li>
+<li><code>/sys/block/&lt;disk&gt;/device/type</code> reads exactly <code>SD</code>;</li>
+<li>its controller is not <code>mmc0</code>. The host comes from where <code>/sys/block/&lt;disk&gt;</code> really resolves (the <code>mmc_host/mmc&lt;X&gt;</code> part of the
+  path); if that cannot be worked out the disk is refused (fail closed). On the device the eMMC was observed on <code>mmc0</code> and the SD slot as <code>mmcblk1</code> under <code>mmc_host/mmc1</code> (2026-11-11).</li>
+</ul>
+<p>The <code>removable</code> attribute is ignored: the MTK slot driver reports <code>0</code> for the real SD slot, so it says nothing useful (this
+replaced an earlier rule that refused the card with <code>mmcblk1 is type SD but not removable</code>). The card is found under whichever
+<code>mmcblk&lt;N&gt;</code> it enumerates as, not only <code>mmcblk1</code>; if more than one disk qualifies the lowest N is used and the log says
+<code>storage: &lt;n&gt; SD disks qualify, using the lowest</code>. <code>hal_storage.c</code> checks the name again right before <code>open()</code> and <code>lstat()</code>s the node first: it must be a real block
+device (not a symlink; the open also uses <code>O_NOFOLLOW</code>), its major:minor must equal the one in sysfs, and neither may be
+the eMMC's device numbers (<code>/sys/block/mmcblk0/dev</code> and its minor range, or 179:0 to 179:7 if that is unreadable). The opened
+descriptor is checked the same way. Every reopen (read-only to read-write) repeats all of it and also requires the same
+card (see below).
+Anything else is refused and logged, and the firmware runs without a card: fail closed. The selection is unit-tested against a
+fake sysfs tree with the real symlink layout (<code>tests/test_y2_sd.c</code>).</p>
+<p>While a card is held, "card present" means that same disk is still there and is the same card: its sysfs device numbers,
+<code>device/cid</code> and name, serial, manufacturer, OEM and date are remembered at open. A card pulled and re-inserted between two
+polls (even under a new node, or a different card behind the same one) is treated as a removal followed by an insertion:
+the descriptor is dropped, storage goes degraded and the next poll opens the new card. Re-inserting the very same card
+with identical identity within one poll is indistinguishable from it never leaving; the old descriptor then fails with
+<code>ENODEV</code>/<code>ENOMEDIUM</code> and is dropped.</p>
+<p>The rescue init (<code>testbed/y2/rescue/overlay/init</code>, line 186) and <code>diag.sh</code> (line 99) still hard-code <code>mmcblk1</code>; that is fine
+for the rescue tools, which are separate from the firmware and do not use its card rule.</p>
+<p>The device identity (<code>hal_chip_id</code>) is unrelated: it hashes the read-only eMMC CID attribute
+<code>/sys/class/mmc_host/mmc0/mmc0:0001/cid</code> and does not take part in card selection.</p>
+<p>No card is the normal state at boot: the log says <code>storage: no mmcblk1 or higher (no card inserted)</code>, Settings and Files say so, and
+settings stay in RAM for the session. With <code>storage_hotplug</code> set in <code>main.c</code>, the monitor looks for a card every two seconds
+while storage is unavailable; when the card disk appears (mdev creates the node) the storage boot check runs again and, if the
+card mounts, storage turns available and the settings load. A card that fails the check (no filesystem, unreadable) is not
+retried until it has been taken out and put back; a failed check closes the device and reports why ("no filesystem", "card
+unreadable"). While a card is in use the same poll watches the slot: if it disappears (or reads fail with EIO and the sysfs entry
+is gone) storage turns degraded, settings go back to RAM-only, and putting the card back runs the check again. The boot check
+and the retry never run at the same time, and a retry never starts while a settings write is in flight. Nothing in the rootfs mounts the card and the firmware does not either: it
+reads the filesystem itself.</p>
+<h2 id="running-it">Running it<a class="headerlink" href="#running-it" title="Permanent link">&para;</a></h2>
+<p><code>deploy-fw.sh</code> and <code>select-ui.sh</code> (in <code>testbed/y2/scripts</code>) do the work; see <code>testbed/y2/README.md</code>. On the device:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Binary</td>
+<td><code>/opt/neupod-fw/neupod</code> (flags: <code>--splash-hold-ms N</code>, <code>--run-ms N</code>, <code>--script "s s e ..."</code>)</td>
+</tr>
+<tr>
+<td>Init script</td>
+<td><code>/etc/init.d/S91neupod-fw</code>, a respawn wrapper (2 s pause), log <code>/tmp/neupod-fw.log</code> on tmpfs, emptied when it passes 256 KB, PID files <code>/run/neupod-fw.pid</code> and <code>/run/neupod-fw.app.pid</code>; stop kills by PID only</td>
+</tr>
+<tr>
+<td>UI selection</td>
+<td><code>/etc/neupod-ui</code> holds <code>fw</code> or <code>demo</code>. <code>S90neupod-demo</code> (the .NET demo) and <code>S91neupod-fw</code> each start only if selected, because both draw on <code>/dev/fb0</code>; a missing file means <code>demo</code></td>
+</tr>
+</tbody>
+</table>
+<p>To look at the screen, read the visible page back from the framebuffer: the pan offset is in
+<code>/sys/class/graphics/fb0/pan</code> (<code>x,y</code>), and 360 rows of 1920 bytes from that row offset in <code>/dev/fb0</code> are the picture
+(XRGB8888 little endian).</p>
+<h2 id="what-is-measured-and-what-is-not">What is measured and what is not<a class="headerlink" href="#what-is-measured-and-what-is-not" title="Permanent link">&para;</a></h2>
+<p>Measured on the device (kernel 3.4.67, firmware running; measured before the 480x360 UI profile, when a 320x240 UI was drawn in the top-left corner): boots clean with no card; idle CPU 5.2 % of one core over 30 s (9.6 % with the port's default 1 kHz tick, and 105 % before the idle hook, because the
+port's idle task otherwise spins). The Y2 uses a 250 Hz tick (4 ms; delays round up to
+whole ticks, so <code>os_tick_ms()</code> has 4 ms resolution on this target only) because the port's tick is a signal plus a context switch (1000 of them a second were about half of the idle CPU); resident memory
+about 1.6 MB (4 MB FreeRTOS heap, almost all untouched); page flips up to 64 fps; the UI driven through the FIFO (scroll,
+select, back) including the Files screen's "no card" message and the test tone playing on the null sink.</p>
+<p>Not verified yet: the physical wheel, ring buttons and side keys on the real hardware (the decoding and mapping are unit-tested
+with captured codes, but no event was injected on the device), the Vol keys, the card path with a real microSD (everything but
+the final open is unit-tested; the hot-plug re-check has not run on the device), and charging-only mode and the power key (screen sleep and hold-to-power-off are unit-tested but have not been tried on the device). The UI now uses the 480x360 profile
+filling the whole panel (log: <code>ui: profile 480x360 on 480x360 panel</code>) with the 192 KB LVGL pool of hosted builds; the numbers above have not been re-measured with it.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

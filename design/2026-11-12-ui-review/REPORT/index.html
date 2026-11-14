@@ -1,0 +1,2649 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/design/2026-11-12-ui-review/REPORT/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>neuPod UI/UX review and proposal - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#neupod-uiux-review-and-proposal" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              neuPod UI/UX review and proposal
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../bluetooth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../wifi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../y2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Innioasis Y2 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../i2c-peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0017-music-library-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0018-ui-resolution-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0018 UI resolution profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0019-bluetooth-audio-sink-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0019 Bluetooth audio boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0020-hold/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0020 Hold
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-summary-highest-impact-changes-ranked" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Summary — highest-impact changes, ranked
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-design-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Design system
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Design system">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-colour-tokens-rgb565-safe-r-and-b-multiples-of-8-g-multiples-of-4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Colour tokens (RGB565-safe: R and B multiples of 8, G multiples of 4)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-type-scale-existing-fonts-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Type scale (existing fonts only)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-layout-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Layout metrics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-album-art-sizes-to-decode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4 Album-art sizes to decode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#25-icon-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.5 Icon set
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#26-motion-all-small-area-no-full-screen-redraw" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.6 Motion (all small-area, no full-screen redraw)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-per-screen-review-and-proposal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Per-screen review and proposal
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Per-screen review and proposal">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-home" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Home
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-now-playing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Now Playing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-library-artists-albums-songs-genres-compilations-playlists-album-update-library" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Library (Artists, Albums, Songs, Genres, Compilations, Playlists, Album, Update Library)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-bluetooth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.4 Bluetooth
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#35-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.5 Settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#36-files-extras-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.6 Files (Extras › Files)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#37-input-widgets-text-password-number-slider-choice-datetime-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.7 Input widgets (text, password, number, slider, choice, date/time, search)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#38-hold-lock-and-power" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.8 Hold, lock and power
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#39-splash-and-about" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.9 Splash and About
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#310-status-bar-global" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.10 Status bar (global)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-mock-ups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Mock-ups
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-implementation-notes-cost-and-cheaper-alternatives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Implementation notes (cost and cheaper alternatives)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-backlog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Backlog
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="neupod-uiux-review-and-proposal">neuPod UI/UX review and proposal<a class="headerlink" href="#neupod-uiux-review-and-proposal" title="Permanent link">&para;</a></h1>
+<p>Reviewed: 164 simulator screenshots (<code>320x240/</code>, <code>480x360/</code>, two contact sheets), firmware v0.1.0-dev. Target: LVGL 9, RGB565, partial redraws, Montserrat Medium 14/20/48 (320×240) and 20/28/48 (480×360), click wheel + Select + 4 buttons + Hold.</p>
+<p>Mock-ups are in <code>mockups/</code>, named <code>&lt;area&gt;-&lt;screen&gt;-&lt;WxH&gt;.png</code>, rendered at native resolution for both profiles. They use Inter Medium/SemiBold as a stand-in for Montserrat Medium (same x-height class; expect Montserrat to run ~4% wider — all widths below leave that margin). Fixture names (Aurora Lane, Harbour Lights, Beacon) are kept so the engineer can compare like for like.</p>
+<hr />
+<h2 id="1-summary-highest-impact-changes-ranked">1. Summary — highest-impact changes, ranked<a class="headerlink" href="#1-summary-highest-impact-changes-ranked" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Now Playing hierarchy</strong> — title/artist/album stack, format and output as pills, progress with remaining time, volume as a quiet bottom strip; one layout for wired and Bluetooth (<code>np-nowplaying</code>, <code>np-nowplaying-bt</code>). Today the title is a file name, "Playing – 1 of 3" competes with the format, and the volume bar is as heavy as the progress bar.</li>
+<li><strong>Two-line list rows with secondary text</strong> for Songs and search results (<code>lib-songs</code>) — today artist is right-aligned on the same line and collides with long titles (<code>lib-songs.png</code>, <code>text-nowplaying.png</code>).</li>
+<li><strong>Fast-scroll letter overlay + index rail</strong> (<code>lib-songs-fastscroll</code>) — the wheel accelerates but gives no position feedback; the overlay already exists in Files (<code>files-many.png</code>, the "F" tile) and should be generalised and moved off the content.</li>
+<li><strong>Consistent status bar</strong>: left context slot (clock / track position / count / path), centre title, right Bluetooth + battery with a percentage when &lt; 20 % (<code>home-home</code>). Today the left slot is always empty and the battery reads "--".</li>
+<li><strong>Selection bar as the one accent</strong>: 4 px radius, 3 px inset from the edges, only the focused row coloured; chevrons and secondary text drop to grey — the bar then "moves" between rows with an 80 ms slide instead of repainting two rows.</li>
+<li><strong>State feedback without modal screens</strong>: top toast strip for link-lost / can't-play / library busy (<code>bt-dropped</code>), bottom HUD strip for volume from any screen (<code>np-volume-hud</code>), and busy dots replaced by a determinate progress bar where a count is known (<code>lib-building</code>).</li>
+<li><strong>Hold / Power feedback</strong> (<code>hold-locked</code>, <code>hold-power-progress</code>) — a pill at the bottom and a 3 px progress line under the status bar; no full-screen dim.</li>
+<li><strong>Text entry on the wheel</strong> (<code>in-text</code>) — a horizontal letter ring with the current glyph at 48 px, mode chips (abc / ABC / 123 / #!? / space / ⌫) on Left/Right, field at the top. Today letters are evenly spaced small glyphs and there is no visible mode switch (<code>in-text.png</code>, <code>wifi-kb.png</code>).</li>
+<li><strong>Dark theme via tokens</strong> (<code>home-home-dark</code>, <code>np-nowplaying-dark</code>) — one token table, <code>Auto</code> switches to dark when the backlight dims; the product board's LCD benefits less than an OLED would, but night use and battery on a future panel both improve.</li>
+<li><strong>Missing screens</strong>: Cover-Flow-style album browser without 3D (<code>lib-coverflow</code>), Now Playing page 2 (<code>np-page2</code>), Playlists (<code>lib-playlists</code>), Licences (<code>settings-licences</code>), real empty states (<code>lib-empty</code>).</li>
+</ol>
+<hr />
+<h2 id="2-design-system">2. Design system<a class="headerlink" href="#2-design-system" title="Permanent link">&para;</a></h2>
+<h3 id="21-colour-tokens-rgb565-safe-r-and-b-multiples-of-8-g-multiples-of-4">2.1 Colour tokens (RGB565-safe: R and B multiples of 8, G multiples of 4)<a class="headerlink" href="#21-colour-tokens-rgb565-safe-r-and-b-multiples-of-8-g-multiples-of-4" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Token</th>
+<th>Light</th>
+<th>Dark</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>bg</code></td>
+<td><code>#F8F8F8</code></td>
+<td><code>#101010</code></td>
+<td>screen background</td>
+</tr>
+<tr>
+<td><code>surface</code></td>
+<td><code>#FFFFFF</code></td>
+<td><code>#181818</code></td>
+<td>cards, input fields, right pane</td>
+</tr>
+<tr>
+<td><code>bar</code></td>
+<td><code>#E8E8E8</code></td>
+<td><code>#202020</code></td>
+<td>status bar fill</td>
+</tr>
+<tr>
+<td><code>line</code></td>
+<td><code>#E0E0E0</code></td>
+<td><code>#303030</code></td>
+<td>hairlines, progress track, scrollbar track</td>
+</tr>
+<tr>
+<td><code>ink</code></td>
+<td><code>#181818</code></td>
+<td><code>#F0F0F0</code></td>
+<td>primary text, battery fill</td>
+</tr>
+<tr>
+<td><code>ink2</code></td>
+<td><code>#606060</code></td>
+<td><code>#A0A0A0</code></td>
+<td>secondary text, chevrons, volume fill</td>
+</tr>
+<tr>
+<td><code>ink3</code></td>
+<td><code>#A0A0A0</code></td>
+<td><code>#686868</code></td>
+<td>tertiary text, disabled rows, hints</td>
+</tr>
+<tr>
+<td><code>accent</code></td>
+<td><code>#1858C8</code></td>
+<td><code>#2868D8</code></td>
+<td>selection bar, progress fill, focused value</td>
+</tr>
+<tr>
+<td><code>on_accent</code></td>
+<td><code>#FFFFFF</code></td>
+<td><code>#FFFFFF</code></td>
+<td>text on the selection bar</td>
+</tr>
+<tr>
+<td><code>accent_soft</code></td>
+<td><code>#D8E4F8</code></td>
+<td><code>#203050</code></td>
+<td>pills, info toast</td>
+</tr>
+<tr>
+<td><code>amber</code></td>
+<td><code>#D08018</code></td>
+<td><code>#E89828</code></td>
+<td>seek mode, warnings</td>
+</tr>
+<tr>
+<td><code>amber_soft</code></td>
+<td><code>#F8E8C8</code></td>
+<td><code>#483818</code></td>
+<td>warning toast background</td>
+</tr>
+<tr>
+<td><code>green</code></td>
+<td><code>#209858</code></td>
+<td><code>#30B870</code></td>
+<td>charging, streaming OK, signal full</td>
+</tr>
+<tr>
+<td><code>red</code></td>
+<td><code>#D03028</code></td>
+<td><code>#E84840</code></td>
+<td>battery &lt; 15 %, errors</td>
+</tr>
+</tbody>
+</table>
+<p>Contrast: <code>ink2</code> on <code>surface</code> 5.9:1 light / 7.1:1 dark; <code>ink3</code> on <code>surface</code> 2.6:1 — use <code>ink3</code> only for text ≥ 14 px that is not the sole carrier of meaning (hints, disabled rows). <code>on_accent</code> on <code>accent</code> 7.3:1.</p>
+<p>Theme switch: a <code>theme_t</code> struct of these 14 colours; every style reads from it; <code>lv_obj_report_style_change()</code> after swap. <code>Auto</code> = light while the backlight is at full, dark once it dims (and remembers the user's last manual choice).</p>
+<h3 id="22-type-scale-existing-fonts-only">2.2 Type scale (existing fonts only)<a class="headerlink" href="#22-type-scale-existing-fonts-only" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>320×240</th>
+<th>480×360</th>
+<th>Weight</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Title</td>
+<td>20</td>
+<td>28</td>
+<td>Medium</td>
+<td>Now Playing title, album header, empty-state heading</td>
+</tr>
+<tr>
+<td>Body</td>
+<td>14</td>
+<td>20</td>
+<td>Medium</td>
+<td>list rows, status-bar title, settings values</td>
+</tr>
+<tr>
+<td>Small</td>
+<td>12 (new)</td>
+<td>16 (new)</td>
+<td>Medium</td>
+<td>secondary list line, times, pills, hints, status-bar left slot</td>
+</tr>
+<tr>
+<td>Big</td>
+<td>48</td>
+<td>48</td>
+<td>Medium</td>
+<td>seek time, letter overlay, clock, text-entry current glyph</td>
+</tr>
+</tbody>
+</table>
+<p>The only addition is <strong>Small</strong> (12 / 16 px). It is the single biggest readability gain in the proposal (secondary lines, times). Cost: one Montserrat Medium size per profile, ASCII + Latin-1 + punctuation ≈ 9–12 KB each. If flash is tight, ship 12 px only and let 480×360 use 14 px Body for secondary text with <code>ink2</code> (works, looser).</p>
+<p>Truncation: always <code>LV_LABEL_LONG_DOT</code> with a single ellipsis; never clip glyphs (<code>text-nowplaying.png</code> currently clips "Have You Fed t…" at the title size but wraps nothing). Title in Now Playing may wrap to two lines on 480×360 only.</p>
+<h3 id="23-layout-metrics">2.3 Layout metrics<a class="headerlink" href="#23-layout-metrics" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>320×240</th>
+<th>480×360</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Status bar height</td>
+<td>24</td>
+<td>36</td>
+</tr>
+<tr>
+<td>Single-line row</td>
+<td>30</td>
+<td>45</td>
+</tr>
+<tr>
+<td>Two-line row</td>
+<td>40</td>
+<td>60</td>
+</tr>
+<tr>
+<td>Horizontal padding</td>
+<td>10</td>
+<td>15</td>
+</tr>
+<tr>
+<td>Selection bar inset / radius</td>
+<td>3 / 4</td>
+<td>4 / 6</td>
+</tr>
+<tr>
+<td>Split-pane divider (Home, Settings)</td>
+<td>56 % / 44 %</td>
+<td>same</td>
+</tr>
+<tr>
+<td>Art: Now Playing</td>
+<td>112</td>
+<td>168</td>
+</tr>
+<tr>
+<td>Art: Home panel</td>
+<td>panel width − 24</td>
+<td>same</td>
+</tr>
+<tr>
+<td>Art: album header, NP page 2</td>
+<td>64</td>
+<td>96</td>
+</tr>
+<tr>
+<td>Art: Cover Flow centre / neighbours / outer</td>
+<td>96 / 64 / 48</td>
+<td>144 / 96 / 72</td>
+</tr>
+<tr>
+<td>Progress bar height (normal / seek)</td>
+<td>4 / 6</td>
+<td>6 / 9</td>
+</tr>
+<tr>
+<td>Toast strip height</td>
+<td>22</td>
+<td>33</td>
+</tr>
+<tr>
+<td>HUD strip height</td>
+<td>26</td>
+<td>39</td>
+</tr>
+<tr>
+<td>Pill height</td>
+<td>18</td>
+<td>27</td>
+</tr>
+<tr>
+<td>Scrollbar width / margin</td>
+<td>2 / 1</td>
+<td>3 / 2</td>
+</tr>
+</tbody>
+</table>
+<p>Visible rows: 320×240 gives 7 single-line rows or 5 two-line rows; 480×360 gives the same counts (everything scales ×1.5). Keep row counts identical across profiles so wheel acceleration feels the same.</p>
+<h3 id="24-album-art-sizes-to-decode">2.4 Album-art sizes to decode<a class="headerlink" href="#24-album-art-sizes-to-decode" title="Permanent link">&para;</a></h3>
+<p>Decode once per album to a <strong>160×160 RGB565 thumbnail</strong> (51 KB) on the PSRAM board and keep an LRU of ~24 (1.2 MB). Draw it scaled down for every slot above; nothing is scaled up, which is what makes today's 64 px → 2.6× art look soft (<code>art-cover.png</code>). On the Pico 2 W target keep 96×96 (18 KB) and an LRU of 6; Now Playing then shows art at 1:1 on 320×240 and 1.17× on 480×360 — acceptable.</p>
+<h3 id="25-icon-set">2.5 Icon set<a class="headerlink" href="#25-icon-set" title="Permanent link">&para;</a></h3>
+<p>Use <strong>Lucide</strong> (ISC licence, https://lucide.dev) rendered to 1-bit-alpha bitmaps at 16 and 24 px (320) / 24 and 36 px (480). Lucide is stroke-based, consistent at small sizes, and its licence permits embedding without attribution in the UI (keep the licence text in the Licences screen). Required glyphs, 14 in total:</p>
+<p><code>chevron-right</code>, <code>play</code>, <code>pause</code>, <code>skip-back</code>, <code>skip-forward</code>, <code>shuffle</code>, <code>repeat</code>, <code>repeat-1</code>, <code>volume-2</code>, <code>bluetooth</code>, <code>wifi</code>, <code>lock</code>, <code>folder</code>, <code>file</code>. Battery, signal bars and the three busy dots are drawn primitives (rectangles), not glyphs.</p>
+<p>Drop FontAwesome where these cover it; keep it only for glyphs you already ship and still need.</p>
+<h3 id="26-motion-all-small-area-no-full-screen-redraw">2.6 Motion (all small-area, no full-screen redraw)<a class="headerlink" href="#26-motion-all-small-area-no-full-screen-redraw" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Motion</th>
+<th>Duration</th>
+<th>Easing</th>
+<th>What moves</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Selection bar to adjacent row</td>
+<td>80 ms</td>
+<td>ease-out</td>
+<td>only the bar (<code>lv_anim</code> on y); text repaints two rows</td>
+</tr>
+<tr>
+<td>Selection bar jump &gt; 3 rows / fast spin</td>
+<td>0 ms</td>
+<td>—</td>
+<td>no anim; letter overlay shows instead</td>
+</tr>
+<tr>
+<td>Push screen (deeper)</td>
+<td>120 ms</td>
+<td>ease-out-cubic</td>
+<td>list area slides in 24 px from the right, fades from 0; status bar title swaps instantly</td>
+</tr>
+<tr>
+<td>Pop screen (Menu)</td>
+<td>100 ms</td>
+<td>ease-out-cubic</td>
+<td>list slides 24 px to the right and fades out</td>
+</tr>
+<tr>
+<td>Toast in / out</td>
+<td>150 / 200 ms</td>
+<td>ease-out / ease-in</td>
+<td>one-row (30 / 45 px) strip slides down from under the status bar</td>
+</tr>
+<tr>
+<td>Volume HUD</td>
+<td>120 ms in, hold 1200 ms, 200 ms out</td>
+<td>ease-out</td>
+<td>26 px bottom strip; bar fill animates 60 ms</td>
+</tr>
+<tr>
+<td>Seek mode enter / leave</td>
+<td>0 ms</td>
+<td>—</td>
+<td>colour swap only; haptic tick</td>
+</tr>
+<tr>
+<td>Progress bar</td>
+<td>1 Hz step</td>
+<td>—</td>
+<td>invalidate only the bar rectangle</td>
+</tr>
+<tr>
+<td>Letter overlay</td>
+<td>appears instantly, fades 250 ms after the wheel stops</td>
+<td>ease-in</td>
+<td>44 px tile + rail</td>
+</tr>
+<tr>
+<td>Cover Flow step</td>
+<td>90 ms</td>
+<td>ease-out</td>
+<td>five tiles re-blit at new x/size; no rotation</td>
+</tr>
+<tr>
+<td>Power-hold progress</td>
+<td>linear over 2 s</td>
+<td>—</td>
+<td>3 px line under the status bar grows left to right</td>
+</tr>
+</tbody>
+</table>
+<p>Cap LVGL at 30 fps on the MCU (<code>LV_DEF_REFR_PERIOD 33</code>); 60 fps on the Y2 if the kernel gives a vsync'd fb.</p>
+<hr />
+<h2 id="3-per-screen-review-and-proposal">3. Per-screen review and proposal<a class="headerlink" href="#3-per-screen-review-and-proposal" title="Permanent link">&para;</a></h2>
+<p>Button conventions used throughout: <strong>Wheel</strong> scroll/adjust · <strong>Select</strong> open/choose · <strong>Menu</strong> back · <strong>Play/Pause</strong> global · <strong>◁ ▷</strong> prev/next (hold = seek) · <strong>Power</strong> hold 2 s lock, 10 s off.</p>
+<h3 id="31-home">3.1 Home<a class="headerlink" href="#31-home" title="Permanent link">&para;</a></h3>
+<p><strong>Current</strong> (<code>home.png</code>, <code>home-clock.png</code>, <code>art-home.png</code>): split list + right panel; the panel shows a generic disc glyph, "Nothing playing", "--:--" and a debug line "image 2.0 MB". When playing it shows art, file name and "⏸ Paused" but no progress. Status bar left slot is empty; battery reads "--".</p>
+<p><strong>Proposed</strong> (<code>home-home</code>, <code>home-idle</code>, <code>home-home-dark</code>):</p>
+<ul>
+<li>Left 56 %: the seven items, chevrons on items that open a list, none on "Shuffle Songs". "Now Playing" greys out when nothing is queued instead of opening an empty screen.</li>
+<li>Right panel, playing: art at panel width, title (Body, semibold) and artist (Small) centred, a 3 px progress bar, elapsed/remaining in Small. Paused shows the pause glyph in front of the elapsed time.</li>
+<li>Right panel, idle: 48 px clock, date, one Small line "1,204 songs · 72 %". Remove "image 2.0 MB" from release builds (keep it behind a debug flag).</li>
+<li>Status bar: clock in the left slot on Home only.</li>
+</ul>
+<p><strong>States:</strong> idle / playing / paused / library-not-built (panel shows "Update Library" prompt, Select on Music still works).
+<strong>Transitions:</strong> push on Select; the panel does not animate.
+<strong>Wheel:</strong> scroll items; Select opens; Play/Pause toggles playback without leaving Home.</p>
+<h3 id="32-now-playing">3.2 Now Playing<a class="headerlink" href="#32-now-playing" title="Permanent link">&para;</a></h3>
+<p><strong>Current</strong> (<code>np-bt-badge.png</code>, <code>seek-scrub.png</code>, <code>np-bt-volume.png</code>, <code>art-cover.png</code>, <code>text-nowplaying.png</code>): file name as title; format badge in blue sits where the artist should; "Playing – 1 of 3" is body-weight; the volume slider is as prominent as progress; seek mode recolours progress amber and adds a third "Seek 0:08" line with yet another bar; on BT the label changes to "Headset 47 %". Long titles clip (<code>text-nowplaying.png</code>).</p>
+<p><strong>Proposed</strong> (<code>np-nowplaying</code>, <code>np-nowplaying-bt</code>, <code>np-seek</code>, <code>np-page2</code>, <code>np-volume-hud</code>):</p>
+<ul>
+<li>Status bar: left slot "3 of 12", centre "Now Playing", Bluetooth glyph in blue when streaming.</li>
+<li>Art 112 / 168 px at the left; to its right the stack Title (Title size) → Artist (Body, <code>ink2</code>) → Album · Year (Small, <code>ink3</code>). Fall back to the file name only when there is no title tag, and then show the folder name as the "artist".</li>
+<li>Pill row under the stack: format pill (<code>accent_soft</code>, e.g. "FLAC 16/44.1" or "AAC 44.1" when the BT codec is what's leaving the box) and output pill (outline: "Wired" or the headset's name). The output pill is where "Headset" belonged.</li>
+<li>Progress: 4 px, elapsed left, remaining right, a quiet <code>ink3</code> "repeat 1 / shuffle" word in the centre only when either is on.</li>
+<li>Volume: bottom strip, label "Volume −18 dB" or "Headset 62 %" in Small, bar in <code>ink2</code>, 45 % of the width. On a volume change from any other screen the same strip appears as a HUD for 1.2 s (<code>np-volume-hud</code>).</li>
+<li>Seek mode: the pill row is replaced by the seek time in Big amber; the progress bar grows to 6 px with a knob; hint line "Scroll: seek · Select: go · Menu: cancel". Leaving seek restores the pills. No third bar.</li>
+<li>Page 2 (Select on Now Playing when not seeking): small art + title, star rating under it (wheel adjusts when focused), then Shuffle / Repeat / Gapless / Add to playlist / Go to album / Go to artist.</li>
+</ul>
+<p><strong>States:</strong> playing / paused (pause glyph before elapsed time, art unchanged) / seeking / BT link lost (toast, progress bar goes <code>ink3</code>, "Paused" under the title — see <code>bt-dropped</code>) / no art (placeholder tile with a ring, not a music-note glyph) / unsupported codec (toast "Can't play: AAC — skipped", auto-skip after 1.5 s).
+<strong>Transitions:</strong> push from a list = 120 ms slide; Menu returns to the list that queued the track.
+<strong>Wheel:</strong> volume; Select → page 2; hold Select → seek mode (wheel seeks, Select commits, Menu cancels); ◁ ▷ tracks, hold to scan at 4× with the seek bar shown.</p>
+<h3 id="33-library-artists-albums-songs-genres-compilations-playlists-album-update-library">3.3 Library (Artists, Albums, Songs, Genres, Compilations, Playlists, Album, Update Library)<a class="headerlink" href="#33-library-artists-albums-songs-genres-compilations-playlists-album-update-library" title="Permanent link">&para;</a></h3>
+<p><strong>Current</strong> (<code>lib-songs.png</code>, <code>lib-album.png</code>, <code>lib-album-greyed.png</code>, <code>lib-artists.png</code>, <code>lib-building.png</code>, <code>lib-needs-writable.png</code>, <code>lib-cant-play.png</code>, <code>lib-update-done.png</code>, <code>music-empty.png</code>): single-line rows with artist right-aligned (collides with long titles); album screen is a bare track list with no header; greyed unplayable rows give no reason until you press Select, then a yellow bar appears bottom-left; busy and error states are rendered as fake list rows ("Building library…" with dots as the first row, "Select to cancel" as the third); "No artists" is a selected blue row.</p>
+<p><strong>Proposed:</strong></p>
+<ul>
+<li><strong>Songs / search results</strong> (<code>lib-songs</code>): two-line rows, title in Body and "Artist · Album" in Small <code>ink2</code>; 2 px scrollbar at the right edge; status-bar left slot shows the count.</li>
+<li><strong>Fast scroll</strong> (<code>lib-songs-fastscroll</code>): when wheel velocity passes the acceleration threshold, show a 44 px dark tile with the first letter of the focused row at the top-right and a 26-letter rail along the right edge with the current letter in <code>ink</code> at Small size, the rest at 8 px <code>ink3</code> (every second letter on 320×240). The tile never covers the selection bar. Fade out 250 ms after the wheel stops. Sort keys ignore "The ", "A " and diacritics so the rail is useful.</li>
+<li><strong>Album</strong> (<code>lib-album</code>): header with 64 px art, album title (Title), "Artist · Year" (Body <code>ink2</code>), "3 songs · 9:41 · FLAC" (Small <code>ink3</code>); hairline; tracks as "n   Title" with duration right. Unplayable tracks greyed with the codec in brackets ("Carrier Wave (AAC)") so the reason is visible before pressing.</li>
+<li><strong>Artists / Albums / Genres / Compilations</strong>: single-line rows with chevrons; show counts on the right ("4 albums") only on 480×360 where there is room.</li>
+<li><strong>Albums as Cover Flow</strong> (<code>lib-coverflow</code>): optional view toggled with ▷ on the Albums list. Five flat tiles: centre 96 px, neighbours 64 px, outer 48 px, no rotation or reflection; title and "Artist · Year · n songs" under the centre; status-bar left slot "7 of 31". Wheel moves one album per step; Play plays the album; Select opens it.</li>
+<li><strong>Playlists</strong> (<code>lib-playlists</code>): smart lists first (On-The-Go, Recently added, Most played, Unplayed) then .m3u files from the card, counts on the right.</li>
+<li><strong>Update Library / busy</strong> (<code>lib-building</code>): centred heading, determinate bar (songs found / total files from a first directory count), current folder in Small, hints "Menu: run in background · Select: cancel". While running in the background the status bar shows three busy dots in the left slot of every screen.</li>
+<li><strong>Empty and error states</strong> (<code>lib-empty</code>): heading in Title, one or two Small lines that say what to do, a single accent button. "Library needs a writable card" becomes a toast on the library root plus this empty state, never a selected list row.</li>
+<li><strong>Can't play</strong>: toast at the top in <code>amber_soft</code> with the codec and "skipped"; the track is skipped automatically after 1.5 s in a queue, or the row stays focused in a list.</li>
+</ul>
+<p><strong>Transitions:</strong> push/pop slides; Cover Flow step 90 ms.
+<strong>Wheel:</strong> as lists; in Cover Flow one album per detent with acceleration to 3 per detent.</p>
+<h3 id="34-bluetooth">3.4 Bluetooth<a class="headerlink" href="#34-bluetooth" title="Permanent link">&para;</a></h3>
+<p><strong>Current</strong> (<code>bt-found.png</code>, <code>bt-pairing.png</code>, <code>bt-dropped.png</code>, <code>bt-forget-asks.png</code>, <code>settings-bt-streaming.png</code>, <code>bt-key-next.png</code>): the settings page mixes status rows (Status, Address) with actions (Scan, Connect, Forget) in one list; the scan list shows a "Cancel pairing" row at the top and three-colour signal bars; "Headset disconnected" is a yellow band with "Reconnecting…" dots inline; "Forget" turns into "Select again" as a confirmation, which is easy to trigger by accident; the right pane in Settings dumps "SBC bitpool 53 · 328 kbit/s · 0 underruns" (fine for a dev build, not for users).</p>
+<p><strong>Proposed</strong> (<code>bt-devices</code>, <code>bt-dropped</code>):</p>
+<ul>
+<li>One <strong>Devices</strong> screen: known devices first with their state on the right ("Connected" in <code>on_accent</code> on the selection bar, "Saved" in <code>ink2</code>), then found devices with signal bars (three bars, monochrome <code>ink</code>/<code>line</code>, no traffic-light colours), phones greyed and labelled "(phone)" because they cannot be sinks, then "Scan again". Scanning progress as four dots at the bottom in <code>ink3</code>.</li>
+<li>Select on a saved device: Connect / Forget / Rename in a small list pushed from the right; Forget asks "Forget AirPods Pro?" with Select = yes, Menu = no — never a self-mutating row.</li>
+<li>Pairing: the row's right text becomes "Pairing…" with three dots; Menu cancels (no "Cancel pairing" row).</li>
+<li>Link lost: <code>bt-dropped</code> — toast "AirPods Pro disconnected · reconnecting…", playback paused, progress bar goes <code>ink3</code>, status-bar glyph grey. On success the toast becomes "AirPods Pro connected" in <code>accent_soft</code> for 1.2 s; on give-up, "Couldn't reconnect — playing on wired" or "— paused" if nothing is plugged in.</li>
+<li>Codec detail stays in About › Diagnostics, not in the Settings right pane.</li>
+<li>Status, Address and Audio output move to a short <strong>Bluetooth</strong> settings page: Bluetooth On/Off, Audio output Auto/Wired/Bluetooth, Devices ›, Absolute volume On/Off.</li>
+</ul>
+<p><strong>States:</strong> off / idle / scanning / pairing / connected / streaming / reconnecting / failed.
+<strong>Wheel:</strong> list; Select on a device = connect (found) or options (saved).</p>
+<h3 id="35-settings">3.5 Settings<a class="headerlink" href="#35-settings" title="Permanent link">&para;</a></h3>
+<p><strong>Current</strong> (<code>settings.png</code>, <code>settings-bt.png</code>, <code>haptics</code>, <code>display</code>): two-pane with values on the left rows and a centred prose summary on the right ("Resume playing / At power-up / On / Plays on power-up if it was playing") that reads as a paragraph; About shows "6 of 8 checks ok" and "nogit".</p>
+<p><strong>Proposed</strong> (<code>settings-display</code>):</p>
+<ul>
+<li>Left list: Display, Click, Haptics, Gapless, Shuffle, Repeat, Resume, Bluetooth, About — values on the row where the value is a word, chevrons where it opens a page. Rows that toggle (Gapless, Resume) toggle on Select without leaving the list; a 60 ms value flip, haptic tick.</li>
+<li>Right pane: a key/value summary left-aligned (Small), heading in Body semibold, one line of help in <code>ink3</code>. No centred prose.</li>
+<li>Display page: Theme Light/Dark/Auto, Brightness, Dim after, Off after.</li>
+<li>About: version, build, storage used/free, battery health, then Diagnostics › (checks, codec detail, underruns) and Licences › (<code>settings-licences</code>).</li>
+</ul>
+<h3 id="36-files-extras-files">3.6 Files (Extras › Files)<a class="headerlink" href="#36-files-extras-files" title="Permanent link">&para;</a></h3>
+<p><strong>Current</strong> (<code>files.png</code>, <code>files-many.png</code>, <code>files-many-end.png</code>, <code>text-folder.png</code>): fine functionally; the "… more (first 256 shown)" row is a blue selected row; the "F" letter tile sits over the list centre.</p>
+<p><strong>Proposed</strong> (<code>files-browser</code>): path in the status-bar left slot, folder/file glyphs from the icon set, size right-aligned in <code>ink2</code>, scrollbar. Folders with more than 256 entries show "256+" on the folder row and page in the list with "Load more" as the last row (not selected by default). Letter overlay as in the library (top-right tile).</p>
+<h3 id="37-input-widgets-text-password-number-slider-choice-datetime-search">3.7 Input widgets (text, password, number, slider, choice, date/time, search)<a class="headerlink" href="#37-input-widgets-text-password-number-slider-choice-datetime-search" title="Permanent link">&para;</a></h3>
+<p><strong>Current</strong> (<code>in-text.png</code>, <code>wifi-kb.png</code>, <code>in-slider.png</code>, <code>in-choice.png</code>, <code>in-datetime.png</code>): letters in an even row of five with the current one blue; hints as a sentence; no visible way to switch case/digits/symbols; slider is a bare bar; date/time fields underline the active field.</p>
+<p><strong>Proposed</strong> (<code>in-text</code>): field at the top in a <code>surface</code> box with a caret; a horizontal ring of nine glyphs with the current one in Big <code>accent</code> and widths proportional to glyph size; mode chips below (abc / ABC / 123 / #!? / space / ⌫) switched with ◁ ▷; hint line at the bottom. Password shows the typed glyph for 800 ms then a dot. Number/slider: value in Big centred, bar below, min/max in Small at the ends. Choice: plain list. Date/time: keep the field underline but make the active field <code>accent</code> and add the field name under it in Small.</p>
+<p><strong>Wheel:</strong> letters (acceleration jumps 3); Select types; Menu deletes (hold = clear); Play = done; ◁ ▷ = mode (text) or field (date/time).</p>
+<h3 id="38-hold-lock-and-power">3.8 Hold, lock and power<a class="headerlink" href="#38-hold-lock-and-power" title="Permanent link">&para;</a></h3>
+<p><strong>Current:</strong> nothing visible in the tours beyond the brief's description.</p>
+<p><strong>Proposed</strong> (<code>hold-locked</code>, <code>hold-power-progress</code>): while locked, any key press wakes the screen for 3 s and shows a dark pill at the bottom "Locked · hold Power 2 s to unlock"; the content behind is unchanged (no dim, so no full-screen blend). While Power is held, a 3 px <code>accent</code> line grows under the status bar over 2 s with a pill "Keep holding to lock · 10 s = off"; past 2 s the pill reads "Locked", the line resets and refills to 10 s in <code>red</code> with "Release to cancel · shutting down in 6"; haptic tick at 2 s and each second after 7 s.</p>
+<p>On the product board the physical Hold switch drives the same pill without the progress line.</p>
+<h3 id="39-splash-and-about">3.9 Splash and About<a class="headerlink" href="#39-splash-and-about" title="Permanent link">&para;</a></h3>
+<p><strong>Current</strong> (<code>splash.png</code>): wordmark, a thin progress line, a row of eight boxed status glyphs with red crosses, a red "[1/2] battery: gauge: no response" line and the version.</p>
+<p><strong>Proposed:</strong> keep the wordmark and the progress line; move the self-test row to a debug splash (shown only when a check fails or when Menu is held at boot) and show it as a short list ("Battery gauge — no response") rather than crossed-out icons. Release splash: wordmark, progress line, version in <code>ink3</code>, 600 ms minimum.</p>
+<blockquote>
+<p><strong>Owner amendment, 2026-11-13:</strong> after testing on the Y2 the owner asked for the icon row back ("the device check screen has lost the icons and replaced with text - I want the icons back, that loading screen was good"). The release splash is now wordmark, progress line, <strong>icon row</strong> (Lucide icons, pulse / solid / red cross), version; the text list stays on the debug splash only.</p>
+</blockquote>
+<h3 id="310-status-bar-global">3.10 Status bar (global)<a class="headerlink" href="#310-status-bar-global" title="Permanent link">&para;</a></h3>
+<p>Left slot by screen: Home = clock · Now Playing = "n of m" · lists = count · Files = path · Album = album/artist name · Cover Flow = "n of m". Centre: screen title. Right: Bluetooth glyph (<code>ink3</code> saved, <code>ink</code> connected, <code>accent</code> streaming), battery outline with fill (<code>green</code> while charging, <code>red</code> below 15 %) and the percentage as text only below 20 % or while charging. Three busy dots replace the left slot when the library is building in the background.</p>
+<hr />
+<h2 id="4-mock-ups">4. Mock-ups<a class="headerlink" href="#4-mock-ups" title="Permanent link">&para;</a></h2>
+<p>All in <code>mockups/</code>, light theme unless named <code>-dark</code>, both <code>320x240</code> and <code>480x360</code>:</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Section</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>home-home</code>, <code>home-idle</code>, <code>home-home-dark</code></td>
+<td>3.1</td>
+</tr>
+<tr>
+<td><code>np-nowplaying</code>, <code>np-nowplaying-bt</code>, <code>np-nowplaying-dark</code>, <code>np-seek</code>, <code>np-page2</code>, <code>np-volume-hud</code></td>
+<td>3.2</td>
+</tr>
+<tr>
+<td><code>lib-songs</code>, <code>lib-songs-fastscroll</code>, <code>lib-album</code>, <code>lib-coverflow</code>, <code>lib-playlists</code>, <code>lib-building</code>, <code>lib-empty</code></td>
+<td>3.3</td>
+</tr>
+<tr>
+<td><code>bt-devices</code>, <code>bt-dropped</code></td>
+<td>3.4</td>
+</tr>
+<tr>
+<td><code>settings-display</code>, <code>settings-licences</code></td>
+<td>3.5</td>
+</tr>
+<tr>
+<td><code>files-browser</code></td>
+<td>3.6</td>
+</tr>
+<tr>
+<td><code>in-text</code></td>
+<td>3.7</td>
+</tr>
+<tr>
+<td><code>hold-locked</code>, <code>hold-power-progress</code></td>
+<td>3.8</td>
+</tr>
+</tbody>
+</table>
+<p><code>render.py</code> regenerates them; every length comes from the metric table in §2.3, so it doubles as a layout reference.</p>
+<hr />
+<h2 id="5-implementation-notes-cost-and-cheaper-alternatives">5. Implementation notes (cost and cheaper alternatives)<a class="headerlink" href="#5-implementation-notes-cost-and-cheaper-alternatives" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Cost</th>
+<th>Cheaper alternative</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>New Small font size (12 / 16 px)</td>
+<td>~10 KB flash per profile</td>
+<td>Ship 12 px only; 480×360 uses 14 px Body in <code>ink2</code> for secondary text</td>
+</tr>
+<tr>
+<td>Lucide icons, 14 glyphs × 2 sizes × 2 profiles, 1-bit alpha</td>
+<td>~6 KB</td>
+<td>Render at 16 px only and let LVGL scale ×1.5 on 480×360 (slightly soft)</td>
+</tr>
+<tr>
+<td>160×160 art thumbnails, LRU 24</td>
+<td>1.2 MB PSRAM</td>
+<td>96×96, LRU 6 (18 KB each) on the Pico 2 W; Now Playing at 1:1</td>
+</tr>
+<tr>
+<td>Selection-bar slide (80 ms)</td>
+<td>invalidates two rows per frame</td>
+<td>Disable below 30 fps; the bar simply jumps</td>
+</tr>
+<tr>
+<td>Push/pop slide + fade</td>
+<td>list area redrawn ~4 frames</td>
+<td>Slide only (no alpha); or title-swap only on the Pico 2 W</td>
+</tr>
+<tr>
+<td>Toast / HUD strips</td>
+<td>one 22–26 px strip</td>
+<td>none needed — already minimal</td>
+</tr>
+<tr>
+<td>Letter overlay + rail</td>
+<td>44 px tile + 26 small labels, drawn ~once per 100 ms</td>
+<td>Rail every second letter on 320×240 (as mocked)</td>
+</tr>
+<tr>
+<td>Cover Flow, five flat tiles</td>
+<td>five <code>lv_image</code> re-blits per step; no rotation</td>
+<td>Three tiles on the Pico 2 W</td>
+</tr>
+<tr>
+<td>Dark theme</td>
+<td>zero runtime cost; one token struct</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Power-hold progress line</td>
+<td>3 px × width invalidate at 10 Hz</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Determinate library progress</td>
+<td>needs a first pass to count files (fast: directory entries only)</td>
+<td>Indeterminate bar that sweeps, still better than row-dots</td>
+</tr>
+</tbody>
+</table>
+<p>Avoid: full-screen dim behind the lock pill (alpha blend of the whole frame), blur, gradients on backgrounds, animating the progress bar more often than 1 Hz, and per-frame redraw of the right pane on Home.</p>
+<hr />
+<h2 id="6-backlog">6. Backlog<a class="headerlink" href="#6-backlog" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Item</th>
+<th>Area</th>
+<th>Effort</th>
+<th>Impact</th>
+<th>Depends on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DS-1</td>
+<td>Colour token table + light/dark structs, <code>Auto</code> on dim</td>
+<td>System</td>
+<td>S</td>
+<td>3</td>
+<td>—</td>
+</tr>
+<tr>
+<td>DS-2</td>
+<td>Add Small font size (12/16) to both profiles</td>
+<td>System</td>
+<td>S</td>
+<td>3</td>
+<td>—</td>
+</tr>
+<tr>
+<td>DS-3</td>
+<td>Status bar: left slot, battery % rules, BT glyph states</td>
+<td>System</td>
+<td>S</td>
+<td>3</td>
+<td>DS-1</td>
+</tr>
+<tr>
+<td>DS-4</td>
+<td>Selection bar restyle (inset, radius, 80 ms slide) and grey chevrons</td>
+<td>System</td>
+<td>S</td>
+<td>2</td>
+<td>DS-1</td>
+</tr>
+<tr>
+<td>DS-5</td>
+<td>Toast strip component (top) and HUD strip (bottom)</td>
+<td>System</td>
+<td>M</td>
+<td>3</td>
+<td>DS-1, DS-2</td>
+</tr>
+<tr>
+<td>DS-6</td>
+<td>Lucide icon set, replace FontAwesome where covered</td>
+<td>System</td>
+<td>S</td>
+<td>2</td>
+<td>—</td>
+</tr>
+<tr>
+<td>DS-7</td>
+<td>Push/pop slide transition, 30 fps cap</td>
+<td>System</td>
+<td>M</td>
+<td>2</td>
+<td>DS-4</td>
+</tr>
+<tr>
+<td>NP-1</td>
+<td>Now Playing layout: tag stack, pills, progress, volume strip</td>
+<td>Now Playing</td>
+<td>M</td>
+<td>3</td>
+<td>DS-2, DS-3</td>
+</tr>
+<tr>
+<td>NP-2</td>
+<td>Seek mode: Big amber time, knob, hints, no third bar</td>
+<td>Now Playing</td>
+<td>S</td>
+<td>2</td>
+<td>NP-1</td>
+</tr>
+<tr>
+<td>NP-3</td>
+<td>Now Playing page 2 (rating, shuffle, repeat, go-to)</td>
+<td>Now Playing</td>
+<td>M</td>
+<td>2</td>
+<td>NP-1</td>
+</tr>
+<tr>
+<td>NP-4</td>
+<td>Volume HUD from any screen</td>
+<td>Now Playing</td>
+<td>S</td>
+<td>2</td>
+<td>DS-5</td>
+</tr>
+<tr>
+<td>NP-5</td>
+<td>Art pipeline: 160² thumbnails + LRU (96² on Pico 2 W)</td>
+<td>Now Playing</td>
+<td>M</td>
+<td>2</td>
+<td>—</td>
+</tr>
+<tr>
+<td>LB-1</td>
+<td>Two-line song rows (title / artist · album)</td>
+<td>Library</td>
+<td>S</td>
+<td>3</td>
+<td>DS-2</td>
+</tr>
+<tr>
+<td>LB-2</td>
+<td>Fast-scroll letter overlay + index rail, sort keys ignoring articles/diacritics</td>
+<td>Library</td>
+<td>M</td>
+<td>3</td>
+<td>DS-2</td>
+</tr>
+<tr>
+<td>LB-3</td>
+<td>Album header (art, title, artist · year, totals)</td>
+<td>Library</td>
+<td>S</td>
+<td>2</td>
+<td>NP-5</td>
+</tr>
+<tr>
+<td>LB-4</td>
+<td>Empty / error / busy states as full-pane layouts, determinate progress</td>
+<td>Library</td>
+<td>M</td>
+<td>3</td>
+<td>DS-5</td>
+</tr>
+<tr>
+<td>LB-5</td>
+<td>Unplayable rows show codec; auto-skip with toast</td>
+<td>Library</td>
+<td>S</td>
+<td>2</td>
+<td>DS-5</td>
+</tr>
+<tr>
+<td>LB-6</td>
+<td>Cover Flow (flat five-tile) view on Albums</td>
+<td>Library</td>
+<td>M</td>
+<td>2</td>
+<td>NP-5</td>
+</tr>
+<tr>
+<td>LB-7</td>
+<td>Playlists screen (smart lists + .m3u)</td>
+<td>Library</td>
+<td>L</td>
+<td>2</td>
+<td>—</td>
+</tr>
+<tr>
+<td>BT-1</td>
+<td>Devices screen (known / found / scan), signal bars monochrome</td>
+<td>Bluetooth</td>
+<td>M</td>
+<td>3</td>
+<td>DS-6</td>
+</tr>
+<tr>
+<td>BT-2</td>
+<td>Forget / pairing / reconnect flows with toasts; no self-mutating rows</td>
+<td>Bluetooth</td>
+<td>M</td>
+<td>3</td>
+<td>DS-5, BT-1</td>
+</tr>
+<tr>
+<td>BT-3</td>
+<td>Bluetooth settings page; codec detail moves to Diagnostics</td>
+<td>Bluetooth</td>
+<td>S</td>
+<td>1</td>
+<td>BT-1</td>
+</tr>
+<tr>
+<td>ST-1</td>
+<td>Settings right pane as key/value summary; toggles in place</td>
+<td>Settings</td>
+<td>S</td>
+<td>2</td>
+<td>DS-2</td>
+</tr>
+<tr>
+<td>ST-2</td>
+<td>Display page (theme, brightness, timeouts)</td>
+<td>Settings</td>
+<td>S</td>
+<td>2</td>
+<td>DS-1</td>
+</tr>
+<tr>
+<td>ST-3</td>
+<td>About › Diagnostics, Licences screen</td>
+<td>Settings</td>
+<td>S</td>
+<td>1</td>
+<td>—</td>
+</tr>
+<tr>
+<td>IN-1</td>
+<td>Text entry: letter ring, mode chips, field box</td>
+<td>Input</td>
+<td>M</td>
+<td>2</td>
+<td>DS-2</td>
+</tr>
+<tr>
+<td>IN-2</td>
+<td>Number/slider/date-time polish</td>
+<td>Input</td>
+<td>S</td>
+<td>1</td>
+<td>IN-1</td>
+</tr>
+<tr>
+<td>HL-1</td>
+<td>Lock pill and Power-hold progress line</td>
+<td>Hold/Power</td>
+<td>S</td>
+<td>2</td>
+<td>DS-5</td>
+</tr>
+<tr>
+<td>FL-1</td>
+<td>Files: path in status bar, icons, paged "Load more"</td>
+<td>Files</td>
+<td>S</td>
+<td>1</td>
+<td>DS-3, DS-6</td>
+</tr>
+<tr>
+<td>SP-1</td>
+<td>Release splash; self-test to debug splash</td>
+<td>Splash</td>
+<td>S</td>
+<td>1</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>Suggested order: DS-1 → DS-2 → DS-3 → DS-4 → DS-5 (foundation, about a week), then NP-1 and LB-1/LB-2 (the two things users see most), then BT-1/BT-2, then the rest by impact.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

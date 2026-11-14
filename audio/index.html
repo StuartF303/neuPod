@@ -1,0 +1,2652 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/audio/">
+      
+      
+        <link rel="prev" href="../runtime/">
+      
+      
+        <link rel="next" href="../bluetooth/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Audio (I2S, tones, WAV) - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#audio-output-i2s-test-signals-wav-flac-mp3-alac" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Audio (I2S, tones, WAV)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#pins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pins
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resource-allocation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resource allocation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Resource allocation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#interrupt-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interrupt flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sink-restart-re-clock-on-a-sample-rate-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sink restart (re-clock on a sample-rate change)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#clocking-and-rate-accuracy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clocking and rate accuracy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mute-line-gp22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mute line (GP22)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#volume-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Volume safety
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bit-perfect-note" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bit-perfect note
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-signals-and-wav" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test signals and WAV
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#codecs-flac-mp3-alac-and-wav" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codecs: FLAC, MP3, ALAC (and WAV)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Codecs: FLAC, MP3, ALAC (and WAV)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-things-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where things run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gapless-playback-and-the-play-queue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gapless playback and the play queue
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resume-last-track-and-position" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resume (last track and position)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-and-cpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory and CPU
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flac-verify-mode-check-without-listening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FLAC verify mode (check without listening)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#robustness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Robustness
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test vectors
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-test-bench" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to test (bench)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#not-verified-on-hardware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not verified on hardware
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bluetooth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wifi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../y2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Innioasis Y2 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../i2c-peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-music-library-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0018-ui-resolution-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0018 UI resolution profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0019-bluetooth-audio-sink-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0019 Bluetooth audio boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0020-hold/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0020 Hold
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#pins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pins
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resource-allocation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resource allocation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Resource allocation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#interrupt-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interrupt flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sink-restart-re-clock-on-a-sample-rate-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sink restart (re-clock on a sample-rate change)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#clocking-and-rate-accuracy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clocking and rate accuracy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mute-line-gp22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mute line (GP22)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#volume-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Volume safety
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bit-perfect-note" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bit-perfect note
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-signals-and-wav" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test signals and WAV
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#codecs-flac-mp3-alac-and-wav" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codecs: FLAC, MP3, ALAC (and WAV)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Codecs: FLAC, MP3, ALAC (and WAV)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-things-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where things run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gapless-playback-and-the-play-queue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gapless playback and the play queue
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resume-last-track-and-position" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resume (last track and position)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-and-cpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory and CPU
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flac-verify-mode-check-without-listening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FLAC verify mode (check without listening)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#robustness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Robustness
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test vectors
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-test-bench" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to test (bench)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#not-verified-on-hardware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not verified on hardware
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="audio-output-i2s-test-signals-wav-flac-mp3-alac">Audio output (I2S, test signals, WAV, FLAC, MP3, ALAC)<a class="headerlink" href="#audio-output-i2s-test-signals-wav-flac-mp3-alac" title="Permanent link">&para;</a></h1>
+<p>Phase 1 sound comes out of the Pimoroni Pico Audio Pack ("the Audio Pack DAC") over I2S, driven by the PIO and
+DMA from the bare-metal audio core (<a href="../adr/0011-bare-metal-audio-core/">ADR-0011</a>, <a href="../runtime/">Runtime</a>).
+The audio policy is <a href="../adr/0003-audio-quality-policy/">ADR-0003</a>: decode once to a 32-bit mixer, no
+resampling; the sink is re-clocked per file instead.</p>
+<h2 id="pins">Pins<a class="headerlink" href="#pins" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Signal</th>
+<th>GPIO</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>I2S DATA</td>
+<td>GP9</td>
+<td>PIO0 <code>out</code> pin</td>
+</tr>
+<tr>
+<td>I2S BCK</td>
+<td>GP10</td>
+<td>PIO0 side-set bit 0</td>
+</tr>
+<tr>
+<td>I2S LRCK</td>
+<td>GP11</td>
+<td>PIO0 side-set bit 1 (BCK and LRCK must be consecutive)</td>
+</tr>
+<tr>
+<td>Mute / amp enable</td>
+<td>GP22</td>
+<td>plain GPIO, driven by core 1 (and by core 0 at boot and in the fatal-error path)</td>
+</tr>
+</tbody>
+</table>
+<p>The Audio Pack is a TI <strong>PCM5100A</strong> DAC with a <strong>PAM8908</strong> headphone amp behind the "phones" jack (low/high gain
+switch); "line out" is the DAC output directly. Try both jacks.</p>
+<p>No MCLK: the PCM5100A runs its internal PLL from BCK, which must be 32, 48 or 64 × fs with a 50 % LRCK. Our 32-bit
+slots give 64 fs. SCK is tied low on the Pack; the format pin is hardwired to standard I2S (one-BCK delay), which is
+what <code>neupod_i2s.pio</code> produces.</p>
+<h2 id="resource-allocation">Resource allocation<a class="headerlink" href="#resource-allocation" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Resource</th>
+<th>Used by</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PIO0, 1 state machine, 8 instructions</td>
+<td>I2S transmitter (<code>platforms/rp2350/hal/neupod_i2s.pio</code>)</td>
+<td>claimed with <code>pio_claim_unused_sm</code>, program added and removed at open/close. pio1 = SD (carlk3), pio2 = CYW43 + click wheel</td>
+</tr>
+<tr>
+<td>2 DMA channels (claimed dynamically)</td>
+<td>ping-pong, chained A to B to A, 512 words each (256 stereo frames)</td>
+<td>high bus priority; read pointer wraps inside its 2 KB buffer (ring), so a late restart replays the old block instead of reading past the buffer</td>
+</tr>
+<tr>
+<td><code>DMA_IRQ_1</code>, enabled on <strong>core 1</strong></td>
+<td>block-complete interrupt, refills the finished buffer</td>
+<td><code>DMA_IRQ_0</code> stays with the SD library on core 0</td>
+</tr>
+<tr>
+<td>2 x 2 KB DMA buffers, 32 KB PCM ring, 32 KB data ring</td>
+<td>RAM</td>
+<td>PCM ring size is <code>NEUPOD_PCM_RING_FRAMES</code> in <code>app/os/memory_budget.h</code>; data ring in <code>audio_shared.c</code></td>
+</tr>
+<tr>
+<td>Hot path in RAM</td>
+<td><code>dma_isr</code>, <code>on_block</code>, <code>audio_apply_gain</code>, the ring functions, <code>hal_audio_write</code>, <code>hal_audio_mute</code></td>
+<td><code>NEUPOD_RAM_FUNC</code> / <code>__not_in_flash_func</code></td>
+</tr>
+</tbody>
+</table>
+<p>The sink is chosen at build time: <code>scripts/build.sh rp2350 -- -DNEUPOD_AUDIO_SINK=i2s</code> (default) or <code>null</code>
+(the old discard-on-a-clock sink, touches no pins). The host build uses SDL for audible output when SDL2 and an
+audio device exist (<code>NEUPOD_HOST_AUDIO=0</code> forces silence), otherwise it is the null sink.</p>
+<p>On the Innioasis Y2 the wired sink is the headphone jack's CS43131 DAC (<a href="../y2/#what-each-hal-does">Y2</a>, Audio): the audio core is unchanged
+(same 32-bit blocks, same software volume and ramps); the HAL converts to 16 bit (TPDF dither whenever the volume or a deeper source leaves
+bits below the 16th), queues the blocks in a ring, and a writer thread paces the whole player on the DAC's clock. 44.1 kHz only, with the null
+sink as the fallback when no headphones are plugged in. <code>hal_audio_wired_attached()</code> tells the audio route whether anything is on the jack
+(always true on the other platforms): headphones pulled out while playing pause the player with a "Headphones unplugged" banner.
+The Y2's internal speaker and Line out use the same sink: <code>hal_audio_set_speaker()</code> / <code>hal_audio_set_line_out()</code> carry the route's decision (Settings &gt; Speaker, Settings &gt; Line out, Audio output Auto / Wired / Bluetooth / Speaker) to the HAL, <code>hal_audio_headphones_in()</code> and <code>hal_audio_speaker_available()</code> / <code>hal_audio_line_out_available()</code> report the hardware; the other platforms answer no. The amplifier-off-first rules, the volume caps (speaker 9, jack 11, Line out 15) and the allow-lists are in <a href="../y2/#internal-speaker-and-line-out">Y2</a>. Line out locks the software volume at 0 dB (<code>player_volume_set_locked()</code>).</p>
+<h3 id="interrupt-flow">Interrupt flow<a class="headerlink" href="#interrupt-flow" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Start: both buffers hold silence; DMA channel A is started, the PIO is enabled.</li>
+<li>When a channel finishes it chains to the other one and raises <code>DMA_IRQ_1</code>.</li>
+<li>The handler acknowledges, then for the finished buffer calls the block callback (<code>on_block</code> in
+   <code>app/audio/audio_core.c</code>), which reads 256 frames from the PCM ring, applies volume, writes them into the
+   buffer through <code>hal_audio_write</code>. The handler re-arms that channel's count.</li>
+<li>Ring empty: that block is silence and <code>underruns</code> counts it. If the interrupt runs so late that both buffers
+   finished, <code>dma_underruns</code> (<code>sink_missed</code>) counts it and the old block is replayed once.
+   If the late interrupt finds the other buffer's channel already restarted, the finished sibling is re-armed with
+   its old block (never left at a zero count, which would end the ping-pong).</li>
+<li>32 starved blocks in a row (186 ms) while playing: playback stops, the output is muted and the event
+   <code>STORM</code> is logged.</li>
+</ol>
+<h3 id="sink-restart-re-clock-on-a-sample-rate-change">Sink restart (re-clock on a sample-rate change)<a class="headerlink" href="#sink-restart-re-clock-on-a-sample-rate-change" title="Permanent link">&para;</a></h3>
+<p>Close and <code>hal_audio_force_mute()</code> stop the sink in a fixed order, registers only and with bounded waits: mute pin;
+(close only) DMA interrupt off; clear the EN bit of <strong>both</strong> channels through the non-triggering <code>AL1_CTRL</code> alias
+(so the chain cannot re-trigger the sibling, RP2350-E5); abort both and wait for <code>CHAN_ABORT</code> and <code>BUSY</code> to clear;
+disable their <code>INTE1</code> bits and acknowledge <code>INTS1</code>; disable the state machine, clear its FIFOs, restart it and
+its clock divider, clear its <code>FDEBUG</code> flags. It is safe to call twice or with nothing open. Open starts from the
+same clean state (the claimed channels are quiesced, <code>pio_sm_init</code>), configures both channels, clears <code>INTS1</code> and
+the pending NVIC bit, enables the interrupt, then starts channel A and enables the state machine. Before this
+fix a rate switch could leave channel A armed and busy while the PIO requested data and nothing moved (audio
+core stalled). The <code>dma_underruns=2</code> seen once per reopen is gone too; the likely explanation is the two stale
+chained channels completing after the unwaited abort (consistent with the counter now reading 0, not proven).
+An abort that has not completed within the spin bound (about 2 ms) is counted (<code>g_abort_timeouts</code>, readable
+over SWD) and makes open return <code>HAL_EBUSY</code> rather than configure a running channel. In the late-interrupt path,
+if both channels are found idle after re-arming the sibling, the sibling is restarted (the ping-pong had stopped).</p>
+<p><strong>Bench, 3 Nov 2026 (Pico 2 W):</strong> 12 ALAC 44.1 ↔ 96 kHz switches while playing, a switch from a paused 96 kHz stream
+and an ALAC 96 kHz → WAV 44.1 kHz switch: no stall, <code>dma_underruns=0</code> after every reopen (was 2 every time).</p>
+<h2 id="clocking-and-rate-accuracy">Clocking and rate accuracy<a class="headerlink" href="#clocking-and-rate-accuracy" title="Permanent link">&para;</a></h2>
+<p>The PIO runs at 128 x Fs: two PIO cycles per BCK, 64 BCK per frame (32-bit slots). The divider comes from
+<code>clk_sys</code> = 125 MHz in 1/256 steps (16.8 fixed point), rounded to nearest.</p>
+<table>
+<thead>
+<tr>
+<th>Fs</th>
+<th>divider</th>
+<th>achieved Fs</th>
+<th>error</th>
+<th>BCK</th>
+<th>PIO cycle</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>44.1 kHz</td>
+<td>22 + 37/256</td>
+<td>44099.488 Hz</td>
+<td>-11.6 ppm</td>
+<td>2.8224 MHz</td>
+<td>177 ns</td>
+</tr>
+<tr>
+<td>48 kHz</td>
+<td>20 + 88/256</td>
+<td>48003.072 Hz</td>
+<td>+64 ppm</td>
+<td>3.0722 MHz</td>
+<td>163 ns</td>
+</tr>
+<tr>
+<td>88.2 kHz</td>
+<td>11 + 18/256</td>
+<td>88214.538 Hz</td>
+<td>+165 ppm</td>
+<td>5.6457 MHz</td>
+<td>89 ns</td>
+</tr>
+<tr>
+<td>96 kHz</td>
+<td>10 + 44/256</td>
+<td>96006.144 Hz</td>
+<td>+64 ppm</td>
+<td>6.1444 MHz</td>
+<td>81 ns</td>
+</tr>
+</tbody>
+</table>
+<p>The monitor line <code>audio sink:</code> prints the actual rate and divider read back from the hardware setup.
+Consequences:</p>
+<ul>
+<li>The DAC slaves to BCK, so a rate error is not a sync problem; it only changes pitch and duration, by at most
+  165 ppm (0.29 cent; a 4-minute track is 40 ms shorter or longer). Not audible.</li>
+<li>The fractional divider dithers each PIO cycle between 22 and 23 system clocks (and so on), so a BCK edge moves by at most
+  one system clock, 8 ns, around its ideal place: 2 % of a 354 ns BCK period at 44.1 kHz, 5 % at 96 kHz. A DAC that
+  regenerates its clock with a PLL (as no-MCLK DACs do) filters this. Not measured on the board; an oscilloscope on GP10 would show it.</li>
+<li>88.2 and 96 kHz are generated by the same code and accepted by the WAV player, but were not run on hardware.</li>
+</ul>
+<h2 id="mute-line-gp22">Mute line (GP22)<a class="headerlink" href="#mute-line-gp22" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>GP22 drives the PCM5100A's XSMT pin (TSSOP-20 pin 17), active LOW</strong>: low = soft-muted, high = playing
+  (design response, 3 Nov 2026, from the Pack schematic; confirmed on the bench the same day). The build default
+  <code>NEUPOD_AUDIO_UNMUTE_LEVEL=1</code> is correct.</li>
+<li>The DAC also <strong>auto-mutes on a clock error</strong>: BCK and LRCK must be running continuously, and its PLL locked,
+  before XSMT goes high.</li>
+<li><strong>Current behaviour (as built):</strong> muted from boot (<code>hal_system_init</code>), at sink open and close, on stop, on an
+  underrun storm and in the fatal-error path (<code>hal_panic</code> → <code>hal_audio_force_mute()</code>, which also aborts the DMA and
+  stops the PIO). The audio core opens XSMT one block before a fade-in and closes it after two silent blocks
+  (<code>app/audio/audio_core.c</code>), and <code>hal_audio_close()</code> stops the I2S clocks between streams. So XSMT toggles with every
+  start/stop. The stream is opened at boot and its clocks keep running, so in practice XSMT rises long after the PLL has locked.</li>
+<li><strong>Bench, 3 Nov 2026: works.</strong> 1 kHz test tone heard on the "line out" jack (DAC direct, no PAM8908) at -30 dB. The earlier silence was wiring:
+  the GP9 (DATA) and GP22 (XSMT) jumpers were on the wrong Pico pins. Register read-back over SWD (SIO_IN / IO_BANK0
+  STATUS) showed both pins driven correctly while the Pack end read 0 V, which is how it was found.</li>
+<li><strong>Design recommendation (optional, not built):</strong> raise XSMT once after the clocks have settled and leave it high,
+  doing start/stop/pause with the gain ramp only; XSMT low only for force-mute (panic, storm) and sink close. Not needed
+  for function on the testbed; it reduces DAC soft-mute ramps at track boundaries.</li>
+</ul>
+<h2 id="volume-safety">Volume safety<a class="headerlink" href="#volume-safety" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Volume is <strong>attenuation in whole dB</strong>, applied in the 32-bit domain. Start-up level is <strong>-30 dB</strong> and is
+  sent to the audio core before anything can play; the audio core also boots at -30 dB by itself. The volume is saved on the card
+  (settings store, <a href="../bluetooth/">Bluetooth</a>) together with the output path, and restored at boot by the
+  <a href="../bluetooth/#volume-restore-policy">Volume restore policy</a>: the saved level on the same known path, otherwise capped at -30 dB. Nothing
+  reports the output path yet, so today every restore is capped at -30 dB, as before.</li>
+<li>The UI steps 2 dB per wheel click. The engine never applies gain above 0 dB, and a build-time hard cap
+  (<code>NEUPOD_AUDIO_VOLUME_CAP_DB</code>, default 0, meaning full scale allowed) sets the loudest level; raise it for a
+  headphone-safe build. At 80 dB or more the output is silent.</li>
+<li>The test tone is -20 dBFS; with the default volume it reaches the DAC at -50 dBFS peak. The Test tone screen
+  prints that figure. Leaving the Test tone screen stops the sound.</li>
+<li>Volume changes, pause, resume, start and stop are ramped linearly across one 5.8 ms block (no clicks).</li>
+</ul>
+<h2 id="bit-perfect-note">Bit-perfect note<a class="headerlink" href="#bit-perfect-note" title="Permanent link">&para;</a></h2>
+<p>PCM files are converted to 32 bits exactly (16-bit <code>&lt;&lt; 16</code>, 24-bit <code>&lt;&lt; 8</code>, 32-bit as is; mono duplicated to both
+channels), with no dither and no resampling. At <strong>0 dB volume</strong> the samples then go to the DAC unchanged
+(verified by the unit tests; the gain stage is skipped). <strong>Only 0 dB is bit-perfect</strong>: any other setting
+multiplies the samples. The first and last block of a start/stop/pause are ramped even at 0 dB. The DAC itself
+and its analogue stage are not "bit-perfect" in any measurable sense; the claim is about the digital path.
+The Audio Pack DAC takes 32-bit slots; how many of the bits it uses is the DAC's business.</p>
+<h2 id="test-signals-and-wav">Test signals and WAV<a class="headerlink" href="#test-signals-and-wav" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Source</th>
+<th>What</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 kHz tone</td>
+<td>sine, -20 dBFS peak, both channels</td>
+<td>phase accumulator, 1024-point table with linear interpolation (worst error about -104 dBFS)</td>
+</tr>
+<tr>
+<td>L/R ident</td>
+<td>400 Hz on the left only for 1 s, then 1600 Hz on the right only for 1 s, repeating (low = left, high = right)</td>
+<td>switches at a zero crossing; if you hear it in the wrong ear the channel order is swapped (slot order is left first)</td>
+</tr>
+<tr>
+<td>Scale</td>
+<td>C4 D4 E4 F4 G4 A4 B4 C5, then B4 down to C4, 300 ms per note, 10 ms raised-cosine attack and release, 600 ms rest, loops until stopped</td>
+<td>equal temperament, A4 = 440 Hz; frequencies rounded to a millihertz, phase step exact to 2^-32</td>
+</tr>
+<tr>
+<td>WAV</td>
+<td>integer PCM 16/24/32-bit, mono or stereo, 44.1/48/88.2/96 kHz</td>
+<td>RIFF parser walks the chunks (LIST and other chunks before <code>data</code>, odd sizes, extensible PCM); float, 8-bit, other rates and RF64 are rejected with a message</td>
+</tr>
+</tbody>
+</table>
+<p>A different sample rate re-clocks the sink (close and reopen, a few ms) with no resampling. The tones run at the
+sink's current rate (44.1 kHz after boot, or the last file's rate).
+The storage task reads the card in 2 KB steps into a 32 KB ring (85 ms at 32-bit stereo 48 kHz). End of file
+raises an end-of-track event after the last sample has played, then the output ramps down and mutes.</p>
+<h2 id="codecs-flac-mp3-alac-and-wav">Codecs: FLAC, MP3, ALAC (and WAV)<a class="headerlink" href="#codecs-flac-mp3-alac-and-wav" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Format</th>
+<th>Decoder</th>
+<th>Licence</th>
+<th>Runs on</th>
+<th>Output</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FLAC (16/20/24/32-bit, mono/stereo, 44.1/48/88.2/96 kHz)</td>
+<td><code>dr_flac</code> (single header, <code>app/third_party/dr_libs/</code>)</td>
+<td>public domain / MIT-0</td>
+<td><strong>core 1</strong></td>
+<td>exact: the sample is shifted left-justified into 32 bits</td>
+</tr>
+<tr>
+<td>MP3 (MPEG-1/2 Layer III, 44.1/48 kHz)</td>
+<td><code>dr_mp3</code> (contains minimp3)</td>
+<td>public domain / MIT-0 (minimp3 CC0)</td>
+<td>core 1</td>
+<td>float, rounded to nearest and clipped to 32 bits</td>
+</tr>
+<tr>
+<td>ALAC in <code>.m4a</code> (16/20/24-bit; 32-bit rejected, mono/stereo, 44.1 to 96 kHz)</td>
+<td>Apple's ALAC decoder core (<code>app/third_party/alac/</code>) with a C wrapper (<code>alac_dec.c</code>)</td>
+<td>Apache-2.0 (see the repository's <code>LICENSE.md</code>: no NOTICE file upstream; the C port is marked as modified)</td>
+<td>core 1</td>
+<td>exact</td>
+</tr>
+<tr>
+<td>AAC in <code>.m4a</code></td>
+<td>none yet</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>the player says "AAC not supported yet"</td>
+</tr>
+<tr>
+<td>WAV</td>
+<td>our own parser (<code>wav.c</code>), raw PCM passthrough</td>
+<td>MPL-2.0</td>
+<td>conversion on core 1</td>
+<td>exact</td>
+</tr>
+</tbody>
+</table>
+<p><code>dr_wav</code> is vendored with the others as requested but is not compiled: the WAV path has no codec in it, only a header parser that
+we already have and test, so <code>dr_wav</code> would add code without adding capability.
+More than 2 channels are rejected with a message, as are unsupported rates ("Unsupported sample rate"); mono is played on both sides.</p>
+<h3 id="where-things-run">Where things run<a class="headerlink" href="#where-things-run" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Core 0 (storage task)</strong> reads the file, parses the header and tags, and streams bytes through the 32 KB data ring:<ul>
+<li>FLAC: a synthesised 42-byte header (<code>fLaC</code> + one STREAMINFO block) followed by the audio frames, so the decoder never has to
+  stream through the file's pictures and comments. Tags (Vorbis comments) are read here.</li>
+<li>MP3: the compressed bytes from the first frame header on (ID3v2 skipped and parsed here; duration from the Xing/Info frame count,
+  otherwise estimated from the file size, which can be far off for VBR files that lack one; shown with a <code>~</code>).</li>
+<li>M4A: the container is demuxed here (it needs random access to <code>moov</code>): <code>app/audio/mp4.c</code> reads <code>stsd</code> (the ALAC magic cookie), <code>stsz</code>, <code>stsc</code>,
+  <code>stco</code>/<code>co64</code>, <code>mdhd</code> and the <code>ilst</code> tags, and sends each packet with a 4-byte big-endian length in front. The demuxer is codec independent so
+  AAC can use it later.</li>
+<li>Pictures: the tag readers do not load them. They record where each embedded picture is (<code>audio_tags_t.art</code>: file offset, length, kind JPEG / PNG / other,
+  picture type) from the MP3 ID3v2 <code>APIC</code> / <code>PIC</code> frame, the FLAC <code>PICTURE</code> block and the MP4 <code>covr</code> item, reading only the few header bytes that say where the
+  image starts and its first four bytes to tell JPEG from PNG: a 2 MB PNG costs the same few reads as a 2 KB one. A JPEG is preferred to a PNG, a front cover (type 3) to
+  other types. Unsynchronised, compressed or encrypted ID3 frames cannot be streamed and are ignored. The art itself is decoded afterwards by the storage task (see <a href="../ui/#now-playing-art">UI</a>).</li>
+</ul>
+</li>
+<li><strong>Core 1</strong> decodes. The main loop calls the decoder for up to two 256-frame blocks per pass while the PCM ring has room; the block interrupt is
+  unchanged and still preempts it. Everything the decoders allocate comes from one static <strong>arena of 116 KB</strong> (<code>codec.h</code>), reset at every new stream:
+  <code>malloc</code> is never called (the vendored allocation macros point at the arena), asserts are compiled out, and there is no stdio.
+  <code>tools/check_core1_closure.py</code> (Python is required by the RP2350 build; ctest also runs the checker against a known-good and a known-bad fixture, so it is proven able to fail) runs after every RP2350 build and fails it if anything reachable from the audio core's entry points
+  could reach the RTOS, stdio, the heap, blocking SDK calls or the panic path (it walks the call graph of the linked image, following branches and every function address found in literal pools; a function whose address is only ever computed would be missed, see the limits in the script's header); the
+  <code>audio_core_rules</code> token scan still covers our own sources. Core 1's stack is now a 16 KB array of our own (minimp3 alone keeps about 10 KB of scratch on the stack).</li>
+<li>Waiting for data: the decoder's read callback blocks until the bytes are there (core 0 refills at about 2 MB/s). While it waits it keeps handling
+  commands: volume, pause and the end-of-stream marker immediately; anything that tears the stream down (stop, a new track, a tone) is parked, the read is abandoned and the command runs
+  next, so nothing can deadlock. 32 starved blocks in a row still stops and mutes the output.</li>
+<li>The first block of audio is not played until about 23 ms are buffered (and a stream is complete if it is shorter), so a slow start is silence rather than an underrun.</li>
+<li><strong>Seeking</strong> inside the decoder (the Now Playing seek is different, see "Seeking to a frame" below): forward seeks inside the decoder (including dr_flac's own) discard bytes; an absolute seek backwards sends core 0 a
+  request (byte offset), core 0 repositions the file and acknowledges, core 1 then empties the data ring and acknowledges back, and only then does core 0 write again
+  (<code>stream_io.h</code>; unit-tested with a real second thread).</li>
+</ul>
+<h3 id="gapless-playback-and-the-play-queue">Gapless playback and the play queue<a class="headerlink" href="#gapless-playback-and-the-play-queue" title="Permanent link">&para;</a></h3>
+<p>Decision record: <a href="../adr/0016-gapless-playback-and-play-queue/">ADR-0016</a>. The queue is the playable files of the folder a track was chosen
+from, in Files order; the player (core 0) owns it. Gapless is on by default (Settings, "Gapless playback").</p>
+<p><strong>Handshake.</strong> Every stream core 0 starts or announces gets a sequence number; its description (<code>audio_stream_desc_t</code>) and its length in
+bytes live in <code>g_audio_slot[seq &amp; 1]</code>. The data ring carries streams back to back.</p>
+<ol>
+<li>Hard start (<code>audio_stream_start</code>, command <code>STREAM_START</code>, a = sequence number): core 1 flushes both rings, re-clocks the sink if the rate
+   differs, ramps, as before. It cancels any announcement.</li>
+<li>Once the current decoder is open (core 1 publishes <code>g_audio_open_seq</code>), the storage task asks the player which track follows, opens and
+   parses it (the rate and channel count must match) and announces it: <code>audio_stream_next()</code> fills the other slot, sets <code>g_audio_next_valid</code>
+   and sends <code>STREAM_NEXT</code>. Core 1 only remembers the number (it handles this command while waiting for data too).</li>
+<li>When the current track is completely in the ring, <code>audio_stream_end()</code> publishes its byte count in its slot and the announced track's
+   bytes follow immediately. Core 1's byte source (<code>sio_t.end</code>) reads the ring first and the length second, so whenever it sees the next
+   stream's bytes it also sees the boundary; reads never cross it, and the decoder sees the end of its stream there. Codecs that stop early
+   because of trimming (see below) skip the rest of the stream up to the boundary.</li>
+<li>The decoder returns its last frame: core 1 looks at the command ring once more (an announcement sent just before the end is not missed),
+   then, if the announcement is still valid (<code>g_audio_next_valid</code> re-read after copying the description), closes the decoder, opens the next one
+   on the same sink, PCM ring and volume (the decoders' byte source <code>g_sio</code> is rebuilt for every stream, WAV included, so a WAV that hands
+   over to a codec track never opens it on an unset source), and pushes the number of PCM frames written so far into a small boundary ring. The block interrupt
+   counts the frames it serves; when they reach the boundary it reports <code>END_OF_TRACK</code> with value 1 and <code>elapsed</code> restarts. So the event
+   fires in the block that carries the old track's last sample (within 256 frames), not when decoding ends. No mute change, no ramp.</li>
+<li>Nothing announced (last track, gapless off, other rate or channel count, unreadable file, a track too short to chain): the track ends
+   as before (ring drains, ramp, <code>END_OF_TRACK</code> value 0) and the player starts the next one with a hard start.</li>
+</ol>
+<p>Seeks: a decoder only seeks while it opens, when nothing can be announced yet. A seek request nevertheless withdraws an announcement and the
+end marker (core 0), and <code>g_audio_next_valid</code> makes a stale <code>STREAM_NEXT</code> harmless. Stop, skip or a new start clear <code>g_audio_next_valid</code>
+before anything reuses a slot; core 1 drops its pending note on stop. Only one handoff may be pending at a time. A different format is
+refused by core 1 too (error event, the track ends normally).</p>
+<p><strong>Encoder delay and padding.</strong> FLAC and WAV lengths are exact. MP3: with a LAME tag <code>dr_mp3</code> drops <code>delay + 529</code> frames at the start and <code>padding - 529</code>
+at the end; the parser reports exactly the length it will deliver, and the codec layer does not trim again. Without a LAME tag nothing is
+trimmed (and a missing frame count gives an estimate, shown with <code>~</code>). ALAC/M4A: the edit list (<code>elst</code>, one non-empty entry: <code>media_time</code> = priming,
+<code>segment_duration</code> = length) is preferred, else <code>iTunSMPB</code> (hex: priming, padding, original length). A trim that does not fit the media is
+ignored. The reported <code>total_frames</code> is the trimmed length. The test vectors: <code>tools/gen_trim_vectors.py</code>.</p>
+<p><strong>Host tests.</strong> <code>gapless</code> runs the real core-1 loop and the real core-0 stream controller against a fake sink with a real-time block clock and
+compares the sink's samples frame by frame with each track decoded on its own (WAV, FLAC, MP3, ALAC with an edit list; skip, stop, seek and rate
+change cases). <code>play_queue</code> covers the queue rules (including shuffle permutations, repeat, wrap re-shuffle) and <code>player</code> the mid-play toggles.</p>
+<p>Shuffle and repeat (Settings &gt; Shuffle / Repeat, saved; Now Playing shows small shuffle/loop icons, loop with a 1 for repeat-one): see the
+amendment in ADR-0016. UART reasons added: <code>repeat</code>, <code>wrap</code> (and <code>gapless repeat</code>, <code>gapless wrap</code>).</p>
+<p><strong>Bench, 3 Nov 2026 (Pico 2 W):</strong> <code>30-signals/gapless/</code> (3-part FLAC then 3-part LAME MP3, one queue): five <code>(gapless)</code>
+handoffs incl. FLAC → MP3, one <code>END_OF_TRACK(1)</code> per boundary, sink never re-clocked, mute line open throughout, 0 underruns.
+Next / Previous (restart when more than 3 s in, previous track within 3 s) / Next on the last track (<code>queue end</code>) correct; a skip
+while the successor was being announced leaves later joins gapless. Gapless Off: <code>(auto)</code> joins with the ramp, setting
+persists across a reboot. 44.1 → 48 kHz in <code>10-matrix/</code>: <code>(auto)</code> with a re-clock, <code>dma_underruns=0</code>, 0 underruns.</p>
+<h3 id="resume-last-track-and-position">Resume (last track and position)<a class="headerlink" href="#resume-last-track-and-position" title="Permanent link">&para;</a></h3>
+<p>The player (core 0) remembers the folder track that was playing and where (<code>app/runtime/resume.c</code>, two settings items <code>NPr0</code>/<code>NPr1</code>: track path,
+folder entry index, 64-bit file size, position in PCM frames, playing or paused; the entry, not the shuffle slot, is saved). It is stored when the user pauses or resumes, when a
+track starts (also a gapless or repeat one) and on Stop (the place is kept). Under repeat-all or repeat-one the album never ends, so the record is never cleared; without
+repeat the end of the album clears it. These calls only change the RAM image (serialised by a small mutex, as the UI and the storage task both call them); the SD write is the settings
+store's own save on the storage task (write lock opened only inside that save, nothing on core 1).</p>
+<p><strong>There is no periodic update by default.</strong> The rule "no SD writes while audio plays" stands, and a mid-track update could only be written during playback: the
+write runs on the storage task that also refills the audio data ring, so a card that stalls for 100-250 ms for one write would underrun a high-rate stream (at
+24-bit/96 kHz the rings hold only about 85-130 ms). So <strong>a power cut mid-track resumes at the last pause, resume, Stop or track start</strong>, not at the exact second.
+An opt-in build exception exists (<code>RESUME_WRITE_WHILE_PLAYING 1</code>, <code>resume.h</code>; default 0, unbenched): it adds a 30 s update (<code>RESUME_PERIOD_MS</code>) and writes it during
+playback only when the data ring plus the PCM ring hold at least 300 ms of audio (judged pessimistically as 32-bit stereo, so it rarely opens), times each such
+write, and turns itself off for the boot if one takes over 50 ms. There is no orderly-shutdown hook in the firmware yet (no power-off path); pausing before
+switching off stores the exact place.</p>
+<p>At boot, right after the settings load, the storage task lists the saved folder (only if the UI has not listed anything yet: the listing buffer is
+shared), <code>resume_plan()</code> decides, and the player opens the track (in a queue built with the saved shuffle and repeat modes: under shuffle the order is new, the track is the saved one) <strong>paused</strong> at the saved frame (nothing is played until the user presses play):
+the file is there with the same size: that frame; same name but another size: the same track from the beginning; the file is gone: the playable
+entry at the saved queue position, from its beginning; the folder cannot be read, or holds nothing playable, or the track cannot be opened: the record is discarded.</p>
+<p><strong>Resume playing on power-up</strong> (Settings, <code>NPra</code>, u8, default Off; <code>player_resume_autoplay()</code>): Off keeps the behaviour above (always paused). On: the same restore, but when the saved record says it was
+playing (<code>resume_state_t.playing</code>) the track starts playing instead of being paused (<code>player_resume_folder(..., play)</code>); a record that says paused or stopped still restores paused. The setting is read
+after the settings load and the volume restore (same task, in that order), so auto-play uses the restored volume, including the -30 dB cap for an unknown or different output path. A track that cannot be
+opened is dropped quietly in both modes.</p>
+<p><strong>Seeking to a frame</strong> (<code>track_feed_seek()</code>, core 0 only; the one core-1 change is that the FLAC decoder honours <code>skip_frames</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Codec</th>
+<th>Start position</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>WAV</td>
+<td>exact frame (the byte)</td>
+</tr>
+<tr>
+<td>ALAC (M4A)</td>
+<td>exact frame: the packet is found with the sample tables (<code>mp4_iter_seek</code>: the stsc runs and one chunk, not every packet before it) and the decoder drops the frames before the target; trimming (edit list, <code>iTunSMPB</code>) stays exact</td>
+</tr>
+<tr>
+<td>FLAC</td>
+<td>exact frame <strong>if the file has a SEEKTABLE</strong> (nearest earlier seek point, the decoder drops the rest); without one the track starts at the beginning (position 0)</td>
+</tr>
+<tr>
+<td>MP3</td>
+<td>nearest frame: from the Xing table of contents or the Fraunhofer VBRI table (VBR) or the byte proportion (CBR, within a frame; VBR roughly 1%; a file with no frame count at all uses an estimate from its first frame's bit rate), then a resync to a frame header confirmed by the one after it. The position that is then shown and saved is computed back from where the frame header really landed, so errors do not add up over repeated resumes. The first granule after the jump may be silent (bit reservoir) and the LAME end padding is no longer trimmed</td>
+</tr>
+</tbody>
+</table>
+<p><code>tools/gen_seek_vector.py</code> makes the FLAC vector with a seek table for the tests (<code>tests/test_gapless.c</code>, through the real core-1 loop).</p>
+<p><strong>Seek from Now Playing</strong> (<code>player_seek()</code>, UI-7): the same file is started again at the target frame, a hard start exactly like the boot resume, so core 1 sees an
+ordinary new stream and nothing new crosses between the cores. Consequences: a short mute (the ramp-down, the ring flush and the decoder opening; the audio core's
+underrun and storm counters are not involved); an announced gapless successor is withdrawn by the stop and the player's counters are re-based, and the stream controller
+announces it again for the restarted stream once its ring is full, so the handoff at the end of the track stays sample-exact (<code>tests/test_gapless.c</code>, seek during prefetch);
+paused stays paused (the restarted stream is paused before anything is fed). Only tracks whose <code>track_info_t.seekable</code> is set are offered it: WAV, ALAC, MP3 (UI-7: the scrub bar and the time show where an MP3 really landed, so a VBR file moves in jumps of up to about 1 % of the track), and FLAC with a SEEKTABLE and a
+known length (it is exact; without a table the only way would be decoding from the start; such a FLAC answers <code>Seek not available</code>). A target at or past the last frame is the end of the track: the queue advances as it does
+when a track plays out (repeat-one restarts it, the last track stops). Scrubbing applies one restart per rest of the wheel (0.35 s), not one per step.
+The player counts the start requests it has posted (the storage task answers each exactly once, in order) and applies only the answer to the last one, so a seek followed by another seek,
+Next or a seek to the end never shows the replaced start's track data; the answer to a replaced start that fails is ignored too. When a seek's restart is up, the new position is saved
+for resume once (<code>RESUME_EVENT</code>), not per scrub step.</p>
+<h3 id="memory-and-cpu">Memory and CPU<a class="headerlink" href="#memory-and-cpu" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Arena</td>
+<td>99 KB (101,376 bytes, <code>CODEC_ARENA_BYTES</code>). Measured high water: FLAC 4096-sample blocks 35 KB; MP3 57 to 68 KB; ALAC 16-bit 82,072 B, 24-bit 98,456 B. Computed worst cases (<code>arena_worst_cases_fit</code>): FLAC at the 8192-sample limit (4096 for 32-bit FLAC, which dr_flac stores at 8 bytes a sample) 72,128 B, MP3 56,984 B, ALAC 24-bit stereo 4096 frames 98,472 B. ALAC 24-bit is the binding case; the arena is that plus a 2 KB margin, rounded up to 1 KB</td>
+</tr>
+<tr>
+<td>Limits that follow</td>
+<td>FLAC blocks above 8192 samples (4096 for 32-bit FLAC) are rejected ("FLAC block size too large"); the synthesised header declares exactly that limit, so the decoder's sample buffer is allocated once at full size and a larger frame fails instead of growing the arena; ALAC packets of at most 16384 frames are accepted by the parser but only 4096-frame packets are guaranteed to fit; <strong>32-bit ALAC is rejected</strong> on core 0 ("32-bit ALAC not supported") and again in <code>alac_dec_init</code> on core 1, because 4096-frame 32-bit stereo needs about 115 KB of arena</td>
+</tr>
+<tr>
+<td>Data ring</td>
+<td>32 KB, 32-bit stereo 48 kHz is 85 ms</td>
+</tr>
+<tr>
+<td>PCM ring</td>
+<td><code>NEUPOD_PCM_RING_FRAMES</code> = 4096 frames, 32 KB (<code>app/os/memory_budget.h</code>): 93 ms at 44.1 kHz, 43 ms at 96 kHz. The earlier 2048 frames (46 ms / 21 ms) underran 66 times in 30 s on ALAC 16/44.1 and about 2600 times on ALAC 24/96</td>
+</tr>
+<tr>
+<td>RAM budget</td>
+<td>Arena 116 to 99 KB (-17 KB) funds the PCM ring 16 to 32 KB (+16 KB): net -1 KB. The ALAC hot paths in SRAM cost about 6.5 KB of <code>.data</code> (see below)</td>
+</tr>
+<tr>
+<td>Hot paths in SRAM</td>
+<td>ALAC <code>alac_dec_decode</code>, <code>dyn_decomp</code>, <code>unpc_block</code>, <code>unmix16/24/32</code>, <code>copyPredictorTo24/32</code> (+Shift) and the BitBuffer readers run from RAM via <code>NEUPOD_RAM_FUNC</code> (<code>app/third_party/alac/README.md</code>)</td>
+</tr>
+<tr>
+<td><strong>Measured</strong> RP2350 load of core 1 (bench, ALAC code in SRAM, ring 2048)</td>
+<td>ALAC 16/44.1: 30.2 % load, worst packet decode 27.9 ms (38.4 % and 57 ms with the code in flash), 0 underruns; ALAC 24/96: 71.7 % load, worst packet 30 ms; MP3 worst 37 ms. With the 4096-frame ring a 30 ms decode fits inside 43 ms at 96 kHz; <strong>bench 3 Nov 2026, ring 4096: ALAC 24/96 0 underruns over 60 s, 72.4 % load, worst packet 30.4 ms, lowest ring fill 1280 frames (13 ms spare), arena high water 98,456 of 101,376 B</strong>; FLAC 16/44.1 album (35 min) 0 underruns at 7 to 8 % load</td>
+</tr>
+<tr>
+<td>Host decode speed (i7-12700T, <code>-O2</code>, the test vectors, MD5 hashing included)</td>
+<td>FLAC 16/44.1: 547x real time; FLAC 24/96: 409x; MP3: 720x; ALAC 16/44.1: 322x; ALAC 24/48: 286x (<code>NEUPOD_BENCH=1 test_codecs</code>)</td>
+</tr>
+<tr>
+<td><strong>Estimated</strong> RP2350 load of core 1 (not measured)</td>
+<td>FLAC 16/44.1 about 10 to 20 %, FLAC 24/96 about 15 to 35 %, MP3 about 10 to 25 %, ALAC 16/44.1 about 20 to 35 %, ALAC 24/48 about 25 to 40 %. Basis: about 2x the x86 cycles per sample at 125 MHz, before flash cache misses (the decoder code runs from flash). The vectors are noisy, so real music should be cheaper. Measure with the line below</td>
+</tr>
+</tbody>
+</table>
+<p>The monitor prints, every 10 s, <code>audio decoder: codec=... decode_us_per_256_frames avg/max=.../... load=..% of a core ... arena_high_water=...</code>. The
+figure is the time the decoder spent per 256 output frames with the block interrupt's own time subtracted, its worst single call, and the average as a share of
+the 5.8 ms block period (at 44.1 kHz). The ALAC hot loops already run from RAM.</p>
+<h3 id="metadata">Metadata<a class="headerlink" href="#metadata" title="Permanent link">&para;</a></h3>
+<p>FLAC Vorbis comments (TITLE, ARTIST, ALBUM, TRACKNUMBER), ID3v2.2/2.3/2.4 text frames (TIT2, TPE1, TALB, TRCK; ISO-8859-1, UTF-16 and UTF-8), and MP4 <code>ilst</code>
+(<code>©nam</code>, <code>©ART</code>, <code>©alb</code>, <code>trkn</code>) are parsed on core 0 and shown on Now Playing with the format badge (<code>FLAC 24/96</code>, <code>MP3 320k</code> or <code>MP3 VBR ~192k</code>, <code>ALAC 16/44.1</code>) and the
+elapsed and remaining time. The screen font has no accented letters, so those show as an empty box. Embedded art is not read yet.</p>
+<h3 id="flac-verify-mode-check-without-listening">FLAC verify mode (check without listening)<a class="headerlink" href="#flac-verify-mode-check-without-listening" title="Permanent link">&para;</a></h3>
+<p>In Extras &gt; Files, press <strong>Right</strong> on a <code>.flac</code> (Select plays it). The decoder runs flat out with no sound, hashes every decoded sample the way FLAC defines its checksum
+(each sample as <code>ceil(bits/8)</code> little-endian bytes, channels interleaved) and compares it with the MD5 in the file's STREAMINFO at the end of the file.
+Now Playing shows <code>MD5 OK</code>, <code>MD5 MISMATCH</code> or <code>No MD5 stored in this file</code>, and the UART prints <code>verify: '&lt;name&gt;' MD5 OK</code>. A mismatch means the data from the card or the decoder is wrong, so it tests the whole path
+from the card to the decoder. (An MD5 of all zeros means the encoder did not compute one.)</p>
+<h3 id="robustness">Robustness<a class="headerlink" href="#robustness" title="Permanent link">&para;</a></h3>
+<p>Files are untrusted input. The header parsers bound every length and walk (box sizes are compared without wrapping, a box budget of 20,000, vendor and
+comment lengths checked, text conversion never writes past its buffer); ALAC rejects a partial-frame sample count above its frame length (the original
+decoder trusted it); an MP4 packet outside the file or larger than the decoder's frame buffer ends the stream; a decode that ends short of the
+announced length is an error ("File is truncated or damaged"), so a damaged FLAC can never report <code>MD5 OK</code> or <code>Finished</code>; and a codec error makes core 0 stop reading the card.
+Once a command has interrupted the decoder's wait, every further read fails until the engine has handled it. Core 1's stack has a hardware limit
+(MSPLIM) 256 bytes above its bottom, so an overflow faults instead of corrupting RAM. The tests truncate every vector at each early byte and at 40 further
+points and flip random bits (fixed seed) in all of FLAC, MP3 and M4A; <code>-DNEUPOD_HOST_ASAN=ON</code> adds <code>test_codecs_asan</code>, the same tests under AddressSanitizer
+and UBSan (signed-overflow and shift reports are switched off: the vendored decoders wrap on corrupt data, which is harmless on ARM), and
+<code>test_gapless_asan</code>, the gapless test (the real core-1 loop, every codec pair) under the same sanitizers.</p>
+<h3 id="test-vectors">Test vectors<a class="headerlink" href="#test-vectors" title="Permanent link">&para;</a></h3>
+<p><code>tests/assets/audio/</code> holds small FLAC, MP3 and M4A files with the MD5 of their source samples, made by <code>tools/gen_audio_vectors.py</code> (libsndfile via <code>uv run --no-project --with soundfile --with numpy</code>) and
+<code>tools/gen_alac_vectors.py</code> (Apple's reference ALAC encoder built from <code>tests/tools/alac_encoder/</code> with <code>g++</code>, plus a hand-written MP4 muxer). <code>ctest</code> decodes every vector and compares it bit for bit (FLAC 16-bit 44.1 kHz,
+24-bit 96 kHz and 48 kHz, mono; ALAC 16-bit, 24-bit with <code>co64</code>, mono), checks the MP3's length and level, the demuxer's sample-table maths, the tag parsers, MD5 against the RFC 1321 vectors,
+the arena (including the worst-case sizes) and the core 0 / core 1 stream handshake.</p>
+<p>Album art (<code>tests/test_art.c</code>, <code>tests/test_art_snapshot.c</code>, <code>ctest art</code>, <code>art_tour</code>, <code>art_snapshot</code>; pictures in <code>tests/assets/art/</code>, regenerated by <code>tests/tools/gen_art_assets.py</code> and
+<code>tests/tools/make_art_flacs.py</code>): decoded size, scale and quadrant colours of 4:2:0 600x600 / 500x333 / 1000x700, 4:4:4, 4:2:2 at an odd size, grey, restart markers and a tiny picture; progressive refused; truncated, junk and
+bit-flipped input; reads of 512 bytes at most and never past the picture; abort through the yield hook; cover-file ranking and the source order; APIC / PIC / PICTURE / <code>covr</code> positions including a 2 MB PNG and a 1.5 MB APIC that are not read;
+Now Playing snapshots with a cover file, an embedded JPEG, and art that cannot be shown.</p>
+<h2 id="how-to-test-bench">How to test (bench)<a class="headerlink" href="#how-to-test-bench" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Plug the Audio Pack, <strong>headphones off your head</strong> (or very low volume). Flash <code>neupod.elf</code>
+   (<code>scripts/build.sh rp2350</code>, then <code>scripts/flash.sh</code>). The splash shows the audio icon solid
+   if the PIO and DMA stream started (the DAC cannot be detected: I2S is one-way).</li>
+<li>UART keys: <code>w</code>/<code>s</code> scroll, <code>e</code> select, <code>m</code> back, <code>a</code>/<code>d</code> left/right (volume on the Test tone screen), <code>p</code> play/pause.</li>
+<li>Home: <code>s</code> x3 to Extras, <code>e</code>; <code>s</code> to Test tone, <code>e</code>. Select (<code>e</code>) on <strong>1 kHz tone</strong>. You should hear a quiet tone;
+   <code>d</code> raises the volume 1 step = 2 dB. Try the "phones" jack (gain switch low first) and the "line out" jack. If nothing is
+   audible see <a href="#mute-line-gp22">Mute line</a> — the polarity is confirmed, so do not flip <code>NEUPOD_AUDIO_UNMUTE_LEVEL</code>.</li>
+<li><code>e</code> again stops it. Try <strong>L/R ident</strong> (left ear first), then <strong>Scale</strong>.</li>
+<li>Files: Extras &gt; Files, a folder with a <code>.wav</code>, <code>.flac</code>, <code>.mp3</code> or <code>.m4a</code>, Select. Now Playing opens with the tags and format badge; the wheel (<code>w</code>/<code>s</code>) is volume; <code>p</code> pauses; <code>m</code> goes back
+   while it keeps playing. <code>d</code> (Right) on a <code>.flac</code> runs the MD5 verify instead of playing. An <code>.m4a</code> with AAC says "AAC not supported yet".</li>
+<li>Album art (see <a href="../ui/#now-playing-art">UI</a>): play tracks from folders with a <code>cover.jpg</code>, from <code>20-tags</code> (APIC files) and from <code>10-matrix/19-flac-16-44-bigpng.flac</code> (PNG: placeholder, no stall) and <code>20-flac-16-44-smalljpg.flac</code>; the UART prints <code>art: ...</code> with the source, size, decoder scale and time. Play ALAC 24/96 while art loads: <code>underruns</code> must stay 0.</li>
+<li>The UART prints every 10 s the <code>audio:</code> line (underruns must stay 0) and the <code>audio sink:</code> line
+   (actual rate, divider, <code>dma_underruns</code>, mute state, source, volume).</li>
+</ol>
+<h2 id="not-verified-on-hardware">Not verified on hardware<a class="headerlink" href="#not-verified-on-hardware" title="Permanent link">&para;</a></h2>
+<p>Everything in this page about the board's behaviour is from reading the datasheet-level behaviour of the RP2350 PIO and
+DMA and from the host build; none of it has been run on the Audio Pack. The 1 kHz tone on the Audio Pack is verified (3 Nov 2026). Specifically open: the
+DMA interrupt timing under UI load, clock jitter, 88.2/96 kHz, SD streaming throughput at 24/32-bit, the decoders' CPU load and flash-cache behaviour on the RP2350, the 16 KB core-1 stack margin under MP3 (watch <code>core1_stack_free</code> in the <code>audio:</code> line), and the real RAM headroom (about 28 KB were left in the link).</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>
