@@ -6,9 +6,32 @@
 #include "hardware/i2c.h"
 #include "pico/time.h"
 
-#define I2C_INST i2c0
-#define PIN_SDA 20u
-#define PIN_SCL 21u
+// Pico 2 W rig: I2C0 on GP20/GP21. Another board names its bus in its CMake (NEUPOD_I2C_INST / _SDA / _SCL).
+#ifndef NEUPOD_I2C_INST
+#define NEUPOD_I2C_INST i2c0
+#define NEUPOD_I2C_SDA 20u
+#define NEUPOD_I2C_SCL 21u
+#endif
+#define I2C_INST NEUPOD_I2C_INST
+#define PIN_SDA NEUPOD_I2C_SDA
+#define PIN_SCL NEUPOD_I2C_SCL
+
+// NEUPOD_I2C_ADDRS (optional): the 7-bit addresses of the devices this board really has. Any other address answers NACK without
+// touching the bus, so firmware written for another board's parts (the MAX17048 gauge, the DRV2605L haptic driver) can probe for
+// them without interfering with the touch controller that shares the bus.
+#ifdef NEUPOD_I2C_ADDRS
+static bool addr_exists(uint8_t addr) {
+    static const uint8_t k_addrs[] = {NEUPOD_I2C_ADDRS};
+    for (size_t i = 0; i < sizeof k_addrs; i++) {
+        if (k_addrs[i] == addr) {
+            return true;
+        }
+    }
+    return false;
+}
+#else
+#define addr_exists(a) true
+#endif
 
 #define BAUD_MIN 10000u
 #define BAUD_MAX 1000000u
@@ -228,6 +251,10 @@ static hal_i2c_err_t check(uint8_t addr, const void *p, size_t len) {
         len > HAL_I2C_MAX_XFER) { // reserved ranges 0x00-0x07 / 0x78-0x7F
         return HAL_I2C_BAD_PARAM;
     }
+    if (!addr_exists(addr)) {
+        s_stats.nack_addr++;
+        return HAL_I2C_NACK_ADDR;
+    }
     return HAL_I2C_OK;
 }
 
@@ -237,6 +264,10 @@ hal_i2c_err_t hal_i2c_probe(uint8_t addr) {
     }
     if (addr < HAL_I2C_ADDR_FIRST || addr > HAL_I2C_ADDR_LAST) {
         return HAL_I2C_BAD_PARAM;
+    }
+    if (!addr_exists(addr)) {
+        s_stats.probe_nacks++;
+        return HAL_I2C_NACK_ADDR;
     }
     uint8_t b;
     return finish(i2c_read_timeout_us(I2C_INST, addr, &b, 1, false, timeout_us(1)), 1, true);
