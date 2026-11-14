@@ -42,6 +42,9 @@ if(NEUPOD_PLATFORM STREQUAL "rp2350")
   set(CMAKE_CXX_STANDARD 17)
   pico_sdk_init()
   add_compile_definitions(NEUPOD_RP2350=1)
+  if(NEUPOD_BOARD STREQUAL "amoled241")
+    add_compile_definitions(NEUPOD_BOARD_AMOLED241=1) # Waveshare RP2350-Touch-AMOLED-2.41: no radio, no wheel, touch + 600x450 panel
+  endif()
 
   # FreeRTOS SMP (RP2350 port) must exist before app/, which links it. Also defines the SD-card
   # and cyw43 arch glue the runtime needs.

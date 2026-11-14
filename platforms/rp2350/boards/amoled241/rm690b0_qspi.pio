@@ -1,0 +1,26 @@
+; SPDX-License-Identifier: MPL-2.0
+;
+; QSPI transmitter for the RM690B0 AMOLED controller (write only). One state machine drives CLK (side-set pin) and the four data
+; lines D0..D3 (out pins). Each 4-bit nibble takes two PIO cycles: data changes while CLK is low, the controller samples on the
+; rising edge, so SCLK = PIO clock / 2. The OSR shifts left (MSB first) and autopulls at 16 bits: a 16-bit DMA write of an RGB565
+; pixel in native byte order therefore goes out high byte first, high nibble first, which is the order the controller wants.
+; Commands, addresses and register parameters use only D0 ("1-wire"): the driver sends each bit as a nibble 0 or 1 (hal_display).
+.program rm690b0_qspi
+.side_set 1
+
+.wrap_target
+    out pins, 4   side 0
+    nop           side 1
+.wrap
+
+% c-sdk {
+static inline pio_sm_config rm690b0_qspi_make_config(uint offset, uint clk_pin, uint d0_pin) {
+    pio_sm_config c = rm690b0_qspi_program_get_default_config(offset);
+    sm_config_set_sideset_pins(&c, clk_pin);
+    sm_config_set_out_pins(&c, d0_pin, 4);
+    sm_config_set_out_shift(&c, false, true, 16); // MSB first, autopull every 16 bits
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+    sm_config_set_clkdiv(&c, 1.0f);
+    return c;
+}
+%}

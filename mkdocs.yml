@@ -48,6 +48,7 @@ nav:
       - Click-wheel protocol: click-wheel-protocol.md
       - Display bring-up tests: display-tests.md
       - microSD storage and tests: storage.md
+      - Waveshare RP2350 AMOLED dev board: rp2350-amoled241.md
       - I2C peripherals (fuel gauge, haptics): i2c-peripherals.md
       - Bench practice and test order: bench.md
   - Decisions:

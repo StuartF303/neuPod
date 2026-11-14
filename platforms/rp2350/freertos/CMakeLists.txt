@@ -16,21 +16,25 @@ include(${FREERTOS_KERNEL_PATH}/portable/ThirdParty/GCC/RP2350_ARM_NTZ/FreeRTOS_
 
 add_library(neupod_freertos INTERFACE)
 target_include_directories(neupod_freertos INTERFACE ${CMAKE_SOURCE_DIR}/app/os)
-target_link_libraries(neupod_freertos INTERFACE
-  FreeRTOS-Kernel-Heap4
-  # cyw43 flavour: pico_cyw43_arch_sys_freertos (no lwIP yet). The driver's worker task is created
-  # on core 0, where the kernel runs (see docs/runtime.md).
-  pico_cyw43_arch_lwip_sys_freertos
-)
+target_link_libraries(neupod_freertos INTERFACE FreeRTOS-Kernel-Heap4)
+if(NOT NEUPOD_BOARD STREQUAL "amoled241") # the amoled241 board has no radio: no CYW43 driver, no lwIP, no BTstack
+  target_link_libraries(neupod_freertos INTERFACE
+    # cyw43 flavour: pico_cyw43_arch_sys_freertos (no lwIP yet). The driver's worker task is created
+    # on core 0, where the kernel runs (see docs/runtime.md).
+    pico_cyw43_arch_lwip_sys_freertos
+  )
+endif()
 target_include_directories(neupod_freertos INTERFACE ${CMAKE_SOURCE_DIR}/platforms/rp2350/lwip)
-# SDK knobs for the cyw43 worker task: low-ish priority (RT_PRIO_RADIO), 6 KB of stack (words). This task is also
-# BTstack's thread (docs/bluetooth.md): every BTstack callback, and our event handlers, run on it.
-target_compile_definitions(neupod_freertos INTERFACE
-  CYW43_TASK_PRIORITY=3
-  CYW43_TASK_STACK_SIZE=1536
-  # Bluetooth. The SDK sets this through pico_btstack_hci_transport_cyw43, which only the targets that link it see;
-  # but cyw43_arch_init() is compiled into several of the static libraries that link neupod_freertos, and every copy must
-  # agree (it decides whether cyw43_arch_init() starts BTstack). The BTstack sources themselves are linked once, in hal_rp2350_rtos.
-  CYW43_ENABLE_BLUETOOTH=1
-  PICO_CYW43_ARCH_DEFAULT_COUNTRY_CODE=CYW43_COUNTRY_UK  # channels 1-13
-)
+if(NOT NEUPOD_BOARD STREQUAL "amoled241")
+  # SDK knobs for the cyw43 worker task: low-ish priority (RT_PRIO_RADIO), 6 KB of stack (words). This task is also
+  # BTstack's thread (docs/bluetooth.md): every BTstack callback, and our event handlers, run on it.
+  target_compile_definitions(neupod_freertos INTERFACE
+    CYW43_TASK_PRIORITY=3
+    CYW43_TASK_STACK_SIZE=1536
+    # Bluetooth. The SDK sets this through pico_btstack_hci_transport_cyw43, which only the targets that link it see;
+    # but cyw43_arch_init() is compiled into several of the static libraries that link neupod_freertos, and every copy must
+    # agree (it decides whether cyw43_arch_init() starts BTstack). The BTstack sources themselves are linked once, in hal_rp2350_rtos.
+    CYW43_ENABLE_BLUETOOTH=1
+    PICO_CYW43_ARCH_DEFAULT_COUNTRY_CODE=CYW43_COUNTRY_UK  # channels 1-13
+  )
+endif()

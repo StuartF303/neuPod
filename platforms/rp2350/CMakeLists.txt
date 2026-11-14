@@ -1,4 +1,13 @@
-# RP2350 (Pico 2 W) platform. Entered from the top-level CMakeLists.txt after pico_sdk_init().
+# RP2350 platform. Entered from the top-level CMakeLists.txt after pico_sdk_init().
+# Board: -DNEUPOD_BOARD=pico2w (default, the Pico 2 W bench rig) or amoled241 (Waveshare RP2350-Touch-AMOLED-2.41, no radio, no wheel,
+# 600x450 touch AMOLED, SD over SPI, serial over USB). The board is chosen in sdk_import.cmake (it selects the SDK's board header);
+# here it selects the per-board HAL files. The amoled241 build is the "neupod" runtime image only: the bare-metal display / i2c /
+# storage test executables are Pico 2 W tools.
+set(NEUPOD_BOARD_DIR ${CMAKE_CURRENT_LIST_DIR}/boards/amoled241)
+if(NEUPOD_BOARD STREQUAL "amoled241")
+  # No audio hardware: the null sink (a virtual real-time clock; no pins touched).
+  set(NEUPOD_AUDIO_SINK null CACHE STRING "Audio sink for the RP2350 build: i2s or null" FORCE)
+endif()
 
 # HAL in three layers. hal_rp2350_core holds everything that does not care about the scheduler.
 # hal_rp2350 (bare metal: the display/storage/i2c test executables) and hal_rp2350_rtos (the
@@ -22,10 +31,21 @@ set_property(CACHE NEUPOD_AUDIO_UNMUTE_LEVEL PROPERTY STRINGS 0 1)
 add_compile_definitions(NEUPOD_AUDIO_UNMUTE_LEVEL=${NEUPOD_AUDIO_UNMUTE_LEVEL}u)
 message(STATUS "neuPod audio unmute level on GP22: ${NEUPOD_AUDIO_UNMUTE_LEVEL}")
 
+if(NEUPOD_BOARD STREQUAL "amoled241")
+  set(NEUPOD_DISPLAY_SRC ${NEUPOD_BOARD_DIR}/hal_display_rm690b0.c)
+  set(NEUPOD_INPUT_SRC ${NEUPOD_BOARD_DIR}/hal_input_amoled.c)
+  set(NEUPOD_BOARD_CORE_SRC ${NEUPOD_BOARD_DIR}/hal_touch_ft6336.c)
+else()
+  set(NEUPOD_DISPLAY_SRC hal/hal_display.c)
+  set(NEUPOD_INPUT_SRC hal/hal_input.c)
+  set(NEUPOD_BOARD_CORE_SRC "")
+endif()
+
 add_library(hal_rp2350_core STATIC
-  hal/hal_display.c
+  ${NEUPOD_DISPLAY_SRC}
   hal/hal_console.c
-  hal/hal_input.c
+  ${NEUPOD_INPUT_SRC}
+  ${NEUPOD_BOARD_CORE_SRC}
   hal/hal_i2c.c
   ${NEUPOD_AUDIO_SINK_SRC}   # core-1 code: no RTOS dependency (ADR-0011), shared by both builds
   hal/hal_audio_vclk.c       # the virtual block clock: the null sink, and the I2S sink's Bluetooth mode
@@ -50,46 +70,80 @@ set_source_files_properties(hal/hal_core.c hal/hal_i2c.c i2c_test_main.c ${CMAKE
   hal/hal_system.c hal/bt_port_cyw43.c hal/hal_wifi.c hal/hal_display.c hal/hal_console.c hal/hal_input.c hal/hal_audio.c hal/hal_audio_null.c hal/hal_audio_vclk.c main.c
   ${CMAKE_SOURCE_DIR}/hal/common/bt_btstack/bt_btstack.c ${CMAKE_SOURCE_DIR}/hal/common/bt_btstack/bt_link_policy.c
   display_test_main.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
-pico_generate_pio_header(hal_rp2350_core ${CMAKE_CURRENT_LIST_DIR}/hal/clickwheel_rx.pio)
+if(NEUPOD_BOARD STREQUAL "amoled241")
+  pico_generate_pio_header(hal_rp2350_core ${NEUPOD_BOARD_DIR}/rm690b0_qspi.pio)
+  set_source_files_properties(${NEUPOD_BOARD_DIR}/hal_display_rm690b0.c ${NEUPOD_BOARD_DIR}/hal_input_amoled.c
+    ${NEUPOD_BOARD_DIR}/hal_touch_ft6336.c ${NEUPOD_BOARD_DIR}/hal_radio_none.c ${NEUPOD_BOARD_DIR}/hal_storage_spi.c
+    ${NEUPOD_BOARD_DIR}/hw_config.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+  # Landscape direction of the panel and the touch mapping (board.h); touch points on the console while bringing the board up.
+  set(NEUPOD_AMOLED_LANDSCAPE 1 CACHE STRING "amoled241 landscape rotation: 1 (default) or 3 (turned by 180 degrees)")
+  set_property(CACHE NEUPOD_AMOLED_LANDSCAPE PROPERTY STRINGS 1 3)
+  option(NEUPOD_AMOLED_TOUCH_LOG "amoled241: log touch down / move / up with raw and mapped coordinates on the console" ON)
+  target_include_directories(hal_rp2350_core PUBLIC ${NEUPOD_BOARD_DIR})
+  target_compile_definitions(hal_rp2350_core PUBLIC
+    NEUPOD_AMOLED_LANDSCAPE=${NEUPOD_AMOLED_LANDSCAPE}
+    NEUPOD_TOUCH_LOG=$<BOOL:${NEUPOD_AMOLED_TOUCH_LOG}>
+    # I2C1 on GP6/GP7 (shared by touch, RTC and IMU). Only the addresses of parts the board has are reachable, so the boot checks for
+    # the Pico 2 W's fuel gauge (0x36) and haptic driver (0x5A) answer "absent" without disturbing the touch controller.
+    NEUPOD_I2C_INST=i2c1 NEUPOD_I2C_SDA=6u NEUPOD_I2C_SCL=7u "NEUPOD_I2C_ADDRS=0x38,0x51,0x6A,0x6B")
+else()
+  pico_generate_pio_header(hal_rp2350_core ${CMAKE_CURRENT_LIST_DIR}/hal/clickwheel_rx.pio)
+endif()
 if(NEUPOD_AUDIO_SINK STREQUAL "i2s")
   pico_generate_pio_header(hal_rp2350_core ${CMAKE_CURRENT_LIST_DIR}/hal/neupod_i2s.pio)
 endif()
 
-# Bare metal: the SDK's threadsafe-background cyw43 arch (the LED lives on the CYW43439).
-add_library(hal_rp2350 STATIC hal/hal_system.c)
-target_link_libraries(hal_rp2350 PUBLIC hal_rp2350_core pico_cyw43_arch_none)
+if(NEUPOD_BOARD STREQUAL "amoled241")
+  # No radio: the FreeRTOS HAL is the system layer plus the "not present" radio; no CYW43, lwIP or BTstack. (No bare-metal HAL: the
+  # display / i2c / storage test executables are not built for this board.)
+  add_library(hal_rp2350_rtos STATIC hal/hal_system.c ${NEUPOD_BOARD_DIR}/hal_radio_none.c)
+  target_compile_definitions(hal_rp2350_rtos PRIVATE NEUPOD_RTOS=1)
+  target_link_libraries(hal_rp2350_rtos PUBLIC hal_rp2350_core neupod_freertos)
+else()
+  # Bare metal: the SDK's threadsafe-background cyw43 arch (the LED lives on the CYW43439).
+  add_library(hal_rp2350 STATIC hal/hal_system.c)
+  target_link_libraries(hal_rp2350 PUBLIC hal_rp2350_core pico_cyw43_arch_none)
 
-# FreeRTOS (single-core, core 0): pico_cyw43_arch_sys_freertos (via neupod_freertos). Radio bring-up
-# waits for the scheduler (hal_system_late_init).
-add_library(hal_rp2350_rtos STATIC hal/hal_system.c hal/bt_port_cyw43.c hal/hal_wifi.c
-  ${CMAKE_SOURCE_DIR}/hal/common/bt_btstack/bt_btstack.c ${CMAKE_SOURCE_DIR}/hal/common/bt_btstack/bt_link_policy.c)
-target_compile_definitions(hal_rp2350_rtos PRIVATE NEUPOD_RTOS=1)
-target_link_libraries(hal_rp2350_rtos PUBLIC hal_rp2350_core neupod_freertos)
+  # FreeRTOS (single-core, core 0): pico_cyw43_arch_sys_freertos (via neupod_freertos). Radio bring-up
+  # waits for the scheduler (hal_system_late_init).
+  add_library(hal_rp2350_rtos STATIC hal/hal_system.c hal/bt_port_cyw43.c hal/hal_wifi.c
+    ${CMAKE_SOURCE_DIR}/hal/common/bt_btstack/bt_btstack.c ${CMAKE_SOURCE_DIR}/hal/common/bt_btstack/bt_link_policy.c)
+  target_compile_definitions(hal_rp2350_rtos PRIVATE NEUPOD_RTOS=1)
+  target_link_libraries(hal_rp2350_rtos PUBLIC hal_rp2350_core neupod_freertos)
 
-# Bluetooth classic: BTstack from the Pico SDK (lib/btstack, v1.6.2) on the CYW43 async context. Deliberately NOT
-# pico_btstack_cyw43 (it pulls pico_btstack_flash_bank / pico_flash: run-time flash writes, which stall core 1, see
-# docs/bluetooth.md); bt_port_cyw43.c supplies btstack_cyw43_init() instead; the link logic is hal/common/bt_btstack/ (link keys: the SD-backed settings store).
-# pico_btstack_sbc_encoder is linked now to prove it builds; nothing references it until stage 2, so it adds no flash.
-if(NOT TARGET pico_btstack_classic)
-  message(FATAL_ERROR "BTstack is missing from the Pico SDK. Run: git -C $ENV{PICO_SDK_PATH} submodule update --init lib/btstack")
+  # Bluetooth classic: BTstack from the Pico SDK (lib/btstack, v1.6.2) on the CYW43 async context. Deliberately NOT
+  # pico_btstack_cyw43 (it pulls pico_btstack_flash_bank / pico_flash: run-time flash writes, which stall core 1, see
+  # docs/bluetooth.md); bt_port_cyw43.c supplies btstack_cyw43_init() instead; the link logic is hal/common/bt_btstack/ (link keys: the SD-backed settings store).
+  # pico_btstack_sbc_encoder is linked now to prove it builds; nothing references it until stage 2, so it adds no flash.
+  if(NOT TARGET pico_btstack_classic)
+    message(FATAL_ERROR "BTstack is missing from the Pico SDK. Run: git -C $ENV{PICO_SDK_PATH} submodule update --init lib/btstack")
+  endif()
+  target_include_directories(hal_rp2350_rtos PUBLIC ${CMAKE_CURRENT_LIST_DIR}/btstack)
+  target_include_directories(hal_rp2350_rtos PRIVATE ${CMAKE_SOURCE_DIR}/hal/common/bt_btstack)
+  target_link_libraries(hal_rp2350_rtos PUBLIC
+    pico_btstack_classic
+    pico_btstack_hci_transport_cyw43
+    pico_btstack_run_loop_async_context
+    pico_btstack_sbc_encoder
+    pico_lwip_sntp
+    pico_lwip_http
+  )
+
 endif()
-target_include_directories(hal_rp2350_rtos PUBLIC ${CMAKE_CURRENT_LIST_DIR}/btstack)
-target_include_directories(hal_rp2350_rtos PRIVATE ${CMAKE_SOURCE_DIR}/hal/common/bt_btstack)
-target_link_libraries(hal_rp2350_rtos PUBLIC
-  pico_btstack_classic
-  pico_btstack_hci_transport_cyw43
-  pico_btstack_run_loop_async_context
-  pico_btstack_sbc_encoder
-  pico_lwip_sntp
-  pico_lwip_http
-)
 
 add_executable(neupod main.c)
 target_link_libraries(neupod neupod_runtime neupod_drivers hal_rp2350_rtos hal_rp2350_storage_rtos)
 
-# stdio over UART0 (GP0 TX / GP1 RX -> Debug Probe UART), not USB
-pico_enable_stdio_uart(neupod 1)
-pico_enable_stdio_usb(neupod 0)
+if(NEUPOD_BOARD STREQUAL "amoled241")
+  # The board's UART0 pins are not brought out to anything: the console is the USB serial port (CDC), UART0 stays on as well (the panic
+  # path writes to it). The SDK's USB reset interface stays on, so `picotool load -f -x` reboots a running image into BOOTSEL.
+  pico_enable_stdio_uart(neupod 1)
+  pico_enable_stdio_usb(neupod 1)
+else()
+  # stdio over UART0 (GP0 TX / GP1 RX -> Debug Probe UART), not USB
+  pico_enable_stdio_uart(neupod 1)
+  pico_enable_stdio_usb(neupod 0)
+endif()
 
 pico_add_extra_outputs(neupod)
 
@@ -101,19 +155,21 @@ add_custom_command(TARGET neupod POST_BUILD
   COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_core1_closure.py ${CMAKE_OBJDUMP} $<TARGET_FILE:neupod>
   COMMENT "Checking the audio core's call closure (core-1 rules)")
 
-# Interactive display test menu over UART for the ST7789 (flash with: scripts/flash.sh rp2350 display_test)
-add_executable(display_test display_test_main.c)
-target_link_libraries(display_test neupod_app hal_rp2350)
-pico_enable_stdio_uart(display_test 1)
-pico_enable_stdio_usb(display_test 0)
-pico_add_extra_outputs(display_test)
+if(NOT NEUPOD_BOARD STREQUAL "amoled241")
+  # Interactive display test menu over UART for the ST7789 (flash with: scripts/flash.sh rp2350 display_test)
+  add_executable(display_test display_test_main.c)
+  target_link_libraries(display_test neupod_app hal_rp2350)
+  pico_enable_stdio_uart(display_test 1)
+  pico_enable_stdio_usb(display_test 0)
+  pico_add_extra_outputs(display_test)
 
-# Interactive I2C test menu over UART (fuel gauge + haptic driver; flash with: scripts/flash.sh rp2350 i2c_test)
-add_executable(i2c_test i2c_test_main.c)
-target_link_libraries(i2c_test neupod_i2c_tests hal_rp2350)
-pico_enable_stdio_uart(i2c_test 1)
-pico_enable_stdio_usb(i2c_test 0)
-pico_add_extra_outputs(i2c_test)
+  # Interactive I2C test menu over UART (fuel gauge + haptic driver; flash with: scripts/flash.sh rp2350 i2c_test)
+  add_executable(i2c_test i2c_test_main.c)
+  target_link_libraries(i2c_test neupod_i2c_tests hal_rp2350)
+  pico_enable_stdio_uart(i2c_test 1)
+  pico_enable_stdio_usb(i2c_test 0)
+  pico_add_extra_outputs(i2c_test)
+endif()
 
 # --- microSD (SDIO over PIO) ---------------------------------------------------------------------
 # carlk3's no-OS-FatFS-SD-SDIO-SPI-RPi-Pico (Apache-2.0), a git submodule pinned to a release tag.
@@ -160,10 +216,15 @@ set(NEUPOD_LIBRARY_SRC
 # The runtime's library service and Music screens use the library's types (library.h includes ff.h for the reader's FIL objects): give them the
 # same FatFs headers and configuration the library files are built with.
 target_include_directories(neupod_runtime BEFORE PRIVATE ${CMAKE_CURRENT_LIST_DIR}/ffconf ${NEUPOD_SD_LIB_DIR}/src/ff15/source)
+if(NEUPOD_BOARD STREQUAL "amoled241")
+  # The TF slot is wired for SPI (SPI0): the same library, its SPI interface (docs/rp2350-amoled241.md).
+  set(NEUPOD_STORAGE_SRC ${NEUPOD_BOARD_DIR}/hal_storage_spi.c ${NEUPOD_BOARD_DIR}/hw_config.c)
+else()
+  set(NEUPOD_STORAGE_SRC hal/hal_storage.c hal/hw_config.c)
+endif()
 function(neupod_add_storage_lib name)
   add_library(${name} STATIC
-    hal/hal_storage.c
-    hal/hw_config.c
+    ${NEUPOD_STORAGE_SRC}
     ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c
     ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c   # portable file API on the library's FatFs
     ${NEUPOD_LIBRARY_SRC}                          # music library index (ADR-0017): FatFs through the library's ff.h; linked only when used
@@ -175,7 +236,9 @@ function(neupod_add_storage_lib name)
   # Library error messages (bus errors, timeouts) go to the UART console.
   target_compile_definitions(${name} PUBLIC USE_PRINTF)
 endfunction()
-neupod_add_storage_lib(hal_rp2350_storage)
+if(NOT NEUPOD_BOARD STREQUAL "amoled241")
+  neupod_add_storage_lib(hal_rp2350_storage)
+endif()
 # Same sources for the runtime, built against the SDK's FreeRTOS adapter: the SD library embeds
 # pico_sync mutexes in its structs, whose layout changes with the adapter, so one copy cannot serve both.
 neupod_add_storage_lib(hal_rp2350_storage_rtos neupod_freertos)
@@ -183,17 +246,19 @@ set_source_files_properties(hal/hal_storage.c hal/hw_config.c storage_test_main.
   ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c ${NEUPOD_LIBRARY_SRC}
   PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
-# microSD test menu (flash with: scripts/flash.sh rp2350 storage_test)
-add_executable(storage_test storage_test_main.c)
-target_link_libraries(storage_test neupod_storage_tests hal_rp2350 hal_rp2350_storage)
-# 4 KB main stack (the default is 2 KB). That is the maximum: core 0's stack lives in the 4 KB
-# SCRATCH_Y bank (0x4000 does not link: "region SCRATCH_Y overflowed"). FatFs (LFN buffers are
-# on the heap) plus the test menu are shallow enough; the stack high-water mark is printed after
-# every test (hal_stack_free_min) so any margin problem shows up on the bench.
-target_compile_definitions(storage_test PRIVATE PICO_STACK_SIZE=0x1000)
-pico_enable_stdio_uart(storage_test 1)
-pico_enable_stdio_usb(storage_test 0)
-pico_add_extra_outputs(storage_test)
+if(NOT NEUPOD_BOARD STREQUAL "amoled241")
+  # microSD test menu (flash with: scripts/flash.sh rp2350 storage_test)
+  add_executable(storage_test storage_test_main.c)
+  target_link_libraries(storage_test neupod_storage_tests hal_rp2350 hal_rp2350_storage)
+  # 4 KB main stack (the default is 2 KB). That is the maximum: core 0's stack lives in the 4 KB
+  # SCRATCH_Y bank (0x4000 does not link: "region SCRATCH_Y overflowed"). FatFs (LFN buffers are
+  # on the heap) plus the test menu are shallow enough; the stack high-water mark is printed after
+  # every test (hal_stack_free_min) so any margin problem shows up on the bench.
+  target_compile_definitions(storage_test PRIVATE PICO_STACK_SIZE=0x1000)
+  pico_enable_stdio_uart(storage_test 1)
+  pico_enable_stdio_usb(storage_test 0)
+  pico_add_extra_outputs(storage_test)
+endif()
 
 # The crypto library needs hal_chip_id() / hal_random().
 target_link_libraries(neupod_crypto PUBLIC hal_rp2350_rtos)
