@@ -33,7 +33,7 @@
 
 #define I2C_ADDR_TCA9554 0x20
 #define I2C_ADDR_FT6336  0x38
-#define I2C_ADDR_QMI8658 0x6A
+#define I2C_ADDR_QMI8658 0x6B  /* scan on the bench 14 Nov 2026: 0x6B (SA0 high), as on the RP2350 sibling */
 #define I2C_ADDR_PCF85063 0x51
 
 // Panel native geometry is 450 x 600 (portrait); the probe presents 600 x 450 landscape.

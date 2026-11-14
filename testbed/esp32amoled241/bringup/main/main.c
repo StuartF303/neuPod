@@ -40,7 +40,7 @@ static void step_chip(void)
     bool ok = flash_sz == 16u * 1024 * 1024 && ps >= 7u * 1024 * 1024;
     res_set(R_BOOT, ok ? ST_PASS : ST_FAIL,
             "ESP32-S3 rev v%d.%d, %d cores, %s PSRAM; flash %u MB (JEDEC 0x%06X); PSRAM %u KB; free heap internal %u KB, PSRAM %u KB; reset reason %d",
-            ci.revision / 100, ci.revision % 100, ci.cores, (ci.features & CHIP_FEATURE_EMB_PSRAM) ? "embedded" : "no",
+            ci.revision / 100, ci.revision % 100, ci.cores, (ci.features & CHIP_FEATURE_EMB_PSRAM) ? "embedded" : "efuse flag clear for",
             (unsigned)(flash_sz >> 20), (unsigned)jedec, (unsigned)(ps >> 10),
             (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) >> 10),
             (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) >> 10), (int)esp_reset_reason());

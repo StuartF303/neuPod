@@ -72,7 +72,7 @@ void periph_i2c_scan(void)
         }
     }
     bool all = want[0] && want[1] && want[2] && want[3];
-    res_set(R_I2C, all ? ST_PASS : ST_FAIL, "%d found: %s| need TCA 0x20=%d touch 0x38=%d rtc 0x51=%d imu 0x6A=%d",
+    res_set(R_I2C, all ? ST_PASS : ST_FAIL, "%d found: %s| need TCA 0x20=%d touch 0x38=%d rtc 0x51=%d imu 0x6B=%d",
             found, list, want[0], want[1], want[2], want[3]);
 }
 
