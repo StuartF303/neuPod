@@ -101,6 +101,8 @@ jobs:
     container: espressif/idf:v5.3.2
     steps:
       - uses: actions/checkout@v7
+      - name: Fetch submodules
+        run: git submodule update --init lib/lvgl
       - name: Build
         shell: bash
         run: |

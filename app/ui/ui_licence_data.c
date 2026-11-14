@@ -41,10 +41,10 @@ static const ui_licence_t k_licences[] = {
     {"BTstack", "Non-commercial",
      "BlueKitchen GmbH. Free for non-commercial use only: any commercial product needs a licence from BlueKitchen (bluekitchen-gmbh.com). "
      "On Raspberry Pi hardware a separate grant applies (not on the Y2 testbed). LICENSE.md in the source has the details.",
-     "BTstack (BlueKitchen GmbH)", "non-commercial", false},
+     "BTstack (BlueKitchen GmbH)", "non-commercial", false, false, true},
     {"Android SBC codec", "Apache-2.0",
      "Bluedroid SBC from the Android project, copyright Broadcom 1999-2012, inside BTstack. It encodes the audio sent to a Bluetooth headset.",
-     "Bluedroid SBC", "Apache", false},
+     "Bluedroid SBC", "Apache", false, false, true},
     {"lwIP", "BSD-3-Clause",
      "Copyright Swedish Institute of Computer Science (Adam Dunkels). The network stack behind Wi-Fi.", "lwIP", "BSD-3-Clause", true},
     {"cyw43-driver", "Non-commercial",
@@ -54,12 +54,24 @@ static const ui_licence_t k_licences[] = {
      "no-OS-FatFS-SD-SDIO-SPI-RPi-Pico by Carl John Kugler III. Talks to the memory card on the RP2350 board.", "no-OS-FatFS-SD-SDIO-SPI-RPi-Pico",
      "Apache-2.0", true},
     {"Pico SDK", "BSD-3-Clause", "Copyright Raspberry Pi (Trading) Ltd. The support library of the RP2350 chip.", "Pico SDK", "BSD-3-Clause", true},
+    {"ESP-IDF", "Apache-2.0",
+     "Copyright Espressif Systems. The support library of the ESP32-S3 chip: it runs the tasks, drives the screen, the touch panel and the memory card. "
+     "It brings its own FreeRTOS (MIT) and mbed TLS (Apache-2.0 option).",
+     "ESP-IDF v5.3.2", "Apache-2.0", false, true},
 };
 
 #define N_LICENCES (sizeof k_licences / sizeof k_licences[0])
 
 static bool shown(const ui_licence_t *l, const char *platform) {
-    return !l->rp2350_only || (platform != NULL && (strcmp(platform, "rp2350") == 0 || strcmp(platform, "host") == 0));
+    bool host = platform != NULL && strcmp(platform, "host") == 0;
+    bool esp = platform != NULL && strcmp(platform, "esp32s3") == 0;
+    if (l->esp32s3_only) {
+        return esp || host;
+    }
+    if (l->not_esp32s3 && esp) {
+        return false;
+    }
+    return !l->rp2350_only || host || (platform != NULL && strcmp(platform, "rp2350") == 0);
 }
 
 const ui_licence_t *ui_licence_all(size_t *count) {

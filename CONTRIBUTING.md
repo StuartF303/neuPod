@@ -36,8 +36,10 @@ Requires `arm-none-eabi-gcc`, CMake ≥ 3.13, Ninja and Pico SDK ≥ 2.1 with `P
 
 ### ESP32-S3 — comparison
 
-Requires ESP-IDF ≥ 5.3 (`scripts/setup-esp-idf.sh` installs it to `~/esp/esp-idf`).
+Requires ESP-IDF ≥ 5.3 (`scripts/setup-esp-idf.sh` installs it to `~/esp/esp-idf`; CI uses the `espressif/idf:v5.3.2` image) and the
+`lib/lvgl` submodule. Builds the full runtime for the Waveshare ESP32-S3-Touch-AMOLED-2.41 ([ESP32-S3](docs/esp32s3.md)).
 
+    git submodule update --init lib/lvgl
     . ~/esp/esp-idf/export.sh
     scripts/build.sh esp32s3
 

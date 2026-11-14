@@ -29,7 +29,7 @@ Phase 1 testbed (Pico 2 W on a breadboard):
 | Wi-Fi | ⬜ |
 | USB MSC | ⬜ |
 | Host build + unit tests | ✅ |
-| ESP32-S3 build | ⬜ skeleton, not yet built |
+| ESP32-S3 build (Waveshare ESP32-S3-Touch-AMOLED-2.41 dev board: full runtime, null audio sink, no radio yet; [ESP32-S3](docs/esp32s3.md)) | 🟡 builds in CI; boots and runs on the board |
 
 ✅ working · 🟡 code written, not yet tested on hardware · ⬜ not started
 
@@ -62,7 +62,7 @@ neuPod/
 │   └── host/            SDL2 desktop implementation
 ├── platforms/
 │   ├── rp2350/          Pico SDK build entry + RP2350 HAL
-│   ├── esp32s3/         ESP-IDF project skeleton + ESP32-S3 HAL
+│   ├── esp32s3/         ESP-IDF project: full runtime + HAL for the Waveshare ESP32-S3-Touch-AMOLED-2.41
 │   └── y2/              Innioasis Y2 testbed (Linux, armv7): same firmware as a process, Y2 HALs
 ├── lib/                 submodules: SD driver, FreeRTOS-Kernel (RP2350 SMP port), LVGL
 ├── tests/               host unit tests + headless runtime smoke test

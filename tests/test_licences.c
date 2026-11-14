@@ -81,17 +81,40 @@ TEST(entries_are_complete_unique_and_short) {
 TEST(the_y2_does_not_list_the_rp2350_only_parts) {
     size_t all;
     ui_licence_all(&all);
+    size_t esp_only = 0;
+    const ui_licence_t *l = ui_licence_all(NULL);
+    for (size_t i = 0; i < all; i++) {
+        esp_only += l[i].esp32s3_only ? 1u : 0u;
+    }
     size_t rp = ui_licence_count("rp2350"), y2 = ui_licence_count("y2"), host = ui_licence_count("host");
-    ASSERT_EQ(all, rp);
+    ASSERT_EQ(all - esp_only, rp); // everything but the ESP32-S3's own SDK
     ASSERT_EQ(all, host); // the simulator shows everything (the tour)
     ASSERT_TRUE(y2 < all && y2 >= 10);
     for (size_t i = 0; i < y2; i++) {
         ASSERT_FALSE(ui_licence_get("y2", i)->rp2350_only);
+        ASSERT_FALSE(ui_licence_get("y2", i)->esp32s3_only);
     }
     ASSERT_TRUE(ui_licence_get("y2", y2) == NULL);
     ASSERT_TRUE(ui_licence_get("y2", 0) != NULL);
     ASSERT_EQ(0, strcmp("neuPod firmware", ui_licence_get("y2", 0)->name));
     ASSERT_EQ(y2, ui_licence_count(NULL)); // no platform: nothing RP2350-only
+}
+
+TEST(the_esp32s3_lists_its_own_sdk_and_not_what_it_does_not_contain) {
+    size_t n = ui_licence_count("esp32s3");
+    ASSERT_TRUE(n >= 10);
+    bool idf = false;
+    for (size_t i = 0; i < n; i++) {
+        const ui_licence_t *e = ui_licence_get("esp32s3", i);
+        ASSERT_FALSE(e->rp2350_only); // no lwIP, SD driver or Pico SDK here
+        ASSERT_FALSE(e->not_esp32s3); // no BTstack or SBC codec here (Classic Bluetooth is not on this chip)
+        idf = idf || strcmp(e->name, "ESP-IDF") == 0;
+    }
+    ASSERT_TRUE(idf);
+    ASSERT_TRUE(ui_licence_get("esp32s3", n) == NULL);
+    for (size_t i = 0; i < ui_licence_count("rp2350"); i++) {
+        ASSERT_FALSE(ui_licence_get("rp2350", i)->esp32s3_only); // the Pico firmware does not contain ESP-IDF
+    }
 }
 
 TEST(btstack_says_non_commercial) {
@@ -112,6 +135,7 @@ int main(void) {
     RUN(every_listed_component_is_in_licence_md_with_its_licence);
     RUN(entries_are_complete_unique_and_short);
     RUN(the_y2_does_not_list_the_rp2350_only_parts);
+    RUN(the_esp32s3_lists_its_own_sdk_and_not_what_it_does_not_contain);
     RUN(btstack_says_non_commercial);
     return RESULT();
 }

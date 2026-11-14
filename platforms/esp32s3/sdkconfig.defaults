@@ -1,9 +1,50 @@
-# ESP32-S3 defaults for neuPod. Board-specific values (flash size, PSRAM mode) are TODO
-# until the comparison module is chosen.
+# ESP32-S3 defaults for neuPod on the Waveshare ESP32-S3-Touch-AMOLED-2.41 (ESP32-S3R8: 16 MB flash, 8 MB octal PSRAM).
 CONFIG_IDF_TARGET="esp32s3"
 CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
-CONFIG_FREERTOS_HZ=1000
-CONFIG_ESP_CONSOLE_UART_DEFAULT=y
-CONFIG_ESP_CONSOLE_UART_BAUDRATE=115200
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_COMPILER_OPTIMIZATION_PERF=y
-# TODO: CONFIG_ESPTOOLPY_FLASHSIZE_* and CONFIG_SPIRAM_* for the chosen module
+
+# Console on the native USB-Serial/JTAG port (the board's USB-C), not UART0.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# 8 MB octal PSRAM, same mode as the factory firmware and the bring-up probe. Small allocations stay in internal RAM
+# (DMA buffers, task stacks, FreeRTOS objects); big ones (the display shadow, the library and art buffers) go to PSRAM.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_USE_MALLOC=y
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
+CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y
+CONFIG_ESP32S3_DATA_CACHE_64KB=y
+CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
+
+# FreeRTOS: 1 ms tick (os_tick_ms() == ticks), the statistics the monitor task prints (per-task CPU and stack high-water marks).
+CONFIG_FREERTOS_HZ=1000
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y
+CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
+CONFIG_FREERTOS_RUN_TIME_COUNTER_TYPE_U32=y
+CONFIG_FREERTOS_CHECK_STACKOVERFLOW_CANARY=y
+# A hardware watchpoint at the end of the running task's stack: an overflow panics at once and names the task, instead of
+# silently corrupting the neighbouring stack (what the first library scan on this board did).
+CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK=y
+
+# app_main builds the runtime (settings, caps, queues, the audio core) before it retires.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# The decoder on the audio core may keep that CPU busy for long stretches, and the UI and library scan can keep core 0 busy longer
+# than the idle task's 5 s window: the product has its own monitor (AUDIO CORE STALLED, per-task CPU), so the idle-task watchdog
+# is off. The watchdog itself stays on for tasks that subscribe.
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=n
+
+# Secrets at rest (app/crypto): AES-256-GCM and HKDF-SHA256 from IDF's mbed TLS (hardware accelerated).
+CONFIG_MBEDTLS_GCM_C=y
+CONFIG_MBEDTLS_HKDF_C=y
+
+# The block clock timer interrupt (hal_audio.c) must not depend on flash cache state.
+CONFIG_GPTIMER_ISR_IRAM_SAFE=y
+CONFIG_GPTIMER_CTRL_FUNC_IN_IRAM=y

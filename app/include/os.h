@@ -4,7 +4,7 @@
  * @brief Thin portable OS layer (tasks, delays, queues, mutexes, events) for app/ code.
  *
  * Backed by FreeRTOS on every target (RP2350 single-core port, the kernel's POSIX port on the host;
- * ESP-IDF ships FreeRTOS, so app/os/os_freertos.c should build there unchanged). app/ code uses
+ * ESP-IDF's SMP FreeRTOS on the ESP32-S3, where every task is pinned to core 0 and the audio core is a task on core 1). app/ code uses
  * this header instead of calling FreeRTOS directly so that
  *   - the core is an explicit argument of task creation (always core 0: core 1 is the bare-metal
  *     audio core, docs/runtime.md), and
