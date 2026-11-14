@@ -160,6 +160,12 @@ void audio_route_service(void) {
     if (gen != g_gen_seen) { /* the settings were (re)loaded from the card */
         g_gen_seen = gen;
         g_pref = audio_route_pref();
+        /* Line out never survives a load (boot, card reinsert): whatever is in the jack now may be earphones that replaced the amp
+           while the unit was off, and they must not start at full level. The user turns it on again for the amp. */
+        if (audio_route_line_out_enabled()) {
+            settings_set_u8(SETTING_LINE_OUT, 0u);
+            printf("route: Line out reset to Off on settings load\n");
+        }
     }
     const bool up = stream_usable();
 

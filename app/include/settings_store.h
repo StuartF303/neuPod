@@ -174,6 +174,8 @@ void settings_test_set_power_loss_step(int step);
 void settings_test_fail_next_reread(void);
 /** Unit tests only: as above, but the re-read fails with an I/O error. */
 void settings_test_ioerr_next_reread(void);
+/** Unit tests only: count a load without touching the items, as the boot-time load from the card does for its readers. */
+void settings_test_bump_generation(void);
 
 #ifdef __cplusplus
 }

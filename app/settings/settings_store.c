@@ -318,6 +318,7 @@ void settings_get_status(settings_status_t *out) {
 void settings_test_set_power_loss_step(int step) { g_crash_step = step; }
 void settings_test_fail_next_reread(void) { g_test_fault = 1; }
 void settings_test_ioerr_next_reread(void) { g_test_fault = 2; }
+void settings_test_bump_generation(void) { g_generation++; }
 
 static bool power_lost_at(int step) { return g_crash_step == step; }
 

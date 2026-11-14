@@ -564,6 +564,24 @@ TEST(a_saved_line_out_is_switched_off_at_boot_when_the_jack_is_empty) {
     speaker_done();
 }
 
+TEST(a_saved_line_out_is_switched_off_on_a_settings_load_even_with_a_plug_in_the_jack) {
+    reset();
+    hal_host_set_wired_attached(true);
+    settings_set_u8(SETTING_LINE_OUT, 1); // as if saved by the last run, with the amp in the jack
+    settings_test_bump_generation();      // the boot-time load from the card
+    tick(100);
+    ASSERT_FALSE(audio_route_line_out_enabled());
+    ASSERT_FALSE(audio_route_line_out_active());
+    ASSERT_FALSE(hal_host_line_out_allowed());
+    ASSERT_TRUE(audio_route_set_line_out_enabled(true)); // the user turns it on again for the amp, and it stays on
+    tick(100);
+    ASSERT_TRUE(audio_route_line_out_active());
+    ASSERT_TRUE(audio_route_set_line_out_enabled(false));
+    hal_host_set_wired_attached(false);
+    tick(100);
+    speaker_done();
+}
+
 TEST(line_out_is_ignored_on_bluetooth_and_comes_back_only_on_the_jack) {
     reset();
     hal_host_set_wired_attached(true);
