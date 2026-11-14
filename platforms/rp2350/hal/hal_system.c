@@ -4,12 +4,17 @@
 
 #include "hal_system.h"
 #include "hal_audio.h"
+#include "hal_input.h"
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
 #include "hardware/timer.h"
 #include "hardware/uart.h"
 #include "pico/multicore.h"
+#ifdef NEUPOD_BOARD_AMOLED241
+#include "board.h" // Waveshare RP2350-Touch-AMOLED-2.41: no radio chip; the soft power latch instead of the CYW43 LED
+#else
 #include "pico/cyw43_arch.h"
+#endif
 #include "pico/rand.h"
 #include "pico/stdlib.h"
 #include "pico/unique_id.h"
@@ -20,7 +25,9 @@
 
 // NEUPOD_RTOS (set for the FreeRTOS builds): the CYW43 driver runs a worker task, so it can only
 // be brought up once the scheduler is running (hal_system_late_init); bare-metal builds do it here.
+#ifndef NEUPOD_BOARD_AMOLED241
 static volatile bool g_radio_up;
+#endif
 
 // clk_sys target. 125 MHz (not the SDK's 150 MHz default) so the display SPI, which can only run
 // at clk_peri / 2 (or slower even divisions), hits exactly 62.5 MHz; 150 MHz only gives 75/37.5.
@@ -51,6 +58,15 @@ size_t hal_stack_free_min(void) {
 }
 
 hal_status_t hal_system_init(void) {
+#ifdef NEUPOD_BOARD_AMOLED241
+    // First thing: close the battery switch's soft latch. Closed early enough, the board keeps running from the battery after the
+    // Power button is let go; BAT_Control low switches it off again (hal_system_poweroff). The level is set before the pin becomes
+    // an output so the switch never sees a low glitch.
+    gpio_init(BOARD_PIN_BAT_CONTROL);
+    gpio_put(BOARD_PIN_BAT_CONTROL, 1);
+    gpio_set_dir(BOARD_PIN_BAT_CONTROL, GPIO_OUT);
+    hal_input_power_key_setup();
+#endif
     paint_stack();
     // Must come BEFORE stdio_init_all(): the UART divisor is computed from clk_peri at init.
     set_sys_clock_khz(NEUPOD_SYS_CLOCK_KHZ, true);
@@ -69,6 +85,9 @@ hal_status_t hal_system_init(void) {
 }
 
 hal_status_t hal_system_late_init(void) {
+#ifdef NEUPOD_BOARD_AMOLED241
+    return HAL_OK; // nothing to bring up: the board has no radio (hal_radio_none.c answers "not present")
+#else
     if (g_radio_up) {
         return HAL_OK;
     }
@@ -78,6 +97,7 @@ hal_status_t hal_system_late_init(void) {
     }
     g_radio_up = true;
     return HAL_OK;
+#endif
 }
 
 // Straight from the timer registers (RAM, no SDK call): also used by the audio core.
@@ -96,9 +116,13 @@ uint32_t hal_millis(void) { return to_ms_since_boot(get_absolute_time()); }
 void hal_delay_ms(uint32_t ms) { sleep_ms(ms); }
 
 void hal_status_led(bool on) {
+#ifdef NEUPOD_BOARD_AMOLED241
+    (void)on; // no status LED on this board
+#else
     if (g_radio_up) {
         cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, on);
     }
+#endif
 }
 
 // --- Fatal-error path -----------------------------------------------------------------------
@@ -191,8 +215,38 @@ void hal_random(void *buf, size_t n) {
     }
 }
 
+#ifdef NEUPOD_BOARD_AMOLED241
+// Power-off through the battery switch's soft latch. On USB power the board cannot switch itself off: the request is then refused
+// (false), after the latch has been closed again so unplugging USB later does not cut the power under a running player.
+static void (*g_poweroff_prepare)(void);
+
+void amoled241_set_poweroff_prepare(void (*fn)(void)) { g_poweroff_prepare = fn; }
+
+bool hal_system_can_poweroff(void) { return true; }
+
+bool hal_system_poweroff(void) {
+    printf("neuPod: power-off requested\n");
+    if (g_poweroff_prepare != NULL) {
+        g_poweroff_prepare(); // let the card finish its writes first
+    }
+    fflush(stdout);
+    gpio_put(BOARD_PIN_BAT_CONTROL, 0);
+    // The battery switch also follows the Power button while it is held (it is, for the 10 s hold that asks for this): the board
+    // goes off when the button is let go. Wait for that (bounded: this runs in the UI task), then half a second more as the probe: still
+    // running by then means USB power (no VBUS or charger-status line is read), and the latch is closed again.
+    uint32_t t0 = hal_millis();
+    while (hal_input_power_key() && hal_millis() - t0 < 3000u) {
+        sleep_ms(20);
+    }
+    sleep_ms(500);
+    printf("neuPod: still powered (USB?), staying on\n");
+    gpio_put(BOARD_PIN_BAT_CONTROL, 1);
+    return false;
+}
+#else
 // No software power-off on the bench rig (USB powered, no power switch IC): the UI hides the power-off countdown there.
 bool hal_system_can_poweroff(void) { return false; }
 bool hal_system_poweroff(void) { return false; }
+#endif
 
 const char *hal_platform_name(void) { return "rp2350"; }
