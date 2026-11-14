@@ -341,6 +341,7 @@ void boot_start(void) {
     g_started = true;
     // The bus is initialised once, here; the two I2C checks then take turns on it (rt_i2c_mutex).
     hal_i2c_err_t ie = hal_i2c_init(I2C_BUS_HZ);
+    rt_i2c_set_ready(ie == HAL_I2C_OK);
     for (size_t i = 0; i < sizeof k_checks / sizeof k_checks[0]; i++) {
         const check_t *c = &k_checks[i];
         bool is_i2c = c->fn == check_battery || c->fn == check_haptics;

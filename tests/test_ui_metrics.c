@@ -70,6 +70,7 @@ TEST(every_profile_fits_its_panel) {
         ASSERT_TRUE(m->rows >= 1 && m->rows <= UI_ROWS_MAX);
         ASSERT_TRUE(m->status_h + m->rows * m->row_h <= m->h); // title bar + rows fit the height
         ASSERT_TRUE(m->w <= UI_BUF_W_MAX && m->buf_lines <= UI_BUF_LINES_MAX); // the static LVGL buffers are big enough
+        ASSERT_TRUE(m->buf_lines % 2 == 0 && m->w % 2 == 0 && m->h % 2 == 0);   // even-aligned flush windows (RM690B0 / SH8601): strips of an even buffer stay even
         ASSERT_TRUE(m->title_w <= m->w && m->title_h <= m->status_h);
         // a row holds one line of its font, the status bar holds its title
         ASSERT_TRUE(lh(m->font_body) <= m->row_h);
@@ -199,9 +200,14 @@ TEST(selection_picks_the_largest_profile_that_fits) {
     ASSERT_TRUE(strcmp(ui_metrics()->name, "320x240") == 0);
 #ifdef NEUPOD_UI_HIRES // hosted builds only: the product build has the one profile
     ASSERT_TRUE(strcmp(ui_metrics_select(480, 360)->name, "480x360") == 0);
-    ASSERT_TRUE(strcmp(ui_metrics_select(640, 480)->name, "480x360") == 0);
+    ASSERT_TRUE(strcmp(ui_metrics_select(599, 450)->name, "480x360") == 0);
+    ASSERT_TRUE(strcmp(ui_metrics_select(600, 449)->name, "480x360") == 0);
+    ASSERT_TRUE(strcmp(ui_metrics_select(600, 450)->name, "600x450") == 0);
+    ASSERT_TRUE(strcmp(ui_metrics_select(640, 480)->name, "600x450") == 0);
     ui_metrics_set(ui_metrics_select(480, 360));
     ASSERT_EQ(480, ui_metrics()->w);
+    ui_metrics_set(ui_metrics_select(600, 450));
+    ASSERT_EQ(600, ui_metrics()->w);
     ui_metrics_set(ui_metrics_select(320, 240));
 #else
     ASSERT_TRUE(strcmp(ui_metrics_select(480, 360)->name, "320x240") == 0);
@@ -218,7 +224,7 @@ static bool font_has(const lv_font_t *f, uint32_t cp) {
 TEST(text_filter_matches_the_fonts) {
     const lv_font_t *fonts[] = {&neupod_font_12, &neupod_font_14, &neupod_font_20,
 #ifdef NEUPOD_UI_HIRES
-                                &neupod_font_16, &neupod_font_28,
+                                &neupod_font_16, &neupod_font_28, &neupod_font_22, &neupod_font_26, &neupod_font_38,
 #endif
     };
     for (size_t i = 0; i < sizeof fonts / sizeof fonts[0]; i++) {
@@ -282,6 +288,32 @@ TEST(themes_are_rgb565_safe_and_readable) {
     ASSERT_EQ(0x101010u, k_ui_theme_dark.c[UI_TOK_BG]);
 }
 
+#ifdef NEUPOD_UI_HIRES
+// 600x450: the 320x240 layout x 15/8 (S15 in ui_metrics_600.h), the fonts the ratios call for, 7 rows like every profile.
+TEST(profile_600_is_the_320_layout_scaled_by_15_over_8) {
+    const ui_metrics_t *m = ui_metrics_select(600, 450);
+    const ui_metrics_t *b = ui_metrics_select(320, 240);
+    ASSERT_TRUE(strcmp(m->name, "600x450") == 0);
+    ASSERT_EQ(600, m->w);
+    ASSERT_EQ(450, m->h);
+    ASSERT_EQ(7, m->rows);
+    ASSERT_EQ(45, m->status_h);
+    ASSERT_EQ(56, m->row_h);
+    ASSERT_EQ(30, m->buf_lines);
+    ASSERT_TRUE(m->font_small == &neupod_font_22 && m->font_body == &neupod_font_26 && m->font_large == &neupod_font_38 && m->font_huge == &neupod_font_48);
+    ASSERT_TRUE(m->font_icon_sm == &neupod_icons_30 && m->font_icon_lg == &neupod_icons_45);
+    ASSERT_EQ(b->np_art * 15 / 8, m->np_art);
+    ASSERT_EQ(b->pad * 15 / 8, m->pad);
+    ASSERT_EQ(b->sp_icon * 15 / 8, m->sp_icon);
+    ASSERT_EQ(336, m->home_list_w); // 56 %
+    ASSERT_EQ(220, m->home_art);    // the 264 px pane less 22 each side
+    // a row is an eighth of the panel height, as the touch drag distances assume (touch_gesture.h)
+    ASSERT_TRUE(m->row_h * 8 <= m->h && m->row_h * 8 > m->h - 8);
+    // text size to row height: the same proportion as the 480 profile, give or take a few percent
+    ASSERT_TRUE(lh(m->font_body) * 100 / m->row_h >= 48 && lh(m->font_body) * 100 / m->row_h <= 56);
+}
+#endif
+
 TEST(a_token_follows_the_active_theme_and_a_literal_does_not) {
     lv_init();
     ASSERT_TRUE(ui_theme() == &k_ui_theme_light); // Light is the default
@@ -302,5 +334,8 @@ int main(void) {
     RUN(text_filter_matches_the_fonts);
     RUN(themes_are_rgb565_safe_and_readable);
     RUN(a_token_follows_the_active_theme_and_a_literal_does_not);
+#ifdef NEUPOD_UI_HIRES
+    RUN(profile_600_is_the_320_layout_scaled_by_15_over_8);
+#endif
     return RESULT();
 }

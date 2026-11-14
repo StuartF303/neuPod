@@ -2,11 +2,13 @@
 // UI metrics profiles for hosted builds (NEUPOD_UI_HIRES; see ui_metrics.h). The 320x240 values (ui_metrics_320.h) are the ones
 // the UI had before profiles existed and must not change (the host snapshots at 320x240 are compared byte for byte). The
 // 480x360 profile is every length scaled by 3/2 through S(), except fonts, which step to the next size, and row counts,
-// which stay. The product build has only the 320x240 profile, defined in the header; this file is empty there.
+// which stay. The 600x450 profile (ui_metrics_600.h, x 15/8) is shared with product builds configured for it. A product build has
+// only one profile, defined in a header (320x240 by default; -DNEUPOD_UI_PROFILE=600x450); this file is empty there.
 #include "ui_metrics.h"
 
 #ifdef NEUPOD_UI_HIRES
 #include "ui_metrics_320.h"
+#include "ui_metrics_600.h"
 
 #define k_320x240 k_ui_metrics_320
 
@@ -199,7 +201,7 @@ static const ui_metrics_t k_480x360 = {
 };
 #undef S
 
-static const ui_metrics_t *const k_profiles[] = {&k_320x240, &k_480x360};
+static const ui_metrics_t *const k_profiles[] = {&k_320x240, &k_480x360, &k_ui_metrics_600};
 
 const ui_metrics_t *const *ui_metrics_profiles(size_t *count) {
     *count = sizeof k_profiles / sizeof k_profiles[0];

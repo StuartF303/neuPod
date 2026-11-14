@@ -30,8 +30,8 @@
 #define FADE_MS 400u
 #define HOME_SNAPSHOT_AFTER_MS 900u // after the fade has finished
 
-// Two partial-render buffers of UI_BUF_W_MAX x UI_BUF_LINES_MAX RGB565: 320 x 24 = 15 KB each on the product build; the
-// hosted (NEUPOD_UI_HIRES) build sizes them for the 480x360 profile. Only the profile's own w x buf_lines is handed to LVGL.
+// Two partial-render buffers of UI_BUF_W_MAX x UI_BUF_LINES_MAX RGB565: 320 x 24 = 15 KB each on the default product build (600 x 30 = 36 KB for
+// NEUPOD_UI_PROFILE=600x450); the hosted (NEUPOD_UI_HIRES) build sizes them for the largest profile (600 x 36). Only the profile's own w x buf_lines is handed to LVGL.
 static uint8_t g_buf1[UI_BUF_W_MAX * UI_BUF_LINES_MAX * 2] __attribute__((aligned(4)));
 static uint8_t g_buf2[UI_BUF_W_MAX * UI_BUF_LINES_MAX * 2] __attribute__((aligned(4)));
 
@@ -50,21 +50,28 @@ static void flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
     lv_display_flush_ready(disp);
 }
 
+// RM690B0 / SH8601 AMOLED controllers take CASET / RASET windows with an even start and an even size; every other panel and the host
+// repaint at most one extra row or column. Rounded unconditionally, at the source: every flush window is a part of an invalidated area.
+static void invalidate_area_cb(lv_event_t *e) {
+    lv_area_t *a = lv_event_get_invalidated_area(e);
+    ui_area_even_align(&a->x1, &a->y1, &a->x2, &a->y2, UI_W, UI_H);
+}
+
 static bool lvgl_setup(void) {
-#ifndef NEUPOD_RP2350 // the product panel is fixed hardware: nothing to select or warn about (and no flash spent on the messages)
     const uint32_t pw = hal_display_width(), ph = hal_display_height();
-    ui_metrics_set(ui_metrics_select(pw, ph)); // the product build has the one 320x240 profile (compile-time constant)
-    printf("ui: profile %dx%d on %ux%u panel\n", (int)UI_W, (int)UI_H, (unsigned)pw, (unsigned)ph);
-    if (pw > (uint32_t)UI_W || ph > (uint32_t)UI_H) {
+    ui_metrics_set(ui_metrics_select(pw, ph)); // a product build has one constant profile (320x240, or 600x450 by NEUPOD_UI_PROFILE): no selection
 #ifdef NEUPOD_UI_HIRES
-        const char *hint = "";
-#else
-        const char *hint = " (this build has no hires profile: configure with -DNEUPOD_UI_HIRES=ON)";
+    printf("ui: profile %dx%d on %ux%u panel\n", (int)UI_W, (int)UI_H, (unsigned)pw, (unsigned)ph);
 #endif
-        printf("ui: WARNING panel %ux%u is larger than the %dx%d profile: the UI fills the top-left corner only%s\n", (unsigned)pw, (unsigned)ph, (int)UI_W,
+    if (pw != (uint32_t)UI_W || ph != (uint32_t)UI_H) {
+#ifdef NEUPOD_UI_HIRES
+        const char *hint = (pw > (uint32_t)UI_W || ph > (uint32_t)UI_H) ? "" : " (a smaller panel than the smallest profile)";
+#else
+        const char *hint = " (the product profile is fixed at build time: -DNEUPOD_UI_PROFILE, or -DNEUPOD_UI_HIRES=ON for the hosted set)";
+#endif
+        printf("ui: WARNING panel %ux%u does not match the %dx%d profile: the UI is drawn at the profile's size%s\n", (unsigned)pw, (unsigned)ph, (int)UI_W,
                (int)UI_H, hint);
     }
-#endif
     lv_init();
     lv_tick_set_cb(os_tick_ms);
     lv_display_t *d = lv_display_create(UI_W, UI_H);
@@ -74,6 +81,7 @@ static bool lvgl_setup(void) {
     lv_display_set_color_format(d, LV_COLOR_FORMAT_RGB565);
     lv_display_set_buffers(d, g_buf1, g_buf2, (uint32_t)(UI_W * UIM->buf_lines * 2), LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(d, flush_cb);
+    lv_display_add_event_cb(d, invalidate_area_cb, LV_EVENT_INVALIDATE_AREA, NULL);
     return true;
 }
 
@@ -139,6 +147,7 @@ extern void hal_host_bt_headset_volume(uint8_t volume) __attribute__((weak));
 extern void hal_host_bt_headset_key(hal_bt_key_t key) __attribute__((weak));
 extern void hal_host_power_key(bool down) __attribute__((weak));
 extern void hal_host_hold_switch(hal_hold_switch_t sw) __attribute__((weak));
+extern void hal_host_touch_inject(int x, int y, bool down) __attribute__((weak));
 static uint32_t g_script_sleep_until;
 static bool g_script_sleeping;
 static void screen_ready(const char *name);
@@ -216,6 +225,21 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
         /* Tour only (host simulator): the Power key goes down (pwr:down) or up (pwr:up); the input task turns the level into events. */
         if (hal_host_power_key != NULL) {
             hal_host_power_key(strncmp(p + 4, "down", 4) == 0);
+        }
+        return end;
+    }
+    if (strncmp(p, "touch:", 6) == 0) {
+        /* Tour only (host simulator, NEUPOD_TOUCH=1): the touch panel. touch:down:X:Y and touch:move:X:Y put the finger there, touch:up lifts it; the input task's
+         * gesture logic (touch_gesture.c) turns that into scroll / Select / Menu / Play like a real panel. Steps are 300 ms apart (sleep:MS for a long press). */
+        if (hal_host_touch_inject != NULL) {
+            const char *a = p + 6;
+            const char *cx = strchr(a, ':'); /* "down:X:Y" / "move:X:Y" (atoi and strchr, not sscanf: the latter links newlib's scanf and locale into the 520 KB RP2350 image) */
+            const char *cy = cx != NULL ? strchr(cx + 1, ':') : NULL;
+            if (strncmp(a, "up", 2) == 0) {
+                hal_host_touch_inject(-1, -1, false); /* the position is irrelevant once the finger is up (clamped to the panel's corner) */
+            } else if (cx != NULL && cy != NULL) {
+                hal_host_touch_inject(atoi(cx + 1), atoi(cy + 1), true);
+            }
         }
         return end;
     }

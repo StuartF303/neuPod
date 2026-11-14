@@ -787,6 +787,32 @@ TEST(off_survives_the_clock_wrap_and_a_future_stamp) {
     ASSERT_FALSE(ui_idle_off_tick(&t, 0, true, false, 10000, 15000));
 }
 
+TEST(flush_areas_are_even_start_and_even_size) {
+    int32_t x1, y1, x2, y2;
+    x1 = 3; y1 = 5; x2 = 10; y2 = 8; // odd start, even end: 2..11 x 4..9
+    ui_area_even_align(&x1, &y1, &x2, &y2, 600, 450);
+    ASSERT_EQ(2, x1); ASSERT_EQ(4, y1); ASSERT_EQ(11, x2); ASSERT_EQ(9, y2);
+    x1 = 0; y1 = 0; x2 = 0; y2 = 0; // a single pixel becomes a 2 x 2 window
+    ui_area_even_align(&x1, &y1, &x2, &y2, 600, 450);
+    ASSERT_EQ(0, x1); ASSERT_EQ(0, y1); ASSERT_EQ(1, x2); ASSERT_EQ(1, y2);
+    x1 = 4; y1 = 6; x2 = 9; y2 = 11; // already even / odd: untouched
+    ui_area_even_align(&x1, &y1, &x2, &y2, 600, 450);
+    ASSERT_EQ(4, x1); ASSERT_EQ(6, y1); ASSERT_EQ(9, x2); ASSERT_EQ(11, y2);
+    x1 = 0; y1 = 0; x2 = 599; y2 = 449; // the whole panel stays the whole panel
+    ui_area_even_align(&x1, &y1, &x2, &y2, 600, 450);
+    ASSERT_EQ(0, x1); ASSERT_EQ(0, y1); ASSERT_EQ(599, x2); ASSERT_EQ(449, y2);
+    x1 = 599; y1 = 449; x2 = 599; y2 = 449; // the last pixel: start rounds down, the end stays on the panel
+    ui_area_even_align(&x1, &y1, &x2, &y2, 600, 450);
+    ASSERT_EQ(598, x1); ASSERT_EQ(448, y1); ASSERT_EQ(599, x2); ASSERT_EQ(449, y2);
+    x1 = 0; y1 = 0; x2 = 318; y2 = 238; // 320x240: the rounder never leaves the panel
+    ui_area_even_align(&x1, &y1, &x2, &y2, 320, 240);
+    ASSERT_EQ(319, x2); ASSERT_EQ(239, y2);
+    x1 = 0; y1 = 0; x2 = 319; y2 = 239; // an odd-sized panel: the last column is even, so a window there ends even (the HAL's problem, not ours)
+    ui_area_even_align(&x1, &y1, &x2, &y2, 321, 241);
+    ASSERT_EQ(319, x2); ASSERT_EQ(239, y2);
+    ASSERT_EQ(0, x1);
+}
+
 int main(void) {
     RUN(signal_bars_unknown_rssi);
     RUN(signal_bars_thresholds);
@@ -844,5 +870,6 @@ int main(void) {
     RUN(text_display_survives_malformed_utf8);
     RUN(text_display_cuts_on_a_character_boundary);
     RUN(text_display_is_never_longer_than_its_input);
+    RUN(flush_areas_are_even_start_and_even_size);
     return RESULT();
 }

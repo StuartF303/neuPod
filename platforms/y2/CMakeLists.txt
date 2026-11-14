@@ -39,6 +39,7 @@ set(NEUPOD_Y2_HAL_SOURCES
   ${CMAKE_SOURCE_DIR}/hal/host/hal_core.c                 # core 1 = a native thread, portable POSIX
   ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c
   ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
+  ${CMAKE_SOURCE_DIR}/hal/common/hal_touch_none.c         # the Y2 has buttons, no touch panel
   ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c             # the file API on FatFs, as on the Pico (the host uses nfs_posix.c)
 )
 
