@@ -11,8 +11,6 @@
 #include "esp_rom_sys.h"
 
 #define I2C_TIMEOUT_MS 50
-#define TCA_OUT 0x01
-#define TCA_CFG 0x03
 
 // The battery latch as early as the IDF start-up allows: the first CORE-stage init function, before the heap, the PSRAM and the
 // scheduler (the GPIO driver needs none of them). On battery the board stays on only while this pin is high or the key is held,
@@ -25,12 +23,10 @@ ESP_SYSTEM_INIT_FN(neupod_power_latch, CORE, BIT(0), 0) {
 
 static i2c_master_bus_handle_t s_bus;
 static i2c_master_dev_handle_t s_tca;
-static int64_t s_pwr_en_us;
 static bool s_done;
 static esp_err_t s_result = ESP_FAIL;
 
 i2c_master_bus_handle_t board_i2c_bus(void) { return s_bus; }
-int64_t board_panel_power_on_us(void) { return s_pwr_en_us; }
 
 int board_tca_inputs(void) {
     uint8_t reg = 0x00, v = 0;
@@ -40,10 +36,6 @@ int board_tca_inputs(void) {
     return v;
 }
 
-static esp_err_t tca_write(i2c_master_dev_handle_t d, uint8_t reg, uint8_t val) {
-    uint8_t b[2] = {reg, val};
-    return i2c_master_transmit(d, b, 2, I2C_TIMEOUT_MS);
-}
 
 esp_err_t board_init(void) {
     if (s_done) {
@@ -73,24 +65,21 @@ esp_err_t board_init(void) {
         return s_result = e;
     }
 
-    // Panel power enable: output latch first (EXIO1 high), then make EXIO1 an output, so it never glitches low.
+    // The TCA9554 expander is deliberately NOT written to. The first versions of this file drove EXIO1 ("PWR_EN") high as an output,
+    // as the schematic suggests, and the panel stayed dark; the factory firmware (Espressif/Waveshare example_qspi_with_ram, read out
+    // of its image and from Waveshare's demo source) never touches the expander for the display: every EXIO stays at the chip's
+    // power-on default (input) and the panel works. Only its input register is read here, so the boot log shows the level.
     i2c_master_dev_handle_t tca = NULL;
     i2c_device_config_t dc = {.dev_addr_length = I2C_ADDR_BIT_LEN_7, .device_address = I2C_ADDR_TCA9554, .scl_speed_hz = 400000};
     e = i2c_master_bus_add_device(s_bus, &dc, &tca);
     if (e == ESP_OK) {
-        e = tca_write(tca, TCA_OUT, 1u << EXIO_PWR_EN);
-    }
-    if (e == ESP_OK) {
-        e = tca_write(tca, TCA_CFG, (uint8_t)~(1u << EXIO_PWR_EN));
-    }
-    if (e == ESP_OK) {
-        s_tca = tca; // kept: the display self-test reads the TE line through it
-        s_pwr_en_us = esp_timer_get_time();
-    } else if (tca != NULL) {
-        i2c_master_bus_rm_device(tca);
+        s_tca = tca;
+        int in = board_tca_inputs();
+        printf("board: TCA9554 left at its power-on defaults, inputs 0x%02X (EXIO0 TE, EXIO1 PWR_EN, EXIO2 TP_INT)\n", in < 0 ? 0xFF : in);
+        e = in < 0 ? ESP_FAIL : ESP_OK;
     }
     if (e != ESP_OK) {
-        printf("board: TCA9554 (panel power enable): %s\n", esp_err_to_name(e));
+        printf("board: TCA9554 (I2C 0x20) did not answer: %s\n", esp_err_to_name(e));
     }
     return s_result = e;
 }

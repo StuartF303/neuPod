@@ -57,14 +57,11 @@
 #define LAND_H 450
 
 /**
- * One-time board bring-up, from hal_system_init(): latch the battery switch, start the I2C bus and raise the panel power enable
- * (EXIO1) on the expander. Idempotent. Returns ESP_OK if the bus and the expander answered; the board still runs without them
- * (the panel then stays dark and the display HAL reports it).
+ * One-time board bring-up, from hal_system_init(): latch the battery switch and start the I2C bus. The expander is only read, never
+ * written (the panel works with it at its defaults; driving EXIO1 high was what kept it dark). Idempotent. Returns ESP_OK if the bus and
+ * the expander answered.
  */
 esp_err_t board_init(void);
-
-/** Microseconds (esp_timer) at which the panel power enable went high; 0 if it did not. The panel needs time to come up after it. */
-int64_t board_panel_power_on_us(void);
 
 /** The TCA9554 input register (EXIO0 = the panel's TE line, which pulses at the frame rate while the panel is on and displaying), -1 on a bus error. */
 int board_tca_inputs(void);

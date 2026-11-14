@@ -49,7 +49,9 @@ static uint32_t s_push_errors;
 /* The write window and the cursor in it (hal_display_set_window / blit). */
 static uint16_t s_wx, s_wy, s_ww, s_wh, s_cx, s_cy;
 
-/* RM690B0 bring-up: {cmd, data, length, delay ms}. The display is switched on (0x29) after the first frame is in. */
+/* The init table of the factory firmware (Waveshare example_qspi_with_ram, 450x600 panel in the 90 degree rotation), byte for byte as read
+ * out of its image: {cmd, data, length, delay ms}. Note that it switches the display on (0x29), sets MADCTL 0x30 and the full brightness
+ * itself, before any pixel is sent; the probe and the first versions of this file did the display-on after the first frame and stayed dark. */
 typedef struct {
     uint8_t cmd;
     const uint8_t *data;
@@ -58,15 +60,20 @@ typedef struct {
 } init_cmd_t;
 
 static const init_cmd_t INIT_CMDS[] = {
-    {0xFE, (const uint8_t[]){0x20}, 1, 0}, /* user command set 1 */
+    {0xFE, (const uint8_t[]){0x20}, 1, 0},
     {0x26, (const uint8_t[]){0x0A}, 1, 0},
     {0x24, (const uint8_t[]){0x80}, 1, 0},
-    {0xFE, (const uint8_t[]){0x00}, 1, 0}, /* back to the standard command set */
-    {0x3A, (const uint8_t[]){0x55}, 1, 0}, /* 16 bit/pixel */
+    {0xFE, (const uint8_t[]){0x00}, 1, 0},
+    {0x3A, (const uint8_t[]){0x55}, 1, 0},       /* 16 bit/pixel */
     {0xC2, (const uint8_t[]){0x00}, 1, 10},
-    {0x35, NULL, 0, 0},                    /* tearing effect line on */
-    {0x51, (const uint8_t[]){0x00}, 1, 10}, /* brightness 0 until the first frame is in */
-    {0x11, NULL, 0, 80},                   /* sleep out */
+    {0x35, (const uint8_t[]){0x00}, 0, 0},       /* TE on (the factory table lists one data byte but length 0) */
+    {0x51, (const uint8_t[]){0x00}, 1, 10},
+    {0x11, (const uint8_t[]){0x00}, 0, 80},      /* sleep out */
+    {0x2A, (const uint8_t[]){0x00, 0x10, 0x00, 0xD1}, 4, 0},
+    {0x2B, (const uint8_t[]){0x00, 0x00, 0x00, 0x57}, 4, 0},
+    {0x29, (const uint8_t[]){0x00}, 0, 10},      /* display on */
+    {0x36, (const uint8_t[]){0x30}, 1, 0},       /* landscape */
+    {0x51, (const uint8_t[]){0xFF}, 1, 0},       /* full brightness */
 };
 
 static bool IRAM_ATTR on_color_done(esp_lcd_panel_io_handle_t io, esp_lcd_panel_io_event_data_t *ev, void *ctx) {
@@ -168,18 +175,6 @@ hal_status_t hal_display_init(void) {
     if (s_up) {
         return HAL_OK;
     }
-    // The panel's power enable lives on the I2C expander: without it the panel is unpowered and every command would "succeed" into
-    // nothing, so report it as a failed display rather than a working one.
-    if (board_init() != ESP_OK) {
-        printf("display: panel power enable (TCA9554) not available\n");
-        return HAL_ENODEV;
-    }
-    // The panel's supply needs time after the expander raised PWR_EN: the first start-up came up with reset 14 ms later and showed nothing.
-    // (The bring-up probe, which worked, waited over a second.)
-    int64_t on = board_panel_power_on_us();
-    while (esp_timer_get_time() - on < 500000) {
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
     s_done = xSemaphoreCreateCounting(16, 0);
     s_fb = heap_caps_aligned_alloc(64, (size_t)LAND_W * LAND_H * 2u, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     for (int i = 0; i < 2; i++) {
@@ -248,22 +243,24 @@ hal_status_t hal_display_init(void) {
         }
     }
     if (e == ESP_OK) {
-        e = cmd(0x36, &s_madctl, 1); /* landscape */
+        e = cmd(0x29, NULL, 0); /* esp_lcd_panel_disp_on_off(true), as the factory firmware does after the table */
     }
     if (e != ESP_OK) {
         printf("display: init sequence: %s\n", esp_err_to_name(e));
         return HAL_ERR;
     }
     s_up = true;
+    s_madctl = 0x30;
+    // The panel is already on at full brightness (the table did it, as in the factory firmware): clear it to black, then hold the
+    // brightness at 0 until the UI has drawn its first frame and asks for the backlight.
+    bool cleared = push_rect(0, 0, LAND_W - 1, LAND_H - 1);
     s_brightness = 0;
-    // Clear to black, then switch the panel on (the backlight call raises the brightness after the first real frame).
-    if (!push_rect(0, 0, LAND_W - 1, LAND_H - 1)) {
+    (void)cmd(0x51, &s_brightness, 1);
+    if (!cleared) {
         printf("display: first frame did not complete\n");
         s_up = false;
         return HAL_ETIMEOUT;
     }
-    (void)cmd(0x29, NULL, 0);
-    vTaskDelay(pdMS_TO_TICKS(20));
     printf("display: RM690B0 %dx%d landscape, QSPI %d MHz, shadow %u KB in PSRAM\n", LAND_W, LAND_H, LCD_PCLK_HZ / 1000000,
            (unsigned)((size_t)LAND_W * LAND_H * 2u / 1024u));
     return HAL_OK;

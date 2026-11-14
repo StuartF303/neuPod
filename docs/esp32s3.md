@@ -82,6 +82,13 @@ Internal: the PCM ring (32 KB), the library buffers, a 2 KB SD staging buffer (P
 internal heap is free (32 KB at the lowest, while the boot-check tasks run together): enough now, but the Wi-Fi/BLE stacks will need to
 be budgeted against it (trim the doubled stacks that measure small: the monitor line prints each task's stack-free minimum).
 
+**Display bring-up (what the dark-panel hunt found).** The bring-up probe and the first runtime builds left the panel dark, while the factory image lit it. The factory
+firmware's init table was read out of its image (and matches Waveshare's `10_FactoryProgram` demo source). It differs from the probe's in the tail: after sleep-out it sets the
+window, sends **display-on (0x29), MADCTL 0x30 and full brightness (0x51 0xFF) inside the init, before any pixel**, and the driver sends 0x29 once more; the probe switched the display on
+only after the first frame. The factory also **never writes to the TCA9554 expander** (the schematic's EXIO1 "PWR_EN" reads high at the chip's power-on default, `0xC7` on the bench), whereas
+the probe drove EXIO1 as an output. `hal_display.c` now follows the factory sequence and `board.c` only reads the expander. The probe's `esp_lcd_sh8601` 2.0.1 is the same driver version the
+factory uses, with the same QSPI configuration (40 MHz, mode 0, 0x02/0x32 framing).
+
 **Display.** `hal_display.c` talks to the RM690B0 through `esp_lcd`'s SPI panel IO in QSPI mode (SH8601 framing: opcode 0x02 for commands,
 0x32 + 0x2C00 for pixels), so no extra component is needed (the probe used `espressif/esp_lcd_sh8601`; the runtime does not). The controller wants
 windows that start even and end odd, and LVGL hands over arbitrary partial areas: a full **shadow of the panel in PSRAM**, already in the panel's
