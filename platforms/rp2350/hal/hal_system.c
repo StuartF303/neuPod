@@ -232,9 +232,10 @@ bool hal_system_poweroff(void) {
     fflush(stdout);
     gpio_put(BOARD_PIN_BAT_CONTROL, 0);
     // The battery switch also follows the Power button while it is held (it is, for the 10 s hold that asks for this): the board
-    // goes off when the button is let go. Wait for that, then a moment more.
+    // goes off when the button is let go. Wait for that (bounded: this runs in the UI task), then half a second more as the probe: still
+    // running by then means USB power (no VBUS or charger-status line is read), and the latch is closed again.
     uint32_t t0 = hal_millis();
-    while (hal_input_power_key() && hal_millis() - t0 < 12000u) {
+    while (hal_input_power_key() && hal_millis() - t0 < 3000u) {
         sleep_ms(20);
     }
     sleep_ms(500);

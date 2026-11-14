@@ -34,24 +34,23 @@ message(STATUS "neuPod audio unmute level on GP22: ${NEUPOD_AUDIO_UNMUTE_LEVEL}"
 if(NEUPOD_BOARD STREQUAL "amoled241")
   set(NEUPOD_DISPLAY_SRC ${NEUPOD_BOARD_DIR}/hal_display_rm690b0.c)
   set(NEUPOD_INPUT_SRC ${NEUPOD_BOARD_DIR}/hal_input_amoled.c)
-  set(NEUPOD_BOARD_CORE_SRC ${NEUPOD_BOARD_DIR}/hal_touch_ft6336.c)
+  set(NEUPOD_TOUCH_SRC ${NEUPOD_BOARD_DIR}/hal_touch_ft6336.c)
 else()
   set(NEUPOD_DISPLAY_SRC hal/hal_display.c)
   set(NEUPOD_INPUT_SRC hal/hal_input.c)
-  set(NEUPOD_BOARD_CORE_SRC "")
+  set(NEUPOD_TOUCH_SRC ${CMAKE_SOURCE_DIR}/hal/common/hal_touch_none.c)   # no touch panel on the Pico 2 W
 endif()
 
 add_library(hal_rp2350_core STATIC
   ${NEUPOD_DISPLAY_SRC}
   hal/hal_console.c
   ${NEUPOD_INPUT_SRC}
-  ${NEUPOD_BOARD_CORE_SRC}
   hal/hal_i2c.c
   ${NEUPOD_AUDIO_SINK_SRC}   # core-1 code: no RTOS dependency (ADR-0011), shared by both builds
   hal/hal_audio_vclk.c       # the virtual block clock: the null sink, and the I2S sink's Bluetooth mode
   hal/hal_core.c
   ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
-  ${CMAKE_SOURCE_DIR}/hal/common/hal_touch_none.c   # no touch panel on the Pico 2 W (a touch board swaps this for its own driver)
+  ${NEUPOD_TOUCH_SRC}        # hal_touch: none on the Pico 2 W, the FT6336 driver on a touch board
 )
 target_include_directories(hal_rp2350_core PUBLIC ${CMAKE_SOURCE_DIR}/hal/include)
 target_link_libraries(hal_rp2350_core PUBLIC
@@ -79,7 +78,7 @@ if(NEUPOD_BOARD STREQUAL "amoled241")
   # Landscape direction of the panel and the touch mapping (board.h); touch points on the console while bringing the board up.
   set(NEUPOD_AMOLED_LANDSCAPE 1 CACHE STRING "amoled241 landscape rotation: 1 (default) or 3 (turned by 180 degrees)")
   set_property(CACHE NEUPOD_AMOLED_LANDSCAPE PROPERTY STRINGS 1 3)
-  option(NEUPOD_AMOLED_TOUCH_LOG "amoled241: log touch down / move / up with raw and mapped coordinates on the console" ON)
+  option(NEUPOD_AMOLED_TOUCH_LOG "amoled241: log touch down / move / up with raw and mapped coordinates on the console (off by default: a USB terminal that does not read can block the input task)" OFF)
   target_include_directories(hal_rp2350_core PUBLIC ${NEUPOD_BOARD_DIR})
   target_compile_definitions(hal_rp2350_core PUBLIC
     NEUPOD_AMOLED_LANDSCAPE=${NEUPOD_AMOLED_LANDSCAPE}

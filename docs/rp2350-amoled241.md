@@ -54,17 +54,19 @@ Not built for this board: the `display_test`, `i2c_test` and `storage_test` exec
   mapping was taken from the controller's other known drivers and checked on the bench only as far as the registers go (the HAL cannot
   see the glass): **if the picture is upside down or mirrored, build with `-DNEUPOD_AMOLED_LANDSCAPE=3`** (MADCTL `0xA0`, offset 16, and
   the touch mapping turned the same way).
+- **Unverified on the glass.** The orientation, the row offset and the touch mapping were not seen on the panel; they follow other
+  RM690B0 drivers. Try `-DNEUPOD_AMOLED_LANDSCAPE=3` if the picture or the touch is upside down or mirrored.
 - **Even windows.** The controller addresses whole pixel pairs: `hal_display_set_window()` returns `HAL_EINVAL` for an odd x, y, width or
-  height. The UI has to round its flush areas outwards before calling (until it does, a strip with an odd edge is not drawn).
+  height. The UI rounds its flush areas outwards (LVGL rounder).
 - **Brightness** is the panel's own register (0x51): `hal_display_backlight()` 0..255. `hal_display_sleep()` sends DISPOFF + SLPIN.
-- Until the UI has a 600x450 profile it draws its 320x240 layout in the top-left corner.
+- The build selects the UI profile `600x450` automatically.
 
 ## Touch notes
 
 `hal_touch_read()` returns the first contact in the display's landscape coordinates (x 0..599, y 0..449). The raw controller values
-are portrait (x 0..449, y 0..599): landscape x = raw y, landscape y = 449 - raw x. The build logs every press, a move every 200 ms,
-and the release with raw and mapped values (`-DNEUPOD_AMOLED_TOUCH_LOG=OFF` to silence it). A small task started by `main()` initialises the
-controller once, four seconds after boot, and logs its chip, vendor and firmware IDs (a bring-up aid); the input task is what reads points.
+are portrait (x 0..449, y 0..599): landscape x = raw y, landscape y = 449 - raw x. `-DNEUPOD_AMOLED_TOUCH_LOG=ON` logs every press, a
+move every 200 ms and the release with raw and mapped values (off by default: a USB terminal that is attached but not reading can block
+the input task). The chip ID line is always logged at init. The input task initialises the controller (it logs its chip, vendor and firmware IDs) and reads the points under the I2C mutex.
 
 ## Storage notes
 
@@ -76,7 +78,9 @@ answer "unsupported". The write guard, mounting, formatting and the music librar
 
 The Power key held for 10 s shows the "shutting down" countdown (`hal_system_can_poweroff()` is true); at the end the runtime lets the
 card finish its writes and drops BAT_Control. On battery the board then switches off when the key is released. On USB power it cannot:
-the request is refused and the latch is closed again. The Power key is read as level; the press that switched the board on is not
+the request is refused and the latch is closed again. After dropping the latch the HAL waits for the key to be released (at most 3 s,
+in the UI task) and then 0.5 s more; still running means USB power. No VBUS or charger-status line is read (the schematic was not
+checked for one). The Power key is read as level; the press that switched the board on is not
 counted.
 
 ## What is not done

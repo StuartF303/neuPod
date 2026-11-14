@@ -181,6 +181,7 @@ hal_storage_status_t hal_storage_read(uint32_t lba, void *buf, uint32_t count) {
         uint32_t n = count < SPI_READ_CHUNK ? count : SPI_READ_CHUNK;
         hal_storage_status_t st = map_block_err(g_sd->read_blocks(g_sd, dst, lba, n));
         if (st != HAL_STORAGE_OK) {
+            g_write_fault = true; // as the SDIO HAL: a failed read may leave the card mid-command, so no write until the next init
             return st;
         }
         dst += (size_t)n * HAL_STORAGE_SECTOR_SIZE;

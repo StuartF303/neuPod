@@ -24,7 +24,12 @@ if(NEUPOD_UI_HIRES)
 endif()
 # The one profile a product (non-hosted) build compiles in as a constant: 320x240 (Pico 2 W, the default) or 600x450 (the Waveshare touch
 # AMOLED 2.41 boards). Hosted builds carry every profile and pick one at run time from the panel size, so they ignore this.
-set(NEUPOD_UI_PROFILE "320x240" CACHE STRING "UI profile of a product build: 320x240 or 600x450")
+if(NEUPOD_BOARD STREQUAL "amoled241")
+  set(NEUPOD_UI_PROFILE_DEFAULT "600x450") # the Waveshare board's panel (NEUPOD_BOARD comes from the command line: scripts/build.sh rp2350-amoled241)
+else()
+  set(NEUPOD_UI_PROFILE_DEFAULT "320x240")
+endif()
+set(NEUPOD_UI_PROFILE "${NEUPOD_UI_PROFILE_DEFAULT}" CACHE STRING "UI profile of a product build: 320x240 or 600x450")
 set_property(CACHE NEUPOD_UI_PROFILE PROPERTY STRINGS 320x240 600x450)
 if(NOT NEUPOD_UI_PROFILE STREQUAL "320x240" AND NOT NEUPOD_UI_PROFILE STREQUAL "600x450")
   message(FATAL_ERROR "NEUPOD_UI_PROFILE must be 320x240 or 600x450 (got '${NEUPOD_UI_PROFILE}')")
