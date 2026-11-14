@@ -137,6 +137,26 @@ uint32_t hal_audio_free_frames(void) { return HAL_AUDIO_BLOCK_FRAMES; }
 
 void hal_audio_mute(bool mute) { (void)mute; }
 
+static volatile bool g_wired_attached = true; // the jack: headphones in
+static volatile bool g_speaker_allowed;
+static volatile bool g_speaker_present = true;
+static volatile uint32_t g_speaker_sets;
+void hal_host_set_wired_attached(bool attached) { g_wired_attached = attached; }
+void hal_host_set_speaker_present(bool present) { g_speaker_present = present; }
+bool hal_host_speaker_allowed(void) { return g_speaker_allowed; }
+uint32_t hal_host_speaker_sets(void) { return g_speaker_sets; }
+bool hal_audio_headphones_in(void) { return g_wired_attached; }
+bool hal_audio_speaker_available(void) { return g_speaker_present; }
+void hal_audio_set_speaker(bool allow) {
+    g_speaker_allowed = allow && g_speaker_present;
+    g_speaker_sets++;
+}
+static volatile bool g_line_allowed;
+bool hal_audio_line_out_available(void) { return g_speaker_present; } /* the host's simulated Y2 hardware: one switch for both */
+void hal_audio_set_line_out(bool allow) { g_line_allowed = allow && g_speaker_present; }
+bool hal_host_line_out_allowed(void) { return g_line_allowed; }
+bool hal_audio_wired_attached(void) { return g_wired_attached || g_speaker_allowed; }
+
 void hal_audio_force_mute(void) {}
 
 void hal_audio_get_info(hal_audio_info_t *out) {

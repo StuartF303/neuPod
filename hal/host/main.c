@@ -48,14 +48,14 @@
 #define TOUR_BT_AUDIO                                                                              \
     "w w w w w s s s s _ x s s s s s s s s _ x s _ x x x x x x x x x _ x x x x x x x x m m m m "   \
     "w w w w w s s s _ _ _ _ x x x x x x snap:np-bt-badge 4*s snap:np-bt-volume bt:vol:0 x x x snap:np-bt-volume0 bt:vol:48 x x bt:key:next x x x x snap:bt-key-next m m m m "  \
-    "w w w w w s s s s _ _ snap:bt-about s _ 14*s snap:bt-diag m m m m w w w w w s s s s _ x s s s s s s s s _ x s _ x x snap:bt-streaming m m snap:settings-bt-streaming _ s _ x "  \
+    "w w w w w s s s s _ _ snap:bt-about s _ 14*s snap:bt-diag m m m m w w w w w s s s s _ x s s s s s s s s s s _ x s _ x x snap:bt-streaming m m snap:settings-bt-streaming _ s _ x "  \
     "bt:drop x x x snap:bt-dropped x x x x snap:bt-reconnected toast:warn:Couldn't_reconnect_\xE2\x80\x94_paused x snap:bt-gave-up strips:off m m m m"
 
-// Bluetooth pairing (BT-1 to BT-3): Settings > Bluetooth (the Audio output row cycles Auto, Wired, Bluetooth, Auto), Devices (scanning dots, found list, three-bar signal),
+// Bluetooth pairing (BT-1 to BT-3): Settings > Bluetooth (the Audio output row cycles Auto, Wired, Bluetooth, Speaker, Auto; settings-lineout and settings-speaker are the two rows before Bluetooth), Devices (scanning dots, found list, three-bar signal),
 // pair the first headset (busy dots, then Connected), its options (Connect / Disconnect, Forget), Forget asks (Menu keeps it), a second headset asks "Replace ...?" (Menu keeps),
 // Disconnect (the row rests at Saved), Forget (Select = yes), then a pairing the car kit refuses (Failed: pairing refused).
 #define TOUR_BT                                                                                    \
-    "x x x x s s s s _ x s s s s s s s s snap:settings-bt _ snap:bt-idle _ _ snap:bt-output-bt _ s _ x x x x snap:bt-scanning x x x x x snap:bt-found "  \
+    "x x x x s s s s _ x s s s s s s s s s s snap:settings-bt w snap:settings-lineout w snap:settings-speaker s s _ snap:bt-idle _ _ snap:bt-output-bt _ snap:bt-output-speaker _ s _ x x x x snap:bt-scanning x x x x x snap:bt-found "  \
     "_ snap:bt-pairing x x x x snap:bt-paired _ snap:bt-options s _ snap:bt-forget-asks m m s _ snap:bt-replace-asks m w _ _ x x x snap:bt-disconnected "  \
     "_ s _ _ x x x snap:bt-forgotten s s s _ x x x x snap:bt-failed m m m " TOUR_BT_AUDIO
 
@@ -203,7 +203,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--tour-bt") == 0) {
             cfg.ui_script = TOUR_BT;
             cfgp_tour = true;
-            g_expect = 2 + 24; // the splash, home and the named snapshots of the script
+            g_expect = 2 + 27; // the splash, home and the named snapshots of the script
         } else if (strcmp(argv[i], "--tour-art") == 0) {
             cfg.ui_script = TOUR_ART;
             cfgp_tour = true;

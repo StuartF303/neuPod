@@ -21,6 +21,9 @@ static uint32_t g_vol = AUDIO_VOL_DEFAULT_ATT_DB;
 static uint32_t g_started_ms;
 static uint32_t g_ended_base; // audio_pcm_ended_count() when the current file was requested
 static uint32_t g_changes_seen; // audio_track_change_count() as last looked at: gapless handoffs are applied when it moves
+static bool g_vol_lock;       // Line out is on: the software volume sits at 0 dB (no boost) and the wheel and keys do not change it
+static uint32_t g_vol_blocked; // volume steps ignored while locked (the UI says "Line out: fixed level")
+#define VOL_HELD (g_vol_hold || g_vol_lock)
 static bool g_vol_hold;       // the headset's volume is the volume (bt_control.h): the software volume sits at 0 dB, g_vol is kept for when it is not
 static bool g_vol_touched;    // the volume was changed since boot (a late settings load must not override the user)
 static bool g_error_stopped;  // storage_stop_request() already sent for the current error
@@ -100,7 +103,7 @@ static void unlock(void) { os_mutex_unlock(g_mu); }
 void player_init(void) {
     g_mu = os_mutex_create();
     g_vol = audio_vol_clamp(AUDIO_VOL_DEFAULT_ATT_DB);
-    g_info.vol_att_db = g_vol_hold ? 0u : g_vol; // what the audio core applies
+    g_info.vol_att_db = VOL_HELD ? 0u : g_vol; // what the audio core applies
     pq_clear(&g_q);
     (void)audio_set_volume(g_vol);
 }
@@ -160,7 +163,7 @@ static void reset_info(player_src_t src, player_state_t state, const char *name)
     memset(&g_info, 0, sizeof g_info);
     g_info.src = src;
     g_info.state = state;
-    g_info.vol_att_db = g_vol_hold ? 0u : g_vol; // what the audio core applies
+    g_info.vol_att_db = VOL_HELD ? 0u : g_vol; // what the audio core applies
     g_error_stopped = false;
     g_next_valid = false;
     g_offered = false;
@@ -497,7 +500,7 @@ void player_get(player_info_t *out) {
     action_t a = {0};
     lock();
     service(&a, have, &st);
-    g_info.vol_att_db = g_vol_hold ? 0u : g_vol; // what the audio core applies
+    g_info.vol_att_db = VOL_HELD ? 0u : g_vol; // what the audio core applies
     if (have) {
         uint32_t frames = g_info.state == PLAYER_VERIFYING || g_info.state == PLAYER_VERIFIED ? st.decoded_frames : st.pcm_frames;
         g_info.elapsed_s = g_info.rate != 0 && g_info.src == PLAYER_SRC_FILE ? (g_base_frames + frames) / g_info.rate : 0;
@@ -829,13 +832,18 @@ void player_stop(void) {
 
 uint32_t player_volume_att(void) {
     lock();
-    uint32_t v = g_vol_hold ? 0u : g_vol;
+    uint32_t v = VOL_HELD ? 0u : g_vol;
     unlock();
     return v;
 }
 
 uint32_t player_volume_step(int32_t steps) {
     lock();
+    if (g_vol_lock) {
+        g_vol_blocked++;
+        unlock();
+        return 0;
+    }
     int32_t att = (int32_t)g_vol - steps * (int32_t)VOL_STEP_DB; // louder = less attenuation
     if (att < 0) {
         att = 0;
@@ -843,7 +851,7 @@ uint32_t player_volume_step(int32_t steps) {
     g_vol = audio_vol_clamp((uint32_t)att);
     g_vol_touched = true;
     uint32_t v = g_vol;
-    bool hold = g_vol_hold;
+    bool hold = VOL_HELD;
     unlock();
     if (!hold) {
         (void)audio_set_volume(v);
@@ -884,17 +892,43 @@ void player_restore_volume(uint32_t att_db) {
         g_vol = audio_vol_clamp(att_db);
         att_db = g_vol;
     }
-    bool hold = g_vol_hold;
+    bool hold = VOL_HELD;
     unlock();
     if (apply && !hold) {
         (void)audio_set_volume(att_db);
     }
 }
 
+void player_volume_set_locked(bool locked) {
+    lock();
+    if (g_vol_lock == locked) {
+        unlock();
+        return;
+    }
+    g_vol_lock = locked;
+    uint32_t v = VOL_HELD ? 0u : g_vol;
+    unlock();
+    (void)audio_set_volume(v);
+}
+
+bool player_volume_locked(void) {
+    lock();
+    bool l = g_vol_lock;
+    unlock();
+    return l;
+}
+
+uint32_t player_volume_blocked(void) {
+    lock();
+    uint32_t n = g_vol_blocked;
+    unlock();
+    return n;
+}
+
 void player_volume_hold_unity(bool hold) {
     lock();
     g_vol_hold = hold;
-    uint32_t v = hold ? 0u : g_vol;
+    uint32_t v = VOL_HELD ? 0u : g_vol;
     unlock();
     (void)audio_set_volume(v);
 }

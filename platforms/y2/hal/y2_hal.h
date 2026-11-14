@@ -35,6 +35,12 @@ void y2_input_set_power_handler(void (*fn)(void));
  */
 bool y2_bt_probe(void);
 
+/**
+ * The speaker amplifier off, directly, for signal handlers that end the process without exit() (hal_console.c's, hal_audio.c's crash handlers).
+ * Async-signal-safe; a no-op when the audio device is not open.
+ */
+void y2_audio_emergency_pa_off(void);
+
 /** Device paths. */
 #define Y2_SYS_BLOCK "/sys/block"
 #define Y2_DEV_DIR "/dev"

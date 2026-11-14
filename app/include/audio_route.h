@@ -9,6 +9,11 @@
  * (Disconnect / Forget) or the setting says Wired: a headset that is switched off or walks out of range pauses the player (position kept, ring
  * emptied) and shows a banner, and nothing comes out of the wired output by itself. Changing the output needs a quiet audio core
  * (ADR-0013): playback is stopped (its place is kept, as for Stop), the audio stream is closed, the output is selected and the stream reopened.
+ * Speaker (owner-approved 2026-11-14, Y2 only): a fourth Audio output value, and a separate Settings > Speaker On / Off, default Off. The speaker is the wired sink's
+ * third choice: Bluetooth if a headset's stream is open (Auto), else headphones if the jack has them, else the speaker if Speaker is On, else no output (silence, and a
+ * running track pauses with "No audio output" when the speaker is turned off under it; a fresh Play with nothing to play on stays a silent null sink, as before).
+ * Audio output = Speaker never uses Bluetooth; with Speaker Off it plays nothing. Headphones in always win over the speaker (the hardware cannot do both), and
+ * pulling them out while playing pauses rather than jumping to the speaker. hal_audio_set_speaker() carries the decision to the HAL, which does the PA safety.
  * The A2DP stream is started when something plays on Bluetooth and suspended after a few seconds of silence.
  */
 #ifndef NEUPOD_AUDIO_ROUTE_H
@@ -23,12 +28,15 @@
 extern "C" {
 #endif
 
-typedef enum { AUDIO_ROUTE_AUTO = 0, AUDIO_ROUTE_WIRED, AUDIO_ROUTE_BLUETOOTH } audio_route_pref_t;
+typedef enum { AUDIO_ROUTE_AUTO = 0, AUDIO_ROUTE_WIRED, AUDIO_ROUTE_BLUETOOTH, AUDIO_ROUTE_SPEAKER } audio_route_pref_t;
 
 typedef enum {
     ROUTE_NOTICE_NONE = 0,
     ROUTE_NOTICE_HEADSET_DROPPED, /**< the headset went away while playing: "Headset disconnected" */
     ROUTE_NOTICE_NOT_CONNECTED,   /**< Play was pressed on the Bluetooth output with no headset: "Headset not connected" */
+    ROUTE_NOTICE_HEADPHONES_UNPLUGGED, /**< the wired headphones were pulled out while playing: "Headphones unplugged" */
+    ROUTE_NOTICE_LINE_OUT_OFF,    /**< the jack was unplugged with Line out on: it switched itself Off ("Line out off") */
+    ROUTE_NOTICE_NO_OUTPUT,       /**< the speaker was playing and was turned off (Settings > Speaker): "No audio output" */
 } audio_route_notice_t;
 
 #define AUDIO_ROUTE_SUSPEND_MS 4000u /**< silence on the Bluetooth output for this long suspends the A2DP stream */
@@ -38,6 +46,19 @@ typedef enum {
 void audio_route_init(void);
 
 audio_route_pref_t audio_route_pref(void);
+/** Settings > Speaker: may the internal speaker be used at all (saved, default Off). Needs a speaker (hal_audio_speaker_available()) to have any effect. */
+bool audio_route_speaker_enabled(void);
+void audio_route_set_speaker_enabled(bool on);
+/**
+ * Settings > Line out (saved, default Off; owner decision 2026-11-14): the jack at full level for an external amplifier. Active only while the output is the wired
+ * jack with a plug in it: the DAC is then fixed at its top index and the software volume at 0 dB (no boost), and the wheel does not change the volume. Ignored on the
+ * speaker and on Bluetooth. It switches itself Off when the jack is empty (unplugged, or at boot) so in-ear headphones never get full level unexpectedly.
+ * audio_route_line_out_enabled() is the saved setting (false on a device without the hardware); audio_route_line_out_active() is "in force now".
+ */
+bool audio_route_line_out_enabled(void);
+bool audio_route_line_out_active(void);
+/** Turn it On (needs a plug in the jack: refused, false, otherwise) or Off. */
+bool audio_route_set_line_out_enabled(bool on);
 /** Save the setting (settings store) and apply it at the next service tick. */
 void audio_route_set_pref(audio_route_pref_t pref);
 

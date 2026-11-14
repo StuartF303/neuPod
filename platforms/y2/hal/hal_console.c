@@ -40,6 +40,7 @@ static void restore_terminal(void) {
 
 static void on_signal(int sig) {
     restore_terminal();
+    y2_audio_emergency_pa_off(); // this handler ends the process without exit(): the speaker amplifier must not stay on
     signal(sig, SIG_DFL);
     raise(sig);
 }

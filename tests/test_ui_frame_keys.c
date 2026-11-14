@@ -19,6 +19,7 @@ static player_info_t g_pi;
 static int g_pause, g_next, g_prev;
 void player_get(player_info_t *o) { *o = g_pi; }
 uint32_t player_volume_att(void) { return 0; }
+uint32_t player_volume_blocked(void) { return 0; }
 int bt_volume_get(void) { return -1; }
 unsigned bt_vol_percent(uint8_t v) { return v; }
 uint32_t bt_service_gave_up_seq(void) { return 0; }

@@ -728,6 +728,12 @@ static void update_banner(void) {
             bt_toast_name(nm, sizeof nm);
             snprintf(txt, sizeof txt, "%s disconnected", nm);
             ui_toast_show(txt, UI_TOAST_WARN, AUDIO_ROUTE_BANNER_MS);
+        } else if (n == ROUTE_NOTICE_HEADPHONES_UNPLUGGED) {
+            ui_toast_show("Headphones unplugged", UI_TOAST_WARN, AUDIO_ROUTE_BANNER_MS);
+        } else if (n == ROUTE_NOTICE_LINE_OUT_OFF) {
+            ui_toast_show("Line out off", UI_TOAST_WARN, AUDIO_ROUTE_BANNER_MS);
+        } else if (n == ROUTE_NOTICE_NO_OUTPUT) {
+            ui_toast_show("No audio output", UI_TOAST_WARN, AUDIO_ROUTE_BANNER_MS);
         }
     }
 }
@@ -741,7 +747,17 @@ static uint32_t g_vol_gen = UINT32_MAX, g_vol_quiet_until;
 static bool g_vol_quiet;
 #define VOL_QUIET_MS 1500u /* after a settings load (the saved volume is restored a moment later) or a change of volume mode (the software volume follows the headset's) */
 
+static uint32_t g_vol_blocked_seen;
+static bool g_vol_blocked_init;
+
 static void update_volume_hud(void) {
+    /* Line out fixes the level: a wheel turn or volume key says so instead of changing anything */
+    const uint32_t blocked = player_volume_blocked();
+    if (g_vol_blocked_init && blocked != g_vol_blocked_seen && !g_hold.locked && !g_idle.off) {
+        ui_hud_show("Line out: fixed level", 100, 0);
+    }
+    g_vol_blocked_seen = blocked;
+    g_vol_blocked_init = true;
     uint32_t att = player_volume_att();
     int hv = bt_volume_get();
     const bool first = g_vol_att < 0;

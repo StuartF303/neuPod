@@ -10,6 +10,8 @@
 #include <string.h>
 
 #include "audio_engine.h"
+#include "audio_route.h"
+#include "hal_audio.h"
 #include "capabilities.h"
 #include "hal_battery.h"
 #include "hal_core.h"
@@ -440,7 +442,7 @@ static ui_screen_t *make_haptics(void) {
 
 /* ---- the Settings screen itself ---------------------------------------------------------------------- */
 
-enum { G_ABOUT, G_DISPLAY, G_CLICK, G_HAPTICS, G_GAPLESS, G_SHUFFLE, G_REPEAT, G_RESUME, G_BLUETOOTH, G_WIFI, G_STORAGE, G_BATTERY, G_COUNT };
+enum { G_ABOUT, G_DISPLAY, G_CLICK, G_HAPTICS, G_GAPLESS, G_SHUFFLE, G_REPEAT, G_RESUME, G_SPEAKER, G_LINEOUT, G_BLUETOOTH, G_WIFI, G_STORAGE, G_BATTERY, G_COUNT };
 
 #define PANE_ROWS 4
 typedef struct {
@@ -460,7 +462,7 @@ typedef struct {
     bool flip;    /* the next pane update flips the first value (a toggle changed it in place) */
 } settings_t;
 
-static const char *const k_group[G_COUNT] = {"About", "Display", "Click", "Haptics", "Gapless playback", "Shuffle", "Repeat", "Resume playing", "Bluetooth", "Wi-Fi", "Storage", "Battery"};
+static const char *const k_group[G_COUNT] = {"About", "Display", "Click", "Haptics", "Gapless playback", "Shuffle", "Repeat", "Resume playing", "Speaker", "Line out", "Bluetooth", "Wi-Fi", "Storage", "Battery"};
 
 static const char *shuffle_text(void) { return player_shuffle() == PQ_SHUFFLE_SONGS ? "Songs" : "Off"; }
 static const char *repeat_text(void) {
@@ -483,6 +485,12 @@ static void settings_get(void *ctx, int32_t i, ui_list_item_t *o) {
         snprintf(o->detail, sizeof o->detail, "%s", repeat_text());
     } else if (i == G_RESUME) {
         snprintf(o->detail, sizeof o->detail, "%s", player_resume_autoplay() ? "On" : "Off");
+    } else if (i == G_SPEAKER) {
+        snprintf(o->detail, sizeof o->detail, "%s", !hal_audio_speaker_available() ? "None" : audio_route_speaker_enabled() ? "On" : "Off");
+        o->dim = !hal_audio_speaker_available();
+    } else if (i == G_LINEOUT) {
+        snprintf(o->detail, sizeof o->detail, "%s", !hal_audio_line_out_available() ? "None" : audio_route_line_out_enabled() ? "On" : "Off");
+        o->dim = !hal_audio_line_out_available() || (!audio_route_line_out_enabled() && !hal_audio_headphones_in()); /* nothing in the jack: it cannot be turned on */
     } else if (i == G_DISPLAY) {
         snprintf(o->detail, sizeof o->detail, "%u %%", (unsigned)g_ui_state.backlight_pct);
         o->chevron = true;
@@ -558,6 +566,26 @@ static void pane_fill(int32_t g, pane_t *p) {
     case G_RESUME:
         kv(p, "At power-up", "%s", player_resume_autoplay() ? "On" : "Off");
         snprintf(p->help, sizeof p->help, "%s", player_resume_autoplay() ? "Plays on power-up if it was playing" : "Power-up leaves the track paused");
+        break;
+    case G_SPEAKER:
+        if (!hal_audio_speaker_available()) {
+            kv(p, "Speaker", "Not fitted");
+        } else {
+            kv(p, "Speaker", "%s", audio_route_speaker_enabled() ? "On" : "Off");
+            if (audio_route_pref() == AUDIO_ROUTE_SPEAKER) {
+                kv(p, "Output", "%s", audio_route_speaker_enabled() ? "Speaker" : "Speaker (off)");
+            }
+            snprintf(p->help, sizeof p->help, "%s", audio_route_speaker_enabled() ? "Used when no headphones or headset" : "Never used, even as the output");
+        }
+        break;
+    case G_LINEOUT:
+        if (!hal_audio_line_out_available()) {
+            kv(p, "Line out", "Not fitted");
+        } else {
+            kv(p, "Line out", "%s", audio_route_line_out_enabled() ? "On" : "Off");
+            snprintf(p->help, sizeof p->help, "%s",
+                     audio_route_line_out_enabled() ? "Full level, volume fixed" : hal_audio_headphones_in() ? "For an amplifier: full level" : "Plug into the jack first");
+        }
         break;
     case G_BLUETOOTH: {
         hal_bt_state_t bs = hal_bt_state();
@@ -716,6 +744,27 @@ static bool settings_button(ui_screen_t *b, uint8_t btn) {
         return true;
     case G_RESUME:
         player_set_resume_autoplay(!player_resume_autoplay());
+        toggled(s);
+        return true;
+    case G_SPEAKER:
+        if (!hal_audio_speaker_available()) {
+            ui_toast_show("No speaker in this device", UI_TOAST_WARN, 0);
+            return true;
+        }
+        audio_route_set_speaker_enabled(!audio_route_speaker_enabled());
+        toggled(s);
+        return true;
+    case G_LINEOUT:
+        if (!hal_audio_line_out_available()) {
+            ui_toast_show("No line out in this device", UI_TOAST_WARN, 0);
+            return true;
+        }
+        if (audio_route_line_out_enabled()) {
+            (void)audio_route_set_line_out_enabled(false);
+        } else if (!audio_route_set_line_out_enabled(true)) {
+            ui_toast_show("Plug into the jack first", UI_TOAST_WARN, 0);
+            return true;
+        }
         toggled(s);
         return true;
     case G_BLUETOOTH: next = make_bluetooth(); break;

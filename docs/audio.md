@@ -35,6 +35,13 @@ The sink is chosen at build time: `scripts/build.sh rp2350 -- -DNEUPOD_AUDIO_SIN
 (the old discard-on-a-clock sink, touches no pins). The host build uses SDL for audible output when SDL2 and an
 audio device exist (`NEUPOD_HOST_AUDIO=0` forces silence), otherwise it is the null sink.
 
+On the Innioasis Y2 the wired sink is the headphone jack's CS43131 DAC ([Y2](y2.md#what-each-hal-does), Audio): the audio core is unchanged
+(same 32-bit blocks, same software volume and ramps); the HAL converts to 16 bit (TPDF dither whenever the volume or a deeper source leaves
+bits below the 16th), queues the blocks in a ring, and a writer thread paces the whole player on the DAC's clock. 44.1 kHz only, with the null
+sink as the fallback when no headphones are plugged in. `hal_audio_wired_attached()` tells the audio route whether anything is on the jack
+(always true on the other platforms): headphones pulled out while playing pause the player with a "Headphones unplugged" banner.
+The Y2's internal speaker and Line out use the same sink: `hal_audio_set_speaker()` / `hal_audio_set_line_out()` carry the route's decision (Settings > Speaker, Settings > Line out, Audio output Auto / Wired / Bluetooth / Speaker) to the HAL, `hal_audio_headphones_in()` and `hal_audio_speaker_available()` / `hal_audio_line_out_available()` report the hardware; the other platforms answer no. The amplifier-off-first rules, the volume caps (speaker 9, jack 11, Line out 15) and the allow-lists are in [Y2](y2.md#internal-speaker-and-line-out). Line out locks the software volume at 0 dB (`player_volume_set_locked()`).
+
 ### Interrupt flow
 
 1. Start: both buffers hold silence; DMA channel A is started, the PIO is enabled.

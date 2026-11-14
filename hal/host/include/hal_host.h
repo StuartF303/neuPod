@@ -31,6 +31,15 @@ void hal_host_set_chip_id(const uint8_t id[8]);
 /** Tests: the simulated access point goes away (link loss): hal_wifi_state() then reports HAL_WIFI_IDLE. */
 void hal_host_wifi_drop_link(void);
 
+/** Tests: the wired output's jack reports headphones in (default) or out: hal_audio_wired_attached(). */
+void hal_host_set_wired_attached(bool attached);
+/** Tests: the host pretends to have an internal speaker (default) or not; whether the route allows it now (hal_audio_set_speaker) and how often it was told. */
+void hal_host_set_speaker_present(bool present);
+bool hal_host_speaker_allowed(void);
+/** Tests: whether the route allows Line out now (hal_audio_set_line_out). The jack simulation is hal_host_set_wired_attached; the simulated speaker hardware also has Line out. */
+bool hal_host_line_out_allowed(void);
+uint32_t hal_host_speaker_sets(void);
+
 /** Tests: the simulated Bluetooth headset goes away: a CONNECTED link turns FAILED with HAL_BT_FAIL_LINK_LOST. */
 void hal_host_bt_drop_link(void);
 

@@ -2,7 +2,7 @@
 /*
  * Bluetooth screens (design review 2026-11-12, BT-1 to BT-3; docs/ui.md, docs/bluetooth.md):
  *
- *  - Settings > Bluetooth: a short page, Audio output (Auto / Wired / Bluetooth), Devices >, Absolute volume (read-only: what the headset
+ *  - Settings > Bluetooth: a short page, Audio output (Auto / Wired / Bluetooth / Speaker), Devices >, Absolute volume (read-only: what the headset
  *    reports; the firmware has no switch for it). Bluetooth On / Off is not offered: the radio drivers have no clean power-down (backlog).
  *  - Devices: the remembered headset first (its state on the right: Streaming / Connected / Saved / Reconnecting...), then the devices a scan
  *    found (a monochrome three-bar signal; phones and the like greyed and named "(phone)"), then "Scan again". A scan starts when the screen opens
@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include "audio_route.h"
+#include "hal_audio.h"
 #include "bt_saved.h"
 #include "bt_service.h"
 #include "capabilities.h"
@@ -300,7 +301,7 @@ static ui_screen_t *options_create(const hal_bt_device_t *saved) {
 
 /* ---- Settings > Bluetooth ---- */
 
-#define ROW_OUTPUT 0 /* Audio output: Auto / Wired / Bluetooth (saved) */
+#define ROW_OUTPUT 0 /* Audio output: Auto / Wired / Bluetooth / Speaker (saved) */
 #define ROW_DEVICES 1
 #define ROW_ABS 2    /* Absolute volume: what the headset reports */
 #define ROWS_BT 3
@@ -315,6 +316,7 @@ static const char *output_text(char *buf, size_t n) {
     switch (audio_route_pref()) {
     case AUDIO_ROUTE_WIRED: return "Wired";
     case AUDIO_ROUTE_BLUETOOTH: return "Bluetooth";
+    case AUDIO_ROUTE_SPEAKER: return audio_route_speaker_enabled() ? "Speaker" : "Speaker (off)"; /* Settings > Speaker is Off: nothing plays */
     case AUDIO_ROUTE_AUTO: break;
     }
     snprintf(buf, n, "%s", audio_route_output() == AUDIO_OUT_BT ? "Auto: Bluetooth" : "Auto");
@@ -329,6 +331,7 @@ static void bt_get(void *ctx, int32_t idx, ui_list_item_t *o) {
     case ROW_OUTPUT:
         snprintf(o->label, sizeof o->label, "Audio output");
         snprintf(o->detail, sizeof o->detail, "%s", output_text(buf, sizeof buf));
+        o->dim = audio_route_pref() == AUDIO_ROUTE_SPEAKER && !audio_route_speaker_enabled();
         return;
     case ROW_DEVICES: {
         hal_bt_device_t sv;
@@ -372,7 +375,14 @@ static bool bt_button(ui_screen_t *s, uint8_t btn) {
     }
     switch (ui_list_selected(b->list)) {
     case ROW_OUTPUT:
-        audio_route_set_pref(audio_route_pref() == AUDIO_ROUTE_AUTO ? AUDIO_ROUTE_WIRED : audio_route_pref() == AUDIO_ROUTE_WIRED ? AUDIO_ROUTE_BLUETOOTH : AUDIO_ROUTE_AUTO);
+        /* Auto -> Wired -> Bluetooth -> Speaker (only on a device with one) -> Auto */
+        audio_route_set_pref(audio_route_pref() == AUDIO_ROUTE_AUTO ? AUDIO_ROUTE_WIRED
+                             : audio_route_pref() == AUDIO_ROUTE_WIRED ? AUDIO_ROUTE_BLUETOOTH
+                             : audio_route_pref() == AUDIO_ROUTE_BLUETOOTH && hal_audio_speaker_available() ? AUDIO_ROUTE_SPEAKER
+                                                                                                           : AUDIO_ROUTE_AUTO);
+        if (audio_route_pref() == AUDIO_ROUTE_SPEAKER && !audio_route_speaker_enabled()) {
+            ui_toast_show("Speaker is off: turn it on in Settings", UI_TOAST_WARN, 0);
+        }
         ui_list_refresh(b->list);
         break;
     case ROW_DEVICES:
