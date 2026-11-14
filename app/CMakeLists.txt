@@ -117,8 +117,13 @@ file(GLOB_RECURSE NEUPOD_LVGL_SOURCES CONFIGURE_DEPENDS ${NEUPOD_LVGL_DIR}/src/*
 # Small (12 / 16 px) and the Lucide icon sets (16 / 24 / 36 px) are part of the design system (docs/ui.md).
 set(NEUPOD_UI_FONT_SOURCES ${NEUPOD_APP_DIR}/ui/fonts/neupod_font_12.c ${NEUPOD_APP_DIR}/ui/fonts/neupod_font_14.c ${NEUPOD_APP_DIR}/ui/fonts/neupod_font_20.c
     ${NEUPOD_APP_DIR}/ui/fonts/neupod_font_48.c ${NEUPOD_APP_DIR}/ui/fonts/neupod_icons_16.c ${NEUPOD_APP_DIR}/ui/fonts/neupod_icons_24.c)
-if(NEUPOD_UI_HIRES) # 480x360 profile: hosted builds only
-  list(APPEND NEUPOD_UI_FONT_SOURCES ${NEUPOD_APP_DIR}/ui/fonts/neupod_font_16.c ${NEUPOD_APP_DIR}/ui/fonts/neupod_font_28.c ${NEUPOD_APP_DIR}/ui/fonts/neupod_icons_36.c)
+if(NEUPOD_UI_HIRES) # 480x360 and 600x450 profiles: hosted builds only
+  list(APPEND NEUPOD_UI_FONT_SOURCES ${NEUPOD_APP_DIR}/ui/fonts/neupod_font_16.c ${NEUPOD_APP_DIR}/ui/fonts/neupod_font_28.c ${NEUPOD_APP_DIR}/ui/fonts/neupod_icons_36.c
+      ${NEUPOD_APP_DIR}/ui/fonts/neupod_font_22.c ${NEUPOD_APP_DIR}/ui/fonts/neupod_font_26.c ${NEUPOD_APP_DIR}/ui/fonts/neupod_font_38.c
+      ${NEUPOD_APP_DIR}/ui/fonts/neupod_icons_30.c ${NEUPOD_APP_DIR}/ui/fonts/neupod_icons_45.c)
+elseif(NEUPOD_UI_PROFILE STREQUAL "600x450") # a product build of the 600x450 profile: only its own sizes on top of the always-linked set
+  list(APPEND NEUPOD_UI_FONT_SOURCES ${NEUPOD_APP_DIR}/ui/fonts/neupod_font_22.c ${NEUPOD_APP_DIR}/ui/fonts/neupod_font_26.c ${NEUPOD_APP_DIR}/ui/fonts/neupod_font_38.c
+      ${NEUPOD_APP_DIR}/ui/fonts/neupod_icons_30.c ${NEUPOD_APP_DIR}/ui/fonts/neupod_icons_45.c)
 endif()
 add_library(lvgl STATIC ${NEUPOD_LVGL_SOURCES} ${NEUPOD_UI_FONT_SOURCES})
 target_include_directories(lvgl PUBLIC ${NEUPOD_LVGL_DIR} ${NEUPOD_APP_DIR}/ui ${NEUPOD_APP_DIR}/include ${NEUPOD_APP_DIR}/os) # os: memory_budget.h

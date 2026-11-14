@@ -80,6 +80,10 @@ const neupod_runtime_config_t *rt_config(void);
  */
 os_mutex_t *rt_i2c_mutex(void);
 
+/** boot_start() reports here once hal_i2c_init() has succeeded; the input task starts a touch controller (an I2C part on the boards that have one) only after that. */
+void rt_i2c_set_ready(bool ready);
+bool rt_i2c_ready(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -32,6 +32,15 @@ void ui_nav_set(ui_nav_t *n, int32_t sel);
 /** Change the item count (after the model changed), keeping the selection in range. */
 void ui_nav_set_count(ui_nav_t *n, int32_t count);
 
+/* ---- Flush windows ------------------------------------------------------------------------------------ */
+
+/**
+ * Round an invalidated area to what the RM690B0 / SH8601 family of AMOLED controllers accept for CASET / RASET: start even, width and height even,
+ * i.e. x1 and y1 down to even, x2 and y2 up to odd, then clamped back into a @p w x @p h panel (an odd panel edge stays odd-sized: the HAL rounds that one).
+ * Harmless elsewhere (an ST7789 or the host repaints one extra row / column). Strips of an even-height render buffer then stay even too.
+ */
+void ui_area_even_align(int32_t *x1, int32_t *y1, int32_t *x2, int32_t *y2, int32_t w, int32_t h);
+
 /* ---- Wheel scroll acceleration -------------------------------------------------------------------- */
 
 typedef struct {
