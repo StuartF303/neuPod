@@ -11,12 +11,17 @@ LV_FONT_DECLARE(neupod_font_12) /* Small on the 320x240 profile (design system: 
 LV_FONT_DECLARE(neupod_font_14)
 LV_FONT_DECLARE(neupod_font_16) /* Small on the 480x360 profile; hosted builds only (NEUPOD_UI_HIRES) */
 LV_FONT_DECLARE(neupod_font_20)
+LV_FONT_DECLARE(neupod_font_22) /* Small on the 600x450 profile; hosted builds and NEUPOD_UI_PROFILE=600x450 only */
+LV_FONT_DECLARE(neupod_font_26) /* Body, 600x450 */
 LV_FONT_DECLARE(neupod_font_28) /* hosted builds only (NEUPOD_UI_HIRES) */
+LV_FONT_DECLARE(neupod_font_38) /* Large, 600x450 */
 LV_FONT_DECLARE(neupod_font_48) /* ASCII and the note symbol only: never used for media text */
 
-/* Lucide icons (ui_icons.h names the glyphs): 16 and 24 px on 320x240, 24 and 36 px on 480x360. */
+/* Lucide icons (ui_icons.h names the glyphs): 16 and 24 px on 320x240, 24 and 36 px on 480x360, 30 and 45 px on 600x450. */
 LV_FONT_DECLARE(neupod_icons_16)
 LV_FONT_DECLARE(neupod_icons_24)
+LV_FONT_DECLARE(neupod_icons_30) /* 30 and 45 px on 600x450 (the builds that have that profile) */
 LV_FONT_DECLARE(neupod_icons_36) /* hosted builds only (NEUPOD_UI_HIRES) */
+LV_FONT_DECLARE(neupod_icons_45)
 
 #endif

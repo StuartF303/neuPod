@@ -28,4 +28,9 @@ void host_input_scroll(int steps);
 /** The simulated Power key (F1 in the window) went down or up. */
 void host_input_power(bool down);
 
+/** The mouse as a touch panel (NEUPOD_TOUCH=1; ignored otherwise): the pointer in panel pixels, @p down while the left button is held. */
+void host_touch_mouse(int x, int y, bool down);
+/** Tour scripts and tests: set the simulated contact directly (clamped to the panel). Defined in hal_touch.c. */
+void hal_host_touch_inject(int x, int y, bool down);
+
 #endif // NEUPOD_HOST_INTERNAL_H

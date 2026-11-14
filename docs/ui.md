@@ -133,38 +133,46 @@ The product panel is 320x240 and the mock-ups above are drawn at that size, but 
 read `UIM->...` (the active profile); `UI_W`, `UI_H`, `UI_STATUS_H`, `UI_CONTENT_H`, `UI_ROW_H` and `UI_ROWS_VISIBLE` in
 `ui_internal.h` are shorthands for its first fields. Nothing outside `ui_metrics.c` scales a length.
 
-| | 320x240 (product panel) | 480x360 (Y2 testbed, host `NEUPOD_DISPLAY_SIZE=480x360`) |
-| --- | --- | --- |
-| Status bar / list row | 24 / 30 px | 36 / 45 px |
-| Content area, rows per page | 216 px, 7 | 324 px, 7 |
-| Fonts small / body / large / huge | Montserrat 12 / 14 / 20 / 48 (own build, Latin-1) | Montserrat 16 / 20 / 28 / 48 |
-| Icons (Lucide, 1-bit) small / large | 16 / 24 px | 24 / 36 px |
-| Home split (list / pane), art box | 179 / 141 (56 %), 117 px | 269 / 211, 175 px |
-| Now Playing art box, text column | 112 px at (14, 14), x = 140 | 168 px at (21, 21), x = 210 |
-| Settings split (groups / summary) | 179 / 141 | 269 / 211 |
-| Splash icon, icon row, wordmark | 32 px, y = 116, 48 pt | 48 px, y = 174, 48 pt (the largest size built) |
-| LVGL partial-render buffers | 2 x 320 x 24 RGB565 (15 KB each) | 2 x 480 x 36 (34 KB each; hosted builds only) |
-| Toast / HUD strip, lock pill | 22 / 26 / 24 px | 33 / 39 / 36 px |
+| | 320x240 (product panel) | 480x360 (Y2 testbed, host `NEUPOD_DISPLAY_SIZE=480x360`) | 600x450 (touch AMOLED boards, host `NEUPOD_DISPLAY_SIZE=600x450`) |
+| --- | --- | --- | --- |
+| Status bar / list row | 24 / 30 px | 36 / 45 px | 45 / 56 px |
+| Content area, rows per page | 216 px, 7 | 324 px, 7 | 405 px, 7 |
+| Fonts small / body / large / huge | Montserrat 12 / 14 / 20 / 48 (own build, Latin-1) | Montserrat 16 / 20 / 28 / 48 | Montserrat 22 / 26 / 38 / 48 |
+| Icons (Lucide, 1-bit) small / large | 16 / 24 px | 24 / 36 px | 30 / 45 px |
+| Home split (list / pane), art box | 179 / 141 (56 %), 117 px | 269 / 211, 175 px | 336 / 264, 220 px |
+| Now Playing art box, text column | 112 px at (14, 14), x = 140 | 168 px at (21, 21), x = 210 | 210 px at (18, 22), x = 251 |
+| Settings split (groups / summary) | 179 / 141 | 269 / 211 | 336 / 264 |
+| Splash icon, icon row, wordmark | 32 px, y = 116, 48 pt | 48 px, y = 174, 48 pt (the largest size built) | 60 px, y = 217, 48 pt |
+| LVGL partial-render buffers | 2 x 320 x 24 RGB565 (15 KB each) | 2 x 480 x 36 (34 KB each; hosted builds only) | 2 x 600 x 30 (36 KB each; hosted builds and `NEUPOD_UI_PROFILE=600x450`) |
+| Toast / HUD strip, lock pill | 22 / 26 / 24 px | 33 / 39 / 36 px | 56 / 48 / 45 px |
+
+The 600x450 profile (`app/ui/ui_metrics_600.h`, the same 4:3) is every length times 15/8 (`S15()`; fonts 14 / 20 / 12 to 26 / 38 / 22, 1.86x, 1.9x and 1.83x, again a little under the 1.875x of the lengths; Lucide 16 / 24 to 30 / 45), with a 4 / 3 / 2 px scroll bar, selection inset and 7 px Hold line where the 480 one keeps 3 / 2 / 1 / 4. Its render buffer is 30 lines, not 45: the flush windows are even-aligned (below), so the strip height must be even, and 30 lines keep the two buffers at 72 KB. `test_ui_metrics` requires an even width, height and `buf_lines` of every profile. The 48 pt font is the largest built and stays the huge font (the wordmark, the clock and the seek time look small on this panel; a 72 pt build is the follow-up if the owner wants it). The Waveshare boards' touch input is described in [Touch input](touch.md).
 
 The 480x360 profile is every length of the 320x240 one times 3/2 (the `S()` macro in `ui_metrics.c`, used only in that
 table), and fonts step to the next size (14 to 20, 20 to 28: 1.43x and 1.4x, a little under 1.5x, so text that fits at 320
-fits at 480). Row counts do not change: both profiles show 7 rows. Adding a profile is one more initialiser in
+fits at 480). Row counts do not change: every profile shows 7 rows. Adding a profile is one more initialiser in
 `ui_metrics.c`; `tests/test_ui_metrics.c` checks every compiled-in profile (title bar and rows fit the height, art box fits
 above the progress bar, text lines stack without overlapping, the splash debug list fits between the icon row and the version, the static LVGL buffers are big
 enough) and pins the 320x240 numbers to what the UI had before profiles existed.
 
 **What is compiled where.** `NEUPOD_UI_HIRES` (CMake option; default ON for `NEUPOD_PLATFORM=host` and `y2`, OFF for rp2350 and
-esp32s3) adds the 480x360 profile, Montserrat 28 (`lv_conf.h`), 480-wide render buffers (`UI_BUF_W_MAX`), a 192 KB LVGL pool
-(`memory_budget.h`) and the layout audit (`ui_audit.c`). Without it the product build has the one 320x240 profile as a compile-time constant, so
-the RP2350 image is unchanged (flash and RAM identical in size; see the ADR). A hosted build still picks its profile at run time,
+esp32s3) adds the 480x360 and 600x450 profiles, their fonts (16, 22, 26, 28, 38 px text, 30, 36, 45 px icons), 600-wide render buffers (`UI_BUF_W_MAX`), a 192 KB LVGL pool
+(`memory_budget.h`) and the layout audit (`ui_audit.c`). Without it the product build has exactly ONE profile as a compile-time constant, so
+the default RP2350 image is unchanged (flash and RAM identical in size; see the ADR). `-DNEUPOD_UI_PROFILE=600x450` (CMake cache variable, `320x240` by default;
+ignored by hosted builds, which carry them all) makes that one profile the 600x450 one: it defines `NEUPOD_UI_PROFILE_600`, which makes `ui_metrics.h` include `ui_metrics_600.h`
+instead of `ui_metrics_320.h`, sets `UI_BUF_W_MAX` / `UI_BUF_LINES_MAX` to 600 / 30 and compiles only the 22, 26 and 38 px fonts and the 30 and 45 px icons on top of the always-linked set
+(`ui_task` still checks the panel against the profile at start-up and prints `ui: WARNING panel ... does not match` on a mismatch, which a build for the wrong panel would otherwise show only as a corner of picture).
+**Even-aligned flush windows.** RM690B0 / SH8601-family AMOLED controllers need CASET / RASET starts and sizes even. `ui.c` adds an `LV_EVENT_INVALIDATE_AREA` handler that rounds every invalidated area
+(`ui_area_even_align()` in `ui_logic.c`, unit-tested) to even x1 / y1 and odd x2 / y2 inside the panel, always: an ST7789 or the host just repaints one extra row or column. Partial-render strips of an even-height buffer then stay even. A hosted build still picks its profile at run time,
 so a host built with the option runs the 320x240 layout byte for byte as before unless told otherwise.
 
-**Host.** `NEUPOD_DISPLAY_SIZE=WxH` (read once; between 320x240 and 640x480, default 320x240) sets the simulated panel size.
+**Host.** `NEUPOD_DISPLAY_SIZE=WxH` (read once; between 320x240 and 640x480, default 320x240; 600x450 for the touch boards) sets the simulated panel size.
 `NEUPOD_UI_AUDIT=1` makes every snapshot also walk the widget tree and print `ui: AUDIT FAIL ...` for a visible widget that
 lies outside the panel or its container (one pixel over the container's far edge is tolerated; only the list's off-window pool rows
 may be clipped away) and for a label whose text does not fit its box (dots / scrolling labels are not measured). Each snapshot prints
 `ui: audit '<name>' WxH objects=N violations=V`; the tests require that line. At start-up the UI logs `ui: profile WxH on WxH panel`
 and warns when the panel is bigger than the profile (including a build without `NEUPOD_UI_HIRES` on a panel above 320x240). ctest runs
+the tours at 600x450 as `hires600_tour`, `hires600_input_tour`, `hires600_wifi_tour`, `hires600_bt_tour`, `hires600_library_tour`, `hires600_text_tour`, `hires600_splash_*`, `hires600_hold_tour`, `hires600_design_tour`, `hires600_licences_tour` and `hires600_touch_tour`,
 the tours at 480x360 as `hires_tour`, `hires_input_tour`, `hires_wifi_tour`, `hires_bt_tour` and `hires_art_tour` (snapshots in
 `build/host/snapshots_hires*`, checked by `hires_art_snapshot`), and the default `runtime_smoke` tour runs the audit at 320x240. Each hires test has its own fake card, so `ctest -j3` (as CI runs it) is safe; the 320x240 tours share one card and hold a resource lock. `neupod` exits 3 when fewer snapshots were written than the tour promised (typically `--run-ms` too short), 2 when the audio task starved, 4 without audio stats.
 
@@ -175,7 +183,7 @@ test menu) are 320x240 only.
 
 ## Fonts and display text
 
-The UI draws with its own builds of Montserrat Medium (SIL OFL 1.1) at 12 (Small), 14, 16 (Small at 480x360, hosted builds only), 20, 28 (480x360, hosted builds only) and 48 pt, 4 bpp, merged with
+The UI draws with its own builds of Montserrat Medium (SIL OFL 1.1) at 12 (Small), 14, 16 (Small at 480x360, hosted builds only), 20, 22 / 26 / 38 (Small / Body / Large at 600x450: hosted builds and `NEUPOD_UI_PROFILE=600x450`), 28 (480x360, hosted builds only) and 48 pt, 4 bpp, merged with
 the few Font Awesome symbols that are still drawn from the fonts (`LV_SYMBOL_*`: note, tick, image, Wi-Fi, battery 3, Bluetooth, SD card, none of which the boot splash uses any more; the rest of the symbols moved to the Lucide icons, below). They are generated files in `app/ui/fonts/` (`tools/gen_ui_fonts.sh` rebuilds them; the
 command line, sources and licences are in `app/ui/fonts/README.md`) and replace LVGL's built-in `lv_font_montserrat_*`, which are switched off in
 `lv_conf.h` so the flash is not paid twice (the themes' default font is the 14 too). The metrics profiles point at them (`neupod_font_14` and so on).
@@ -240,7 +248,7 @@ in the firmware.) `ui_hud_show(label, pct, ms)`: the bottom strip (ink, Small te
 `ui_pill_show()` / `ui_hold_line_set()`: the lock pill and the Power-hold line (see Hold). None of them dims or blends anything behind it. The host tour tokens `toast:warn:Text_with_underscores`, `toast:info:...`, `hud:Label:PCT`, `strips:off` and `theme:light|dark|auto`
 drive them for `--tour-design` (ctest `design_tour`, `hires_design_tour`).
 
-**Icons (DS-6).** The Lucide set (ISC; chevron-right and lock derive from Feather, MIT) as 1-bit bitmaps at 16 / 24 px (320x240) and 24 / 36 px (480x360): chevron-right, play, pause, skip-back, skip-forward, shuffle, repeat, repeat-1, volume-2, bluetooth, wifi, lock, folder, file, lock-open, and the boot splash's check icons monitor, hard-drive, battery-medium, vibrate and circle-dot (`ui_icons.h`). They are generated from the pinned `lucide-static`
+**Icons (DS-6).** The Lucide set (ISC; chevron-right and lock derive from Feather, MIT) as 1-bit bitmaps at 16 / 24 px (320x240), 24 / 36 px (480x360) and 30 / 45 px (600x450): chevron-right, play, pause, skip-back, skip-forward, shuffle, repeat, repeat-1, volume-2, bluetooth, wifi, lock, folder, file, lock-open, and the boot splash's check icons monitor, hard-drive, battery-medium, vibrate and circle-dot (`ui_icons.h`). They are generated from the pinned `lucide-static`
 package by `tools/gen_ui_fonts.sh` into `neupod_icons_*.c` and drawn with `ui_icon()` like a label, so they take a theme colour. Lists use the chevron, the Files rows the folder and file icons (`ui_list_item_t.icon`), the status bar Wi-Fi, Bluetooth and lock,
 Now Playing play / pause / shuffle / repeat. Battery and signal bars stay drawn shapes (the splash's battery-gauge icon is the Lucide glyph). The licence text is `app/ui/fonts/LICENSE-Lucide.txt`.
 

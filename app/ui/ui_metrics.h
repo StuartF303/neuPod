@@ -3,7 +3,8 @@
  * UI metrics: every pixel size the LVGL UI uses, in one struct chosen once at UI init from the panel size
  * (docs/ui.md "Resolution profiles", ADR-0018). The product panel is 320x240 (the profile that holds the
  * exact numbers the UI always had); hosted builds (NEUPOD_UI_HIRES: the host simulator and the Y2 testbed)
- * also carry a 480x360 profile at 1.5x with the next-size fonts (app/ui/fonts). Screens read their geometry from
+ * also carry a 480x360 profile at 1.5x and a 600x450 one at 15/8x with the next-size fonts (app/ui/fonts). A product build
+ * compiles exactly one profile: 320x240, or 600x450 with -DNEUPOD_UI_PROFILE=600x450 (the 600x450 touch AMOLED boards). Screens read their geometry from
  * ui_metrics(); nothing outside ui_metrics.c multiplies by a scale factor.
  */
 #ifndef NEUPOD_UI_METRICS_H
@@ -16,9 +17,12 @@
 #include "fonts/neupod_fonts.h"
 
 /* Compile-time ceilings for the things that are sized statically (LVGL partial-render buffers, list row pool). */
-#ifdef NEUPOD_UI_HIRES
-#define UI_BUF_W_MAX 480
+#if defined(NEUPOD_UI_HIRES) /* every hosted profile fits: 600 x 36 RGB565 = 43 KB per buffer */
+#define UI_BUF_W_MAX 600
 #define UI_BUF_LINES_MAX 36
+#elif defined(NEUPOD_UI_PROFILE_600)
+#define UI_BUF_W_MAX 600
+#define UI_BUF_LINES_MAX 30 /* the profile's buf_lines (even): 36 KB per buffer */
 #else
 #define UI_BUF_W_MAX 320
 #define UI_BUF_LINES_MAX 24
@@ -151,17 +155,24 @@ const ui_metrics_t *ui_metrics(void);
 /** The compiled-in profiles, for tests. */
 const ui_metrics_t *const *ui_metrics_profiles(size_t *count);
 #else
-/* Product build: one profile, a compile-time constant (every field read folds away; no run-time selection, no extra RAM). */
+/* Product build: one profile, a compile-time constant (every field read folds away; no run-time selection, no extra RAM).
+ * NEUPOD_UI_PROFILE (CMake) picks which: 320x240 by default, 600x450 for the touch AMOLED boards. */
+#ifdef NEUPOD_UI_PROFILE_600
+#include "ui_metrics_600.h"
+#define UI_PRODUCT_PROFILE k_ui_metrics_600
+#else
 #include "ui_metrics_320.h"
-static inline const ui_metrics_t *ui_metrics(void) { return &k_ui_metrics_320; }
+#define UI_PRODUCT_PROFILE k_ui_metrics_320
+#endif
+static inline const ui_metrics_t *ui_metrics(void) { return &UI_PRODUCT_PROFILE; }
 static inline const ui_metrics_t *ui_metrics_select(uint32_t w, uint32_t h) {
     (void)w;
     (void)h;
-    return &k_ui_metrics_320;
+    return &UI_PRODUCT_PROFILE;
 }
 static inline void ui_metrics_set(const ui_metrics_t *m) { (void)m; }
 static inline const ui_metrics_t *const *ui_metrics_profiles(size_t *count) {
-    static const ui_metrics_t *const k_one[] = {&k_ui_metrics_320};
+    static const ui_metrics_t *const k_one[] = {&UI_PRODUCT_PROFILE};
     *count = 1;
     return k_one;
 }

@@ -47,6 +47,17 @@ void ui_nav_set_count(ui_nav_t *n, int32_t count) {
     fix_window(n);
 }
 
+void ui_area_even_align(int32_t *x1, int32_t *y1, int32_t *x2, int32_t *y2, int32_t w, int32_t h) {
+    *x1 &= ~1; /* two's complement: -1 rounds down to -2, then the clamp below */
+    *y1 &= ~1;
+    *x2 |= 1;
+    *y2 |= 1;
+    *x1 = clamp_i32(*x1, 0, w - 1);
+    *y1 = clamp_i32(*y1, 0, h - 1);
+    *x2 = clamp_i32(*x2, 0, w - 1);
+    *y2 = clamp_i32(*y2, 0, h - 1);
+}
+
 void ui_accel_init(ui_accel_t *a) {
     a->residue = 0;
     a->energy = 0;
