@@ -4,7 +4,9 @@
  * pointer = the contact, in panel pixels), so the touch gesture path (app/input/touch_gesture.c) can be driven on the desktop. Without it
  * the host has no touch panel, like the Pico 2 W and the Y2 (hal_touch_none.c). The mouse wheel stays the click wheel either way.
  * The tours (ui.c script tokens touch:down:X:Y, touch:move:X:Y, touch:up) inject contacts through hal_host_touch_inject() instead
- * (they set NEUPOD_TOUCH=1 too, so the panel is present).
+ * (they set NEUPOD_TOUCH=1 too, so the panel is present). The register holds only the latest contact, so a tour sample the input task has not read yet
+ * would be overwritten by the next one on a loaded machine: hal_host_touch_ready() tells the script when the last sample was read (and the panel is up), and
+ * the tour waits for it before injecting the next, so no sample is ever lost and the gestures do not depend on the host's scheduling.
  */
 #include <stdlib.h>
 
@@ -14,6 +16,8 @@
 
 // Latest contact packed into one word (x in bits 0..15, y in 16..30, down in bit 31): the UI thread (SDL pump, tour script) writes, the input task reads.
 static uint32_t g_contact;
+static int g_unread;  // an injected contact the input task has not read yet
+static int g_started; // hal_touch_init has run: the input task is polling
 
 static bool enabled(void) {
     static int cached = -1;
@@ -28,8 +32,11 @@ void hal_host_touch_inject(int x, int y, bool down) {
     const int w = hal_display_width(), h = hal_display_height();
     x = x < 0 ? 0 : x >= w ? w - 1 : x;
     y = y < 0 ? 0 : y >= h ? h - 1 : y;
-    __atomic_store_n(&g_contact, (uint32_t)x | ((uint32_t)y << 16) | (down ? 0x80000000u : 0u), __ATOMIC_RELAXED);
+    __atomic_store_n(&g_contact, (uint32_t)x | ((uint32_t)y << 16) | (down ? 0x80000000u : 0u), __ATOMIC_SEQ_CST);
+    __atomic_store_n(&g_unread, 1, __ATOMIC_SEQ_CST);
 }
+
+bool hal_host_touch_ready(void) { return __atomic_load_n(&g_started, __ATOMIC_SEQ_CST) != 0 && __atomic_load_n(&g_unread, __ATOMIC_SEQ_CST) == 0; }
 
 void host_touch_mouse(int x, int y, bool down) {
     if (enabled()) {
@@ -39,13 +46,20 @@ void host_touch_mouse(int x, int y, bool down) {
 
 bool hal_touch_present(void) { return enabled(); }
 
-hal_status_t hal_touch_init(void) { return enabled() ? HAL_OK : HAL_ENOTSUP; }
+hal_status_t hal_touch_init(void) {
+    if (!enabled()) {
+        return HAL_ENOTSUP;
+    }
+    __atomic_store_n(&g_started, 1, __ATOMIC_SEQ_CST);
+    return HAL_OK;
+}
 
 bool hal_touch_read(hal_touch_point_t *out) {
     if (out == NULL) {
         return false;
     }
-    const uint32_t c = __atomic_load_n(&g_contact, __ATOMIC_RELAXED);
+    __atomic_store_n(&g_unread, 0, __ATOMIC_SEQ_CST); // before the load: a contact injected in between stays unread, and is read next time
+    const uint32_t c = __atomic_load_n(&g_contact, __ATOMIC_SEQ_CST);
     out->x = (uint16_t)(c & 0xFFFFu);
     out->y = (uint16_t)((c >> 16) & 0x7FFFu);
     out->down = (c & 0x80000000u) != 0;

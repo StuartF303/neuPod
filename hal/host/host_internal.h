@@ -32,5 +32,6 @@ void host_input_power(bool down);
 void host_touch_mouse(int x, int y, bool down);
 /** Tour scripts and tests: set the simulated contact directly (clamped to the panel). Defined in hal_touch.c. */
 void hal_host_touch_inject(int x, int y, bool down);
+bool hal_host_touch_ready(void); // the panel is up and the last injected contact was read by the input task
 
 #endif // NEUPOD_HOST_INTERNAL_H

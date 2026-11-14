@@ -454,7 +454,8 @@ function(neupod_library_card NAME)
 endfunction()
 # --run-ms is the latest end of the run (the host exits as soon as the tour script is done; if the script has not finished by then, the snapshot count
 # check fails): the script takes ~70 s of wall clock on an idle machine and flaked at 140 s on loaded CI runners (Nov 2026), so 240 s, test TIMEOUT 300.
-# The real fix is event-driven tours (backlog TS-1).
+# Two real races were behind the 2026-11 failures (Shuffle Songs starting on the AAC file, touch contacts exactly one long-press time apart; both fixed), but the
+# library tour's remaining clock-driven steps (the `x` steps and snapshot timing) are still backlog TS-1.
 set(LIB_GAPLESS "player: track 2/3 .*\\(gapless\\)")
 neupod_library_card(library)
 add_test(NAME library_tour
