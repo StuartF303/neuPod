@@ -89,7 +89,6 @@ idf_component_register(
     heap
     mbedtls
     sdmmc
-    bootloader_support
 )
 # (no "fatfs" here: see ../CMakeLists.txt)
 

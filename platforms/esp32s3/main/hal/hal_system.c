@@ -7,7 +7,6 @@
 #include <stdlib.h>
 
 #include "board.h"
-#include "bootloader_random.h"
 #include "driver/gpio.h"
 #include "esp_mac.h"
 #include "esp_random.h"
@@ -21,9 +20,6 @@ hal_status_t hal_system_init(void) {
     // Latch battery power, start the I2C bus and power the panel. A failure here is not fatal to the system: the display and
     // touch HALs report their own state and the boot checks degrade the matching capabilities.
     (void)board_init();
-    // The radio is off, so the RNG would not get its noise: keep the SAR-ADC entropy source on (the battery divider is on ADC2 and is
-    // not read; turn this off before anything uses the ADC or starts the radio, which feeds the RNG itself).
-    bootloader_random_enable();
     return HAL_OK;
 }
 
@@ -64,8 +60,9 @@ bool hal_chip_id(uint8_t id[8]) {
     return true;
 }
 
-// The hardware RNG register, fed by the SAR-ADC entropy source that hal_system_init() enables while the radio is off (the IDF's
-// way to get true random numbers without Wi-Fi/BLE); revisit when the radio goes on.
+// The hardware RNG register. With the radio off (it is, for now) the IDF documents it as noise from a free-running source, not a
+// certified TRNG (bootloader_random_enable() would add the SAR-ADC entropy source, but it was left out: it reconfigures ADC pads, and
+// the first dark-panel hunt could not rule it out). Fine for the per-record nonces of the secrets file; revisit when Wi-Fi/BLE are on.
 void hal_random(void *buf, size_t n) { esp_fill_random(buf, n); }
 
 bool hal_system_can_poweroff(void) { return true; }

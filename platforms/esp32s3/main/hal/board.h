@@ -63,6 +63,12 @@
  */
 esp_err_t board_init(void);
 
+/** Microseconds (esp_timer) at which the panel power enable went high; 0 if it did not. The panel needs time to come up after it. */
+int64_t board_panel_power_on_us(void);
+
+/** The TCA9554 input register (EXIO0 = the panel's TE line, which pulses at the frame rate while the panel is on and displaying), -1 on a bus error. */
+int board_tca_inputs(void);
+
 /** The shared I2C bus (the i2c_master driver locks the bus per transaction itself). NULL if board_init() could not create it. */
 i2c_master_bus_handle_t board_i2c_bus(void);
 

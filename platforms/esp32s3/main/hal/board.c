@@ -7,6 +7,7 @@
 #include "driver/gpio.h"
 #include "esp_private/startup_internal.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_rom_sys.h"
 
 #define I2C_TIMEOUT_MS 50
@@ -23,10 +24,21 @@ ESP_SYSTEM_INIT_FN(neupod_power_latch, CORE, BIT(0), 0) {
 }
 
 static i2c_master_bus_handle_t s_bus;
+static i2c_master_dev_handle_t s_tca;
+static int64_t s_pwr_en_us;
 static bool s_done;
 static esp_err_t s_result = ESP_FAIL;
 
 i2c_master_bus_handle_t board_i2c_bus(void) { return s_bus; }
+int64_t board_panel_power_on_us(void) { return s_pwr_en_us; }
+
+int board_tca_inputs(void) {
+    uint8_t reg = 0x00, v = 0;
+    if (s_tca == NULL || i2c_master_transmit_receive(s_tca, &reg, 1, &v, 1, I2C_TIMEOUT_MS) != ESP_OK) {
+        return -1;
+    }
+    return v;
+}
 
 static esp_err_t tca_write(i2c_master_dev_handle_t d, uint8_t reg, uint8_t val) {
     uint8_t b[2] = {reg, val};
@@ -71,7 +83,10 @@ esp_err_t board_init(void) {
     if (e == ESP_OK) {
         e = tca_write(tca, TCA_CFG, (uint8_t)~(1u << EXIO_PWR_EN));
     }
-    if (tca != NULL) {
+    if (e == ESP_OK) {
+        s_tca = tca; // kept: the display self-test reads the TE line through it
+        s_pwr_en_us = esp_timer_get_time();
+    } else if (tca != NULL) {
         i2c_master_bus_rm_device(tca);
     }
     if (e != ESP_OK) {

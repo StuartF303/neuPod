@@ -43,6 +43,7 @@ static uint8_t s_madctl = 0x30;
 static bool s_inverted;
 static uint8_t s_brightness;
 static bool s_asleep;
+static uint32_t s_push_errors;
 // Threading: every display call comes from the UI task (init, blit, sleep, backlight), so there is no lock here.
 
 /* The write window and the cursor in it (hal_display_set_window / blit). */
@@ -121,13 +122,20 @@ static bool push_rect(int x0, int y0, int x1, int y1) {
         int n = (y1 - y + 1 < rows) ? (y1 - y + 1) : rows;
         if (inflight == 2) {
             ok = xSemaphoreTake(s_done, pdMS_TO_TICKS(XFER_TIMEOUT_MS)) == pdTRUE;
+            if (!ok && s_push_errors++ == 0) {
+                printf("display: push did not complete (no transfer-done)\n");
+            }
             inflight--;
         }
         for (int r = 0; r < n; r++) {
             memcpy(s_bounce[buf] + r * pw, s_fb + (size_t)(y + r) * LAND_W + x0, (size_t)pw * 2u);
         }
-        if (send_rect(x0, y, x1 + 1, y + n, s_bounce[buf]) != ESP_OK) {
+        esp_err_t se = send_rect(x0, y, x1 + 1, y + n, s_bounce[buf]);
+        if (se != ESP_OK) {
             ok = false;
+            if (s_push_errors++ == 0) {
+                printf("display: push failed: %s\n", esp_err_to_name(se));
+            }
         }
         inflight++;
         buf ^= 1;
@@ -135,6 +143,9 @@ static bool push_rect(int x0, int y0, int x1, int y1) {
     while (inflight-- > 0) {
         if (xSemaphoreTake(s_done, pdMS_TO_TICKS(XFER_TIMEOUT_MS)) != pdTRUE) {
             ok = false;
+            if (s_push_errors++ == 0) {
+                printf("display: push did not complete (no transfer-done)\n");
+            }
         }
     }
     return ok;
@@ -162,6 +173,12 @@ hal_status_t hal_display_init(void) {
     if (board_init() != ESP_OK) {
         printf("display: panel power enable (TCA9554) not available\n");
         return HAL_ENODEV;
+    }
+    // The panel's supply needs time after the expander raised PWR_EN: the first start-up came up with reset 14 ms later and showed nothing.
+    // (The bring-up probe, which worked, waited over a second.)
+    int64_t on = board_panel_power_on_us();
+    while (esp_timer_get_time() - on < 500000) {
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
     s_done = xSemaphoreCreateCounting(16, 0);
     s_fb = heap_caps_aligned_alloc(64, (size_t)LAND_W * LAND_H * 2u, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -210,21 +227,17 @@ hal_status_t hal_display_init(void) {
     }
 
     // Hardware reset, then the bring-up sequence.
+    // The same order as the esp_lcd SH8601 driver the bring-up probe used (which lit this panel): RST configured as an output at level 0,
+    // pulsed low 10 ms then high and 150 ms, then MADCTL, COLMOD and the table.
     gpio_config_t rst = {.pin_bit_mask = 1ULL << PIN_LCD_RST, .mode = GPIO_MODE_OUTPUT};
     gpio_config(&rst);
-    gpio_set_level(PIN_LCD_RST, 1);
-    vTaskDelay(pdMS_TO_TICKS(10));
     gpio_set_level(PIN_LCD_RST, 0);
-    vTaskDelay(pdMS_TO_TICKS(20));
+    vTaskDelay(pdMS_TO_TICKS(10));
     gpio_set_level(PIN_LCD_RST, 1);
-    vTaskDelay(pdMS_TO_TICKS(120));
+    vTaskDelay(pdMS_TO_TICKS(150));
 
     uint8_t zero = 0x00, rgb565 = 0x55;
-    e = cmd(0x11, NULL, 0); /* sleep out */
-    vTaskDelay(pdMS_TO_TICKS(100));
-    if (e == ESP_OK) {
-        e = cmd(0x36, &zero, 1);
-    }
+    e = cmd(0x36, &zero, 1);
     if (e == ESP_OK) {
         e = cmd(0x3A, &rgb565, 1);
     }

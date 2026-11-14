@@ -105,7 +105,7 @@ without the radio on is a noise source rather than a certified TRNG: fine for th
 **Power.** `BAT_CTRL` is latched high by the first start-up init function of the image (`ESP_SYSTEM_INIT_FN` in `board.c`, before the heap and PSRAM are up), and the 0.3 s PSRAM
 memory test is off, to keep the window in which a power-on key press could be released early as short as possible. `hal_system_poweroff()` drops the latch, waits 200 ms and
 **returns false if the board is still running** (USB power: the charger keeps it alive; it is probed, not assumed), so the UI takes its "powering off" overlay away; on battery
-the power simply goes. `hal_random()` is fed by the SAR-ADC entropy source (`bootloader_random_enable()`) while the radio is off.
+the power simply goes. `hal_random()` is the hardware RNG register (not a certified TRNG while the radio is off; fine for per-record nonces; revisit with Wi-Fi/BLE).
 
 ## UI profile
 
