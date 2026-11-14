@@ -43,6 +43,7 @@ typedef enum {
     TOUCH_PENDING,  /**< finger down, not decided yet (tap or long press if it lifts or waits) */
     TOUCH_SCROLL,   /**< locked to a vertical drag */
     TOUCH_SWIPE,    /**< locked to a horizontal drag, Menu not sent yet */
+    TOUCH_WAIT_LIFT, /**< a finger of unknown history (after a cancel, or already down at start-up): ignored until a sample shows no finger */
     TOUCH_SPENT,    /**< this touch already produced its event (long press, swipe); ignore it until the finger lifts */
 } touch_gesture_state_t;
 
@@ -63,7 +64,7 @@ void touch_gesture_init(touch_gesture_t *g, uint16_t panel_w, uint16_t panel_h);
  */
 size_t touch_gesture_update(touch_gesture_t *g, const hal_touch_point_t *pt, uint32_t now_ms, input_event_t *out, size_t max);
 
-/** Forget the touch in progress without sending anything (the controller stopped answering: a tap must not come from a read error). */
+/** Forget the touch in progress without sending anything (the controller stopped answering: a tap must not come from a read error), and ignore any contact until a lift is seen, so a finger still held cannot end as a tap or long press. Also call it when polling starts. */
 void touch_gesture_cancel(touch_gesture_t *g);
 
 #ifdef __cplusplus

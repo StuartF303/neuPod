@@ -181,6 +181,23 @@ TEST(cancel_forgets_the_touch_without_a_tap) {
     ASSERT_EQ(2, at(110, 100, 100, false));
 }
 
+TEST(a_finger_held_through_a_cancel_or_at_start_up_must_lift_first) {
+    touch_gesture_init(&g, PANEL_600);
+    at(0, 100, 100, true);
+    touch_gesture_cancel(&g);
+    ASSERT_EQ(0, at(10, 100, 100, true));
+    ASSERT_EQ(0, at(10 + TOUCH_LONG_PRESS_MS + 50, 100, 100, true)); // held on: no Play
+    ASSERT_EQ(0, at(900, 100, 100, false));                          // lifted: no Select
+    ASSERT_EQ(0, at(910, 100, 100, true));                           // a new touch
+    ASSERT_EQ(2, at(950, 100, 100, false));
+    ASSERT_EQ(HAL_BTN_SELECT, ev[0].button);
+    touch_gesture_init(&g, PANEL_600); // start-up with the finger already down
+    touch_gesture_cancel(&g);
+    ASSERT_EQ(0, at(0, 50, 50, true));
+    ASSERT_EQ(0, at(1000, 50, 400, true)); // even a drag is ignored
+    ASSERT_EQ(0, at(1010, 50, 400, false));
+}
+
 TEST(the_millisecond_clock_wrapping_is_harmless) {
     touch_gesture_init(&g, PANEL_600);
     at(0xFFFFFF00u, 100, 100, true);
@@ -221,6 +238,7 @@ int main(void) {
     RUN(a_swipe_left_does_nothing);
     RUN(the_first_axis_out_of_the_slop_decides_the_touch);
     RUN(cancel_forgets_the_touch_without_a_tap);
+    RUN(a_finger_held_through_a_cancel_or_at_start_up_must_lift_first);
     RUN(the_millisecond_clock_wrapping_is_harmless);
     RUN(not_enough_room_sends_nothing_and_does_not_crash);
     RUN(a_board_without_touch_reports_none);

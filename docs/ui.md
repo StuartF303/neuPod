@@ -190,7 +190,7 @@ command line, sources and licences are in `app/ui/fonts/README.md`) and replace 
 
 | Font | Characters |
 |------|------------|
-| 12, 14, 16, 20, 28 | ASCII (U+0020 to 007E), Latin-1 (U+00A0 to 00FF, without the soft hyphen), bullet, en and em dash, curly single and double quotes, ellipsis, euro, and the 7 symbols still drawn from the fonts |
+| 12, 14, 16, 20, 22, 26, 28, 38 | ASCII (U+0020 to 007E), Latin-1 (U+00A0 to 00FF, without the soft hyphen), bullet, en and em dash, curly single and double quotes, ellipsis, euro, and the 7 symbols still drawn from the fonts |
 | 48 | ASCII and the note symbol only (the splash wordmark and the art-less note; it never shows a name) |
 
 Latin-1 covers the accented letters of Western European names (é ü ñ ø å ß ...) and `¿ ¡`: some rippers write `¿` where the title had a `?`, and it is a

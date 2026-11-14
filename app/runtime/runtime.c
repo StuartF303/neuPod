@@ -77,6 +77,8 @@ static void send_events(const input_event_t *ev, size_t n) { input_pump_send(&g_
 
 typedef struct {
     bool tried, ready;
+    uint8_t init_failures;
+    uint32_t retry_at_ms;
     uint32_t fails;
     touch_gesture_t gesture;
 } touch_input_t;
@@ -90,16 +92,23 @@ static void touch_input_start(touch_input_t *t) {
     const hal_status_t st = hal_touch_init();
     os_mutex_unlock(rt_i2c_mutex());
     if (st != HAL_OK) {
-        printf("input: touch panel init failed (%d): no touch input\n", (int)st);
+        if (++t->init_failures == 1) { // one more try after a second (a controller still coming out of reset), then give up for the session
+            printf("input: touch panel init failed (%d): retrying in 1 s\n", (int)st);
+            t->tried = false;
+            t->retry_at_ms = os_tick_ms() + 1000u;
+        } else {
+            printf("input: touch panel init failed again (%d): no touch input\n", (int)st);
+        }
         return;
     }
     touch_gesture_init(&t->gesture, hal_display_width(), hal_display_height());
+    touch_gesture_cancel(&t->gesture); // a finger already down at start-up must lift before it counts
     t->ready = true;
     printf("input: touch panel ready (%ux%u)\n", (unsigned)hal_display_width(), (unsigned)hal_display_height());
 }
 
 static void touch_input_poll(touch_input_t *t) {
-    if (!t->tried && hal_touch_present() && rt_i2c_ready()) {
+    if (!t->tried && hal_touch_present() && rt_i2c_ready() && (int32_t)(os_tick_ms() - t->retry_at_ms) >= 0) {
         touch_input_start(t);
     }
     if (!t->ready || !os_mutex_lock(rt_i2c_mutex(), OS_NO_WAIT)) {

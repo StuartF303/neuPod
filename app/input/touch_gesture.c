@@ -16,7 +16,7 @@ void touch_gesture_init(touch_gesture_t *g, uint16_t panel_w, uint16_t panel_h) 
     }
 }
 
-void touch_gesture_cancel(touch_gesture_t *g) { g->state = TOUCH_IDLE; }
+void touch_gesture_cancel(touch_gesture_t *g) { g->state = TOUCH_WAIT_LIFT; }
 
 // A button press and its release, as the wheel would report them.
 static size_t press(uint8_t button, input_event_t *out, size_t max) {
@@ -29,6 +29,12 @@ static size_t press(uint8_t button, input_event_t *out, size_t max) {
 }
 
 size_t touch_gesture_update(touch_gesture_t *g, const hal_touch_point_t *pt, uint32_t now_ms, input_event_t *out, size_t max) {
+    if (g->state == TOUCH_WAIT_LIFT) {
+        if (!pt->down) {
+            g->state = TOUCH_IDLE;
+        }
+        return 0;
+    }
     if (!pt->down) {
         // A still finger lifted: a tap, or (if the polls skipped past the long-press time, e.g. a busy bus) the long press it was.
         const bool pending = g->state == TOUCH_PENDING;
