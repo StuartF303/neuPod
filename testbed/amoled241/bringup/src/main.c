@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-// Bring-up probe for the Waveshare RP2350-Touch-AMOLED-2.41 (RP2350B, 16 MB flash, 2 MB PSRAM, RM690B0 450x600 AMOLED,
+// Bring-up probe for the Waveshare RP2350-Touch-AMOLED-2.41 (RP2350B, 16 MB flash, 8 MB PSRAM, RM690B0 450x600 AMOLED,
 // FT6336 touch, PCF85063 RTC, QMI8658 IMU, microSD, soft-latched battery power).
 // Dev-only capability test: prints PASS/FAIL for each block over USB CDC and UART0. Nothing here ever writes to the SD card.
 // Every wait has a timeout; there is deliberately no watchdog (a watchdog reset would float BAT_Control and drop power on battery).
@@ -25,7 +25,8 @@
 #include "AMOLED_2in41.h"
 #include "FT6336U.h"
 #include "fonts.h"
-#include "psram_tool.h"
+#include "hardware/vreg.h"
+#include "psram.h"
 #include "qspi_pio.h"
 
 // ---- Pins (schematic + Waveshare demo) ----
@@ -45,6 +46,7 @@
 #define LW 600  // landscape view
 #define LH 450
 
+#define PSRAM_CS_PIN 47  // QMI CS1
 #define PSRAM_CACHED   0x11000000u  // XIP window, QMI CS1, cached
 #define PSRAM_UNCACHED 0x15000000u  // same chip, no cache: every access really goes to the PSRAM
 #define PSRAM_TEST_BYTES (2u * 1024 * 1024)
@@ -226,13 +228,19 @@ static uint32_t verify(const volatile uint32_t *p, uint32_t n, uint32_t inv, uin
 static uint32_t mbps_x10(uint32_t bytes, uint64_t us) { return us ? (uint32_t)((uint64_t)bytes * 10 / us) : 0; }  // bytes/us = MB/s
 
 static void step_psram(void) {
-    size_t sz = rp_setup_psram(RP2350_XIP_CSI_PIN);
-    printf("psram : CS1 = GPIO%d, KGD=0x%02x (0x5D = AP Memory) EID=0x%02x, driver-reported size %lu MB\n", RP2350_XIP_CSI_PIN,
-           rp_psram_kgd, rp_psram_eid, (unsigned long)(sz >> 20));
-    if (sz == 0) {
-        report("psram", false, "not detected (KGD=0x%02x EID=0x%02x)", rp_psram_kgd, rp_psram_eid);
+    psram_info_t pi;
+    psram_init(PSRAM_CS_PIN, &pi);
+    size_t sz = pi.size;
+    printf("psram : CS1 = GPIO%d, MF=0x%02x KGD=0x%02x (0x5D = known good die) EID=0x%02x, density field says %lu MB\n", PSRAM_CS_PIN,
+           pi.mf, pi.kgd, pi.eid, (unsigned long)(sz >> 20));
+    if (!pi.present) {
+        report("psram", false, "not detected (KGD=0x%02x EID=0x%02x)", pi.kgd, pi.eid);
         return;
     }
+    printf("psram : clk_sys %lu kHz / divider %lu = PSRAM SCK %lu.%03lu MHz; rxdelay %lu, max_select %lu x64 cycles, min_deselect %lu cycles\n",
+           (unsigned long)(clock_get_hz(clk_sys) / 1000), (unsigned long)pi.clkdiv, (unsigned long)(pi.sck_hz / 1000000),
+           (unsigned long)(pi.sck_hz / 1000 % 1000), (unsigned long)pi.rxdelay, (unsigned long)pi.max_select,
+           (unsigned long)pi.min_deselect);
     const uint32_t n = PSRAM_TEST_BYTES / 4;
     volatile uint32_t *u = (volatile uint32_t *)PSRAM_UNCACHED;
     volatile uint32_t *k = (volatile uint32_t *)PSRAM_CACHED;
@@ -276,9 +284,9 @@ static void step_psram(void) {
 
     uint32_t mid = (errs == 0 && g_fb == NULL) ? 1 : 0;
     if (mid) g_fb = (uint16_t *)PSRAM_CACHED;  // framebuffer at the start of PSRAM (540000 bytes, fits in 2 MB)
-    report("psram", errs == 0, "KGD 0x%02x EID 0x%02x, %lu MB (%s), %lu errors, rd %lu.%lu / wr %lu.%lu MB/s (cached)", rp_psram_kgd,
-           rp_psram_eid, (unsigned long)(real_mb ? real_mb : (sz >> 20)), real_mb ? "aliasing" : "driver",
-           (unsigned long)errs, (unsigned long)(mbps_x10(PSRAM_TEST_BYTES, t5 - t4) / 10),
+    report("psram", errs == 0, "KGD 0x%02x EID 0x%02x, %lu MB (%s), SCK %lu MHz, %lu errors, rd %lu.%lu / wr %lu.%lu MB/s (cached)", pi.kgd,
+           pi.eid, (unsigned long)(real_mb ? real_mb : (sz >> 20)), real_mb ? "aliasing" : "EID",
+           (unsigned long)(pi.sck_hz / 1000000), (unsigned long)errs, (unsigned long)(mbps_x10(PSRAM_TEST_BYTES, t5 - t4) / 10),
            (unsigned long)(mbps_x10(PSRAM_TEST_BYTES, t5 - t4) % 10), (unsigned long)(mbps_x10(PSRAM_TEST_BYTES, t4 - t3) / 10),
            (unsigned long)(mbps_x10(PSRAM_TEST_BYTES, t4 - t3) % 10));
 }
@@ -667,8 +675,12 @@ int main(void) {
     gpio_pull_up(PIN_KEY_BAT);
     gpio_set_dir(PIN_KEY_BAT, GPIO_IN);
 
-    // 150 MHz like the Waveshare demo; set before stdio so the UART baud rate is computed for the final clock.
-    set_sys_clock_khz(PLL_SYS_KHZ, true);
+    // 150 MHz like the Waveshare demo unless built with PROBE_SYS_KHZ; set before stdio so the UART baud rate is computed for the final clock.
+    if (PROBE_SYS_KHZ > 150000) {
+        vreg_set_voltage(PROBE_SYS_KHZ > 200000 ? VREG_VOLTAGE_1_20 : VREG_VOLTAGE_1_15);
+        sleep_us(100);
+    }
+    set_sys_clock_khz(PROBE_SYS_KHZ, true);
     stdio_init_all();
 
     // Wait for a USB terminal (up to 6 s) so the first lines are not lost; carry on regardless.

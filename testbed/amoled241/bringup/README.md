@@ -1,6 +1,6 @@
 # AMOLED 2.41 bring-up probe
 
-Dev-only capability probe for the Waveshare RP2350-Touch-AMOLED-2.41 (RP2350B QFN80, 16 MB flash, 2 MB PSRAM, RM690B0 450x600
+Dev-only capability probe for the Waveshare RP2350-Touch-AMOLED-2.41 (RP2350B QFN80, 16 MB flash, PSRAM (8 MB part), RM690B0 450x600
 AMOLED, FT6336 touch). Not part of any neuPod firmware image. One firmware, seven checks, each printing `[PASS]` or `[FAIL]` with numbers;
 every wait has a timeout.
 
@@ -9,7 +9,7 @@ every wait has a timeout.
 | # | Check | How |
 |---|-------|-----|
 | 1 | Chip/board | GPIO25 high first thing in `main()`. Prints SDK version, ROM chip version, GPIO count (48 = B), unique ID, JEDEC flash ID and size |
-| 2 | PSRAM | Waveshare/4D `psram_tool` on CS1 = GPIO47. Prints KGD/EID, size; writes and verifies a 2 MB pattern (uncached and cached); MB/s; checks real capacity by address aliasing |
+| 2 | PSRAM | Own driver (`src/psram.c`) on QMI CS1 = GPIO47: reset, ID read, quad mode, QMI window-1 timing for the actual clk_sys. Prints KGD/EID, divider and PSRAM clock, size; writes and verifies a 2 MB pattern (uncached and cached); MB/s; checks real capacity by address aliasing |
 | 3 | Display | RM690B0 init over PIO QSPI, landscape 600x450 test card (8 colour bars, grey ramp, 1-px orange border, "neuPod 600x450"), TE edge count, full-frame push time/fps from PSRAM and from SRAM strips, brightness 50% then 100% |
 | 4 | Touch | FT6336 reset, chip/vendor/firmware ID, then polls for the rest of the run: prints landscape x,y, draws a red dot, shows x,y on the panel |
 | 5 | I2C1 | Scan 0x08-0x77 (expect 0x38, 0x51, 0x6B or 0x6A), QMI8658 WHO_AM_I (0x05), PCF85063 time |
@@ -22,6 +22,17 @@ released once first, so the press that powers the board on is not counted.
 
 Console keys: `m` cycles the controller's MADCTL (0x36) value and re-pushes the frame (to find out whether the RM690B0 can rotate in
 hardware; the probe itself rotates in software), `s` prints the summary.
+
+## PSRAM clock
+
+The QMI divider is an integer, so the PSRAM clock is clk_sys / ceil(clk_sys / 109 MHz). At 150 MHz that is divider 2 = 75 MHz (no
+integer divider gives anything between 75 and 150). To go faster the system clock has to rise: `-DPROBE_SYS_KHZ=216000` gives
+divider 2 = 108 MHz (core voltage raised to 1.15 V; the display PIO clock and flash clock rise with it: flash 108 MHz, display SCLK
+108 MHz, both unverified). UART/USB are fine either way (stdio starts after the clock change). Datasheet figures relied on, from
+memory and not re-checked against the PDF: APS6404L quad read/write fast to 133 MHz (kept to 109), tCEM 8 us max, tCPH 18 ns min.
+The read sample delay (rxdelay) is 1 up to 90 MHz, 2 above; only the 75 MHz setting has run on hardware.
+
+    cmake -G Ninja -S . -B build-216 -DPROBE_SYS_KHZ=216000 && ninja -C build-216
 
 ## Landscape
 
