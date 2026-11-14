@@ -61,8 +61,8 @@ __attribute__((constructor)) static void idle_init(void) {
 static y2_audio_t g_y2;
 static pthread_once_t g_probe_once = PTHREAD_ONCE_INIT;
 static bool g_dev_ready; // both nodes opened: the CS43131 path exists (the backend is "cs43131")
-static int g_fd_eac = -1;
-static int g_fd_dac = -1;
+static volatile int g_fd_eac = -1; // volatile: read by the signal handlers, set to -1 before it is closed
+static volatile int g_fd_dac = -1;
 static pthread_t g_worker;
 static volatile bool g_worker_done;
 
@@ -144,7 +144,8 @@ static void op_log(void *ctx, const char *line) {
 
 static void *worker_thread(void *arg) {
     (void)arg;
-    while (!(atomic_load(&g_y2.shutdown) != 0u && y2_audio_state(&g_y2) == Y2_DAC_OFF)) {
+    // Leave only when shutdown was asked, everything is down and the final amplifier-off has been sent (it comes after the power-down pass).
+    while (!(atomic_load(&g_y2.shutdown) != 0u && y2_audio_state(&g_y2) == Y2_DAC_OFF && g_y2.exit_off_sent)) {
         if (!y2_audio_work(&g_y2)) {
             nap_us(15000); // idle: the jack is polled every 200 ms, the stream follows the clock thread
         }
@@ -156,8 +157,11 @@ static void *worker_thread(void *arg) {
 // A crash or a terminating signal that nothing else handles: the speaker amplifier must not stay on. ioctl() is async-signal-safe and this
 // is the one command, already on the allow-list; then the signal runs its default action again.
 void y2_audio_emergency_pa_off(void) {
-    if (g_dev_ready && g_fd_eac >= 0) {
-        (void)ioctl(g_fd_eac, Y2_EAC_SPEAKER_OFF, 0);
+    const int fd = g_fd_eac; // one read: shutdown_hook invalidates it before closing, so a closed (and possibly reused) number is never used
+    if (g_dev_ready && fd >= 0) {
+        const int saved = errno;
+        (void)ioctl(fd, Y2_EAC_SPEAKER_OFF, 0);
+        errno = saved;
     }
 }
 
@@ -177,10 +181,14 @@ static void shutdown_hook(void) {
     for (int i = 0; i < 300 && !g_worker_done; i++) { // up to 3 s: a write() in flight returns within an interrupt period
         nap_us(10000);
     }
-    if (g_worker_done) {
-        close(g_fd_eac);
-        close(g_fd_dac);
+    if (!g_worker_done) {
+        y2_audio_emergency_pa_off(); // the worker is stuck (a write that never returns): the amplifier must still go off before the process ends
+        return;
     }
+    const int eac = g_fd_eac, dac = g_fd_dac;
+    g_fd_eac = g_fd_dac = -1; // before the close: a late signal handler must not touch a closed or reused descriptor
+    close(eac);
+    close(dac);
 }
 
 static void probe(void) {

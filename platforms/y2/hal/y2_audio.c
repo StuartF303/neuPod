@@ -427,13 +427,15 @@ bool y2_audio_work(y2_audio_t *a) {
         a->boot_off_sent = true;
         (void)eac_cmd(a, EAC_SPEAKER_OFF, 0);
     }
-    const bool speaker_up = a->st != Y2_DAC_OFF && a->mode == Y2_OUT_SPK;
+    // Fast jack polling where a missed change matters: the amplifier is up, or the jack runs at the Line out level (a plug swapped within
+    // one slow poll interval must not keep full level)
+    const bool fast_poll = a->st != Y2_DAC_OFF && (a->mode == Y2_OUT_SPK || a->line_session);
     if (!a->hp_read || now >= a->next_hp_poll_us) {
         const int s = a->ops.headphones(a->ops.ctx);
         const bool had = a->hp_read;
         jack_update(a, s);
         a->hp_read = true;
-        a->next_hp_poll_us = now + (uint64_t)(speaker_up ? Y2_AUDIO_HP_POLL_SPK_MS : Y2_AUDIO_HP_POLL_MS) * 1000u;
+        a->next_hp_poll_us = now + (uint64_t)(fast_poll ? Y2_AUDIO_HP_POLL_SPK_MS : Y2_AUDIO_HP_POLL_MS) * 1000u;
         if (!had) {
             logf_(a, "audio: jack state %d (%s)", s, y2_audio_h2w_headphones(s) ? "headphones" : "nothing plugged in");
         }
@@ -469,7 +471,9 @@ bool y2_audio_work(y2_audio_t *a) {
     }
     if (sd && a->st == Y2_DAC_OFF && !a->exit_off_sent) {
         a->exit_off_sent = true;
-        (void)eac_cmd(a, EAC_SPEAKER_OFF, 0); // belt and braces on the way out
+        if (eac_cmd(a, EAC_SPEAKER_OFF, 0) >= 0) { // belt and braces on the way out (and the retry if the one in the power-down failed)
+            a->pa_on = false;
+        }
     }
 
     switch (a->st) {

@@ -1129,6 +1129,37 @@ TEST(line_out_switched_off_while_streaming_drops_to_the_normal_level_muted_first
     ASSERT_EQ(0, g_dev.stats.refused);
 }
 
+TEST(a_line_out_session_polls_the_jack_fast_so_a_swapped_plug_does_not_keep_full_level) {
+    setup(2, "15");
+    y2_audio_set_line_out(&g_dev, true);
+    settle();
+    (void)produce(1 << 20, 1 << 20);
+    settle();
+    ASSERT_EQ(15, max_volume_arg());
+    ASSERT_EQ(Y2_DAC_STREAMING, y2_audio_state(&g_dev));
+    g_h2w = 0; // pulled out ...
+    advance_ms(Y2_AUDIO_HP_POLL_SPK_MS + 1);
+    (void)y2_audio_work(&g_dev); // ... and seen within the fast poll interval, not the slow one
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev));
+}
+
+TEST(a_shutdown_retries_a_failed_amplifier_off_after_the_power_down) {
+    setup_spk(0, NULL);
+    start_speaker();
+    g_fail_cmd = PA_OFF; // the amplifier off fails in the power-down (both tries) ...
+    y2_audio_request_shutdown(&g_dev);
+    (void)y2_audio_work(&g_dev);
+    ASSERT_EQ(Y2_DAC_OFF, y2_audio_state(&g_dev));
+    ASSERT_TRUE(g_dev.pa_on); // ... so it is still believed on
+    ASSERT_FALSE(g_dev.exit_off_sent);
+    g_fail_cmd = 0;
+    const int mark = g_n;
+    (void)y2_audio_work(&g_dev); // the final off, which a worker loop waits for
+    ASSERT_TRUE(find('E', PA_OFF, 0, mark) >= mark);
+    ASSERT_FALSE(g_dev.pa_on);
+    ASSERT_TRUE(g_dev.exit_off_sent);
+}
+
 int main(void) {
     RUN(only_the_whitelisted_afe_offsets_are_allowed);
     RUN(forbidden_device_commands_are_refused);
@@ -1176,5 +1207,7 @@ int main(void) {
     RUN(line_out_never_reaches_the_speaker_or_an_empty_jack);
     RUN(unplugging_the_jack_with_line_out_on_mutes_first_and_the_next_plug_runs_at_the_normal_level);
     RUN(line_out_switched_off_while_streaming_drops_to_the_normal_level_muted_first_and_on_again_restarts_at_15);
+    RUN(a_line_out_session_polls_the_jack_fast_so_a_swapped_plug_does_not_keep_full_level);
+    RUN(a_shutdown_retries_a_failed_amplifier_off_after_the_power_down);
     return RESULT();
 }
