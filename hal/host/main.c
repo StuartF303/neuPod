@@ -147,11 +147,12 @@
 
 // Touch (NEUPOD_TOUCH=1, docs/ui-input.md "Touch"): the finger is injected as contacts and goes through the input task's gesture logic. A tap is Select (Music opens, depth 2),
 // a swipe right is Menu (back to Home, depth 1), a drag up scrolls the highlight down and a drag down brings it back, a still finger for 900 ms is Play (nothing is playing: the screen stays).
+// The contacts of one gesture are one script step (300 ms) apart: two steps would be exactly the 600 ms long-press time, and a move arriving on that boundary became a long press.
 #define TOUR_TOUCH                                                                                 \
     "x snap:touch-home touch:down:300:200 touch:up x x x snap:touch-music "                       \
-    "touch:down:80:300 x touch:move:160:300 x touch:move:250:305 x touch:up x x x snap:touch-back "   \
-    "touch:down:300:400 x touch:move:300:300 x touch:move:300:200 x touch:up x x x snap:touch-scroll-down "  \
-    "touch:down:300:200 x touch:move:300:300 x touch:move:300:340 x touch:up x x x snap:touch-scroll-up "    \
+    "touch:down:80:300 touch:move:160:300 touch:move:250:305 touch:up x x x snap:touch-back "   \
+    "touch:down:300:400 touch:move:300:300 touch:move:300:200 touch:up x x x snap:touch-scroll-down "  \
+    "touch:down:300:200 touch:move:300:300 touch:move:300:340 touch:up x x x snap:touch-scroll-up "    \
     "touch:down:300:200 sleep:900 touch:up x x x snap:touch-long"
 
 static unsigned g_expect = 21;

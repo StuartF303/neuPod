@@ -148,6 +148,7 @@ extern void hal_host_bt_headset_key(hal_bt_key_t key) __attribute__((weak));
 extern void hal_host_power_key(bool down) __attribute__((weak));
 extern void hal_host_hold_switch(hal_hold_switch_t sw) __attribute__((weak));
 extern void hal_host_touch_inject(int x, int y, bool down) __attribute__((weak));
+extern bool hal_host_touch_ready(void) __attribute__((weak));
 static uint32_t g_script_sleep_until;
 static bool g_script_sleeping;
 static void screen_ready(const char *name);
@@ -184,8 +185,16 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
             }
         }
         bool ok = (strncmp(p + 5, "lib", 3) == 0 && library_known_ready()) || /* the library index has been opened (the first build is done) */
-                  (strncmp(p + 5, "pause", 5) == 0 && pi.state == PLAYER_PAUSED) ||
+                  /* PLAYER_ERROR ends a pause wait too: a track that cannot play (Shuffle Songs may pick the library's AAC file) never gets to paused */
+                  (strncmp(p + 5, "pause", 5) == 0 && (pi.state == PLAYER_PAUSED || pi.state == PLAYER_ERROR)) ||
                   (strncmp(p + 5, "art", 3) == 0 && pi.state == PLAYER_PAUSED && av.state == ART_VIEW_READY);
+        static uint32_t wait_since;
+        if (ok || wait_since == 0) {
+            wait_since = ok ? 0 : (now != 0 ? now : 1u);
+        } else if ((uint32_t)(now - wait_since) >= 60000u) {
+            printf("ui: tour is stuck in '%.*s' for 60 s (player state %d)\n", (int)(end - p), p, (int)pi.state);
+            wait_since = now != 0 ? now : 1u; /* repeat once a minute, not every step */
+        }
         return ok ? end : p;
     }
     if (strncmp(p, "sleep:", 6) == 0) {
@@ -230,8 +239,12 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
     }
     if (strncmp(p, "touch:", 6) == 0) {
         /* Tour only (host simulator, NEUPOD_TOUCH=1): the touch panel. touch:down:X:Y and touch:move:X:Y put the finger there, touch:up lifts it; the input task's
-         * gesture logic (touch_gesture.c) turns that into scroll / Select / Menu / Play like a real panel. Steps are 300 ms apart (sleep:MS for a long press). */
+         * gesture logic (touch_gesture.c) turns that into scroll / Select / Menu / Play like a real panel. Steps are 300 ms apart (sleep:MS for a long press);
+         * a token waits until the input task has read the previous contact. */
         if (hal_host_touch_inject != NULL) {
+            if (hal_host_touch_ready != NULL && !hal_host_touch_ready()) {
+                return p; /* the input task has not read the previous contact yet (or is not up): wait, so none is overwritten unseen */
+            }
             const char *a = p + 6;
             const char *cx = strchr(a, ':'); /* "down:X:Y" / "move:X:Y" (atoi and strchr, not sscanf: the latter links newlib's scanf and locale into the 520 KB RP2350 image) */
             const char *cy = cx != NULL ? strchr(cx + 1, ':') : NULL;
