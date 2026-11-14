@@ -101,8 +101,11 @@ jobs:
     container: espressif/idf:v5.3.2
     steps:
       - uses: actions/checkout@v7
+      # Only lvgl: IDF brings its own FreeRTOS. The workspace is owned by the runner, not by root in Espressif's image.
       - name: Fetch submodules
-        run: git submodule update --init lib/lvgl
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git submodule update --init lib/lvgl
       - name: Build
         shell: bash
         run: |
