@@ -89,7 +89,7 @@
     "m m m s _ x x x snap:lib-comps _ x x snap:lib-comp-songs "                                                                          \
     "m m s s _ x x x snap:lib-update-building x x x x x x x x x x x x snap:lib-update-done m m "                                                             \
     "_ 6*s _ x snap:lib-bg-building m x snap:lib-bg-dots x x x x x snap:lib-bg-done strips:off m m "                                                    \
-    "5*s _ wait:pause snap:lib-shuffle m x x 5*w _ s _ x x s _ x x snap:lib-longplay _ x x x x x x x x x x x x x x wait:pause snap:lib-nowplaying"
+    "5*s _ wait:pause-or-err snap:lib-shuffle m x x 5*w _ s _ x x s _ x x snap:lib-longplay _ x x x x x x x x x x x x x x wait:pause snap:lib-nowplaying"
 
 // The same on a write-protected card (NEUPOD_DISK_READ_ONLY=1): the first open and Update Library both say "Library needs a writable card" and offer to try again.
 #define TOUR_LIBRARY_RO "x _ _ x x x x x snap:lib-needs-writable m 6*s _ x x x x snap:lib-update-needs-writable"

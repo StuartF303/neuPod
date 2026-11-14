@@ -151,7 +151,19 @@ extern void hal_host_touch_inject(int x, int y, bool down) __attribute__((weak))
 extern bool hal_host_touch_ready(void) __attribute__((weak));
 static uint32_t g_script_sleep_until;
 static bool g_script_sleeping;
+static uint32_t g_script_wait_since; // when the current wait: / touch: token started waiting (0 = not waiting)
 static void screen_ready(const char *name);
+/* Tour only: a token that keeps waiting (wait:, touch:) logs once a minute where the script is stuck, so a hang names itself before --run-ms ends it. */
+static void script_wait_note(const char *p, const char *end, uint32_t now, bool done, int detail) {
+    if (done) {
+        g_script_wait_since = 0;
+    } else if (g_script_wait_since == 0) {
+        g_script_wait_since = now != 0 ? now : 1u;
+    } else if ((uint32_t)(now - g_script_wait_since) >= 60000u) {
+        printf("ui: tour is stuck in '%.*s' for 60 s (detail %d)\n", (int)(end - p), p, detail);
+        g_script_wait_since = now != 0 ? now : 1u; /* repeat once a minute, not every step */
+    }
+}
 static const char *script_step(const char *p, uint32_t now, bool *done) {
     while (*p == ' ') {
         p++;
@@ -185,16 +197,15 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
             }
         }
         bool ok = (strncmp(p + 5, "lib", 3) == 0 && library_known_ready()) || /* the library index has been opened (the first build is done) */
-                  /* PLAYER_ERROR ends a pause wait too: a track that cannot play (Shuffle Songs may pick the library's AAC file) never gets to paused */
-                  (strncmp(p + 5, "pause", 5) == 0 && (pi.state == PLAYER_PAUSED || pi.state == PLAYER_ERROR)) ||
+                  (strncmp(p + 5, "pause", 5) == 0 && pi.state == PLAYER_PAUSED) ||
+                  /* pause-or-err: Shuffle Songs may pick the library's AAC file, which cannot play (backlog UI-24); only the library tours use it, so a decode or queue regression
+                   * in the other tours still fails them */
+                  (strncmp(p + 5, "pause-or-err", 12) == 0 && pi.state == PLAYER_ERROR) ||
                   (strncmp(p + 5, "art", 3) == 0 && pi.state == PLAYER_PAUSED && av.state == ART_VIEW_READY);
-        static uint32_t wait_since;
-        if (ok || wait_since == 0) {
-            wait_since = ok ? 0 : (now != 0 ? now : 1u);
-        } else if ((uint32_t)(now - wait_since) >= 60000u) {
-            printf("ui: tour is stuck in '%.*s' for 60 s (player state %d)\n", (int)(end - p), p, (int)pi.state);
-            wait_since = now != 0 ? now : 1u; /* repeat once a minute, not every step */
+        if (ok && strncmp(p + 5, "pause-or-err", 12) == 0 && pi.state == PLAYER_ERROR) {
+            printf("ui: tour: wait ended on player error\n");
         }
+        script_wait_note(p, end, now, ok, (int)pi.state);
         return ok ? end : p;
     }
     if (strncmp(p, "sleep:", 6) == 0) {
@@ -242,7 +253,9 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
          * gesture logic (touch_gesture.c) turns that into scroll / Select / Menu / Play like a real panel. Steps are 300 ms apart (sleep:MS for a long press);
          * a token waits until the input task has read the previous contact. */
         if (hal_host_touch_inject != NULL) {
-            if (hal_host_touch_ready != NULL && !hal_host_touch_ready()) {
+            const bool ready = hal_host_touch_ready == NULL || hal_host_touch_ready();
+            script_wait_note(p, end, now, ready, 0);
+            if (!ready) {
                 return p; /* the input task has not read the previous contact yet (or is not up): wait, so none is overwritten unseen */
             }
             const char *a = p + 6;
