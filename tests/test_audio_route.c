@@ -39,6 +39,9 @@ void player_get(player_info_t *o) {
 void player_stop(void) { g_stops++; g_pstate = PLAYER_IDLE; }
 void player_pause(void) { g_pauses++; if (g_pstate == PLAYER_PLAYING) g_pstate = PLAYER_PAUSED; }
 void player_set_output_path(output_path_t p) { g_path = p; }
+static bool g_vol_locked;
+void player_volume_set_locked(bool l) { g_vol_locked = l; }
+bool player_volume_locked(void) { return g_vol_locked; }
 
 // ---- helpers ----
 static void tick(uint32_t ms) {
@@ -353,6 +356,237 @@ TEST(the_saved_output_setting_reads_back_and_an_unknown_value_is_auto) {
     ASSERT_EQ(AUDIO_ROUTE_WIRED, audio_route_pref());
     audio_route_set_pref(AUDIO_ROUTE_AUTO);
 }
+// ---- the internal speaker (Y2): Settings > Speaker and Audio output = Speaker ----
+
+static void speaker_done(void) { // leave the shared simulator the way the other tests expect it
+    settings_set_u8(SETTING_LINE_OUT, 0);
+    audio_route_set_speaker_enabled(false);
+    audio_route_set_pref(AUDIO_ROUTE_AUTO);
+    hal_host_set_wired_attached(true);
+    hal_host_set_speaker_present(true);
+    tick(100);
+}
+
+TEST(the_speaker_setting_defaults_to_off_is_saved_and_needs_a_speaker) {
+    reset();
+    uint8_t v;
+    ASSERT_FALSE(settings_get_u8(SETTING_SPEAKER, &v)); // never written: Off
+    ASSERT_FALSE(audio_route_speaker_enabled());
+    audio_route_set_speaker_enabled(true);
+    ASSERT_TRUE(settings_get_u8(SETTING_SPEAKER, &v) && v == 1);
+    ASSERT_TRUE(audio_route_speaker_enabled());
+    hal_host_set_speaker_present(false); // a device without one: the setting means nothing
+    ASSERT_FALSE(audio_route_speaker_enabled());
+    hal_host_set_speaker_present(true);
+    audio_route_set_speaker_enabled(false);
+    ASSERT_FALSE(audio_route_speaker_enabled());
+    speaker_done();
+}
+
+TEST(the_speaker_output_setting_is_stored_as_3_and_reads_back) {
+    reset();
+    audio_route_set_pref(AUDIO_ROUTE_SPEAKER);
+    uint8_t v;
+    ASSERT_TRUE(settings_get_u8(SETTING_AUDIO_OUTPUT, &v) && v == 3);
+    ASSERT_EQ(AUDIO_ROUTE_SPEAKER, audio_route_pref());
+    settings_set_u8(SETTING_AUDIO_OUTPUT, 4); // a value from the future: Auto
+    ASSERT_EQ(AUDIO_ROUTE_AUTO, audio_route_pref());
+    settings_set_u8(SETTING_AUDIO_OUTPUT, 2); // the older values keep their meaning
+    ASSERT_EQ(AUDIO_ROUTE_BLUETOOTH, audio_route_pref());
+    speaker_done();
+}
+
+TEST(auto_allows_the_speaker_only_when_the_setting_is_on_and_no_headset_is_the_output) {
+    reset();
+    hal_host_set_wired_attached(false); // nothing in the jack
+    tick(100);
+    ASSERT_FALSE(hal_host_speaker_allowed()); // Speaker Off (the default): never
+    audio_route_set_speaker_enabled(true);
+    tick(100);
+    ASSERT_TRUE(hal_host_speaker_allowed()); // Auto, wired, nothing in the jack, Speaker On
+    audio_route_set_pref(AUDIO_ROUTE_WIRED);
+    tick(100);
+    ASSERT_FALSE(hal_host_speaker_allowed()); // Wired means the jack only
+    audio_route_set_pref(AUDIO_ROUTE_AUTO);
+    tick(100);
+    ASSERT_TRUE(hal_host_speaker_allowed());
+    connect_headset(); // a headset's stream takes over under Auto
+    pump_stream(HAL_BT_STREAM_OPEN, 3000);
+    tick(100);
+    ASSERT_EQ(AUDIO_OUT_BT, audio_route_output());
+    ASSERT_FALSE(hal_host_speaker_allowed());
+    audio_route_set_pref(AUDIO_ROUTE_BLUETOOTH);
+    tick(100);
+    ASSERT_FALSE(hal_host_speaker_allowed());
+    speaker_done();
+    reset();
+}
+
+TEST(the_speaker_setting_as_the_output_is_wired_even_with_a_headset_and_off_means_nothing_plays) {
+    reset();
+    hal_host_set_wired_attached(false);
+    audio_route_set_speaker_enabled(true);
+    audio_route_set_pref(AUDIO_ROUTE_SPEAKER);
+    tick(100);
+    ASSERT_EQ(AUDIO_OUT_WIRED, audio_route_output());
+    ASSERT_TRUE(hal_host_speaker_allowed());
+    connect_headset();
+    pump_stream(HAL_BT_STREAM_OPEN, 3000);
+    for (int i = 0; i < 5; i++) tick(100);
+    ASSERT_EQ(AUDIO_OUT_WIRED, audio_route_output()); // never Bluetooth under Speaker
+    ASSERT_TRUE(hal_host_speaker_allowed());
+    audio_route_set_speaker_enabled(false); // Speaker Off wins over Audio output = Speaker
+    tick(100);
+    ASSERT_EQ(AUDIO_OUT_WIRED, audio_route_output());
+    ASSERT_FALSE(hal_host_speaker_allowed());
+    speaker_done();
+    reset();
+}
+
+TEST(switching_from_bluetooth_to_the_speaker_setting_moves_the_output_and_allows_the_speaker) {
+    go_bt();
+    hal_host_set_wired_attached(false);
+    audio_route_set_speaker_enabled(true);
+    audio_route_set_pref(AUDIO_ROUTE_SPEAKER);
+    tick(100);
+    ASSERT_EQ(AUDIO_OUT_WIRED, audio_route_output());
+    ASSERT_TRUE(hal_host_speaker_allowed());
+    speaker_done();
+    reset();
+}
+
+TEST(turning_the_speaker_off_under_a_playing_track_pauses_with_no_audio_output) {
+    reset();
+    hal_host_set_wired_attached(false);
+    audio_route_set_speaker_enabled(true);
+    tick(100);
+    uint32_t seq0, seq1;
+    (void)audio_route_notice(&seq0);
+    g_pstate = PLAYER_PLAYING;
+    tick(100);
+    ASSERT_EQ(PLAYER_PLAYING, g_pstate); // the speaker is the output: playing on
+    ASSERT_EQ(0, g_pauses);
+    audio_route_set_speaker_enabled(false);
+    tick(100);
+    ASSERT_EQ(PLAYER_PAUSED, g_pstate);
+    ASSERT_EQ(ROUTE_NOTICE_NO_OUTPUT, audio_route_notice(&seq1));
+    ASSERT_TRUE(seq1 != seq0);
+    speaker_done();
+}
+
+TEST(pulling_the_headphones_out_pauses_even_when_the_speaker_could_take_over_and_plugging_in_does_not) {
+    reset();
+    audio_route_set_speaker_enabled(true);
+    hal_host_set_wired_attached(true); // headphones in
+    tick(100);
+    tick(100);
+    uint32_t seq0, seq1;
+    (void)audio_route_notice(&seq0);
+    g_pstate = PLAYER_PLAYING;
+    hal_host_set_wired_attached(false);
+    tick(100);
+    ASSERT_EQ(PLAYER_PAUSED, g_pstate); // not on the speaker unasked
+    ASSERT_EQ(ROUTE_NOTICE_HEADPHONES_UNPLUGGED, audio_route_notice(&seq1));
+    ASSERT_TRUE(seq1 != seq0);
+    ASSERT_TRUE(hal_host_speaker_allowed()); // the next Play may use it
+    g_pstate = PLAYER_PLAYING; // Play on the speaker
+    tick(100);
+    ASSERT_EQ(PLAYER_PLAYING, g_pstate);
+    hal_host_set_wired_attached(true); // plugging in while on the speaker: the sound moves to the jack, nothing pauses
+    tick(100);
+    ASSERT_EQ(PLAYER_PLAYING, g_pstate);
+    ASSERT_EQ(1, g_pauses);
+    speaker_done();
+}
+
+TEST(a_device_without_a_speaker_never_allows_it) {
+    reset();
+    hal_host_set_speaker_present(false);
+    audio_route_set_speaker_enabled(true);
+    audio_route_set_pref(AUDIO_ROUTE_SPEAKER);
+    tick(100);
+    ASSERT_FALSE(hal_host_speaker_allowed());
+    speaker_done();
+}
+// ---- Line out ----
+
+TEST(line_out_is_saved_off_by_default_and_only_turns_on_with_a_plug_in_the_jack) {
+    reset();
+    uint8_t v;
+    ASSERT_FALSE(audio_route_line_out_enabled()); // absent or 0: Off
+    hal_host_set_wired_attached(false);
+    ASSERT_FALSE(audio_route_set_line_out_enabled(true)); // nothing in the jack
+    ASSERT_FALSE(audio_route_line_out_enabled());
+    hal_host_set_wired_attached(true);
+    ASSERT_TRUE(audio_route_set_line_out_enabled(true));
+    ASSERT_TRUE(settings_get_u8(SETTING_LINE_OUT, &v) && v == 1);
+    tick(100);
+    ASSERT_TRUE(audio_route_line_out_active());
+    ASSERT_TRUE(hal_host_line_out_allowed());
+    ASSERT_TRUE(player_volume_locked()); // software volume at 0 dB, wheel ignored
+    ASSERT_TRUE(audio_route_set_line_out_enabled(false));
+    tick(100);
+    ASSERT_FALSE(hal_host_line_out_allowed());
+    ASSERT_FALSE(player_volume_locked());
+    speaker_done();
+}
+
+TEST(unplugging_the_jack_switches_line_out_off_saved_and_with_a_notice) {
+    reset();
+    hal_host_set_wired_attached(true);
+    ASSERT_TRUE(audio_route_set_line_out_enabled(true));
+    tick(100);
+    ASSERT_TRUE(audio_route_line_out_active());
+    uint32_t seq0, seq1;
+    (void)audio_route_notice(&seq0);
+    hal_host_set_wired_attached(false);
+    tick(100);
+    ASSERT_FALSE(audio_route_line_out_active());
+    ASSERT_FALSE(hal_host_line_out_allowed());
+    ASSERT_FALSE(player_volume_locked());
+    uint8_t v = 9;
+    ASSERT_TRUE(settings_get_u8(SETTING_LINE_OUT, &v) && v == 0); // saved Off: the next plug starts normally
+    ASSERT_EQ(ROUTE_NOTICE_LINE_OUT_OFF, audio_route_notice(&seq1));
+    ASSERT_TRUE(seq1 != seq0);
+    hal_host_set_wired_attached(true);
+    tick(100);
+    ASSERT_FALSE(audio_route_line_out_active());
+    speaker_done();
+}
+
+TEST(a_saved_line_out_is_switched_off_at_boot_when_the_jack_is_empty) {
+    reset();
+    settings_set_u8(SETTING_LINE_OUT, 1); // as if saved by the last run
+    hal_host_set_wired_attached(false);
+    tick(100);
+    ASSERT_FALSE(audio_route_line_out_enabled());
+    ASSERT_FALSE(audio_route_line_out_active());
+    speaker_done();
+}
+
+TEST(line_out_is_ignored_on_bluetooth_and_comes_back_only_on_the_jack) {
+    reset();
+    hal_host_set_wired_attached(true);
+    ASSERT_TRUE(audio_route_set_line_out_enabled(true));
+    tick(100);
+    ASSERT_TRUE(hal_host_line_out_allowed());
+    connect_headset();
+    pump_stream(HAL_BT_STREAM_OPEN, 3000);
+    tick(100);
+    ASSERT_EQ(AUDIO_OUT_BT, audio_route_output());
+    ASSERT_FALSE(hal_host_line_out_allowed());
+    ASSERT_FALSE(player_volume_locked()); // the headset's own volume
+    speaker_done();
+    reset();
+}
+
+TEST(a_device_without_the_hardware_has_no_line_out) {
+    reset();
+    hal_host_set_speaker_present(false);
+    ASSERT_FALSE(audio_route_set_line_out_enabled(true));
+    ASSERT_FALSE(audio_route_line_out_enabled());
+    speaker_done();
+}
 
 int main(void) {
     RUN(wired_until_a_stream_is_open_then_bluetooth_with_a_quiet_change);
@@ -370,5 +604,18 @@ int main(void) {
     RUN(the_bluetooth_setting_is_the_output_with_or_without_a_headset_and_survives_a_disconnect);
     RUN(leaving_the_bluetooth_setting_for_auto_with_no_headset_returns_to_wired);
     RUN(the_saved_output_setting_reads_back_and_an_unknown_value_is_auto);
+    RUN(the_speaker_setting_defaults_to_off_is_saved_and_needs_a_speaker);
+    RUN(the_speaker_output_setting_is_stored_as_3_and_reads_back);
+    RUN(auto_allows_the_speaker_only_when_the_setting_is_on_and_no_headset_is_the_output);
+    RUN(the_speaker_setting_as_the_output_is_wired_even_with_a_headset_and_off_means_nothing_plays);
+    RUN(switching_from_bluetooth_to_the_speaker_setting_moves_the_output_and_allows_the_speaker);
+    RUN(turning_the_speaker_off_under_a_playing_track_pauses_with_no_audio_output);
+    RUN(pulling_the_headphones_out_pauses_even_when_the_speaker_could_take_over_and_plugging_in_does_not);
+    RUN(a_device_without_a_speaker_never_allows_it);
+    RUN(line_out_is_saved_off_by_default_and_only_turns_on_with_a_plug_in_the_jack);
+    RUN(unplugging_the_jack_switches_line_out_off_saved_and_with_a_notice);
+    RUN(a_saved_line_out_is_switched_off_at_boot_when_the_jack_is_empty);
+    RUN(line_out_is_ignored_on_bluetooth_and_comes_back_only_on_the_jack);
+    RUN(a_device_without_the_hardware_has_no_line_out);
     return RESULT();
 }

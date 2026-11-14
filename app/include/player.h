@@ -146,6 +146,15 @@ uint32_t player_volume_step(int32_t steps);
 uint32_t player_volume_att(void);
 
 /**
+ * Line out (Settings > Line out, audio_route.h): while locked the software volume sits at 0 dB (no boost: the audio core's unity) and
+ * player_volume_step() ignores the wheel and keys, counting them; the volume the user chose is kept for when it is unlocked.
+ */
+void player_volume_set_locked(bool locked);
+bool player_volume_locked(void);
+/** How many volume steps were ignored while locked so far (the UI shows "Line out: fixed level" when it moves). */
+uint32_t player_volume_blocked(void);
+
+/**
  * Hold the software volume at 0 dB (true) while the headset's absolute volume is the volume (bt_control.h), or give the user's software volume back
  * (false). The software volume the user chose is kept, and its steps and restores change it without applying it while held.
  */

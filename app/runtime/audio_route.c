@@ -17,7 +17,9 @@
 static audio_output_t g_out = AUDIO_OUT_WIRED;
 static audio_route_pref_t g_pref = AUDIO_ROUTE_AUTO;
 static uint32_t g_gen_seen = UINT32_MAX;
-static bool g_wired_was_attached; /* the wired output had something plugged in at the last tick (a platform that cannot tell always says yes) */
+static bool g_wired_was_attached; /* the wired output had something to listen to at the last tick (a platform that cannot tell always says yes; the speaker, when allowed, counts) */
+static bool g_line_active;        /* Line out is in force: the HAL was told and the software volume is locked at 0 dB */
+static bool g_hp_was_in;          /* headphones were in the jack at the last tick */
 static bool g_was_up;           /* the stream was usable at the last tick while the output was Bluetooth */
 static uint32_t g_release_until;
 static bool g_release_armed;
@@ -33,6 +35,34 @@ static bool stream_usable(void) {
     return st == HAL_BT_STREAM_OPEN || st == HAL_BT_STREAM_STREAMING || st == HAL_BT_STREAM_SUSPENDED;
 }
 
+static void set_line_active(bool on) {
+    if (on == g_line_active) {
+        return;
+    }
+    if (on) {
+        player_volume_set_locked(true); /* the software volume is at 0 dB before the DAC goes to full level */
+        hal_audio_set_line_out(true);
+    } else {
+        hal_audio_set_line_out(false);  /* the DAC drops back (muted restart) first, then the user's volume returns */
+        player_volume_set_locked(false);
+    }
+    g_line_active = on;
+    printf("route: Line out %s\n", on ? "on" : "off");
+}
+
+static void notice(audio_route_notice_t n);
+
+/* Every tick on the wired output. With the jack empty the setting is switched Off (and saved Off), so in-ear headphones plugged in later start normally. */
+static void line_out_service(bool hp) {
+    if (audio_route_line_out_enabled() && !hp) {
+        settings_set_u8(SETTING_LINE_OUT, 0u);
+        if (g_line_active) {
+            notice(ROUTE_NOTICE_LINE_OUT_OFF);
+        }
+    }
+    set_line_active(audio_route_line_out_enabled() && hp);
+}
+
 static void notice(audio_route_notice_t n) {
     g_notice = n;
     g_notice_seq++;
@@ -45,14 +75,39 @@ audio_route_pref_t audio_route_pref(void) {
     if (!settings_get_u8(SETTING_AUDIO_OUTPUT, &v)) {
         return AUDIO_ROUTE_AUTO; /* default Auto */
     }
-    return v == 1 ? AUDIO_ROUTE_WIRED : v == 2 ? AUDIO_ROUTE_BLUETOOTH : AUDIO_ROUTE_AUTO; /* 0 and anything unknown: Auto (a card written by a newer firmware) */
+    return v == 1 ? AUDIO_ROUTE_WIRED : v == 2 ? AUDIO_ROUTE_BLUETOOTH : v == 3 ? AUDIO_ROUTE_SPEAKER : AUDIO_ROUTE_AUTO; /* 0 and anything unknown: Auto (a card written by a newer firmware) */
 }
+
+bool audio_route_speaker_enabled(void) {
+    uint8_t v;
+    return hal_audio_speaker_available() && settings_get_u8(SETTING_SPEAKER, &v) && v == 1; /* absent = Off */
+}
+
+void audio_route_set_speaker_enabled(bool on) { settings_set_u8(SETTING_SPEAKER, on ? 1u : 0u); }
+
+bool audio_route_line_out_enabled(void) {
+    uint8_t v;
+    return hal_audio_line_out_available() && settings_get_u8(SETTING_LINE_OUT, &v) && v == 1; /* absent = Off */
+}
+
+bool audio_route_line_out_active(void) { return g_line_active; }
+
+bool audio_route_set_line_out_enabled(bool on) {
+    if (on && (!hal_audio_line_out_available() || !hal_audio_headphones_in())) {
+        return false; /* nothing in the jack: Line out would only be switched off again */
+    }
+    settings_set_u8(SETTING_LINE_OUT, on ? 1u : 0u);
+    return true;
+}
+
+/* The speaker may sound only on the wired output, when the setting is On and the output setting is Auto or Speaker. Wired means the jack only. */
+static bool speaker_allowed(void) { return g_out == AUDIO_OUT_WIRED && (g_pref == AUDIO_ROUTE_AUTO || g_pref == AUDIO_ROUTE_SPEAKER) && audio_route_speaker_enabled(); }
 
 void audio_route_set_pref(audio_route_pref_t pref) {
     if (pref == AUDIO_ROUTE_AUTO && audio_route_pref() == AUDIO_ROUTE_BLUETOOTH) {
         audio_route_user_released(); /* Bluetooth -> Auto with no headset there: the user's own choice, so the output may return to wired (else it would sit on Bluetooth for ever) */
     }
-    settings_set_u8(SETTING_AUDIO_OUTPUT, pref == AUDIO_ROUTE_WIRED ? 1u : pref == AUDIO_ROUTE_BLUETOOTH ? 2u : 0u);
+    settings_set_u8(SETTING_AUDIO_OUTPUT, pref == AUDIO_ROUTE_WIRED ? 1u : pref == AUDIO_ROUTE_BLUETOOTH ? 2u : pref == AUDIO_ROUTE_SPEAKER ? 3u : 0u);
     g_pref = pref; /* applied by the next service tick */
 }
 
@@ -71,6 +126,10 @@ audio_route_notice_t audio_route_notice(uint32_t *seq) {
 // Change the output. The audio core must be quiet: whatever plays is stopped (the place is kept, like Stop), the stream is closed, the layout of
 // the rings follows the output, the stream is opened again. The commands are processed in this order by the core.
 static void apply_output(audio_output_t out) {
+    if (out == AUDIO_OUT_BT) {
+        hal_audio_set_speaker(false); /* the amplifier goes off before anything else moves */
+        set_line_active(false);       /* and the full level: the headset has its own volume */
+    }
     player_info_t pi;
     player_get(&pi);
     if (pi.state != PLAYER_IDLE) {
@@ -87,7 +146,9 @@ static void apply_output(audio_output_t out) {
     g_out = out;
     player_set_output_path(out == AUDIO_OUT_BT ? OUT_PATH_BT : OUT_PATH_WIRED);
     g_was_up = out == AUDIO_OUT_BT && stream_usable(); /* the Bluetooth setting can make Bluetooth the output with no headset: Play then says "not connected", not "dropped" */
+    hal_audio_set_speaker(speaker_allowed());
     g_wired_was_attached = hal_audio_wired_attached();
+    g_hp_was_in = hal_audio_headphones_in();
     g_quiet_since = os_tick_ms();
     g_reopen_tries = 0;
     printf("route: output %s\n", out == AUDIO_OUT_BT ? "Bluetooth" : "wired");
@@ -107,17 +168,24 @@ void audio_route_service(void) {
             apply_output(AUDIO_OUT_BT);
             return;
         }
-        /* Headphones pulled out while playing: pause (position kept, like a lost link) and say so. Plugging back in does not resume. */
+        /* Headphones pulled out while playing: pause (position kept, like a lost link) and say so, even when the speaker is allowed (the sound must
+           not jump to it unasked). Plugging back in does not resume. The speaker turned off under a playing track pauses too. */
+        const bool allow = speaker_allowed();
+        hal_audio_set_speaker(allow); /* every tick: cheap, and the setting can change at any time */
+        const bool hp = hal_audio_headphones_in();
+        line_out_service(hp);
         const bool attached = hal_audio_wired_attached();
-        if (g_wired_was_attached && !attached) {
+        const bool unplugged = g_hp_was_in && !hp;
+        if (unplugged || (g_wired_was_attached && !attached)) {
             player_info_t pi;
             player_get(&pi);
             if (pi.state == PLAYER_PLAYING) {
                 player_pause();
-                notice(ROUTE_NOTICE_HEADPHONES_UNPLUGGED);
-                printf("route: headphones unplugged, paused\n");
+                notice(unplugged ? ROUTE_NOTICE_HEADPHONES_UNPLUGGED : ROUTE_NOTICE_NO_OUTPUT);
+                printf("route: %s, paused\n", unplugged ? "headphones unplugged" : "no audio output");
             }
         }
+        g_hp_was_in = hp;
         g_wired_was_attached = attached;
         return;
     }
@@ -126,7 +194,7 @@ void audio_route_service(void) {
     if (g_release_armed && (int32_t)(now - g_release_until) >= 0) {
         g_release_armed = false; /* the headset did not go away after all */
     }
-    if (g_pref == AUDIO_ROUTE_WIRED || (g_pref != AUDIO_ROUTE_BLUETOOTH && g_release_armed && !up && hal_bt_link_state() != HAL_BT_LINK_CONNECTED)) {
+    if (g_pref == AUDIO_ROUTE_WIRED || g_pref == AUDIO_ROUTE_SPEAKER || (g_pref != AUDIO_ROUTE_BLUETOOTH && g_release_armed && !up && hal_bt_link_state() != HAL_BT_LINK_CONNECTED)) {
         g_release_armed = false;
         apply_output(AUDIO_OUT_WIRED);
         return;

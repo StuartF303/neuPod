@@ -195,6 +195,23 @@ TEST(setting_off_offers_nothing) {
     ASSERT_TRUE(player_next_track(path, sizeof path));
 }
 
+TEST(line_out_locks_the_volume_at_unity_ignores_steps_and_gives_the_users_level_back) {
+    (void)player_volume_step(0);
+    const uint32_t before = player_volume_att();
+    const uint32_t b0 = player_volume_blocked();
+    player_volume_set_locked(true);
+    ASSERT_TRUE(player_volume_locked());
+    ASSERT_EQ(0u, g_audio_vol); // the audio core runs at 0 dB (no boost)
+    ASSERT_EQ(0u, player_volume_att());
+    (void)player_volume_step(3);
+    (void)player_volume_step(-3);
+    ASSERT_EQ(0u, g_audio_vol);
+    ASSERT_EQ(b0 + 2u, player_volume_blocked());
+    player_volume_set_locked(false);
+    ASSERT_EQ(before, player_volume_att()); // the level the user had
+    ASSERT_EQ(before, g_audio_vol);
+}
+
 TEST(volume_policy_cases) {
     const uint32_t quiet = 40, loud = 10, dflt = PLAYER_RESTORE_MIN_ATT_DB;
     // same known path: the saved level comes back, loud or quiet
