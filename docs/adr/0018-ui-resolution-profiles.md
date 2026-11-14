@@ -42,3 +42,13 @@ scaler in the display path), or render natively at 480x360.
 * Another panel size needs one profile (one initialiser in `ui_metrics.c`) and, if it is larger than 480x360, bigger
   `UI_BUF_W_MAX` / `UI_BUF_LINES_MAX` and the host HAL's 640x480 ceiling raised.
 * The input path is untouched: wheel, keys and the Y2 buttons all deliver the same events.
+
+## Amendment: 600x450 (14 Nov 2026)
+
+The Waveshare RP2350-Touch-AMOLED-2.41 and ESP32-S3-Touch-AMOLED-2.41 dev boards have a 600x450 panel (4:3 again).
+
+* **A third profile, `ui_metrics_600.h`**: every length x 15/8, Montserrat 22 / 26 / 38 (and 48) and Lucide 30 / 45, 7 rows. It is a header, like the 320x240 one, so a product build can use it as its one constant profile.
+* **The one-constant model stays.** CMake cache variable `NEUPOD_UI_PROFILE` (`320x240` default | `600x450`) selects the single profile a non-hosted build compiles in (`UI_BUF_W_MAX` / `UI_BUF_LINES_MAX` follow: 600 x 30 for 600x450). Hosted builds (`NEUPOD_UI_HIRES`) carry all three and select at run time; `NEUPOD_DISPLAY_SIZE=600x450` runs it on the host. The default Pico 2 W image: static RAM unchanged (.data identical, .bss +4 bytes; the Pico's RAM has only about 100 bytes to spare, and a first draft that used `sscanf` in the tour-script parser pulled newlib's locale data into `.data` and broke the link, so keep such calls out of product code), flash +1.4 KB (the touch poll, the panel/profile check, the area rounder).
+* **`ui_task` checks the panel against the profile on every build** (it used to skip that on the RP2350, which assumed a 320x240 panel) and warns on a mismatch.
+* **Even-aligned flush windows** (RM690B0 / SH8601 CASET / RASET): an `LV_EVENT_INVALIDATE_AREA` handler rounds areas to even start and even size, unconditionally; every profile has an even `buf_lines` (the 600x450 one 30, not the 45 that 15/8 of 24 would give).
+* Layout is checked as before: `test_ui_metrics` (the invariants run on every compiled-in profile), `hires600_*` tours with the audit, [Touch input](../touch.md) for the touch gestures.

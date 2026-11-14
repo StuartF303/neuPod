@@ -45,9 +45,12 @@ gen 14 16 3 "$TEXT" "$SYMS"
 gen 16 18 3 "$TEXT" "$SYMS"      # Small, 480x360 profile; compiled for hosted builds only (NEUPOD_UI_HIRES)
 gen 20 22 4 "$TEXT" "$SYMS"
 gen 28 30 5 "$TEXT" "$SYMS"      # 480x360 profile; compiled for hosted builds only (NEUPOD_UI_HIRES)
+gen 22 24 4 "$TEXT" "$SYMS"      # Small, 600x450 profile (built-in Montserrat metrics); compiled for hosted builds and NEUPOD_UI_PROFILE=600x450 only
+gen 26 29 5 "$TEXT" "$SYMS"      # Body, 600x450 profile; same
+gen 38 41 7 "$TEXT" "$SYMS"      # Large, 600x450 profile; same
 gen 48 52 9 "0x20-0x7E" "61441"  # splash wordmark and the art-less note: ASCII and the note symbol only
 
-# ---- Lucide icons: 1 bpp (the review's "1-bit alpha bitmaps"); 16 and 24 px for 320x240, 24 and 36 px for 480x360 ----
+# ---- Lucide icons: 1 bpp (the review's "1-bit alpha bitmaps"); 16 and 24 px for 320x240, 24 and 36 px for 480x360, 30 and 45 px for 600x450 ----
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 (cd "$TMP" && npm pack "lucide-static@$LUCIDE_VER" --silent >/dev/null)
@@ -55,7 +58,7 @@ GOT="sha512-$(openssl dgst -sha512 -binary "$TMP/lucide-static-$LUCIDE_VER.tgz" 
 [[ "$GOT" == "$LUCIDE_INTEGRITY" ]] || { echo "lucide-static $LUCIDE_VER: integrity mismatch ($GOT)" >&2; exit 1; }
 tar -xzf "$TMP/lucide-static-$LUCIDE_VER.tgz" -C "$TMP" package/font/lucide.ttf package/LICENSE
 cp "$TMP/package/LICENSE" "$OUT/LICENSE-Lucide.txt"
-for sz in 16 24 36; do
+for sz in 16 24 30 36 45; do
     (cd "$TMP/package/font" && npx --yes lv_font_conv@1.5.3 --no-compress --no-prefilter --bpp 1 --size "$sz" --lv-font-name "neupod_icons_$sz" \
         --font lucide.ttf -r "$ICONS" --format lvgl -o "$TMP/neupod_icons_$sz.c")
     # keep the machine-specific temp path out of the recorded command line

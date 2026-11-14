@@ -31,6 +31,7 @@ add_library(hal_rp2350_core STATIC
   hal/hal_audio_vclk.c       # the virtual block clock: the null sink, and the I2S sink's Bluetooth mode
   hal/hal_core.c
   ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
+  ${CMAKE_SOURCE_DIR}/hal/common/hal_touch_none.c   # no touch panel on the Pico 2 W (a touch board swaps this for its own driver)
 )
 target_include_directories(hal_rp2350_core PUBLIC ${CMAKE_SOURCE_DIR}/hal/include)
 target_link_libraries(hal_rp2350_core PUBLIC

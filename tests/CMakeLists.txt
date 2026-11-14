@@ -135,6 +135,11 @@ endif()
 add_executable(test_input_events test_input_events.c)
 target_link_libraries(test_input_events neupod_rt_core)
 add_test(NAME input_events COMMAND test_input_events)
+# Touch gestures (app/input/touch_gesture.c) and the "no touch panel" HAL, compiled in here as the Pico 2 W and the Y2 link it.
+add_executable(test_touch_gesture test_touch_gesture.c ${CMAKE_SOURCE_DIR}/hal/common/hal_touch_none.c)
+target_link_libraries(test_touch_gesture neupod_rt_core)
+add_test(NAME touch_gesture COMMAND test_touch_gesture)
+set_source_files_properties(test_touch_gesture.c ${CMAKE_SOURCE_DIR}/hal/common/hal_touch_none.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 set_source_files_properties(test_spsc_ring.c test_input_events.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
 # Boots the whole runtime headless (FreeRTOS POSIX port, LVGL, boot checks, audio stub) for ~8 s,
@@ -681,6 +686,82 @@ neupod_licence_tour(licences_tour licences "" "320x240")
 if(NEUPOD_UI_HIRES)
   neupod_hold_card(hires_licences)
   neupod_licence_tour(hires_licences_tour hires_licences "NEUPOD_DISPLAY_SIZE=480x360;" "480x360")
+endif()
+
+# ---- 600x450 (the Waveshare touch AMOLED 2.41 boards, ADR-0018): the same tours on a host display set to 600x450, layout audit on --------------
+# The profile is x 15/8 of 320x240 with Montserrat 22 / 26 / 38 and Lucide 30 / 45 (app/ui/ui_metrics_600.h). Own cards, as the 480x360 tests have.
+if(NEUPOD_UI_HIRES)
+set(HIRES600_ENV "NEUPOD_DISPLAY_SIZE=600x450;")
+set(HIRES600_PASS "ui: audit '[^']*' 600x450 objects=[1-9][0-9]* violations=0.*host: run finished, status 0")
+foreach(T tour:hires600:tour tour-input:hires600_input:input_tour tour-wifi:hires600_wifi:wifi_tour tour-bt:hires600_bt:bt_tour)
+  string(REPLACE ":" ";" TL "${T}")
+  list(GET TL 0 T_FLAG)
+  list(GET TL 1 T_CARD)
+  list(GET TL 2 T_NAME)
+  if(T_CARD STREQUAL "hires600_bt")
+    neupod_seek_card(hires600_bt)
+    add_test(NAME hires600_bt_tour_reset COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/fsroot_hires600_bt/.neupod)
+    set_tests_properties(hires600_bt_tour_reset PROPERTIES FIXTURES_SETUP hires600_bt_clean)
+  else()
+    neupod_hires_card(${T_CARD})
+  endif()
+  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_${T_CARD})
+  add_test(NAME hires600_${T_NAME}
+    COMMAND neupod --run-ms 100000 --splash-hold-ms 1500 --${T_FLAG} --snapshots ${CMAKE_BINARY_DIR}/snapshots_${T_CARD})
+  set_tests_properties(hires600_${T_NAME} PROPERTIES
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;${HIRES600_ENV}NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_${T_CARD};NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_${T_CARD}.img"
+    PASS_REGULAR_EXPRESSION "${HIRES600_PASS}"
+    FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    TIMEOUT 200)
+  if(T_CARD STREQUAL "hires600_bt")
+    set_tests_properties(hires600_${T_NAME} PROPERTIES FIXTURES_REQUIRED hires600_bt_clean)
+  endif()
+endforeach()
+
+# The music library (lists, Cover Flow, Now Playing with art, album headers, the letter rail) and accented / CJK text at 600x450.
+neupod_library_card(hires600_library)
+add_test(NAME hires600_library_tour
+  COMMAND neupod --run-ms 240000 --splash-hold-ms 1500 --tour-library --snapshots ${CMAKE_BINARY_DIR}/snapshots_hires600_library)
+set_tests_properties(hires600_library_tour PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;${HIRES600_ENV}NEUPOD_UI_AUDIT=1;NEUPOD_LIB_SLOW_MS=100;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_hires600_library;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_hires600_library.img"
+  PASS_REGULAR_EXPRESSION "library: build finished in [0-9]+ ms: 16 tracks.*${LIB_GAPLESS}.*ui: audit '[^']*' 600x450 objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+  FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  FIXTURES_REQUIRED hires600_library_card
+  TIMEOUT 300)
+neupod_text_card(hires600_text)
+add_test(NAME hires600_text_tour
+  COMMAND neupod --run-ms 30000 --splash-hold-ms 1500 --tour-text --snapshots ${CMAKE_BINARY_DIR}/snapshots_hires600_text)
+set_tests_properties(hires600_text_tour PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;${HIRES600_ENV}NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_hires600_text;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_hires600_text.img"
+  PASS_REGULAR_EXPRESSION "ui: audit 'text-files' 600x450 objects=[1-9][0-9]* violations=0.*ui: audit 'text-folder' 600x450 objects=[1-9][0-9]* violations=0.*ui: audit 'text-nowplaying' 600x450 objects=[1-9][0-9]* violations=0.*ui: audit 'text-home' 600x450 objects=[1-9][0-9]* violations=0.*ui: audit 'text-longrow' 600x450 objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+  FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  FIXTURES_REQUIRED hires600_text_card
+  TIMEOUT 90)
+
+neupod_splash_tests(hires600_splash "${HIRES600_ENV}" "600x450")
+neupod_hold_card(hires600_hold)
+neupod_hold_tour(hires600_hold_tour hires600_hold "${HIRES600_ENV}" "600x450")
+neupod_hold_card(hires600_design)
+neupod_design_tour(hires600_design_tour hires600_design "${HIRES600_ENV}" "600x450")
+neupod_hold_card(hires600_licences)
+neupod_licence_tour(hires600_licences_tour hires600_licences "${HIRES600_ENV}" "600x450")
+
+# Touch (docs/ui-input.md "Touch"): the host's simulated touch panel (NEUPOD_TOUCH=1) driven by the tour's touch: tokens through the input task's gesture logic.
+# A tap opens Music (depth 2), a swipe right goes back (depth 1), a drag up moves the Home highlight down (Podcasts, then Extras), a drag down brings it back
+# (Photos, Podcasts); the long press (Play, nothing playing) leaves the screen as it is. The unit test (touch_gesture) pins the numbers; this is the wiring.
+neupod_hold_card(hires600_touch)
+add_test(NAME hires600_touch_tour
+  COMMAND neupod --run-ms 60000 --splash-hold-ms 1500 --tour-touch --snapshots ${CMAKE_BINARY_DIR}/snapshots_hires600_touch)
+set_tests_properties(hires600_touch_tour PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;${HIRES600_ENV}NEUPOD_TOUCH=1;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_hires600_touch;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_hires600_touch.img"
+  PASS_REGULAR_EXPRESSION "input: touch panel ready \\(600x450\\).*ui: screen 'touch-music' [^\n]*depth=2.*ui: screen 'touch-back' [^\n]*depth=1.*ui: sel neuPod 1 'Podcasts'.*ui: sel neuPod 3 'Extras'.*ui: screen 'touch-scroll-down'.*ui: sel neuPod 2 'Photos'.*ui: sel neuPod 1 'Podcasts'.*ui: screen 'touch-scroll-up'.*ui: screen 'touch-long' [^\n]*depth=1.*ui: audit 'touch-long' 600x450 objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+  FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  FIXTURES_REQUIRED hires600_touch_clean
+  TIMEOUT 120)
 endif()
 
 # Optional AddressSanitizer + UBSan build of the codec / parser / handshake tests: cmake -DNEUPOD_HOST_ASAN=ON

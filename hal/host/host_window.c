@@ -135,6 +135,17 @@ void host_pump_events(void) {
                                                                               : -e.wheel.y);
             }
             break;
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP:
+            if (e.button.button == SDL_BUTTON_LEFT) {
+                host_touch_mouse(e.button.x, e.button.y, e.type == SDL_MOUSEBUTTONDOWN); // logical (panel) pixels: SDL_RenderSetLogicalSize
+            }
+            break;
+        case SDL_MOUSEMOTION:
+            if ((e.motion.state & SDL_BUTTON_LMASK) != 0) {
+                host_touch_mouse(e.motion.x, e.motion.y, true);
+            }
+            break;
         default:
             break;
         }

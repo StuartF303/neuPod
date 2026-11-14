@@ -145,6 +145,15 @@
     "m s _ x x x snap:pl-m3u-night 3*s _ x snap:pl-m3u-greyed m s _ x x x strips:off x snap:pl-m3u-running "                                           \
     "2*s _ x wait:pause x _ x 3*s x snap:pl-np-page2 _ x x snap:pl-np-added m m m 6*w _ x x x snap:pl-otg-after m m m"
 
+// Touch (NEUPOD_TOUCH=1, docs/ui-input.md "Touch"): the finger is injected as contacts and goes through the input task's gesture logic. A tap is Select (Music opens, depth 2),
+// a swipe right is Menu (back to Home, depth 1), a drag up scrolls the highlight down and a drag down brings it back, a still finger for 900 ms is Play (nothing is playing: the screen stays).
+#define TOUR_TOUCH                                                                                 \
+    "x snap:touch-home touch:down:300:200 touch:up x x x snap:touch-music "                       \
+    "touch:down:80:300 x touch:move:160:300 x touch:move:250:305 x touch:up x x x snap:touch-back "   \
+    "touch:down:300:400 x touch:move:300:300 x touch:move:300:200 x touch:up x x x snap:touch-scroll-down "  \
+    "touch:down:300:200 x touch:move:300:300 x touch:move:300:340 x touch:up x x x snap:touch-scroll-up "    \
+    "touch:down:300:200 sleep:900 touch:up x x x snap:touch-long"
+
 static unsigned g_expect = 21;
 static const char *g_snapshot_dir;
 static unsigned g_snapshots;
@@ -240,6 +249,10 @@ int main(int argc, char **argv) {
             cfg.ui_script = TOUR_TEXT;
             cfgp_tour = true;
             g_expect = 7; // the splash, home and the five named snapshots
+        } else if (strcmp(argv[i], "--tour-touch") == 0) {
+            cfg.ui_script = TOUR_TOUCH;
+            cfgp_tour = true;
+            g_expect = 8; // the splash, home and the six named snapshots
         } else if (strcmp(argv[i], "--tour-playlists") == 0) {
             cfg.ui_script = TOUR_PLAYLISTS;
             cfgp_tour = true;
@@ -255,7 +268,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--snapshots") == 0 && i + 1 < argc) {
             g_snapshot_dir = argv[++i];
         } else {
-            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek|--tour-library|--tour-library-ro|--tour-library-empty|--tour-playlists|--tour-text|--tour-hold|--tour-licences|--tour-design] [--splash-debug|--splash-release] [--script KEYS] [--snapshots DIR]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek|--tour-library|--tour-library-ro|--tour-library-empty|--tour-playlists|--tour-text|--tour-hold|--tour-licences|--tour-design|--tour-touch] [--splash-debug|--splash-release] [--script KEYS] [--snapshots DIR]\n", argv[0]);
             return 64;
         }
     }

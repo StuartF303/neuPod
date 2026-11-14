@@ -45,6 +45,7 @@ set(NEUPOD_FATFS_SOURCES
 set(NEUPOD_RT_CORE_SOURCES               # pure logic, no OS: host-testable on their own
   ${NEUPOD_APP_DIR}/audio/spsc_ring.c
   ${NEUPOD_APP_DIR}/input/input_events.c
+  ${NEUPOD_APP_DIR}/input/touch_gesture.c
   ${NEUPOD_APP_DIR}/ui/ui_logic.c
   ${NEUPOD_APP_DIR}/ui/ui_hold.c
   ${NEUPOD_APP_DIR}/ui/ui_licence_data.c
