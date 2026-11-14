@@ -49,13 +49,13 @@ Not built for this board: the `display_test`, `i2c_test` and `storage_test` exec
 
 ## Display notes
 
-- **Orientation.** The panel's own MADCTL (0x36) is set to `0x60` (MX|MV): the controller addresses itself as landscape, with a row
-  offset of 14 (the 450 visible columns sit 16 from one end of the controller's 480-column memory and 14 from the other). The
-  mapping was taken from the controller's other known drivers and checked on the bench only as far as the registers go (the HAL cannot
-  see the glass): **if the picture is upside down or mirrored, build with `-DNEUPOD_AMOLED_LANDSCAPE=3`** (MADCTL `0xA0`, offset 16, and
-  the touch mapping turned the same way).
-- **Unverified on the glass.** The orientation, the row offset and the touch mapping were not seen on the panel; they follow other
-  RM690B0 drivers. Try `-DNEUPOD_AMOLED_LANDSCAPE=3` if the picture or the touch is upside down or mirrored.
+- **Orientation.** The panel's own MADCTL (0x36) is `0xA0` (MY|MV) by default: the controller addresses itself as landscape, with a page
+  (row) offset of 16 (the 450 visible columns sit 16 from one end of the controller's 480-column memory and 14 from the other; the
+  offset has to be the one on the side the mirror bit makes "first", else a 2 px band of unused memory shows on an edge).
+  `-DNEUPOD_AMOLED_LANDSCAPE=3` turns the picture by 180 degrees (MADCTL `0x60`, offset 14) and the touch mapping with it, so the pair stays
+  consistent. On the owner's bench, MADCTL `0x60` with the touch mapping below (landscape x = raw y, y = 449 - raw x) was 180 degrees
+  apart; the default is therefore the rotated display with that touch mapping. The offsets come from other RM690B0 drivers; whether a
+  band shows on an edge has not been checked by eye by me.
 - **Even windows.** The controller addresses whole pixel pairs: `hal_display_set_window()` returns `HAL_EINVAL` for an odd x, y, width or
   height. The UI rounds its flush areas outwards (LVGL rounder).
 - **Brightness** is the panel's own register (0x51): `hal_display_backlight()` 0..255. `hal_display_sleep()` sends DISPOFF + SLPIN.

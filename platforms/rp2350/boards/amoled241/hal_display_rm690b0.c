@@ -11,10 +11,9 @@
  *     first blit CS stays low across successive hal_display_blit() calls (they continue filling the window, like the other HALs)
  *     until the next register write ends the stream.
  *
- * Orientation: MADCTL (0x36) 0x60 = MX|MV makes the controller itself address the panel as landscape, so the stream the UI
- * produces (row-major, left to right) goes straight to the glass. Its column/page start offsets are 0 and 14 (the 450 visible
- * columns sit 16 from one end of the controller's 480-column memory and 14 from the other; which end is "first" depends on the
- * mirror bit). NEUPOD_AMOLED_LANDSCAPE=3 selects the other landscape (0xA0, offset 16), turned by 180 degrees.
+ * Orientation: MADCTL (0x36) MV makes the controller itself address the panel as landscape, so the stream the UI produces (row-major,
+ * left to right) goes straight to the glass. Default 0xA0 (MY|MV) with page offset 16; NEUPOD_AMOLED_LANDSCAPE=3 turns it by 180 degrees
+ * (0x60, offset 14); see the definitions below.
  *
  * The controller wants window starts and sizes in whole pairs of pixels: set_window() refuses odd values with HAL_EINVAL (the UI
  * rounds its flush areas outwards before calling).
@@ -30,12 +29,16 @@
 #include "pico/stdlib.h"
 #include "rm690b0_qspi.pio.h"
 
+// NEUPOD_AMOLED_LANDSCAPE selects the picture's direction (the touch mapping follows, hal_touch_ft6336.c). Default 1 = MADCTL 0xA0
+// (MY|MV), page offset 16; 3 = the picture turned by 180 degrees: MADCTL 0x60 (MX|MV), page offset 14. The offsets are the two ends of
+// the controller's 480-column memory around the 450 visible columns (16 + 450 + 14): the offset must be the one on the side the
+// mirror bit makes "first", or a 2 px band of unused memory shows on one edge.
 #if NEUPOD_AMOLED_LANDSCAPE == 3
-#define AMOLED_MADCTL_LANDSCAPE 0xA0u // MY|MV
-#define AMOLED_PAGE_OFFSET 16u
-#else
 #define AMOLED_MADCTL_LANDSCAPE 0x60u // MX|MV
 #define AMOLED_PAGE_OFFSET 14u
+#else
+#define AMOLED_MADCTL_LANDSCAPE 0xA0u // MY|MV
+#define AMOLED_PAGE_OFFSET 16u
 #endif
 #define AMOLED_COLUMN_OFFSET 0u
 

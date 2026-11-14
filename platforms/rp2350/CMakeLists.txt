@@ -76,7 +76,7 @@ if(NEUPOD_BOARD STREQUAL "amoled241")
     ${NEUPOD_BOARD_DIR}/hal_touch_ft6336.c ${NEUPOD_BOARD_DIR}/hal_radio_none.c ${NEUPOD_BOARD_DIR}/hal_storage_spi.c
     ${NEUPOD_BOARD_DIR}/hw_config.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
   # Landscape direction of the panel and the touch mapping (board.h); touch points on the console while bringing the board up.
-  set(NEUPOD_AMOLED_LANDSCAPE 1 CACHE STRING "amoled241 landscape rotation: 1 (default) or 3 (turned by 180 degrees)")
+  set(NEUPOD_AMOLED_LANDSCAPE 1 CACHE STRING "amoled241 landscape direction of picture and touch: 1 (default) or 3 (both turned by 180 degrees)")
   set_property(CACHE NEUPOD_AMOLED_LANDSCAPE PROPERTY STRINGS 1 3)
   option(NEUPOD_AMOLED_TOUCH_LOG "amoled241: log touch down / move / up with raw and mapped coordinates on the console (off by default: a USB terminal that does not read can block the input task)" OFF)
   target_include_directories(hal_rp2350_core PUBLIC ${NEUPOD_BOARD_DIR})

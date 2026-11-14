@@ -24,8 +24,8 @@
 #define BOARD_PIN_BAT_CONTROL 25 // drive HIGH to stay powered on battery, LOW to switch off
 #define BOARD_PIN_BAT_ADC 40     // battery through a x3 divider (200k / 100k); not read by the firmware yet
 
-// Landscape rotation: 1 = MADCTL 0x60 (MX|MV), 3 = MADCTL 0xA0 (MY|MV), the panel turned the other way. Both the display and the
-// touch mapping follow it. -DNEUPOD_AMOLED_LANDSCAPE=3 on the cmake command line flips the picture (and the touch) by 180 degrees.
+// Landscape direction: 1 (default) = MADCTL 0xA0 (MY|MV) with the touch mapping landscape x = raw y, y = 449 - raw x (bench check by the
+// owner: this pairing is the right way round); 3 = both turned by 180 degrees (MADCTL 0x60, touch x = 599 - raw y, y = raw x).
 #ifndef NEUPOD_AMOLED_LANDSCAPE
 #define NEUPOD_AMOLED_LANDSCAPE 1
 #endif
