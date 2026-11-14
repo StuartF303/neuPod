@@ -86,6 +86,7 @@ From the owner-commissioned [design review](design/2026-11-12-ui-review/README.m
 ## Non-UI, tracked elsewhere
 
 - Music library index: [ADR-0017](adr/0017-music-library-index.md); the lists are built (L2), the gaps are UI-19 to UI-22 above.
+- Y2 internal speaker and Line out (owner decisions 2026-11-14): built on the host and in the Y2 firmware, bench steps in [Y2](y2.md#wired-audio-bench-steps); open: listen on the device, choose the speaker's default level (9 is the cap), decide whether the speaker may also follow a Bluetooth drop.
 - Bluetooth: stages 2a to 2c and the reconnect policy are built, what is left is in [bluetooth.md](bluetooth.md).
 - Hold, the Power key and the screen-off stage: [ADR-0020](adr/0020-hold.md).
 - Bench tests still to run: [bench.md](bench.md).
