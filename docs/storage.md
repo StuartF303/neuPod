@@ -66,7 +66,20 @@ From `wiring-phase1.md` (3.3 V, DAT0-DAT3 must be consecutive GPIOs, CLK is DAT0
 - **Stack:** the main stack is 4 KB for the storage test (the most core 0's scratch RAM bank can
   hold); the lowest free stack seen is printed after each test.
 
+## Playlists, play counts and On-The-Go (design review LB-7)
+
+Two files besides `ratings.bin`, both written by the storage task under the same nfs write scope (`/.neupod` only), the same hardware write lock discipline, and always through a temp file that is synced and then renamed over the old one (the card does not rename over a file, so the old one is unlinked first; a power cut leaves the old file, or a complete temp file that the next read picks up; a partial temp file fails its check and is ignored). Only the builds with `NEUPOD_ART_HIRES` (hosted, Y2, PSRAM boards) keep them; the frozen Pico 2 W compiles them out.
+
+| File | What | Format | Card refuses writes |
+| --- | --- | --- | --- |
+| `/.neupod/plays.bin` (`plays_store.[ch]`) | counted plays and "last played" per track, with the path, title and artist the smart lists show | binary: `NPPL`, version 1, serial, count, entries (key = path + size hash as for ratings, plays u16, last u32, stamp u32, three length-prefixed strings), CRC-32. 128 entries; the fewest played goes first, a rated one last | RAM only, retried every 30 s (`plays_persistent()`) |
+| `/.neupod/otg.m3u8` (`playlist_service.c`) | On-The-Go | an ordinary UTF-8 playlist (`#EXTM3U`, `#EXTINF:secs,Artist - Title`, absolute path), ending in `# end`; at most 100 entries; add, remove and clear rewrite the whole file | the add says "Card is write-protected" (nothing is kept in RAM) |
+
+A play is counted once per track start when half of it was actually heard (time spent playing, so a seek does not count), 30 s if its length is unknown, or when it ends by itself after 3 s (`play_tracker.h`). Paths of 96 bytes or more are not tracked in `plays.bin`. Ratings stay in `ratings.bin` (a hash): Top rated lists the tracks the plays store knows, which a rating of four stars or more adds (a rating made before this feature appears once the track is played or re-rated). `.m3u` / `.m3u8` files are only read, from `/`, `/Playlists` and `/Music` (not their sub-folders).
+
 ## Music library index
+
+Index format 3 (12 Nov 2026): sort keys skip a leading "A " / "An " as well as "The "; an older index is "needs rebuilding" and the Music lists rebuild it by themselves. Playlists add two files under `/.neupod` (below).
 
 The Music screens read an index of `/Music` that the firmware builds on the card itself ([ADR-0017](adr/0017-music-library-index.md); screens: [UI](ui.md#music-lists)).
 

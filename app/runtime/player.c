@@ -5,7 +5,9 @@
 #include "audio_engine.h"
 #include "os.h"
 #include "play_queue.h"
+#include "play_tracker.h"
 #include "player.h"
+#include "plays_store.h"
 #include "resume.h"
 #include "settings_store.h"
 #include "storage_service.h"
@@ -32,6 +34,8 @@ static uint32_t g_offer_entry = PLAY_QUEUE_NO_ENTRY;
 // An announcement is only accepted for the offer it answers: any restart of playback (reset_info) bumps g_gen, so the answer to
 // an offer made before a skip, stop or new start is ignored instead of marking a successor that no longer exists.
 static pq_snapshot_t g_snap; // the queue before the move being started (under the lock; g_gen rejects a stale rollback)
+static volatile uint32_t g_skip_seq; // LB-5: unplayable tracks the queue skipped (player_skip_notice)
+static char g_skip_msg[sizeof(((player_info_t *)0)->msg)];
 static uint16_t g_skips;     // consecutive unplayable tracks skipped under repeat-all (reset by any successful start); capped at the queue length
 static uint32_t g_gen;
 static uint32_t g_offer_gen;
@@ -406,6 +410,8 @@ static void service(action_t *a, bool have, const audio_stats_t *st) {
         // A track the queue moved on to cannot be played: skip it rather than stopping the album. Under repeat-all this wraps at the end,
         // but never more than one lap of unplayable tracks in a row (an all-broken queue ends in the error).
         printf("player: skipping '%s' (%s)\n", g_info.name, g_info.msg);
+        snprintf(g_skip_msg, sizeof g_skip_msg, "%s", g_info.msg);
+        g_skip_seq++;
         g_skips++;
         prepare_rollback(a);
         (void)pq_next(&g_q);
@@ -413,6 +419,42 @@ static void service(action_t *a, bool have, const audio_stats_t *st) {
         a->stop = true; // the failed track may still be feeding or have left the audio core half set up
     }
 }
+
+uint32_t player_skip_notice(char *reason, size_t n) {
+    if (reason != NULL && n > 0) {
+        snprintf(reason, n, "%s", g_skip_msg); /* a torn copy is only text; the counter says it is new */
+    }
+    return g_skip_seq;
+}
+
+/* A track counts as played once half of it was heard, or it ran to its end (play_tracker.h): noted in the plays store (plays_store.h), which the
+ * Playlists smart lists read. Monitor task only. */
+#if PLAYS_MAX > 0
+static ptrk_t g_ptrk;
+static player_info_t g_cp_pi, g_cp_again; /* monitor task only: off its small stack */
+static char g_cp_path[PLAYER_PATH_MAX];
+static void count_plays(void) {
+    player_get(&g_cp_pi);
+    if (g_cp_pi.src != PLAYER_SRC_FILE) {
+        ptrk_init(&g_ptrk);
+        return;
+    }
+    uint32_t dur_ms = g_cp_pi.rate != 0 ? (uint32_t)(g_cp_pi.total_frames * 1000u / g_cp_pi.rate) : 0;
+    if (!ptrk_update(&g_ptrk, os_tick_ms(), g_cp_pi.state == PLAYER_PLAYING, g_cp_pi.state == PLAYER_ENDED, g_cp_pi.track_id, dur_ms)) {
+        return;
+    }
+    if (!player_now_path(g_cp_path, sizeof g_cp_path)) {
+        return;
+    }
+    player_get(&g_cp_again);
+    if (g_cp_again.track_id != g_cp_pi.track_id) {
+        return; /* a handoff between the two reads: the path is the next track's */
+    }
+    (void)plays_record(g_cp_path, g_cp_pi.file_size, g_cp_pi.title_is_name ? "" : g_cp_pi.tags.title, g_cp_pi.tags.artist, true);
+}
+#else
+static void count_plays(void) {}
+#endif
 
 void player_service(void) {
     audio_stats_t st;
@@ -432,6 +474,21 @@ void player_service(void) {
 #endif
     unlock();
     run_action(&a);
+    count_plays();
+}
+
+bool player_now_path(char *out, size_t n) {
+    lock();
+    bool ok = g_info.src == PLAYER_SRC_FILE && g_q.count != 0 && queue_real_path(g_q.pos, out, n);
+    unlock();
+    return ok;
+}
+
+bool player_now_handle(char *out, size_t n) {
+    lock();
+    bool ok = g_info.src == PLAYER_SRC_FILE && g_q.count != 0 && pq_path(&g_q, g_q.pos, out, n) && pq_is_handle(out);
+    unlock();
+    return ok;
 }
 
 void player_get(player_info_t *out) {
@@ -451,6 +508,7 @@ void player_get(player_info_t *out) {
         g_error_stopped = true;
     }
     g_info.track_id = g_track_id;
+    g_info.file_size = g_info.src == PLAYER_SRC_FILE ? g_file_size : 0;
     g_info.pos_frames = have && g_info.rate != 0 && g_info.src == PLAYER_SRC_FILE ? g_base_frames + (uint64_t)st.pcm_frames : 0;
     g_info.queue_len = g_info.src == PLAYER_SRC_FILE ? g_q.count : 0;
     g_info.queue_pos = g_info.queue_len != 0 ? g_q.pos + 1u : 0;
@@ -526,6 +584,21 @@ void player_play_folder(const char *dir, const file_entry_t *entries, uint32_t c
     pq_set_repeat(&g_q, player_repeat()); // the saved modes apply to the queue being built (the settings may have loaded since boot)
     g_q.shuffle = (uint8_t)player_shuffle();
     if (!pq_build(&g_q, dir, entries, count, index)) {
+        unlock();
+        return;
+    }
+    begin_track(&a, false, "start");
+    unlock();
+    run_action(&a);
+}
+
+void player_play_paths(const char *const *paths, uint32_t count, uint32_t start) {
+    action_t a = {0};
+    lock();
+    reseed();
+    pq_set_repeat(&g_q, player_repeat());
+    g_q.shuffle = (uint8_t)player_shuffle();
+    if (!pq_build_paths(&g_q, paths, count, start)) {
         unlock();
         return;
     }
@@ -752,6 +825,13 @@ void player_stop(void) {
     go_idle(&a);
     unlock();
     run_action(&a);
+}
+
+uint32_t player_volume_att(void) {
+    lock();
+    uint32_t v = g_vol_hold ? 0u : g_vol;
+    unlock();
+    return v;
 }
 
 uint32_t player_volume_step(int32_t steps) {

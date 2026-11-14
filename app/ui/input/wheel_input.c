@@ -12,7 +12,6 @@ static int32_t clampi(int32_t v, int32_t lo, int32_t hi) { return v < lo ? lo : 
 
 /* ---- UTF-8 helpers ---- */
 static bool is_cont(uint8_t c) { return (c & 0xC0u) == 0x80u; }
-static uint32_t cp_len(uint8_t lead) { return lead < 0x80u ? 1u : lead >= 0xF0u ? 4u : lead >= 0xE0u ? 3u : 2u; }
 static uint32_t encode(uint32_t cp, char out[4]) {
     if (cp < 0x80u) { out[0] = (char)cp; return 1; }
     if (cp < 0x800u) { out[0] = (char)(0xC0u | (cp >> 6)); out[1] = (char)(0x80u | (cp & 0x3Fu)); return 2; }
@@ -42,13 +41,6 @@ static uint32_t page_count_chars(wi_charset_t cs, wi_page_t p) {
     }
     return n;
 }
-static uint32_t pages_usable(const wi_text_t *t) {
-    uint32_t n = 0;
-    for (int p = 0; p < WI_PAGE_COUNT; p++) {
-        n += page_count_chars(t->charset, (wi_page_t)p) != 0;
-    }
-    return n;
-}
 
 uint32_t wi_text_chars(const wi_text_t *t) {
     uint32_t n = 0;
@@ -65,7 +57,7 @@ void wi_text_init(wi_text_t *t, const char *initial, uint32_t max_chars, wi_char
     t->charset = cs;
     t->masked = masked;
     t->search = search;
-    t->page = cs == WI_CS_DIGITS || cs == WI_CS_HEX ? WI_PAGE_DIGITS : WI_PAGE_LOWER;
+    t->chip = cs == WI_CS_DIGITS || cs == WI_CS_HEX ? WI_CHIP_DIGITS : WI_CHIP_LOWER;
     if (initial != NULL) { /* keep the valid, printable prefix: never an invalid sequence, a control byte or half a character */
         size_t i = 0, n = 0;
         while (initial[i] != '\0' && n < WI_TEXT_MAX) {
@@ -115,45 +107,40 @@ void wi_text_set_byte_limit(wi_text_t *t, uint32_t max_bytes) {
     }
 }
 
-uint32_t wi_text_strip_len(const wi_text_t *t) {
-    uint32_t n = page_count_chars(t->charset, t->page);
-    n += pages_usable(t) > 1;
-    n += t->charset == WI_CS_ANY; /* space */
-    n += t->masked;
-    return n + 1; /* done */
+uint32_t wi_text_chips(const wi_text_t *t, wi_chip_t out[WI_CHIP_COUNT]) {
+    uint32_t n = 0;
+    for (int p = 0; p < WI_PAGE_COUNT; p++) {
+        if (page_count_chars(t->charset, (wi_page_t)p) != 0) {
+            out[n++] = (wi_chip_t)p;
+        }
+    }
+    if (t->charset == WI_CS_ANY) {
+        out[n++] = WI_CHIP_SPACE;
+    }
+    out[n++] = WI_CHIP_DELETE;
+    return n;
 }
+
+uint32_t wi_text_strip_len(const wi_text_t *t) { return t->chip < WI_CHIP_SPACE ? page_count_chars(t->charset, (wi_page_t)t->chip) : 1u; }
 
 wi_key_kind_t wi_text_strip_key(const wi_text_t *t, uint32_t i, char out[8]) {
     out[0] = '\0';
-    uint32_t nch = page_count_chars(t->charset, t->page);
-    if (i < nch) {
-        for (const char *s = k_pages[t->page]; *s; s++) {
-            if (allowed(t->charset, *s) && i-- == 0) {
-                out[0] = *s;
-                out[1] = '\0';
-                break;
-            }
-        }
-        return WI_KEY_CHAR;
-    }
-    i -= nch;
-    if (pages_usable(t) > 1) {
-        if (i-- == 0) {
-            static const char *const nm[WI_PAGE_COUNT] = {"ABC", "123", "#+=", "abc"};
-            strcpy(out, nm[t->page]); /* names the page a Select goes to */
-            return WI_KEY_PAGE;
-        }
-    }
-    if (t->charset == WI_CS_ANY && i-- == 0) {
+    if (t->chip == WI_CHIP_SPACE) {
         strcpy(out, "space");
         return WI_KEY_SPACE;
     }
-    if (t->masked && i-- == 0) {
-        strcpy(out, t->show ? "hide" : "show");
-        return WI_KEY_SHOW;
+    if (t->chip == WI_CHIP_DELETE) {
+        strcpy(out, "del");
+        return WI_KEY_DELETE;
     }
-    strcpy(out, "done");
-    return WI_KEY_DONE;
+    for (const char *s = k_pages[t->chip]; *s; s++) {
+        if (allowed(t->charset, *s) && i-- == 0) {
+            out[0] = *s;
+            out[1] = '\0';
+            break;
+        }
+    }
+    return WI_KEY_CHAR;
 }
 
 bool wi_text_insert(wi_text_t *t, uint32_t cp) {
@@ -190,19 +177,30 @@ static void backspace(wi_text_t *t) {
     t->changed = true;
 }
 
-static void next_page(wi_text_t *t) {
-    for (int k = 1; k <= WI_PAGE_COUNT; k++) {
-        wi_page_t p = (wi_page_t)((t->page + (uint32_t)k) % WI_PAGE_COUNT);
-        if (page_count_chars(t->charset, p) != 0) {
-            t->page = p;
-            break;
+void wi_text_clear(wi_text_t *t) {
+    if (t->len != 0) {
+        t->text[0] = '\0';
+        t->len = t->cursor = 0;
+        t->changed = true;
+    }
+}
+
+// Left / Right: the previous / next chip this entry offers.
+static void move_chip(wi_text_t *t, int dir) {
+    wi_chip_t c[WI_CHIP_COUNT];
+    uint32_t n = wi_text_chips(t, c), at = 0;
+    for (uint32_t i = 0; i < n; i++) {
+        if (c[i] == t->chip) {
+            at = i;
         }
     }
+    t->chip = c[(uint32_t)wrap((int32_t)at + dir, (int32_t)n)];
     t->sel = 0;
 }
 
 wi_result_t wi_text_event(wi_text_t *t, wi_ev_t ev, int32_t steps) {
     uint32_t n = wi_text_strip_len(t);
+    t->typed = false;
     switch (ev) {
     case WI_EV_SCROLL:
         t->sel = (uint32_t)wrap((int32_t)t->sel + steps, (int32_t)n);
@@ -210,11 +208,13 @@ wi_result_t wi_text_event(wi_text_t *t, wi_ev_t ev, int32_t steps) {
     case WI_EV_SELECT: {
         char k[8];
         switch (wi_text_strip_key(t, t->sel, k)) {
-        case WI_KEY_CHAR: (void)wi_text_insert(t, (uint8_t)k[0]); break;
-        case WI_KEY_SPACE: (void)wi_text_insert(t, ' '); break;
-        case WI_KEY_PAGE: next_page(t); break;
-        case WI_KEY_SHOW: t->show = !t->show; break;
-        case WI_KEY_DONE: return WI_OK;
+        case WI_KEY_CHAR: t->typed = wi_text_insert(t, (uint8_t)k[0]); break;
+        case WI_KEY_SPACE: t->typed = wi_text_insert(t, ' '); break;
+        case WI_KEY_DELETE:
+            if (t->cursor > 0) {
+                backspace(t);
+            }
+            break;
         }
         break;
     }
@@ -223,24 +223,11 @@ wi_result_t wi_text_event(wi_text_t *t, wi_ev_t ev, int32_t steps) {
             backspace(t);
         } else if (t->len == 0) {
             return WI_CANCELLED;
-        } /* cursor at the start of non-empty text: nothing before it to delete */
+        }
         break;
     case WI_EV_PLAY: return WI_OK;
-    case WI_EV_LEFT:
-        if (t->cursor > 0) {
-            do {
-                t->cursor--;
-            } while (t->cursor > 0 && is_cont((uint8_t)t->text[t->cursor]));
-        }
-        break;
-    case WI_EV_RIGHT:
-        if (t->cursor < t->len) {
-            t->cursor += cp_len((uint8_t)t->text[t->cursor]);
-            if (t->cursor > t->len) {
-                t->cursor = t->len;
-            }
-        }
-        break;
+    case WI_EV_LEFT: move_chip(t, -1); break;
+    case WI_EV_RIGHT: move_chip(t, 1); break;
     }
     if (t->sel >= wi_text_strip_len(t)) {
         t->sel = 0;

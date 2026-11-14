@@ -44,6 +44,7 @@ typedef struct {
 
 #define LVW_TEXT_MAX 48u   /**< first line of a row, UTF-8, NUL included (longer is cut at a character boundary) */
 #define LVW_DETAIL_MAX 24u /**< right-hand text */
+#define LVW_SUB_MAX 48u    /**< second line of a two-line row ("Artist . Album"), UTF-8, NUL included */
 
 typedef struct {
     uint32_t count;          /**< rows, "All Songs" included */
@@ -51,11 +52,23 @@ typedef struct {
     bool songs;              /**< the rows after the head are songs: Select on row i queues range at (i - head) */
     pq_range_t range;        /**< songs lists: what a Select queues */
     char title[LVW_TEXT_MAX]; /**< status bar title: "Artists", the artist's name, ... */
+    /* An album's header (LVW_ALBUM only; docs/ui.md "Album header"): who made it, when, how long and in what format */
+    char artist[LVW_TEXT_MAX]; /**< the album artist ("Various Artists" for a compilation) */
+    uint16_t year;             /**< of the first song that has one; 0 = unknown */
+    uint32_t total_s;          /**< summed song lengths */
+    uint8_t codec;             /**< lib_codec_t of the songs; LIB_CODEC_NONE when they differ */
 } lvw_info_t;
 
 typedef struct {
     char text[LVW_TEXT_MAX];
     char detail[LVW_DETAIL_MAX];
+    char sub[LVW_SUB_MAX]; /**< songs: "Artist . Album" (second line of a two-line row); empty otherwise */
+    uint16_t track;        /**< songs of an album: the track number, 0 = none */
+    uint8_t codec;         /**< songs: lib_codec_t (the unplayable ones show it in brackets) */
+    /* Albums and Compilations rows (the Cover Flow, docs/ui.md): the album's songs as a range of the by-album order, and the year of its first song (0 = unknown) */
+    uint32_t first;        /**< position of the album's first song in LIB_ORDER_ALBUM */
+    uint32_t songs;        /**< songs in the album */
+    uint16_t year;
     lvw_view_t child; /**< the list a Select opens; kind LVW_KINDS for a song */
     uint8_t play;    /**< songs: lib_play_t (0 = playable; a Select shows why it is not) */
 } lvw_row_t;

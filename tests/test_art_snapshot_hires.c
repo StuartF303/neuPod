@@ -4,7 +4,7 @@
 //   art-cover     the four colour quadrants, filling the 168 px box
 //   art-embedded  the quadrants, letterboxed (dark bars above and below)
 //   art-home      Home: the quadrants in the 144 px box of the right pane, the title text under it, no placeholder ring
-//   art-none      the note placeholder, no picture colours
+//   art-none      the ring placeholder, no picture colours
 // The thumbnail is still decoded at 64 px (art.h) and scaled up by LVGL, so the quadrant edges are soft; the probes stay clear of them.
 #include <stdbool.h>
 #include <stdint.h>
@@ -47,9 +47,9 @@ static int dist(const ppm_t *p, int x, int y, int r, int g, int b) {
 
 static const char *g_dir;
 
-// The art box is 168 x 168 at (21, 57) on the 480 x 360 screen (status bar 36 px, box 21 px below it).
-#define BX 21
-#define BY 57
+// The art box is 168 x 168 at (15, 54) on the 480 x 360 screen (status bar 36 px, box 18 px below it).
+#define BX 15
+#define BY 54
 #define BOX 168
 
 TEST(test_cover_quadrants) {
@@ -90,15 +90,9 @@ TEST(test_none_shows_placeholder) {
     ASSERT_TRUE(dist(&p, BX + BOX / 4, BY + BOX / 4, 220, 40, 40) > 80); // no red quadrant ...
     ASSERT_TRUE(dist(&p, BX + 3 * BOX / 4, BY + BOX / 4, 40, 200, 60) > 80); // ... no green one ...
     ASSERT_TRUE(dist(&p, BX + 3 * BOX / 4, BY + 3 * BOX / 4, 230, 210, 40) > 80); // ... no yellow one
-    // the note glyph is light on the dark background: some pixel in the middle of the box is bright
-    int bright = 0;
-    for (int y = BY + 45; y < BY + 123; y++) {
-        for (int x = BX + 45; x < BX + 123; x++) {
-            const uint8_t *q = p.px + ((size_t)y * (size_t)p.w + (size_t)x) * 3u;
-            if (q[0] > 120 && q[1] > 130 && q[2] > 150) bright++;
-        }
-    }
-    ASSERT_TRUE(bright > 100);
+    // the placeholder's centre dot is a light spot on the dark gradient (no music-note glyph any more)
+    const uint8_t *q = p.px + ((size_t)(BY + 84) * (size_t)p.w + (size_t)(BX + 84)) * 3u;
+    ASSERT_TRUE(q[0] > 110 && q[1] > 110 && q[2] > 120);
     free(p.px);
 }
 

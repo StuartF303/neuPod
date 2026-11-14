@@ -132,6 +132,18 @@ int ui_signal_bars(int32_t rssi, const ui_signal_thr_t *thr, int prev, int32_t h
 
 int ui_signal_class(int bars) { return bars >= 3 ? 3 : bars == 2 ? 2 : 1; }
 
+int ui_signal_bars3(int bars) { return bars <= 0 ? 0 : bars == 1 ? 1 : bars >= 4 ? 3 : 2; }
+
+const char *ui_bt_class_word(uint32_t cod) {
+    switch ((cod >> 8) & 0x1Fu) { /* major device class */
+    case 0x01: return "computer";
+    case 0x02: return "phone";
+    case 0x04: return "";
+    case 0x07: return "wearable";
+    default: return "other";
+    }
+}
+
 const char *ui_signal_word(int bars) { return bars <= 0 ? "-" : bars >= 4 ? "Excellent" : bars == 3 ? "Good" : bars == 2 ? "Fair" : "Weak"; }
 
 /* ---- Backlight auto-dim -------------------------------------------------------------------------- */
@@ -144,17 +156,62 @@ static const struct {
 uint32_t ui_autodim_seconds(uint8_t idx) { return idx < UI_AUTODIM_STEPS ? k_autodim[idx].sec : 0u; }
 const char *ui_autodim_name(uint8_t idx) { return idx < UI_AUTODIM_STEPS ? k_autodim[idx].name : "-"; }
 
+static const struct {
+    uint16_t sec;
+    const char *name;
+} k_screenoff[UI_SCREENOFF_STEPS] = {{0, "Never"}, {15, "15 s"}, {30, "30 s"}, {60, "1 min"}, {120, "2 min"}, {180, "3 min"}, {300, "5 min"}};
+
+uint32_t ui_screenoff_seconds(uint8_t idx) { return idx < UI_SCREENOFF_STEPS ? k_screenoff[idx].sec : 0u; }
+const char *ui_screenoff_name(uint8_t idx) { return idx < UI_SCREENOFF_STEPS ? k_screenoff[idx].name : "-"; }
+
+bool ui_theme_mode_from_stored(uint8_t v, ui_theme_mode_t *out) {
+    if (v >= UI_THEME_MODES) {
+        return false;
+    }
+    *out = (ui_theme_mode_t)v;
+    return true;
+}
+
+const char *ui_theme_mode_name(ui_theme_mode_t m) { return m == UI_THEME_DARK ? "Dark" : m == UI_THEME_AUTO ? "Auto" : "Light"; }
+
+ui_theme_mode_t ui_theme_mode_next(ui_theme_mode_t m) { return (ui_theme_mode_t)(((unsigned)m + 1u) % UI_THEME_MODES); }
+
+bool ui_theme_is_dark(ui_theme_mode_t m, bool dimmed) { return m == UI_THEME_DARK || (m == UI_THEME_AUTO && dimmed); }
+
 void ui_idle_init(ui_idle_t *t, uint32_t now_ms) {
     t->last_ms = now_ms;
     t->dimmed = false;
+    t->off = false;
+    t->forced_off = false;
 }
 
 bool ui_idle_activity(ui_idle_t *t, uint32_t now_ms) {
-    bool was = t->dimmed;
+    bool was = t->dimmed || t->off;
     t->last_ms = now_ms;
     t->dimmed = false;
+    t->off = false;
+    t->forced_off = false;
     return was;
 }
+
+bool ui_idle_off_tick(ui_idle_t *t, uint32_t now_ms, bool dim_enabled, bool inhibit, uint32_t dim_timeout_ms, uint32_t off_after_ms) {
+    uint32_t elapsed = now_ms - t->last_ms;
+    bool future = elapsed >= 0u - UI_IDLE_FUTURE_MS;
+    bool idle_off = off_after_ms != 0u && !future && elapsed >= (dim_enabled ? dim_timeout_ms : 0u) + off_after_ms;
+    bool off = !inhibit && (t->forced_off || idle_off);
+    bool changed = off != t->off;
+    t->off = off;
+    return changed;
+}
+
+bool ui_idle_force_off(ui_idle_t *t) {
+    bool changed = !t->off;
+    t->off = true;
+    t->forced_off = true;
+    return changed;
+}
+
+uint8_t ui_backlight_level(uint8_t set_pct, bool dimmed, bool off) { return off ? 0u : ui_backlight_effective(set_pct, dimmed); }
 
 bool ui_idle_tick(ui_idle_t *t, uint32_t now_ms, bool enabled, bool inhibit, uint32_t timeout_ms) {
     if (inhibit) {
@@ -214,16 +271,31 @@ static void move_target(ui_npc_t *c, const ui_npc_track_t *t, int64_t delta_fram
     c->move_ms = now_ms;
 }
 
-bool ui_npc_select(ui_npc_t *c, const ui_npc_track_t *t, uint32_t now_ms) {
-    if (c->mode == UI_WHEEL_SEEK) {
-        c->mode = UI_WHEEL_VOLUME; /* a scrub still waiting is applied by the next tick */
-        return true;
+uint32_t ui_npc_select_down(ui_npc_t *c, uint32_t now_ms) {
+    c->sel_down = true;
+    c->sel_ms = now_ms;
+    if (c->mode == UI_WHEEL_SEEK) { /* "Select: go" */
+        c->mode = UI_WHEEL_VOLUME;
+        c->sel_used = true; /* its release must not open page 2 */
+        return c->pending ? UI_NPC_COMMIT : UI_NPC_TO_VOLUME;
     }
-    if (!t->seekable || t->rate == 0 || t->total_frames == 0) {
+    c->sel_used = false;
+    return UI_NPC_NONE;
+}
+
+uint32_t ui_npc_select_up(ui_npc_t *c) {
+    bool short_press = c->sel_down && !c->sel_used;
+    c->sel_down = false;
+    c->sel_used = false;
+    return short_press ? UI_NPC_PAGE2 : UI_NPC_NONE;
+}
+
+bool ui_npc_menu(ui_npc_t *c) {
+    if (c->mode != UI_WHEEL_SEEK) {
         return false;
     }
-    c->mode = UI_WHEEL_SEEK;
-    c->mode_ms = now_ms;
+    c->mode = UI_WHEEL_VOLUME;
+    c->pending = false; /* "Menu: cancel" */
     return true;
 }
 
@@ -307,12 +379,27 @@ uint32_t ui_npc_tick(ui_npc_t *c, const ui_npc_track_t *t, uint32_t now_ms) {
         c->holding = false;
         return ev | (c->pending ? UI_NPC_COMMIT : UI_NPC_NONE);
     }
-    if (c->mode == UI_WHEEL_SEEK && (!can || (!c->holding && !c->pending && elapsed_ge(now_ms, c->mode_ms, UI_SEEK_IDLE_MS)))) {
-        c->mode = UI_WHEEL_VOLUME;
+    if (c->sel_down && !c->sel_used && c->mode != UI_WHEEL_SEEK && elapsed_ge(now_ms, c->sel_ms, UI_SELHOLD_MS)) {
+        c->sel_used = true; /* the hold fired: the release is not a short press */
+        if (can) {
+            c->mode = UI_WHEEL_SEEK;
+            c->mode_ms = now_ms;
+            ev |= UI_NPC_SEEK_ENTER;
+        } else {
+            ev |= UI_NPC_UNAVAILABLE;
+        }
+    }
+    if (c->sel_down && elapsed_ge(now_ms, c->sel_ms, UI_HOLD_MAX_MS)) {
+        c->sel_down = false; /* a release that never arrives */
+        c->sel_used = false;
+    }
+    if (c->mode == UI_WHEEL_SEEK && (!can || (!c->holding && elapsed_ge(now_ms, c->mode_ms, UI_SEEK_IDLE_MS)))) {
+        c->mode = UI_WHEEL_VOLUME; /* idle for UI_SEEK_IDLE_MS (or the track cannot seek any more): cancelled, nothing is applied */
+        c->pending = false;
         ev |= UI_NPC_TO_VOLUME;
     }
-    if (c->pending && !c->holding && can && elapsed_ge(now_ms, c->move_ms, UI_SEEK_COMMIT_MS)) {
-        ev |= UI_NPC_COMMIT;
+    if (c->pending && !c->holding && can && c->mode != UI_WHEEL_SEEK && elapsed_ge(now_ms, c->move_ms, UI_SEEK_COMMIT_MS)) {
+        ev |= UI_NPC_COMMIT; /* a Left / Right scrub that stopped (seek mode applies on Select, never by itself) */
     }
     if (c->pending && !can) {
         c->pending = false; /* the track changed under a scrub: drop it */
@@ -337,9 +424,9 @@ bool ui_text_has_glyph(uint32_t cp) {
     }
     switch (cp) {
     case 0x2013: case 0x2014: case 0x2018: case 0x2019: case 0x201C: case 0x201D: case 0x2022: case 0x2026: case 0x20AC:
-    // LV_SYMBOL_*: AUDIO OK IMAGE PLAY PAUSE RIGHT SHUFFLE LOOP DIRECTORY CHARGE FILE WIFI BATTERY_FULL/3/2/1/EMPTY BLUETOOTH SD_CARD
-    case 0xF001: case 0xF00C: case 0xF03E: case 0xF04B: case 0xF04C: case 0xF054: case 0xF074: case 0xF079: case 0xF07B:
-    case 0xF0E7: case 0xF15B: case 0xF1EB: case 0xF240: case 0xF241: case 0xF242: case 0xF243: case 0xF244: case 0xF293: case 0xF7C2:
+    // Font Awesome symbols still in the fonts (tools/gen_ui_fonts.sh SYMS): LV_SYMBOL_ AUDIO OK IMAGE WIFI BATTERY_3 BLUETOOTH SD_CARD.
+    // The chevron, transport, folder / file, lock and battery glyphs are Lucide icons or drawn shapes now (ui_icons.h), not text.
+    case 0xF001: case 0xF005: case 0xF00C: case 0xF03E: case 0xF1EB: case 0xF241: case 0xF293: case 0xF7C2:
         return true;
     default:
         return false;

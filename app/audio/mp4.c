@@ -150,10 +150,11 @@ static void ilst_item(pctx_t *p, const box_t *it) {
     } else if (x != NULL && it->type == FOURCC('g', 'n', 'r', 'e') && n >= 2) { // ID3v1 genre number + 1, 16-bit
         const char *g = meta_genre_name(be16(v) - 1u); // (0 wraps to a huge number: NULL)
         if (g != NULL) meta_genre_text(x->genre, sizeof x->genre, g, false);
-    } else if (x != NULL && it->type == FOURCC(0xA9, 'd', 'a', 'y')) {
+    } else if (it->type == FOURCC(0xA9, 'd', 'a', 'y')) {
         char y[8] = {0};
         memcpy(y, v, n < 4 ? n : 4);
-        x->year = meta_year_text(y);
+        t->year = meta_year_text(y);
+        if (x != NULL) x->year = t->year;
     } else if (x != NULL && it->type == FOURCC('d', 'i', 's', 'k') && n >= 4) x->disc = (uint16_t)be16(v + 2);
     else if (x != NULL && it->type == FOURCC('c', 'p', 'i', 'l') && n >= 1) x->compilation = v[0] != 0;
 }

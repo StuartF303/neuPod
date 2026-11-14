@@ -37,6 +37,7 @@ typedef struct {
 typedef struct {
     char title[64], artist[64], album[64]; /**< UTF-8, cut at a character boundary; empty if absent */
     uint16_t track;                        /**< 0 = unknown */
+    uint16_t year;                         /**< the year of the release (DATE / TDRC / (c)day), 0 = unknown: Now Playing shows "Album . Year" */
     art_ref_t art;                         /**< best embedded picture: a JPEG over a PNG, a front cover over other types */
 } audio_tags_t;
 
@@ -172,7 +173,7 @@ bool mp4_iter_next(mp4_iter_t *it, meta_read_fn rd, void *ctx, uint64_t *offset,
 bool flac_seek_point(meta_read_fn rd, void *ctx, uint64_t file_size, uint64_t target_frame, uint64_t *sample, uint64_t *offset);
 /**
  * MP3: file offset of an MPEG frame header near @p frame (of @p total_frames, as mp3_info_t reports them): from the Xing table of contents when the
- * file has one (VBR), else proportionally to the bytes (exact for CBR). The offset is validated as a frame header confirmed by the one after it.
+ * file has one (VBR) or from the Fraunhofer VBRI table, else proportionally to the bytes (exact for CBR). The offset is validated as a frame header confirmed by the one after it.
  * @p landed_frame is the frame the landed offset corresponds to (computed back from the offset, through the TOC when it was used), so a
  * position saved after playing from there does not inherit the error. Approximate: nearest frame for CBR, roughly 1% of the track for VBR.
  * False if none was found (start at the beginning).

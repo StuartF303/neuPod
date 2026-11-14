@@ -41,6 +41,18 @@ add_test(NAME settings COMMAND test_settings)
 set_tests_properties(settings PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_source_files_properties(test_settings.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
+# Ratings (Now Playing page 2): keys by path + size, the table, the card image and its CRC.
+add_executable(test_ratings test_ratings.c)
+target_link_libraries(test_ratings neupod_settings hal_host)
+add_test(NAME ratings COMMAND test_ratings)
+set_source_files_properties(test_ratings.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+# Plays store (LB-7): counting, eviction, the card file and its save through a temp file.
+add_executable(test_plays test_plays.c)
+target_link_libraries(test_plays neupod_settings hal_host)
+add_test(NAME plays COMMAND test_plays)
+set_source_files_properties(test_plays.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
 # Resume record over the real settings store: round trip through the store's write path, rate limiting, missing / changed file decisions.
 add_executable(test_resume test_resume.c ${CMAKE_SOURCE_DIR}/app/runtime/resume.c)
 target_compile_definitions(test_resume PRIVATE NEUPOD_TEST_ASSETS="${CMAKE_SOURCE_DIR}/tests/assets/audio")
@@ -160,7 +172,8 @@ add_test(NAME input_tour
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_input)
 set_tests_properties(input_tour PROPERTIES
   RESOURCE_LOCK neupod_shared_card
-  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_fixture;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
+  FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_fixture;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   TIMEOUT 120)
 
@@ -173,12 +186,9 @@ set_tests_properties(wifi_tour PROPERTIES
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   TIMEOUT 120)
 
-# Bluetooth pairing tour (stage 2a): pair, remembered-headset rows and pane, Disconnect, Forget, a refused pairing; snapshots bt-pairing,
-# bt-paired, bt-saved, settings-bt-saved, bt-disconnected, bt-forget-asks, bt-forgotten, bt-failed. The run fails if the script does not
-# reach its last snapshot (the tour expects its 13 files).
-# Stage 2b adds the audio half: the headset's stream opens, a track from the WAV album plays on Bluetooth (np-bt-badge), Settings > Bluetooth shows
-# "Streaming" and the codec (bt-streaming), then the headset goes away (bt-dropped: the banner, the player paused). The tour pairs and keeps a
-# headset, so the card's settings are wiped first (bt_clean), and it has its own card with the 20 s WAV album (like the seek tour).
+# Bluetooth tour (stage 2a pairing, 2b audio, design review phase 3 screens): Settings > Bluetooth, Devices (scan dots, found list), pair, options, Forget and Replace
+# questions, Disconnect, a refused pairing; then the audio half: playing on the headset, Diagnostics, streaming, the link lost and back as toasts. 24 snapshots (hal/host/main.c TOUR_BT).
+# The tour pairs and keeps a headset, so the card's settings are wiped first (bt_clean), and it has its own card with the 20 s WAV album (like the seek tour).
 add_test(NAME bt_tour_reset COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/fsroot_bt/.neupod)
 set_tests_properties(bt_tour_reset PROPERTIES FIXTURES_SETUP bt_clean)
 add_test(NAME bt_tour
@@ -218,15 +228,17 @@ set_source_files_properties(test_art_snapshot.c PROPERTIES COMPILE_OPTIONS "${NE
 add_test(NAME art_snapshot COMMAND test_art_snapshot ${CMAKE_BINARY_DIR}/snapshots_art)
 set_tests_properties(art_snapshot PROPERTIES FIXTURES_REQUIRED art_snapshots)
 
-# Now Playing seek mode (UI-7): a fake card with an album of three silent 20 s WAVs (seekable) and one MP3 (not yet), the tour pauses a
-# track, enters seek mode, scrubs, lets the 3 s idle timeout run, then presses Select on the MP3. test_seek_snapshot checks the pixels of
+# Now Playing seek mode (UI-7): a fake card with an album of three silent 20 s WAVs (seekable), an MP3 (seekable since UI-7) and a FLAC without a seek
+# table (not seekable), the tour pauses a track, enters seek mode, scrubs, lets the 3 s idle timeout run, then presses Select on the MP3 (seek mode) and
+# on the FLAC (stays on volume). test_seek_snapshot checks the pixels of
 # the progress / volume bars in the snapshots at both metrics profiles (this 320x240 one and, in hosted hires builds, 480x360).
 # The WAV is a 44-byte header (printf, octal escapes: 44.1 kHz, 16 bit, stereo, 3528000 data bytes) and zeros from dd, made at configure time.
 function(neupod_seek_card NAME)
   set(FS ${CMAKE_BINARY_DIR}/fsroot_${NAME})
-  file(MAKE_DIRECTORY "${FS}/Album" "${FS}/Other")
+  file(MAKE_DIRECTORY "${FS}/Album" "${FS}/Other" "${FS}/Zflac")
   execute_process(COMMAND sh -c "printf 'RIFF\\144\\354\\065\\000WAVEfmt \\020\\000\\000\\000\\001\\000\\002\\000\\104\\254\\000\\000\\020\\261\\002\\000\\004\\000\\020\\000data\\100\\354\\065\\000' > '${FS}/Album/01.wav' && dd if=/dev/zero bs=1000 count=3528 status=none >> '${FS}/Album/01.wav' && cp '${FS}/Album/01.wav' '${FS}/Album/02.wav' && cp '${FS}/Album/01.wav' '${FS}/Album/03.wav'")
   file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/mp3_44k_st.mp3 "${FS}/Other/track.mp3")
+  file(COPY_FILE ${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/flac16_44k_st.flac "${FS}/Zflac/track.flac") # no SEEKTABLE: Seek is not offered
   execute_process(COMMAND dd if=/dev/zero of=${CMAKE_BINARY_DIR}/disk_${NAME}.img bs=1024 count=2048 status=none)
   file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_${NAME})
 endfunction()
@@ -346,8 +358,8 @@ add_test(NAME boot_briefs COMMAND test_boot_briefs)
 set_source_files_properties(test_boot_briefs.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
 # UI metrics profiles (app/ui/ui_metrics.c): layout invariants of every compiled-in resolution profile, 320x240 pinned to its historic values.
-add_executable(test_ui_metrics test_ui_metrics.c ${CMAKE_SOURCE_DIR}/app/ui/ui_metrics.c)
-target_link_libraries(test_ui_metrics lvgl neupod_rt_core)
+add_executable(test_ui_metrics test_ui_metrics.c ${CMAKE_SOURCE_DIR}/app/ui/ui_metrics.c ${CMAKE_SOURCE_DIR}/app/ui/ui_theme.c)
+target_link_libraries(test_ui_metrics lvgl neupod_rt_core m)
 target_include_directories(test_ui_metrics PRIVATE ${CMAKE_SOURCE_DIR}/app/runtime)
 add_test(NAME ui_metrics COMMAND test_ui_metrics)
 set_source_files_properties(test_ui_metrics.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
@@ -357,6 +369,21 @@ target_include_directories(test_ui_logic PRIVATE ${CMAKE_SOURCE_DIR}/app/ui)
 target_link_libraries(test_ui_logic neupod_rt_core)
 add_test(NAME ui_logic COMMAND test_ui_logic)
 set_source_files_properties(test_ui_logic.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+# Hold and the Power-key gestures (ADR-0020): the 2 s toggle, the 10 s power-off and its countdown, the short press, the slide switch.
+add_executable(test_ui_hold test_ui_hold.c)
+target_include_directories(test_ui_hold PRIVATE ${CMAKE_SOURCE_DIR}/app/ui)
+target_link_libraries(test_ui_hold neupod_rt_core)
+add_test(NAME ui_hold COMMAND test_ui_hold)
+set_source_files_properties(test_ui_hold.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+# The Licences screen's data against LICENSE.md (the standing rule: licence notes stay up to date).
+add_executable(test_licences test_licences.c)
+target_include_directories(test_licences PRIVATE ${CMAKE_SOURCE_DIR}/app/ui)
+target_compile_definitions(test_licences PRIVATE NEUPOD_LICENSE_MD="${CMAKE_SOURCE_DIR}/LICENSE.md")
+target_link_libraries(test_licences neupod_rt_core)
+add_test(NAME licences COMMAND test_licences)
+set_source_files_properties(test_licences.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
 add_executable(test_wheel_input test_wheel_input.c)
 target_link_libraries(test_wheel_input neupod_rt_core)
@@ -416,33 +443,61 @@ function(neupod_library_card NAME)
   set(FS ${CMAKE_BINARY_DIR}/fsroot_${NAME})
   execute_process(COMMAND dd if=/dev/zero of=${CMAKE_BINARY_DIR}/disk_${NAME}.img bs=1024 count=2048 status=none)
   file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_${NAME})
-  # the card folder is (re)made by a test so every run starts from no index and the default settings
-  add_test(NAME ${NAME}_card COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_library_card.py ${FS} ${CMAKE_CURRENT_SOURCE_DIR}/assets/audio)
+  # the card folder is (re)made by a test so every run starts from no index and the default settings (extra arguments: --playlists ...)
+  add_test(NAME ${NAME}_card COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_library_card.py ${FS} ${CMAKE_CURRENT_SOURCE_DIR}/assets/audio ${ARGN})
   set_tests_properties(${NAME}_card PROPERTIES FIXTURES_SETUP ${NAME}_card)
 endfunction()
+# --run-ms is the end of the run (the tour must have finished its script by then, or the snapshot count check fails): the script itself takes ~55 s of wall
+# clock on an idle machine, so 60 s flaked on a loaded CI runner; 80 s leaves headroom.
 set(LIB_GAPLESS "player: track 2/3 .*\\(gapless\\)")
 neupod_library_card(library)
 add_test(NAME library_tour
-  COMMAND neupod --run-ms 60000 --splash-hold-ms 1500 --tour-library --snapshots ${CMAKE_BINARY_DIR}/snapshots_library)
+  COMMAND neupod --run-ms 140000 --splash-hold-ms 1500 --tour-library --snapshots ${CMAKE_BINARY_DIR}/snapshots_library)
 set_tests_properties(library_tour PROPERTIES
   ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_UI_AUDIT=1;NEUPOD_LIB_SLOW_MS=100;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_library;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_library.img"
   PASS_REGULAR_EXPRESSION "library: build finished in [0-9]+ ms: 16 tracks.*${LIB_GAPLESS}.*host: run finished, status 0"
   FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   FIXTURES_REQUIRED library_card
-  TIMEOUT 150)
+  TIMEOUT 200)
 if(NEUPOD_UI_HIRES)
   set_tests_properties(library_tour PROPERTIES PASS_REGULAR_EXPRESSION
     "library: build finished in [0-9]+ ms: 16 tracks.*${LIB_GAPLESS}.*ui: audit '[^']*' 320x240 objects=[1-9][0-9]* violations=0.*host: run finished, status 0")
   neupod_library_card(hires_library)
   add_test(NAME hires_library_tour
-    COMMAND neupod --run-ms 60000 --splash-hold-ms 1500 --tour-library --snapshots ${CMAKE_BINARY_DIR}/snapshots_hires_library)
+    COMMAND neupod --run-ms 140000 --splash-hold-ms 1500 --tour-library --snapshots ${CMAKE_BINARY_DIR}/snapshots_hires_library)
   set_tests_properties(hires_library_tour PROPERTIES
     ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_DISPLAY_SIZE=480x360;NEUPOD_UI_AUDIT=1;NEUPOD_LIB_SLOW_MS=100;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_hires_library;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_hires_library.img"
     PASS_REGULAR_EXPRESSION "library: build finished in [0-9]+ ms: 16 tracks.*${LIB_GAPLESS}.*ui: audit '[^']*' 480x360 objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
     FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     FIXTURES_REQUIRED hires_library_card
+    TIMEOUT 200)
+endif()
+
+# Music > Playlists (LB-7): the library card plus playlist files and a seeded On-The-Go; checks the layout audit on every snapshot and that the plays reached the card.
+neupod_library_card(playlists --playlists)
+add_test(NAME playlists_tour
+  COMMAND neupod --run-ms 90000 --splash-hold-ms 1500 --tour-playlists --snapshots ${CMAKE_BINARY_DIR}/snapshots_playlists)
+set_tests_properties(playlists_tour PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_playlists;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_playlists.img"
+  PASS_REGULAR_EXPRESSION "library: build finished in [0-9]+ ms: 16 tracks.*host: run finished, status 0"
+  FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  FIXTURES_REQUIRED playlists_card
+  TIMEOUT 150)
+if(NEUPOD_UI_HIRES)
+  set_tests_properties(playlists_tour PROPERTIES PASS_REGULAR_EXPRESSION
+    "library: build finished in [0-9]+ ms: 16 tracks.*ui: audit '[^']*' 320x240 objects=[1-9][0-9]* violations=0.*host: run finished, status 0")
+  neupod_library_card(hires_playlists --playlists)
+  add_test(NAME hires_playlists_tour
+    COMMAND neupod --run-ms 90000 --splash-hold-ms 1500 --tour-playlists --snapshots ${CMAKE_BINARY_DIR}/snapshots_hires_playlists)
+  set_tests_properties(hires_playlists_tour PROPERTIES
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_DISPLAY_SIZE=480x360;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_hires_playlists;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_hires_playlists.img"
+    PASS_REGULAR_EXPRESSION "library: build finished in [0-9]+ ms: 16 tracks.*ui: audit '[^']*' 480x360 objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+    FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    FIXTURES_REQUIRED hires_playlists_card
     TIMEOUT 150)
 endif()
 
@@ -472,6 +527,38 @@ if(NEUPOD_UI_HIRES)
     TIMEOUT 90)
 endif()
 
+# An empty library (LB-4): the empty pane, its Update Library button and the "0 songs" result (tests/tools/make_empty_card.py).
+set(EMPTY_FS ${CMAKE_BINARY_DIR}/fsroot_library_empty)
+execute_process(COMMAND dd if=/dev/zero of=${CMAKE_BINARY_DIR}/disk_library_empty.img bs=1024 count=2048 status=none)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_library_empty)
+add_test(NAME library_empty_card COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_empty_card.py ${EMPTY_FS})
+set_tests_properties(library_empty_card PROPERTIES FIXTURES_SETUP library_empty_card)
+add_test(NAME library_empty_tour
+  COMMAND neupod --run-ms 30000 --splash-hold-ms 1500 --tour-library-empty --snapshots ${CMAKE_BINARY_DIR}/snapshots_library_empty)
+set_tests_properties(library_empty_tour PROPERTIES
+  ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${EMPTY_FS};NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_library_empty.img"
+  PASS_REGULAR_EXPRESSION "library: build finished in [0-9]+ ms: 0 tracks.*host: run finished, status 0"
+  FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  FIXTURES_REQUIRED library_empty_card
+  TIMEOUT 90)
+if(NEUPOD_UI_HIRES)
+  set(HEMPTY_FS ${CMAKE_BINARY_DIR}/fsroot_hires_library_empty)
+  execute_process(COMMAND dd if=/dev/zero of=${CMAKE_BINARY_DIR}/disk_hires_library_empty.img bs=1024 count=2048 status=none)
+  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_hires_library_empty)
+  add_test(NAME hires_library_empty_card COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_empty_card.py ${HEMPTY_FS})
+  set_tests_properties(hires_library_empty_card PROPERTIES FIXTURES_SETUP hires_library_empty_card)
+  add_test(NAME hires_library_empty_tour
+    COMMAND neupod --run-ms 30000 --splash-hold-ms 1500 --tour-library-empty --snapshots ${CMAKE_BINARY_DIR}/snapshots_hires_library_empty)
+  set_tests_properties(hires_library_empty_tour PROPERTIES
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_DISPLAY_SIZE=480x360;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${HEMPTY_FS};NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_hires_library_empty.img"
+    PASS_REGULAR_EXPRESSION "library: build finished in [0-9]+ ms: 0 tracks.*host: run finished, status 0"
+    FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    FIXTURES_REQUIRED hires_library_empty_card
+    TIMEOUT 90)
+endif()
+
 # Text beyond ASCII (UI-17): Files and Now Playing on a card with accented / U+00BF / CJK / emoji names and tags (tests/tools/make_text_card.py).
 # The snapshots are for the eye; the test checks the run finished and the layout audit passed on every snapshot (at both profiles).
 function(neupod_text_card NAME)
@@ -493,17 +580,106 @@ set_tests_properties(text_tour PROPERTIES
   TIMEOUT 90)
 if(NEUPOD_UI_HIRES)
   set_tests_properties(text_tour PROPERTIES PASS_REGULAR_EXPRESSION
-    "ui: audit 'text-files' 320x240 objects=[1-9][0-9]* violations=0.*ui: audit 'text-folder' 320x240 objects=[1-9][0-9]* violations=0.*ui: audit 'text-nowplaying' 320x240 objects=[1-9][0-9]* violations=0.*host: run finished, status 0")
+    "ui: audit 'text-files' 320x240 objects=[1-9][0-9]* violations=0.*ui: audit 'text-folder' 320x240 objects=[1-9][0-9]* violations=0.*ui: audit 'text-nowplaying' 320x240 objects=[1-9][0-9]* violations=0.*ui: audit 'text-home' 320x240 objects=[1-9][0-9]* violations=0.*ui: audit 'text-longrow' 320x240 objects=[1-9][0-9]* violations=0.*host: run finished, status 0")
   neupod_text_card(hires_text)
   add_test(NAME hires_text_tour
     COMMAND neupod --run-ms 30000 --splash-hold-ms 1500 --tour-text --snapshots ${CMAKE_BINARY_DIR}/snapshots_hires_text)
   set_tests_properties(hires_text_tour PROPERTIES
     ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_DISPLAY_SIZE=480x360;NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_hires_text;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_hires_text.img"
-    PASS_REGULAR_EXPRESSION "ui: audit 'text-files' 480x360 objects=[1-9][0-9]* violations=0.*ui: audit 'text-folder' 480x360 objects=[1-9][0-9]* violations=0.*ui: audit 'text-nowplaying' 480x360 objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+    PASS_REGULAR_EXPRESSION "ui: audit 'text-files' 480x360 objects=[1-9][0-9]* violations=0.*ui: audit 'text-folder' 480x360 objects=[1-9][0-9]* violations=0.*ui: audit 'text-nowplaying' 480x360 objects=[1-9][0-9]* violations=0.*ui: audit 'text-home' 480x360 objects=[1-9][0-9]* violations=0.*ui: audit 'text-longrow' 480x360 objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
     FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     FIXTURES_REQUIRED hires_text_card
     TIMEOUT 90)
+endif()
+
+# The splash (SP-1): the release splash (wordmark, progress line, version; the host's failing battery gauge and haptics checks are hidden with --splash-release)
+# and the debug splash (--splash-debug: the list of failed checks and how many passed, as when a check fails or Menu is held at start), at both sizes, each with the
+# layout audit on its snapshot. The splash has to stay up at least 600 ms: the run's own log line says when it finished.
+function(neupod_splash_tests NAME SIZE_ENV SIZE)
+  foreach(MODE release debug)
+    add_test(NAME ${NAME}_${MODE}
+      COMMAND neupod --run-ms 9000 --splash-hold-ms 1500 --splash-${MODE} --snapshots ${CMAKE_BINARY_DIR}/snapshots_${NAME}_${MODE})
+    file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_${NAME}_${MODE})
+    set_tests_properties(${NAME}_${MODE} PROPERTIES
+      ENVIRONMENT "SDL_VIDEODRIVER=dummy;${SIZE_ENV}NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_fixture;NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/test_disk.img"
+      PASS_REGULAR_EXPRESSION "ui: audit 'splash' ${SIZE} objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+      FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+      RESOURCE_LOCK neupod_shared_card
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+      TIMEOUT 60)
+  endforeach()
+endfunction()
+if(NEUPOD_UI_HIRES)
+  neupod_splash_tests(splash "" "320x240")
+  neupod_splash_tests(hires_splash "NEUPOD_DISPLAY_SIZE=480x360;" "480x360")
+endif()
+
+# Hold (ADR-0020): the Power key simulated by the tour (pwr:down / pwr:up / sleep:MS), the lock overlay, the countdown, the host's simulated power-off,
+# the hardware switch, the screen-off stage with auto-lock, and the new Display rows. The PASS pattern follows the whole story in log order and the audit
+# of the last snapshot; "AUDIT FAIL" fails it. Own fake card whose settings are wiped first (the tour turns Auto-lock off at the end).
+function(neupod_hold_card NAME)
+  set(FS ${CMAKE_BINARY_DIR}/fsroot_${NAME})
+  file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/assets/fsroot/ DESTINATION ${FS})
+  execute_process(COMMAND dd if=/dev/zero of=${CMAKE_BINARY_DIR}/disk_${NAME}.img bs=1024 count=2048 status=none)
+  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_${NAME})
+  add_test(NAME ${NAME}_reset COMMAND ${CMAKE_COMMAND} -E remove_directory ${FS}/.neupod)
+  set_tests_properties(${NAME}_reset PROPERTIES FIXTURES_SETUP ${NAME}_clean)
+endfunction()
+function(neupod_hold_tour NAME CARD SIZE_ENV SIZE)
+  add_test(NAME ${NAME}
+    COMMAND neupod --run-ms 90000 --splash-hold-ms 1500 --tour-hold --snapshots ${CMAKE_BINARY_DIR}/snapshots_${CARD})
+  set_tests_properties(${NAME} PROPERTIES
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;${SIZE_ENV}NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_${CARD};NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_${CARD}.img"
+    PASS_REGULAR_EXPRESSION "ui: audit 'hold-ring' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: hold on.*ui: audit 'hold-locked' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: audit 'hold-swallowed' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: hold off.*ui: audit 'hold-countdown' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: hold on.*ui: power-off requested.*host: power-off requested.*ui: hold off.*ui: hold on.*ui: backlight off 0%.*ui: audit 'hold-display' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: audit 'hold-autolock-off' ${SIZE} objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+    FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    FIXTURES_REQUIRED ${CARD}_clean
+    TIMEOUT 150)
+endfunction()
+neupod_hold_card(hold)
+neupod_hold_tour(hold_tour hold "" "320x240")
+if(NEUPOD_UI_HIRES)
+  neupod_hold_card(hires_hold)
+  neupod_hold_tour(hires_hold_tour hires_hold "NEUPOD_DISPLAY_SIZE=480x360;" "480x360")
+endif()
+
+# The design system (DS-1 to DS-5): toast and HUD strips, the Theme row, dark and auto themes; own card, settings wiped first (the tour changes the theme).
+function(neupod_design_tour NAME CARD SIZE_ENV SIZE)
+  add_test(NAME ${NAME}
+    COMMAND neupod --run-ms 90000 --splash-hold-ms 1500 --tour-design --snapshots ${CMAKE_BINARY_DIR}/snapshots_${CARD})
+  set_tests_properties(${NAME} PROPERTIES
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;${SIZE_ENV}NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_${CARD};NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_${CARD}.img"
+    PASS_REGULAR_EXPRESSION "ui: audit 'ds-toast-warn' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: audit 'ds-toast-info' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: audit 'ds-hud' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: audit 'ds-display-dark' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: audit 'ds-music-dark' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: audit 'ds-home-auto' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: backlight dim.*ui: audit 'ds-home-auto-dim' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: backlight wake.*ui: audit 'ds-home-auto-wake' ${SIZE} objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+    FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    FIXTURES_REQUIRED ${CARD}_clean
+    TIMEOUT 150)
+endfunction()
+neupod_hold_card(design)
+neupod_design_tour(design_tour design "" "320x240")
+if(NEUPOD_UI_HIRES)
+  neupod_hold_card(hires_design)
+  neupod_design_tour(hires_design_tour hires_design "NEUPOD_DISPLAY_SIZE=480x360;" "480x360")
+endif()
+
+# Settings > About > Licences at both profiles: the lists and the longest notice, with the layout audit on every snapshot.
+function(neupod_licence_tour NAME CARD SIZE_ENV SIZE)
+  add_test(NAME ${NAME}
+    COMMAND neupod --run-ms 30000 --splash-hold-ms 1500 --tour-licences --snapshots ${CMAKE_BINARY_DIR}/snapshots_${CARD})
+  set_tests_properties(${NAME} PROPERTIES
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;${SIZE_ENV}NEUPOD_UI_AUDIT=1;NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_${CARD};NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_${CARD}.img"
+    PASS_REGULAR_EXPRESSION "ui: audit 'about' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: audit 'licences' ${SIZE} objects=[1-9][0-9]* violations=0.*ui: audit 'licence-btstack' ${SIZE} objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+    FAIL_REGULAR_EXPRESSION "AUDIT FAIL"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    FIXTURES_REQUIRED ${CARD}_clean
+    TIMEOUT 90)
+endfunction()
+neupod_hold_card(licences)
+neupod_licence_tour(licences_tour licences "" "320x240")
+if(NEUPOD_UI_HIRES)
+  neupod_hold_card(hires_licences)
+  neupod_licence_tour(hires_licences_tour hires_licences "NEUPOD_DISPLAY_SIZE=480x360;" "480x360")
 endif()
 
 # Optional AddressSanitizer + UBSan build of the codec / parser / handshake tests: cmake -DNEUPOD_HOST_ASAN=ON
@@ -534,11 +710,31 @@ set_source_files_properties(test_gapless.c PROPERTIES COMPILE_OPTIONS "-Wall;-We
 add_test(NAME gapless COMMAND test_gapless)
 set_tests_properties(gapless PROPERTIES TIMEOUT 120)
 
+# The same gapless test under AddressSanitizer + UBSan (-DNEUPOD_HOST_ASAN=ON): the core-1 loop, the codecs and the handoff.
+if(NEUPOD_HOST_ASAN)
+  add_executable(test_gapless_asan test_gapless.c
+    ${CMAKE_SOURCE_DIR}/app/audio/audio_shared.c ${CMAKE_SOURCE_DIR}/app/audio/audio_ctl.c ${CMAKE_SOURCE_DIR}/app/audio/codec.c
+    ${CMAKE_SOURCE_DIR}/app/audio/bt_pcm.c ${CMAKE_SOURCE_DIR}/app/audio/track_feed.c ${CMAKE_SOURCE_DIR}/app/audio/track_stream.c ${NEUPOD_CODEC_TEST_VENDOR})
+  target_include_directories(test_gapless_asan PRIVATE ${CMAKE_SOURCE_DIR}/app/include ${CMAKE_SOURCE_DIR}/app/third_party/alac)
+  target_compile_definitions(test_gapless_asan PRIVATE NEUPOD_TEST_ASSETS="${CMAKE_SOURCE_DIR}/tests/assets/audio")
+  target_compile_options(test_gapless_asan PRIVATE -fsanitize=address,undefined -fno-sanitize=signed-integer-overflow,shift -fno-omit-frame-pointer -g -Wno-multichar)
+  target_link_options(test_gapless_asan PRIVATE -fsanitize=address,undefined)
+  target_link_libraries(test_gapless_asan neupod_rt_core Threads::Threads m)
+  add_test(NAME gapless_asan COMMAND test_gapless_asan)
+  set_tests_properties(gapless_asan PROPERTIES TIMEOUT 240)
+endif()
+
 # Play queue: folder order, skipping non-audio entries, next / previous rules, end of queue.
 add_executable(test_play_queue test_play_queue.c)
 target_link_libraries(test_play_queue neupod_rt_core)
 add_test(NAME play_queue COMMAND test_play_queue)
 set_source_files_properties(test_play_queue.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
+# Playlists (LB-7), the pure parts: the .m3u / .m3u8 reader and path resolution, the On-The-Go text, the queue built from paths, the play-count rule.
+add_executable(test_playlists test_playlists.c)
+target_link_libraries(test_playlists neupod_rt_core)
+add_test(NAME playlists COMMAND test_playlists)
+set_source_files_properties(test_playlists.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
 # art_service retargeted by a track change in the middle of a decode (gapless handoff): the old picture must not be published.
 add_executable(test_art_service test_art_service.c ${CMAKE_SOURCE_DIR}/app/runtime/art_service.c)
@@ -569,6 +765,7 @@ add_library(neupod_y2_logic STATIC
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_sysfs.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_poweroff.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_charge.c
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_chargeview.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_haptic.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_bt_addr.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_bt_tlv.c
@@ -577,15 +774,18 @@ target_include_directories(neupod_y2_logic PUBLIC ${CMAKE_SOURCE_DIR}/platforms/
 set_source_files_properties(${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_input.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_sd.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_power.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_fb.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_sysfs.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_poweroff.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_charge.c
-  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_haptic.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_bt_addr.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_bt_tlv.c
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_chargeview.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_haptic.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_bt_addr.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_bt_tlv.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_audio.c
   test_y2_haptic.c test_y2_bt_addr.c test_y2_bt_tlv.c test_y2_audio.c
-  test_y2_charge.c test_y2_input.c test_y2_sd.c test_y2_power.c test_y2_fb.c test_y2_sysfs.c test_y2_poweroff.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
-foreach(T y2_input y2_sd y2_power y2_fb y2_sysfs y2_poweroff y2_charge y2_haptic y2_bt_addr y2_bt_tlv y2_audio)
+  test_y2_charge.c test_y2_chargeview.c test_y2_input.c test_y2_sd.c test_y2_power.c test_y2_fb.c test_y2_sysfs.c test_y2_poweroff.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+foreach(T y2_input y2_sd y2_power y2_fb y2_sysfs y2_poweroff y2_charge y2_chargeview y2_haptic y2_bt_addr y2_bt_tlv y2_audio)
   add_executable(test_${T} test_${T}.c)
   target_link_libraries(test_${T} neupod_y2_logic neupod_rt_core) # neupod_rt_core: input_events_diff (the real app mapping)
   add_test(NAME ${T} COMMAND test_${T})
 endforeach()
+# The charging screen also writes PPM snapshots of its states at 320x240 and 480x360 for a look.
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/snapshots_charging)
+add_test(NAME y2_chargeview_snapshots COMMAND test_y2_chargeview ${CMAKE_BINARY_DIR}/snapshots_charging)
 
 # The Y2-only capability re-arm logic: capabilities.c compiled on its own with NEUPOD_PLATFORM_Y2 (the host build has it off).
 add_executable(test_caps_rearm test_caps_rearm.c ${CMAKE_SOURCE_DIR}/app/runtime/capabilities.c)
@@ -624,7 +824,7 @@ set_tests_properties(library_big PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BI
 set_source_files_properties(test_library_big.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
 # ui_frame_input() routing of the transport keys (the real ui_frame.c with fakes for the player and services): consumed keys stay with the screen.
-add_executable(test_ui_frame_keys test_ui_frame_keys.c ${CMAKE_SOURCE_DIR}/app/ui/ui_metrics.c)
+add_executable(test_ui_frame_keys test_ui_frame_keys.c ${CMAKE_SOURCE_DIR}/app/ui/ui_metrics.c ${CMAKE_SOURCE_DIR}/app/ui/ui_theme.c ${CMAKE_SOURCE_DIR}/app/ui/ui_strips.c)
 target_include_directories(test_ui_frame_keys PRIVATE ${CMAKE_SOURCE_DIR}/app/ui ${CMAKE_SOURCE_DIR}/app/runtime)
 target_link_libraries(test_ui_frame_keys neupod_rt_core lvgl)
 add_test(NAME ui_frame_keys COMMAND test_ui_frame_keys)

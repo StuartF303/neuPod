@@ -60,6 +60,8 @@ bool library_request_rows(lvw_view_t v, uint32_t first, uint32_t n, uint32_t seq
 bool library_request_build(uint32_t seq);
 /** Ask a running build to stop at its next file. Harmless when none runs. */
 void library_cancel_build(void);
+/** Let the build carry on with its screen gone ("run in background"; any other request for the card still ends it, as for a Play press). The UI clears it again when it has taken the answer. */
+void library_build_background(bool on);
 
 /** True when request @p seq of kind @p k has finished; @p status gets its outcome. */
 bool library_poll(libsvc_kind_t k, uint32_t seq, libsvc_status_t *status);
@@ -68,15 +70,23 @@ void library_info(lvw_info_t *out);
 /** Row @p idx of @p v if it is in the window (the window is filled for one list at a time: another list's rows never match). */
 bool library_row(lvw_view_t v, uint32_t idx, lvw_row_t *out);
 
+#define LIBSVC_FOLDER_MAX 40u
 typedef struct {
     bool active;           /**< a build is running */
+    bool background;       /**< ... and its screen was left (library_build_background): the status bar shows busy dots */
     uint32_t files;        /**< audio files read so far */
+    uint32_t total;        /**< audio files the quick first pass counted (0 until it has: the bar is then indeterminate) */
+    char folder[LIBSVC_FOLDER_MAX]; /**< the folder being scanned (its own name, not the path) */
     uint32_t tracks, artists, albums, genres; /**< the last finished build */
 } library_progress_t;
 void library_progress(library_progress_t *out);
 
 /** "Can't play: <reason>" for a lib_play_t (a constant string: no RAM). The screens and the queue's resolver say the same words. */
 const char *lib_cant_play_str(uint8_t play);
+
+/** The album and album artist ids of a track the player started from the library (its queue handle; a compilation's artist is LIB_NONE). Any task.
+ *  False when it is not one of the last two tracks the storage task resolved (the track plays from a folder, or the list moved on). */
+bool library_track_ids(const char *handle, uint32_t *album, uint32_t *artist);
 
 /** True once a library has been opened this boot and it was fine: Shuffle Songs and the Music screens can then skip the wait. */
 bool library_known_ready(void);
@@ -89,10 +99,18 @@ void library_service_handle(const void *blob, size_t n);
 /** The shared buffer's Files-listing view; taking it for a listing closes the reader and forgets the row window. */
 file_entry_t *library_service_take_listing(void);
 /**
+ * The open library reader for another storage-task service (the playlists' smart lists): the index is opened afresh, the row window is dropped (a list screen asks
+ * again when it is shown), and the reader stays valid until the next library or Files request. NULL with @p why set when there is no card or no usable index. Storage task only.
+ */
+lib_reader_t *library_service_reader(libsvc_status_t *why);
+/**
  * Turn a queue handle ("@lib/<order>/<pos>", play_queue.h) into the file path to open. False with @p why set (a message for the user)
  * when the track cannot be played or cannot be found. Keeps the answer for library_service_real_path(). Storage task only.
  */
 bool library_service_resolve(const char *handle, char *out, size_t n, const char **why);
+/** As library_service_resolve(), for album art: the file of any entry (an unplayable one too), and it does not take the place of a playing track's path in the cache the
+ *  resume record reads. Storage task only. */
+bool library_service_resolve_for_art(const char *handle, char *out, size_t n, const char **why);
 /** The real path a handle was resolved to a moment ago (for the resume record); any task. False if it is not one of the last two. */
 bool library_service_real_path(const char *handle, char *out, size_t n);
 

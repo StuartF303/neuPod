@@ -6,9 +6,8 @@
  *        except sysfs reads under a root argument, so it is unit-tested on the PC. The loop that drives it, the
  *        backlight and the framebuffer are in platforms/y2/charging.c.
  *
- * Behaviour: Power held Y2_POWER_HOLD_MS asks for a reboot (once per press); the charger being offline continuously for
- * Y2_CHARGE_UNPLUG_MS asks for a power-off (once); a short Power press does nothing (the screen stays dark; a battery
- * percentage flash is a later idea).
+ * Behaviour: Power held Y2_CHARGE_REBOOT_HOLD_MS asks for a reboot (once per press); the charger being offline continuously for
+ * Y2_CHARGE_UNPLUG_MS asks for a power-off (once); a short Power press does nothing here (it wakes the screen: y2_chargeview.h).
  */
 #ifndef NEUPOD_Y2_CHARGE_H
 #define NEUPOD_Y2_CHARGE_H
@@ -56,6 +55,9 @@ void y2_unplug_init(y2_unplug_t *u);
 /** Feed a reading at @p now_ms. True once the charger has been continuously offline for Y2_CHARGE_UNPLUG_MS. */
 bool y2_unplug_update(y2_unplug_t *u, y2_charge_online_t online, uint32_t now_ms);
 
+/** Power held this long (while still held) asks for a reboot in charging mode. (The player's Power gestures live in the UI: ui_hold.h.) */
+#define Y2_CHARGE_REBOOT_HOLD_MS 2000u
+
 typedef enum {
     Y2_CHARGE_NONE = 0,
     Y2_CHARGE_REBOOT,   /**< Power held 2 s */
@@ -67,6 +69,10 @@ typedef struct {
     y2_unplug_t unplug;
     bool reboot_sent;
     bool poweroff_sent;
+    bool pw_down;    /**< KEY_POWER is held (pw_ms valid) */
+    bool pw_fired;   /**< this press already counted as a hold */
+    bool pw_hold;    /**< a hold is waiting to be reported by the next y2_charge_step() */
+    uint32_t pw_ms;
 } y2_charge_t;
 
 void y2_charge_init(y2_charge_t *c);
@@ -79,6 +85,9 @@ void y2_charge_feed(y2_charge_t *c, const y2_event_t *ev, uint32_t now_ms);
  * y2_charge_failed(). Reboot takes priority over poweroff when both fire in the same poll.
  */
 y2_charge_action_t y2_charge_step(y2_charge_t *c, uint32_t now_ms, y2_charge_online_t online);
+
+/** How long Power has been held at @p now_ms (0 when it is not down); drives the "hold to restart" bar. */
+uint32_t y2_charge_hold_ms(const y2_charge_t *c, uint32_t now_ms);
 
 /** The command for @p action could not be started: allow it again (next press / after another 3 s offline). */
 void y2_charge_failed(y2_charge_t *c, y2_charge_action_t action, uint32_t now_ms);

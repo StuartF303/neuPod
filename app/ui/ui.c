@@ -22,6 +22,7 @@
 #include "runtime.h"
 #include "runtime_config.h"
 #include "ui.h"
+#include "ui_input.h"
 #include "ui_internal.h"
 
 #define SPLASH_MIN_MS RT_SPLASH_MIN_MS
@@ -136,6 +137,10 @@ static uint32_t pump(void) {
 extern void hal_host_bt_drop_link(void) __attribute__((weak));
 extern void hal_host_bt_headset_volume(uint8_t volume) __attribute__((weak));
 extern void hal_host_bt_headset_key(hal_bt_key_t key) __attribute__((weak));
+extern void hal_host_power_key(bool down) __attribute__((weak));
+extern void hal_host_hold_switch(hal_hold_switch_t sw) __attribute__((weak));
+static uint32_t g_script_sleep_until;
+static bool g_script_sleeping;
 static void screen_ready(const char *name);
 static const char *script_step(const char *p, uint32_t now, bool *done) {
     while (*p == ' ') {
@@ -173,6 +178,93 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
                   (strncmp(p + 5, "pause", 5) == 0 && pi.state == PLAYER_PAUSED) ||
                   (strncmp(p + 5, "art", 3) == 0 && pi.state == PLAYER_PAUSED && av.state == ART_VIEW_READY);
         return ok ? end : p;
+    }
+    if (strncmp(p, "sleep:", 6) == 0) {
+        /* Tour only: let N ms of the UI clock pass before the next token (a Power hold of 2 s needs 2 s, not seven 300 ms steps). */
+        if (!g_script_sleeping) {
+            g_script_sleeping = true;
+            g_script_sleep_until = now + (uint32_t)atoi(p + 6);
+        }
+        if ((int32_t)(now - g_script_sleep_until) < 0) {
+            return p;
+        }
+        g_script_sleeping = false;
+        return end;
+    }
+    if (strncmp(p, "sel:", 4) == 0) {
+        /* Tour only: Select held (sel:down ... sleep:MS ... sel:up): the hold that enters Now Playing's seek mode. */
+        input_event_t ev = {.type = strncmp(p + 4, "down", 4) == 0 ? INPUT_BUTTON_DOWN : INPUT_BUTTON_UP, .button = HAL_BTN_SELECT};
+        ui_frame_input(&ev, now);
+        return end;
+    }
+    if (strncmp(p, "menu:", 5) == 0) {
+        /* Tour only: Menu held (menu:down ... sleep:MS ... menu:up): the long press that clears a text entry. */
+        input_event_t ev = {.type = strncmp(p + 5, "down", 4) == 0 ? INPUT_BUTTON_DOWN : INPUT_BUTTON_UP, .button = HAL_BTN_MENU};
+        ui_frame_input(&ev, now);
+        return end;
+    }
+    if (strncmp(p, "vol:", 4) == 0) {
+        /* Tour only: the volume changes by N steps from outside the screen (a side key, like the Y2's): the HUD shows on screens that do not draw it. */
+        (void)player_volume_step(atoi(p + 4));
+        return end;
+    }
+    if (strncmp(p, "rail:", 5) == 0) {
+        ui_letter_overlay_tour_hold(strncmp(p + 5, "hold", 4) == 0); /* Tour only: keep the fast-scroll overlay up for a snapshot */
+        return end;
+    }
+    if (strncmp(p, "pwr:", 4) == 0) {
+        /* Tour only (host simulator): the Power key goes down (pwr:down) or up (pwr:up); the input task turns the level into events. */
+        if (hal_host_power_key != NULL) {
+            hal_host_power_key(strncmp(p + 4, "down", 4) == 0);
+        }
+        return end;
+    }
+    if (strncmp(p, "sw:", 3) == 0) {
+        /* Tour only: the hardware Hold switch (sw:on / sw:off) */
+        if (hal_host_hold_switch != NULL) {
+            hal_host_hold_switch(strncmp(p + 3, "on", 2) == 0 ? HAL_HOLD_SWITCH_ON : HAL_HOLD_SWITCH_OFF);
+        }
+        return end;
+    }
+    if (strncmp(p, "toast:", 6) == 0 || strncmp(p, "hud:", 4) == 0) {
+        /* Tour only (design-system strips): toast:warn:Text_with_underscores / toast:info:Text, hud:Label_text:PCT (PCT -1 = no bar); settled at once for the snapshot. */
+        char txt[64];
+        bool hud = p[0] == 'h';
+        const char *a = p + (hud ? 4 : 6);
+        bool info = !hud && strncmp(a, "info:", 5) == 0;
+        if (!hud) {
+            a += 5; /* "warn:" and "info:" are both five characters */
+        }
+        size_t n = 0;
+        while (a + n < end && a[n] != ':' && n < sizeof txt - 1) {
+            txt[n] = a[n] == '_' ? ' ' : a[n];
+            n++;
+        }
+        txt[n] = '\0';
+        if (hud) {
+            ui_hud_show(txt, a + n < end ? atoi(a + n + 1) : -1, 60000u);
+        } else {
+            ui_toast_show(txt, info ? UI_TOAST_INFO : UI_TOAST_WARN, 60000u);
+        }
+        return end;
+    }
+    if (strncmp(p, "theme:", 6) == 0) {
+        /* Tour only: Settings > Display > Theme set directly (light, dark, auto). */
+        ui_theme_mode_t m = strncmp(p + 6, "dark", 4) == 0 ? UI_THEME_DARK : strncmp(p + 6, "auto", 4) == 0 ? UI_THEME_AUTO : UI_THEME_LIGHT;
+        g_ui_state.theme = m;
+        ui_apply_theme();
+        return end;
+    }
+    if (strncmp(p, "dim:", 4) == 0) {
+        /* Tour only: Auto-dim on, dimming after the first choice (10 s), so a tour can reach the dimmed backlight with sleep:. */
+        g_ui_state.autodim = true;
+        g_ui_state.dim_idx = 0;
+        return end;
+    }
+    if (strncmp(p, "strips:off", 10) == 0) {
+        ui_toast_hide(); /* Tour only: take the strips down again */
+        ui_hud_hide();
+        return end;
     }
     if (strncmp(p, "bt:drop", 7) == 0) {
         /* Tour only (host simulator): the headset goes away now. Weak, so builds without the simulator simply skip it. */
@@ -229,18 +321,35 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
     return end;
 }
 
-// Any input event (wheel, buttons, testbed console keys, host keyboard: all arrive through the input
-// queue) skips the splash hold.
-static bool skip_requested(void) {
+// Input during the splash. Events that arrive while the checks run are kept (up to BOOT_KEYS) and handed to the UI once the splash is over, as before;
+// the state of the Menu key is followed so that Menu held at start (down, not yet released when the checks end) asks for the debug splash.
+// Any other input event skips the debug splash's hold; the event that does is dropped, and so is Menu's own press and release.
+#define BOOT_KEYS 16u
+typedef struct {
+    input_event_t ev[BOOT_KEYS];
+    unsigned n;
+    bool menu_down;
+} boot_in_t;
+
+static bool boot_input(boot_in_t *b, bool holding) {
     input_event_t ev;
     bool skip = false;
     while (os_queue_recv(rt_input_queue(), &ev, OS_NO_WAIT)) {
-        skip = true;
+        bool menu = (ev.type == INPUT_BUTTON_DOWN || ev.type == INPUT_BUTTON_UP) && ev.button == HAL_BTN_MENU;
+        if (menu) {
+            b->menu_down = ev.type == INPUT_BUTTON_DOWN;
+        } else if (holding) {
+            skip = skip || ev.type == INPUT_SCROLL || ev.type == INPUT_BUTTON_DOWN || ev.type == INPUT_BUTTON_UP || ev.type == INPUT_POWER_DOWN;
+        }
+        if (!holding && !menu && b->n < BOOT_KEYS) {
+            b->ev[b->n++] = ev;
+        }
     }
     return skip;
 }
 
 static void screen_ready(const char *name) {
+    ui_frame_settle(); // a slide or a strip still moving jumps to its end: the picture (and the layout audit) is of the settled screen
     lv_refr_now(NULL); // make sure the screen's latest state is on the panel before anyone looks
     sample_lvgl_memory();
     printf("ui: screen '%s' lvgl_mem=%u/%uB depth=%d\n", name, (unsigned)g_perf.mem_used, (unsigned)g_perf.mem_total, ui_frame_depth());
@@ -293,14 +402,18 @@ void ui_task(void *arg) {
     uint32_t t0 = os_tick_ms();
     boot_start();
 
-    // --- Splash: animate while the checks run; hold if any came out not fully correct ---
+    // --- Splash: the release splash (wordmark, progress line, check icons, version) for at least SPLASH_MIN_MS while the checks run. If a check came out not fully
+    // correct, or Menu is held, it becomes the debug splash (the list of failures) and is held ---
     const uint32_t hold_ms = rt_config()->splash_hold_ms != 0 ? rt_config()->splash_hold_ms : RT_SPLASH_HOLD_MS;
+    const uint8_t mode = rt_config()->splash_mode;
+    boot_in_t boot_in = {.n = 0, .menu_down = false};
     bool holding = false;
     uint32_t hold_t0 = 0;
     for (;;) {
         bool all = boot_poll();
         caps_get(&caps);
         ui_splash_update(&caps);
+        (void)boot_input(&boot_in, false);
         uint32_t now = os_tick_ms();
         uint32_t elapsed = now - t0;
         if ((all && elapsed >= SPLASH_MIN_MS) || elapsed >= SPLASH_MAX_MS) {
@@ -311,22 +424,28 @@ void ui_task(void *arg) {
             for (int i = 0; i < CAP_COUNT; i++) {
                 any_bad = any_bad || caps.state[i] == CAP_DEGRADED;
             }
-            if (!any_bad) {
+            bool debug = mode == 1 || (mode != 2 && (any_bad || boot_in.menu_down));
+            if (!debug) {
                 break; // everything passed: no extra delay
             }
             if (!holding) {
                 holding = true;
                 hold_t0 = now; // the hold runs from the moment the checks are done (and the minimum has passed)
+                boot_in.n = 0; // the hold drops every key and release: a kept press whose release was dropped would reach Home as a press that never ends
+                ui_splash_show_debug(&caps);
             }
-            if (now - hold_t0 >= hold_ms || skip_requested()) {
+            if (now - hold_t0 >= hold_ms || boot_input(&boot_in, true)) {
                 break;
             }
-            ui_splash_hold_update(&caps, now - hold_t0, hold_ms);
+            ui_splash_hold_update(now - hold_t0, hold_ms);
         }
         os_delay_ms(pump());
     }
     screen_ready("splash"); // final state of the splash, for the host snapshot hook
 
+    for (unsigned i = 0; i < boot_in.n; i++) { // what was pressed while the splash showed goes to the UI now
+        (void)os_queue_send(rt_input_queue(), &boot_in.ev[i], OS_NO_WAIT);
+    }
     // --- Transition to the home menu ---
     lv_obj_t *scr = lv_obj_create(NULL);
     ui_frame_init(scr);
@@ -338,6 +457,10 @@ void ui_task(void *arg) {
     uint32_t script_next = home_at + FADE_MS + HOME_SNAPSHOT_AFTER_MS + 400u;
     bool script_done = false;
     uint32_t mem_at = 0;
+    // The hardware Hold switch may have been slid before the UI existed (its event was dropped with the splash's): take its position now.
+    if (hal_input_hold_switch() == HAL_HOLD_SWITCH_ON) {
+        ui_frame_input(&(input_event_t){.type = INPUT_HOLD_SWITCH, .steps = 1}, os_tick_ms());
+    }
 
     for (;;) {
         uint32_t now = os_tick_ms();
@@ -358,6 +481,10 @@ void ui_task(void *arg) {
             mem_at = now;
             sample_lvgl_memory();
         }
-        os_delay_ms(pump());
+        // Sleep until the next UI pass is due, or until an input event arrives: a press must not wait out the sleep (UI-6).
+        uint32_t wait = pump();
+        if (os_queue_recv(rt_input_queue(), &ev, wait)) {
+            ui_frame_input(&ev, os_tick_ms());
+        }
     }
 }

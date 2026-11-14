@@ -20,11 +20,17 @@
 #include "os.h"
 #include "player.h"
 #include "runtime.h"
+#include "ui.h"
 #include "y2_hal.h"
 #include "y2_poweroff.h"
 #include "y2_sysfs.h"
 
-static void on_volume(int32_t steps) { (void)player_volume_step(steps); }
+// The side volume keys are hardware keys like the rest: locked while Hold is on (a pocket presses them too). Headset keys are not.
+static void on_volume(int32_t steps) {
+    if (!ui_locked()) {
+        (void)player_volume_step(steps);
+    }
+}
 
 static void on_done(void *ctx) {
     (void)ctx;

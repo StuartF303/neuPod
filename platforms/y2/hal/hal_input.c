@@ -12,7 +12,6 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "hal_display.h"
 #include "hal_input.h"
 #include "hal_system.h"
 #include "y2_hal.h"
@@ -27,10 +26,15 @@ static node_t g_nodes[] = {{"mtk-tpd", -1}, {"mtk-kpd", -1}};
 static y2_input_t g_in;
 static void (*g_volume_fn)(int32_t);
 
-static void (*g_power_fn)(void);
-
 void y2_input_set_volume_handler(void (*fn)(int32_t steps)) { g_volume_fn = fn; }
-void y2_input_set_power_handler(void (*fn)(void)) { g_power_fn = fn; }
+
+// The Power key is only reported here (level, for the input task to turn into events); what it means (a short press puts the screen
+// to sleep, 2 s toggles Hold, 10 s powers off) is decided in the UI (app/ui/ui_hold.c, docs/adr/0020-hold.md).
+bool hal_input_power_key(void) { return y2_input_power_down(&g_in); }
+bool hal_input_has_power_key(void) { return true; }
+
+// The Y2 has no Hold slide switch (the iPod 6G donor board has one).
+hal_hold_switch_t hal_input_hold_switch(void) { return HAL_HOLD_SWITCH_NONE; }
 
 hal_status_t hal_input_init(void) {
     y2_input_init(&g_in);
@@ -110,18 +114,6 @@ bool hal_input_poll(hal_wheel_state *out) {
             if (g_nodes[i].fd >= 0) {
                 drain(&g_nodes[i]);
             }
-        }
-    }
-    // The hold timer runs on every call, not only when events arrive: a held key sends nothing.
-    y2_input_tick(&g_in, now);
-    bool asleep;
-    if (y2_input_take_sleep(&g_in, &asleep)) {
-        hal_display_sleep(asleep); // backlight only; the previous brightness comes back on wake; playback is not touched
-    }
-    if (y2_input_take_shutdown(&g_in)) {
-        printf("y2: power held, shutting down\n");
-        if (g_power_fn != NULL) {
-            g_power_fn();
         }
     }
     int32_t vol = y2_input_take_volume(&g_in);

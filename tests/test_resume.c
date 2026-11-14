@@ -282,6 +282,67 @@ TEST(mp3_seek_lands_where_it_says_cbr_and_vbr_with_toc) {
     }
 }
 
+// A Fraunhofer VBRI file (UI-7): the frame count comes from the VBRI header (no estimate), and the seek follows its table of per-stretch byte counts.
+TEST(mp3_vbri_gives_the_length_and_seeks_through_its_table) {
+    static const uint8_t bi[4] = {0x90, 0xB0, 0xD0, 0xE0}; // 128, 160, 224, 256 kbps
+    static const uint32_t kb[4] = {128, 160, 224, 256};
+    enum { FRAMES = 2000, FPE = 20, ENTRIES = FRAMES / FPE };
+    static uint8_t buf[2000 * 836 + 4096];
+    static uint32_t start[FRAMES + 1];
+    memset(buf, 0, sizeof buf);
+    buf[0] = 0xFF; buf[1] = 0xFB; buf[2] = 0x90; buf[3] = 0x00; // the VBRI frame: 128 kbps = 417 bytes
+    size_t pos = 417;
+    for (int f = 0; f < FRAMES; f++) {
+        int k = (f / 5 + f * 3) % 4;
+        start[f] = (uint32_t)pos;
+        uint32_t len = 144000u * kb[k] / 44100u;
+        buf[pos] = 0xFF; buf[pos + 1] = 0xFB; buf[pos + 2] = bi[k]; buf[pos + 3] = 0x00;
+        pos += len;
+    }
+    start[FRAMES] = (uint32_t)pos;
+    uint8_t *v = buf + 4 + 32;
+    memcpy(v, "VBRI", 4);
+    v[4] = 0; v[5] = 1; // version
+    uint32_t total = (uint32_t)pos;
+    v[10] = total >> 24; v[11] = total >> 16; v[12] = total >> 8; v[13] = total;
+    v[14] = FRAMES >> 24; v[15] = FRAMES >> 16; v[16] = FRAMES >> 8; v[17] = FRAMES;
+    v[18] = 0; v[19] = ENTRIES; // entries
+    v[20] = 0; v[21] = 1;       // scale 1
+    v[22] = 0; v[23] = 2;       // two bytes per entry
+    v[24] = 0; v[25] = FPE;     // frames per entry
+    for (int e = 0; e < ENTRIES; e++) {
+        uint32_t lo = e == 0 ? 0u : start[e * FPE], hi = e + 1 == ENTRIES ? total : start[(e + 1) * FPE]; // the first stretch includes the VBRI frame
+        uint32_t sz = hi - lo;
+        v[26 + 2 * e] = (uint8_t)(sz >> 8);
+        v[27 + 2 * e] = (uint8_t)sz;
+    }
+    mem_t m = {buf, pos};
+    mp3_info_t mi;
+    ASSERT_EQ(META_OK, mp3_parse(mem_rd, &m, pos, &mi));
+    ASSERT_TRUE(mi.vbr);
+    ASSERT_FALSE(mi.estimated);
+    ASSERT_EQ((uint64_t)FRAMES * 1152u, mi.total_frames);
+    uint64_t worst = 0;
+    for (uint64_t want = 50; want < (uint64_t)FRAMES * 1152u - 2000u; want += 24137) {
+        uint64_t at = 0, landed = 0;
+        ASSERT_TRUE(mp3_seek_point(mem_rd, &m, pos, 0, mi.total_frames, want, &at, &landed));
+        ASSERT_TRUE(buf[at] == 0xFF && (buf[at + 1] & 0xE0) == 0xE0);
+        uint32_t tf = 0;
+        while (tf + 1 < FRAMES && start[tf + 1] <= at) tf++;
+        uint64_t truth = (uint64_t)tf * 1152u;
+        uint64_t err = truth > landed ? truth - landed : landed - truth;
+        if (err > worst) worst = err;
+        uint64_t ask = want > landed ? want - landed : landed - want; // and it lands near what was asked for
+        ASSERT_TRUE(ask <= (uint64_t)FRAMES * 1152u * 15u / 1000u);
+    }
+    printf("  mp3 VBRI: worst landed-frame error %llu frames (track %u)\n", (unsigned long long)worst, FRAMES * 1152u);
+    ASSERT_TRUE(worst <= 2u * 1152u);
+    // a table that cannot be read falls back to the byte proportion instead of failing
+    mem_t cut = {buf, 200};
+    uint64_t at, landed;
+    ASSERT_FALSE(mp3_seek_point(mem_rd, &cut, 200, 0, mi.total_frames, 1000, &at, &landed)); // (a 200-byte file has no second frame to confirm)
+}
+
 TEST(alac_seek_matches_walking_the_packets) {
     static const char *const files[] = {"alac16_44k_st.m4a", "alac16_48k_mono.m4a", "alac24_48k_st.m4a"};
     for (unsigned fi = 0; fi < sizeof files / sizeof files[0]; fi++) {
@@ -351,6 +412,7 @@ int main(void) {
     RUN(a_torn_pair_does_not_load);
     RUN(resume_yields_when_the_store_is_nearly_full);
     RUN(mp3_seek_lands_where_it_says_cbr_and_vbr_with_toc);
+    RUN(mp3_vbri_gives_the_length_and_seeks_through_its_table);
     RUN(alac_seek_matches_walking_the_packets);
     RUN(write_while_playing_gate_math);
     char cmd[300];

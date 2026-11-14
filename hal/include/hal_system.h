@@ -67,6 +67,18 @@ bool hal_chip_id(uint8_t id[8]);
 /** Fill @p buf with @p n random bytes (RP2350: the SDK's get_rand_64(), which uses the chip's hardware TRNG; host: /dev/urandom). */
 void hal_random(void *buf, size_t n);
 
+/**
+ * Can this platform switch itself off from software (Y2: ask init to power off; host: simulated, only logs)? The UI shows the
+ * "powering off" countdown of a long Power hold only where this is true.
+ */
+bool hal_system_can_poweroff(void);
+
+/**
+ * Ask for an orderly power-off (Y2: stop the firmware cleanly, then run the system poweroff; exit status 77 keeps the init wrapper
+ * from respawning it). Returns at once; true if the request was accepted. False where hal_system_can_poweroff() is false.
+ */
+bool hal_system_poweroff(void);
+
 /** Short platform name for logs, e.g. "rp2350", "esp32s3", "host". */
 const char *hal_platform_name(void);
 

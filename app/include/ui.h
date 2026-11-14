@@ -27,6 +27,12 @@ typedef struct {
     uint32_t mem_frag_pct;
 } ui_perf_t;
 bool ui_perf_get(ui_perf_t *out);
+
+/**
+ * True while Hold is on (docs/adr/0020-hold.md). Safe to call from any task (the Y2's side volume keys, read on the input task, are locked with the
+ * rest of the hardware keys; headset keys are not).
+ */
+bool ui_locked(void);
 void ui_perf_new_window(void);
 
 /** Task body for the UI task (display init -> splash -> boot checks -> home -> event loop). */

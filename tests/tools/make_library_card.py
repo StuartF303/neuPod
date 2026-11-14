@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 """A fake card with a small tagged music library, for the host tours and tests (docs/adr/0017-music-library-index.md, L2).
 
-usage: make_library_card.py OUTDIR AUDIO_ASSETS_DIR [--many N]
+usage: make_library_card.py OUTDIR AUDIO_ASSETS_DIR [--many N] [--playlists]
 
 Writes OUTDIR/Music/<artist>/<album>/NN Title.<ext>. The FLAC files are the real (0.3 s) test vectors from AUDIO_ASSETS_DIR with their tags
 replaced, so they decode and play; one album is silent 3 s WAVs (no tags, long enough for a gapless handoff); one track is an AAC .m4a header
@@ -137,6 +137,11 @@ def main():
     put(os.path.join(music, "Cinders/Ash/02 Ember.mp3"),
         mp3_with_tags(mp3, [("TITLE", "Ember"), ("ARTIST", "The Cinders"), ("ALBUM", "An Unreasonably Long Album Title That Will Not Fit Either"),
                             ("GENRE", "Rock"), ("TRACKNUMBER", "2")]))
+    # cover files for three albums (the Cover Flow shows pictures for them and placeholders for the rest); the picture assets are next to the audio ones
+    art = os.path.join(os.path.dirname(assets.rstrip("/")), "art")
+    for rel, jpg in (("Aurora Lane/First Light", "q420_600x600.jpg"), ("Aurora Lane/Second Wind", "q444_128x128.jpg"), ("Beacon/Signal", "q422_517x389.jpg")):
+        with open(os.path.join(art, jpg), "rb") as f:
+            put(os.path.join(music, rel, "cover.jpg"), f.read())
     # a compilation
     flac("Various/Now 7/01 Hit A.flac", f44, "Hit A", "Zed Zed", "Now 7", None, 1, comp=True)
     flac("Various/Now 7/02 Hit B.flac", f48, "Hit B", "Quartz", "Now 7", None, 2, comp=True)
@@ -145,6 +150,18 @@ def main():
     # three silent 3 s WAVs: a gapless album that plays long enough to see the handoffs (the library tour checks them in the log)
     for i in (1, 2, 3):
         put(os.path.join(music, f"Longplay/0{i}.wav"), wav_silent(3))
+    if "--playlists" in sys.argv:
+        # the Playlists tour (LB-7): On-The-Go seeded (three songs and one that was deleted), a playlist file with relative paths and bad entries in /Playlists,
+        # and one at the root with a UTF-8 byte-order mark and CRLF line ends
+        put(os.path.join(out, ".neupod/otg.m3u8"),
+            ("#EXTM3U\n#EXTINF:3,Longplay - Track One\n/Music/Longplay/01.wav\n#EXTINF:3,Longplay - Track Two\n/Music/Longplay/02.wav\n"
+             "#EXTINF:215,Aurora Lane - Caf\u00e9 Del Mar\n/Music/Aurora Lane/Second Wind/02 Caf\u00e9 Del Mar.flac\n"
+             "#EXTINF:1,Gone - Deleted\n/Music/Gone/Deleted.wav\n# end\n").encode())
+        put(os.path.join(out, "Playlists/Night drive.m3u"),
+            ("#EXTM3U\n#EXTINF:3,Aurora Lane - Opening\n../Music/Aurora Lane/First Light/01 Opening.flac\n#EXTINF:3,Beacon - Pulse\n"
+             "../Music/Beacon/Signal/01 Pulse.flac\n../Music/Beacon/Signal/02 Carrier Wave.m4a\n../Music/Gone/Missing Song.flac\nhttp://example.com/stream.mp3\n").encode())
+        put(os.path.join(out, "Running.m3u8"),
+            ("\ufeff#EXTM3U\r\n#EXTINF:3,Quiet Room - First Silence\r\n/Music/Longplay/01.wav\r\n/Music/Longplay/02.wav\r\n/Music/Longplay/03.wav\r\n").encode())
     for i in range(many):
         flac(f"Bulk/Artist {i // 50:03d}/Album {i // 10:04d}/{i % 10:02d} Song {i}.flac", f44, f"Song {i}", f"Artist {i // 50:03d}",
              f"Album {i // 10:04d}", ("Pop", "Rock", "Jazz")[i % 3], i % 10 + 1)

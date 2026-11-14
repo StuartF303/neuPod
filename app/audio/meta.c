@@ -252,7 +252,7 @@ static void vorbis_field(audio_tags_t *t, const char *s, size_t k, const uint8_t
     audio_tags_ext_t *x = g_ext;
     for (size_t i = 0; i < sizeof keys / sizeof keys[0]; i++) {
         if (k != keys[i].len || !ieq(s, keys[i].key, k)) continue;
-        if (keys[i].id >= 4 && x == NULL) return; // library tags: not wanted
+        if (keys[i].id >= 4 && keys[i].id != 7 && x == NULL) return; // library tags: not wanted (the year is wanted by Now Playing too)
         char tmp[12];
         if (keys[i].id >= 3 && keys[i].id <= 8 && keys[i].id != 4 && keys[i].id != 5) { // numbers and flags: only the head matters
             size_t m = vl < 11 ? vl : 11;
@@ -272,7 +272,10 @@ static void vorbis_field(audio_tags_t *t, const char *s, size_t k, const uint8_t
             break;
         }
         case 6: x->disc = track_from(tmp); break;
-        case 7: x->year = meta_year_text(tmp); break;
+        case 7:
+            t->year = meta_year_text(tmp);
+            if (x != NULL) x->year = t->year;
+            break;
         case 8: x->compilation = flag_from(tmp); break;
         case 9: vorbis_text(x->sort_title, sizeof x->sort_title, v, vl); break;
         case 10: vorbis_text(x->sort_artist, sizeof x->sort_artist, v, vl); break;
@@ -429,10 +432,11 @@ static void id3_text_frame(const char *id, const uint8_t *d, uint32_t n, audio_t
         char tmp[16] = {0};
         meta_text_to_utf8(tmp, sizeof tmp, s, sl, enc);
         x->disc = track_from(tmp);
-    } else if (x != NULL && (!strcmp(id, "TDRC") || !strcmp(id, "TYER") || !strcmp(id, "TYE"))) {
+    } else if (!strcmp(id, "TDRC") || !strcmp(id, "TYER") || !strcmp(id, "TYE")) {
         char tmp[16] = {0};
         meta_text_to_utf8(tmp, sizeof tmp, s, sl, enc);
-        x->year = meta_year_text(tmp);
+        t->year = meta_year_text(tmp);
+        if (x != NULL) x->year = t->year;
     } else if (x != NULL && (!strcmp(id, "TCMP") || !strcmp(id, "TCP"))) {
         char tmp[8] = {0};
         meta_text_to_utf8(tmp, sizeof tmp, s, sl, enc);
@@ -518,6 +522,76 @@ static void id3v2_tags(meta_read_fn rd, void *ctx, const uint8_t h[10], uint64_t
     }
 }
 
+/* Fraunhofer VBRI header (the VBR index of files from that encoder), 32 bytes after the frame header: "VBRI", version(2), delay(2), quality(2),
+ * bytes(4), frames(4), entries(2), scale(2), entry size(2), frames per entry(2), then the table: per entry the BYTES of its stretch of the file (times scale). */
+#define VBRI_FIXED 62u /* from the frame start to the table */
+typedef struct {
+    uint32_t bytes, frames, entries, scale, ebytes, fpe; /* MPEG frames, not PCM frames */
+} vbri_t;
+
+static bool vbri_parse(const uint8_t *fr, int32_t got, vbri_t *v) {
+    if (got < (int32_t)VBRI_FIXED || memcmp(fr + 36, "VBRI", 4) != 0) return false;
+    v->bytes = be32(fr + 46);
+    v->frames = be32(fr + 50);
+    v->entries = ((uint32_t)fr[54] << 8) | fr[55];
+    v->scale = ((uint32_t)fr[56] << 8) | fr[57];
+    v->ebytes = ((uint32_t)fr[58] << 8) | fr[59];
+    v->fpe = ((uint32_t)fr[60] << 8) | fr[61];
+    return v->frames != 0 && v->entries != 0 && v->scale != 0 && v->fpe != 0 && v->ebytes >= 1 && v->ebytes <= 4;
+}
+
+/* Size in file bytes of table entry @p i (the table starts VBRI_FIXED bytes after the frame at @p frame_off); false if unreadable. Reads a few entries at a time. */
+static bool vbri_entries(meta_read_fn rd, void *ctx, uint64_t frame_off, const vbri_t *v, uint32_t first, uint32_t count, uint64_t *sizes) {
+    uint8_t buf[64];
+    uint32_t per = (uint32_t)sizeof buf / v->ebytes;
+    for (uint32_t done = 0; done < count;) {
+        uint32_t n = count - done < per ? count - done : per;
+        if (rd(ctx, frame_off + VBRI_FIXED + (uint64_t)(first + done) * v->ebytes, buf, n * v->ebytes) != (int32_t)(n * v->ebytes)) return false;
+        for (uint32_t k = 0; k < n; k++) {
+            uint64_t e = 0;
+            for (uint32_t b = 0; b < v->ebytes; b++) e = (e << 8) | buf[k * v->ebytes + b];
+            sizes[done + k] = e * v->scale;
+        }
+        done += n;
+    }
+    return true;
+}
+
+/* Bytes from the VBRI frame to MPEG frame @p mf (clamped to the table). */
+static bool vbri_frame_to_bytes(meta_read_fn rd, void *ctx, uint64_t frame_off, const vbri_t *v, uint64_t mf, uint64_t *bytes) {
+    uint64_t seg = mf / v->fpe, sum = 0, one[1], batch[16];
+    if (seg >= v->entries) seg = v->entries - 1u;
+    for (uint32_t i = 0; i < seg;) {
+        uint32_t n = seg - i < 16u ? seg - i : 16u;
+        if (!vbri_entries(rd, ctx, frame_off, v, i, n, batch)) return false;
+        for (uint32_t k = 0; k < n; k++) sum += batch[k];
+        i += n;
+    }
+    if (!vbri_entries(rd, ctx, frame_off, v, (uint32_t)seg, 1, one)) return false;
+    uint64_t in_seg = mf - seg * v->fpe;
+    *bytes = sum + (in_seg >= v->fpe ? one[0] : one[0] * in_seg / v->fpe);
+    return true;
+}
+
+/* MPEG frame at @p back bytes after the VBRI frame (the inverse). */
+static bool vbri_bytes_to_frame(meta_read_fn rd, void *ctx, uint64_t frame_off, const vbri_t *v, uint64_t back, uint64_t *mf) {
+    uint64_t sum = 0, batch[16];
+    for (uint32_t i = 0; i < v->entries;) {
+        uint32_t n = v->entries - i < 16u ? v->entries - i : 16u;
+        if (!vbri_entries(rd, ctx, frame_off, v, i, n, batch)) return false;
+        for (uint32_t k = 0; k < n; k++) {
+            if (back < sum + batch[k] || (i + k + 1u == v->entries)) {
+                uint64_t in = back > sum ? back - sum : 0;
+                *mf = (uint64_t)(i + k) * v->fpe + (batch[k] != 0 ? (in < batch[k] ? in : batch[k]) * v->fpe / batch[k] : 0);
+                return true;
+            }
+            sum += batch[k];
+        }
+        i += n;
+    }
+    return false;
+}
+
 meta_err_t mp3_parse(meta_read_fn rd, void *ctx, uint64_t file_size, mp3_info_t *out) {
     memset(out, 0, sizeof *out);
     ext_clear();
@@ -577,6 +651,11 @@ meta_err_t mp3_parse(meta_read_fn rd, void *ctx, uint64_t file_size, mp3_info_t 
                 padding = pd > 529u ? pd - 529u : 0u; // dr_mp3 ignores a padding below its own decoder delay
             }
         }
+    }
+    vbri_t vb;
+    if (frames == 0 && got != 0 && vbri_parse(fr, got, &vb)) {
+        frames = vb.frames; // a VBRI file: the frame count is exact, there is no LAME tag (no delay or padding to account for)
+        out->vbr = true;
     }
     uint64_t audio_bytes = file_size > found ? file_size - found : 0;
     if (frames != 0) {
@@ -680,6 +759,16 @@ bool mp3_seek_point(meta_read_fn rd, void *ctx, uint64_t file_size, uint64_t aud
             rel = bytes * ((uint64_t)a * 256u + (uint64_t)(b > a ? b - a : 0u) * f) / 65536u;
         }
     }
+    vbri_t vb;
+    bool use_vbri = false;
+    mp3_hdr_t vh = {0};
+    if (toc_tab == NULL && got >= (int32_t)VBRI_FIXED && mp3_header(fr, &vh) && vbri_parse(fr, got, &vb)) {
+        uint64_t b;
+        if (vbri_frame_to_bytes(rd, ctx, audio_offset, &vb, frame / vh.spf, &b) && b < bytes) {
+            rel = b;
+            use_vbri = true;
+        }
+    }
     uint8_t buf[512];
     uint64_t pos = audio_offset + rel;
     for (uint32_t scanned = 0; scanned < 8192u; scanned += 256u, pos += 256u) {
@@ -693,7 +782,10 @@ bool mp3_seek_point(meta_read_fn rd, void *ctx, uint64_t file_size, uint64_t aud
             if (rd(ctx, pos + (uint64_t)i + c.frame_bytes, nx, 4) != 4 || !mp3_header(nx, &c2) || c2.rate != c.rate) continue;
             *file_offset = pos + (uint64_t)i;
             uint64_t back = *file_offset - audio_offset, landed;
-            if (toc_tab != NULL) { // inverse of the table: the percent whose byte position brackets the offset
+            uint64_t mf;
+            if (use_vbri && vbri_bytes_to_frame(rd, ctx, audio_offset, &vb, back, &mf)) {
+                landed = mf * vh.spf;
+            } else if (toc_tab != NULL) { // inverse of the table: the percent whose byte position brackets the offset
                 uint64_t f = back * 65536u / bytes;
                 uint32_t t = 0;
                 while (t < 99u && (uint64_t)toc_tab[t + 1u] * 256u <= f) t++;

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-// Short captions for the boot splash, one per kind of failure. They must fit on ONE caption line next
+// Short captions for the debug splash's list ("Battery gauge — <caption>"), one per kind of failure. They must fit on ONE line next
 // to a "[n/m] name: " prefix (tests/test_boot_briefs.c measures them with the real font); the full
 // reason goes to the UART. Keep each at 24 characters or fewer.
 #ifndef NEUPOD_BOOT_BRIEFS_H
@@ -13,7 +13,7 @@
 #define BR_SD_MOUNT "mount failed"
 #define BR_I2C_BUSY "i2c bus busy"
 #define BR_I2C_INIT "i2c init failed"
-#define BR_GAUGE "gauge: no response"
+#define BR_GAUGE "no response" // shown as "Battery gauge — no response" on the debug splash
 #define BR_NO_CELL "no battery cell"
 #define BR_BAD_CELL "bad cell voltage"
 // Haptics boot check wording: the DRV2605L at 0x5A on the product, the timed_output ERM vibrator on the Y2.

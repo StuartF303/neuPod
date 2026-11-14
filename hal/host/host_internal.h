@@ -25,5 +25,7 @@ void host_pump_events(void);
 void host_input_button(uint8_t btn, bool down);
 /** Move the finger by @p steps wheel positions (sign = direction) and mark it touched. */
 void host_input_scroll(int steps);
+/** The simulated Power key (F1 in the window) went down or up. */
+void host_input_power(bool down);
 
 #endif // NEUPOD_HOST_INTERNAL_H

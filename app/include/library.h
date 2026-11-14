@@ -87,6 +87,10 @@ typedef struct {
     uint32_t decoder_version; /**< 0 = LIB_DECODER_SET_VERSION */
     /** Called after every audio file: files done so far. Return false to cancel (the old library is untouched). May be NULL. */
     bool (*progress)(void *user, uint32_t files_done);
+    /** Called once, before the walk, with the number of audio files a quick directory pass found (the progress's denominator). May be NULL. */
+    void (*total)(void *user, uint32_t files_total);
+    /** Called when the walk enters a folder, with its full path (valid during the call only). May be NULL. */
+    void (*where)(void *user, const char *folder);
     void *user;
 #ifdef NEUPOD_LIB_TEST_HOOKS /* only in the test library (neupod_library_test): production code carries none of this */
     int test_stop_step; /**< stop with LIB_E_TEST_STOP after this step (1 = tables written, before the manifest; 2 = tmp complete;
@@ -147,7 +151,11 @@ lib_err_t lib_manifest_load(const char *dir, bool full, lib_manifest_t *out);
 
 #define LIB_TEXT_MAX 65u /**< a name or title, UTF-8, NUL included */
 #define LIB_PAGE_BYTES 2048u
-#define LIB_PAGES 4u
+#ifdef NEUPOD_ART_HIRES
+#define LIB_PAGES 5u /* a song row touches five table pages (order, track, strings, album): the pages of one row must all stay cached; the reader plus the row window must fit the Files buffer (library_service.c) */
+#else
+#define LIB_PAGES 4u /* the Pico 2 W (frozen): its song rows re-read pages instead; the reader + row window stay within the Files buffer */
+#endif
 #define LIB_NONE 0xFFFFFFFFu
 
 /** Why a track cannot be played (D6); 0 = playable. */
@@ -187,6 +195,7 @@ typedef struct {
     uint32_t id;             /**< artist / album / track / genre id */
     char text[LIB_TEXT_MAX]; /**< first line: name or title */
     char sub[LIB_TEXT_MAX];  /**< second line: album artist of an album, artist of a song; empty otherwise */
+    char album[LIB_TEXT_MAX]; /**< songs: the album's name (the second line of a two-line row is "artist . album"); empty otherwise */
     uint32_t count;          /**< children: albums of an artist, tracks of an album, artists of a genre; 0 for songs */
     uint8_t play;            /**< songs: lib_play_t */
 } lib_row_t;
@@ -232,6 +241,8 @@ lib_err_t lib_list_id(lib_reader_t *r, lib_list_t l, uint32_t i, uint32_t *id);
 uint32_t lib_list_jump(const lib_reader_t *r, lib_list_t l, char ch);
 
 lib_err_t lib_track(lib_reader_t *r, uint32_t id, lib_track_t *out);
+/** Just the file's modified time, size and play verdict (lib_play_t) of track @p id: one 48-byte record, no strings (the Recently added pass over every track). */
+lib_err_t lib_track_stamp(lib_reader_t *r, uint32_t id, uint32_t *mtime, uint32_t *size, uint8_t *play);
 lib_err_t lib_artist(lib_reader_t *r, uint32_t id, lib_entity_t *out); /**< first / count = its albums (ids first .. first+count-1) */
 lib_err_t lib_album(lib_reader_t *r, uint32_t id, lib_entity_t *out);  /**< first / count = its tracks, as positions in the by-album order */
 lib_err_t lib_genre(lib_reader_t *r, uint32_t id, lib_entity_t *out);  /**< first / count = its artists, as positions in the genre-artist order */
@@ -255,6 +266,9 @@ typedef enum { LIB_ORDER_TITLE = 0, LIB_ORDER_ALBUM, LIB_ORDER_GENRE, LIB_ORDERS
  * list. @p play (may be NULL) gets the track's lib_play_t. LIB_E_NONE if there is no library.
  */
 lib_err_t lib_resolve(const char *base, lib_order_t order, uint32_t pos, char *path, size_t cap, uint8_t *play);
+/** lib_resolve() that also says which album (@p album) and album artist (@p album_artist; LIB_NONE for a compilation) the track belongs to (either may be NULL):
+ *  what "Go to album" / "Go to artist" on Now Playing open. */
+lib_err_t lib_resolve_ids(const char *base, lib_order_t order, uint32_t pos, char *path, size_t cap, uint8_t *play, uint32_t *album, uint32_t *album_artist);
 
 #ifdef __cplusplus
 }

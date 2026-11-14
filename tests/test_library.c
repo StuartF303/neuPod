@@ -21,6 +21,12 @@ TEST(collate_case_and_the) {
     ASSERT_TRUE(cmp("Theatre of Tragedy", "Them") < 0); /* only "The " with the space is dropped: "theatre" < "them" */
     ASSERT_TRUE(cmp("Theory", "Therapy") < 0);
     ASSERT_TRUE(cmp("The ", "A") > 0); /* "The " alone is a name, not an article */
+    ASSERT_EQ(0, cmp("A Perfect Circle", "Perfect Circle")); /* LB-2b: "A " and "An " are skipped as well */
+    ASSERT_EQ(0, cmp("An Horse", "horse"));
+    ASSERT_TRUE(cmp("A Perfect Circle", "Abba") > 0);
+    ASSERT_TRUE(cmp("Abba", "Anvil") < 0);   /* "Abba" / "Anvil": no space after A / An, so no article */
+    ASSERT_TRUE(cmp("A ", "A") > 0);         /* "A " alone is a name */
+    ASSERT_TRUE(cmp("An ", "An") > 0);
 }
 
 TEST(collate_diacritics) {
@@ -43,7 +49,7 @@ TEST(collate_classes) {
     ASSERT_TRUE(cmp("99 Luftballons", "Abba") < 0);
     ASSERT_TRUE(cmp("!!!", "10cc") < 0);  /* symbols before digits */
     ASSERT_TRUE(cmp(" leading space", "a") < 0);
-    ASSERT_TRUE(cmp("a b", "ab") < 0);    /* a space sorts first */
+    ASSERT_TRUE(cmp("ab c", "abc") < 0);  /* a space sorts first ("a b" would be "b": the article is skipped) */
     ASSERT_TRUE(cmp("&", "~") < 0);       /* ASCII symbols by code point */
     ASSERT_TRUE(cmp("~", "\xCE\xB1") < 0); /* Greek alpha: other, after the ASCII symbols, before digits */
     ASSERT_TRUE(cmp("\xCE\xB1", "0") < 0);
@@ -533,7 +539,7 @@ TEST(build_and_browse) {
     ASSERT_EQ(9, lib_list_jump(&g_rd, LIB_LIST_ARTISTS, 'Z'));
     for (unsigned b = 1; b < LIB_BUCKETS; b++) ASSERT_TRUE(m->jump[LIB_LIST_ARTISTS][b - 1] <= m->jump[LIB_LIST_ARTISTS][b]);
 
-    /* Page cache: 4 pages, hits and misses are counted */
+    /* Page cache: LIB_PAGES pages, hits and misses are counted */
     ASSERT_TRUE(g_rd.page_misses > 0);
     uint32_t misses = g_rd.page_misses;
     ASSERT_EQ(LIB_OK, lib_list_row(&g_rd, LIB_LIST_SONGS, 3, &r));

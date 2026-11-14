@@ -19,6 +19,73 @@ _spec.loader.exec_module(tool)
 SCRIPTS = ["init", "bin/diag.sh", "bin/respawn", "bin/console-shell"]
 
 
+class KeyHeld(unittest.TestCase):
+    """key_held() from rescue's init, run under sh on captured evdev bytes. A hold needs a real press: the touch wheel
+    emits a ghost press/release pair 21 us apart at power-on."""
+
+    GHOST = bytes.fromhex(
+        "259ab16a86a50a00" "01006700" "01000000" "259ab16a8ea50a00" "00000000" "00000000"
+        "259ab16a9ba50a00" "01006700" "00000000" "259ab16a9ea50a00" "00000000" "00000000")
+
+    @staticmethod
+    def ev(sec, usec, typ, code, val):
+        import struct
+        return struct.pack("<IIHHi", sec, usec, typ, code, val)
+
+    def held(self, data):
+        s = (OVERLAY / "init").read_text()
+        i = s.index("HOLD_MIN_US=")
+        j = s.index("\nrm -f /tmp/key.*", i)
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "key.event2"
+            f.write_bytes(data)
+            r = subprocess.run(["sh", "-c", s[i:j] + '\nkey_held "$1"', "sh", str(f)], capture_output=True, text=True)
+        self.assertEqual(r.stderr, "")
+        return r.returncode == 0
+
+    def test_captured_ghost_event_does_not_hold(self):
+        self.assertEqual(len(self.GHOST), 64)
+        self.assertFalse(self.held(self.GHOST))
+
+    def test_200ms_press_holds(self):
+        t = 1790000421
+        self.assertTrue(self.held(self.ev(t, 100000, 1, 0x67, 1) + self.ev(t, 100001, 0, 0, 0) +
+                                  self.ev(t, 300000, 1, 0x67, 0) + self.ev(t, 300001, 0, 0, 0)))
+
+    def test_press_across_a_second_boundary_holds(self):
+        t = 1790000421
+        self.assertTrue(self.held(self.ev(t, 900000, 1, 0x67, 1) + self.ev(t + 1, 100000, 1, 0x67, 0)))
+
+    def test_press_still_down_at_end_of_window_holds(self):
+        self.assertTrue(self.held(self.ev(1790000421, 500, 1, 0x67, 1)))
+
+    def test_just_under_and_at_30ms(self):
+        t = 1790000421
+        self.assertFalse(self.held(self.ev(t, 0, 1, 0x67, 1) + self.ev(t, 29999, 1, 0x67, 0)))
+        self.assertTrue(self.held(self.ev(t, 0, 1, 0x67, 1) + self.ev(t, 30000, 1, 0x67, 0)))
+
+    def test_ghost_then_real_press_holds(self):
+        t = 1790000421
+        self.assertTrue(self.held(self.GHOST + self.ev(t, 0, 1, 0x67, 1) + self.ev(t + 1, 0, 1, 0x67, 0)))
+
+    def test_glitch_on_another_key_during_a_real_hold(self):
+        t = 1790000421
+        self.assertTrue(self.held(self.ev(t, 0, 1, 103, 1) + self.ev(t, 1000, 1, 108, 1) +
+                                  self.ev(t, 11000, 1, 108, 0) + self.ev(t, 100000, 1, 103, 0)))
+        self.assertTrue(self.held(self.ev(t, 0, 1, 108, 1) + self.ev(t, 100, 1, 103, 1) +
+                                  self.ev(t, 150, 1, 103, 0) + self.ev(t + 1, 0, 1, 108, 0)))
+
+    def test_non_key_events_and_empty_file_do_not_hold(self):
+        self.assertFalse(self.held(self.ev(1, 0, 3, 0x30, 1)))  # EV_ABS with value 1
+        self.assertFalse(self.held(b""))
+        self.assertFalse(self.held(self.GHOST[:12]))  # truncated record
+
+    def test_sd_marker_and_cmdline_paths_unchanged(self):
+        s = (OVERLAY / "init").read_text()
+        self.assertIn('[ -e /mnt/sd/y2-hold ] && HOLD="y2-hold on SD"', s)
+        self.assertIn('*" y2.hold "*) HOLD="y2.hold on cmdline"', s)
+
+
 class Overlay(unittest.TestCase):
     def read(self, rel):
         return (OVERLAY / rel).read_text()
@@ -90,7 +157,7 @@ class Overlay(unittest.TestCase):
 
     def test_hold_uses_cat_on_event0_and_event2_only(self):
         s = self.read("init")
-        hold = s[s.index("# Any key on event0"):s.index("# Find USRDATA")]
+        hold = s[s.index("# A held key on event0"):s.index("# Find USRDATA")]
         self.assertIn("/dev/input/event0 /dev/input/event2", hold)
         self.assertIn('timeout $((HOLD_SECS + 1)) cat "$ev"', hold)
         self.assertLess(hold.index("sd_mount &&"), hold.index("cat \"$ev\""))  # readers start after the SD probe

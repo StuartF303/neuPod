@@ -29,7 +29,9 @@ static union {
     file_entry_t entries[FILES_MAX_ENTRIES];
     lib_mem_t lib;
 } g_mem;
-_Static_assert(sizeof(lib_mem_t) <= sizeof(file_entry_t[FILES_MAX_ENTRIES]), "reader + row window must fit the Files listing buffer");
+// The reader plus the row window are a little larger than the folder listing since the two-line rows (a second text per row) and the fifth page of the cache
+// (a song row reads five table pages): the shared buffer grows to the larger of the two, which costs under 1 KB over the listing alone.
+_Static_assert(sizeof(lib_mem_t) <= sizeof(file_entry_t[FILES_MAX_ENTRIES]) + 1024u, "reader + row window must stay close to the Files listing buffer");
 
 // Is there a card the library can use? A mounted FatFs volume on the device; the simulator's card is a folder, which the storage check has vouched for.
 static bool card_ready(void) {
@@ -76,7 +78,10 @@ static lvw_view_t g_rows_view;
 static uint32_t g_rows_first, g_rows_n;
 
 /* build progress */
-static volatile uint32_t g_prog_files;
+static volatile uint32_t g_prog_files, g_prog_total; /* files read so far; audio files the first quick pass found (0 = not counted yet) */
+static volatile uint32_t g_prog_dir_ver;               /* odd while g_prog_dir is being written */
+static char g_prog_dir[LIBSVC_FOLDER_MAX];             /* the folder the scan is in (its last path component) */
+static volatile bool g_prog_bg;                        /* the screen was left with the build running: it carries on in the background */
 static volatile bool g_prog_active, g_cancel;
 static volatile uint32_t g_last[4]; /* tracks, artists, albums, genres of the last finished build */
 
@@ -85,6 +90,7 @@ static volatile uint32_t g_last[4]; /* tracks, artists, albums, genres of the la
 static struct {
     char handle[24]; /* "@lib/2/4294967295" is 17 characters */
     char path[PLAYER_PATH_MAX];
+    uint32_t album, artist; /* the track's album and album artist ids (LIB_NONE: a compilation): Now Playing's "Go to album / artist" */
 } g_paths[PATH_CACHE];
 static unsigned g_path_next;
 static os_mutex_t *g_path_mu;
@@ -141,6 +147,7 @@ bool library_request_build(uint32_t seq) {
 }
 
 void library_cancel_build(void) { g_cancel = true; }
+void library_build_background(bool on) { g_prog_bg = on; }
 
 bool library_poll(libsvc_kind_t k, uint32_t seq, libsvc_status_t *status) {
     if (__atomic_load_n(&g_done[k].seq, __ATOMIC_ACQUIRE) != seq) {
@@ -164,7 +171,17 @@ bool library_row(lvw_view_t v, uint32_t idx, lvw_row_t *out) {
 
 void library_progress(library_progress_t *out) {
     out->active = g_prog_active;
+    out->background = g_prog_bg;
     out->files = g_prog_files;
+    out->total = g_prog_total;
+    for (int tries = 0; tries < 3; tries++) { /* a torn copy of the folder name is retried; after that, the last try's text is fine */
+        uint32_t v = __atomic_load_n(&g_prog_dir_ver, __ATOMIC_ACQUIRE);
+        memcpy(out->folder, g_prog_dir, sizeof out->folder);
+        if ((v & 1u) == 0 && __atomic_load_n(&g_prog_dir_ver, __ATOMIC_ACQUIRE) == v) {
+            break;
+        }
+    }
+    out->folder[sizeof out->folder - 1] = '\0';
     out->tracks = g_last[0];
     out->artists = g_last[1];
     out->albums = g_last[2];
@@ -289,7 +306,33 @@ static libsvc_status_t do_rows(const libsvc_req_t *rq) {
     return st;
 }
 
+lib_reader_t *library_service_reader(libsvc_status_t *why) {
+    rows_invalidate();
+    reader_close(); /* afresh: a card that was swapped or an index that was rebuilt since the last use is never read through stale handles */
+    g_cur_view.kind = LVW_KINDS;
+    libsvc_status_t s = reader_ensure();
+    if (s != LIBSVC_OK) {
+        *why = s;
+        return NULL;
+    }
+    return &g_mem.lib.r;
+}
+
 /* ---- building --------------------------------------------------------------------------------------------------------------------- */
+
+static void build_total(void *user, uint32_t total) {
+    (void)user;
+    g_prog_total = total;
+}
+
+static void build_where(void *user, const char *folder) {
+    (void)user;
+    const char *leaf = strrchr(folder, '/');
+    leaf = leaf != NULL ? leaf + 1 : folder;
+    __atomic_add_fetch(&g_prog_dir_ver, 1u, __ATOMIC_ACQ_REL);
+    snprintf(g_prog_dir, sizeof g_prog_dir, "%s", leaf);
+    __atomic_add_fetch(&g_prog_dir_ver, 1u, __ATOMIC_ACQ_REL);
+}
 
 static bool build_progress(void *user, uint32_t done) {
     (void)user;
@@ -364,14 +407,17 @@ static libsvc_status_t do_build(void) {
     g_cur_view.kind = LVW_KINDS;
     size_t scratch_n = 0;
     void *scratch = codec_arena_borrow(&scratch_n);
-    lib_build_cfg_t cfg = {.progress = build_progress};
+    lib_build_cfg_t cfg = {.progress = build_progress, .total = build_total, .where = build_where};
     lib_build_stats_t st = {0};
     g_prog_files = 0;
+    g_prog_total = 0;
+    g_prog_dir[0] = '\0';
     g_prog_active = true;
     printf("library: build started\n");
     uint32_t t0 = os_tick_ms();
     lib_err_t e = lib_build(&cfg, scratch, scratch_n, &st);
     g_prog_active = false;
+    g_prog_bg = false;
     printf("library: build %s in %u ms: %u tracks (%u playable), %u artists, %u albums, %u genres, %u sort runs, %u KB scratch\n",
            e == LIB_OK ? "finished" : lib_err_str(e), (unsigned)(os_tick_ms() - t0), (unsigned)st.tracks, (unsigned)st.playable,
            (unsigned)st.artists, (unsigned)st.albums, (unsigned)st.genres, (unsigned)st.sort_runs, (unsigned)(st.scratch_peak / 1024u));
@@ -406,7 +452,7 @@ void library_service_handle(const void *blob, size_t n) {
 
 /* ---- queue handles ------------------------------------------------------------------------------------------------------------------ */
 
-bool library_service_resolve(const char *handle, char *out, size_t n, const char **why) {
+static bool resolve(const char *handle, char *out, size_t n, const char **why, bool for_play) {
     uint8_t order;
     uint32_t pos;
     uint8_t play = 0;
@@ -418,10 +464,14 @@ bool library_service_resolve(const char *handle, char *out, size_t n, const char
         *why = "No card";
         return false;
     }
-    lib_err_t e = lib_resolve(NULL, (lib_order_t)order, pos, out, n, &play);
+    uint32_t album = LIB_NONE, artist = LIB_NONE;
+    lib_err_t e = lib_resolve_ids(NULL, (lib_order_t)order, pos, out, n, &play, &album, &artist);
     if (e != LIB_OK) {
         *why = e == LIB_E_NONE || e == LIB_E_RANGE || e == LIB_E_FORMAT ? "Library changed: update it" : "Card read error";
         return false;
+    }
+    if (!for_play) {
+        return true; // a picture is looked for in any file, playable or not; the path caches below belong to the tracks that play
     }
     if (play != LIB_PLAY_OK) {
         *why = lib_cant_play_str(play);
@@ -431,9 +481,30 @@ bool library_service_resolve(const char *handle, char *out, size_t n, const char
         unsigned k = g_path_next++ % PATH_CACHE;
         snprintf(g_paths[k].handle, sizeof g_paths[k].handle, "%s", handle);
         snprintf(g_paths[k].path, sizeof g_paths[k].path, "%s", out);
+        g_paths[k].album = album;
+        g_paths[k].artist = artist;
         os_mutex_unlock(g_path_mu);
     }
     return true;
+}
+
+bool library_service_resolve(const char *handle, char *out, size_t n, const char **why) { return resolve(handle, out, n, why, true); }
+bool library_service_resolve_for_art(const char *handle, char *out, size_t n, const char **why) { return resolve(handle, out, n, why, false); }
+
+bool library_track_ids(const char *handle, uint32_t *album, uint32_t *artist) {
+    bool found = false;
+    if (g_path_mu == NULL || !os_mutex_lock(g_path_mu, 20)) {
+        return false;
+    }
+    for (unsigned i = 0; i < PATH_CACHE && !found; i++) {
+        if (g_paths[i].handle[0] != '\0' && strcmp(g_paths[i].handle, handle) == 0) {
+            *album = g_paths[i].album;
+            *artist = g_paths[i].artist;
+            found = true;
+        }
+    }
+    os_mutex_unlock(g_path_mu);
+    return found;
 }
 
 bool library_service_real_path(const char *handle, char *out, size_t n) {

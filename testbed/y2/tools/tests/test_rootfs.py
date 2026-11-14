@@ -208,6 +208,88 @@ class S91EnvFile(unittest.TestCase):
         self.assertNotIn("neupod-fw.env", (Y2 / "scripts" / "deploy-fw.sh").read_text())
 
 
+class S80MtkBt(unittest.TestCase):
+    """S80mtk-bt creates /dev/stpwmt, /dev/stpbt and /dev/wmtWifi. The kernel registers those drivers in /proc/devices
+    under different names (below, copied from the real device); looking the node name up there created no node at all.
+    mknod needs root, so a fake mknod on PATH records its arguments."""
+
+    PROC_DEVICES = """Character devices:
+  1 mem
+  4 tty
+141 mtk_stp_usktrk
+153 mtk_wmt_WIFI_chrdev
+190 mtk_stp_wmt
+191 mtk_stp_GPS_chrdev
+192 mtk_stp_BT_chrdev
+
+Block devices:
+  8 sd
+179 mmc
+"""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="s80-"))
+        t = self.tmp
+        for d in ("bin", "dev", "run", "stage", "fakebin"):
+            (t / d).mkdir()
+        for n, body in (("wmt_loader", "exit 255"), ("6620_launcher", "exec sleep 30")):
+            (t / "bin" / n).write_text("#!/bin/sh\n" + body + "\n")
+            (t / "bin" / n).chmod(0o755)
+        (t / "fakebin" / "mknod").write_text('#!/bin/sh\necho "$@" >> "%s/mknod.log"\n: > "$1"\n' % t)
+        (t / "fakebin" / "mknod").chmod(0o755)
+        (t / "proc-devices").write_text(self.PROC_DEVICES)
+        self.env = dict(os.environ, PATH=f"{t}/fakebin:" + os.environ["PATH"], MTK_STAGE=str(t / "stage"),
+                        MTK_BIN=str(t / "bin"), MTK_DEV=str(t / "dev"), MTK_RUN=str(t / "run"),
+                        MTK_PROC_DEVICES=str(t / "proc-devices"), MTK_WAIT_S="0")
+
+    def tearDown(self):
+        self.run_s80("stop")
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def run_s80(self, action="start"):
+        return subprocess.run(["sh", str(OVERLAY / "etc" / "init.d" / "S80mtk-bt"), action], env=self.env,
+                              capture_output=True, text=True, timeout=20)
+
+    def mknods(self):
+        log = self.tmp / "mknod.log"
+        return sorted(log.read_text().splitlines()) if log.exists() else []
+
+    def test_nodes_use_the_kernels_registered_names(self):
+        r = self.run_s80()
+        self.assertEqual(r.returncode, 0, r.stdout)
+        # The node is "<dev>/<name> c <major> 0": majors of mtk_wmt_WIFI_chrdev, mtk_stp_BT_chrdev, mtk_stp_wmt.
+        d = self.tmp / "dev"
+        self.assertEqual(self.mknods(), sorted([f"{d}/stpwmt c 190 0", f"{d}/stpbt c 192 0", f"{d}/wmtWifi c 153 0"]))
+        for n in ("stpwmt", "stpbt", "wmtWifi"):
+            self.assertEqual((d / n).stat().st_mode & 0o777, 0o660, n)
+        self.assertNotIn("is not in", r.stdout)
+
+    def test_a_proc_devices_with_only_the_node_names_creates_nothing(self):
+        # What the old script expected; the real kernel never says this.
+        (self.tmp / "proc-devices").write_text("Character devices:\n190 stpwmt\n192 stpbt\n153 wmtWifi\n")
+        r = self.run_s80()
+        self.assertEqual(self.mknods(), [])
+        self.assertIn("mtk_stp_BT_chrdev", r.stdout)
+
+    def test_block_device_with_same_name_is_not_used(self):
+        (self.tmp / "proc-devices").write_text("Character devices:\n190 mtk_stp_wmt\n\nBlock devices:\n192 mtk_stp_BT_chrdev\n")
+        self.run_s80()
+        self.assertEqual(self.mknods(), [f"{self.tmp}/dev/stpwmt c 190 0"])
+
+    def test_loader_runs_once_per_boot_and_existing_nodes_are_kept(self):
+        self.run_s80()
+        self.run_s80("stop")
+        n = len(self.mknods())
+        (self.tmp / "bin" / "wmt_loader").write_text("#!/bin/sh\necho again >> %s/loader-ran\n" % self.tmp)
+        self.run_s80()
+        self.assertFalse((self.tmp / "loader-ran").exists())
+        self.assertEqual(len(self.mknods()), n)
+
+    def test_nothing_writes_to_the_wifi_node(self):
+        s = (OVERLAY / "etc" / "init.d" / "S80mtk-bt").read_text()
+        self.assertNotRegex(s, r"(?m)^[^#]*(>>?|tee|dd of=)\s*\"?\$DEV/wmtWifi")
+
+
 @unittest.skipUnless(IMG.exists() and shutil.which("debugfs"), f"{IMG} not built (run rootfs/build-rootfs.sh)")
 class Image(unittest.TestCase):
     @classmethod

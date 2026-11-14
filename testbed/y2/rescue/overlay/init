@@ -198,14 +198,42 @@ sd_mount() {
 	return 1
 }
 
-# Any key on event0 (mtk-kpd: vol/power) or event2 (mtk-tpd: wheel/ring) during the window = stay.
+# A held key on event0 (mtk-kpd: vol/power) or event2 (mtk-tpd: wheel/ring) during the window = stay.
 # event1/event3 never produce key events. Reads must be 16-byte multiples (busybox hexdump
 # fails with EINVAL on evdev), so use cat: it writes the file only once an event arrives.
+#
+# A hold needs a real press: the touch wheel emits ghost events at power-on (a KEY_UP press and release 21 us apart), which no
+# finger can produce. key_held() parses the captured 16-byte input_events (32-bit ARM: tv_sec u32, tv_usec u32, type u16,
+# code u16, value s32) and counts a key press (type 1, value 1) only if its release comes >= HOLD_MIN_US later or it is still
+# down when the window ends. Shorter press/release pairs are ignored. Needs `od` (busybox CONFIG_OD).
+HOLD_MIN_US=30000
+key_held() {
+	od -An -v -tu1 "$1" 2>/dev/null | {
+		s0=; down=0; tdown=0; dcode=
+		while read -r b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15; do
+			[ -n "$b15" ] || continue # truncated last record
+			[ "$b8" = 1 ] && [ "$b9" = 0 ] || continue # EV_KEY only
+			val=$((b12 + b13 * 256 + b14 * 65536 + b15 * 16777216))
+			sec=$((b0 + b1 * 256 + b2 * 65536 + b3 * 16777216))
+			[ -n "$s0" ] || s0=$sec
+			t=$(((sec - s0) * 1000000 + b4 + b5 * 256 + b6 * 65536 + b7 * 16777216))
+			code=$((b10 + b11 * 256))
+			if [ "$val" = 1 ]; then
+				[ "$down" = 1 ] || { down=1; tdown=$t; dcode=$code; }
+			elif [ "$val" = 0 ] && [ "$down" = 1 ] && [ "$code" = "$dcode" ]; then # only the tracked key's release counts
+				[ $((t - tdown)) -ge "$HOLD_MIN_US" ] && exit 0
+				down=0
+			fi
+		done
+		[ "$down" = 1 ] && exit 0 # still held when the window ended
+		exit 1
+	}
+}
 rm -f /tmp/key.*
 HOLD=
 sd_mount && [ -e /mnt/sd/y2-hold ] && HOLD="y2-hold on SD"
 case " $CMDLINE " in *" y2.hold "*) HOLD="y2.hold on cmdline" ;; esac
-log "hold window: ${HOLD_SECS}s (press any key to stay in rescue)"
+log "hold window: ${HOLD_SECS}s (hold a key to stay in rescue)"
 # Readers start right before the sleep (after the slow SD probe) so the whole window is covered.
 kpids=
 for ev in /dev/input/event0 /dev/input/event2; do
@@ -217,7 +245,7 @@ sleep $HOLD_SECS
 # shellcheck disable=SC2086
 [ -n "$kpids" ] && wait $kpids 2>/dev/null
 for k in /tmp/key.*; do
-	[ -s "$k" ] && HOLD="key press (${k##*/})"
+	[ -s "$k" ] && key_held "$k" && HOLD="key press (${k##*/})"
 done
 
 # Find USRDATA by geometry, not by a hard-coded partition number.

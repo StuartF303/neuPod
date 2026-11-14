@@ -213,7 +213,8 @@ bytes live in `g_audio_slot[seq & 1]`. The data ring carries streams back to bac
    because of trimming (see below) skip the rest of the stream up to the boundary.
 4. The decoder returns its last frame: core 1 looks at the command ring once more (an announcement sent just before the end is not missed),
    then, if the announcement is still valid (`g_audio_next_valid` re-read after copying the description), closes the decoder, opens the next one
-   on the same sink, PCM ring and volume, and pushes the number of PCM frames written so far into a small boundary ring. The block interrupt
+   on the same sink, PCM ring and volume (the decoders' byte source `g_sio` is rebuilt for every stream, WAV included, so a WAV that hands
+   over to a codec track never opens it on an unset source), and pushes the number of PCM frames written so far into a small boundary ring. The block interrupt
    counts the frames it serves; when they reach the boundary it reports `END_OF_TRACK` with value 1 and `elapsed` restarts. So the event
    fires in the block that carries the old track's last sample (within 256 frames), not when decoding ends. No mute change, no ramp.
 5. Nothing announced (last track, gapless off, other rate or channel count, unreadable file, a track too short to chain): the track ends
@@ -276,7 +277,7 @@ opened is dropped quietly in both modes.
 | WAV | exact frame (the byte) |
 | ALAC (M4A) | exact frame: the packet is found with the sample tables (`mp4_iter_seek`: the stsc runs and one chunk, not every packet before it) and the decoder drops the frames before the target; trimming (edit list, `iTunSMPB`) stays exact |
 | FLAC | exact frame **if the file has a SEEKTABLE** (nearest earlier seek point, the decoder drops the rest); without one the track starts at the beginning (position 0) |
-| MP3 | nearest frame: from the Xing table of contents (VBR) or the byte proportion (CBR, within a frame; VBR roughly 1%). The position that is then shown and saved is computed back from where the frame header really landed, so errors do not add up over repeated resumes. The first granule after the jump may be silent (bit reservoir) and the LAME end padding is no longer trimmed |
+| MP3 | nearest frame: from the Xing table of contents or the Fraunhofer VBRI table (VBR) or the byte proportion (CBR, within a frame; VBR roughly 1%; a file with no frame count at all uses an estimate from its first frame's bit rate), then a resync to a frame header confirmed by the one after it. The position that is then shown and saved is computed back from where the frame header really landed, so errors do not add up over repeated resumes. The first granule after the jump may be silent (bit reservoir) and the LAME end padding is no longer trimmed |
 
 `tools/gen_seek_vector.py` makes the FLAC vector with a seek table for the tests (`tests/test_gapless.c`, through the real core-1 loop).
 
@@ -284,8 +285,8 @@ opened is dropped quietly in both modes.
 ordinary new stream and nothing new crosses between the cores. Consequences: a short mute (the ramp-down, the ring flush and the decoder opening; the audio core's
 underrun and storm counters are not involved); an announced gapless successor is withdrawn by the stop and the player's counters are re-based, and the stream controller
 announces it again for the restarted stream once its ring is full, so the handoff at the end of the track stays sample-exact (`tests/test_gapless.c`, seek during prefetch);
-paused stays paused (the restarted stream is paused before anything is fed). Only tracks whose `track_info_t.seekable` is set are offered it: WAV, and FLAC with a SEEKTABLE and a
-known length (it is exact; without a table the only way would be decoding from the start). A target at or past the last frame is the end of the track: the queue advances as it does
+paused stays paused (the restarted stream is paused before anything is fed). Only tracks whose `track_info_t.seekable` is set are offered it: WAV, ALAC, MP3 (UI-7: the scrub bar and the time show where an MP3 really landed, so a VBR file moves in jumps of up to about 1 % of the track), and FLAC with a SEEKTABLE and a
+known length (it is exact; without a table the only way would be decoding from the start; such a FLAC answers `Seek not available`). A target at or past the last frame is the end of the track: the queue advances as it does
 when a track plays out (repeat-one restarts it, the last track stops). Scrubbing applies one restart per rest of the wheel (0.35 s), not one per step.
 The player counts the start requests it has posted (the storage task answers each exactly once, in order) and applies only the answer to the last one, so a seek followed by another seek,
 Next or a seek to the end never shows the replaced start's track data; the answer to a replaced start that fails is ignored too. When a seek's restart is up, the new position is saved
@@ -331,7 +332,8 @@ announced length is an error ("File is truncated or damaged"), so a damaged FLAC
 Once a command has interrupted the decoder's wait, every further read fails until the engine has handled it. Core 1's stack has a hardware limit
 (MSPLIM) 256 bytes above its bottom, so an overflow faults instead of corrupting RAM. The tests truncate every vector at each early byte and at 40 further
 points and flip random bits (fixed seed) in all of FLAC, MP3 and M4A; `-DNEUPOD_HOST_ASAN=ON` adds `test_codecs_asan`, the same tests under AddressSanitizer
-and UBSan (signed-overflow and shift reports are switched off: the vendored decoders wrap on corrupt data, which is harmless on ARM).
+and UBSan (signed-overflow and shift reports are switched off: the vendored decoders wrap on corrupt data, which is harmless on ARM), and
+`test_gapless_asan`, the gapless test (the real core-1 loop, every codec pair) under the same sanitizers.
 
 ### Test vectors
 

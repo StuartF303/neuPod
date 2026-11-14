@@ -55,8 +55,9 @@ typedef struct {
     uint64_t total_frames; /**< 0 for tones */
     uint32_t elapsed_s;    /**< from the audio core's own frame count */
     uint64_t pos_frames;   /**< the same position in frames of the track (a seek in progress shows its target) */
+    uint64_t file_size;    /**< bytes of the file playing (0 unknown): with its path the key of its rating (ratings_store.h) */
     uint32_t track_id;     /**< changes when another track plays (a start, a gapless handoff), not on a seek within the track */
-    bool seekable;         /**< playing or paused on a track player_seek() can move within (WAV, FLAC with a seek table) */
+    bool seekable;         /**< playing or paused on a track player_seek() can move within (WAV, ALAC, MP3, FLAC with a seek table) */
     uint32_t vol_att_db;
     bool muted;            /**< output stage mute line asserted */
     uint32_t queue_pos;    /**< file playback through a queue: 1-based position ("n of N"); 0 when there is no queue */
@@ -70,6 +71,13 @@ void player_init(void);
 
 /** Latest state (cheap; also folds in end-of-file and stream faults reported by the audio core). */
 void player_get(player_info_t *out);
+/** Tracks the queue skipped because they cannot be played (LB-5): a counter that moves on every skip, and the reason of the last one ("Can't play: unsupported
+ *  codec (AAC)"). The UI shows a toast when the counter moves. Any task. */
+uint32_t player_skip_notice(char *reason, size_t n);
+/** Real path of the file that plays now (a library queue entry is resolved: false until the storage task has done it) and, for a library queue, the
+ *  entry's handle ("@lib/<order>/<pos>"). Both false when no queue file plays. */
+bool player_now_path(char *out, size_t n);
+bool player_now_handle(char *out, size_t n);
 
 /** Start @p mode, or stop it if it is already the active test signal. TONE_OFF stops. */
 void player_tone_toggle(tone_mode_t mode);
@@ -80,6 +88,12 @@ void player_play_file(const char *path, const char *name);
  * listing order (play_queue.h); the files before it stay queued for Previous. The queue then plays through by itself.
  */
 void player_play_folder(const char *dir, const file_entry_t *entries, uint32_t count, uint32_t index);
+/**
+ * Play a playlist (Music > Playlists): the files at @p paths (absolute, @p count of them) form the queue, in that order, and entry @p start plays first. The
+ * paths are copied. The queue works like a folder's (Shuffle and Repeat apply); what does not fit the queue pool (play_queue.h) is dropped from the far end,
+ * keeping a window around @p start. Nothing is started for an empty list or a start outside it.
+ */
+void player_play_paths(const char *const *paths, uint32_t count, uint32_t start);
 /**
  * Play song @p start (an index into @p range) of a library range (play_queue.h, pq_range_t) and queue the whole range: an album in track
  * order, an artist's songs, all songs, a genre. @p start PLAY_QUEUE_NO_ENTRY picks a random song. @p shuffle_all forces a shuffled queue
@@ -113,7 +127,7 @@ pq_repeat_t player_repeat(void);
 void player_set_shuffle(pq_shuffle_t mode);
 void player_set_repeat(pq_repeat_t mode);
 /**
- * Move playback to PCM frame @p frame of the current track (exact for the seekable tracks, player_info_t.seekable). Done as a hard start of
+ * Move playback to PCM frame @p frame of the current track (exact for WAV, ALAC and FLAC with a seek table, near it for MP3: player_info_t.seekable). Done as a hard start of
  * the same file at that frame (the resume path: a short mute, the announced gapless successor is withdrawn and offered again), so the audio
  * core and its rings see an ordinary new stream. Paused stays paused. @p frame at or past the end of the track is the end of the track: the
  * queue moves on as it does when a track ends by itself (repeat-one restarts it, the last track stops). False (nothing done) when the track
@@ -128,6 +142,8 @@ void player_stop(void);
 
 /** Volume steps: positive = louder, 2 dB each, clamped to [hard cap, off]. Returns the new attenuation in dB. */
 uint32_t player_volume_step(int32_t steps);
+/** The attenuation shown to the user in dB (0 = unity; what player_info_t.vol_att_db says) without the rest of player_get(): cheap, for the volume HUD. */
+uint32_t player_volume_att(void);
 
 /**
  * Hold the software volume at 0 dB (true) while the headset's absolute volume is the volume (bt_control.h), or give the user's software volume back
