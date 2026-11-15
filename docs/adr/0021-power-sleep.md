@@ -83,7 +83,8 @@ Plugged into a PC over USB the Y2 reports external power and therefore never sle
   power": nothing tries again (no more GPIO pulses or blocked UI) until the gauge shows a discharge (rate of at least -2000 milli-percent/h, the UI's own "discharging" threshold, or the
   cell 100 mV lower than at the refusal) or 6 h pass. The same latch, and a gauge rate above +2000 (the Y2's rate is synthetic, plus or minus 10 %/h from the supply status; the MAX17048's is its CRATE
   register: both are the figures the UI already uses for "charging"), count as external power for the battery rule too. A refused critical power-off withdraws the "Battery empty" notice and logs
-  "on external power".
+  "on external power". A refusal that was not USB (the RP2350 AMOLED board also refuses while the Power key is held over 3 s) latches the same way, so idle and
+  empty-battery power-off stay off for up to 6 h or until the gauge shows a discharge. A user's 10 s Power hold calls the power-off directly and is unaffected.
 * **Y2, a firmware stopped mid-request.** `state` stays `mem` if the firmware is killed after the request and before the thaw, and the next start would find the panel early-suspended.
   `hal_power_init()` therefore writes `on` right after taking the wake lock (idempotent), and the exit handler writes `on` before releasing the lock.
 * **Y2, the timer.** Decided by CLOCK_BOOTTIME reaching the limit, or, if that clock did not run on across the sleep, by the alarm driver's own clock (`ANDROID_ALARM_GET_TIME`) reaching the

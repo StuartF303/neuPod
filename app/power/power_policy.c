@@ -86,6 +86,8 @@ void power_guard_observe(power_guard_t *g, uint32_t now_ms, bool rate_valid, int
     const bool timed_out = diff(now_ms, g->refused_at) >= (int32_t)POWER_REFUSED_CLEAR_MS;
     const bool discharging = rate_valid && rate_mpct_per_h <= POWER_DISCHARGE_RATE_MPCT_PER_H;
     const bool dropped = rate_valid && g->refused_mv != 0u && mv != 0u && (uint32_t)g->refused_mv >= (uint32_t)mv + POWER_DISCHARGE_MV_DROP;
+    /* Deliberately loose: a charge finishing on USB (4.2 -> 4.1 V) or a load above the charge current can clear the latch
+     * without an unplug. That costs one more refused attempt (a short block and latch pulse) before it re-latches. */
     if (timed_out || discharging || dropped) {
         g->refused = false;
     }

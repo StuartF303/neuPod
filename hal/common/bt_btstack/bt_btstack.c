@@ -2162,7 +2162,8 @@ hal_status_t hal_bt_power(bool on) {
     if (wait_for(is_off, 3000u)) {
         return HAL_OK;
     }
-    g_powering_down = false;
+    /* g_powering_down stays set: a late OFF must still be taken as the wanted one (state OFF), so the next
+     * hal_bt_power(true) really powers up. A stale flag is cleared there. */
     return HAL_ETIMEOUT;
 }
 #else

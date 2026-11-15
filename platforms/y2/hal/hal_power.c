@@ -249,6 +249,7 @@ hal_status_t hal_power_sleep(uint32_t max_ms, hal_wake_reason_t *why) {
     const char *cap = getenv("NEUPOD_SLEEP_MAX_S");
     if (cap != NULL && atoi(cap) > 0 && (uint32_t)atoi(cap) < max_ms / 1000u) {
         max_ms = (uint32_t)atoi(cap) * 1000u;
+        printf("power: sleep limit overridden to %u s (NEUPOD_SLEEP_MAX_S, bench only)\n", (unsigned)(max_ms / 1000u));
     }
     g_job = (job_t){.max_ms = max_ms != 0u ? max_ms : 1u, .done = 0, .status = HAL_ERR, .why = HAL_WAKE_NONE};
 
