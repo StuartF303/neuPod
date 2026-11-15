@@ -16,6 +16,7 @@
 #include "hal_battery.h"
 #include "hal_core.h"
 #include "hal_display.h"
+#include "power_policy.h"
 #include "hal_radio.h"
 #include "hal_storage.h"
 #include "hal_system.h"
@@ -280,7 +281,7 @@ static void open_backlight_slider(void) {
     }
 }
 
-/* Display (ST-2, design review 3.5): Theme, Brightness (opens the slider), Dim after (10 s ... 5 min, then Off: that is Auto-dim), Off after, Auto-lock.
+/* Display (ST-2, design review 3.5): Theme, Brightness (opens the slider), Dim after (10 s ... 5 min, then Off: that is Auto-dim), Off after, Sleep after (ADR-0021), Auto-lock.
  * The other rows change in place with a tick. */
 
 typedef struct {
@@ -288,7 +289,17 @@ typedef struct {
     ui_list_t *list;
 } display_t;
 
-enum { D_THEME, D_BACKLIGHT, D_DIM_AFTER, D_SCREEN_OFF, D_AUTOLOCK, D_COUNT };
+enum {
+    D_THEME,
+    D_BACKLIGHT,
+    D_DIM_AFTER,
+    D_SCREEN_OFF,
+#if NEUPOD_POWER_MGMT
+    D_SLEEP, /* Sleep after: Never, 10, 30, 60 min (ADR-0021) */
+#endif
+    D_AUTOLOCK,
+    D_COUNT
+};
 
 static void display_get(void *ctx, int32_t i, ui_list_item_t *o) {
     (void)ctx;
@@ -301,6 +312,10 @@ static void display_get(void *ctx, int32_t i, ui_list_item_t *o) {
         put(o, "Dim after", "%s", g_ui_state.autodim ? ui_autodim_name(g_ui_state.dim_idx) : "Off");
     } else if (i == D_SCREEN_OFF) {
         put(o, "Off after", "%s", ui_screenoff_name(g_ui_state.off_idx)); /* counted from the dim (from the last press when Dim after is Off) */
+#if NEUPOD_POWER_MGMT
+    } else if (i == D_SLEEP) {
+        put(o, "Sleep after", "%s", power_sleep_name(g_ui_state.sleep_idx)); /* idle this long (nothing playing, no charger): suspend; 24 h asleep: power off */
+#endif
     } else {
         put(o, "Auto-lock", "%s", g_ui_state.autolock ? "On" : "Off"); /* Hold turns on when the screen goes off */
     }
@@ -334,6 +349,11 @@ static bool display_button(ui_screen_t *b, uint8_t btn) {
     case D_SCREEN_OFF:
         g_ui_state.off_idx = (uint8_t)((g_ui_state.off_idx + 1u) % UI_SCREENOFF_STEPS);
         break;
+#if NEUPOD_POWER_MGMT
+    case D_SLEEP:
+        g_ui_state.sleep_idx = (uint8_t)((g_ui_state.sleep_idx + 1u) % POWER_SLEEP_STEPS);
+        break;
+#endif
     default:
         g_ui_state.autolock = !g_ui_state.autolock;
         break;

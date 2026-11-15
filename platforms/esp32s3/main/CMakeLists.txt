@@ -42,6 +42,7 @@ set(NEUPOD_ESP_HAL_SOURCES
   hal/hal_storage.c
   hal/hal_radio.c
   ${NEUPOD_ROOT}/hal/common/hal_i2c_common.c
+  ${NEUPOD_ROOT}/hal/common/hal_power_none.c   # no suspend yet (docs/adr/0021-power-sleep.md)
   ${NEUPOD_ROOT}/hal/common/hal_storage_common.c
 )
 

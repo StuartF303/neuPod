@@ -200,6 +200,16 @@ Any input event also skips the splash hold. The UI screens and their keys are de
 `TODO(hw)`) is not fatal: the wheel check passes if valid frames arrive within about 1.1 s, otherwise it is
 degraded ("not connected").
 
+## Sleep and the empty battery
+
+[ADR-0021](adr/0021-power-sleep.md). The UI task evaluates `power_service_poll()` every tick (it looks at most every 500 ms): the pure policy (`app/power/power_policy.c`) from the UI's last-input
+time, whether audio plays, whether anything is busy (card queue or write, library build, Bluetooth pair / connect / scan, Wi-Fi join, haptic calibration), external power
+(`hal_power_external()`) and the battery store. SLEEP runs the sequence on the UI task: `power_service_sleep_prepare()` (re-check, Bluetooth controller off through `hal_bt_power()`,
+settings and resume position flushed by the storage task with a bounded wait, card synced), screen off and panel sleep, `hal_power_sleep(24 h)`, then the wake. The other tasks
+keep running until the system actually suspends (the Y2's HAL waits through the scheduler). Only the UI task calls `hal_power_sleep()`; the I2C mutex is not involved: the platforms that can sleep read their battery
+without the I2C bus (the Y2: sysfs), and the system is only suspended after the card is idle.
+On the Pico 2 W the whole feature is compiled out (`NEUPOD_POWER_MGMT=0`).
+
 ## Failure handling
 
 * FreeRTOS stack overflow, malloc failure and `configASSERT` (also LVGL assertions) call

@@ -264,6 +264,27 @@ hal_status_t hal_bt_init(hal_bt_event_fn cb, void *ctx, const hal_bt_storage_t *
     return HAL_OK;
 }
 
+hal_status_t hal_bt_power(bool on) {
+    if (g_cb == NULL) {
+        return HAL_EINVAL; /* hal_bt_init() never ran */
+    }
+    if (on) {
+        if (g_state == HAL_BT_OFF || g_state == HAL_BT_FAILED) {
+            g_t0 = hal_millis();
+            emit_state(HAL_BT_STARTING); /* hal_bt_poll() brings it up after the simulated delay */
+        }
+        return HAL_OK;
+    }
+    if (g_state == HAL_BT_SCANNING) {
+        hal_bt_inquiry_stop();
+    }
+    hal_bt_disconnect();
+    if (g_state != HAL_BT_OFF) {
+        emit_state(HAL_BT_OFF);
+    }
+    return HAL_OK;
+}
+
 hal_bt_state_t hal_bt_state(void) { return g_state; }
 
 bool hal_bt_local_address(uint8_t addr[6]) {

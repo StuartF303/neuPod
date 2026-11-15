@@ -382,6 +382,12 @@ target_link_libraries(test_ui_hold neupod_rt_core)
 add_test(NAME ui_hold COMMAND test_ui_hold)
 set_source_files_properties(test_ui_hold.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
+# The sleep / empty-battery policy (ADR-0021): pure, so exact.
+add_executable(test_power_policy test_power_policy.c)
+target_link_libraries(test_power_policy neupod_rt_core)
+add_test(NAME power_policy COMMAND test_power_policy)
+set_source_files_properties(test_power_policy.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+
 # The Licences screen's data against LICENSE.md (the standing rule: licence notes stay up to date).
 add_executable(test_licences test_licences.c)
 target_include_directories(test_licences PRIVATE ${CMAKE_SOURCE_DIR}/app/ui)
@@ -651,6 +657,41 @@ if(NEUPOD_UI_HIRES)
   neupod_hold_tour(hires_hold_tour hires_hold "NEUPOD_DISPLAY_SIZE=480x360;" "480x360")
 endif()
 
+# Sleep and the empty battery (ADR-0021), end to end on the host with the simulated sleep (hal/host/hal_power.c): the tour makes the policy sleep after 2 s of idleness (idlesleep:),
+# the env of each entry says how the simulated sleep ends. Own fake card each (the sleep flushes the settings to it), wiped first.
+function(neupod_power_tour NAME TOUR ENV PASS FAIL TIMEOUT_S)
+  neupod_hold_card(${NAME})
+  add_test(NAME ${NAME}
+    COMMAND neupod --run-ms 90000 --splash-hold-ms 1500 ${TOUR} --snapshots ${CMAKE_BINARY_DIR}/snapshots_${NAME})
+  set_tests_properties(${NAME} PROPERTIES
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;NEUPOD_UI_AUDIT=1;${ENV}NEUPOD_FS_ROOT=${CMAKE_BINARY_DIR}/fsroot_${NAME};NEUPOD_DISK_IMAGE=${CMAKE_BINARY_DIR}/disk_${NAME}.img"
+    PASS_REGULAR_EXPRESSION "${PASS}"
+    FAIL_REGULAR_EXPRESSION "${FAIL}"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    FIXTURES_REQUIRED ${NAME}_clean
+    TIMEOUT ${TIMEOUT_S})
+endfunction()
+# A key wakes it: the Select press that wakes it only lights the screen (no screen opens afterwards), Hold is still on, a hold of Power unlocks, the keys work again.
+neupod_power_tour(power_tour --tour-power "NEUPOD_HOST_SLEEP_WAKE_MS=800;"
+  "ui: backlight off 0%.*ui: hold on.*power: going to sleep.*host: sleep \\(simulated\\).*host: wake \\(key\\).*power: woke \\(status 0\\).*ui: backlight wake 100%.*ui: audit 'power-woke' 320x240 objects=[1-9][0-9]* violations=0.*ui: hold off.*ui: audit 'power-scrolled' 320x240 objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+  "AUDIT FAIL|power: woke.*ui: screen '[^']*' push" 120)
+# 24 hours asleep (the host shortens them to 0.8 s): the normal power-off path.
+neupod_power_tour(power_off_tour --tour-power-off "NEUPOD_HOST_SLEEP_MAX_MS=800;"
+  "power: going to sleep.*host: sleep \\(simulated\\).*host: wake \\(timer\\).*power: asleep for 24 h, powering off.*host: power-off requested.*host: run finished, status 0"
+  "AUDIT FAIL" 120)
+# No suspend on the platform (NEUPOD_SUSPEND=0, the Y2's kill switch): the same idle time powers off, and nothing sleeps.
+neupod_power_tour(power_nosuspend_tour --tour-power-off "NEUPOD_SUSPEND=0;"
+  "power: idle for the sleep time, powering off.*host: power-off requested.*host: run finished, status 0"
+  "AUDIT FAIL|host: sleep|power: going to sleep" 120)
+# External power: no sleep however long it idles.
+neupod_power_tour(power_charger_tour --tour-power-charger ""
+  "ui: audit 'power-ext-home' 320x240 objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+  "AUDIT FAIL|host: sleep|power: going to sleep" 120)
+# An empty battery off the charger for 30 s: "Battery empty", then the power-off request.
+neupod_power_tour(power_battery_tour --tour-power-battery ""
+  "power: battery empty, powering off in 3 s.*ui: audit 'power-battery-notice' 320x240 objects=[1-9][0-9]* violations=0.*host: power-off requested.*ui: audit 'power-battery-off' 320x240 objects=[1-9][0-9]* violations=0.*host: run finished, status 0"
+  "AUDIT FAIL|host: sleep" 150)
+
 # The design system (DS-1 to DS-5): toast and HUD strips, the Theme row, dark and auto themes; own card, settings wiped first (the tour changes the theme).
 function(neupod_design_tour NAME CARD SIZE_ENV SIZE)
   add_test(NAME ${NAME}
@@ -852,16 +893,17 @@ add_library(neupod_y2_logic STATIC
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_haptic.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_bt_addr.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_bt_tlv.c
-  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_audio.c)
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_audio.c
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_suspend.c)
 target_include_directories(neupod_y2_logic PUBLIC ${CMAKE_SOURCE_DIR}/platforms/y2/hal ${CMAKE_SOURCE_DIR}/hal/include ${CMAKE_SOURCE_DIR}/app/include)
 set_source_files_properties(${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_input.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_sd.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_power.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_fb.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_sysfs.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_poweroff.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_charge.c
   ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_chargeview.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_haptic.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_bt_addr.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_bt_tlv.c
-  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_audio.c
+  ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_audio.c ${CMAKE_SOURCE_DIR}/platforms/y2/hal/y2_suspend.c
   test_y2_haptic.c test_y2_bt_addr.c test_y2_bt_tlv.c test_y2_audio.c
-  test_y2_charge.c test_y2_chargeview.c test_y2_input.c test_y2_sd.c test_y2_power.c test_y2_fb.c test_y2_sysfs.c test_y2_poweroff.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
-foreach(T y2_input y2_sd y2_power y2_fb y2_sysfs y2_poweroff y2_charge y2_chargeview y2_haptic y2_bt_addr y2_bt_tlv y2_audio)
+  test_y2_charge.c test_y2_chargeview.c test_y2_input.c test_y2_sd.c test_y2_power.c test_y2_fb.c test_y2_sysfs.c test_y2_poweroff.c test_y2_suspend.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+foreach(T y2_input y2_sd y2_power y2_fb y2_sysfs y2_poweroff y2_charge y2_chargeview y2_haptic y2_bt_addr y2_bt_tlv y2_audio y2_suspend)
   add_executable(test_${T} test_${T}.c)
   target_link_libraries(test_${T} neupod_y2_logic neupod_rt_core) # neupod_rt_core: input_events_diff (the real app mapping)
   add_test(NAME ${T} COMMAND test_${T})

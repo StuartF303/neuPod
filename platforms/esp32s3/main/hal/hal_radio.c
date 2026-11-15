@@ -77,6 +77,11 @@ hal_status_t hal_bt_init(hal_bt_event_fn cb, void *ctx, const hal_bt_storage_t *
     return HAL_ENOTSUP;
 }
 
+hal_status_t hal_bt_power(bool on) {
+    (void)on;
+    return HAL_ENOTSUP;
+}
+
 hal_bt_state_t hal_bt_state(void) { return HAL_BT_OFF; }
 
 bool hal_bt_local_address(uint8_t addr[6]) {

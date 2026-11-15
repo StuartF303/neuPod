@@ -165,6 +165,41 @@ static void reconnect_tick(void) {
     }
 }
 
+#if NEUPOD_POWER_MGMT
+uint8_t bt_service_sleep(void) {
+    const hal_bt_state_t st = hal_bt_state();
+    if (st == HAL_BT_OFF || st == HAL_BT_FAILED || st == HAL_BT_STARTING) {
+        return 0;
+    }
+    uint8_t flags = BT_SLEEP_WAS_ON;
+    if (hal_bt_link_state() == HAL_BT_LINK_CONNECTED || bt_rc_active(&g_rc)) {
+        flags |= BT_SLEEP_WAS_LINKED;
+    }
+    bt_rc_user_action(&g_rc); /* no reconnect attempt may start while the controller goes away */
+    hal_status_t r = hal_bt_power(false);
+    g_lost = false; /* the link that ended with it is not a loss to reconnect from: the wake does that */
+    if (r != HAL_OK) {
+        printf("bt: could not power the controller off for sleep (%d)\n", (int)r);
+        return r == HAL_ETIMEOUT ? flags : 0u; /* a controller that may still be on: the wake looks again */
+    }
+    printf("bt: controller off for sleep\n");
+    return flags;
+}
+
+void bt_service_wake(uint8_t flags) {
+    if ((flags & BT_SLEEP_WAS_ON) == 0) {
+        return;
+    }
+    if (hal_bt_power(true) != HAL_OK) {
+        printf("bt: could not power the controller on after sleep\n");
+        return;
+    }
+    g_powerup_done = (flags & BT_SLEEP_WAS_LINKED) == 0; /* reconnect_tick() reconnects once HCI is up, but only if a headset was in use */
+    g_lost = false;
+    printf("bt: controller on after sleep\n");
+}
+#endif
+
 void bt_service_tick(void) {
     hal_bt_poll();
     reconnect_tick();

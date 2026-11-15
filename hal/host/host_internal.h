@@ -27,6 +27,8 @@ void host_input_button(uint8_t btn, bool down);
 void host_input_scroll(int steps);
 /** The simulated Power key (F1 in the window) went down or up. */
 void host_input_power(bool down);
+/** A number that changes whenever a person pressed, turned or touched something at the window (the simulated sleep wakes on it). */
+uint32_t host_input_activity(void);
 
 /** The mouse as a touch panel (NEUPOD_TOUCH=1; ignored otherwise): the pointer in panel pixels, @p down while the left button is held. */
 void host_touch_mouse(int x, int y, bool down);

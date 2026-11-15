@@ -116,7 +116,16 @@
     "sw:off x x snap:hold-switch-off x x x x x sw:on x x snap:hold-switch-on sw:off x x x x x x x "    \
     "pwr:down pwr:up sleep:600 snap:hold-screen-off s x snap:hold-woke x x x x x x x "    \
     "pwr:down sleep:1800 pwr:up sleep:600 s snap:hold-unlocked-nav s s s _ s _ snap:hold-display "   \
-    "s s s s _ x snap:hold-autolock-off m m"
+    "s s s s s _ x snap:hold-autolock-off m m"
+
+// Sleep (docs/adr/0021-power-sleep.md): idlesleep:N makes the policy sleep once after N s of idleness, batt:N sets the gauge to N percent and ext:on / ext:off plug the charger in and out.
+// The host simulates the sleep (hal_power.c; the env of each ctest entry says how it ends). Key wake: the sleep ends with a Select press, which only lights the screen
+// (nothing opens) and the next key works; Hold stays on as the screen-off left it. Timer wake / no suspend: the host logs a simulated power-off request. Charger: no sleep at
+// all. Empty battery: "Battery empty", then the simulated power-off, after 30 s.
+#define TOUR_POWER "x snap:power-home idlesleep:2 sleep:4500 idlesleep:0 x x x snap:power-woke x x snap:power-after pwr:down sleep:2300 pwr:up sleep:600 s s x snap:power-scrolled"
+#define TOUR_POWER_OFF "x idlesleep:2 sleep:4000 idlesleep:0 x x snap:power-off-home"
+#define TOUR_POWER_CHARGER "x ext:on idlesleep:2 sleep:5000 snap:power-ext-home ext:off"
+#define TOUR_POWER_BATTERY "x batt:2 sleep:31500 snap:power-battery-notice sleep:4500 snap:power-battery-off"
 
 // Settings > About > Licences (the third-party components and their licences): the About list, the Licences list, and the longest notice (BTstack).
 #define TOUR_LICENCES "x s s s s _ _ snap:about _ snap:licences 11*s _ snap:licence-btstack m m m"
@@ -242,6 +251,22 @@ int main(int argc, char **argv) {
             cfg.ui_script = TOUR_HOLD;
             cfgp_tour = true;
             g_expect = 16; // the splash, home and the fourteen named snapshots
+        } else if (strcmp(argv[i], "--tour-power") == 0) {
+            cfg.ui_script = TOUR_POWER;
+            cfgp_tour = true;
+            g_expect = 6; // the splash, home and the four named snapshots
+        } else if (strcmp(argv[i], "--tour-power-off") == 0) {
+            cfg.ui_script = TOUR_POWER_OFF;
+            cfgp_tour = true;
+            g_expect = 3; // the splash, home and the one named snapshot
+        } else if (strcmp(argv[i], "--tour-power-charger") == 0) {
+            cfg.ui_script = TOUR_POWER_CHARGER;
+            cfgp_tour = true;
+            g_expect = 3;
+        } else if (strcmp(argv[i], "--tour-power-battery") == 0) {
+            cfg.ui_script = TOUR_POWER_BATTERY;
+            cfgp_tour = true;
+            g_expect = 4; // the splash, home and the two named snapshots
         } else if (strcmp(argv[i], "--tour-design") == 0) {
             cfg.ui_script = TOUR_DESIGN;
             cfgp_tour = true;
@@ -269,7 +294,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--snapshots") == 0 && i + 1 < argc) {
             g_snapshot_dir = argv[++i];
         } else {
-            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek|--tour-library|--tour-library-ro|--tour-library-empty|--tour-playlists|--tour-text|--tour-hold|--tour-licences|--tour-design|--tour-touch] [--splash-debug|--splash-release] [--script KEYS] [--snapshots DIR]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--run-ms N] [--splash-hold-ms N] [--tour|--tour-wifi|--tour-bt|--tour-art|--tour-seek|--tour-library|--tour-library-ro|--tour-library-empty|--tour-playlists|--tour-text|--tour-hold|--tour-licences|--tour-design|--tour-touch|--tour-power|--tour-power-off|--tour-power-charger|--tour-power-battery] [--splash-debug|--splash-release] [--script KEYS] [--snapshots DIR]\n", argv[0]);
             return 64;
         }
     }

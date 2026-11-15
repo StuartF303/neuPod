@@ -20,6 +20,7 @@
 #include "hal_audio.h"
 #include "hal_core.h"
 #include "hal_input.h"
+#include "hal_power.h"
 #include "hal_storage.h"
 #include "hal_system.h"
 #include "hal_touch.h"
@@ -385,6 +386,9 @@ void neupod_runtime_run(const neupod_runtime_config_t *cfg) {
 
     caps_init();
     battery_store_init();
+#if NEUPOD_POWER_MGMT
+    (void)hal_power_init(); /* the Y2 takes its "awake" wake lock here; the others have nothing to do (ADR-0021) */
+#endif
     g_i2c_mutex = os_mutex_create();
     g_input_queue = os_queue_create(sizeof(input_event_t), RT_INPUT_QUEUE_LEN);
     settings_service_init();

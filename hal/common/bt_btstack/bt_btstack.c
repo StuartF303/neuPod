@@ -40,7 +40,9 @@
 #include "classic/btstack_link_key_db_tlv.h"
 #include "classic/btstack_sbc.h"
 #include "classic/btstack_sbc_bluedroid.h"
+#include "hal_power.h" /* NEUPOD_POWER_MGMT */
 #include "hal_radio.h"
+#include "hal_system.h"
 #include "bt_link_policy.h"
 #include "bt_port.h"
 
@@ -86,6 +88,9 @@ static hal_bt_event_fn g_cb;
 static void *g_cb_ctx;
 static const hal_bt_storage_t *g_storage;
 static volatile int g_state = HAL_BT_OFF; /* hal_bt_state_t; written with atomics, read anywhere */
+#if NEUPOD_POWER_MGMT
+static volatile bool g_powering_down; /* hal_bt_power(false) asked for HCI_POWER_OFF: the OFF that follows is wanted, not a failed start */
+#endif
 static bd_addr_t g_local;
 static volatile bool g_have_addr;
 static bool g_registered;
@@ -361,6 +366,12 @@ static void packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint
                 printf("bt: HCI did not come up\n");
                 set_state(HAL_BT_FAILED);
             }
+#if NEUPOD_POWER_MGMT
+            else if (g_powering_down) {
+                g_powering_down = false;
+                set_state(HAL_BT_OFF);
+            }
+#endif
             break;
         default:
             break;
@@ -2088,6 +2099,73 @@ hal_status_t hal_bt_init(hal_bt_event_fn cb, void *ctx, const hal_bt_storage_t *
     }
     return g_init.rc == 0 ? HAL_OK : HAL_ERR;
 }
+
+#if NEUPOD_POWER_MGMT
+static uint32_t worker_power_down(void *param) {
+    (void)param;
+    set_accepting(false);
+    g_powering_down = true;
+    return (uint32_t)bt_port_power(false);
+}
+
+static uint32_t worker_power_up(void *param) {
+    (void)param;
+    set_state(HAL_BT_STARTING);
+    int rc = bt_port_power(true);
+    if (rc != 0) {
+        printf("bt: hci_power_control(ON) failed (%d)\n", rc);
+        set_state(HAL_BT_FAILED);
+    }
+    return (uint32_t)rc;
+}
+
+/* Wait (bounded, through the scheduler) until @p done() holds. */
+static bool wait_for(bool (*done)(void), uint32_t timeout_ms) {
+    for (uint32_t waited = 0; !done(); waited += 20u) {
+        if (waited >= timeout_ms) {
+            return false;
+        }
+        hal_delay_ms(20);
+    }
+    return true;
+}
+static bool not_scanning(void) { return g_state != HAL_BT_SCANNING; }
+static bool link_down(void) { return g_link == HAL_BT_LINK_DISCONNECTED || g_link == HAL_BT_LINK_FAILED; }
+static bool is_off(void) { return g_state == HAL_BT_OFF; }
+
+hal_status_t hal_bt_power(bool on) {
+    if (!bt_port_present()) {
+        return HAL_ENODEV;
+    }
+    if (!g_registered) {
+        return HAL_EINVAL; /* hal_bt_init() never ran */
+    }
+    if (on) {
+        if (g_state != HAL_BT_OFF && g_state != HAL_BT_FAILED) {
+            return HAL_OK; /* already up, or on its way */
+        }
+        return bt_port_run_sync(worker_power_up, NULL) ? HAL_OK : HAL_ERR;
+    }
+    if (g_state == HAL_BT_OFF) {
+        return HAL_OK;
+    }
+    if (g_state == HAL_BT_SCANNING) {
+        hal_bt_inquiry_stop();
+        (void)wait_for(not_scanning, 1500u);
+    }
+    hal_bt_disconnect();
+    (void)wait_for(link_down, 2000u); /* HCI_POWER_OFF disconnects what is left anyway: this only makes the end orderly */
+    if (!bt_port_run_sync(worker_power_down, NULL)) {
+        return HAL_ERR;
+    }
+    return wait_for(is_off, 3000u) ? HAL_OK : HAL_ETIMEOUT;
+}
+#else
+hal_status_t hal_bt_power(bool on) {
+    (void)on;
+    return HAL_ENOTSUP;
+}
+#endif
 
 hal_bt_state_t hal_bt_state(void) { return (hal_bt_state_t)g_state; }
 

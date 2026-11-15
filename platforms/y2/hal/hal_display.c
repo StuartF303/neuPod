@@ -224,7 +224,17 @@ void hal_display_sleep(bool sleep) {
         return;
     }
     g_sleeping = sleep;
+    if (!sleep) {
+        // Waking from a system sleep (ADR-0021): the kernel has switched the panel off and on and the LED driver may have restored its own brightness, so
+        // forget what we think is applied and push the whole picture again (a full page flip) rather than trust what the panel kept.
+        g_applied_level = -1;
+        y2_pager_mark_all(&g_pager);
+        g_dirty = true;
+    }
     backlight_apply(sleep ? 0 : g_level);
+    if (!sleep) {
+        hal_display_present();
+    }
     printf("display: %s\n", sleep ? "sleep (backlight off)" : "wake");
 }
 
