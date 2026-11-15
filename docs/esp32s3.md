@@ -100,7 +100,7 @@ answers `HAL_ENODEV`, so the boot check marks the wheel degraded, exactly as on 
 that is already down at power-on is ignored until it has been released once. The runtime's input task owns the touch controller: it calls `hal_touch_init()` under the
 I2C mutex once the bus is up and polls `hal_touch_read()` every 2 ms (`app/input/touch_gesture.c`, [Touch](touch.md)); `hal_touch.c` throttles the bus to one read per 8 ms and
 uses the i2c_master driver, which locks the bus per transaction, so it shares the bus safely with `hal_i2c`. The touch HAL maps the controller's portrait coordinates to landscape
-(`x = 599 - y`, `y = x`, the factory demo's mapping). **This mapping and the display image were not confirmed against a finger and by eye yet**; the three `TOUCH_*`
+(`x = y`, `y = 449 - x`; the factory demo's `x = 599 - y`, `y = x` came out 180 degrees rotated on the bench, 2026-11-15). The display (factory init table) and this mapping are bench-confirmed; the three `TOUCH_*`
 switches at the top of `hal_touch.c` are the one place to change the mapping.
 
 **Radio.** `hal_wifi_present()` is false, every Wi-Fi call answers `HAL_ENODEV`, and `hal_bt_init()` answers `HAL_ENOTSUP`; the boot check reports both as

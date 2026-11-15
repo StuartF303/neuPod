@@ -5,9 +5,9 @@
  * TOUCH_POLL_MS and otherwise returns the last answer.
  *
  * Coordinates: the controller reports portrait panel coordinates (x 0..449, y 0..599). The display runs landscape (MADCTL 0x30,
- * hal_display.c), so the point is rotated: landscape x = 599 - y, landscape y = x. That mapping is the factory demo's (swap and
- * mirror y); the bring-up probe made it cyclable on the bench but it has NOT been confirmed against a finger yet (see
- * docs/esp32s3.md). The three TOUCH_* switches below are the one place to change it.
+ * hal_display.c), so the point is rotated: landscape x = y, landscape y = 449 - x (swap and mirror x). Bench-confirmed
+ * 2026-11-15: the factory demo's mapping (599 - y, x) came out 180 degrees rotated with the factory init table's MADCTL 0x30.
+ * The three TOUCH_* switches below are the one place to change it.
  */
 #include <stdio.h>
 
@@ -20,8 +20,8 @@
 #include "hal_touch.h"
 
 #define TOUCH_SWAP_XY 1
-#define TOUCH_MIRROR_X 0 /* applied to the portrait x before the swap */
-#define TOUCH_MIRROR_Y 1 /* applied to the portrait y before the swap */
+#define TOUCH_MIRROR_X 1 /* applied to the portrait x before the swap */
+#define TOUCH_MIRROR_Y 0 /* applied to the portrait y before the swap */
 #define TOUCH_POLL_MS 8
 #define TOUCH_TIMEOUT_MS 20
 
