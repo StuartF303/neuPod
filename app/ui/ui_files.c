@@ -80,7 +80,7 @@ static void files_get(void *ctx, int32_t idx, ui_list_item_t *out) {
         snprintf(out->label, sizeof out->label, "Load more");
     } else {
         const file_entry_t *e = entry_at(f, idx); /* not NULL: tested above */
-        snprintf(out->label, sizeof out->label, "%s", e->name);
+        snprintf(out->label, sizeof out->label, "%s", e != NULL ? e->name : ""); /* e is not NULL here; the test keeps GCC 13 from assuming a NULL name */
         out->icon = e->is_dir ? UI_ICON_FOLDER : UI_ICON_FILE;
         if (e->is_dir) {
             out->chevron = true;

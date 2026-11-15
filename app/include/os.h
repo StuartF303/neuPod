@@ -4,7 +4,7 @@
  * @brief Thin portable OS layer (tasks, delays, queues, mutexes, events) for app/ code.
  *
  * Backed by FreeRTOS on every target (RP2350 single-core port, the kernel's POSIX port on the host;
- * ESP-IDF ships FreeRTOS, so app/os/os_freertos.c should build there unchanged). app/ code uses
+ * ESP-IDF's SMP FreeRTOS on the ESP32-S3, where every task is pinned to core 0 and the audio core is a task on core 1). app/ code uses
  * this header instead of calling FreeRTOS directly so that
  *   - the core is an explicit argument of task creation (always core 0: core 1 is the bare-metal
  *     audio core, docs/runtime.md), and
@@ -137,7 +137,11 @@ uint32_t os_event_wait(os_event_t *e, uint32_t bits, bool all, bool clear_on_exi
 
 /* ---- Diagnostics (monitor task) ----------------------------------------------------------- */
 
+#ifdef ESP_PLATFORM
+#define OS_STATS_MAX_TASKS 32u /* IDF adds idle x2, ipc x2, esp_timer and more: the kernel call returns 0 if the array is smaller than the task count */
+#else
 #define OS_STATS_MAX_TASKS 16u
+#endif
 
 typedef struct {
     char name[12];

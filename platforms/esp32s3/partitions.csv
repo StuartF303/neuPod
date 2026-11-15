@@ -1,0 +1,5 @@
+# Name,   Type, SubType, Offset,  Size
+# No NVS user data: settings live on the SD card. nvs and phy_init stay for the IDF components that expect them (Wi-Fi/BLE later).
+nvs,      data, nvs,     0x9000,  0x6000
+phy_init, data, phy,     0xf000,  0x1000
+factory,  app,  factory, 0x10000, 0x400000

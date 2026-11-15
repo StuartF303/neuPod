@@ -476,7 +476,7 @@ bool ui_library_background(void) {
     library_progress_t p;
     library_progress(&p);
     if (st == LIBSVC_OK) {
-        char c[16], t[40];
+        char c[16], t[48]; /* "Library updated " + dot + count (up to 15) + " songs" */
         fmt_count(c, sizeof c, p.tracks);
         snprintf(t, sizeof t, "Library updated \xC2\xB7 %s %s", c, p.tracks == 1 ? "song" : "songs");
         ui_toast_show(t, UI_TOAST_INFO, 0);

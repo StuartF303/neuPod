@@ -23,12 +23,14 @@ typedef struct {
     const char *notice;   /**< what to know, plain sentences, at most UI_LICENCE_NOTICE_MAX characters (it is drawn without scrolling) */
     const char *key;      /**< how LICENSE.md names the component (checked by the test) */
     const char *token;    /**< a word that LICENSE.md's row for the component must contain (checked by the test) */
-    bool rp2350_only;     /**< linked into the RP2350 firmware only (Wi-Fi stack, SD driver, SDK): hidden on the Y2 */
+    bool rp2350_only;     /**< linked into the RP2350 firmware only (Wi-Fi stack, SD driver, SDK): hidden on the Y2 and the ESP32-S3 */
+    bool esp32s3_only;    /**< linked into the ESP32-S3 firmware only (ESP-IDF): shown on "esp32s3" and "host" */
+    bool not_esp32s3;     /**< in the RP2350 and Y2 firmware but not in the ESP32-S3 one (BTstack and its SBC codec): hidden on "esp32s3" */
 } ui_licence_t;
 
 #define UI_LICENCE_NOTICE_MAX 400u
 
-/** Components shown on @p platform ("rp2350", "y2", "host", ...): the RP2350-only ones appear on "rp2350" and "host" (the simulator carries them for the tour). */
+/** Components shown on @p platform ("rp2350", "y2", "esp32s3", "host", ...): the RP2350-only ones appear on "rp2350" and "host", the ESP32-S3-only ones on "esp32s3" and "host" (the simulator carries them for the tour). */
 size_t ui_licence_count(const char *platform);
 /** The @p i-th component shown on @p platform, NULL if out of range. */
 const ui_licence_t *ui_licence_get(const char *platform, size_t i);

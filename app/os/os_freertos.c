@@ -1,20 +1,30 @@
 // SPDX-License-Identifier: MPL-2.0
 /*
- * os.h on FreeRTOS: the Raspberry Pi RP2350 port (single-core, core 0) and the kernel's POSIX port on the host.
+ * os.h on FreeRTOS: the Raspberry Pi RP2350 port (single-core, core 0), the kernel's POSIX port on the host and ESP-IDF's
+ * SMP FreeRTOS (ESP32-S3: every task is pinned to core 0, the audio core is on core 1, platforms/esp32s3/main/hal/hal_core.c).
  * Also holds the kernel hooks (stack overflow, malloc failure) and the run-time-stats clock,
  * which are part of the same FreeRTOSConfig contract.
  */
 #include <stdio.h>
 #include <string.h>
 
+#ifdef ESP_PLATFORM
+#include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
+#include "freertos/queue.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
+#include "esp_heap_caps.h"
+#else
 #include "FreeRTOS.h"
 #include "event_groups.h"
-#include "hal_system.h"
-#include "os.h"
-#include "panic.h"
 #include "queue.h"
 #include "semphr.h"
 #include "task.h"
+#endif
+#include "hal_system.h"
+#include "os.h"
+#include "panic.h"
 
 // --- Time ----------------------------------------------------------------------------------
 
@@ -65,7 +75,11 @@ void os_freeze_other_tasks(void) {
     for (UBaseType_t i = 0; i < n; i++) {
         const char *name = status[i].pcTaskName;
         if (status[i].xHandle == self || strncmp(name, "IDLE", 4) == 0 ||
-            strncmp(name, "Tmr Svc", 7) == 0 || strncmp(name, "async_", 6) == 0) {
+            strncmp(name, "Tmr Svc", 7) == 0 || strncmp(name, "async_", 6) == 0
+#ifdef ESP_PLATFORM /* IDF's own service tasks: the cross-core call tasks and the timer task the console and panic path rely on */
+            || strncmp(name, "ipc", 3) == 0 || strncmp(name, "esp_timer", 9) == 0
+#endif
+        ) {
             continue;
         }
         vTaskSuspend(status[i].xHandle);
@@ -78,6 +92,10 @@ void os_yield(void) { taskYIELD(); }
 
 #if defined(__linux__) || defined(__APPLE__)
 #define OS_STACK_SCALE 4u // x86-64 frames are bigger than Thumb-2 ones; the host heap is large
+#elif defined(ESP_PLATFORM)
+// Xtensa's windowed-register frames (a spill area per call) and newlib's printf are bigger than Thumb-2 ones: the library scan
+// overflowed the 8 KB storage stack on the S3 bench. The monitor's per-task "stack-free-min" shows the real margin.
+#define OS_STACK_SCALE 2u
 #else
 #define OS_STACK_SCALE 1u
 #endif
@@ -108,7 +126,11 @@ os_task_t *os_task_create(const os_task_cfg_t *cfg) {
     TaskHandle_t handle = NULL;
     configSTACK_DEPTH_TYPE depth =
         (configSTACK_DEPTH_TYPE)(cfg->stack_bytes * OS_STACK_SCALE / sizeof(StackType_t));
+#ifdef ESP_PLATFORM
+    BaseType_t ok = xTaskCreatePinnedToCore(task_trampoline, cfg->name, depth, boot, cfg->priority, &handle, 0); // OS_CORE_0
+#else
     BaseType_t ok = xTaskCreate(task_trampoline, cfg->name, depth, boot, cfg->priority, &handle);
+#endif
     if (ok != pdPASS) {
         vPortFree(boot);
         return NULL;
@@ -119,6 +141,13 @@ os_task_t *os_task_create(const os_task_cfg_t *cfg) {
 void os_task_exit(void) { vTaskDelete(NULL); }
 
 void os_start(void) {
+#ifdef ESP_PLATFORM
+    // ESP-IDF's scheduler is already running: this is called from app_main's task, which is finished once the tasks exist.
+    vTaskDelete(NULL);
+    for (;;) {
+        vTaskDelay(portMAX_DELAY); // not reached: a deleted task does not run again
+    }
+#endif
     vTaskStartScheduler();
     // Only reached if the kernel could not create its idle/timer tasks (out of heap).
     neupod_panic(NEUPOD_PANIC_MALLOC_FAILED, "scheduler did not start");
@@ -218,8 +247,14 @@ size_t os_task_stats(os_task_info_t *out, size_t max) {
     return count;
 }
 
+#ifdef ESP_PLATFORM
+// The tight resource on the S3 is internal RAM (stacks, DMA buffers, drivers); the PSRAM pool would hide it.
+size_t os_heap_free(void) { return heap_caps_get_free_size(MALLOC_CAP_INTERNAL); }
+size_t os_heap_free_min(void) { return heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL); }
+#else
 size_t os_heap_free(void) { return xPortGetFreeHeapSize(); }
 size_t os_heap_free_min(void) { return xPortGetMinimumEverFreeHeapSize(); }
+#endif
 
 // --- Run-time-stats clock (portGET_RUN_TIME_COUNTER_VALUE in the FreeRTOSConfig.h files) ------
 

@@ -44,6 +44,7 @@ nav:
       - Wheel input widgets: ui-input.md
       - Touch input (600x450 boards): touch.md
       - Innioasis Y2 platform: y2.md
+      - ESP32-S3 platform (dev board): esp32s3.md
   - Hardware:
       - Phase 1 wiring: wiring-phase1.md
       - Click-wheel protocol: click-wheel-protocol.md

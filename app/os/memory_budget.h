@@ -23,7 +23,8 @@
  * 32-bit target does for the same screens: Files plus Now Playing on top does not fit in 72 KB there, so the host gets 128 KB.
  * The target figure is the one that counts.
  */
-#if defined(NEUPOD_UI_HIRES) /* hosted build (host simulator, Y2 testbed): carries the 480x360 profile, plenty of RAM */
+#if defined(NEUPOD_LVGL_POOL_BYTES) /* set by the build: the ESP32-S3 keeps the pool in its 8 MB of PSRAM (platforms/esp32s3/main/CMakeLists.txt) */
+#elif defined(NEUPOD_UI_HIRES) /* hosted build (host simulator, Y2 testbed): carries the 480x360 profile, plenty of RAM */
 #define NEUPOD_LVGL_POOL_BYTES (192u * 1024u)
 #elif defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 8 /* 64-bit host build only; any 32-bit target (ARM or RISC-V) gets 72 KB */
 #define NEUPOD_LVGL_POOL_BYTES (128u * 1024u)
