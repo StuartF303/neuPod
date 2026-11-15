@@ -32,3 +32,6 @@ obj/
 .DS_Store
 Thumbs.db
 .claude/worktrees/
+
+# Claude Code agent worktrees (the project skill in .claude/skills is tracked)
+.claude/worktrees/
