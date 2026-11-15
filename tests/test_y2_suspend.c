@@ -106,26 +106,27 @@ TEST(only_a_key_press_counts_as_input_during_a_sleep) {
 #define T0M 100000   /* CLOCK_MONOTONIC at the request, ms */
 #define T0B 5000000  /* CLOCK_BOOTTIME at the request, ms */
 #define LIMIT (24u * 3600u * 1000u)
+#define T0R 1700000000000LL /* the alarm driver's clock at the request, ms */
 
 static y2_susp_t begun(bool ext) {
     y2_susp_t s;
-    y2_susp_begin(&s, LIMIT, T0M, T0B, ext);
+    y2_susp_begin(&s, LIMIT, T0M, T0B, T0R, ext);
     return s;
 }
 
 TEST(waiting_until_something_happens) {
     y2_susp_t s = begun(false);
-    y2_susp_verdict_t v = y2_susp_step(&s, T0M + 20, T0B + 20, false, false);
+    y2_susp_verdict_t v = y2_susp_step(&s, T0M + 20, T0B + 20, -1, false, false, false);
     ASSERT_EQ(Y2_SUSP_WAIT, v.state);
     ASSERT_FALSE(v.slept);
-    v = y2_susp_step(&s, T0M + Y2_SUSP_REFUSE_MS - 1, T0B + Y2_SUSP_REFUSE_MS - 1, false, false);
+    v = y2_susp_step(&s, T0M + Y2_SUSP_REFUSE_MS - 1, T0B + Y2_SUSP_REFUSE_MS - 1, -1, false, false, false);
     ASSERT_EQ(Y2_SUSP_WAIT, v.state);
 }
 
 TEST(a_key_wake_after_a_real_sleep) {
     y2_susp_t s = begun(false);
     // 40 minutes asleep: the boot clock ran on, the monotonic one stood still
-    y2_susp_verdict_t v = y2_susp_step(&s, T0M + 800, T0B + 800 + 40 * 60 * 1000, true, false);
+    y2_susp_verdict_t v = y2_susp_step(&s, T0M + 800, T0B + 800 + 40 * 60 * 1000, -1, true, false, false);
     ASSERT_EQ(Y2_SUSP_WOKE, v.state);
     ASSERT_EQ(HAL_WAKE_KEY, v.why);
     ASSERT_TRUE(v.slept);
@@ -134,7 +135,7 @@ TEST(a_key_wake_after_a_real_sleep) {
 
 TEST(the_alarm_is_the_timer_wake) {
     y2_susp_t s = begun(false);
-    y2_susp_verdict_t v = y2_susp_step(&s, T0M + 800, T0B + 800 + LIMIT - 500, false, false); // woken by the alarm a little early
+    y2_susp_verdict_t v = y2_susp_step(&s, T0M + 800, T0B + 800 + LIMIT - 500, -1, false, false, false); // woken by the alarm a little early
     ASSERT_EQ(Y2_SUSP_WOKE, v.state);
     ASSERT_EQ(HAL_WAKE_TIMER, v.why);
     ASSERT_TRUE(v.slept);
@@ -142,24 +143,24 @@ TEST(the_alarm_is_the_timer_wake) {
 
 TEST(a_wake_well_before_the_limit_is_not_the_timer) {
     y2_susp_t s = begun(false);
-    y2_susp_verdict_t v = y2_susp_step(&s, T0M + 800, T0B + 800 + 3 * 3600 * 1000, false, false); // 3 h asleep, nothing watched woke it
+    y2_susp_verdict_t v = y2_susp_step(&s, T0M + 800, T0B + 800 + 3 * 3600 * 1000, -1, false, false, false); // 3 h asleep, nothing watched woke it
     ASSERT_EQ(Y2_SUSP_WOKE, v.state);
     ASSERT_EQ(HAL_WAKE_OTHER, v.why);
 }
 
 TEST(plugging_in_the_charger_wakes_it_with_that_reason) {
     y2_susp_t s = begun(false);
-    y2_susp_verdict_t v = y2_susp_step(&s, T0M + 800, T0B + 800 + 600 * 1000, false, true);
+    y2_susp_verdict_t v = y2_susp_step(&s, T0M + 800, T0B + 800 + 600 * 1000, -1, false, false, true);
     ASSERT_EQ(Y2_SUSP_WOKE, v.state);
     ASSERT_EQ(HAL_WAKE_EXTERNAL_POWER, v.why);
     s = begun(true); // already on the charger at the request: not a change
-    v = y2_susp_step(&s, T0M + 800, T0B + 800 + 600 * 1000, false, true);
+    v = y2_susp_step(&s, T0M + 800, T0B + 800 + 600 * 1000, -1, false, false, true);
     ASSERT_EQ(HAL_WAKE_OTHER, v.why);
 }
 
 TEST(a_key_before_it_has_gone_down_ends_the_attempt_at_once) {
     y2_susp_t s = begun(false);
-    y2_susp_verdict_t v = y2_susp_step(&s, T0M + 300, T0B + 300, true, false);
+    y2_susp_verdict_t v = y2_susp_step(&s, T0M + 300, T0B + 300, -1, true, false, false);
     ASSERT_EQ(Y2_SUSP_WOKE, v.state);
     ASSERT_EQ(HAL_WAKE_KEY, v.why);
     ASSERT_FALSE(v.slept); // the key is real: the core lights the screen for it
@@ -167,7 +168,7 @@ TEST(a_key_before_it_has_gone_down_ends_the_attempt_at_once) {
 
 TEST(a_system_that_never_suspends_is_given_up_on) {
     y2_susp_t s = begun(false);
-    y2_susp_verdict_t v = y2_susp_step(&s, T0M + Y2_SUSP_REFUSE_MS, T0B + Y2_SUSP_REFUSE_MS, false, false);
+    y2_susp_verdict_t v = y2_susp_step(&s, T0M + Y2_SUSP_REFUSE_MS, T0B + Y2_SUSP_REFUSE_MS, -1, false, false, false);
     ASSERT_EQ(Y2_SUSP_REFUSED, v.state);
     ASSERT_FALSE(v.slept);
 }
@@ -175,20 +176,42 @@ TEST(a_system_that_never_suspends_is_given_up_on) {
 TEST(a_short_nap_is_not_a_sleep_but_the_difference_adds_up) {
     y2_susp_t s = begun(false);
     // 1.0 s asleep so far: under the gap, still waiting
-    y2_susp_verdict_t v = y2_susp_step(&s, T0M + 5000, T0B + 5000 + 1000, false, false);
+    y2_susp_verdict_t v = y2_susp_step(&s, T0M + 5000, T0B + 5000 + 1000, -1, false, false, false);
     ASSERT_EQ(Y2_SUSP_WAIT, v.state);
     // the kernel suspended again after a spurious wake: 3 s in all
-    v = y2_susp_step(&s, T0M + 5000, T0B + 5000 + 3000, false, false);
+    v = y2_susp_step(&s, T0M + 5000, T0B + 5000 + 3000, -1, false, false, false);
     ASSERT_EQ(Y2_SUSP_WOKE, v.state);
     ASSERT_TRUE(v.slept);
 }
 
 TEST(a_clock_that_steps_back_cannot_fake_a_sleep) {
     y2_susp_t s = begun(false);
-    y2_susp_verdict_t v = y2_susp_step(&s, T0M + 5000, T0B + 4000, false, false); // the boot clock reads lower than the monotonic one's advance
+    y2_susp_verdict_t v = y2_susp_step(&s, T0M + 5000, T0B + 4000, -1, false, false, false); // the boot clock reads lower than the monotonic one's advance
     ASSERT_EQ(Y2_SUSP_WAIT, v.state);
     ASSERT_FALSE(v.slept);
     ASSERT_EQ(0, v.slept_ms);
+}
+
+TEST(the_real_time_clock_decides_the_timer_when_the_boot_clock_did_not_run_on) {
+    y2_susp_t s = begun(false);
+    // the boot clock shows nothing (it did not advance across the sleep) but the alarm's own clock reached the deadline
+    y2_susp_verdict_t v = y2_susp_step(&s, T0M + 800, T0B + 800, T0R + (int64_t)LIMIT + 200, false, false, false);
+    ASSERT_EQ(Y2_SUSP_WOKE, v.state);
+    ASSERT_EQ(HAL_WAKE_TIMER, v.why);
+    ASSERT_TRUE(v.slept);
+    v = y2_susp_step(&s, T0M + 800, T0B + 800, T0R + 5000, false, false, false); // an unremarkable reading: not due
+    ASSERT_EQ(Y2_SUSP_WAIT, v.state);
+    v = y2_susp_step(&s, T0M + 800, T0B + 800, -1, false, false, false); // unreadable: ignored
+    ASSERT_EQ(Y2_SUSP_WAIT, v.state);
+}
+
+TEST(wheel_activity_counts_as_a_key_only_after_the_system_has_slept) {
+    y2_susp_t s = begun(false);
+    y2_susp_verdict_t v = y2_susp_step(&s, T0M + 300, T0B + 300, -1, false, true, false); // the panel twitching as it powers down
+    ASSERT_EQ(Y2_SUSP_WAIT, v.state);
+    v = y2_susp_step(&s, T0M + 800, T0B + 800 + 600 * 1000, -1, false, true, false); // the wheel woke it: not a press, still a key
+    ASSERT_EQ(Y2_SUSP_WOKE, v.state);
+    ASSERT_EQ(HAL_WAKE_KEY, v.why);
 }
 
 int main(void) {
@@ -207,5 +230,7 @@ int main(void) {
     RUN(a_system_that_never_suspends_is_given_up_on);
     RUN(a_short_nap_is_not_a_sleep_but_the_difference_adds_up);
     RUN(a_clock_that_steps_back_cannot_fake_a_sleep);
+    RUN(the_real_time_clock_decides_the_timer_when_the_boot_clock_did_not_run_on);
+    RUN(wheel_activity_counts_as_a_key_only_after_the_system_has_slept);
     return RESULT();
 }

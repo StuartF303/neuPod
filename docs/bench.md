@@ -60,6 +60,11 @@ player will power off when idle instead (that is the fallback working).
 6. Kill switch: `NEUPOD_SUSPEND=0` in `/etc/neupod-fw.env`, restart the firmware: the start-up line says sleep is switched off and, after the idle time, `power: idle for the sleep time, powering off`.
 7. Measure the current in suspend if you can (the point of the feature), and note how long the sleep and the wake take.
 8. 24 h limit (optional, long): leave it asleep for a day. It should be off by then (not suspended), and the next power-up should come back at the saved position.
+9. After a wake, play a file and browse a folder: no SD I/O errors in the log (the card must be re-detected across the suspend), and the player carries on.
+10. Kill the firmware while it is asleep or just requesting sleep (`kill` by PID only), let the wrapper restart it: the new start writes `on` and the screen must be lit (the panel not left early-suspended).
+11. Timer wake: set `NEUPOD_SLEEP_MAX_S=120` in `/etc/neupod-fw.env`, restart, let it sleep: after 2 minutes it must wake with `(timer)` and power off. Check **both clocks** in the log: the line `woke after N ms asleep` (CLOCK_BOOTTIME against CLOCK_MONOTONIC) and that the timer verdict also holds if N is 0 (the real-time clock fallback); note which of the two decided.
+12. Inspect what a wheel touch produces as the wake (the log line says key; check the key is not delivered and nothing opens), and what Power does.
+13. Charger plug-in while asleep: does the hardware wake on it (`external power` reason)? If not, the unit sleeps on until a key; that is acceptable.
 
 ## Hold (Y2)
 

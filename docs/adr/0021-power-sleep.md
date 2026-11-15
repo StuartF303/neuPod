@@ -72,6 +72,26 @@ Plugged into a PC over USB the Y2 reports external power and therefore never sle
 * **Pico 2 W** (frozen, about 100 B of static RAM spare): the whole feature is compiled out (`NEUPOD_POWER_MGMT=0` from the top-level `CMakeLists.txt`: no setting, no row, no
   policy, no sequence, no `hal_bt_power`). It can neither sleep nor switch itself off, so there is nothing for it to do.
 
+### Failure paths (review fixes)
+
+* **A sleep that did not happen** (`HAL_EBUSY` / `HAL_ERR`): the screen is not lit for it. Everything is put back as it was before the sleep (Bluetooth on, the screen off and locked if
+  it was, otherwise lit and unlocked again), and the count restarts. **Two failures in a row stop further tries for an hour** (`power_guard_*`, unit tested). Only an
+  external-power or unknown wake lights the screen by itself.
+* **A last look before the screen goes**: if an input is queued or a charger appeared during the preparation (which can take seconds), the sleep is abandoned, Bluetooth is put back and the
+  count restarts; the input is handled as usual.
+* **A power-off the platform refuses** (`hal_system_poweroff()` false although it says it can: a USB-powered dev board, where the latch cannot cut power) is latched as "external
+  power": nothing tries again (no more GPIO pulses or blocked UI) until the gauge shows a discharge (rate of at least -2000 milli-percent/h, the UI's own "discharging" threshold, or the
+  cell 100 mV lower than at the refusal) or 6 h pass. The same latch, and a gauge rate above +2000 (the Y2's rate is synthetic, plus or minus 10 %/h from the supply status; the MAX17048's is its CRATE
+  register: both are the figures the UI already uses for "charging"), count as external power for the battery rule too. A refused critical power-off withdraws the "Battery empty" notice and logs
+  "on external power".
+* **Y2, a firmware stopped mid-request.** `state` stays `mem` if the firmware is killed after the request and before the thaw, and the next start would find the panel early-suspended.
+  `hal_power_init()` therefore writes `on` right after taking the wake lock (idempotent), and the exit handler writes `on` before releasing the lock.
+* **Y2, the timer.** Decided by CLOCK_BOOTTIME reaching the limit, or, if that clock did not run on across the sleep, by the alarm driver's own clock (`ANDROID_ALARM_GET_TIME`) reaching the
+  armed time. Any event at all from the wheel node (`mtk-tpd`) after the system has been seen to sleep is a key wake (dark, locked, not delivered); before that only a press counts.
+* **Stale events.** An event queued shortly before the sleep may light the screen just before the wake key does: harmless (the wake key is swallowed either way).
+* `NEUPOD_SLEEP_MAX_S` (Y2, bench only, in `/etc/neupod-fw.env`) shortens the 24 h limit so the timer wake can be tried in minutes.
+* With no card (RAM-only settings) the preparation does not wait for a flush; it re-checks that the storage task is idle after the card sync, right before suspending.
+
 ## Consequences
 
 * **Failure stance.** Unknown battery, a failed gauge, an unreadable charger sensor: never power off or sleep *because of it* (the battery rule needs a valid reading; "external power

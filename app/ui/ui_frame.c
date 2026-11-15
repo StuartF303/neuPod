@@ -25,6 +25,7 @@
 #include "player.h"
 #include "power_policy.h"
 #include "power_service.h"
+#include "runtime.h"
 #include "runtime_config.h"
 #include "settings_store.h"
 #include "ui_internal.h"
@@ -909,7 +910,15 @@ static void power_sleep(uint32_t now_ms) {
         power_service_restart(now_ms); /* something started meanwhile, or the card stayed busy: try again after another full time */
         return;
     }
+    // The last look before the screen goes: an input that arrived during the preparation, or a charger, ends the attempt (the input is still queued and is
+    // handled as usual, so nothing is lost).
+    if (os_queue_pending(rt_input_queue()) || hal_power_external()) {
+        power_service_wake(os_tick_ms());
+        power_service_restart(now_ms);
+        return;
+    }
     const bool was_off = g_idle.off;
+    const bool was_locked = g_hold.locked;
     hold_overlay_hide();
     (void)ui_idle_force_off(&g_idle);
     ui_apply_theme();
@@ -923,18 +932,26 @@ static void power_sleep(uint32_t now_ms) {
     hal_display_sleep(false);
     const uint32_t t = os_tick_ms();
     power_service_wake(t);
-    if (st == HAL_OK && why == HAL_WAKE_TIMER) {
+    power_service_sleep_result(st, t);
+    if (st != HAL_OK) {
+        // It never slept (something held the system awake, or the suspend machinery failed): nobody pressed anything, so the screen is put back as it was.
+        printf("power: the system did not sleep (status %d)\n", (int)st);
+        if (!was_off) {
+            hold_apply(ui_hold_set(&g_hold, was_locked), t);
+            screen_light(t);
+        }
+    } else if (why == HAL_WAKE_TIMER) {
         printf("power: asleep for 24 h, powering off\n");
         if (power_service_poweroff()) {
             ui_pill_show("Powering off");
             return;
         }
         screen_light(t); /* this platform cannot switch off: carry on as awake */
-    } else if (st == HAL_OK && why == HAL_WAKE_KEY) {
+    } else if (why == HAL_WAKE_KEY) {
         g_wake_pending = true;
         g_wake_until = t + WAKE_INPUT_WAIT_MS;
     } else {
-        screen_light(t); /* a charger, something unknown, or the system would not sleep: nobody pressed anything, show the screen */
+        screen_light(t); /* a charger, or something unknown: nobody pressed anything, show the screen */
     }
 }
 
@@ -961,7 +978,8 @@ static void power_tick(uint32_t now_ms) {
             if (power_service_poweroff()) {
                 ui_pill_show("Powering off");
             } else {
-                printf("power: battery empty, but this platform cannot switch itself off\n");
+                ui_toast_hide(); /* the notice is withdrawn: this board is on external power (or cannot switch off), which the policy now assumes */
+                printf("power: battery empty, but the power-off was refused: on external power\n");
             }
         }
     }

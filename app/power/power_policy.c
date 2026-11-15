@@ -56,3 +56,51 @@ power_action_t power_policy_tick(power_policy_t *p, const power_inputs_t *in) {
     }
     return POWER_ACT_NONE;
 }
+
+/* ---- guards ---- */
+
+void power_guard_init(power_guard_t *g) { *g = (power_guard_t){0}; }
+
+bool power_guard_sleep_failed(power_guard_t *g, uint32_t now_ms) {
+    if (++g->sleep_fails < POWER_SLEEP_FAILS_MAX) {
+        return false;
+    }
+    g->sleep_fails = 0;
+    g->backoff = true;
+    g->backoff_until = now_ms + POWER_SLEEP_BACKOFF_MS;
+    return true;
+}
+
+void power_guard_sleep_ok(power_guard_t *g) { g->sleep_fails = 0; }
+
+void power_guard_poweroff_refused(power_guard_t *g, uint32_t now_ms, uint16_t mv) {
+    g->refused = true;
+    g->refused_at = now_ms;
+    g->refused_mv = mv;
+}
+
+void power_guard_observe(power_guard_t *g, uint32_t now_ms, bool rate_valid, int32_t rate_mpct_per_h, uint16_t mv) {
+    if (!g->refused) {
+        return;
+    }
+    const bool timed_out = diff(now_ms, g->refused_at) >= (int32_t)POWER_REFUSED_CLEAR_MS;
+    const bool discharging = rate_valid && rate_mpct_per_h <= POWER_DISCHARGE_RATE_MPCT_PER_H;
+    const bool dropped = rate_valid && g->refused_mv != 0u && mv != 0u && (uint32_t)g->refused_mv >= (uint32_t)mv + POWER_DISCHARGE_MV_DROP;
+    if (timed_out || discharging || dropped) {
+        g->refused = false;
+    }
+}
+
+bool power_guard_allows(power_guard_t *g, uint32_t now_ms) {
+    if (g->refused) {
+        return false;
+    }
+    if (g->backoff) {
+        const int32_t left = diff(g->backoff_until, now_ms);
+        if (left > 0 && left <= (int32_t)POWER_SLEEP_BACKOFF_MS) {
+            return false;
+        }
+        g->backoff = false; /* over, or the clock jumped back past the whole back-off: do not wait for ever */
+    }
+    return true;
+}

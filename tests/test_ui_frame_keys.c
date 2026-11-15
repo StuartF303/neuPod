@@ -99,6 +99,12 @@ hal_status_t power_service_sleep_block(hal_wake_reason_t *why) { pw_log('B'); *w
 void power_service_wake(uint32_t now_ms) { (void)now_ms; pw_log('W'); }
 bool power_service_poweroff(void) { g_pw_poweroff++; return g_pw_poweroff_ok; }
 void power_service_restart(uint32_t now_ms) { (void)now_ms; g_pw_restart++; }
+static int g_pw_results, g_pw_queued;
+static bool g_pw_external;
+void power_service_sleep_result(hal_status_t st, uint32_t now_ms) { (void)st; (void)now_ms; g_pw_results++; }
+os_queue_t *rt_input_queue(void) { return NULL; }
+bool os_queue_pending(os_queue_t *q) { (void)q; return g_pw_queued != 0; }
+bool hal_power_external(void) { return g_pw_external; }
 bool power_service_can_act(void) { return true; }
 bool hal_power_can_sleep(void) { return g_pw_can_sleep; }
 void hal_display_sleep(bool sleep) { pw_log(sleep ? 'S' : 'D'); }
@@ -364,7 +370,8 @@ static void power_reset(void) {
     g_pw_prepare_ok = g_pw_can_sleep = g_pw_poweroff_ok = true;
     g_pw_status = HAL_OK;
     g_pw_why = HAL_WAKE_KEY;
-    g_pw_poweroff = g_pw_restart = 0;
+    g_pw_poweroff = g_pw_restart = g_pw_results = g_pw_queued = 0;
+    g_pw_external = false;
     memset(g_pw_log, 0, sizeof g_pw_log);
     g_wake_pending = g_crit_shown = g_crit_done = false;
     g_backlight = 100;
@@ -502,6 +509,44 @@ TEST(sleep_after_defaults_to_30_minutes_loads_from_the_card_and_is_saved) {
     g_set_have = false;
 }
 
+TEST(a_failed_sleep_puts_the_screen_back_as_it_was) {
+    power_reset();
+    g_pw_action = POWER_ACT_SLEEP;
+    g_pw_status = HAL_EBUSY; // the screen was on: it is lit again and Hold is as it was (unlocked)
+    power_tick(1000);
+    ASSERT_EQ(1, g_pw_results);
+    ASSERT_FALSE(g_idle.off);
+    ASSERT_FALSE(ui_frame_locked());
+    power_reset();
+    g_idle.off = g_idle.forced_off = true; // the screen was already off and locked: a failed sleep must not light it
+    g_backlight = 0;
+    ui_hold_set(&g_hold, true);
+    g_pw_action = POWER_ACT_SLEEP;
+    g_pw_status = HAL_ERR;
+    power_tick(1000);
+    ASSERT_TRUE(g_idle.off);
+    ASSERT_EQ(0, g_backlight);
+    ASSERT_TRUE(ui_frame_locked());
+    ASSERT_FALSE(g_wake_pending);
+}
+
+TEST(input_or_a_charger_during_the_preparation_aborts_the_sleep_before_the_screen_goes) {
+    power_reset();
+    g_pw_action = POWER_ACT_SLEEP;
+    g_pw_queued = 1;
+    power_tick(1000);
+    ASSERT_TRUE(strcmp(g_pw_log, "PW") == 0); // prepared, then woken again at once: no display sleep, no block
+    ASSERT_FALSE(g_idle.off);
+    ASSERT_EQ(100, g_backlight);
+    ASSERT_EQ(1, g_pw_restart);
+    power_reset();
+    g_pw_action = POWER_ACT_SLEEP;
+    g_pw_external = true;
+    power_tick(1000);
+    ASSERT_TRUE(strcmp(g_pw_log, "PW") == 0);
+    ASSERT_FALSE(g_idle.off);
+}
+
 int main(void) {
     ui_stack_init(&g_stack);
     ui_idle_init(&g_idle, 1000);
@@ -528,6 +573,8 @@ int main(void) {
     RUN(a_press_the_screen_saw_still_gets_its_release_when_hold_comes_on_in_between);
     RUN(sleep_after_defaults_to_30_minutes_loads_from_the_card_and_is_saved);
     RUN(sleep_runs_in_order_and_the_key_that_wakes_it_only_lights_the_screen);
+    RUN(a_failed_sleep_puts_the_screen_back_as_it_was);
+    RUN(input_or_a_charger_during_the_preparation_aborts_the_sleep_before_the_screen_goes);
     RUN(a_key_wake_whose_input_never_arrives_lights_the_screen_anyway);
     RUN(a_charger_wake_lights_the_screen_at_once_and_a_failed_sleep_does_too);
     RUN(waking_by_the_timer_takes_the_normal_power_off_path);

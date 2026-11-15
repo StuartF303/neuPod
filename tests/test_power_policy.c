@@ -226,6 +226,50 @@ TEST(the_battery_streak_survives_a_restart_of_the_idle_clock) {
     ASSERT_EQ(POWER_ACT_POWEROFF_CRITICAL, power_policy_tick(&p, &in));
 }
 
+TEST(two_failed_sleeps_back_off_for_an_hour) {
+    power_guard_t g;
+    power_guard_init(&g);
+    ASSERT_TRUE(power_guard_allows(&g, 1000));
+    ASSERT_FALSE(power_guard_sleep_failed(&g, 1000));
+    ASSERT_TRUE(power_guard_allows(&g, 1000));
+    power_guard_sleep_ok(&g); // a success in between resets the count
+    ASSERT_FALSE(power_guard_sleep_failed(&g, 2000));
+    ASSERT_TRUE(power_guard_sleep_failed(&g, 3000)); // the second in a row
+    ASSERT_FALSE(power_guard_allows(&g, 3000 + POWER_SLEEP_BACKOFF_MS - 1));
+    ASSERT_TRUE(power_guard_allows(&g, 3000 + POWER_SLEEP_BACKOFF_MS));
+    ASSERT_FALSE(power_guard_sleep_failed(&g, 9000000)); // the count started again
+}
+
+TEST(a_back_off_does_not_outlive_a_clock_that_jumps_back) {
+    power_guard_t g;
+    power_guard_init(&g);
+    power_guard_sleep_failed(&g, 10000000);
+    power_guard_sleep_failed(&g, 10000000);
+    ASSERT_FALSE(power_guard_allows(&g, 10000000 + 1000));
+    ASSERT_TRUE(power_guard_allows(&g, 1000)); // hours back: not an endless wait
+}
+
+TEST(a_refused_power_off_latches_until_the_gauge_shows_a_discharge_or_six_hours) {
+    power_guard_t g;
+    power_guard_init(&g);
+    power_guard_poweroff_refused(&g, 5000, 4100);
+    ASSERT_FALSE(power_guard_allows(&g, 5000));
+    power_guard_observe(&g, 6000, true, 500, 4090); // still charging, voltage steady
+    ASSERT_FALSE(power_guard_allows(&g, 6000));
+    power_guard_observe(&g, 7000, false, -9000, 4000); // an invalid reading says nothing
+    ASSERT_FALSE(power_guard_allows(&g, 7000));
+    power_guard_observe(&g, 8000, true, -3000, 4090); // discharging
+    ASSERT_TRUE(power_guard_allows(&g, 8000));
+    power_guard_poweroff_refused(&g, 9000, 4100);
+    power_guard_observe(&g, 10000, true, 0, 4000); // the cell fell 100 mV
+    ASSERT_TRUE(power_guard_allows(&g, 10000));
+    power_guard_poweroff_refused(&g, 20000, 0);
+    power_guard_observe(&g, 20000 + POWER_REFUSED_CLEAR_MS - 1, false, 0, 0);
+    ASSERT_FALSE(power_guard_allows(&g, 20000));
+    power_guard_observe(&g, 20000 + POWER_REFUSED_CLEAR_MS, false, 0, 0);
+    ASSERT_TRUE(power_guard_allows(&g, 20000 + POWER_REFUSED_CLEAR_MS));
+}
+
 int main(void) {
     RUN(the_choice_table_and_default);
     RUN(sleeps_exactly_after_the_setting_with_nothing_happening);
@@ -242,5 +286,8 @@ int main(void) {
     RUN(the_counter_wrap_changes_nothing);
     RUN(a_stamp_slightly_ahead_of_now_is_not_idle_and_a_clock_that_jumps_back_restarts);
     RUN(the_battery_streak_survives_a_restart_of_the_idle_clock);
+    RUN(two_failed_sleeps_back_off_for_an_hour);
+    RUN(a_back_off_does_not_outlive_a_clock_that_jumps_back);
+    RUN(a_refused_power_off_latches_until_the_gauge_shows_a_discharge_or_six_hours);
     return RESULT();
 }

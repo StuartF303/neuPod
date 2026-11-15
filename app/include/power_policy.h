@@ -82,6 +82,36 @@ void power_policy_restart(power_policy_t *p, uint32_t now_ms);
 /** Decide. POWEROFF_CRITICAL wins over SLEEP. SLEEP / POWEROFF_CRITICAL repeat on every call until the caller restarts the policy or the cause ends. */
 power_action_t power_policy_tick(power_policy_t *p, const power_inputs_t *in);
 
+
+/* ---- guards: what to stop trying (ADR-0021) ---- */
+
+#define POWER_SLEEP_FAILS_MAX 2u                    /**< this many failed sleeps in a row ... */
+#define POWER_SLEEP_BACKOFF_MS (60u * 60u * 1000u)  /**< ... and it stops trying for this long */
+#define POWER_REFUSED_CLEAR_MS (6u * 60u * 60u * 1000u) /**< a power-off the platform refused (a USB-powered board) is forgotten after this long ... */
+#define POWER_DISCHARGE_RATE_MPCT_PER_H (-2000)     /**< ... or when the gauge shows at least this discharge (the UI's own "discharging" threshold) */
+#define POWER_CHARGE_RATE_MPCT_PER_H 2000           /**< a gauge rate above this means a charger (the UI's "charging") */
+#define POWER_DISCHARGE_MV_DROP 100u                /**< ... or the cell voltage fell this far since the refusal */
+
+typedef struct {
+    uint8_t sleep_fails;     /**< consecutive failed sleeps */
+    bool backoff;            /**< no sleep before backoff_until */
+    uint32_t backoff_until;
+    bool refused;            /**< hal_system_poweroff() failed on this board: "powered by something else" until it is shown otherwise */
+    uint32_t refused_at;
+    uint16_t refused_mv;     /**< the cell voltage then (0 unknown) */
+} power_guard_t;
+
+void power_guard_init(power_guard_t *g);
+/** A sleep did not happen (HAL_EBUSY / HAL_ERR). Returns true when this was the last try before the back-off began. */
+bool power_guard_sleep_failed(power_guard_t *g, uint32_t now_ms);
+void power_guard_sleep_ok(power_guard_t *g);
+/** hal_system_poweroff() failed although the platform says it can: assume external power. */
+void power_guard_poweroff_refused(power_guard_t *g, uint32_t now_ms, uint16_t mv);
+/** Look at the gauge: clears the refusal on a discharge (rate or voltage drop) or after POWER_REFUSED_CLEAR_MS. @p rate_valid: rate and mv are from a valid reading. */
+void power_guard_observe(power_guard_t *g, uint32_t now_ms, bool rate_valid, int32_t rate_mpct_per_h, uint16_t mv);
+/** May the player try to act (sleep or switch off) now? false while refused or backing off. */
+bool power_guard_allows(power_guard_t *g, uint32_t now_ms);
+
 #ifdef __cplusplus
 }
 #endif

@@ -52,7 +52,10 @@ hal_status_t power_service_sleep_block(hal_wake_reason_t *why);
 /** Step 4 (non-UI part). */
 void power_service_wake(uint32_t now_ms);
 
-/** The normal power-off path: write the settings out (bounded wait), then hal_system_poweroff(). False if the platform cannot switch off. Returns at once. */
+/** Report how hal_power_sleep() ended (HAL_OK, or a failure): two failures in a row stop further attempts for an hour. */
+void power_service_sleep_result(hal_status_t st, uint32_t now_ms);
+
+/** The normal power-off path: write the settings out (bounded wait), then hal_system_poweroff(). False if the platform cannot switch off, or it refused (then the player assumes external power until the gauge shows a discharge, or 6 h). Returns at once. */
 bool power_service_poweroff(void);
 
 #endif // NEUPOD_POWER_MGMT

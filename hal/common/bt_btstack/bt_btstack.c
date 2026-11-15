@@ -2144,6 +2144,7 @@ hal_status_t hal_bt_power(bool on) {
         if (g_state != HAL_BT_OFF && g_state != HAL_BT_FAILED) {
             return HAL_OK; /* already up, or on its way */
         }
+        g_powering_down = false; /* a power-down that never finished must not turn this start's OFF into a wanted one */
         return bt_port_run_sync(worker_power_up, NULL) ? HAL_OK : HAL_ERR;
     }
     if (g_state == HAL_BT_OFF) {
@@ -2158,7 +2159,11 @@ hal_status_t hal_bt_power(bool on) {
     if (!bt_port_run_sync(worker_power_down, NULL)) {
         return HAL_ERR;
     }
-    return wait_for(is_off, 3000u) ? HAL_OK : HAL_ETIMEOUT;
+    if (wait_for(is_off, 3000u)) {
+        return HAL_OK;
+    }
+    g_powering_down = false;
+    return HAL_ETIMEOUT;
 }
 #else
 hal_status_t hal_bt_power(bool on) {

@@ -85,6 +85,7 @@ typedef struct {
     int64_t mono0_ms;    /**< CLOCK_MONOTONIC at the request */
     int64_t boot0_ms;    /**< CLOCK_BOOTTIME at the request */
     bool ext0;           /**< external power at the request */
+    int64_t deadline_rtc_ms; /**< the alarm's time on the alarm driver's clock (the real-time clock), -1 if it could not be read */
 } y2_susp_t;
 
 typedef enum {
@@ -100,10 +101,16 @@ typedef struct {
     uint32_t slept_ms; /**< time asleep so far (the clock difference), for the log */
 } y2_susp_verdict_t;
 
-void y2_susp_begin(y2_susp_t *s, uint32_t max_ms, int64_t mono_ms, int64_t boot_ms, bool ext_online);
+/** @p rtc_ms: the alarm driver's clock now in ms (ANDROID_ALARM_GET_TIME), or -1 if unreadable. */
+void y2_susp_begin(y2_susp_t *s, uint32_t max_ms, int64_t mono_ms, int64_t boot_ms, int64_t rtc_ms, bool ext_online);
 
-/** One look: the clocks now, whether a watched input node has data, whether external power is online. Pure. */
-y2_susp_verdict_t y2_susp_step(const y2_susp_t *s, int64_t mono_ms, int64_t boot_ms, bool input_ready, bool ext_online);
+/**
+ * One look: the clocks now (@p rtc_ms as for y2_susp_begin()), whether a watched node holds a key PRESS (@p input_ready), whether the wheel node (mtk-tpd) produced
+ * anything at all (@p wheel_activity: counted as a key only once the system has been seen to sleep, because the panel may twitch while it powers down), whether
+ * external power is online. The timer is decided by CLOCK_BOOTTIME against the limit, or, if that clock did not run on across the sleep, by the real-time clock
+ * reaching the alarm's time. Pure.
+ */
+y2_susp_verdict_t y2_susp_step(const y2_susp_t *s, int64_t mono_ms, int64_t boot_ms, int64_t rtc_ms, bool input_ready, bool wheel_activity, bool ext_online);
 
 #ifdef __cplusplus
 }

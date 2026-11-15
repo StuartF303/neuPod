@@ -15,6 +15,7 @@
 #include "os.h"
 #include "player.h"
 #include "settings_service.h"
+#include "settings_store.h"
 #include "storage_service.h"
 #include "wifi_service.h"
 
@@ -26,8 +27,11 @@ static bool g_pol_started;
 static uint32_t g_last_poll_ms;
 static power_action_t g_last_action;
 static uint8_t g_bt_flags; /* what bt_service_sleep() powered off: handed back at the wake */
+static power_guard_t g_guard; /* the refused-power-off latch and the failed-sleep back-off */
 
-bool power_service_can_act(void) { return hal_power_can_sleep() || hal_system_can_poweroff(); }
+bool power_service_can_act(void) {
+    return (hal_power_can_sleep() || hal_system_can_poweroff()) && power_guard_allows(&g_guard, os_tick_ms());
+}
 
 static bool playing_now(void) {
     player_info_t pi;
@@ -71,14 +75,19 @@ power_action_t power_service_poll(uint32_t now_ms, uint32_t last_activity_ms, ui
     g_last_poll_ms = now_ms;
     hal_battery_status_t b = {0};
     const bool have = battery_store_get(&b);
+    const bool gauge = have && b.valid && b.present;
+    power_guard_observe(&g_guard, now_ms, gauge, b.rate_mpct_per_h, b.mv);
+    /* A charger the sensor cannot see shows as a refused power-off (the board stays up on USB), or as the gauge reading a charge. The Y2's rate is
+     * synthetic (+/- 10 %/h from the supply status), the MAX17048's is its CRATE register: both are compared with the UI's own "charging" threshold. */
+    const bool charging = gauge && b.rate_mpct_per_h > POWER_CHARGE_RATE_MPCT_PER_H;
     power_inputs_t in = {
         .now_ms = now_ms,
         .last_activity_ms = last_activity_ms,
         .sleep_after_s = sleep_after_s,
         .audio_playing = playing_now(),
         .busy = busy_now(),
-        .external_power = hal_power_external(),
-        .battery_valid = have && b.valid && b.present,
+        .external_power = hal_power_external() || g_guard.refused || charging,
+        .battery_valid = gauge,
         .battery_pct = b.soc_pct,
         .battery_mv = b.mv,
     };
@@ -98,14 +107,20 @@ void power_service_restart(uint32_t now_ms) {
 }
 
 // Wait until the settings are on the card and the storage task is idle. False if the card stayed busy (a write in flight must not be cut by a suspend).
+// With no card (RAM-only settings) there is nothing to write and nothing to wait for.
 static bool flush_storage(void) {
+    settings_status_t st;
+    settings_get_status(&st);
+    if (!st.persistent) {
+        return storage_service_idle();
+    }
     settings_service_request_flush();
     const uint32_t t0 = os_tick_ms();
     while ((settings_service_flush_pending() || !storage_service_idle()) && os_tick_ms() - t0 < FLUSH_WAIT_MS) {
         os_delay_ms(20);
     }
     if (settings_service_flush_pending()) {
-        printf("power: settings still waiting for the card after %u ms\n", (unsigned)FLUSH_WAIT_MS); /* no card or a failing one: nothing more to be done */
+        printf("power: settings still waiting for the card after %u ms\n", (unsigned)FLUSH_WAIT_MS);
     }
     return storage_service_idle();
 }
@@ -122,7 +137,7 @@ bool power_service_sleep_prepare(void) {
         return false;
     }
     (void)hal_storage_sync();
-    if (playing_now()) { /* a headset key during the preparation */
+    if (!storage_service_idle() || playing_now()) { /* something queued meanwhile, or a headset key during the preparation */
         bt_service_wake(g_bt_flags);
         g_bt_flags = 0;
         return false;
@@ -149,7 +164,24 @@ bool power_service_poweroff(void) {
         return false;
     }
     (void)flush_storage(); /* the orderly stop of some platforms does not force out a change younger than a few seconds */
-    return hal_system_poweroff();
+    if (hal_system_poweroff()) {
+        return true;
+    }
+    // The platform says it can switch off and did not (a board that stays up on USB power): treat it as on external power until the gauge shows
+    // otherwise, so nothing tries again every idle period (a GPIO pulse, a blocked UI).
+    hal_battery_status_t b = {0};
+    (void)battery_store_get(&b);
+    power_guard_poweroff_refused(&g_guard, os_tick_ms(), b.mv);
+    printf("power: power-off refused, assuming external power\n");
+    return false;
+}
+
+void power_service_sleep_result(hal_status_t st, uint32_t now_ms) {
+    if (st == HAL_OK) {
+        power_guard_sleep_ok(&g_guard);
+    } else if (power_guard_sleep_failed(&g_guard, now_ms)) {
+        printf("power: sleep failed twice, not trying again for 1 h\n");
+    }
 }
 
 #endif // NEUPOD_POWER_MGMT

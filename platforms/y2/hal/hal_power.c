@@ -38,7 +38,12 @@
 static bool g_inited;
 static bool g_can_sleep;
 
-static void unlock_at_exit(void) { (void)y2_susp_write(Y2_POWER_DIR, "wake_unlock", Y2_WAKELOCK_NAME); }
+// At exit: "on" first, then the lock goes. A firmware stopped (or killed by a signal that runs this) while a suspend request stands would otherwise leave
+// /sys/power/state at "mem" and the next start would find the panel early-suspended; the init also writes "on" at start for the case this never ran.
+static void unlock_at_exit(void) {
+    (void)y2_susp_write(Y2_POWER_DIR, "state", "on");
+    (void)y2_susp_write(Y2_POWER_DIR, "wake_unlock", Y2_WAKELOCK_NAME);
+}
 
 static bool read_text(const char *path, char *out, size_t cap) {
     int fd = open(path, O_RDONLY | O_CLOEXEC);
@@ -78,6 +83,7 @@ hal_status_t hal_power_init(void) {
     // Awake means holding this lock: nothing else may suspend the system under the player. It is dropped only to sleep (and at exit, so a stopped
     // firmware does not leave the lock behind). Without /sys/power/wake_lock (a kernel with plain suspend) there is nothing to hold.
     if (y2_susp_write(Y2_POWER_DIR, "wake_lock", Y2_WAKELOCK_NAME)) {
+        (void)y2_susp_write(Y2_POWER_DIR, "state", "on"); /* idempotent: undoes a "mem" a killed predecessor left standing (the panel early-suspended) */
         atexit(unlock_at_exit); /* registered after main()'s own, so it runs before main()'s poweroff hook (last in, first out) */
     }
     printf("power: sleep available (suspend to RAM, wake lock \"%s\", alarm for the 24 h limit)\n", Y2_WAKELOCK_NAME);
@@ -105,14 +111,18 @@ static int64_t clock_ms(clockid_t id) {
 }
 
 // Open our own descriptors on the input nodes: they only see what happens from now on, and the input task's own (opened at start-up) are not disturbed.
-static int open_nodes(int fds[MAX_NODES]) {
+static int open_nodes(int fds[MAX_NODES], int *wheel) {
     static const char *const k_names[MAX_NODES] = {"mtk-kpd", "mtk-tpd", "mtk-tpd-kpd"};
     int n = 0;
+    *wheel = -1;
     for (int i = 0; i < MAX_NODES; i++) {
         char path[64];
         if (y2_input_find_node(Y2_INPUT_CLASS, Y2_DEV_INPUT, k_names[i], path, sizeof path)) {
             int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
             if (fd >= 0) {
+                if (strcmp(k_names[i], "mtk-tpd") == 0) {
+                    *wheel = n;
+                }
                 fds[n++] = fd;
             }
         }
@@ -120,9 +130,8 @@ static int open_nodes(int fds[MAX_NODES]) {
     return n;
 }
 
-// Read what the nodes hold; true if any of it is a key or button press.
-static bool drain_presses(const int *fds, int n, const struct pollfd *p) {
-    bool press = false;
+// Read what the nodes hold; *press is set if any of it is a key or button press, *wheel_any if the wheel node (index @p wheel) produced anything at all.
+static void drain_nodes(const int *fds, int n, const struct pollfd *p, int wheel, bool *press, bool *wheel_any) {
     for (int i = 0; i < n; i++) {
         if ((p[i].revents & POLLIN) == 0) {
             continue;
@@ -131,12 +140,28 @@ static bool drain_presses(const int *fds, int n, const struct pollfd *p) {
         ssize_t r;
         do {
             r = read(fds[i], buf, sizeof buf);
-            if (r > 0 && y2_susp_has_press(buf, (size_t)r)) {
-                press = true;
+            if (r > 0) {
+                if (y2_susp_has_press(buf, (size_t)r)) {
+                    *press = true;
+                }
+                if (i == wheel) {
+                    *wheel_any = true;
+                }
             }
         } while (r > 0);
     }
-    return press;
+}
+
+static int64_t rtc_ms(int afd) {
+    y2_alarm_ts_t t;
+    if (ioctl(afd, Y2_ALARM_GET_TIME(Y2_ALARM_RTC_WAKEUP), &t) != 0) {
+        struct timespec rt;
+        if (clock_gettime(CLOCK_REALTIME, &rt) != 0) {
+            return -1;
+        }
+        return (int64_t)rt.tv_sec * 1000 + rt.tv_nsec / 1000000;
+    }
+    return (int64_t)t.sec * 1000 + t.nsec / 1000000;
 }
 
 static void *sleep_thread(void *arg) {
@@ -144,7 +169,8 @@ static void *sleep_thread(void *arg) {
     j->status = HAL_ERR;
     j->why = HAL_WAKE_NONE;
     int fds[MAX_NODES];
-    const int n = open_nodes(fds);
+    int wheel;
+    const int n = open_nodes(fds, &wheel);
     const int afd = open(Y2_ALARM_DEV, O_RDWR | O_CLOEXEC);
     bool requested = false;
     if (afd >= 0) {
@@ -157,7 +183,7 @@ static void *sleep_thread(void *arg) {
         const y2_alarm_ts_t at = y2_alarm_after(now, j->max_ms);
         if (ioctl(afd, Y2_ALARM_SET(Y2_ALARM_RTC_WAKEUP), &at) == 0) {
             y2_susp_t s;
-            y2_susp_begin(&s, j->max_ms, clock_ms(CLOCK_MONOTONIC), clock_ms(CLOCK_BOOTTIME), hal_power_external());
+            y2_susp_begin(&s, j->max_ms, clock_ms(CLOCK_MONOTONIC), clock_ms(CLOCK_BOOTTIME), rtc_ms(afd), hal_power_external());
             (void)y2_susp_write(Y2_POWER_DIR, "wake_unlock", Y2_WAKELOCK_NAME); /* nothing of ours holds the system awake any more ... */
             requested = y2_susp_write(Y2_POWER_DIR, "state", "mem");            /* ... and the suspend is asked for last. On a kernel where this write
                                                                                    suspends, it returns after the wake and the loop below ends at once. */
@@ -170,8 +196,9 @@ static void *sleep_thread(void *arg) {
             }
             while (requested) {
                 (void)poll(p, (nfds_t)n, POLL_MS); /* interrupted or not: the clocks decide */
-                const bool press = drain_presses(fds, n, p);
-                const y2_susp_verdict_t v = y2_susp_step(&s, clock_ms(CLOCK_MONOTONIC), clock_ms(CLOCK_BOOTTIME), press, hal_power_external());
+                bool press = false, wheel_any = false;
+                drain_nodes(fds, n, p, wheel, &press, &wheel_any);
+                const y2_susp_verdict_t v = y2_susp_step(&s, clock_ms(CLOCK_MONOTONIC), clock_ms(CLOCK_BOOTTIME), rtc_ms(afd), press, wheel_any, hal_power_external());
                 if (v.state == Y2_SUSP_WAIT) {
                     continue;
                 }
@@ -217,6 +244,11 @@ hal_status_t hal_power_sleep(uint32_t max_ms, hal_wake_reason_t *why) {
     }
     if (g_job.done == 0 && g_job.max_ms != 0u) {
         return HAL_EBUSY; /* one sleep at a time (the previous helper has not finished) */
+    }
+    // Bench aid only (documented in docs/bench.md): NEUPOD_SLEEP_MAX_S shortens the 24 h limit so the timer wake can be tried in minutes.
+    const char *cap = getenv("NEUPOD_SLEEP_MAX_S");
+    if (cap != NULL && atoi(cap) > 0 && (uint32_t)atoi(cap) < max_ms / 1000u) {
+        max_ms = (uint32_t)atoi(cap) * 1000u;
     }
     g_job = (job_t){.max_ms = max_ms != 0u ? max_ms : 1u, .done = 0, .status = HAL_ERR, .why = HAL_WAKE_NONE};
 
