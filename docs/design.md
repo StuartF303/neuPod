@@ -223,6 +223,9 @@ primary source for every reused-part interface on this page.
 
 - [ ] 3D-scan the mid-frame, original logic board, thin back and (when bought) thick back on the Revopoint Metro X (matte spray on chrome/steel/gloss connectors); flatbed-scan the bare board at ≥600 dpi for the 2D outline and hole centres; keep STL + DXF with the design files
 
+- [ ] **Slot antenna in the steel back (CAD):** model the slot, feed board, keep-out and back grounding contacts on the scanned back; cut a test back and tune it with a NanoVNA (see [Requirements → Slot antenna](requirements.md#slot-antenna))
+- [ ] **Test a PCB-trace antenna at the wheel's rim gap:** a test PCB in the board outline with 2–3 trace variants, then NanoVNA and RSSI against the slot. Check for wheel false touches during TX (same section)
+
 - [ ] **Decide click feedback before board commit:** piezo (authentic, stock approach), LRA/ERM via DRV2605L (Moonlit-style haptic), or both selectable — see Requirements → Reused parts
 
 ### Questions raised at export (1 Nov 2026)

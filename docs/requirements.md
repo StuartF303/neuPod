@@ -51,7 +51,7 @@ Required: 2.4 GHz Wi-Fi, Bluetooth audio (A2DP to AirPods/headphones/speakers), 
 
 - **Radio for RP2350 route:** Infineon CYW43439 over SPI (Pico W / Pico 2 W reference design is open, ~£2–3 + antenna) or an ESP32-C6 as radio co-processor over SPI (~£1.50, Wi-Fi 6 + BLE 5 only, easier to source). The C6 has **no classic Bluetooth, so no A2DP**; it only suits Wi-Fi.
 - **Classic Bluetooth A2DP** is needed for most headphones; confirm the chosen radio supports BR/EDR, not just BLE.
-- **Antenna (requirement, 3 Nov 2026):** the shell is a Faraday cage; the only RF-transparent area is the **top plastic window of the 6G back**. The antenna sits there with its keep-out, and the radio module chosen must have a u.FL connector or an on-module antenna that can be placed there. Applies to Bluetooth first.
+- **Antenna (requirement, 3 Nov 2026; revised 15 Nov 2026):** the shell is a Faraday cage (anodised aluminium front, stainless steel back). The display glass is the only real opening, and an antenna behind the panel is shielded by the module's metal backplate, so the antenna is a **slot cut in the steel back** (see [Slot antenna](#slot-antenna) below). The radio module must have a u.FL connector (or a pad for a coax pigtail) so it can feed the slot. The earlier note of a "top plastic window of the 6G back" is superseded: the 6G back is all metal.
 - **Final-board radio:** not a bare CYW43439 (not assemblable at JLCPCB, outside the BTstack grant). Options: RM2 module, or an ESP32 with its own stack — see [ADR-0007](adr/0007-bluetooth-audio-path.md).
 - **USB-C:** 5.1 kΩ CC pulldowns for 5 V from C-to-C cables; USB 2.0 data; no PD needed at 1–2 A. The 30-pin aperture (~21 × 3 mm) takes a mid-mount USB-C receptacle with a small printed/CNC filler.
 - **GPIO:** 2× spare via the wired-remote connector (as Sprout) is a nice-to-have.
@@ -164,10 +164,31 @@ Reuse the shell, mid-frame, click wheel and its FPC, headphone/hold-switch flex,
 - **Connectors to provide:** click wheel FPC, LCD FPC (stock pinout or new panel), headphone/hold flex, battery (3-pin, thermistor), microSD socket, USB-C mid-mount.
 - **Click wheel:** keep; serial protocol documented in Rockbox; new wheels available from Elite Obsolete.
 - **Port aperture:** 30-pin opening ~21 × 3 mm; USB-C with printed/CNC filler. Keep the port centred.
-- **Antenna keep-out:** near the headphone jack's plastic insert or under the wheel.
+- **Antenna:** slot in the steel back near the top edge; keep-out behind it. See [Slot antenna](#slot-antenna).
 - **Thermal/EMI:** metal shell; no thermal issue at RP2350 power levels.
 - **Reversibility:** no adhesive on original parts; foam spacers where the HDD was.
 - Cosmetic parts if needed: Elite Obsolete (shells, wheels, faceplates), Moonlit Market, iFlash (shells, screws, tools).
+
+### Slot antenna
+
+Working design for the 2.4 GHz antenna (Wi-Fi and Bluetooth share it). Recorded 15 Nov 2026; nothing here has been cut or measured yet.
+
+- **Where:** a closed slot in the stainless back, parallel to and about 4–6 mm in from the **top edge** (the hold switch and headphone jack end). That end is clear of the hand that holds the bottom and of the wheel. Centre it across the 61.8 mm width.
+- **Size:** about 1.5 mm wide. Length is λ/2 at 2.44 GHz: 61 mm in air, shortened by the filler. With an epoxy or polycarbonate fill (εr ≈ 3, εeff ≈ 2) expect **~43–50 mm**. Cut it short first and lengthen it while tuning. The slot needs unbroken metal around it, at least ~5 mm on every side, with no seams or screw holes in that margin.
+- **Fallback if a closed slot won't fit or tune:** an open-ended λ/4 slot, ~25–30 mm long, running in from the edge. It cuts the rim, so it's structurally and cosmetically worse.
+- **Feed:** a small FR4 or FPC feed board bonded inside the back over the slot. A 50 Ω microstrip crosses the slot about 10–20 % of its length from one end (the slot centre is roughly 500 Ω, the ends are a short), finishing in an open λg/4 stub past the slot. A U.FL connector on the board carries a pigtail to the radio. This avoids soldering to stainless, and moving the crossing point is the main matching adjustment. The feed board's ground must bond to the back on both sides of the slot (conductive adhesive tape or spring fingers).
+- **Back grounding:** the back must be tied to system ground at several points (spring contacts to the board or mid-frame). If it floats, the slot's resonance moves around.
+- **Keep-out:** keep at least 3 mm of air or foam behind the slot and feed board, with no battery pouch, PCB copper or flex over it. The battery is a metal laminate and detunes the slot badly. On the thin back (~6 mm usable depth) this sets where the cell can sit. That's one more reason for the thick back.
+- **Fill and finish:** fill flush with black epoxy or a press-fit polycarbonate strip, and **tune with the fill in place** because the filler shifts the resonance. Cut it by wire EDM (cleanest on the curved shell) or fibre laser. Deburr, and don't leave a burr bridging the gap.
+- **Pass criteria:** S11 below −10 dB across 2.400–2.4835 GHz on a NanoVNA, measured with the back assembled, the battery fitted, and a hand on the bottom half. Then compare received RSSI against a bare dev board using the ESP32 probe's Wi-Fi scan, which prints per-network RSSI.
+- **Qi option:** a plastic or glass back for Qi charging makes the slot unnecessary. The antenna then sits under the plastic, with the same keep-out from the coil and cell.
+- **Option to test: PCB-trace antenna under or around the wheel.** The click wheel and its centre button are plastic, and the gap between the wheel's rim and the aluminium front plate is a natural annular slot. Test a printed antenna on our board in that region: a meandered inverted-F (TI DN007 / AN043 style) or a trace that follows part of the wheel's outline. It costs nothing in BOM and needs no machining of the shell. Unknowns to settle on the bench:
+  - The wheel flex has its own copper (16 sense segments plus ground) and sits directly over the board. A trace *under* the wheel is probably shadowed and detuned, so the rim gap is the likelier spot.
+  - Whether the steel backing plate and the metal mid-frame leave any clear path from the board's edge to the rim gap.
+  - Coupling into the wheel's capacitive sensing: check that radio TX bursts don't cause false touches or position jitter. Also check the reverse, that the wheel's ~53 kHz scan doesn't desense the receiver.
+  - Detuning by the thumb, which rests right on top of it.
+  - Test method: a sacrificial test PCB in the board outline with two or three trace variants (and a u.FL on each for comparison), measured with a NanoVNA inside the closed shell, then an RSSI comparison against the slot using the ESP32 probe's scan.
+  If it passes, it may replace the slot. If not, the slot stays the plan.
 
 **Click wheel sub-board (how it works):** a capacitive ring of ~16 copper segments under the plastic plus five dome switches, scanned by a microcontroller on the flex itself (Cypress PSoC on the 5G; same family on the 6G). The PSoC interpolates finger position to 96 steps per revolution and streams 32-bit frames on its own ~53 kHz clock while touched; the host only listens (one init packet). It has its own 3.0 V LDO fed from the system rail. All the touch logic therefore stays in the wheel — our board needs 4 lines + power and a frame decoder (design doc §4.1).
 
