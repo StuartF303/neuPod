@@ -48,6 +48,7 @@ set(NEUPOD_RT_CORE_SOURCES               # pure logic, no OS: host-testable on t
   ${NEUPOD_APP_DIR}/input/touch_gesture.c
   ${NEUPOD_APP_DIR}/ui/ui_logic.c
   ${NEUPOD_APP_DIR}/ui/ui_hold.c
+  ${NEUPOD_APP_DIR}/power/power_policy.c
   ${NEUPOD_APP_DIR}/ui/ui_licence_data.c
   ${NEUPOD_APP_DIR}/ui/input/wheel_input.c
   ${NEUPOD_APP_DIR}/net/sys_clock.c
@@ -106,6 +107,7 @@ set(NEUPOD_RUNTIME_SOURCES
   ${NEUPOD_APP_DIR}/runtime/bt_reconnect.c
   ${NEUPOD_APP_DIR}/runtime/bt_saved.c
   ${NEUPOD_APP_DIR}/runtime/wifi_service.c
+  ${NEUPOD_APP_DIR}/runtime/power_service.c
   ${NEUPOD_APP_DIR}/storage/nfs_path.c   # portable half of the nfs API (the backend is in the HAL libs)
   ${NEUPOD_APP_DIR}/audio/audio_ctl.c
   ${NEUPOD_APP_DIR}/audio/track_feed.c

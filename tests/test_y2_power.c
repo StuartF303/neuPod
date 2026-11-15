@@ -122,7 +122,21 @@ TEST(status_text_and_voltage_units) {
     ASSERT_EQ(4222, y2_power_to_mv(4221600));
 }
 
+TEST(external_power_is_the_usb_or_ac_supply_online) {
+    tree(); // usb online, ac not
+    ASSERT_TRUE(y2_power_external_online(g_ps));
+    fs_write("ps/usb/online", "0\n");
+    ASSERT_FALSE(y2_power_external_online(g_ps));
+    fs_write("ps/ac/online", "1\n"); // a wall charger
+    ASSERT_TRUE(y2_power_external_online(g_ps));
+    fs_write("ps/ac/online", "garbage\n"); // unreadable: not online
+    ASSERT_FALSE(y2_power_external_online(g_ps));
+    ASSERT_FALSE(y2_power_external_online("/nonexistent/ps"));
+    fs_destroy();
+}
+
 int main(void) {
+    RUN(external_power_is_the_usb_or_ac_supply_online);
     RUN(parses_the_mediatek_node);
     RUN(charging_and_discharging_set_a_synthetic_rate_the_ui_understands);
     RUN(standard_microvolt_voltage_now_is_accepted);

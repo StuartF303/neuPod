@@ -43,6 +43,29 @@ queued (64 events); if the UI ever could not keep up the 10 s statistics print `
 7. Bluetooth scan with the AirPods in pairing mode (expect `audio=yes`).
 8. Battery / charging detection (VBUS + CRATE heuristic, [Requirements → Power](requirements.md#power-and-battery)).
 
+## Sleep (Y2)
+
+Steps for the Y2 after flashing a build with [ADR-0021](adr/0021-power-sleep.md). Unplug USB first (a plugged-in Y2 reports external power and never sleeps); watch the log over
+the console or `/opt/neupod-logs`. Expect `power: sleep available (suspend to RAM, ...)` at start; if it says the kernel offers no suspend or there is no alarm device, the
+player will power off when idle instead (that is the fallback working).
+
+1. Settings > Display > **Sleep after** is 30 min by default; set 10 min for the test. Pause music (or leave it stopped) and do nothing. At 10 min: `bt: controller off for sleep`,
+   `ui: backlight off 0%`, `ui: hold on`, `power: going to sleep`; the USB link drops. Press **Power**: the screen comes back dark-locked then lights (`ui: backlight wake`), the log
+   (on the card or after reconnecting) shows `power: woke after N ms asleep (key)`; the press does nothing else. Check the picture and the backlight are right, the time slept (N) is about the
+   10 minutes, and that it did not go back to sleep by itself (`power: woke` once, no second `going to sleep` until another 10 min).
+2. With a headset paired and connected before the sleep: after the wake `bt: controller on after sleep`, `bt: reconnecting`, and "<name> connected" within a minute.
+3. Wake with the **wheel** and with a **ring button**: same result (the key is not delivered).
+4. Music playing for longer than the Sleep after time: it must not sleep; 10 min after it ends (or is paused) it does.
+5. Charger in while asleep (bonus): the wake reason is `external power` if the hardware wakes on it. Charger in while awake: it never sleeps.
+6. Kill switch: `NEUPOD_SUSPEND=0` in `/etc/neupod-fw.env`, restart the firmware: the start-up line says sleep is switched off and, after the idle time, `power: idle for the sleep time, powering off`.
+7. Measure the current in suspend if you can (the point of the feature), and note how long the sleep and the wake take.
+8. 24 h limit (optional, long): leave it asleep for a day. It should be off by then (not suspended), and the next power-up should come back at the saved position.
+9. After a wake, play a file and browse a folder: no SD I/O errors in the log (the card must be re-detected across the suspend), and the player carries on.
+10. Kill the firmware while it is asleep or just requesting sleep (`kill` by PID only), let the wrapper restart it: the new start writes `on` and the screen must be lit (the panel not left early-suspended).
+11. Timer wake: set `NEUPOD_SLEEP_MAX_S=120` in `/etc/neupod-fw.env`, restart, let it sleep: after 2 minutes it must wake with `(timer)` and power off. Check **both clocks** in the log: the line `woke after N ms asleep` (CLOCK_BOOTTIME against CLOCK_MONOTONIC) and that the timer verdict also holds if N is 0 (the real-time clock fallback); note which of the two decided.
+12. Inspect what a wheel touch produces as the wake (the log line says key; check the key is not delivered and nothing opens), and what Power does.
+13. Charger plug-in while asleep: does the hardware wake on it (`external power` reason)? If not, the unit sleeps on until a key; that is acceptable.
+
 ## Hold (Y2)
 
 Steps for the Y2 after flashing a build with [ADR-0020](adr/0020-hold.md) (watch `/opt/neupod-logs` or the console for the `ui: hold`, `ui: backlight` and

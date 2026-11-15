@@ -10,6 +10,7 @@ add_library(hal_host STATIC
   hal_audio.c
   hal_core.c
   hal_radio.c
+  hal_power.c               # simulated sleep and external power (ADR-0021)
   nfs_posix.c
   lib_ff_posix.c            # FatFs-style file calls over POSIX, for the music library in the simulator (app/include/lib_ff_posix.h)
   ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c

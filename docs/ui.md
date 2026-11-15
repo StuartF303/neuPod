@@ -353,7 +353,7 @@ Left/Right, Space/`p` Play/Pause. The wheel, when it works, sends the same event
 `ui_frame_push` returns false when the stack is full; Go to album / artist then toast "Can't open: too many screens".
 
 **Settings (ST-1, ST-2).** The right pane is a left-aligned summary: group name (Body), up to four key / value lines (Small, key ink2, value ink right-aligned) and one help line (Small, ink3). Gapless, Shuffle, Repeat, Resume and Click change in place on Select
-with a haptic tick and a 60 ms flip of the value in the pane. Settings > Display is Theme, Brightness (the slider), Dim after (10 s to 5 min, then Off: that is Auto-dim), Off after, Auto-lock.
+with a haptic tick and a 60 ms flip of the value in the pane. Settings > Display is Theme, Brightness (the slider), Dim after (10 s to 5 min, then Off: that is Auto-dim), Off after, **Sleep after** (Never, 10, 30 (default), 60 min: the player suspends, [ADR-0021](adr/0021-power-sleep.md); not on the Pico 2 W), Auto-lock.
 
 **Home (3.1).** Playing: art, title and artist (tickers), a 3 px progress bar, elapsed (pause glyph in front when paused) and remaining. Idle: the clock at 48 px and the date once the clock is set (otherwise "Nothing playing"), then "1,204 songs . 72 %"
 (one Info request for the song count when the panel goes idle; "No library yet" and "Open Music to build it" when there is no index). "Now Playing" is greyed while nothing is queued (Select says "Nothing playing"); Shuffle Songs has no chevron.
@@ -400,10 +400,11 @@ shows the lock pill ("Locked · hold Power 2 s to unlock"). Headset buttons (AVR
 | Power-off | still held: at 5 s the line turns red and grows again while the pill counts "Release to cancel · shutting down in 5 ... 1" (letting go cancels), at 10 s the power-off is requested (Y2; the Pico rig cannot, and shows no countdown) |
 | Tap | **Power tapped** (under 0.4 s) turns the screen off now; the next input wakes it (and is lost) |
 | Switch | the iPod 6G donor board's slide switch (`hal_input_hold_switch()`), same state; none on the Y2 or the Pico rig |
+| Sleep | after **Sleep after** idle (nothing playing, no charger) the screen goes off and locks as above and the system sleeps; the next input wakes it, lights the screen and is lost, Hold stays on ([ADR-0021](adr/0021-power-sleep.md)). A day asleep, or an empty battery ("Battery empty" for 3 s), powers the player off |
 | Console / simulator | no Power key on the Pico rig: the console key `l` toggles Hold. Simulator: **F1** is Power (hold it) |
 
 The reminder ("Locked · hold Power 2 s to unlock"), the confirmations and the countdown are the lock pill and the Power-hold line of the design system (`ui_strips.c`; HL-1): nothing is dimmed, blended or covered except the pill itself. They are drawn at both UI profiles and covered by
-the layout audit (`hold_tour`, `hires_hold_tour`: ring, locked, swallowed keys, countdown, power-off, switch, screen off, wake, unlock, the Display rows).
+the layout audit (`hold_tour`, `hires_hold_tour`: ring, locked, swallowed keys, countdown, power-off, switch, screen off, wake, unlock, the Display rows). Sleep has its own host tours (`power_tour`, `power_off_tour`, `power_nosuspend_tour`, `power_charger_tour`, `power_battery_tour`, ADR-0021).
 
 ## Licences
 

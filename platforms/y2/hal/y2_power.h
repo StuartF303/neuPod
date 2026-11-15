@@ -44,6 +44,11 @@ uint32_t y2_power_to_mv(long raw);
  */
 bool y2_power_read(const char *ps_root, hal_battery_status_t *out, y2_power_status_t *status);
 
+/**
+ * Is external power attached: does <ps_root>/usb/online or <ps_root>/ac/online read non-zero? A missing or unreadable supply counts as not online.
+ */
+bool y2_power_external_online(const char *ps_root);
+
 #ifdef __cplusplus
 }
 #endif

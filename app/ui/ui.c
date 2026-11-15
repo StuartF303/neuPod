@@ -149,6 +149,9 @@ extern void hal_host_power_key(bool down) __attribute__((weak));
 extern void hal_host_hold_switch(hal_hold_switch_t sw) __attribute__((weak));
 extern void hal_host_touch_inject(int x, int y, bool down) __attribute__((weak));
 extern bool hal_host_touch_ready(void) __attribute__((weak));
+#if NEUPOD_POWER_MGMT
+extern void hal_host_external_power(bool on) __attribute__((weak));
+#endif
 static uint32_t g_script_sleep_until;
 static bool g_script_sleeping;
 static uint32_t g_script_wait_since; // when the current wait: / touch: token started waiting (0 = not waiting)
@@ -311,6 +314,27 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
         g_ui_state.dim_idx = 0;
         return end;
     }
+#if NEUPOD_POWER_MGMT
+    if (strncmp(p, "idlesleep:", 10) == 0) {
+        /* Tour only (docs/adr/0021-power-sleep.md): sleep after N seconds of idleness instead of the setting's 10 minutes or more; 0 = the setting again. */
+        ui_power_test_sleep_after((uint32_t)atoi(p + 10));
+        return end;
+    }
+    if (strncmp(p, "batt:", 5) == 0) {
+        /* Tour only: the battery gauge reads N percent (a valid reading, 3.0 V above 3 %, 3.2 V at or below it): the empty-battery rule, off the charger. */
+        const int pct = atoi(p + 5);
+        hal_battery_status_t b = {.valid = true, .present = true, .soc_pct = (uint8_t)pct, .soc_x256 = (uint16_t)(pct * 256), .mv = pct <= 3 ? 3200u : 3900u};
+        battery_store_publish(&b);
+        return end;
+    }
+    if (strncmp(p, "ext:", 4) == 0) {
+        /* Tour only (host simulator): a charger or USB goes in (ext:on) or out (ext:off). Weak, so builds without the simulator skip it. */
+        if (hal_host_external_power != NULL) {
+            hal_host_external_power(strncmp(p + 4, "on", 2) == 0);
+        }
+        return end;
+    }
+#endif
     if (strncmp(p, "strips:off", 10) == 0) {
         ui_toast_hide(); /* Tour only: take the strips down again */
         ui_hud_hide();

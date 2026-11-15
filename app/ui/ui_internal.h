@@ -5,6 +5,7 @@
 
 #include "battery_store.h"
 #include "capabilities.h"
+#include "hal_power.h" /* NEUPOD_POWER_MGMT */
 #include "haptic_logic.h"
 #include "input_events.h"
 #include "lvgl.h"
@@ -91,6 +92,9 @@ typedef struct {
     uint8_t dim_idx;       /* idle time, an index for ui_autodim_seconds() */
     uint8_t off_idx;       /* time after the dim until the backlight is fully off, an index for ui_screenoff_seconds() */
     bool autolock;         /* Hold turns on by itself when the screen goes off (docs/adr/0020-hold.md) */
+#if NEUPOD_POWER_MGMT
+    uint8_t sleep_idx;     /* Settings > Display > Sleep after: an index for power_sleep_seconds() (ADR-0021; sits in the padding before the theme) */
+#endif
     ui_theme_mode_t theme; /* Settings > Display > Theme: Light (default), Dark, Auto (dark once the backlight dims) */
 } ui_state_t;
 extern ui_state_t g_ui_state;
@@ -102,6 +106,10 @@ void ui_apply_theme(void);
 bool ui_frame_locked(void);
 /** Hold the auto-dim off while a screen previews the backlight (the slider); the idle time restarts when it is released. */
 void ui_idle_inhibit(bool on);
+#if NEUPOD_POWER_MGMT
+/** Tour only (idlesleep:): sleep once after @p seconds of idleness instead of the setting; 0 = the setting again. */
+void ui_power_test_sleep_after(uint32_t seconds);
+#endif
 /** Remember a changed UI setting (RAM now, the card a moment later: settings_store.h). */
 void ui_state_persist(void);
 

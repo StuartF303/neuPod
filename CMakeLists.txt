@@ -59,6 +59,10 @@ if(NEUPOD_PLATFORM STREQUAL "rp2350")
   add_compile_definitions(NEUPOD_RP2350=1)
   if(NEUPOD_BOARD STREQUAL "amoled241")
     add_compile_definitions(NEUPOD_BOARD_AMOLED241=1) # Waveshare RP2350-Touch-AMOLED-2.41: no radio, no wheel, touch + 600x450 panel
+  else()
+    # The Pico 2 W bench rig is frozen with about 100 B of static RAM spare and can neither sleep nor switch itself off: power management
+    # (the sleep setting, the idle policy, the sleep sequence) is compiled out (docs/adr/0021-power-sleep.md).
+    add_compile_definitions(NEUPOD_POWER_MGMT=0)
   endif()
 
   # FreeRTOS SMP (RP2350 port) must exist before app/, which links it. Also defines the SD-card

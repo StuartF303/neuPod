@@ -60,11 +60,54 @@ bool hal_system_poweroff(void) { return true; }
 bool hal_input_has_power_key(void) { return true; }
 static int g_backlight = -1;
 void rt_piezo_click(void) {}
-uint32_t settings_generation(void) { return 0; }
-bool settings_get_u8(uint32_t tag, uint8_t *out) { (void)tag; (void)out; return false; }
-void settings_set_u8(uint32_t tag, uint8_t v) { (void)tag; (void)v; }
+static uint32_t g_set_gen;
+static bool g_set_have; // is a "Sleep after" item stored, and what it holds
+static uint8_t g_set_val, g_set_saved;
+uint32_t settings_generation(void) { return g_set_gen; }
+bool settings_get_u8(uint32_t tag, uint8_t *out) {
+    if (tag == SETTING_SLEEP_IDX && g_set_have) {
+        *out = g_set_val;
+        return true;
+    }
+    return false;
+}
+void settings_set_u8(uint32_t tag, uint8_t v) {
+    if (tag == SETTING_SLEEP_IDX) {
+        g_set_saved = v;
+    }
+}
 void hal_display_backlight(uint8_t level) { g_backlight = level; }
 void ui_log_screen(const char *t, const char *w, const char *n) { (void)t; (void)w; (void)n; }
+
+
+// ---- fakes: power (docs/adr/0021-power-sleep.md). g_pw_log records the order of the sleep sequence: P prepare, S display sleep, B block, D display wake, W wake.
+static power_action_t g_pw_action;
+static bool g_pw_prepare_ok = true, g_pw_can_sleep = true, g_pw_poweroff_ok = true;
+static hal_status_t g_pw_status = HAL_OK;
+static hal_wake_reason_t g_pw_why = HAL_WAKE_KEY;
+static int g_pw_poweroff, g_pw_restart;
+static char g_pw_log[16];
+static void pw_log(char c) {
+    size_t n = strlen(g_pw_log);
+    if (n < sizeof g_pw_log - 1) {
+        g_pw_log[n] = c;
+    }
+}
+power_action_t power_service_poll(uint32_t now_ms, uint32_t last_ms, uint32_t sleep_after_s) { (void)now_ms; (void)last_ms; (void)sleep_after_s; return g_pw_action; }
+bool power_service_sleep_prepare(void) { pw_log('P'); return g_pw_prepare_ok; }
+hal_status_t power_service_sleep_block(hal_wake_reason_t *why) { pw_log('B'); *why = g_pw_why; return g_pw_status; }
+void power_service_wake(uint32_t now_ms) { (void)now_ms; pw_log('W'); }
+bool power_service_poweroff(void) { g_pw_poweroff++; return g_pw_poweroff_ok; }
+void power_service_restart(uint32_t now_ms) { (void)now_ms; g_pw_restart++; }
+static int g_pw_results, g_pw_queued;
+static bool g_pw_external;
+void power_service_sleep_result(hal_status_t st, uint32_t now_ms) { (void)st; (void)now_ms; g_pw_results++; }
+os_queue_t *rt_input_queue(void) { return NULL; }
+bool os_queue_pending(os_queue_t *q) { (void)q; return g_pw_queued != 0; }
+bool hal_power_external(void) { return g_pw_external; }
+bool power_service_can_act(void) { return true; }
+bool hal_power_can_sleep(void) { return g_pw_can_sleep; }
+void hal_display_sleep(bool sleep) { pw_log(sleep ? 'S' : 'D'); }
 
 // ---- a fake screen -------------------------------------------------------------------------------------------------------------
 static ui_screen_t g_scr;
@@ -318,6 +361,192 @@ TEST(a_press_the_screen_saw_still_gets_its_release_when_hold_comes_on_in_between
     ASSERT_EQ(1, g_up_calls);
 }
 
+
+// ---- Sleep and the empty battery (ADR-0021): the screen's part of the sequence ----
+static void power_reset(void) {
+    reset(true, false);
+    g_pi.state = PLAYER_PAUSED;
+    g_pw_action = POWER_ACT_NONE;
+    g_pw_prepare_ok = g_pw_can_sleep = g_pw_poweroff_ok = true;
+    g_pw_status = HAL_OK;
+    g_pw_why = HAL_WAKE_KEY;
+    g_pw_poweroff = g_pw_restart = g_pw_results = g_pw_queued = 0;
+    g_pw_external = false;
+    memset(g_pw_log, 0, sizeof g_pw_log);
+    g_wake_pending = g_crit_shown = g_crit_done = false;
+    g_backlight = 100;
+}
+
+TEST(sleep_runs_in_order_and_the_key_that_wakes_it_only_lights_the_screen) {
+    power_reset();
+    g_pw_action = POWER_ACT_SLEEP;
+    power_tick(1000);
+    ASSERT_TRUE(strcmp(g_pw_log, "PSBDW") == 0); // prepare, panel to sleep, block, panel awake, wake: the screen went off before the block
+    ASSERT_TRUE(g_idle.off);                      // and stays off after it: nothing pressed yet
+    ASSERT_EQ(0, g_backlight);
+    ASSERT_TRUE(ui_frame_locked());               // auto-lock, as when the screen goes off by itself
+    ASSERT_TRUE(g_wake_pending);
+    g_pw_action = POWER_ACT_NONE;
+    press(HAL_BTN_PLAY); // the input that woke the system arrives
+    ASSERT_FALSE(g_idle.off);
+    ASSERT_TRUE(g_backlight > 0);
+    ASSERT_FALSE(g_wake_pending);
+    ASSERT_EQ(0, g_pause + g_btn_calls); // not delivered
+    ASSERT_TRUE(ui_frame_locked());      // Hold as the screen-off left it: only a hold of Power unlocks
+    ASSERT_EQ(0, g_pw_poweroff);
+}
+
+TEST(a_key_wake_whose_input_never_arrives_lights_the_screen_anyway) {
+    power_reset();
+    g_pw_action = POWER_ACT_SLEEP;
+    power_tick(1000);
+    g_pw_action = POWER_ACT_NONE;
+    power_tick(1000 + WAKE_INPUT_WAIT_MS - 1);
+    ASSERT_TRUE(g_idle.off);
+    power_tick(1000 + WAKE_INPUT_WAIT_MS);
+    ASSERT_FALSE(g_idle.off);
+    ASSERT_TRUE(g_backlight > 0);
+}
+
+TEST(a_charger_wake_lights_the_screen_at_once_and_a_failed_sleep_does_too) {
+    power_reset();
+    g_pw_action = POWER_ACT_SLEEP;
+    g_pw_why = HAL_WAKE_EXTERNAL_POWER;
+    power_tick(1000);
+    ASSERT_FALSE(g_idle.off);
+    ASSERT_FALSE(g_wake_pending);
+    power_reset();
+    g_pw_action = POWER_ACT_SLEEP;
+    g_pw_status = HAL_EBUSY; // something held the system awake: it never slept
+    power_tick(1000);
+    ASSERT_FALSE(g_idle.off);
+    ASSERT_TRUE(g_backlight > 0);
+}
+
+TEST(waking_by_the_timer_takes_the_normal_power_off_path) {
+    power_reset();
+    g_pw_action = POWER_ACT_SLEEP;
+    g_pw_why = HAL_WAKE_TIMER;
+    power_tick(1000);
+    ASSERT_EQ(1, g_pw_poweroff);
+    ASSERT_FALSE(g_wake_pending);
+    power_reset();
+    g_pw_action = POWER_ACT_SLEEP;
+    g_pw_why = HAL_WAKE_TIMER;
+    g_pw_poweroff_ok = false; // a platform that cannot switch off carries on awake
+    power_tick(1000);
+    ASSERT_FALSE(g_idle.off);
+}
+
+TEST(a_refused_preparation_leaves_the_screen_alone_and_restarts_the_count) {
+    power_reset();
+    g_pw_action = POWER_ACT_SLEEP;
+    g_pw_prepare_ok = false; // playing again, or the card stayed busy
+    power_tick(1000);
+    ASSERT_TRUE(strcmp(g_pw_log, "P") == 0);
+    ASSERT_FALSE(g_idle.off);
+    ASSERT_EQ(100, g_backlight);
+    ASSERT_EQ(1, g_pw_restart);
+}
+
+TEST(no_suspend_on_this_platform_switches_off_after_the_idle_time_instead) {
+    power_reset();
+    g_pw_action = POWER_ACT_SLEEP;
+    g_pw_can_sleep = false;
+    power_tick(1000);
+    ASSERT_EQ(1, g_pw_poweroff);
+    ASSERT_FALSE(g_idle.off); // the screen is left as it was: the player is going away
+    power_reset();
+    g_pw_action = POWER_ACT_SLEEP;
+    g_pw_can_sleep = false;
+    g_pw_poweroff_ok = false; // cannot switch off either: nothing happens, and the count starts again
+    power_tick(1000);
+    ASSERT_EQ(1, g_pw_restart);
+}
+
+TEST(an_empty_battery_shows_the_notice_lights_the_screen_and_powers_off_once) {
+    power_reset();
+    g_idle.off = g_idle.forced_off = true;
+    g_backlight = 0;
+    g_pw_action = POWER_ACT_POWEROFF_CRITICAL;
+    power_tick(1000);
+    ASSERT_FALSE(g_idle.off); // the notice has to be seen
+    ASSERT_TRUE(g_backlight > 0);
+    ASSERT_TRUE(g_crit_shown);
+    ASSERT_EQ(0, g_pw_poweroff);
+    power_tick(1000 + CRIT_NOTICE_MS - 1);
+    ASSERT_EQ(0, g_pw_poweroff);
+    power_tick(1000 + CRIT_NOTICE_MS);
+    ASSERT_EQ(1, g_pw_poweroff);
+    power_tick(1000 + CRIT_NOTICE_MS + 500);
+    ASSERT_EQ(1, g_pw_poweroff); // asked once
+    g_pw_action = POWER_ACT_NONE; // a charger came: the rule resets and a later empty battery shows its notice again
+    power_tick(1000 + CRIT_NOTICE_MS + 1000);
+    ASSERT_FALSE(g_crit_shown);
+    ASSERT_FALSE(g_crit_done);
+}
+
+
+TEST(sleep_after_defaults_to_30_minutes_loads_from_the_card_and_is_saved) {
+    ASSERT_EQ(POWER_SLEEP_DEFAULT_IDX, g_ui_state.sleep_idx);
+    ASSERT_EQ(1800, power_sleep_seconds(g_ui_state.sleep_idx));
+    g_set_have = false; // a settings file from an older firmware has no such item: the default stays
+    g_set_gen = 1;
+    sync_from_settings();
+    ASSERT_EQ(POWER_SLEEP_DEFAULT_IDX, g_ui_state.sleep_idx);
+    g_set_have = true; // the card says 60 min
+    g_set_val = 3;
+    g_set_gen = 2;
+    sync_from_settings();
+    ASSERT_EQ(3, g_ui_state.sleep_idx);
+    ui_state_persist();
+    ASSERT_EQ(3, g_set_saved);
+    g_set_val = 9; // a value only a newer firmware knows: ignored, the current choice stays
+    g_set_gen = 3;
+    sync_from_settings();
+    ASSERT_EQ(3, g_ui_state.sleep_idx);
+    g_ui_state.sleep_idx = POWER_SLEEP_DEFAULT_IDX;
+    g_set_have = false;
+}
+
+TEST(a_failed_sleep_puts_the_screen_back_as_it_was) {
+    power_reset();
+    g_pw_action = POWER_ACT_SLEEP;
+    g_pw_status = HAL_EBUSY; // the screen was on: it is lit again and Hold is as it was (unlocked)
+    power_tick(1000);
+    ASSERT_EQ(1, g_pw_results);
+    ASSERT_FALSE(g_idle.off);
+    ASSERT_FALSE(ui_frame_locked());
+    power_reset();
+    g_idle.off = g_idle.forced_off = true; // the screen was already off and locked: a failed sleep must not light it
+    g_backlight = 0;
+    ui_hold_set(&g_hold, true);
+    g_pw_action = POWER_ACT_SLEEP;
+    g_pw_status = HAL_ERR;
+    power_tick(1000);
+    ASSERT_TRUE(g_idle.off);
+    ASSERT_EQ(0, g_backlight);
+    ASSERT_TRUE(ui_frame_locked());
+    ASSERT_FALSE(g_wake_pending);
+}
+
+TEST(input_or_a_charger_during_the_preparation_aborts_the_sleep_before_the_screen_goes) {
+    power_reset();
+    g_pw_action = POWER_ACT_SLEEP;
+    g_pw_queued = 1;
+    power_tick(1000);
+    ASSERT_TRUE(strcmp(g_pw_log, "PW") == 0); // prepared, then woken again at once: no display sleep, no block
+    ASSERT_FALSE(g_idle.off);
+    ASSERT_EQ(100, g_backlight);
+    ASSERT_EQ(1, g_pw_restart);
+    power_reset();
+    g_pw_action = POWER_ACT_SLEEP;
+    g_pw_external = true;
+    power_tick(1000);
+    ASSERT_TRUE(strcmp(g_pw_log, "PW") == 0);
+    ASSERT_FALSE(g_idle.off);
+}
+
 int main(void) {
     ui_stack_init(&g_stack);
     ui_idle_init(&g_idle, 1000);
@@ -342,5 +571,15 @@ int main(void) {
     RUN(the_hardware_switch_sets_the_state_both_ways);
     RUN(a_dimmed_screen_that_is_not_off_still_delivers_the_input);
     RUN(a_press_the_screen_saw_still_gets_its_release_when_hold_comes_on_in_between);
+    RUN(sleep_after_defaults_to_30_minutes_loads_from_the_card_and_is_saved);
+    RUN(sleep_runs_in_order_and_the_key_that_wakes_it_only_lights_the_screen);
+    RUN(a_failed_sleep_puts_the_screen_back_as_it_was);
+    RUN(input_or_a_charger_during_the_preparation_aborts_the_sleep_before_the_screen_goes);
+    RUN(a_key_wake_whose_input_never_arrives_lights_the_screen_anyway);
+    RUN(a_charger_wake_lights_the_screen_at_once_and_a_failed_sleep_does_too);
+    RUN(waking_by_the_timer_takes_the_normal_power_off_path);
+    RUN(a_refused_preparation_leaves_the_screen_alone_and_restarts_the_count);
+    RUN(no_suspend_on_this_platform_switches_off_after_the_idle_time_instead);
+    RUN(an_empty_battery_shows_the_notice_lights_the_screen_and_powers_off_once);
     return RESULT();
 }

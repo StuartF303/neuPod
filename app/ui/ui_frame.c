@@ -23,6 +23,9 @@
 #include "hal_system.h"
 #include "os.h"
 #include "player.h"
+#include "power_policy.h"
+#include "power_service.h"
+#include "runtime.h"
 #include "runtime_config.h"
 #include "settings_store.h"
 #include "ui_internal.h"
@@ -35,11 +38,23 @@ ui_state_t g_ui_state = {.click_mode = CLICK_HAPTIC,
                          .dim_idx = UI_AUTODIM_DEFAULT_IDX,
                          .off_idx = UI_SCREENOFF_DEFAULT_IDX,
                          .autolock = true,
+#if NEUPOD_POWER_MGMT
+                         .sleep_idx = POWER_SLEEP_DEFAULT_IDX,
+#endif
                          .theme = UI_THEME_LIGHT};
 
 static ui_idle_t g_idle;
 static ui_hold_t g_hold;
 static bool g_idle_inhibit;
+
+#if NEUPOD_POWER_MGMT
+static bool g_wake_pending;       /* woke from sleep by a key: the screen stays off until that input arrives (it is not delivered) ... */
+static uint32_t g_wake_until;     /* ... or until this time, if it never does */
+static bool g_crit_shown;         /* "Battery empty" is up, the power-off follows at g_crit_off_at */
+static uint32_t g_crit_off_at;
+static bool g_crit_done;          /* the power-off was asked for (or cannot be done here): not again until the battery recovers */
+static uint32_t g_test_sleep_s;   /* tour only (idlesleep:): Sleep after, in seconds, instead of the setting, for one sleep */
+#endif
 
 void ui_idle_inhibit(bool on) { g_idle_inhibit = on; }
 
@@ -61,6 +76,9 @@ void ui_state_persist(void) {
     settings_set_u8(SETTING_AUTODIM_IDX, g_ui_state.dim_idx);
     settings_set_u8(SETTING_SCREENOFF_IDX, g_ui_state.off_idx);
     settings_set_u8(SETTING_AUTOLOCK, g_ui_state.autolock ? 1u : 0u);
+#if NEUPOD_POWER_MGMT
+    settings_set_u8(SETTING_SLEEP_IDX, g_ui_state.sleep_idx);
+#endif
     settings_set_u8(SETTING_THEME, (uint8_t)g_ui_state.theme);
 }
 
@@ -104,6 +122,12 @@ static void sync_from_settings(void) {
     if (settings_get_u8(SETTING_AUTOLOCK, &v) && v <= 1) {
         g_ui_state.autolock = v == 1;
     }
+#if NEUPOD_POWER_MGMT
+    /* An older settings file has no such item, and one written by a newer firmware may hold a choice this one does not know: both leave the default. */
+    if (settings_get_u8(SETTING_SLEEP_IDX, &v) && v < POWER_SLEEP_STEPS) {
+        g_ui_state.sleep_idx = v;
+    }
+#endif
     ui_theme_mode_t tm;
     if (settings_get_u8(SETTING_THEME, &v) && ui_theme_mode_from_stored(v, &tm)) {
         g_ui_state.theme = tm;
@@ -252,6 +276,10 @@ void ui_frame_init(lv_obj_t *scr) {
     ui_accel_init(&g_accel);
     ui_idle_init(&g_idle, os_tick_ms());
     ui_hold_init(&g_hold);
+#if NEUPOD_POWER_MGMT
+    g_wake_pending = g_crit_shown = g_crit_done = false;
+    power_service_restart(os_tick_ms());
+#endif
 }
 
 ui_screen_t *ui_screen_new(size_t size, const char *title) {
@@ -497,6 +525,9 @@ static void hold_draw_progress(uint32_t now_ms) {
 static bool is_user_input(const input_event_t *ev) { return ev->type == INPUT_SCROLL || ev->type == INPUT_BUTTON_DOWN || ev->type == INPUT_BUTTON_UP; }
 
 void ui_frame_input(const input_event_t *ev, uint32_t now_ms) {
+#if NEUPOD_POWER_MGMT
+    g_wake_pending = false; /* the input a key wake was waiting for has come (the rest of this function swallows it as it does any that wakes a dark screen) */
+#endif
     bool was_off = g_idle.off;
     if (ui_idle_activity(&g_idle, now_ms)) {
         ui_apply_theme(); /* Auto: back to light before the backlight comes up */
@@ -842,6 +873,119 @@ static void update_busy_dots(uint32_t now_ms) {
     }
 }
 
+#if NEUPOD_POWER_MGMT
+// ---- Sleep and the empty battery (docs/adr/0021-power-sleep.md) ------------------------------------------------------------------------
+// The policy (power_policy.c) decides; this is the screen's part of what follows. The wake leaves the screen the way the idle stage left it: off,
+// with Hold on under auto-lock. The input that woke the system is still queued for the input task and arrives like any input that wakes a dark
+// screen, so it only lights it and is not delivered. If no input arrives (a charger woke it, or the event was lost) the screen lights by itself.
+
+#define WAKE_INPUT_WAIT_MS 2000u /* how long a key wake waits for its own input before lighting the screen anyway */
+#define CRIT_NOTICE_MS 3000u     /* "Battery empty" stays up this long before the power-off */
+
+static uint32_t sleep_after_seconds(void) { return g_test_sleep_s != 0u ? g_test_sleep_s : power_sleep_seconds(g_ui_state.sleep_idx); }
+
+void ui_power_test_sleep_after(uint32_t seconds) { g_test_sleep_s = seconds; }
+
+// Light the screen without any input (nothing was pressed: a charger woke the system, or a battery notice has to be seen). Hold stays as it is.
+static void screen_light(uint32_t now_ms) {
+    if (ui_idle_activity(&g_idle, now_ms)) {
+        ui_apply_theme();
+        backlight_transition();
+    }
+}
+
+static void power_sleep(uint32_t now_ms) {
+    g_test_sleep_s = 0; /* the tour's idlesleep: is for one sleep */
+    if (!hal_power_can_sleep()) {
+        // No suspend on this platform (or it is switched off): the same idle time switches the player off instead, where it can (hal_system_can_poweroff()).
+        printf("power: idle for the sleep time, powering off\n");
+        if (power_service_poweroff()) {
+            ui_pill_show("Powering off");
+        } else {
+            power_service_restart(now_ms);
+        }
+        return;
+    }
+    if (!power_service_sleep_prepare()) {
+        power_service_restart(now_ms); /* something started meanwhile, or the card stayed busy: try again after another full time */
+        return;
+    }
+    // The last look before the screen goes: an input that arrived during the preparation, or a charger, ends the attempt (the input is still queued and is
+    // handled as usual, so nothing is lost).
+    if (os_queue_pending(rt_input_queue()) || hal_power_external()) {
+        power_service_wake(os_tick_ms());
+        power_service_restart(now_ms);
+        return;
+    }
+    const bool was_off = g_idle.off;
+    const bool was_locked = g_hold.locked;
+    hold_overlay_hide();
+    (void)ui_idle_force_off(&g_idle);
+    ui_apply_theme();
+    backlight_transition();
+    if (!was_off && g_ui_state.autolock) {
+        hold_apply(ui_hold_set(&g_hold, true), now_ms);
+    }
+    hal_display_sleep(true);
+    hal_wake_reason_t why = HAL_WAKE_NONE;
+    const hal_status_t st = power_service_sleep_block(&why);
+    hal_display_sleep(false);
+    const uint32_t t = os_tick_ms();
+    power_service_wake(t);
+    power_service_sleep_result(st, t);
+    if (st != HAL_OK) {
+        // It never slept (something held the system awake, or the suspend machinery failed): nobody pressed anything, so the screen is put back as it was.
+        printf("power: the system did not sleep (status %d)\n", (int)st);
+        if (!was_off) {
+            hold_apply(ui_hold_set(&g_hold, was_locked), t);
+            screen_light(t);
+        }
+    } else if (why == HAL_WAKE_TIMER) {
+        printf("power: asleep for 24 h, powering off\n");
+        if (power_service_poweroff()) {
+            ui_pill_show("Powering off");
+            return;
+        }
+        screen_light(t); /* this platform cannot switch off: carry on as awake */
+    } else if (why == HAL_WAKE_KEY) {
+        g_wake_pending = true;
+        g_wake_until = t + WAKE_INPUT_WAIT_MS;
+    } else {
+        screen_light(t); /* a charger, or something unknown: nobody pressed anything, show the screen */
+    }
+}
+
+static void power_tick(uint32_t now_ms) {
+    if (g_wake_pending && (int32_t)(now_ms - g_wake_until) >= 0) {
+        g_wake_pending = false;
+        screen_light(now_ms);
+    }
+    const power_action_t a = power_service_poll(now_ms, g_idle.last_ms, sleep_after_seconds());
+    if (a != POWER_ACT_POWEROFF_CRITICAL) {
+        g_crit_shown = g_crit_done = false; /* the battery recovered, or a charger came */
+    }
+    if (a == POWER_ACT_SLEEP) {
+        power_sleep(now_ms);
+    } else if (a == POWER_ACT_POWEROFF_CRITICAL && !g_crit_done) {
+        if (!g_crit_shown) {
+            g_crit_shown = true;
+            g_crit_off_at = now_ms + CRIT_NOTICE_MS;
+            printf("power: battery empty, powering off in %u s\n", (unsigned)(CRIT_NOTICE_MS / 1000u));
+            screen_light(now_ms); /* the notice has to be seen */
+            ui_toast_show("Battery empty", UI_TOAST_WARN, CRIT_NOTICE_MS + 1000u);
+        } else if ((int32_t)(now_ms - g_crit_off_at) >= 0) {
+            g_crit_done = true;
+            if (power_service_poweroff()) {
+                ui_pill_show("Powering off");
+            } else {
+                ui_toast_hide(); /* the notice is withdrawn: this board is on external power (or cannot switch off), which the policy now assumes */
+                printf("power: battery empty, but the power-off was refused: on external power\n");
+            }
+        }
+    }
+}
+#endif // NEUPOD_POWER_MGMT
+
 void ui_frame_tick(uint32_t now_ms) {
     sync_from_settings();
     bool dim_changed = ui_idle_tick(&g_idle, now_ms, g_ui_state.autodim, g_idle_inhibit, ui_autodim_seconds(g_ui_state.dim_idx) * 1000u);
@@ -860,6 +1004,9 @@ void ui_frame_tick(uint32_t now_ms) {
     }
     hold_apply(ui_hold_tick(&g_hold, now_ms, hal_system_can_poweroff()), now_ms);
     hold_draw_progress(now_ms);
+#if NEUPOD_POWER_MGMT
+    power_tick(now_ms);
+#endif
     if (g_htoast_until != 0 && (int32_t)(now_ms - g_htoast_until) >= 0 && !g_hold.down) {
         hold_overlay_hide();
     }

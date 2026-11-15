@@ -18,10 +18,12 @@ set(NEUPOD_Y2_LOGIC_SOURCES
   ${Y2_HAL}/y2_bt_addr.c
   ${Y2_HAL}/y2_bt_tlv.c
   ${Y2_HAL}/y2_audio.c
+  ${Y2_HAL}/y2_suspend.c
 )
 set(NEUPOD_Y2_HAL_SOURCES
   ${NEUPOD_Y2_LOGIC_SOURCES}
   ${Y2_HAL}/hal_system.c
+  ${Y2_HAL}/hal_power.c
   ${Y2_HAL}/hal_display.c
   ${Y2_HAL}/hal_console.c
   ${Y2_HAL}/hal_input.c

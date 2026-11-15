@@ -54,6 +54,19 @@ static bool read_long(const char *dir, const char *file, long *out) {
     return true;
 }
 
+bool y2_power_external_online(const char *ps_root) {
+    static const char *const k_names[] = {"usb", "ac"}; /* the Y2 also has "wireless" (no coil fitted, never online) */
+    for (size_t i = 0; i < sizeof k_names / sizeof k_names[0]; i++) {
+        char dir[512];
+        snprintf(dir, sizeof dir, "%s/%s", ps_root, k_names[i]);
+        long on = 0;
+        if (read_long(dir, "online", &on) && on != 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool find_battery(const char *ps_root, char *dir, size_t cap) {
     DIR *d = opendir(ps_root);
     if (d == NULL) {

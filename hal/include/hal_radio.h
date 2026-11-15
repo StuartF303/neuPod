@@ -283,6 +283,15 @@ typedef struct {
  */
 hal_status_t hal_bt_init(hal_bt_event_fn cb, void *ctx, const hal_bt_storage_t *storage);
 
+/**
+ * Power the Bluetooth controller down (@p on false) or up again (@p on true), after hal_bt_init(): for system sleep (ADR-0021), where a controller left
+ * running drains the battery and may keep the system from suspending. Down: a scan is stopped, a link (if any) is dropped, HCI is powered off; returns once
+ * hal_bt_state() is HAL_BT_OFF (bounded wait; HAL_ETIMEOUT if it did not get there). Up: starts HCI as hal_bt_init() did, with the same callback and storage;
+ * returns once the request is handed to the stack's thread (on the Y2 that waits for /dev/stpbt to reopen, about 1.3 s); HAL_BT_EVT_STATE reports HAL_BT_ON about a second later. Nothing connects by itself (the app's auto-reconnect does that). Task context.
+ * HAL_ENODEV without a controller, HAL_ENOTSUP where the platform cannot do it (compiled out on the Pico 2 W), HAL_EINVAL if hal_bt_init() never ran.
+ */
+hal_status_t hal_bt_power(bool on);
+
 hal_bt_state_t hal_bt_state(void);
 
 /** The local Bluetooth device address (MSB first). false until the stack is up. */

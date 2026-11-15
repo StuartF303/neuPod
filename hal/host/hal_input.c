@@ -15,12 +15,16 @@
 static hal_wheel_state g_sim; // buttons/position/touched as the simulated wheel would report
 static uint32_t g_touch_until;
 static bool g_dirty;
+static volatile uint32_t g_activity; // counts what a person did at the window: the simulated sleep wakes on it (hal_power.c)
+
+uint32_t host_input_activity(void) { return g_activity; }
 
 void host_input_button(uint8_t btn, bool down) {
     uint8_t before = g_sim.buttons;
     g_sim.buttons = down ? (uint8_t)(g_sim.buttons | btn) : (uint8_t)(g_sim.buttons & ~btn);
     if (g_sim.buttons != before) {
         g_dirty = true;
+        g_activity++;
     }
 }
 
@@ -33,12 +37,16 @@ void host_input_scroll(int steps) {
     g_sim.touched = true;
     g_touch_until = hal_millis() + TOUCH_HOLD_MS;
     g_dirty = true;
+    g_activity++;
 }
 
 static volatile bool g_power_down;
 static volatile hal_hold_switch_t g_hold_switch = HAL_HOLD_SWITCH_NONE;
 
-void host_input_power(bool down) { g_power_down = down; }
+void host_input_power(bool down) {
+    g_power_down = down;
+    g_activity++;
+}
 void hal_host_power_key(bool down) { g_power_down = down; }
 void hal_host_hold_switch(hal_hold_switch_t sw) { g_hold_switch = sw; }
 
