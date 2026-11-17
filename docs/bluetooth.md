@@ -265,7 +265,7 @@ volume (AVRCP, stage 2c) makes up the level. Bench aids on the Y2 only: `NEUPOD_
 `NEUPOD_BT_PCM_DUMP=<file>` (the encoder's input PCM) in `/etc/neupod-fw.env`.
 
 Three more Y2 bench switches in the same file match the controller's set-up to the stock MediaTek stack's, for the intermittent "no AirPods in the inquiry" (the Pico 2 W
-beside it finds them every time). Both are read at every HCI-up (first start and each controller power-on after sleep or a reset), so a change needs a firmware restart.
+beside it finds them every time). All three are read at every HCI-up (first start and each controller power-on after sleep or a reset), so a change needs a firmware restart.
 The controller's own inquiry transmit power is always read and logged (`bt: inquiry tx power (controller default) N dBm`).
 * `NEUPOD_BT_INQ_TXPWR=<-70..20>`: Write Inquiry Transmit Power Level (0x0C59) with that many dBm (stock writes +6 before every inquiry; the value lasts until the
   controller is reset, so once per HCI-up is the same). Logged with its status and a read-back (`bt: inquiry tx power set to 6 dBm -> status 0x00`, `bt: inquiry tx power

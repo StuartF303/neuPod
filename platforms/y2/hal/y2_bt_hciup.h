@@ -3,7 +3,7 @@
  * @file y2_bt_hciup.h
  * @brief Bench switches that make the Y2's controller set-up match the stock MediaTek stack's, and the plan of commands they add at HCI-up.
  *
- * Three environment variables (in /etc/neupod-fw.env, like NEUPOD_BT_HCI_DUMP), both off unless set:
+ * Three environment variables (in /etc/neupod-fw.env, like NEUPOD_BT_HCI_DUMP), each off unless set:
  *   NEUPOD_BT_INQ_TXPWR=<-70..20>  Write Inquiry Transmit Power Level (0x0C59) with this many dBm. Stock sends +6 before every inquiry.
  *   NEUPOD_BT_MTK_FC66=1           the MediaTek vendor command 0xFC66 with 00 10 40 9C (stock sends it once after HCI_Reset; meaning unknown).
  *   NEUPOD_BT_INQ_MODE=<0|1|2>     Write Inquiry Mode (0x0C45): 0 standard, 1 with RSSI, 2 with RSSI or extended inquiry response (EIR). BTstack's init sets 2;
