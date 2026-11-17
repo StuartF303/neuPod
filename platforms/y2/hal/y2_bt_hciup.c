@@ -36,10 +36,23 @@ y2_inq_txpwr_result_t y2_bt_parse_inq_txpwr(const char *s, int8_t *out) {
     return Y2_INQ_TXPWR_OK;
 }
 
+y2_inq_mode_result_t y2_bt_parse_inq_mode(const char *s, uint8_t *out) {
+    if (s == NULL || s[0] == '\0') {
+        return Y2_INQ_MODE_UNSET;
+    }
+    if (s[0] < '0' || s[0] > '2' || s[1] != '\0') {
+        return Y2_INQ_MODE_INVALID;
+    }
+    *out = (uint8_t)(s[0] - '0');
+    return Y2_INQ_MODE_OK;
+}
+
 bool y2_bt_parse_fc66(const char *s) { return s != NULL && s[0] == '1' && s[1] == '\0'; }
 
-void y2_hciup_plan_init(y2_hciup_plan_t *p, bool fc66, bool write_txpwr, int8_t txpwr) {
+void y2_hciup_plan_init(y2_hciup_plan_t *p, bool fc66, bool write_inq_mode, uint8_t inq_mode, bool write_txpwr, int8_t txpwr) {
     p->fc66 = fc66;
+    p->write_inq_mode = write_inq_mode;
+    p->inq_mode = inq_mode;
     p->write_txpwr = write_txpwr;
     p->txpwr = txpwr;
     p->next = 0;
@@ -61,6 +74,14 @@ bool y2_hciup_next(y2_hciup_plan_t *p, y2_hciup_cmd_t *out) {
             out->params[1] = 0x10;
             out->params[2] = 0x40;
             out->params[3] = 0x9C;
+            return true;
+        case Y2_HCIUP_WRITE_INQ_MODE:
+            if (!p->write_inq_mode) {
+                continue;
+            }
+            out->opcode = 0x0C45;
+            out->len = 1;
+            out->params[0] = p->inq_mode;
             return true;
         case Y2_HCIUP_READ_TXPWR:
             out->opcode = 0x0C58;

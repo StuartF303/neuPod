@@ -47,7 +47,7 @@ TEST(fc66_is_on_only_for_exactly_one) {
 TEST(default_plan_is_only_the_diagnostic_read) {
     y2_hciup_plan_t p;
     y2_hciup_cmd_t c;
-    y2_hciup_plan_init(&p, false, false, 0);
+    y2_hciup_plan_init(&p, false, false, 0, false, 0);
     ASSERT_TRUE(y2_hciup_next(&p, &c));
     ASSERT_EQ(0x0C58, c.opcode);
     ASSERT_EQ(Y2_HCIUP_READ_TXPWR, c.step);
@@ -59,7 +59,7 @@ TEST(default_plan_is_only_the_diagnostic_read) {
 TEST(full_plan_is_fc66_read_write_readback) {
     y2_hciup_plan_t p;
     y2_hciup_cmd_t c;
-    y2_hciup_plan_init(&p, true, true, -4);
+    y2_hciup_plan_init(&p, true, false, 0, true, -4);
     ASSERT_TRUE(y2_hciup_next(&p, &c));
     ASSERT_EQ(0xFC66, c.opcode);
     ASSERT_EQ(4, c.len);
@@ -82,7 +82,7 @@ TEST(full_plan_is_fc66_read_write_readback) {
 TEST(write_only_plan_skips_fc66) {
     y2_hciup_plan_t p;
     y2_hciup_cmd_t c;
-    y2_hciup_plan_init(&p, false, true, 6);
+    y2_hciup_plan_init(&p, false, false, 0, true, 6);
     ASSERT_TRUE(y2_hciup_next(&p, &c));
     ASSERT_EQ(0x0C58, c.opcode);
     ASSERT_TRUE(y2_hciup_next(&p, &c));
@@ -90,6 +90,52 @@ TEST(write_only_plan_skips_fc66) {
     ASSERT_EQ(6, c.params[0]);
     ASSERT_TRUE(y2_hciup_next(&p, &c));
     ASSERT_EQ(Y2_HCIUP_READBACK, c.step);
+    ASSERT_FALSE(y2_hciup_next(&p, &c));
+}
+
+TEST(inq_mode_parse) {
+    uint8_t v = 9;
+    ASSERT_EQ(Y2_INQ_MODE_UNSET, y2_bt_parse_inq_mode(NULL, &v));
+    ASSERT_EQ(Y2_INQ_MODE_UNSET, y2_bt_parse_inq_mode("", &v));
+    ASSERT_EQ(9, v);
+    const char *bad[] = {"3", "-1", "1x", " 1", "1 ", "01", "a"};
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+        ASSERT_EQ(Y2_INQ_MODE_INVALID, y2_bt_parse_inq_mode(bad[i], &v));
+    }
+    ASSERT_EQ(9, v);
+    for (int m = 0; m <= 2; m++) {
+        char str[2] = {(char)('0' + m), 0};
+        ASSERT_EQ(Y2_INQ_MODE_OK, y2_bt_parse_inq_mode(str, &v));
+        ASSERT_EQ(m, v);
+    }
+}
+
+TEST(inq_mode_only_plan_is_write_then_read) {
+    y2_hciup_plan_t p;
+    y2_hciup_cmd_t c;
+    y2_hciup_plan_init(&p, false, true, 0, false, 0); // mode 0 still sends
+    ASSERT_TRUE(y2_hciup_next(&p, &c));
+    ASSERT_EQ(Y2_HCIUP_WRITE_INQ_MODE, c.step);
+    ASSERT_EQ(0x0C45, c.opcode);
+    ASSERT_EQ(1, c.len);
+    ASSERT_EQ(0, c.params[0]);
+    ASSERT_TRUE(y2_hciup_next(&p, &c));
+    ASSERT_EQ(0x0C58, c.opcode);
+    ASSERT_FALSE(y2_hciup_next(&p, &c));
+}
+
+TEST(all_switches_plan_order) {
+    y2_hciup_plan_t p;
+    y2_hciup_cmd_t c;
+    y2_hciup_plan_init(&p, true, true, 1, true, 6);
+    const uint16_t order[] = {0xFC66, 0x0C45, 0x0C58, 0x0C59, 0x0C58};
+    for (size_t i = 0; i < sizeof order / sizeof order[0]; i++) {
+        ASSERT_TRUE(y2_hciup_next(&p, &c));
+        ASSERT_EQ(order[i], c.opcode);
+        if (c.opcode == 0x0C45) {
+            ASSERT_EQ(1, c.params[0]);
+        }
+    }
     ASSERT_FALSE(y2_hciup_next(&p, &c));
 }
 
@@ -101,5 +147,8 @@ int main(void) {
     RUN(default_plan_is_only_the_diagnostic_read);
     RUN(full_plan_is_fc66_read_write_readback);
     RUN(write_only_plan_skips_fc66);
+    RUN(inq_mode_parse);
+    RUN(inq_mode_only_plan_is_write_then_read);
+    RUN(all_switches_plan_order);
     return RESULT();
 }
