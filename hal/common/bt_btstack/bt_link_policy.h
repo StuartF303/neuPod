@@ -78,6 +78,12 @@ static inline bool bt_link_phantom_acl(uint8_t st, bool have_acl, bool already_r
     return st == 0x0Bu /* ERROR_CODE_ACL_CONNECTION_ALREADY_EXISTS */ && !have_acl && !already_reset;
 }
 
+#define BT_LINK_PHANTOM_REPEAT_MS 60000u /**< at most one controller reset per peer in this time (unless a link to it came up) */
+#define BT_LINK_PHANTOM_BOUND_MS 15000u  /**< a reset that has not brought the controller back by now ends the attempt as a failed start */
+
+/** True if the last reset (at @p last_ms) is far enough back for another (wrap-safe). */
+static inline bool bt_link_phantom_due(uint32_t now_ms, uint32_t last_ms) { return (uint32_t)(now_ms - last_ms) >= BT_LINK_PHANTOM_REPEAT_MS; }
+
 #ifdef __cplusplus
 }
 #endif

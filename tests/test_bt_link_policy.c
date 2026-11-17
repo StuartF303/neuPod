@@ -167,6 +167,15 @@ TEST(test_phantom_acl_is_reset_once_and_only_without_a_real_link) {
     ASSERT_FALSE(bt_link_phantom_acl(0x0C, false, false)); // command disallowed: a different refusal
 }
 
+TEST(test_phantom_reset_is_rate_limited_per_peer_and_wrap_safe) {
+    ASSERT_FALSE(bt_link_phantom_due(1000u, 1000u));
+    ASSERT_FALSE(bt_link_phantom_due(1000u + BT_LINK_PHANTOM_REPEAT_MS - 1u, 1000u));
+    ASSERT_TRUE(bt_link_phantom_due(1000u + BT_LINK_PHANTOM_REPEAT_MS, 1000u));
+    ASSERT_TRUE(bt_link_phantom_due(5u, 0xFFFFFFFFu - BT_LINK_PHANTOM_REPEAT_MS - 10u)); // the clock wrapped between the two
+    ASSERT_FALSE(bt_link_phantom_due(5u, 0xFFFFFFF0u));
+    ASSERT_TRUE(BT_LINK_PHANTOM_BOUND_MS > 5000u); // longer than a power cycle (about 1.3 s + the patch download)
+}
+
 int main(void) {
     RUN(test_catchup_budget_bounds_what_is_owed_and_counts_the_rest);
     RUN(test_pressure_is_a_long_wait_or_a_big_debt);
@@ -179,5 +188,6 @@ int main(void) {
     RUN(test_a_headset_without_room_to_step_never_changes);
     RUN(test_the_clock_wraps);
     RUN(test_phantom_acl_is_reset_once_and_only_without_a_real_link);
+    RUN(test_phantom_reset_is_rate_limited_per_peer_and_wrap_safe);
     return RESULT();
 }

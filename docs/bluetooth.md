@@ -272,11 +272,16 @@ The controller's own inquiry transmit power is always read and logged (`bt: inqu
   (read back) 6 dBm`). Unset: not sent. Not an integer in range: ignored, and logged once.
 * `NEUPOD_BT_MTK_FC66=1`: the MediaTek vendor command 0xFC66 with `00 10 40 9C`, which stock sends once after HCI_Reset (meaning unknown). Its status is logged.
 
-A command the controller refuses or never answers is logged and skipped; Bluetooth still comes up.
+A command the controller refuses or never answers is logged and skipped; Bluetooth still comes up. The commands run before the radio is reported ON, so each HCI-up
+can take up to 6 s longer in the worst case (an unanswering controller); with the switches unset it is one quick read.
 
 The MT6582 has a bug after a connection attempt that timed out: it keeps a phantom link to that headset and refuses every later Create_Connection to it with status 0x0B
-(ACL connection already exists) until it is reset. The adapter now resets the controller (the sleep path's power-off and power-on) and retries the Pair / Connect step once:
-`bt: controller reports a phantom link to XX (0x0B): resetting the controller and retrying`. If the retry fails as well, the failure is reported as before.
+(ACL connection already exists) until it is reset. **The Y2 build only** (compile switch `NEUPOD_BT_PHANTOM_RESET`; the other platforms are unchanged) resets the controller
+(the sleep path's power-off and power-on) and retries the Pair / Connect step once:
+`bt: controller reports a phantom link to XX (0x0B): resetting the controller and retrying`. While it runs the radio shows "Starting" for a few seconds
+(the attempt stays in Connecting / Pairing). At most one reset per attempt and per headset per 60 s (a headset that keeps failing does not power-cycle the controller on every
+auto-reconnect; a link that comes up re-arms it). A reset that has not finished in 15 s ends the attempt (timeout) and leaves the radio failed, like a start that fails.
+Ending the attempt or powering the radio down cancels it. If the retry fails as well, the failure is reported as before (`bt: SDP 0x0B (after the controller reset)`).
 
 Built and host-tested; **not yet run on a headset in the firmware** (bench steps at the end). The Y2 is where it is proved first: the BTstack A2DP source it uses is the one verified
 on AirPods Pro and a Sony WI-C200 by the `y2-a2dp` tool, now inside the shared adapter.

@@ -61,6 +61,8 @@ target_link_libraries(neupod PRIVATE neupod_runtime neupod_drivers neupod_fatfs 
 target_compile_definitions(neupod PRIVATE NEUPOD_BT_PCM_TAP=1)
 # The Y2's stock-parity controller set-up after HCI-up (bt_port.h, bt_port_hci_up): compiled into no other platform.
 target_compile_definitions(neupod PRIVATE NEUPOD_BT_PORT_HCI_UP=1)
+# The MT6582's phantom-ACL recovery (bt_btstack.c, phantom_*): the Y2 controller's bug, so no other platform carries it.
+target_compile_definitions(neupod PRIVATE NEUPOD_BT_PHANTOM_RESET=1)
 
 # A smaller image to copy over USB; the unstripped one stays in the build tree for debugging.
 add_custom_command(TARGET neupod POST_BUILD
