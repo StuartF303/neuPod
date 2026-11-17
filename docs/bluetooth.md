@@ -264,6 +264,20 @@ matched a reference encode on the PC (22 to 27 dB SNR), so the overshoot is SBC'
 volume (AVRCP, stage 2c) makes up the level. Bench aids on the Y2 only: `NEUPOD_BT_HCI_DUMP=<file>` (HCI trace, PacketLogger format) and
 `NEUPOD_BT_PCM_DUMP=<file>` (the encoder's input PCM) in `/etc/neupod-fw.env`.
 
+Two more Y2 bench switches in the same file match the controller's set-up to the stock MediaTek stack's, for the intermittent "no AirPods in the inquiry" (the Pico 2 W
+beside it finds them every time). Both are read at every HCI-up (first start and each controller power-on after sleep or a reset), so a change needs a firmware restart.
+The controller's own inquiry transmit power is always read and logged (`bt: inquiry tx power (controller default) N dBm`).
+* `NEUPOD_BT_INQ_TXPWR=<-70..20>`: Write Inquiry Transmit Power Level (0x0C59) with that many dBm (stock writes +6 before every inquiry; the value lasts until the
+  controller is reset, so once per HCI-up is the same). Logged with its status and a read-back (`bt: inquiry tx power set to 6 dBm -> status 0x00`, `bt: inquiry tx power
+  (read back) 6 dBm`). Unset: not sent. Not an integer in range: ignored, and logged once.
+* `NEUPOD_BT_MTK_FC66=1`: the MediaTek vendor command 0xFC66 with `00 10 40 9C`, which stock sends once after HCI_Reset (meaning unknown). Its status is logged.
+
+A command the controller refuses or never answers is logged and skipped; Bluetooth still comes up.
+
+The MT6582 has a bug after a connection attempt that timed out: it keeps a phantom link to that headset and refuses every later Create_Connection to it with status 0x0B
+(ACL connection already exists) until it is reset. The adapter now resets the controller (the sleep path's power-off and power-on) and retries the Pair / Connect step once:
+`bt: controller reports a phantom link to XX (0x0B): resetting the controller and retrying`. If the retry fails as well, the failure is reported as before.
+
 Built and host-tested; **not yet run on a headset in the firmware** (bench steps at the end). The Y2 is where it is proved first: the BTstack A2DP source it uses is the one verified
 on AirPods Pro and a Sony WI-C200 by the `y2-a2dp` tool, now inside the shared adapter.
 

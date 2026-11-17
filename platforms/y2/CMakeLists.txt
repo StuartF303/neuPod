@@ -17,6 +17,7 @@ set(NEUPOD_Y2_LOGIC_SOURCES
   ${Y2_HAL}/y2_haptic.c
   ${Y2_HAL}/y2_bt_addr.c
   ${Y2_HAL}/y2_bt_tlv.c
+  ${Y2_HAL}/y2_bt_hciup.c
   ${Y2_HAL}/y2_audio.c
   ${Y2_HAL}/y2_suspend.c
 )
@@ -58,6 +59,8 @@ set_source_files_properties(main.c charging.c ${NEUPOD_Y2_HAL_SOURCES} PROPERTIE
 target_link_libraries(neupod PRIVATE neupod_runtime neupod_drivers neupod_fatfs btstack_y2 pthread)
 # Bench aid: NEUPOD_BT_PCM_DUMP=<file> in the environment records the Bluetooth encoder input (Y2 only, never the product).
 target_compile_definitions(neupod PRIVATE NEUPOD_BT_PCM_TAP=1)
+# The Y2's stock-parity controller set-up after HCI-up (bt_port.h, bt_port_hci_up): compiled into no other platform.
+target_compile_definitions(neupod PRIVATE NEUPOD_BT_PORT_HCI_UP=1)
 
 # A smaller image to copy over USB; the unstripped one stays in the build tree for debugging.
 add_custom_command(TARGET neupod POST_BUILD
