@@ -59,7 +59,7 @@ bool bt_port_hci_up(void (*done)(void));
 
 /** Optional, same guard. Length of one inquiry round in 1.28 s units, or 0 for the default (one inquiry covering the whole scan). When non-zero the
  * adapter runs rounds of this length (the last one shortened) and starts another as long as the scan window has at least a whole unit left. Called
- * on BTstack's thread at the start of each scan and after each round. */
+ * on BTstack's thread once at the start of each scan (the value is kept for its rounds). */
 uint8_t bt_port_inquiry_round_units(void);
 #endif
 

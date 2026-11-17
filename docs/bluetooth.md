@@ -282,8 +282,8 @@ The controller's own inquiry transmit power is always read and logged (`bt: inqu
      Write Page Timeout (0x0C18, 0x3800 = 8.96 s). Each completion status is logged. The wider event mask only makes the controller send events BTstack does not use
      (it ignores events it has no case for); BTstack's own mask from its init is overridden until the next reset. Host flow control (0x0C33/0x0C31) is deliberately not
      enabled: BTstack never sends Host_Number_Of_Completed_Packets.
-  2. Stock's inquiry shape: rounds of 4 x 1.28 s (5.12 s), repeated until the scan window (10 s) is covered; the last round is shortened to what is left, and no
-     round starts with less than one 1.28 s unit left. Each round is logged (`bt: inquiry round N (4 x 1.28 s)`, and `bt: inquiry complete ...` after each), the
+  2. Stock's inquiry shape: rounds of 4 x 1.28 s (5.12 s), repeated until the scan window (10 s) is approximately covered; the last round is shortened to what is left, and no
+     round starts with less than one 1.28 s unit left. When there is more than one round each is logged (`bt: inquiry round N (4 x 1.28 s)`); `bt: inquiry complete ...` follows each round with a running total of results; the
      results are de-duplicated by address across rounds, and `bt: scan done` comes once at the end. A scan stopped by the user is not restarted. Stock also passes
      num_responses 25; BTstack's GAP API always sends 0 (unlimited) and has no setter, so that is not reproduced (unlimited is never fewer results). Not sent behind BTstack's back: it
      would desynchronise its inquiry state.
