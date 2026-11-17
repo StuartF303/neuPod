@@ -69,6 +69,15 @@ void bt_link_policy_init(bt_link_policy_t *p, uint32_t now_ms);
 /** Feed one pacing tick. Returns the bitpool to switch to, or 0 for no change. @p ceiling / @p min_bp as bt_link_bitpool(). */
 uint8_t bt_link_policy_tick(bt_link_policy_t *p, uint32_t now_ms, bool pressured, uint8_t ceiling, uint8_t min_bp);
 
+/* ---- The MT6582's phantom link ---- */
+
+/** After a Create_Connection that timed out (and was cancelled) the MT6582 refuses every later one to that address with 0x0B (ACL connection
+ * already exists) until it is reset, with no link there. True if a failed set-up step (status @p st, with @p have_acl: we hold a connection handle)
+ * is that and the controller has not been reset for this attempt yet (@p already_reset): reset it and try the same step once more. */
+static inline bool bt_link_phantom_acl(uint8_t st, bool have_acl, bool already_reset) {
+    return st == 0x0Bu /* ERROR_CODE_ACL_CONNECTION_ALREADY_EXISTS */ && !have_acl && !already_reset;
+}
+
 #ifdef __cplusplus
 }
 #endif

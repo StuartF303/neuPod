@@ -139,6 +139,10 @@ static btstack_timer_source_t g_cancel_timer;
 static uint8_t g_cancel_addr[6];
 static uint8_t g_cancel_tries;
 static uint32_t g_cancel_attempt;     /* the attempt a pending create-connection cancel belongs to */
+/* The MT6582's phantom link (see phantom_recover): PH_OFF waits for the controller to go down, PH_ON for it to come back and the step to be retried. */
+enum { PH_NONE = 0, PH_OFF, PH_ON };
+static uint8_t g_phantom;
+static bool g_phantom_tried; /* the controller was already reset for this attempt: a second 0x0B is reported as it is */
 #define FORGET_SLOTS 2u
 static uint8_t g_forget_addr[FORGET_SLOTS][6];
 static volatile int g_forget_state[FORGET_SLOTS]; /* 0 free, 1 being filled, 2 ready */
@@ -340,11 +344,25 @@ static const char *hci_version_name(uint8_t v) {
     return v < sizeof k / sizeof k[0] ? k[v] : "?";
 }
 
+static void phantom_retry(void);
+static bool phantom_off(void);
+
+/* The radio is usable: report it, and finish a controller reset that a phantom link caused. */
+static void on_ready(void) {
+    set_state(HAL_BT_ON);
+    phantom_retry();
+}
+
 static void on_working(void) {
     gap_local_bd_addr(g_local);
     g_have_addr = true;
     printf("bt: HCI up, local BD_ADDR %s\n", bd_addr_to_str(g_local));
-    set_state(HAL_BT_ON);
+#ifdef NEUPOD_BT_PORT_HCI_UP
+    if (bt_port_hci_up(on_ready)) {
+        return; /* the port runs its controller commands first; on_ready() follows */
+    }
+#endif
+    on_ready();
 }
 
 static void packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint16_t size) {
@@ -361,6 +379,9 @@ static void packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint
             on_working();
             break;
         case HCI_STATE_OFF:
+            if (phantom_off()) {
+                break; /* our own reset of the controller: the attempt is kept for the retry */
+            }
             link_reset();
             if (g_state == HAL_BT_STARTING) {
                 printf("bt: HCI did not come up\n");
@@ -598,6 +619,72 @@ static bool have_link_key(void) {
 }
 
 static void start_sdp(void);
+static void link_start_attempt(bool retry);
+
+/* The MT6582 (Y2) keeps a phantom ACL: after a Create_Connection timed out and was cancelled (Create_Connection_Cancel is answered with a failed
+ * Connection_Complete, as it should be) every later Create_Connection to that address is refused with Command Status 0x0B (ACL connection already
+ * exists), with no link there, until the controller is reset. BTstack passes the refusal on as the SDP / bonding result. Only a power cycle of the
+ * controller clears it, so that is what is done, once per attempt, and the same step is then tried again. It goes through the same hci_power_control()
+ * as the sleep path, so the link keys, the state events and the UI stay as they are there. g_cancel_timer defers each step out of the BTstack
+ * callback that found the fault (nothing is being cancelled then); the attempt itself is kept, only its timer and phase are paused. */
+static void phantom_step(btstack_timer_source_t *ts) {
+    (void)ts;
+    uint8_t ph = g_phantom;
+    int rc = bt_port_power(ph == PH_ON);
+    if (rc != 0 && g_phantom == ph) {
+        printf("bt: controller reset (%s) failed (%d)\n", ph == PH_ON ? "on" : "off", rc);
+        g_phantom = PH_NONE;
+        link_end(HAL_BT_LINK_FAILED, HAL_BT_FAIL_INTERNAL);
+        if (ph == PH_ON) {
+            set_state(HAL_BT_FAILED);
+        }
+    }
+}
+
+static void phantom_defer(uint32_t ms) {
+    btstack_run_loop_remove_timer(&g_cancel_timer);
+    btstack_run_loop_set_timer_handler(&g_cancel_timer, phantom_step);
+    btstack_run_loop_set_timer(&g_cancel_timer, ms);
+    btstack_run_loop_add_timer(&g_cancel_timer);
+}
+
+static bool phantom_recover(uint8_t st) {
+    if (g_phantom != PH_NONE || !bt_link_phantom_acl(st, g_acl != HCI_CON_HANDLE_INVALID, g_phantom_tried)) {
+        return false;
+    }
+    printf("bt: controller reports a phantom link to %s (0x%02X): resetting the controller and retrying\n", bd_addr_to_str(g_peer.addr), (unsigned)st);
+    g_phantom_tried = true;
+    g_phantom = PH_OFF;
+    btstack_run_loop_remove_timer(&g_link_timer); /* the retry starts a fresh one */
+    g_lphase = LP_IDLE;
+    g_sdp_live = g_sdp_wait = false;
+    phantom_defer(1);
+    return true;
+}
+
+/* HCI_STATE_OFF: true if it is the first half of our reset (the second half is powering up again). */
+static bool phantom_off(void) {
+    if (g_phantom != PH_OFF) {
+        g_phantom = PH_NONE; /* the power-up of the retry failed, or an ordinary power-down: the usual handling */
+        return false;
+    }
+    g_phantom = PH_ON;
+    g_acl = HCI_CON_HANDLE_INVALID;
+    set_state(HAL_BT_STARTING);
+    phantom_defer(200);
+    return true;
+}
+
+/* The controller is back (on_ready): start the same attempt once more. */
+static void phantom_retry(void) {
+    if (g_phantom != PH_ON) {
+        return;
+    }
+    g_phantom = PH_NONE;
+    if (g_link == HAL_BT_LINK_PAIRING || g_link == HAL_BT_LINK_CONNECTING) {
+        link_start_attempt(true);
+    }
+}
 
 static void sdp_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint16_t size) {
     (void)channel;
@@ -625,6 +712,9 @@ static void sdp_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint16_
         }
         uint8_t st = sdp_event_query_complete_get_status(packet);
         if (st != 0) {
+            if (phantom_recover(st)) {
+                return;
+            }
             printf("bt: SDP 0x%02X\n", (unsigned)st);
             link_end(HAL_BT_LINK_FAILED, fail_from_status(st));
         } else if (!g_sink_seen) {
@@ -663,14 +753,16 @@ static void start_sdp(void) {
     }
 }
 
-/* Worker: begin the attempt that hal_bt_pair() / hal_bt_connect() reserved (g_link is already PAIRING / CONNECTING). */
-static void worker_link_start(void *arg) {
-    (void)arg;
+/* Begin the attempt that hal_bt_pair() / hal_bt_connect() reserved (g_link is already PAIRING / CONNECTING), or its one retry after a controller reset. */
+static void link_start_attempt(bool retry) {
+    if (!retry) {
+        g_phantom_tried = false;
+    }
     g_acl = HCI_CON_HANDLE_INVALID;
     g_sink_seen = false;
     g_sdp_wait = false;
     g_pairing = g_link == HAL_BT_LINK_PAIRING;
-    printf("bt: %s %s\n", g_pairing ? "pair" : "connect", bd_addr_to_str(g_peer.addr));
+    printf("bt: %s %s%s\n", g_pairing ? "pair" : "connect", bd_addr_to_str(g_peer.addr), retry ? " (again, after the controller reset)" : "");
     emit_link((hal_bt_link_state_t)g_link, HAL_BT_FAIL_NONE);
     btstack_run_loop_set_timer_handler(&g_link_timer, link_timeout);
     btstack_run_loop_set_timer(&g_link_timer, g_pairing ? HAL_BT_PAIR_TIMEOUT_MS : HAL_BT_CONNECT_TIMEOUT_MS);
@@ -688,6 +780,11 @@ static void worker_link_start(void *arg) {
     } else {
         start_sdp();
     }
+}
+
+static void worker_link_start(void *arg) {
+    (void)arg;
+    link_start_attempt(false);
 }
 
 /* Worker: a user cancel / disconnect, or Forget of the current peer. */
@@ -808,6 +905,8 @@ static void link_packet(uint8_t *packet) {
         uint8_t st = gap_event_dedicated_bonding_completed_get_status(packet);
         if (st == 0) {
             start_sdp();
+        } else if (phantom_recover(st)) {
+            break;
         } else {
             printf("bt: bonding 0x%02X\n", (unsigned)st);
             link_end(HAL_BT_LINK_FAILED, fail_from_status(st));
