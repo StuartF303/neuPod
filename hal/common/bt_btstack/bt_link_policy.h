@@ -78,6 +78,12 @@ static inline bool bt_link_phantom_acl(uint8_t st, bool have_acl, bool already_r
     return st == 0x0Bu /* ERROR_CODE_ACL_CONNECTION_ALREADY_EXISTS */ && !have_acl && !already_reset;
 }
 
+/** Where a controller reset for a phantom link is. */
+enum { PH_NONE = 0, PH_OFF /* power-off not issued yet */, PH_DOWN /* power-off issued, waiting for HCI_STATE_OFF */, PH_ON /* power-on issued or pending */ };
+/** The attempt ended (cancel, Forget, timeout) while a reset was at @p phase. Before the power-off was issued nothing has happened to the controller, so the reset is
+ * simply dropped. Afterwards it is never cancelled half-way (HCI would be left off, or the state wrong): it runs to the end and only its retry is abandoned. */
+static inline bool bt_link_phantom_abandon_only(uint8_t phase) { return phase == PH_DOWN || phase == PH_ON; }
+
 #define BT_LINK_PHANTOM_REPEAT_MS 60000u /**< at most one controller reset per peer in this time (unless a link to it came up) */
 #define BT_LINK_PHANTOM_BOUND_MS 15000u  /**< a reset that has not brought the controller back by now ends the attempt as a failed start */
 

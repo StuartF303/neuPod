@@ -280,8 +280,8 @@ The MT6582 has a bug after a connection attempt that timed out: it keeps a phant
 (the sleep path's power-off and power-on) and retries the Pair / Connect step once:
 `bt: controller reports a phantom link to XX (0x0B): resetting the controller and retrying`. While it runs the radio shows "Starting" for a few seconds
 (the attempt stays in Connecting / Pairing). At most one reset per attempt and per headset per 60 s (a headset that keeps failing does not power-cycle the controller on every
-auto-reconnect; a link that comes up re-arms it). A reset that has not finished in 15 s ends the attempt (timeout) and leaves the radio failed, like a start that fails.
-Ending the attempt or powering the radio down cancels it. If the retry fails as well, the failure is reported as before (`bt: SDP 0x0B (after the controller reset)`).
+auto-reconnect; a link that comes up re-arms it). A reset that has not finished in 15 s ends the attempt (timeout) and leaves the radio failed, like a start that fails: the radio shows Failed, nothing happens automatically, and the user recovers by turning Bluetooth off and on again.
+Cancelling or Forgetting the headset before the controller has been switched off drops the reset; after that the reset always runs to the end (so the radio is never left half-way) and only the retry is skipped. Powering the radio down cancels it. If the retry fails as well, the failure is reported as before (`bt: SDP 0x0B (after the controller reset)`).
 
 Built and host-tested; **not yet run on a headset in the firmware** (bench steps at the end). The Y2 is where it is proved first: the BTstack A2DP source it uses is the one verified
 on AirPods Pro and a Sony WI-C200 by the `y2-a2dp` tool, now inside the shared adapter.

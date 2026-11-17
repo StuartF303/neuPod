@@ -176,6 +176,13 @@ TEST(test_phantom_reset_is_rate_limited_per_peer_and_wrap_safe) {
     ASSERT_TRUE(BT_LINK_PHANTOM_BOUND_MS > 5000u); // longer than a power cycle (about 1.3 s + the patch download)
 }
 
+TEST(test_ending_an_attempt_drops_a_reset_only_before_the_power_off) {
+    ASSERT_FALSE(bt_link_phantom_abandon_only(PH_NONE));
+    ASSERT_FALSE(bt_link_phantom_abandon_only(PH_OFF)); // nothing done to the controller yet: drop the reset
+    ASSERT_TRUE(bt_link_phantom_abandon_only(PH_DOWN)); // off issued: finish the cycle, skip the retry
+    ASSERT_TRUE(bt_link_phantom_abandon_only(PH_ON));
+}
+
 int main(void) {
     RUN(test_catchup_budget_bounds_what_is_owed_and_counts_the_rest);
     RUN(test_pressure_is_a_long_wait_or_a_big_debt);
@@ -189,5 +196,6 @@ int main(void) {
     RUN(test_the_clock_wraps);
     RUN(test_phantom_acl_is_reset_once_and_only_without_a_real_link);
     RUN(test_phantom_reset_is_rate_limited_per_peer_and_wrap_safe);
+    RUN(test_ending_an_attempt_drops_a_reset_only_before_the_power_off);
     return RESULT();
 }
