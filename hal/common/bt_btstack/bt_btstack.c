@@ -104,6 +104,11 @@ static bd_addr_t g_name_pending;
 static bool g_name_in_flight;
 static bool g_skip_names; /* the scan was stopped by the user: no name requests */
 static uint32_t g_raw_results; /* inquiry results BTstack delivered this scan (before any filtering): for the log */
+#ifdef NEUPOD_BT_PORT_HCI_UP
+static uint32_t g_scan_end_ms;  /* when the scan window ends (btstack_run_loop_get_time_ms) */
+static uint8_t g_round_units;   /* the port's inquiry round length (0: one inquiry for the whole window) */
+static uint32_t g_round;        /* inquiry rounds started this scan */
+#endif
 static bool g_version_logged;  /* BTstack reads the controller version itself during start-up: print it once */
 
 /* Non-blocking hand-over of scan start/stop from the caller's task to the worker. */
@@ -353,6 +358,24 @@ static void on_inquiry_complete(void) {
     if (g_phase != SCAN_INQUIRY) {
         return;
     }
+#ifdef NEUPOD_BT_PORT_HCI_UP
+    /* Short rounds (the Y2's stock shape): another one while the window has a whole unit left. Results are de-duplicated by address (find()). */
+    if (g_round_units != 0 && !g_skip_names) {
+        int32_t left_ms = (int32_t)(g_scan_end_ms - btstack_run_loop_get_time_ms());
+        uint32_t units = left_ms > 0 ? (uint32_t)left_ms / 1280u : 0u;
+        if (units > g_round_units) {
+            units = g_round_units;
+        }
+        if (units >= 1u) {
+            g_round++;
+            printf("bt: inquiry round %u (%u x 1.28 s)\n", (unsigned)g_round, (unsigned)units);
+            if (gap_inquiry_start((uint8_t)units) == 0) {
+                return;
+            }
+            printf("bt: inquiry round could not start\n");
+        }
+    }
+#endif
     g_phase = SCAN_NAMES;
     if (g_skip_names) {
         finish_scan();
@@ -492,7 +515,17 @@ static void worker_scan_start(void *arg) {
     /* hal_bt_inquiry_start() already moved the state to SCANNING (so a second start is refused at once): announce it. */
     hal_bt_event_t ev = {.type = HAL_BT_EVT_STATE, .state = HAL_BT_SCANNING};
     emit(&ev);
-    if (gap_inquiry_start(g_start_units) != 0) {
+    uint8_t units = g_start_units;
+#ifdef NEUPOD_BT_PORT_HCI_UP
+    g_round_units = bt_port_inquiry_round_units();
+    g_scan_end_ms = btstack_run_loop_get_time_ms() + (uint32_t)g_start_units * 1280u;
+    g_round = 1;
+    if (g_round_units != 0 && units > g_round_units) {
+        units = g_round_units;
+        printf("bt: inquiry round 1 (%u x 1.28 s)\n", (unsigned)units);
+    }
+#endif
+    if (gap_inquiry_start(units) != 0) {
         printf("bt: inquiry could not start\n");
         finish_scan();
     }

@@ -47,7 +47,7 @@ TEST(fc66_is_on_only_for_exactly_one) {
 TEST(default_plan_is_only_the_diagnostic_read) {
     y2_hciup_plan_t p;
     y2_hciup_cmd_t c;
-    y2_hciup_plan_init(&p, false, false, 0, false, 0);
+    y2_hciup_plan_init(&p, false, false, 0, false, false, 0);
     ASSERT_TRUE(y2_hciup_next(&p, &c));
     ASSERT_EQ(0x0C58, c.opcode);
     ASSERT_EQ(Y2_HCIUP_READ_TXPWR, c.step);
@@ -59,7 +59,7 @@ TEST(default_plan_is_only_the_diagnostic_read) {
 TEST(full_plan_is_fc66_read_write_readback) {
     y2_hciup_plan_t p;
     y2_hciup_cmd_t c;
-    y2_hciup_plan_init(&p, true, false, 0, true, -4);
+    y2_hciup_plan_init(&p, true, false, 0, false, true, -4);
     ASSERT_TRUE(y2_hciup_next(&p, &c));
     ASSERT_EQ(0xFC66, c.opcode);
     ASSERT_EQ(4, c.len);
@@ -82,7 +82,7 @@ TEST(full_plan_is_fc66_read_write_readback) {
 TEST(write_only_plan_skips_fc66) {
     y2_hciup_plan_t p;
     y2_hciup_cmd_t c;
-    y2_hciup_plan_init(&p, false, false, 0, true, 6);
+    y2_hciup_plan_init(&p, false, false, 0, false, true, 6);
     ASSERT_TRUE(y2_hciup_next(&p, &c));
     ASSERT_EQ(0x0C58, c.opcode);
     ASSERT_TRUE(y2_hciup_next(&p, &c));
@@ -113,7 +113,7 @@ TEST(inq_mode_parse) {
 TEST(inq_mode_only_plan_is_write_then_read) {
     y2_hciup_plan_t p;
     y2_hciup_cmd_t c;
-    y2_hciup_plan_init(&p, false, true, 0, false, 0); // mode 0 still sends
+    y2_hciup_plan_init(&p, false, true, 0, false, false, 0); // mode 0 still sends
     ASSERT_TRUE(y2_hciup_next(&p, &c));
     ASSERT_EQ(Y2_HCIUP_WRITE_INQ_MODE, c.step);
     ASSERT_EQ(0x0C45, c.opcode);
@@ -127,7 +127,7 @@ TEST(inq_mode_only_plan_is_write_then_read) {
 TEST(all_switches_plan_order) {
     y2_hciup_plan_t p;
     y2_hciup_cmd_t c;
-    y2_hciup_plan_init(&p, true, true, 1, true, 6);
+    y2_hciup_plan_init(&p, true, true, 1, false, true, 6);
     const uint16_t order[] = {0xFC66, 0x0C45, 0x0C58, 0x0C59, 0x0C58};
     for (size_t i = 0; i < sizeof order / sizeof order[0]; i++) {
         ASSERT_TRUE(y2_hciup_next(&p, &c));
@@ -135,6 +135,66 @@ TEST(all_switches_plan_order) {
         if (c.opcode == 0x0C45) {
             ASSERT_EQ(1, c.params[0]);
         }
+    }
+    ASSERT_FALSE(y2_hciup_next(&p, &c));
+}
+
+TEST(stock_init_parse) {
+    ASSERT_EQ(Y2_STOCK_INIT_UNSET, y2_bt_parse_stock_init(NULL));
+    ASSERT_EQ(Y2_STOCK_INIT_UNSET, y2_bt_parse_stock_init(""));
+    ASSERT_EQ(Y2_STOCK_INIT_ON, y2_bt_parse_stock_init("1"));
+    const char *bad[] = {"0", "11", "yes", " 1", "1 ", "true"};
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+        ASSERT_EQ(Y2_STOCK_INIT_INVALID, y2_bt_parse_stock_init(bad[i]));
+    }
+}
+
+TEST(stock_init_only_plan) {
+    y2_hciup_plan_t p;
+    y2_hciup_cmd_t c;
+    y2_hciup_plan_init(&p, false, false, 0, true, false, 0);
+    ASSERT_TRUE(y2_hciup_next(&p, &c));
+    ASSERT_EQ(Y2_HCIUP_EVENT_MASK, c.step);
+    ASSERT_EQ(0x0C01, c.opcode);
+    ASSERT_EQ(8, c.len);
+    for (int i = 0; i < 8; i++) {
+        ASSERT_EQ(0xFF, c.params[i]);
+    }
+    ASSERT_TRUE(y2_hciup_next(&p, &c));
+    ASSERT_EQ(0x0C6D, c.opcode);
+    ASSERT_EQ(2, c.len);
+    ASSERT_EQ(0x01, c.params[0]);
+    ASSERT_EQ(0x00, c.params[1]);
+    ASSERT_TRUE(y2_hciup_next(&p, &c));
+    ASSERT_EQ(0x0C18, c.opcode);
+    ASSERT_EQ(2, c.len);
+    ASSERT_EQ(0x00, c.params[0]);
+    ASSERT_EQ(0x38, c.params[1]);
+    ASSERT_TRUE(y2_hciup_next(&p, &c));
+    ASSERT_EQ(Y2_HCIUP_READ_TXPWR, c.step);
+    ASSERT_FALSE(y2_hciup_next(&p, &c));
+}
+
+TEST(all_switches_with_stock_init_order) {
+    y2_hciup_plan_t p;
+    y2_hciup_cmd_t c;
+    y2_hciup_plan_init(&p, true, true, 2, true, true, 6);
+    const uint16_t order[] = {0xFC66, 0x0C45, 0x0C01, 0x0C6D, 0x0C18, 0x0C58, 0x0C59, 0x0C58};
+    for (size_t i = 0; i < sizeof order / sizeof order[0]; i++) {
+        ASSERT_TRUE(y2_hciup_next(&p, &c));
+        ASSERT_EQ(order[i], c.opcode);
+    }
+    ASSERT_FALSE(y2_hciup_next(&p, &c));
+}
+
+TEST(stock_init_off_adds_nothing) {
+    y2_hciup_plan_t p;
+    y2_hciup_cmd_t c;
+    y2_hciup_plan_init(&p, true, true, 2, false, true, 6);
+    const uint16_t order[] = {0xFC66, 0x0C45, 0x0C58, 0x0C59, 0x0C58};
+    for (size_t i = 0; i < sizeof order / sizeof order[0]; i++) {
+        ASSERT_TRUE(y2_hciup_next(&p, &c));
+        ASSERT_EQ(order[i], c.opcode);
     }
     ASSERT_FALSE(y2_hciup_next(&p, &c));
 }
@@ -150,5 +210,9 @@ int main(void) {
     RUN(inq_mode_parse);
     RUN(inq_mode_only_plan_is_write_then_read);
     RUN(all_switches_plan_order);
+    RUN(stock_init_parse);
+    RUN(stock_init_only_plan);
+    RUN(all_switches_with_stock_init_order);
+    RUN(stock_init_off_adds_nothing);
     return RESULT();
 }

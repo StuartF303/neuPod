@@ -252,6 +252,7 @@ static y2_hciup_cmd_t g_up_cmd;
 static uint8_t g_up_raw[HCI_OUTGOING_PRE_BUFFER_SIZE + 3 + sizeof g_up_cmd.params];
 #define g_up_buf (&g_up_raw[HCI_OUTGOING_PRE_BUFFER_SIZE])
 static void (*g_up_done)(void);
+static bool g_stock_init; /* NEUPOD_BT_STOCK_INIT=1; set in bt_port_hci_up(), before any inquiry */
 static bool g_up_active, g_up_inflight, g_up_env_logged, g_up_registered;
 static uint32_t g_up_start;
 static btstack_timer_source_t g_up_timer;
@@ -322,6 +323,15 @@ static void up_answer(uint8_t status, const uint8_t *data, uint16_t data_len) {
     case Y2_HCIUP_WRITE_INQ_MODE:
         printf("bt: inquiry mode set to %u (0x0C45) -> status 0x%02X%s\n", (unsigned)g_up_plan.inq_mode, (unsigned)status, ok ? "" : " (refused, carrying on)");
         break;
+    case Y2_HCIUP_EVENT_MASK:
+        printf("bt: event mask set to all ones (0x0C01) -> status 0x%02X%s\n", (unsigned)status, ok ? "" : " (refused, carrying on)");
+        break;
+    case Y2_HCIUP_LE_HOST:
+        printf("bt: LE host supported 01 00 (0x0C6D) -> status 0x%02X%s\n", (unsigned)status, ok ? "" : " (refused, carrying on)");
+        break;
+    case Y2_HCIUP_PAGE_TIMEOUT:
+        printf("bt: page timeout 0x3800 (0x0C18) -> status 0x%02X%s\n", (unsigned)status, ok ? "" : " (refused, carrying on)");
+        break;
     case Y2_HCIUP_READ_TXPWR:
         if (ok && data_len >= 1) {
             printf("bt: inquiry tx power (controller default) %d dBm\n", (int)(int8_t)data[0]);
@@ -382,6 +392,8 @@ static void up_event(uint8_t type, uint16_t channel, uint8_t *packet, uint16_t s
     }
 }
 
+uint8_t bt_port_inquiry_round_units(void) { return g_stock_init ? Y2_STOCK_INQ_ROUND_UNITS : 0; }
+
 bool bt_port_hci_up(void (*done)(void)) {
     const char *tx = getenv("NEUPOD_BT_INQ_TXPWR");
     int8_t pwr = 0;
@@ -390,6 +402,9 @@ bool bt_port_hci_up(void (*done)(void)) {
     uint8_t inq_mode = 0;
     y2_inq_mode_result_t mr = y2_bt_parse_inq_mode(im, &inq_mode);
     bool fc66 = y2_bt_parse_fc66(getenv("NEUPOD_BT_MTK_FC66"));
+    const char *si = getenv("NEUPOD_BT_STOCK_INIT");
+    y2_stock_init_result_t sr = y2_bt_parse_stock_init(si);
+    g_stock_init = sr == Y2_STOCK_INIT_ON;
     if (!g_up_env_logged) {
         g_up_env_logged = true;
         if (r == Y2_INQ_TXPWR_UNSET) {
@@ -403,6 +418,12 @@ bool bt_port_hci_up(void (*done)(void)) {
         } else if (mr == Y2_INQ_MODE_INVALID) {
             printf("bt: NEUPOD_BT_INQ_MODE='%s' is not 0, 1 or 2: ignored\n", im);
         }
+        if (sr == Y2_STOCK_INIT_ON) {
+            printf("bt: NEUPOD_BT_STOCK_INIT=1: event mask, LE host supported and page timeout follow every HCI reset; inquiries run as %u x 1.28 s rounds\n",
+                   (unsigned)Y2_STOCK_INQ_ROUND_UNITS);
+        } else if (sr == Y2_STOCK_INIT_INVALID) {
+            printf("bt: NEUPOD_BT_STOCK_INIT='%s' is not 1: ignored\n", si);
+        }
         if (fc66) {
             printf("bt: NEUPOD_BT_MTK_FC66=1: the MediaTek vendor command FC66 follows every HCI reset\n");
         }
@@ -412,7 +433,7 @@ bool bt_port_hci_up(void (*done)(void)) {
         g_up_reg.callback = up_event;
         hci_add_event_handler(&g_up_reg);
     }
-    y2_hciup_plan_init(&g_up_plan, fc66, mr == Y2_INQ_MODE_OK, inq_mode, r == Y2_INQ_TXPWR_OK, pwr);
+    y2_hciup_plan_init(&g_up_plan, fc66, mr == Y2_INQ_MODE_OK, inq_mode, g_stock_init, r == Y2_INQ_TXPWR_OK, pwr);
     g_up_done = done;
     g_up_active = true;
     g_up_inflight = false;

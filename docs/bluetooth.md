@@ -265,7 +265,7 @@ volume (AVRCP, stage 2c) makes up the level. Bench aids on the Y2 only: `NEUPOD_
 `NEUPOD_BT_PCM_DUMP=<file>` (the encoder's input PCM) in `/etc/neupod-fw.env`.
 
 Three more Y2 bench switches in the same file match the controller's set-up to the stock MediaTek stack's, for the intermittent "no AirPods in the inquiry" (the Pico 2 W
-beside it finds them every time). All three are read at every HCI-up (first start and each controller power-on after sleep or a reset), so a change needs a firmware restart.
+beside it finds them every time). All of them are read at every HCI-up (first start and each controller power-on after sleep or a reset), so a change needs a firmware restart.
 The controller's own inquiry transmit power is always read and logged (`bt: inquiry tx power (controller default) N dBm`).
 * `NEUPOD_BT_INQ_TXPWR=<-70..20>`: Write Inquiry Transmit Power Level (0x0C59) with that many dBm (stock writes +6 before every inquiry; the value lasts until the
   controller is reset, so once per HCI-up is the same). Logged with its status and a read-back (`bt: inquiry tx power set to 6 dBm -> status 0x00`, `bt: inquiry tx power
@@ -277,6 +277,16 @@ The controller's own inquiry transmit power is always read and logged (`bt: inqu
   (`bt: NEUPOD_BT_INQ_MODE=1: inquiry mode RSSI (0x0C45) after every HCI reset`, then `bt: inquiry mode set to 1 (0x0C45) -> status 0x00`). Unset: not sent. Anything but
   exactly 0, 1 or 2: ignored, and logged once.
 * `NEUPOD_BT_MTK_FC66=1`: the MediaTek vendor command 0xFC66 with `00 10 40 9C`, which stock sends once after HCI_Reset (meaning unknown). Its status is logged.
+* `NEUPOD_BT_STOCK_INIT=1`: the rest of stock's HCI set-up, in two parts (exactly `1` enables; anything else set is logged as ignored; unset: off).
+  1. After every HCI reset, after FC66 and the inquiry mode and before the power commands: Set Event Mask (0x0C01, `ff` x 8), Write LE Host Supported (0x0C6D, `01 00`) and
+     Write Page Timeout (0x0C18, 0x3800 = 8.96 s). Each completion status is logged. The wider event mask only makes the controller send events BTstack does not use
+     (it ignores events it has no case for); BTstack's own mask from its init is overridden until the next reset. Host flow control (0x0C33/0x0C31) is deliberately not
+     enabled: BTstack never sends Host_Number_Of_Completed_Packets.
+  2. Stock's inquiry shape: rounds of 4 x 1.28 s (5.12 s), repeated until the scan window (10 s) is covered; the last round is shortened to what is left, and no
+     round starts with less than one 1.28 s unit left. Each round is logged (`bt: inquiry round N (4 x 1.28 s)`, and `bt: inquiry complete ...` after each), the
+     results are de-duplicated by address across rounds, and `bt: scan done` comes once at the end. A scan stopped by the user is not restarted. Stock also passes
+     num_responses 25; BTstack's GAP API always sends 0 (unlimited) and has no setter, so that is not reproduced (unlimited is never fewer results). Not sent behind BTstack's back: it
+     would desynchronise its inquiry state.
 
 A command the controller refuses or never answers is logged and skipped; Bluetooth still comes up. The commands run before the radio is reported ON, so each HCI-up
 can take up to 6 s longer in the worst case (an unanswering controller); with the switches unset it is one quick read.
