@@ -247,7 +247,10 @@ int bt_port_power(bool on) { return hci_power_control(on ? HCI_POWER_ON : HCI_PO
 
 static y2_hciup_plan_t g_up_plan;
 static y2_hciup_cmd_t g_up_cmd;
-static uint8_t g_up_buf[3 + sizeof g_up_cmd.params];
+/* The H4 transport writes the packet type into packet[-1], so a command must have HCI_OUTGOING_PRE_BUFFER_SIZE spare bytes in front of it (BTstack's own
+ * hci_packet_buffer has them). Without them the type byte lands on whatever precedes the buffer: it overwrote the plan's step counter and re-sent 0x0C58 for ever. */
+static uint8_t g_up_raw[HCI_OUTGOING_PRE_BUFFER_SIZE + 3 + sizeof g_up_cmd.params];
+#define g_up_buf (&g_up_raw[HCI_OUTGOING_PRE_BUFFER_SIZE])
 static void (*g_up_done)(void);
 static bool g_up_active, g_up_inflight, g_up_env_logged, g_up_registered;
 static uint32_t g_up_start;
@@ -359,9 +362,16 @@ static void up_event(uint8_t type, uint16_t channel, uint8_t *packet, uint16_t s
         }
         break;
     case HCI_EVENT_COMMAND_STATUS:
-        /* a refusal comes as Command Status (an unknown command often does); an accepted one is followed by its own event, which none of ours has */
+        /* a refusal comes as Command Status (an unknown command often does); "accepted" would be followed by an event of its own, which none of ours has */
         if (g_up_inflight && size >= 6 && little_endian_read_16(packet, 4) == g_up_cmd.opcode) {
-            up_answer(packet[2] != 0 ? packet[2] : 0xFF, NULL, 0);
+            if (packet[2] != 0) {
+                up_answer(packet[2], NULL, 0);
+            } else {
+                printf("bt: controller set-up command 0x%04X accepted, no completion event, carrying on\n", (unsigned)g_up_cmd.opcode);
+                g_up_inflight = false;
+                btstack_run_loop_remove_timer(&g_up_timer);
+                up_pump();
+            }
         }
         break;
     default:
