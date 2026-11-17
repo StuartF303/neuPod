@@ -139,6 +139,32 @@ static btstack_timer_source_t g_cancel_timer;
 static uint8_t g_cancel_addr[6];
 static uint8_t g_cancel_tries;
 static uint32_t g_cancel_attempt;     /* the attempt a pending create-connection cancel belongs to */
+#ifdef NEUPOD_BT_PHANTOM_RESET
+/* The MT6582's phantom link (see phantom_recover; the Y2 build only): g_phantom is where the reset is (PH_* in bt_link_policy.h). Each reset is for one attempt, has its own timers (one paces the steps, one bounds the whole reset) and is cancelled by anything that ends the attempt
+ * or powers the radio down. */
+static uint8_t g_phantom;
+static bool g_phantom_abandoned;       /* the attempt ended after the power-off was issued: the reset runs to the end, but nothing is retried */
+static bool g_phantom_tried;            /* the controller was already reset for this attempt: a second 0x0B is reported as it is */
+static uint32_t g_phantom_attempt;      /* the attempt the reset is for: the retry must find it still current */
+static btstack_timer_source_t g_phantom_timer, g_phantom_bound;
+static uint8_t g_phantom_last_addr[6];  /* the peer of the last reset, and when: at most one reset per peer per BT_LINK_PHANTOM_REPEAT_MS */
+static uint32_t g_phantom_last_ms;
+static bool g_phantom_have_last;
+static void phantom_clear(void);
+static void phantom_attempt_ended(void);
+static bool phantom_off(void);
+static void phantom_retry(void);
+static const char *phantom_note(uint8_t st);
+#define PHANTOM_CLEAR() phantom_attempt_ended()
+#define PHANTOM_FMT "%s"
+#define PHANTOM_ARG(st) , phantom_note(st)
+#define PHANTOM_LINK_UP() (g_phantom_have_last = false) /* a link to the peer worked: the next 0x0B is a new fault */
+#else
+#define PHANTOM_CLEAR() ((void)0)
+#define PHANTOM_FMT ""
+#define PHANTOM_ARG(st)
+#define PHANTOM_LINK_UP() ((void)0)
+#endif
 #define FORGET_SLOTS 2u
 static uint8_t g_forget_addr[FORGET_SLOTS][6];
 static volatile int g_forget_state[FORGET_SLOTS]; /* 0 free, 1 being filled, 2 ready */
@@ -340,11 +366,24 @@ static const char *hci_version_name(uint8_t v) {
     return v < sizeof k / sizeof k[0] ? k[v] : "?";
 }
 
+/* The radio is usable: report it, and finish a controller reset that a phantom link caused. */
+static void on_ready(void) {
+    set_state(HAL_BT_ON);
+#ifdef NEUPOD_BT_PHANTOM_RESET
+    phantom_retry();
+#endif
+}
+
 static void on_working(void) {
     gap_local_bd_addr(g_local);
     g_have_addr = true;
     printf("bt: HCI up, local BD_ADDR %s\n", bd_addr_to_str(g_local));
-    set_state(HAL_BT_ON);
+#ifdef NEUPOD_BT_PORT_HCI_UP
+    if (bt_port_hci_up(on_ready)) {
+        return; /* the port runs its controller commands first; on_ready() follows */
+    }
+#endif
+    on_ready();
 }
 
 static void packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint16_t size) {
@@ -361,7 +400,19 @@ static void packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint
             on_working();
             break;
         case HCI_STATE_OFF:
+#ifdef NEUPOD_BT_PHANTOM_RESET
+            if (phantom_off()) {
+                break; /* our own reset of the controller: the attempt is kept for the retry */
+            }
+#endif
             link_reset();
+#if defined(NEUPOD_BT_PHANTOM_RESET) && NEUPOD_POWER_MGMT
+            if (g_powering_down) { /* a power-down asked for during a (retry) power-up is a wanted OFF, not a failed start */
+                g_powering_down = false;
+                set_state(HAL_BT_OFF);
+                break;
+            }
+#endif
             if (g_state == HAL_BT_STARTING) {
                 printf("bt: HCI did not come up\n");
                 set_state(HAL_BT_FAILED);
@@ -556,6 +607,7 @@ static void cancel_pending_acl(void) {
 
 /* The end of an attempt (or of the link): everything off, hang up unless it is CONNECTED, publish the state. */
 static void link_end(hal_bt_link_state_t s, hal_bt_fail_t reason) {
+    PHANTOM_CLEAR(); /* the attempt is over: a reset not yet started is dropped, one under way is only stripped of its retry */
     btstack_run_loop_remove_timer(&g_link_timer);
     if (g_accepting || g_pairing) {
         set_accepting(false);
@@ -586,6 +638,7 @@ static void avrcp_arm_connect(void);
 
 static void link_up(void) {
     g_lphase = LP_UP;
+    PHANTOM_LINK_UP();
     printf("bt: connected %s\n", bd_addr_to_str(g_peer.addr));
     link_end(HAL_BT_LINK_CONNECTED, HAL_BT_FAIL_NONE);
     a2dp_open(); /* the audio stream opens by itself once the link is up (stage 2b) */
@@ -598,6 +651,151 @@ static bool have_link_key(void) {
 }
 
 static void start_sdp(void);
+static void link_start_attempt(bool retry);
+
+#ifdef NEUPOD_BT_PHANTOM_RESET
+/* The MT6582 (Y2) keeps a phantom ACL: after a Create_Connection timed out and was cancelled (Create_Connection_Cancel is answered with a failed
+ * Connection_Complete, as it should be) every later Create_Connection to that address is refused with Command Status 0x0B (ACL connection already
+ * exists), with no link there, until the controller is reset. BTstack passes the refusal on as the SDP / bonding result. Only a power cycle of the
+ * controller clears it, so that is what is done, once per attempt and at most once per peer per BT_LINK_PHANTOM_REPEAT_MS (a headset that keeps
+ * failing must not power-cycle the controller on every auto-reconnect), and the same step is then tried again. It goes through the same
+ * hci_power_control() as the sleep path, so the link keys, the state events and the UI stay as they are there. The steps run from a timer, out of the
+ * BTstack callback that found the fault; the attempt itself is kept, only its timer and phase are paused. Ending the attempt, or a power-down of the
+ * radio, cancels the reset (phantom_clear); a reset that has not finished after BT_LINK_PHANTOM_BOUND_MS ends the attempt and leaves the radio failed. */
+static bool power_down_wanted(void) {
+#if NEUPOD_POWER_MGMT
+    return g_powering_down;
+#else
+    return false;
+#endif
+}
+
+static void phantom_clear(void) {
+    g_phantom = PH_NONE;
+    g_phantom_abandoned = false;
+    btstack_run_loop_remove_timer(&g_phantom_timer);
+    btstack_run_loop_remove_timer(&g_phantom_bound);
+}
+
+/* link_end(): the attempt is over. A reset whose power-off has not been issued is dropped; one under way runs to the end (the bound stays armed) so HCI
+ * and the radio state agree afterwards, and phantom_retry() then finds the attempt abandoned. */
+static void phantom_attempt_ended(void) {
+    if (bt_link_phantom_abandon_only(g_phantom)) {
+        g_phantom_abandoned = true;
+    } else {
+        phantom_clear();
+    }
+}
+
+/* The reset itself failed or timed out: end it (explicitly, not through link_end) and, unless the attempt is already over, fail the attempt. */
+static void phantom_fail(hal_bt_fail_t why) {
+    bool live = !g_phantom_abandoned;
+    phantom_clear();
+    if (live && (g_link == HAL_BT_LINK_PAIRING || g_link == HAL_BT_LINK_CONNECTING)) {
+        link_end(HAL_BT_LINK_FAILED, why);
+    }
+}
+
+static void phantom_step(btstack_timer_source_t *ts) {
+    (void)ts;
+    uint8_t ph = g_phantom;
+    if ((ph != PH_OFF && ph != PH_ON) || power_down_wanted()) {
+        return; /* cancelled meanwhile */
+    }
+    if (ph == PH_OFF) {
+        g_phantom = PH_DOWN; /* before the call: the OFF event may arrive inside it */
+    }
+    int rc = bt_port_power(ph == PH_ON);
+    if (rc != 0) {
+        printf("bt: controller reset (%s) failed (%d)\n", ph == PH_ON ? "on" : "off", rc);
+        phantom_fail(HAL_BT_FAIL_INTERNAL);
+        if (ph == PH_ON) {
+            set_state(HAL_BT_FAILED);
+        }
+    }
+}
+
+/* The reset did not finish in time (HCI never went down, or never came back up): end the attempt and leave the radio failed, as a start that fails. Nothing is
+ * automatic after that: the user turns Bluetooth off and on again. */
+static void phantom_bound_expired(btstack_timer_source_t *ts) {
+    (void)ts;
+    if (g_phantom == PH_NONE) {
+        return;
+    }
+    printf("bt: controller reset did not finish within %u s: giving up\n", (unsigned)(BT_LINK_PHANTOM_BOUND_MS / 1000u));
+    phantom_fail(HAL_BT_FAIL_TIMEOUT);
+    set_state(HAL_BT_STARTING); /* so the OFF that follows is a failed start (FAILED) */
+    if (hci_get_state() == HCI_STATE_OFF || bt_port_power(false) != 0) {
+        set_state(HAL_BT_FAILED);
+    }
+}
+
+static void phantom_defer(uint32_t ms) {
+    btstack_run_loop_remove_timer(&g_phantom_timer);
+    btstack_run_loop_set_timer_handler(&g_phantom_timer, phantom_step);
+    btstack_run_loop_set_timer(&g_phantom_timer, ms);
+    btstack_run_loop_add_timer(&g_phantom_timer);
+}
+
+static bool phantom_recover(uint8_t st) {
+    if (g_phantom != PH_NONE || !bt_link_phantom_acl(st, g_acl != HCI_CON_HANDLE_INVALID, g_phantom_tried)) {
+        return false;
+    }
+    uint32_t now = btstack_run_loop_get_time_ms();
+    if (g_phantom_have_last && memcmp(g_phantom_last_addr, g_peer.addr, 6) == 0 && !bt_link_phantom_due(now, g_phantom_last_ms)) {
+        printf("bt: phantom link to %s again (0x%02X) within %u s of the last controller reset: not resetting again\n", bd_addr_to_str(g_peer.addr),
+               (unsigned)st, (unsigned)(BT_LINK_PHANTOM_REPEAT_MS / 1000u));
+        return false;
+    }
+    printf("bt: controller reports a phantom link to %s (0x%02X): resetting the controller and retrying\n", bd_addr_to_str(g_peer.addr), (unsigned)st);
+    g_phantom_tried = true;
+    g_phantom_have_last = true;
+    g_phantom_last_ms = now;
+    memcpy(g_phantom_last_addr, g_peer.addr, 6);
+    g_phantom_attempt = g_attempt;
+    g_phantom_abandoned = false;
+    g_phantom = PH_OFF;
+    btstack_run_loop_remove_timer(&g_link_timer); /* the retry starts a fresh one */
+    g_lphase = LP_IDLE;
+    g_sdp_live = g_sdp_wait = false;
+    btstack_run_loop_set_timer_handler(&g_phantom_bound, phantom_bound_expired);
+    btstack_run_loop_set_timer(&g_phantom_bound, BT_LINK_PHANTOM_BOUND_MS);
+    btstack_run_loop_add_timer(&g_phantom_bound);
+    phantom_defer(1);
+    return true;
+}
+
+/* HCI_STATE_OFF: true if it is the first half of our reset (the second half is powering up again). */
+static bool phantom_off(void) {
+    if (g_phantom != PH_DOWN || power_down_wanted()) {
+        phantom_clear(); /* the power-up of the retry failed, or an ordinary power-down (which also ends a reset): the usual handling */
+        return false;
+    }
+    g_phantom = PH_ON;
+    g_acl = HCI_CON_HANDLE_INVALID;
+    set_state(HAL_BT_STARTING);
+    phantom_defer(200);
+    return true;
+}
+
+/* The controller is back (on_ready): start the same attempt once more, if it is still the one that was reset. */
+static void phantom_retry(void) {
+    if (g_phantom != PH_ON) {
+        return;
+    }
+    bool same = !g_phantom_abandoned && g_attempt == g_phantom_attempt;
+    phantom_clear();
+    if (g_link == HAL_BT_LINK_PAIRING || g_link == HAL_BT_LINK_CONNECTING) {
+        if (same) {
+            link_start_attempt(true);
+        } else {
+            link_end(HAL_BT_LINK_FAILED, HAL_BT_FAIL_INTERNAL); /* a newer attempt began while the controller was going down: the reset took it too */
+        }
+    }
+}
+
+static const char *phantom_note(uint8_t st) { return st == 0x0Bu && g_phantom_tried ? " (after the controller reset)" : ""; }
+#endif
 
 static void sdp_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint16_t size) {
     (void)channel;
@@ -625,7 +823,12 @@ static void sdp_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint16_
         }
         uint8_t st = sdp_event_query_complete_get_status(packet);
         if (st != 0) {
-            printf("bt: SDP 0x%02X\n", (unsigned)st);
+#ifdef NEUPOD_BT_PHANTOM_RESET
+            if (phantom_recover(st)) {
+                return;
+            }
+#endif
+            printf("bt: SDP 0x%02X" PHANTOM_FMT "\n", (unsigned)st PHANTOM_ARG(st));
             link_end(HAL_BT_LINK_FAILED, fail_from_status(st));
         } else if (!g_sink_seen) {
             link_end(HAL_BT_LINK_FAILED, HAL_BT_FAIL_NO_SINK);
@@ -663,14 +866,25 @@ static void start_sdp(void) {
     }
 }
 
-/* Worker: begin the attempt that hal_bt_pair() / hal_bt_connect() reserved (g_link is already PAIRING / CONNECTING). */
+/* Begin the attempt that hal_bt_pair() / hal_bt_connect() reserved (g_link is already PAIRING / CONNECTING), or its one retry after a controller reset. */
+#ifdef NEUPOD_BT_PHANTOM_RESET
+static void link_start_attempt(bool retry) {
+    if (!retry) {
+        g_phantom_tried = false;
+    }
+#else
 static void worker_link_start(void *arg) {
     (void)arg;
+#endif
     g_acl = HCI_CON_HANDLE_INVALID;
     g_sink_seen = false;
     g_sdp_wait = false;
     g_pairing = g_link == HAL_BT_LINK_PAIRING;
+#ifdef NEUPOD_BT_PHANTOM_RESET
+    printf("bt: %s %s%s\n", g_pairing ? "pair" : "connect", bd_addr_to_str(g_peer.addr), retry ? " (again, after the controller reset)" : "");
+#else
     printf("bt: %s %s\n", g_pairing ? "pair" : "connect", bd_addr_to_str(g_peer.addr));
+#endif
     emit_link((hal_bt_link_state_t)g_link, HAL_BT_FAIL_NONE);
     btstack_run_loop_set_timer_handler(&g_link_timer, link_timeout);
     btstack_run_loop_set_timer(&g_link_timer, g_pairing ? HAL_BT_PAIR_TIMEOUT_MS : HAL_BT_CONNECT_TIMEOUT_MS);
@@ -689,6 +903,13 @@ static void worker_link_start(void *arg) {
         start_sdp();
     }
 }
+
+#ifdef NEUPOD_BT_PHANTOM_RESET
+static void worker_link_start(void *arg) {
+    (void)arg;
+    link_start_attempt(false);
+}
+#endif
 
 /* Worker: a user cancel / disconnect, or Forget of the current peer. */
 static void drop_link(void) {
@@ -808,8 +1029,12 @@ static void link_packet(uint8_t *packet) {
         uint8_t st = gap_event_dedicated_bonding_completed_get_status(packet);
         if (st == 0) {
             start_sdp();
+#ifdef NEUPOD_BT_PHANTOM_RESET
+        } else if (phantom_recover(st)) {
+            break;
+#endif
         } else {
-            printf("bt: bonding 0x%02X\n", (unsigned)st);
+            printf("bt: bonding 0x%02X" PHANTOM_FMT "\n", (unsigned)st PHANTOM_ARG(st));
             link_end(HAL_BT_LINK_FAILED, fail_from_status(st));
         }
         break;
@@ -2103,6 +2328,16 @@ hal_status_t hal_bt_init(hal_bt_event_fn cb, void *ctx, const hal_bt_storage_t *
 #if NEUPOD_POWER_MGMT
 static uint32_t worker_power_down(void *param) {
     (void)param;
+#ifdef NEUPOD_BT_PHANTOM_RESET
+    phantom_clear(); /* a controller reset in progress is overtaken by the power-down */
+    if (g_state == HAL_BT_STARTING && hci_get_state() == HCI_STATE_OFF) {
+        /* The window between our reset's power-off and power-on: HCI is already off, so hci_power_control(OFF) would report nothing. */
+        set_accepting(false);
+        link_reset();
+        set_state(HAL_BT_OFF);
+        return 0;
+    }
+#endif
     set_accepting(false);
     g_powering_down = true;
     return (uint32_t)bt_port_power(false);

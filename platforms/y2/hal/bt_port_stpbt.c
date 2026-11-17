@@ -37,6 +37,7 @@
 #include "hal_system.h"
 #include "hci_transport_h4.h"
 #include "y2_bt_addr.h"
+#include "y2_bt_hciup.h"
 #include "y2_bt_tlv.h"
 #include "y2_hal.h"
 
@@ -231,6 +232,183 @@ bool bt_port_run_sync(bt_port_fn fn, void *arg) {
 }
 
 int bt_port_power(bool on) { return hci_power_control(on ? HCI_POWER_ON : HCI_POWER_OFF); }
+
+/* ---- controller commands at HCI-up (stock parity, bench switches in y2_bt_hciup.h) ---- */
+
+/* The stock MediaTek stack writes the inquiry transmit power (0x0C59) before every inquiry and sends the vendor command 0xFC66 once after
+ * HCI_Reset; we sent neither, and the Y2 sometimes found no AirPods. The power is controller state that lasts until the controller is reset, so
+ * writing it at every HCI-up (first start and each power-on after sleep or a phantom-link reset) is the same as writing it before each inquiry,
+ * and it keeps the inquiry path free of extra commands. The commands go out one at a time with BTstack's own can-send check, from the HCI event
+ * handler on BTstack's thread, before the adapter reports the radio ON. HCI_Reset itself was done by BTstack's init before it said WORKING, so
+ * FC66 is "after HCI_Reset" as in stock.
+ * Failure stance: fail open. A command that is refused (status != 0, including 0x01 unknown command) or never answered is logged and skipped. */
+#define HCIUP_ANSWER_MS 2000u /* one command's answer */
+#define HCIUP_TOTAL_MS 6000u  /* the whole sequence, including waiting for the controller to take a command */
+
+static y2_hciup_plan_t g_up_plan;
+static y2_hciup_cmd_t g_up_cmd;
+/* The H4 transport writes the packet type into packet[-1], so a command must have HCI_OUTGOING_PRE_BUFFER_SIZE spare bytes in front of it (BTstack's own
+ * hci_packet_buffer has them). Without them the type byte lands on whatever precedes the buffer: it overwrote the plan's step counter and re-sent 0x0C58 for ever. */
+static uint8_t g_up_raw[HCI_OUTGOING_PRE_BUFFER_SIZE + 3 + sizeof g_up_cmd.params];
+#define g_up_buf (&g_up_raw[HCI_OUTGOING_PRE_BUFFER_SIZE])
+static void (*g_up_done)(void);
+static bool g_up_active, g_up_inflight, g_up_env_logged, g_up_registered;
+static uint32_t g_up_start;
+static btstack_timer_source_t g_up_timer;
+static btstack_packet_callback_registration_t g_up_reg;
+
+static void up_finish(void) {
+    btstack_run_loop_remove_timer(&g_up_timer);
+    g_up_active = g_up_inflight = false;
+    void (*done)(void) = g_up_done;
+    g_up_done = NULL;
+    if (done != NULL) {
+        done();
+    }
+}
+
+static void up_pump(void);
+
+static void up_timer(btstack_timer_source_t *ts) {
+    (void)ts;
+    if (g_up_inflight) {
+        printf("bt: controller set-up command 0x%04X: no answer within %u ms, carrying on\n", (unsigned)g_up_cmd.opcode, (unsigned)HCIUP_ANSWER_MS);
+        g_up_inflight = false;
+    }
+    up_pump();
+}
+
+static void up_pump(void) {
+    if (!g_up_active || g_up_inflight) {
+        return;
+    }
+    if (btstack_run_loop_get_time_ms() - g_up_start > HCIUP_TOTAL_MS) {
+        printf("bt: controller set-up: gave up waiting (%u ms), carrying on\n", (unsigned)HCIUP_TOTAL_MS);
+        up_finish();
+        return;
+    }
+    if (!hci_can_send_command_packet_now()) {
+        btstack_run_loop_set_timer(&g_up_timer, 5);
+        btstack_run_loop_add_timer(&g_up_timer);
+        return;
+    }
+    if (!y2_hciup_next(&g_up_plan, &g_up_cmd)) {
+        up_finish();
+        return;
+    }
+    little_endian_store_16(g_up_buf, 0, g_up_cmd.opcode);
+    g_up_buf[2] = g_up_cmd.len;
+    memcpy(&g_up_buf[3], g_up_cmd.params, g_up_cmd.len);
+    g_up_inflight = true;
+    btstack_run_loop_remove_timer(&g_up_timer);
+    btstack_run_loop_set_timer(&g_up_timer, HCIUP_ANSWER_MS);
+    btstack_run_loop_add_timer(&g_up_timer);
+    uint8_t rc = hci_send_cmd_packet(g_up_buf, 3 + g_up_cmd.len);
+    if (rc != 0) {
+        printf("bt: controller set-up command 0x%04X not sent (0x%02X), carrying on\n", (unsigned)g_up_cmd.opcode, (unsigned)rc);
+        g_up_inflight = false;
+        btstack_run_loop_remove_timer(&g_up_timer);
+        up_pump();
+    }
+}
+
+/* The answer to the command in flight: log it by what it was, then the next one. @p status / @p data: the status byte and what follows it. */
+static void up_answer(uint8_t status, const uint8_t *data, uint16_t data_len) {
+    bool ok = status == 0;
+    switch (g_up_cmd.step) {
+    case Y2_HCIUP_FC66:
+        printf("bt: MTK vendor command FC66 (00 10 40 9C) -> status 0x%02X%s\n", (unsigned)status, ok ? "" : " (refused, carrying on)");
+        break;
+    case Y2_HCIUP_READ_TXPWR:
+        if (ok && data_len >= 1) {
+            printf("bt: inquiry tx power (controller default) %d dBm\n", (int)(int8_t)data[0]);
+        } else {
+            printf("bt: inquiry tx power read refused (status 0x%02X), carrying on\n", (unsigned)status);
+        }
+        break;
+    case Y2_HCIUP_WRITE_TXPWR:
+        printf("bt: inquiry tx power set to %d dBm -> status 0x%02X%s\n", (int)g_up_plan.txpwr, (unsigned)status, ok ? "" : " (refused, carrying on)");
+        break;
+    case Y2_HCIUP_READBACK:
+        if (ok && data_len >= 1) {
+            printf("bt: inquiry tx power (read back) %d dBm\n", (int)(int8_t)data[0]);
+        } else {
+            printf("bt: inquiry tx power read-back refused (status 0x%02X), carrying on\n", (unsigned)status);
+        }
+        break;
+    }
+    g_up_inflight = false;
+    btstack_run_loop_remove_timer(&g_up_timer);
+    up_pump();
+}
+
+static void up_event(uint8_t type, uint16_t channel, uint8_t *packet, uint16_t size) {
+    (void)channel;
+    if (type != HCI_EVENT_PACKET || !g_up_active || size < 3) {
+        return;
+    }
+    switch (hci_event_packet_get_type(packet)) {
+    case BTSTACK_EVENT_STATE:
+        if (btstack_event_state_get_state(packet) != HCI_STATE_WORKING) {
+            /* the controller went down under the sequence (a power cycle): drop it; HCI-up runs it again */
+            btstack_run_loop_remove_timer(&g_up_timer);
+            g_up_active = g_up_inflight = false;
+            g_up_done = NULL;
+        }
+        break;
+    case HCI_EVENT_COMMAND_COMPLETE:
+        if (g_up_inflight && size >= 6 && little_endian_read_16(packet, 3) == g_up_cmd.opcode) {
+            up_answer(packet[5], &packet[6], (uint16_t)(size - 6));
+        }
+        break;
+    case HCI_EVENT_COMMAND_STATUS:
+        /* a refusal comes as Command Status (an unknown command often does); "accepted" would be followed by an event of its own, which none of ours has */
+        if (g_up_inflight && size >= 6 && little_endian_read_16(packet, 4) == g_up_cmd.opcode) {
+            if (packet[2] != 0) {
+                up_answer(packet[2], NULL, 0);
+            } else {
+                printf("bt: controller set-up command 0x%04X accepted, no completion event, carrying on\n", (unsigned)g_up_cmd.opcode);
+                g_up_inflight = false;
+                btstack_run_loop_remove_timer(&g_up_timer);
+                up_pump();
+            }
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+bool bt_port_hci_up(void (*done)(void)) {
+    const char *tx = getenv("NEUPOD_BT_INQ_TXPWR");
+    int8_t pwr = 0;
+    y2_inq_txpwr_result_t r = y2_bt_parse_inq_txpwr(tx, &pwr);
+    bool fc66 = y2_bt_parse_fc66(getenv("NEUPOD_BT_MTK_FC66"));
+    if (!g_up_env_logged) {
+        g_up_env_logged = true;
+        if (r == Y2_INQ_TXPWR_UNSET) {
+            printf("bt: NEUPOD_BT_INQ_TXPWR not set: the inquiry transmit power is left as the controller has it\n");
+        } else if (r == Y2_INQ_TXPWR_INVALID) {
+            printf("bt: NEUPOD_BT_INQ_TXPWR='%s' is not an integer from %d to %d: ignored\n", tx, Y2_INQ_TXPWR_MIN, Y2_INQ_TXPWR_MAX);
+        }
+        if (fc66) {
+            printf("bt: NEUPOD_BT_MTK_FC66=1: the MediaTek vendor command FC66 follows every HCI reset\n");
+        }
+    }
+    if (!g_up_registered) {
+        g_up_registered = true;
+        g_up_reg.callback = up_event;
+        hci_add_event_handler(&g_up_reg);
+    }
+    y2_hciup_plan_init(&g_up_plan, fc66, r == Y2_INQ_TXPWR_OK, pwr);
+    g_up_done = done;
+    g_up_active = true;
+    g_up_inflight = false;
+    g_up_start = btstack_run_loop_get_time_ms();
+    btstack_run_loop_set_timer_handler(&g_up_timer, up_timer);
+    up_pump();
+    return true;
+}
 
 /* ---- start-up ---- */
 

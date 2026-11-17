@@ -69,6 +69,27 @@ void bt_link_policy_init(bt_link_policy_t *p, uint32_t now_ms);
 /** Feed one pacing tick. Returns the bitpool to switch to, or 0 for no change. @p ceiling / @p min_bp as bt_link_bitpool(). */
 uint8_t bt_link_policy_tick(bt_link_policy_t *p, uint32_t now_ms, bool pressured, uint8_t ceiling, uint8_t min_bp);
 
+/* ---- The MT6582's phantom link ---- */
+
+/** After a Create_Connection that timed out (and was cancelled) the MT6582 refuses every later one to that address with 0x0B (ACL connection
+ * already exists) until it is reset, with no link there. True if a failed set-up step (status @p st, with @p have_acl: we hold a connection handle)
+ * is that and the controller has not been reset for this attempt yet (@p already_reset): reset it and try the same step once more. */
+static inline bool bt_link_phantom_acl(uint8_t st, bool have_acl, bool already_reset) {
+    return st == 0x0Bu /* ERROR_CODE_ACL_CONNECTION_ALREADY_EXISTS */ && !have_acl && !already_reset;
+}
+
+/** Where a controller reset for a phantom link is. */
+enum { PH_NONE = 0, PH_OFF /* power-off not issued yet */, PH_DOWN /* power-off issued, waiting for HCI_STATE_OFF */, PH_ON /* power-on issued or pending */ };
+/** The attempt ended (cancel, Forget, timeout) while a reset was at @p phase. Before the power-off was issued nothing has happened to the controller, so the reset is
+ * simply dropped. Afterwards it is never cancelled half-way (HCI would be left off, or the state wrong): it runs to the end and only its retry is abandoned. */
+static inline bool bt_link_phantom_abandon_only(uint8_t phase) { return phase == PH_DOWN || phase == PH_ON; }
+
+#define BT_LINK_PHANTOM_REPEAT_MS 60000u /**< at most one controller reset per peer in this time (unless a link to it came up) */
+#define BT_LINK_PHANTOM_BOUND_MS 15000u  /**< a reset that has not brought the controller back by now ends the attempt as a failed start */
+
+/** True if the last reset (at @p last_ms) is far enough back for another (wrap-safe). */
+static inline bool bt_link_phantom_due(uint32_t now_ms, uint32_t last_ms) { return (uint32_t)(now_ms - last_ms) >= BT_LINK_PHANTOM_REPEAT_MS; }
+
 #ifdef __cplusplus
 }
 #endif

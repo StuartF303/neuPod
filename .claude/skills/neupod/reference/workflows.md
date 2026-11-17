@@ -64,7 +64,7 @@ ssh root@192.168.7.2 'echo s > /run/neupod.keys'            # keys: w/s scroll, 
 ```
 
 - Firmware: `/opt/neupod-fw/neupod`, started by `/etc/init.d/S91neupod-fw` (respawns; exit status 77 = power off, no respawn).
-  Env: `/etc/neupod-fw.env` (`NEUPOD_*` vars, e.g. `NEUPOD_BT_HCI_DUMP=/tmp/x.pklg`). UI selection: `/etc/neupod-ui` = `fw|demo`.
+  Env: `/etc/neupod-fw.env` (`NEUPOD_*` vars, e.g. `NEUPOD_BT_HCI_DUMP=/tmp/x.pklg`, `NEUPOD_BT_INQ_TXPWR=6`, `NEUPOD_BT_MTK_FC66=1`; see docs/bluetooth.md). UI selection: `/etc/neupod-ui` = `fw|demo`.
 - Bluetooth: `/etc/init.d/S80mtk-bt` brings the MT6582 combo chip up at boot (`6620_launcher`). Controller is BT 4.0, no
   Secure Connections.
 - Battery: `/sys/class/power_supply/battery/{capacity,batt_vol,status}`. `BatteryAverageCurrent` only means anything while

@@ -158,6 +158,31 @@ TEST(test_the_clock_wraps) {
     ASSERT_EQ(2, changes);
 }
 
+TEST(test_phantom_acl_is_reset_once_and_only_without_a_real_link) {
+    ASSERT_TRUE(bt_link_phantom_acl(0x0B, false, false));
+    ASSERT_FALSE(bt_link_phantom_acl(0x0B, false, true));  // already reset for this attempt: fail as before
+    ASSERT_FALSE(bt_link_phantom_acl(0x0B, true, false));  // we do hold a connection to it: a real link, not a phantom
+    ASSERT_FALSE(bt_link_phantom_acl(0x04, false, false)); // page timeout
+    ASSERT_FALSE(bt_link_phantom_acl(0x00, false, false));
+    ASSERT_FALSE(bt_link_phantom_acl(0x0C, false, false)); // command disallowed: a different refusal
+}
+
+TEST(test_phantom_reset_is_rate_limited_per_peer_and_wrap_safe) {
+    ASSERT_FALSE(bt_link_phantom_due(1000u, 1000u));
+    ASSERT_FALSE(bt_link_phantom_due(1000u + BT_LINK_PHANTOM_REPEAT_MS - 1u, 1000u));
+    ASSERT_TRUE(bt_link_phantom_due(1000u + BT_LINK_PHANTOM_REPEAT_MS, 1000u));
+    ASSERT_TRUE(bt_link_phantom_due(5u, 0xFFFFFFFFu - BT_LINK_PHANTOM_REPEAT_MS - 10u)); // the clock wrapped between the two
+    ASSERT_FALSE(bt_link_phantom_due(5u, 0xFFFFFFF0u));
+    ASSERT_TRUE(BT_LINK_PHANTOM_BOUND_MS > 5000u); // longer than a power cycle (about 1.3 s + the patch download)
+}
+
+TEST(test_ending_an_attempt_drops_a_reset_only_before_the_power_off) {
+    ASSERT_FALSE(bt_link_phantom_abandon_only(PH_NONE));
+    ASSERT_FALSE(bt_link_phantom_abandon_only(PH_OFF)); // nothing done to the controller yet: drop the reset
+    ASSERT_TRUE(bt_link_phantom_abandon_only(PH_DOWN)); // off issued: finish the cycle, skip the retry
+    ASSERT_TRUE(bt_link_phantom_abandon_only(PH_ON));
+}
+
 int main(void) {
     RUN(test_catchup_budget_bounds_what_is_owed_and_counts_the_rest);
     RUN(test_pressure_is_a_long_wait_or_a_big_debt);
@@ -169,5 +194,8 @@ int main(void) {
     RUN(test_a_quick_return_to_pressure_lengthens_the_up_hold);
     RUN(test_a_headset_without_room_to_step_never_changes);
     RUN(test_the_clock_wraps);
+    RUN(test_phantom_acl_is_reset_once_and_only_without_a_real_link);
+    RUN(test_phantom_reset_is_rate_limited_per_peer_and_wrap_safe);
+    RUN(test_ending_an_attempt_drops_a_reset_only_before_the_power_off);
     return RESULT();
 }

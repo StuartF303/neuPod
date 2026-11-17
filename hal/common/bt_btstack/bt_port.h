@@ -50,6 +50,14 @@ void bt_port_deliver(hal_bt_event_fn cb, void *ctx, const hal_bt_event_t *ev);
 /** hal_bt_poll(): deliver what bt_port_deliver() queued, from the calling task. A no-op where events are delivered at once. */
 void bt_port_poll(void);
 
+#ifdef NEUPOD_BT_PORT_HCI_UP
+/** Optional (a port defines NEUPOD_BT_PORT_HCI_UP for the whole build; the others pay nothing for it). Called on BTstack's thread when HCI is
+ * working, before the adapter reports the radio ON: run extra controller commands through BTstack's command flow, then call @p done() once, on
+ * BTstack's thread. Returns false if there is nothing to do (done() is then not called). A command that fails or is never answered is logged
+ * and skipped; it must never keep HCI from coming up. Used at every HCI-up: first start and after each controller power-on. */
+bool bt_port_hci_up(void (*done)(void));
+#endif
+
 #ifdef __cplusplus
 }
 #endif
