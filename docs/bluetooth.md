@@ -264,12 +264,18 @@ matched a reference encode on the PC (22 to 27 dB SNR), so the overshoot is SBC'
 volume (AVRCP, stage 2c) makes up the level. Bench aids on the Y2 only: `NEUPOD_BT_HCI_DUMP=<file>` (HCI trace, PacketLogger format) and
 `NEUPOD_BT_PCM_DUMP=<file>` (the encoder's input PCM) in `/etc/neupod-fw.env`.
 
-Two more Y2 bench switches in the same file match the controller's set-up to the stock MediaTek stack's, for the intermittent "no AirPods in the inquiry" (the Pico 2 W
+Three more Y2 bench switches in the same file match the controller's set-up to the stock MediaTek stack's, for the intermittent "no AirPods in the inquiry" (the Pico 2 W
 beside it finds them every time). Both are read at every HCI-up (first start and each controller power-on after sleep or a reset), so a change needs a firmware restart.
 The controller's own inquiry transmit power is always read and logged (`bt: inquiry tx power (controller default) N dBm`).
 * `NEUPOD_BT_INQ_TXPWR=<-70..20>`: Write Inquiry Transmit Power Level (0x0C59) with that many dBm (stock writes +6 before every inquiry; the value lasts until the
   controller is reset, so once per HCI-up is the same). Logged with its status and a read-back (`bt: inquiry tx power set to 6 dBm -> status 0x00`, `bt: inquiry tx power
   (read back) 6 dBm`). Unset: not sent. Not an integer in range: ignored, and logged once.
+  On the MT6582 the write is accepted (status 0x00) but the read-back stays at +10 dBm: the controller ignores it (bench 2026-11-17).
+* `NEUPOD_BT_INQ_MODE=<0|1|2>`: Write Inquiry Mode (0x0C45) after every HCI reset: 0 standard, 1 with RSSI, 2 with RSSI or extended inquiry response (EIR). BTstack's init
+  sets 2 and the shared adapter asks for 2; this overrides it, to A/B whether the controller drops AirPods' inquiry results in EIR mode (BTstack's own copy of the mode
+  stays 2, which is fine: it handles all three result events the same way). Sent right after FC66, before the power commands. Logged
+  (`bt: NEUPOD_BT_INQ_MODE=1: inquiry mode RSSI (0x0C45) after every HCI reset`, then `bt: inquiry mode set to 1 (0x0C45) -> status 0x00`). Unset: not sent. Anything but
+  exactly 0, 1 or 2: ignored, and logged once.
 * `NEUPOD_BT_MTK_FC66=1`: the MediaTek vendor command 0xFC66 with `00 10 40 9C`, which stock sends once after HCI_Reset (meaning unknown). Its status is logged.
 
 A command the controller refuses or never answers is logged and skipped; Bluetooth still comes up. The commands run before the radio is reported ON, so each HCI-up

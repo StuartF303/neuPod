@@ -319,6 +319,9 @@ static void up_answer(uint8_t status, const uint8_t *data, uint16_t data_len) {
     case Y2_HCIUP_FC66:
         printf("bt: MTK vendor command FC66 (00 10 40 9C) -> status 0x%02X%s\n", (unsigned)status, ok ? "" : " (refused, carrying on)");
         break;
+    case Y2_HCIUP_WRITE_INQ_MODE:
+        printf("bt: inquiry mode set to %u (0x0C45) -> status 0x%02X%s\n", (unsigned)g_up_plan.inq_mode, (unsigned)status, ok ? "" : " (refused, carrying on)");
+        break;
     case Y2_HCIUP_READ_TXPWR:
         if (ok && data_len >= 1) {
             printf("bt: inquiry tx power (controller default) %d dBm\n", (int)(int8_t)data[0]);
@@ -383,6 +386,9 @@ bool bt_port_hci_up(void (*done)(void)) {
     const char *tx = getenv("NEUPOD_BT_INQ_TXPWR");
     int8_t pwr = 0;
     y2_inq_txpwr_result_t r = y2_bt_parse_inq_txpwr(tx, &pwr);
+    const char *im = getenv("NEUPOD_BT_INQ_MODE");
+    uint8_t inq_mode = 0;
+    y2_inq_mode_result_t mr = y2_bt_parse_inq_mode(im, &inq_mode);
     bool fc66 = y2_bt_parse_fc66(getenv("NEUPOD_BT_MTK_FC66"));
     if (!g_up_env_logged) {
         g_up_env_logged = true;
@@ -390,6 +396,12 @@ bool bt_port_hci_up(void (*done)(void)) {
             printf("bt: NEUPOD_BT_INQ_TXPWR not set: the inquiry transmit power is left as the controller has it\n");
         } else if (r == Y2_INQ_TXPWR_INVALID) {
             printf("bt: NEUPOD_BT_INQ_TXPWR='%s' is not an integer from %d to %d: ignored\n", tx, Y2_INQ_TXPWR_MIN, Y2_INQ_TXPWR_MAX);
+        }
+        if (mr == Y2_INQ_MODE_OK) {
+            static const char *const names[] = {"standard", "RSSI", "EIR"};
+            printf("bt: NEUPOD_BT_INQ_MODE=%u: inquiry mode %s (0x0C45) after every HCI reset\n", (unsigned)inq_mode, names[inq_mode]);
+        } else if (mr == Y2_INQ_MODE_INVALID) {
+            printf("bt: NEUPOD_BT_INQ_MODE='%s' is not 0, 1 or 2: ignored\n", im);
         }
         if (fc66) {
             printf("bt: NEUPOD_BT_MTK_FC66=1: the MediaTek vendor command FC66 follows every HCI reset\n");
@@ -400,7 +412,7 @@ bool bt_port_hci_up(void (*done)(void)) {
         g_up_reg.callback = up_event;
         hci_add_event_handler(&g_up_reg);
     }
-    y2_hciup_plan_init(&g_up_plan, fc66, r == Y2_INQ_TXPWR_OK, pwr);
+    y2_hciup_plan_init(&g_up_plan, fc66, mr == Y2_INQ_MODE_OK, inq_mode, r == Y2_INQ_TXPWR_OK, pwr);
     g_up_done = done;
     g_up_active = true;
     g_up_inflight = false;
