@@ -6,9 +6,9 @@
 #     second-root  default $Y2_BACKUP2 or the warrender2 'public' share via gvfs; it must already
 #                  exist and be a network/FUSE mount on a different filesystem from the backup
 #   Y2_BACKUP2_URI  gio URI of the same folder (MUST be set together with Y2_BACKUP2 / arg 2, or neither);
-#                   used to re-read the copy from the NAS (default smb://warrender2.local/public/y2-backup)
+#                   used to re-read the copy from the NAS (default smb://warrender2/public/y2-backup)
 #
-# Mount the share first (as your user): gio mount smb://warrender2.local/public
+# Mount the share first (as your user): gio mount smb://warrender2/public
 # Idempotent: files already present with matching sha256 are not re-copied.
 set -euo pipefail
 
@@ -28,8 +28,8 @@ SRC="${SRC%/}"
 if [[ -n ${2:-${Y2_BACKUP2:-}} && -z ${Y2_BACKUP2_URI:-} ]] || [[ -z ${2:-${Y2_BACKUP2:-}} && -n ${Y2_BACKUP2_URI:-} ]]; then
     die "set the second root (arg 2 / Y2_BACKUP2) and Y2_BACKUP2_URI together, or neither"
 fi
-ROOT2="${2:-${Y2_BACKUP2:-/run/user/$(id -u)/gvfs/smb-share:server=warrender2.local,share=public/y2-backup}}"
-URI="${Y2_BACKUP2_URI:-smb://warrender2.local/public/y2-backup}"
+ROOT2="${2:-${Y2_BACKUP2:-/run/user/$(id -u)/gvfs/smb-share:server=warrender2,share=public/y2-backup}}"
+URI="${Y2_BACKUP2_URI:-smb://warrender2/public/y2-backup}"
 NAME=$(basename "$SRC")
 DST="$ROOT2/$NAME"
 
