@@ -13,7 +13,7 @@ Y2FLASH="$Y2/tools/y2flash.py"
 # Fixed locations. The Y2_* environment overrides below are IGNORED for real runs (a stray variable must never
 # redirect a flash to another backup, calibration or state file); they are honoured only with --dry-run.
 BACKUP="$HOME/y2-backup/2026-11-10"
-NAS_URL="smb://warrender2.local/public/y2-backup/$(basename "$BACKUP")"
+NAS_URL="smb://warrender2/public/y2-backup/$(basename "$BACKUP")"
 CAL="$HOME/y2-backup/write-calibration.json"      # written only by probe-write.sh
 STATE="$HOME/y2-backup/flash-state.json"
 LOGDIR="$HOME/y2-backup/flash-logs"
@@ -34,7 +34,7 @@ env_overrides() {
     done
     ((set)) || return 0
     BACKUP="${Y2_BACKUP:-$BACKUP}"; BACKUP="${BACKUP%/}"
-    NAS_URL="${Y2_NAS_URL:-smb://warrender2.local/public/y2-backup/$(basename "$BACKUP")}"
+    NAS_URL="${Y2_NAS_URL:-smb://warrender2/public/y2-backup/$(basename "$BACKUP")}"
     CAL="${Y2_WRITE_CAL:-$CAL}"; STATE="${Y2_FLASH_STATE:-$STATE}"; LOGDIR="${Y2_FLASH_LOGS:-$LOGDIR}"
     FW="${Y2_FIRMWARE:-$FW}"; PRELOADER="$FW/preloader_eastaeon82_wet_kk.bin"
 }
