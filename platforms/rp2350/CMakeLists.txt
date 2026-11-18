@@ -155,6 +155,10 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_custom_command(TARGET neupod POST_BUILD
   COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_core1_closure.py ${CMAKE_OBJDUMP} $<TARGET_FILE:neupod>
   COMMENT "Checking the audio core's call closure (core-1 rules)")
+# Art and FatFs scratch must allocate through os_alloc (NULL on failure), never malloc (panics on this build): tools/check_app_heap.py.
+add_custom_command(TARGET neupod POST_BUILD
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_app_heap.py ${CMAKE_OBJDUMP} $<TARGET_FILE:neupod>
+  COMMENT "Checking that art and FatFs scratch never reach the panicking malloc")
 
 if(NOT NEUPOD_BOARD STREQUAL "amoled241")
   # Interactive display test menu over UART for the ST7789 (flash with: scripts/flash.sh rp2350 display_test)
@@ -250,7 +254,7 @@ set_source_files_properties(hal/hal_storage.c hal/hw_config.c storage_test_main.
 if(NOT NEUPOD_BOARD STREQUAL "amoled241")
   # microSD test menu (flash with: scripts/flash.sh rp2350 storage_test)
   add_executable(storage_test storage_test_main.c)
-  target_link_libraries(storage_test neupod_storage_tests hal_rp2350 hal_rp2350_storage)
+  target_link_libraries(storage_test neupod_storage_tests neupod_os_alloc_malloc hal_rp2350 hal_rp2350_storage) # no kernel here: ff_memalloc's os_alloc is the malloc twin
   # 4 KB main stack (the default is 2 KB). That is the maximum: core 0's stack lives in the 4 KB
   # SCRATCH_Y bank (0x4000 does not link: "region SCRATCH_Y overflowed"). FatFs (LFN buffers are
   # on the heap) plus the test menu are shallow enough; the stack high-water mark is printed after

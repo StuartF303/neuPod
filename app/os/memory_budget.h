@@ -15,7 +15,13 @@
 #ifndef NEUPOD_MEMORY_BUDGET_H
 #define NEUPOD_MEMORY_BUDGET_H
 
-/** FreeRTOS heap_4 (task stacks, queues, mutexes, the CYW43 worker task). */
+/**
+ * FreeRTOS heap_4 (task stacks, queues, mutexes, the CYW43 worker task) and, through os_alloc(), the transient scratch of
+ * album art (art.c: 4096 B decoder pool + at most 3008 B strip/averaging buffers = about 7.1 KB on the 64 px build) and FatFs
+ * (ff_alloc.c: at most NEUPOD_FF_ALLOC_MAX_BYTES = 4 KB during a directory creation). Both run in the storage task; the
+ * worst case together is about 11 KB of free heap, so keep the monitor's heap low-water mark above that. The newlib
+ * heap is only ~2 KB, which is why these do not use malloc (docs/storage.md).
+ */
 #define NEUPOD_RTOS_HEAP_BYTES (80u * 1024u)
 
 /**

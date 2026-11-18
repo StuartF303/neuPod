@@ -1,0 +1,39 @@
+10000000 <art_decode>:
+10000000:	push	{r4, lr}
+10000002:	bl	10000100 <os_alloc>
+10000006:	bl	10000300 <jd_prepare>
+1000000a:	bl	10000110 <os_free>
+1000000e:	pop	{r4, pc}
+
+10000020 <ff_memalloc>:
+10000020:	b.n	10000700 <helper>
+
+10000030 <ff_memfree>:
+10000030:	b.n	10000110 <os_free>
+
+10000100 <os_alloc>:
+10000100:	bl	10000200 <pvPortMalloc>
+
+10000110 <os_free>:
+10000110:	bx	lr
+
+10000200 <pvPortMalloc>:
+10000200:	bl	10000400 <neupod_panic>
+
+10000300 <jd_prepare>:
+10000300:	bx	lr
+
+10000400 <neupod_panic>:
+10000400:	bx	lr
+
+10000500 <other_user_of_malloc>:
+10000500:	bl	10000600 <__wrap_malloc>
+
+10000600 <__wrap_malloc>:
+10000600:	bx	lr
+
+10000700 <helper>:
+10000700:	bl	10000800 <malloc>
+
+10000800 <malloc>:
+10000800:	bx	lr
