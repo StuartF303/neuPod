@@ -23,6 +23,7 @@
 #include "task.h"
 #endif
 #include "hal_system.h"
+#include "memory_budget.h"
 #include "os.h"
 #include "panic.h"
 
@@ -269,9 +270,15 @@ void *os_alloc(size_t size) {
         return NULL;
     }
     vTaskSuspendAll();
-    s_quiet_alloc = 1u;
-    void *p = pvPortMalloc(size);
-    s_quiet_alloc = 0u;
+    void *p = NULL;
+    // Keep NEUPOD_OS_ALLOC_RESERVE free for kernel objects (which panic on failure). Checked with the scheduler suspended so the
+    // free size cannot change between the check and the allocation; written to avoid unsigned underflow.
+    size_t free_now = xPortGetFreeHeapSize();
+    if (free_now >= NEUPOD_OS_ALLOC_RESERVE && size <= free_now - NEUPOD_OS_ALLOC_RESERVE) {
+        s_quiet_alloc = 1u;
+        p = pvPortMalloc(size);
+        s_quiet_alloc = 0u;
+    }
     (void)xTaskResumeAll();
     return p;
 }

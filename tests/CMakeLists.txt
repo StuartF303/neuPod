@@ -436,6 +436,13 @@ target_link_libraries(test_art neupod_rt_core neupod_os_alloc_malloc)
 set_source_files_properties(test_art.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 add_test(NAME art COMMAND test_art)
 
+# The real os_alloc() (os_freertos.c) on the FreeRTOS POSIX port, heap_4: NULL without a panic, the reserve, the hook for plain allocations.
+add_executable(test_os_alloc test_os_alloc.c ${CMAKE_SOURCE_DIR}/app/os/os_freertos.c)
+target_include_directories(test_os_alloc PRIVATE ${CMAKE_SOURCE_DIR}/app/include ${CMAKE_SOURCE_DIR}/hal/include ${CMAKE_SOURCE_DIR}/app/os)
+target_link_libraries(test_os_alloc neupod_freertos hal_host)
+set_source_files_properties(test_os_alloc.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+add_test(NAME os_alloc COMMAND test_os_alloc)
+
 # The core-1 closure checker must be able to FAIL: a known-good and a known-bad disassembly fixture.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME core1_closure_selftest_good COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_core1_closure.py --text ${CMAKE_SOURCE_DIR}/tests/assets/closure/good.txt)

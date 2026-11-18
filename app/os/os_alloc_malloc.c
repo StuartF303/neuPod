@@ -8,6 +8,15 @@
 
 #include "os.h"
 
+#ifdef NEUPOD_OS_ALLOC_REAL_MALLOC
+/* Device build without the kernel (storage_test): the SDK links malloc through --wrap and the wrapper panics on exhaustion;
+ * the real allocator returns NULL, which is what FatFs relies on. Set by platforms/rp2350/CMakeLists.txt. */
+extern void *__real_malloc(size_t n);
+#define RAW_MALLOC __real_malloc
+#else
+#define RAW_MALLOC malloc
+#endif
+
 static int s_fail_from = -1;
 static int s_calls;
 static int s_live;
@@ -23,7 +32,7 @@ void *os_alloc(size_t size) {
     if (size == 0u || (s_fail_from >= 0 && idx >= s_fail_from)) {
         return NULL;
     }
-    void *p = malloc(size);
+    void *p = RAW_MALLOC(size);
     if (p != NULL) {
         s_live++;
     }

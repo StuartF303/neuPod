@@ -18,11 +18,22 @@
 /**
  * FreeRTOS heap_4 (task stacks, queues, mutexes, the CYW43 worker task) and, through os_alloc(), the transient scratch of
  * album art (art.c: 4096 B decoder pool + at most 3008 B strip/averaging buffers = about 7.1 KB on the 64 px build) and FatFs
- * (ff_alloc.c: at most NEUPOD_FF_ALLOC_MAX_BYTES = 4 KB during a directory creation). Both run in the storage task; the
- * worst case together is about 11 KB of free heap, so keep the monitor's heap low-water mark above that. The newlib
+ * (ff_alloc.c: at most NEUPOD_FF_ALLOC_MAX_BYTES = 4 KB during a directory creation). Both run in the storage task and never
+ * overlap (art_decode creates no directories mid-decode), so the peak is the art figure, about 7.1 KB of free heap. The newlib
  * heap is only ~2 KB, which is why these do not use malloc (docs/storage.md).
  */
 #define NEUPOD_RTOS_HEAP_BYTES (80u * 1024u)
+
+/**
+ * Free heap that os_alloc() leaves alone: it returns NULL rather than take a block that would drop the RTOS heap's free space
+ * below this. Task, queue and mutex creation panic when the heap is dry, so the optional scratch (album art, FatFs) must never be
+ * the allocation that starves them. Owner-chosen default: the bench showed about 10 KB minimum-ever free with Bluetooth A2DP up,
+ * and the art transient is about 7.1 KB, so 6 KB keeps kernel creation safe with the art decode in flight. On the ESP32-S3
+ * the free size counts PSRAM too (megabytes), so the reserve does not bind there.
+ */
+#ifndef NEUPOD_OS_ALLOC_RESERVE
+#define NEUPOD_OS_ALLOC_RESERVE 6144u
+#endif
 
 /**
  * LVGL's built-in allocator pool (screens, widgets, styles). The host build (64-bit pointers) needs about 1.6 times what the

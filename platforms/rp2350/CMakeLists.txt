@@ -254,6 +254,8 @@ set_source_files_properties(hal/hal_storage.c hal/hw_config.c storage_test_main.
 if(NOT NEUPOD_BOARD STREQUAL "amoled241")
   # microSD test menu (flash with: scripts/flash.sh rp2350 storage_test)
   add_executable(storage_test storage_test_main.c)
+  # PICO_ON_DEVICE is not set for this target (it is a plain app/ library), so say it explicitly: use the NULL-returning allocator.
+  target_compile_definitions(neupod_os_alloc_malloc PRIVATE NEUPOD_OS_ALLOC_REAL_MALLOC)
   target_link_libraries(storage_test neupod_storage_tests neupod_os_alloc_malloc hal_rp2350 hal_rp2350_storage) # no kernel here: ff_memalloc's os_alloc is the malloc twin
   # 4 KB main stack (the default is 2 KB). That is the maximum: core 0's stack lives in the 4 KB
   # SCRATCH_Y bank (0x4000 does not link: "region SCRATCH_Y overflowed"). FatFs (LFN buffers are
