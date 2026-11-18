@@ -167,6 +167,23 @@ echo md1:2 >"$T/ccci_boot"
 run start
 check "md1:2 and no daemons: nothing started" test ! -e "$T/fsd.args" -a ! -e "$T/mdinit.args"
 check "md1:2 and no daemons: logged" grep -q "modem is already up" "$T/S78.log"
+check "md1:2, no marker, no stage: the stage alone is started" grep -q "starting the background stage only" "$T/S78.log"
+wait_finished 15
+check "md1:2, no marker, no stage: it ran to the end" grep -q "modem bring-up finished" "$T/S78.log"
+check "md1:2, no marker, no stage: ccci daemons still not started" test ! -e "$T/fsd.args" -a ! -e "$T/mdinit.args"
+run stop
+echo done >"$T/run/md_cfun.done"
+run start
+sleep 1
+check "md1:2, marker present: no stage" test ! -s "$T/run/md_stage.pid" && ! grep -q "background stage only" "$T/S78.log"
+rm -f "$T/run/md_cfun.done"
+sleep 30 &
+fake=$!
+echo $fake >"$T/run/md_stage.pid"
+run start
+check "md1:2, stage alive: no second stage" test "$(cat "$T/run/md_stage.pid")" = "$fake" && ! grep -q "background stage only" "$T/S78.log"
+kill $fake 2>/dev/null
+rm -f "$T/run/md_stage.pid"
 echo md1:0 >"$T/ccci_boot"
 
 # --- fail open: staged but daemons missing ---
@@ -232,6 +249,10 @@ while True:
             n_cfun += 1
             if mode in ("noack", "stale-noack"):
                 out = b""
+            elif mode == "nocarrier":
+                out = b"\r\nNO CARRIER\r\n"
+            elif mode == "cmserror":
+                out = b"\r\n+CMS ERROR: 500\r\n"
             elif mode == "flaky" and n_cfun == 1:
                 out = b"\r\nERROR\r\n"
             else:
@@ -254,7 +275,7 @@ EOF2
 		run stop
 		rm -rf "$T/radio" "$T/at.log" "$T/muxd.args" "$T/muxd.count" "$T/run/md_cfun.done" "$T/S78.log"
 		echo md1:0 >"$T/ccci_boot"
-		MD_TEST_DIR=$T MD_TEST_MODE=$1 MD_RADIO="$T/radio" MD_MUX_WAIT_S=3 MD_AT_WAIT_S=2 MD_SETTLE_S=1 MD_UP_SETTLE_S=0 MD_MUX_RETRY_S=1 MD_MUX_TRIES=2 run start
+		MD_TEST_DIR=$T MD_TEST_MODE=$1 MD_RADIO="$T/radio" MD_MUX_WAIT_S=3 MD_AT_WAIT_S=${AT_W:-2} MD_SETTLE_S=1 MD_UP_SETTLE_S=0 MD_MUX_RETRY_S=1 MD_MUX_TRIES=2 run start
 		wait_finished 60
 	}
 	export MD_TEST_DIR MD_TEST_MODE MD_RADIO
@@ -279,6 +300,15 @@ EOF2
 	check "flight: no OK, 3 attempts then gives up" test "$(grep -c 'AT+CFUN=4' "$T/at.log")" = 3
 	check "flight: gives up, logged, exit 0" grep -q "not confirmed after 3 attempts" "$T/S78.log"
 	check "flight: exhausted marker" test "$(cat "$T/run/md_cfun.done")" = exhausted
+	for m in nocarrier cmserror; do
+		t0=$(date +%s)
+		AT_W=20 flight $m
+		t1=$(date +%s)
+		check "flight: $m ends the wait at once" test "$((t1 - t0))" -le 14
+		check "flight: $m is a failure: 3 attempts" test "$(grep -c 'AT+CFUN=4' "$T/at.log")" = 3
+		check "flight: $m is logged, fail open" grep -q "not confirmed after 3 attempts" "$T/S78.log"
+		check "flight: $m exhausted marker" test "$(cat "$T/run/md_cfun.done")" = exhausted
+	done
 	flight cfun0
 	check "flight: +CFUN: 0 counts as radio off" grep -q "radio off (attempt 1" "$T/S78.log"
 	check "flight: CFUN=4 is still sent" grep -q "AT+CFUN=4" "$T/at.log"
@@ -297,6 +327,32 @@ EOF2
 	flight nochannel
 	check "flight: no channel is logged" grep -q "no .*pttycmd1: flight mode not sent" "$T/S78.log"
 	check "flight: no channel, nothing sent" test ! -e "$T/at.log"
+	# stop in the middle of an AT exchange leaves no descendant of the stage
+	flight noack >/dev/null 2>&1 || :
+	run stop
+	rm -f "$T/at.log"
+	echo md1:0 >"$T/ccci_boot"
+	MD_TEST_DIR=$T MD_TEST_MODE=noack MD_RADIO="$T/radio" MD_MUX_WAIT_S=3 MD_AT_WAIT_S=20 MD_SETTLE_S=1 MD_UP_SETTLE_S=0 run start
+	w=0
+	while [ "$w" -lt 20 ] && ! grep -q 'AT+CFUN=4' "$T/at.log" 2>/dev/null; do sleep 1; w=$((w + 1)); done
+	sp=$(cat "$T/run/md_stage.pid")
+	descendants() { # all descendants of $1
+		snap=$(for st in /proc/[0-9]*/stat; do c=${st#/proc/}; echo "${c%/stat} $(sed 's/.*) //' "$st" 2>/dev/null | cut -d' ' -f2)"; done)
+		kids=$1
+		while [ -n "$kids" ]; do
+			new=$(echo "$snap" | while read -r c pp; do for k in $kids; do [ "$pp" = "$k" ] && echo "$c"; done; done)
+			echo $new
+			kids=$(echo $new)
+		done
+	}
+	dpids=$(descendants "$sp")
+	check "stop mid-exchange: the stage has grandchildren to find" test "$(echo $dpids | wc -w)" -ge 3
+	run stop
+	left=
+	for p in $dpids $sp; do
+		[ -r "/proc/$p/stat" ] && [ "$(sed 's/.*) //' "/proc/$p/stat" | cut -c1)" != Z ] && left="$left $p"
+	done
+	check "stop mid-exchange: no descendant of the stage survives" test -z "$left"
 	run stop
 	check "flight: stop removes the muxd pid file" test ! -e "$T/run/gsm0710muxd.pid"
 	mv "$T/bin/gsm0710muxd" "$T/bin/gsm0710muxd.off"

@@ -80,7 +80,7 @@ CFUN_DONE=$RUN/md_cfun.done
 KEEP="preloader misc-sd seccfg sec_ro bootimg recovery"
 FIXED_NULLED="nvram misc pro_info protect_f protect_s mbr ebr1 ebr2 expdb logo android cache usrdata fat bmtpool uboot"
 
-# Logged to the file (tmpfs, so no eMMC wear; capped at 64 KiB, the newest 32 KiB are kept when the daemons are about to be launched) first, then to stdout, which
+# Logged to the file (tmpfs, so no eMMC wear; trimmed to the newest 32 KiB at each start when it has grown past 64 KiB) first, then to stdout, which
 # at boot is the console that nobody captures and may be closed: a write error there is ignored, and the stage ignores SIGPIPE.
 log() {
 	msg="S78mtk-md: $(cut -d' ' -f1 /proc/uptime 2>/dev/null) $*"
@@ -315,6 +315,12 @@ start() {
 	if [ "$(cat "$CCCI_BOOT" 2>/dev/null)" = "md1:2" ]; then
 		# re-running ccci_mdinit against a live modem can disturb it (restart has the same guard)
 		log "modem is already up (md1:2) but the daemons are not running: not starting them again (a reboot restarts the modem)"
+		# flight mode was never confirmed (the stage died or was stopped): retry it alone, without ccci_mdinit
+		if [ ! -e "$CFUN_DONE" ] && ! pid_alive "$STAGE_PID"; then
+			log "flight mode not handled yet: starting the background stage only"
+			modem_stage &
+			echo $! >"$STAGE_PID"
+		fi
 		return 0
 	fi
 	trim_log
@@ -328,12 +334,12 @@ start() {
 	mkdir -p "$DATA/nvram/md" "$DATA/nvram/md2" "$DATA/ccci_cfg" || { log "cannot create the modem NVRAM directories under $DATA"; return 0; }
 
 	if ! pid_alive "$FSD_PID"; then
-		setsid "$FSD" 0 >/dev/null 2>&1 &
+		setsid "$FSD" 0 </dev/null >/dev/null 2>&1 &
 		echo $! >"$FSD_PID"
 		log "ccci_fsd started (pid $(cat "$FSD_PID" 2>/dev/null))"
 		sleep 1
 	fi
-	setsid "$MDINIT" 0 >/dev/null 2>&1 &
+	setsid "$MDINIT" 0 </dev/null >/dev/null 2>&1 &
 	echo $! >"$MDINIT_PID"
 	log "ccci_mdinit started (pid $(cat "$MDINIT_PID" 2>/dev/null))"
 
@@ -347,12 +353,23 @@ start() {
 stop() {
 	spid=$(cat "$STAGE_PID" 2>/dev/null)
 	if alive "$spid"; then
-		# the stage's own children (a sleep, an AT reader), by parent pid; the stage and the muxer are then killed by pid file
-		for st in /proc/[0-9]*/stat; do
+		# Freeze the stage first so its retry loops cannot start replacements, then collect ALL its descendants (the AT reader cat
+		# and sleep run under a command substitution, so they are grandchildren), by repeated parent-pid scans, kill them, then the stage.
+		kill -STOP "$spid" 2>/dev/null
+		snap=$(for st in /proc/[0-9]*/stat; do
 			c=${st#/proc/}
-			c=${c%/stat}
-			[ "$(sed 's/.*) //' "$st" 2>/dev/null | cut -d' ' -f2)" = "$spid" ] && kill "$c" 2>/dev/null
+			echo "${c%/stat} $(sed 's/.*) //' "$st" 2>/dev/null | cut -d' ' -f2)"
+		done)
+		kids=$spid
+		all=
+		while [ -n "$kids" ]; do
+			new=$(echo "$snap" | while read -r c pp; do in_list "$pp" $kids && echo "$c"; done)
+			all="$all $new"
+			kids=$(echo $new)
 		done
+		for c in $all; do kill "$c" 2>/dev/null; done
+		kill "$spid" 2>/dev/null
+		kill -CONT "$spid" 2>/dev/null
 	fi
 	for f in "$STAGE_PID" "$MUXD_PID" "$MDINIT_PID" "$FSD_PID"; do
 		pid=$(cat "$f" 2>/dev/null)
