@@ -1,0 +1,113 @@
+#!/bin/sh
+# Modem (MD1) bring-up for the Y2 (MediaTek MT6582). The 26 MHz crystal oscillator that Bluetooth discovery depends on is trimmed
+# only by the modem; without it the clock runs about -80 ppm and classic-Bluetooth inquiry fails. With the stock modem booted it is
+# about -4 ppm. Runs the stock Android helpers from /system/bin, staged from the device backup under /opt/mtk-wmt (never committed;
+# see testbed/y2/scripts/stage-modem.sh). Runs before S80mtk-bt. Skips everything, silently, if /opt/mtk-wmt is not staged.
+#
+# FAIL OPEN (owner-approved): if anything is missing, or the modem does not reach "md1:2", this logs it and returns success, so
+# Bluetooth still starts (with the clock error).
+#
+#   1. /dev/block/mmcblk0 and /dev/block/mmcblk0p4 symlinks: the kernel's image-signature (masp) code and the dumchar driver look
+#      the eMMC up under /dev/block, which Buildroot does not have. They are only symlinks; nothing here opens the eMMC.
+#   2. every dumchar raw-partition node that could be written is replaced by a symlink to /dev/null (the real node is kept under
+#      /dev/.real-<name> on the tmpfs /dev), so nothing the stock daemons do can write those partitions: nvram misc pro_info
+#      protect_f protect_s mbr ebr1 ebr2 expdb logo android cache usrdata fat bmtpool uboot. KEPT real, because the kernel reads
+#      them during the modem image signature check: preloader, misc-sd, seccfg, sec_ro, bootimg, recovery.
+#   3. /data/nvram/md, /data/nvram/md2, /data/ccci_cfg: the modem's NVRAM files (a rootfs copy under /opt/mtk-wmt/data, not the
+#      NVRAM partition) as the stock init.modem.rc makes them.
+#   4. ccci_fsd 0 (serves the modem's file requests), then ccci_mdinit 0 (loads modem_1_2g_n.img and boots it), both exactly the
+#      stock arguments, in the background under setsid, pid files in /run. Never started twice.
+#   5. a bounded wait (30 s) for /sys/kernel/ccci/boot to read "md1:2" (modem up); the result is logged.
+#
+# Never touched here: writes to /dev/mmcblk0* (the eMMC), the NVRAM partition, nvram_daemon. stop signals only the two daemons;
+# the stock never stops them, and stopping them while the modem runs may make ccci_mdinit stop the modem (a reboot is then
+# needed before it boots again).
+#
+# Test hooks (all default to the device's paths): MD_STAGE, MD_BIN, MD_DEV, MD_RUN, MD_DATA, MD_CCCI_BOOT, MD_WAIT_S.
+STAGE=${MD_STAGE:-/opt/mtk-wmt}
+BIN=${MD_BIN:-/system/bin}
+DEV=${MD_DEV:-/dev}
+RUN=${MD_RUN:-/run}
+DATA=${MD_DATA:-/data}
+CCCI_BOOT=${MD_CCCI_BOOT:-/sys/kernel/ccci/boot}
+WAIT_S=${MD_WAIT_S:-30}
+FSD=$BIN/ccci_fsd
+MDINIT=$BIN/ccci_mdinit
+FSD_PID=$RUN/ccci_fsd.pid
+MDINIT_PID=$RUN/ccci_mdinit.pid
+NULLED="nvram misc pro_info protect_f protect_s mbr ebr1 ebr2 expdb logo android cache usrdata fat bmtpool uboot"
+
+log() { echo "S78mtk-md: $*"; }
+
+alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
+
+pid_alive() { alive "$(cat "$1" 2>/dev/null)"; }
+
+neutralise() {
+	for n in $NULLED; do
+		# a real node (not already a symlink, not a directory) is moved aside and replaced
+		if [ -e "$DEV/$n" ] && [ ! -L "$DEV/$n" ] && [ ! -d "$DEV/$n" ]; then
+			mv "$DEV/$n" "$DEV/.real-$n" && ln -s /dev/null "$DEV/$n" || log "cannot neutralise $DEV/$n"
+		fi
+	done
+}
+
+start() {
+	[ -d "$STAGE" ] || return 0
+	if [ ! -x "$FSD" ] || [ ! -x "$MDINIT" ]; then
+		log "$STAGE is staged but $FSD or $MDINIT is missing: modem not started (Bluetooth clock stays untrimmed)"
+		return 0
+	fi
+	if pid_alive "$MDINIT_PID"; then
+		log "ccci_mdinit already running"
+		return 0
+	fi
+
+	mkdir -p "$DEV/block" || { log "cannot create $DEV/block"; return 0; }
+	[ -e "$DEV/block/mmcblk0" ] || ln -s "$DEV/mmcblk0" "$DEV/block/mmcblk0"
+	[ -e "$DEV/block/mmcblk0p4" ] || [ -L "$DEV/block/mmcblk0p4" ] || ln -s "$DEV/mmcblk0p4" "$DEV/block/mmcblk0p4"
+	neutralise
+	mkdir -p "$DATA/nvram/md" "$DATA/nvram/md2" "$DATA/ccci_cfg" || { log "cannot create the modem NVRAM directories under $DATA"; return 0; }
+
+	if ! pid_alive "$FSD_PID"; then
+		(cd / && setsid "$FSD" 0 >/dev/null 2>&1 & echo $! >"$FSD_PID")
+		log "ccci_fsd started (pid $(cat "$FSD_PID" 2>/dev/null))"
+		sleep 1
+	fi
+	(cd / && setsid "$MDINIT" 0 >/dev/null 2>&1 & echo $! >"$MDINIT_PID")
+	log "ccci_mdinit started (pid $(cat "$MDINIT_PID" 2>/dev/null))"
+
+	i=0
+	state=
+	while [ "$i" -lt "$WAIT_S" ]; do
+		state=$(cat "$CCCI_BOOT" 2>/dev/null)
+		[ "$state" = "md1:2" ] && break
+		if ! pid_alive "$MDINIT_PID" && ! pid_alive "$FSD_PID"; then
+			break
+		fi
+		sleep 1
+		i=$((i + 1))
+	done
+	if [ "$state" = "md1:2" ]; then
+		log "modem up (md1:2) after ${i}s"
+	else
+		log "modem did not reach md1:2 (state '${state:-unreadable}' after ${i}s): continuing, Bluetooth clock stays untrimmed"
+	fi
+	return 0
+}
+
+stop() {
+	for f in "$MDINIT_PID" "$FSD_PID"; do
+		pid=$(cat "$f" 2>/dev/null)
+		alive "$pid" && kill "$pid" 2>/dev/null
+		rm -f "$f"
+	done
+	return 0
+}
+
+case "$1" in
+	start) start ;;
+	stop) stop ;;
+	restart) stop; start ;;
+esac
+exit 0

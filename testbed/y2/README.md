@@ -51,6 +51,17 @@ unavailable. It never touches `/dev/mmcblk0*`, `/data/nvram` or `/data/BT_Addr` 
 `nvram_daemon`. `deploy-fw.sh` copies the script but does not run it; start it by hand with `/etc/init.d/S80mtk-bt start` or reboot.
 Test: `ctest -R y2_s80_mtk_bt` (fake `/dev`, `/run`, `/proc/devices` and helpers).
 
+**Modem (`S78mtk-md`).** The 26 MHz clock is trimmed only by the modem (MD1); without it the clock is about -80 ppm and classic
+Bluetooth discovery fails (with the stock modem booted: about -4 ppm, AirPods found 3/3 vs 0/13). `S78mtk-md` runs before `S80mtk-bt`:
+`/dev/block/mmcblk0{,p4}` symlinks, every writable dumchar node (nvram, misc, pro_info, protect_f/s, mbr, ebr1/2, expdb, logo,
+android, cache, usrdata, fat, bmtpool, uboot) replaced by a symlink to `/dev/null` (preloader, misc-sd, seccfg, sec_ro, bootimg,
+recovery stay real: the kernel reads them for the signature check), `/data/nvram/md{,2}` and `/data/ccci_cfg`, then the stock
+`ccci_fsd 0` and `ccci_mdinit 0` under setsid (pid files in `/run`) and a 30 s wait for `/sys/kernel/ccci/boot` = `md1:2`. It fails
+open: anything missing, or no `md1:2`, is logged and Bluetooth still starts. Files come from the backup via
+`testbed/y2/scripts/stage-modem.sh` (read-only debugfs, copied over ssh; system files replaced when different, data and protect files
+only added when missing; never committed). Without `/opt/mtk-wmt` it does nothing. `deploy-fw.sh` installs it but does not run it.
+Test: `ctest -R y2_s78_mtk_md`.
+
 On the device: log `/tmp/neupod-fw.log` (tmpfs, emptied past 256 KB), PID files `/run/neupod-fw.pid` (respawn wrapper, 2 s pause)
 and `/run/neupod-fw.app.pid`, keys from ssh with `echo s > /run/neupod.keys` (`w s` scroll, `e` select, `m` menu, `a d`, `p`).
 
