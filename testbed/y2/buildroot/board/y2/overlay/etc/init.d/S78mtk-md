@@ -7,88 +7,168 @@
 # FAIL OPEN (owner-approved): if anything is missing, or the modem does not reach "md1:2", this logs it and returns success, so
 # Bluetooth still starts (with the clock error).
 #
-#   1. /dev/block/mmcblk0 and /dev/block/mmcblk0p4 symlinks: the kernel's image-signature (masp) code and the dumchar driver look
+# Steps 1 to 4 run before start returns (the daemons are started, never waited for). Steps 5 and 6 run in a background subshell
+# (pid file /run/md_stage.pid, same log) so S80/S90/S91 are not delayed by the modem's boot.
+#
+#   1. /dev/__properties__, the 128 KiB KitKat property area, if missing (same bytes as S80mtk-bt makes; S80 leaves an existing one
+#      alone). The stock Bionic daemons below read system properties through it. There is no property service.
+#   2. /dev/block/mmcblk0 and /dev/block/mmcblk0p4 symlinks: the kernel's image-signature (masp) code and the dumchar driver look
 #      the eMMC up under /dev/block, which Buildroot does not have. They are only symlinks; nothing here opens the eMMC.
-#   2. every dumchar raw-partition node that could be written is replaced by a symlink to /dev/null (the real node is kept under
-#      /dev/.real-<name> on the tmpfs /dev), so nothing the stock daemons do can write those partitions: nvram misc pro_info
-#      protect_f protect_s mbr ebr1 ebr2 expdb logo android cache usrdata fat bmtpool uboot. KEPT real, because the kernel reads
-#      them during the modem image signature check: preloader, misc-sd, seccfg, sec_ro, bootimg, recovery.
-#   3. /data/nvram/md, /data/nvram/md2, /data/ccci_cfg: the modem's NVRAM files (a rootfs copy under /opt/mtk-wmt/data, not the
-#      NVRAM partition) as the stock init.modem.rc makes them.
-#   4. ccci_fsd 0 (serves the modem's file requests), then ccci_mdinit 0 (loads modem_1_2g_n.img and boots it), both exactly the
-#      stock arguments, in the background under setsid, pid files in /run. Never started twice.
-#   5. a bounded wait (30 s) for /sys/kernel/ccci/boot to read "md1:2" (modem up); the result is logged.
+#   3. every dumchar raw-partition node EXCEPT an allowlist is replaced by a symlink to /dev/null (the real node is kept under
+#      /dev/.real-<name> on the tmpfs /dev), so nothing the stock daemons do can write those partitions. The names come from
+#      /proc/dumchar_info (first column, lower-cased), plus the fixed list nvram misc pro_info protect_f protect_s mbr ebr1 ebr2
+#      expdb logo android cache usrdata fat bmtpool uboot in case the file is unreadable. KEPT real, because the kernel reads them
+#      during the modem image signature check: preloader, misc-sd, seccfg, sec_ro, bootimg, recovery. Their permissions are left as
+#      they are (the kernel opens them from kernel context, and I could not confirm it never needs write access). Any dumchar node
+#      that is left real is logged. Nodes named mmcblk* are never touched.
+#   4. /data/nvram/md, /data/nvram/md2, /data/ccci_cfg (the modem's NVRAM files: a rootfs copy under /opt/mtk-wmt/data, not the
+#      NVRAM partition), as the stock init.modem.rc makes them; then ccci_fsd 0 (serves the modem's file requests) and ccci_mdinit 0
+#      (loads modem_1_2g_n.img and boots it), exactly the stock arguments, in the background under setsid, pid files in /run. Never
+#      started twice.
+#   5. (background) a bounded wait (30 s) for /sys/kernel/ccci/boot to read "md1:2" (modem up); the result is logged.
+#   6. (background, only when the modem is up) flight mode: gsm0710muxd with the stock arguments (-s /dev/ttyC0 -f 512 -n 8 -m basic)
+#      under setsid, pid file in /run. It owns /dev/ttyC0, speaks the GSM 07.10 multiplexer to the modem and makes the channels as
+#      pseudo-terminals linked at /dev/radio/ (pttycmd1..4 carry AT commands). The script waits (up to 20 s) for
+#      /dev/radio/pttycmd1, lets it settle (1 s), then up to 3 times: sends "AT+CFUN=4", expects a line that is exactly "OK", sends
+#      "AT+CFUN?" and expects a line "+CFUN: 4" (other lines, such as unsolicited reports, are ignored; each command is read with
+#      the channel opened once, after anything stale has been discarded). AT+CFUN=4 is idempotent, hence the retries. The marker
+#      /run/md_cfun.done means "flight mode confirmed or the attempts used up". Everything is logged; any failure is only logged.
+#      /dev/ttyC0 itself is NEVER opened here (a raw open and close of it left it returning EMFILE and ccci_mdinit then stopped the
+#      modem): only the muxer touches it.
 #
-#   6. flight mode, once the modem is up (never when it is not): gsm0710muxd with the stock arguments (-s /dev/ttyC0 -f 512 -n 8
-#      -m basic) under setsid, pid file in /run. It owns /dev/ttyC0, speaks the GSM 07.10 multiplexer to the modem and makes the
-#      channels as pseudo-terminals linked at /dev/radio/ (pttycmd1..4 carry AT commands). The script waits (up to 20 s) for
-#      /dev/radio/pttycmd1, sends "AT+CFUN=4" once (marker /run/md_cfun.done, written before the send), expects "OK", then asks
-#      "AT+CFUN?" and expects "+CFUN: 4". Everything is logged; any failure is only logged. /dev/ttyC0 itself is NEVER opened here
-#      (a raw open and close of it left it returning EMFILE and ccci_mdinit then stopped the modem): only the muxer touches it.
+# Never touched here: writes to /dev/mmcblk0* (the eMMC), the NVRAM partition, nvram_daemon. stop signals the background stage and
+# the three daemons (waiting up to 3 s for each to exit); the stock never stops them, and stopping them while the modem runs may make
+# ccci_mdinit stop the modem (a reboot is then needed before it boots again). restart is therefore a logged no-op while the modem is
+# up (md1:2); otherwise it is stop then start. Only rcK or a hand call ever runs stop.
 #
-# Never touched here: writes to /dev/mmcblk0* (the eMMC), the NVRAM partition, nvram_daemon. stop signals only the two daemons;
-# the stock never stops them, and stopping them while the modem runs may make ccci_mdinit stop the modem (a reboot is then
-# needed before it boots again).
-#
-# Test hooks (all default to the device's paths): MD_STAGE, MD_BIN, MD_DEV, MD_RUN, MD_DATA, MD_CCCI_BOOT, MD_WAIT_S, MD_RADIO,
-# MD_MUX_WAIT_S, MD_AT_WAIT_S.
+# Test hooks (all default to the device's paths): MD_STAGE, MD_BIN, MD_DEV, MD_RUN, MD_DATA, MD_CCCI_BOOT, MD_DUMCHAR_INFO,
+# MD_WAIT_S, MD_RADIO, MD_MUX_WAIT_S, MD_AT_WAIT_S, MD_SETTLE_S.
 STAGE=${MD_STAGE:-/opt/mtk-wmt}
 BIN=${MD_BIN:-/system/bin}
 DEV=${MD_DEV:-/dev}
 RUN=${MD_RUN:-/run}
 DATA=${MD_DATA:-/data}
 CCCI_BOOT=${MD_CCCI_BOOT:-/sys/kernel/ccci/boot}
+DUMCHAR_INFO=${MD_DUMCHAR_INFO:-/proc/dumchar_info}
 WAIT_S=${MD_WAIT_S:-30}
 RADIO=${MD_RADIO:-/dev/radio}
 MUX_WAIT_S=${MD_MUX_WAIT_S:-20}
 AT_WAIT_S=${MD_AT_WAIT_S:-5}
+SETTLE_S=${MD_SETTLE_S:-1}
+PROP_SIZE=131072
 MUXD=$BIN/gsm0710muxd
-MUXD_PID=$RUN/gsm0710muxd.pid
-CFUN_DONE=$RUN/md_cfun.done
 FSD=$BIN/ccci_fsd
 MDINIT=$BIN/ccci_mdinit
+MUXD_PID=$RUN/gsm0710muxd.pid
 FSD_PID=$RUN/ccci_fsd.pid
 MDINIT_PID=$RUN/ccci_mdinit.pid
-NULLED="nvram misc pro_info protect_f protect_s mbr ebr1 ebr2 expdb logo android cache usrdata fat bmtpool uboot"
+STAGE_PID=$RUN/md_stage.pid
+CFUN_DONE=$RUN/md_cfun.done
+KEEP="preloader misc-sd seccfg sec_ro bootimg recovery"
+FIXED_NULLED="nvram misc pro_info protect_f protect_s mbr ebr1 ebr2 expdb logo android cache usrdata fat bmtpool uboot"
 
 log() { echo "S78mtk-md: $*"; }
 
-alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
+# Running, and not a zombie (a killed daemon whose parent is gone and not yet reaped still answers kill -0).
+alive() {
+	[ -n "$1" ] && kill -0 "$1" 2>/dev/null || return 1
+	[ -r "/proc/$1/stat" ] && [ "$(sed 's/.*) //' "/proc/$1/stat" | cut -c1)" = Z ] && return 1
+	return 0
+}
 
 pid_alive() { alive "$(cat "$1" 2>/dev/null)"; }
 
+# Same bytes as S80mtk-bt's make_props (kept in step by hand: S80 is not changed). Temporary name, then rename.
+make_props() {
+	[ -e "$DEV/__properties__" ] && return 0
+	tmp=$DEV/.__properties__.$$
+	dd if=/dev/zero of="$tmp" bs=4096 count=$((PROP_SIZE / 4096)) 2>/dev/null || { rm -f "$tmp"; return 1; }
+	# 14 00 00 00 | 00 00 00 00 | 'P' 'R' 'O' 'P' | ab d0 6e fc
+	printf '\024\000\000\000\000\000\000\000\120\122\117\120\253\320\156\374' |
+		dd of="$tmp" bs=16 count=1 conv=notrunc 2>/dev/null || { rm -f "$tmp"; return 1; }
+	chmod 0444 "$tmp" && mv "$tmp" "$DEV/__properties__" || { rm -f "$tmp"; return 1; }
+}
+
+in_list() { # <word> <list...>
+	w=$1
+	shift
+	for x in "$@"; do [ "$x" = "$w" ] && return 0; done
+	return 1
+}
+
+# Names of the dumchar partitions: first column of /proc/dumchar_info, lower-cased, header line and odd names skipped.
+dumchar_names() {
+	[ -r "$DUMCHAR_INFO" ] || return 0
+	while read -r name rest; do
+		name=$(echo "$name" | tr 'A-Z' 'a-z')
+		case "$name" in
+			''|part_name|*[!a-z0-9_-]*) continue ;;
+		esac
+		echo "$name"
+	done <"$DUMCHAR_INFO"
+}
+
 neutralise() {
-	for n in $NULLED; do
+	names="$FIXED_NULLED $(dumchar_names | tr '\n' ' ')"
+	for n in $names; do
+		case "$n" in mmcblk*) continue ;; esac
+		in_list "$n" $KEEP && continue
 		# a real node (not already a symlink, not a directory) is moved aside and replaced
 		if [ -e "$DEV/$n" ] && [ ! -L "$DEV/$n" ] && [ ! -d "$DEV/$n" ]; then
 			mv "$DEV/$n" "$DEV/.real-$n" && ln -s /dev/null "$DEV/$n" || log "cannot neutralise $DEV/$n"
 		fi
 	done
+	# report every dumchar node that stays real
+	for n in $(dumchar_names | tr '\n' ' '); do
+		case "$n" in mmcblk*) continue ;; esac
+		if [ -e "$DEV/$n" ] && [ ! -L "$DEV/$n" ]; then
+			log "dumchar node left real: $n"
+		fi
+	done
 }
 
-# Send one AT command on the channel $1 and wait up to AT_WAIT_S for a final result code. The reply is left in $RUN/at.reply.
-at_cmd() {
-	ch=$1
-	reply=$RUN/at.reply
-	: >"$reply"
-	stty -F "$ch" raw -echo 2>/dev/null
-	cat "$ch" >"$reply" 2>/dev/null &
-	reader=$!
-	printf '%s\r' "$2" >"$ch" 2>/dev/null
+# Wait up to $2 s for the pid in file $1 to exit.
+wait_gone() {
 	k=0
-	while [ "$k" -lt "$AT_WAIT_S" ]; do
+	while [ "$k" -lt "${2:-3}" ] && pid_alive "$1"; do
 		sleep 1
-		grep -q 'OK\|ERROR' "$reply" 2>/dev/null && break
 		k=$((k + 1))
 	done
-	kill "$reader" 2>/dev/null
-	wait "$reader" 2>/dev/null
-	tr -d '\r' <"$reply" | tr '\n' ' '
 }
+
+# One AT command on channel $1, text $2. The channel is opened once (fd 3, read and write). A reader collects everything the
+# channel says; after SETTLE_S anything stale or unsolicited is discarded, then the command is written, then up to AT_WAIT_S for a
+# final result line. The reply (carriage returns removed) is printed.
+at_cmd() {
+	reply=$RUN/at.reply
+	: >"$reply"
+	{
+		stty -F "$1" raw -echo 2>/dev/null
+		cat <&3 >>"$reply" 2>/dev/null &
+		reader=$!
+		sleep "$SETTLE_S"
+		: >"$reply"
+		printf '%s\r' "$2" >&3
+		k=0
+		while [ "$k" -lt "$AT_WAIT_S" ]; do
+			sleep 1
+			tr -d '\r' <"$reply" | grep -Eq '^(OK|ERROR|\+CME ERROR.*)$' && break
+			k=$((k + 1))
+		done
+		kill "$reader" 2>/dev/null
+		wait "$reader" 2>/dev/null
+	} 3<>"$1" 2>/dev/null
+	tr -d '\r' <"$reply"
+}
+
+# Is <exact line> one of the lines of <reply>? (whole-line match, so "OK" never matches inside another line)
+has_line() { printf '%s\n' "$1" | grep -Fxq -- "$2"; }
+
+oneline() { printf '%s' "$1" | tr '\n' ' '; }
 
 flight_mode() {
 	if [ -e "$CFUN_DONE" ]; then
-		log "flight mode already requested this boot"
+		log "flight mode already handled this boot"
 		return 0
 	fi
 	if [ ! -x "$MUXD" ]; then
@@ -97,7 +177,8 @@ flight_mode() {
 	fi
 	mkdir -p "$RADIO" || { log "cannot create $RADIO"; return 0; }
 	if ! pid_alive "$MUXD_PID"; then
-		(cd / && setsid "$MUXD" -s /dev/ttyC0 -f 512 -n 8 -m basic >/dev/null 2>&1 & echo $! >"$MUXD_PID")
+		setsid "$MUXD" -s /dev/ttyC0 -f 512 -n 8 -m basic >/dev/null 2>&1 &
+		echo $! >"$MUXD_PID"
 		log "gsm0710muxd started (pid $(cat "$MUXD_PID" 2>/dev/null))"
 	fi
 	i=0
@@ -110,46 +191,29 @@ flight_mode() {
 		log "no $RADIO/pttycmd1 after ${i}s (gsm0710muxd $(pid_alive "$MUXD_PID" && echo running || echo exited)): flight mode not sent"
 		return 0
 	fi
-	# marker first: a hang or a crash here never lets the command be sent twice in one boot
-	echo started >"$CFUN_DONE" || { log "cannot write $CFUN_DONE: flight mode not sent"; return 0; }
-	r=$(at_cmd "$RADIO/pttycmd1" "AT+CFUN=4")
-	case "$r" in
-		*OK*) ;;
-		*) log "AT+CFUN=4 not acknowledged (reply: '$r'): continuing"; return 0 ;;
-	esac
-	r=$(at_cmd "$RADIO/pttycmd1" "AT+CFUN?")
-	case "$r" in
-		*"+CFUN: 4"*) log "flight mode on (AT+CFUN=4 OK, AT+CFUN? -> +CFUN: 4)" ;;
-		*) log "AT+CFUN=4 returned OK but AT+CFUN? replied '$r'" ;;
-	esac
+	attempt=1
+	while [ "$attempt" -le 3 ]; do
+		r=$(at_cmd "$RADIO/pttycmd1" "AT+CFUN=4")
+		if has_line "$r" OK; then
+			r2=$(at_cmd "$RADIO/pttycmd1" "AT+CFUN?")
+			if has_line "$r2" "+CFUN: 4"; then
+				log "flight mode on (attempt $attempt: AT+CFUN=4 OK, AT+CFUN? -> +CFUN: 4)"
+				echo done >"$CFUN_DONE"
+				return 0
+			fi
+			log "attempt $attempt: AT+CFUN=4 OK but AT+CFUN? replied '$(oneline "$r2")'"
+		else
+			log "attempt $attempt: AT+CFUN=4 not acknowledged (reply: '$(oneline "$r")')"
+		fi
+		attempt=$((attempt + 1))
+	done
+	log "flight mode not confirmed after 3 attempts: continuing"
+	echo exhausted >"$CFUN_DONE"
 	return 0
 }
 
-start() {
-	[ -d "$STAGE" ] || return 0
-	if [ ! -x "$FSD" ] || [ ! -x "$MDINIT" ]; then
-		log "$STAGE is staged but $FSD or $MDINIT is missing: modem not started (Bluetooth clock stays untrimmed)"
-		return 0
-	fi
-	if pid_alive "$MDINIT_PID"; then
-		log "ccci_mdinit already running"
-		return 0
-	fi
-
-	mkdir -p "$DEV/block" || { log "cannot create $DEV/block"; return 0; }
-	[ -e "$DEV/block/mmcblk0" ] || ln -s "$DEV/mmcblk0" "$DEV/block/mmcblk0"
-	[ -e "$DEV/block/mmcblk0p4" ] || [ -L "$DEV/block/mmcblk0p4" ] || ln -s "$DEV/mmcblk0p4" "$DEV/block/mmcblk0p4"
-	neutralise
-	mkdir -p "$DATA/nvram/md" "$DATA/nvram/md2" "$DATA/ccci_cfg" || { log "cannot create the modem NVRAM directories under $DATA"; return 0; }
-
-	if ! pid_alive "$FSD_PID"; then
-		(cd / && setsid "$FSD" 0 >/dev/null 2>&1 & echo $! >"$FSD_PID")
-		log "ccci_fsd started (pid $(cat "$FSD_PID" 2>/dev/null))"
-		sleep 1
-	fi
-	(cd / && setsid "$MDINIT" 0 >/dev/null 2>&1 & echo $! >"$MDINIT_PID")
-	log "ccci_mdinit started (pid $(cat "$MDINIT_PID" 2>/dev/null))"
-
+# The background stage: wait for md1:2, then flight mode.
+modem_stage() {
 	i=0
 	state=
 	while [ "$i" -lt "$WAIT_S" ]; do
@@ -167,22 +231,68 @@ start() {
 	else
 		log "modem did not reach md1:2 (state '${state:-unreadable}' after ${i}s): continuing, Bluetooth clock stays untrimmed"
 	fi
+	log "modem bring-up finished"
+}
+
+start() {
+	[ -d "$STAGE" ] || return 0
+	if [ ! -x "$FSD" ] || [ ! -x "$MDINIT" ]; then
+		log "$STAGE is staged but $FSD or $MDINIT is missing: modem not started (Bluetooth clock stays untrimmed)"
+		return 0
+	fi
+	if pid_alive "$MDINIT_PID"; then
+		log "ccci_mdinit already running"
+		return 0
+	fi
+	cd / || return 0
+	make_props || { log "cannot create $DEV/__properties__: modem not started"; return 0; }
+
+	mkdir -p "$DEV/block" || { log "cannot create $DEV/block"; return 0; }
+	[ -e "$DEV/block/mmcblk0" ] || ln -s "$DEV/mmcblk0" "$DEV/block/mmcblk0"
+	[ -e "$DEV/block/mmcblk0p4" ] || [ -L "$DEV/block/mmcblk0p4" ] || ln -s "$DEV/mmcblk0p4" "$DEV/block/mmcblk0p4"
+	neutralise
+	mkdir -p "$DATA/nvram/md" "$DATA/nvram/md2" "$DATA/ccci_cfg" || { log "cannot create the modem NVRAM directories under $DATA"; return 0; }
+
+	if ! pid_alive "$FSD_PID"; then
+		setsid "$FSD" 0 >/dev/null 2>&1 &
+		echo $! >"$FSD_PID"
+		log "ccci_fsd started (pid $(cat "$FSD_PID" 2>/dev/null))"
+		sleep 1
+	fi
+	setsid "$MDINIT" 0 >/dev/null 2>&1 &
+	echo $! >"$MDINIT_PID"
+	log "ccci_mdinit started (pid $(cat "$MDINIT_PID" 2>/dev/null))"
+
+	if ! pid_alive "$STAGE_PID"; then
+		modem_stage &
+		echo $! >"$STAGE_PID"
+	fi
 	return 0
 }
 
 stop() {
-	for f in "$MUXD_PID" "$MDINIT_PID" "$FSD_PID"; do
+	for f in "$STAGE_PID" "$MUXD_PID" "$MDINIT_PID" "$FSD_PID"; do
 		pid=$(cat "$f" 2>/dev/null)
 		alive "$pid" && kill "$pid" 2>/dev/null
+		wait_gone "$f" 3
 		rm -f "$f"
 	done
 	rm -f "$CFUN_DONE"
 	return 0
 }
 
+restart() {
+	if [ "$(cat "$CCCI_BOOT" 2>/dev/null)" = "md1:2" ]; then
+		log "restart: modem is up (md1:2), nothing restarted (a reboot is the way to restart the modem)"
+		return 0
+	fi
+	stop
+	start
+}
+
 case "$1" in
 	start) start ;;
 	stop) stop ;;
-	restart) stop; start ;;
+	restart) restart ;;
 esac
 exit 0

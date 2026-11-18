@@ -52,17 +52,22 @@ unavailable. It never touches `/dev/mmcblk0*`, `/data/nvram` or `/data/BT_Addr` 
 Test: `ctest -R y2_s80_mtk_bt` (fake `/dev`, `/run`, `/proc/devices` and helpers).
 
 **Modem (`S78mtk-md`).** The 26 MHz clock is trimmed only by the modem (MD1); without it the clock is about -80 ppm and classic
-Bluetooth discovery fails (with the stock modem booted: about -4 ppm, AirPods found 3/3 vs 0/13). `S78mtk-md` runs before `S80mtk-bt`:
-`/dev/block/mmcblk0{,p4}` symlinks, every writable dumchar node (nvram, misc, pro_info, protect_f/s, mbr, ebr1/2, expdb, logo,
-android, cache, usrdata, fat, bmtpool, uboot) replaced by a symlink to `/dev/null` (preloader, misc-sd, seccfg, sec_ro, bootimg,
-recovery stay real: the kernel reads them for the signature check), `/data/nvram/md{,2}` and `/data/ccci_cfg`, then the stock
-`ccci_fsd 0` and `ccci_mdinit 0` under setsid (pid files in `/run`) and a 30 s wait for `/sys/kernel/ccci/boot` = `md1:2`. It fails
-open: anything missing, or no `md1:2`, is logged and Bluetooth still starts. Files come from the backup via
-`testbed/y2/scripts/stage-modem.sh` (read-only debugfs, copied over ssh; system files replaced when different, data and protect files
-only added when missing; never committed). Without `/opt/mtk-wmt` it does nothing. `deploy-fw.sh` installs it but does not run it.
-Once `md1:2` is reached it also starts `gsm0710muxd` (stock arguments, setsid) and, when `/dev/radio/pttycmd1` appears, sends `AT+CFUN=4` once per boot
-(flight mode) and checks `AT+CFUN?` -> `+CFUN: 4`; failures are only logged. It never opens `/dev/ttyC0` itself. Not yet verified on the device.
-Test: `ctest -R y2_s78_mtk_md` (the flight-mode part uses a fake multiplexer on a real pseudo-terminal; needs python3).
+Bluetooth discovery fails (with the stock modem booted: about -4 ppm, AirPods found 3/3 vs 0/13). `S78mtk-md` runs before `S80mtk-bt`.
+Synchronously: the property area `/dev/__properties__` if missing, `/dev/block/mmcblk0{,p4}` symlinks, then every dumchar node named
+in `/proc/dumchar_info` (plus the fixed list nvram, misc, pro_info, protect_f/s, mbr, ebr1/2, expdb, logo, android, cache, usrdata,
+fat, bmtpool, uboot) replaced by a symlink to `/dev/null`, EXCEPT the allowlist preloader, misc-sd, seccfg, sec_ro, bootimg, recovery
+(the kernel reads them for the signature check; their permissions are left alone; every one left real is logged), then
+`/data/nvram/md{,2}` and `/data/ccci_cfg`, and the stock `ccci_fsd 0` and `ccci_mdinit 0` under setsid (pid files in `/run`).
+In a background subshell (boot is not delayed): a 30 s wait for `/sys/kernel/ccci/boot` = `md1:2`, then `gsm0710muxd` (stock
+arguments, setsid) and, when `/dev/radio/pttycmd1` appears, `AT+CFUN=4` (flight mode) then `AT+CFUN?` -> `+CFUN: 4`: at most 3
+attempts per boot, marker `/run/md_cfun.done` written when confirmed or the attempts are used up. It never opens `/dev/ttyC0`
+itself. It fails open: anything missing, or no `md1:2`, or no flight mode, is logged and Bluetooth still starts. `restart` is a logged
+no-op while the modem is up (the modem is only restarted by a reboot); `stop` kills the stage and the three daemons. Files come from
+the backup via `testbed/y2/scripts/stage-modem.sh` (read-only debugfs, copied over ssh; system files replaced when different, data and
+protect files only added when missing; never committed; `--dry-run` lists what it would stage). Without `/opt/mtk-wmt` it does nothing.
+`deploy-fw.sh` installs it but does not run it. Flight mode is not yet verified on the device.
+Test: `ctest -R y2_s78_mtk_md` (about 2 minutes; the flight-mode part uses a fake multiplexer on a real pseudo-terminal and needs
+python3; `SHELL_UNDER_TEST="busybox sh"` runs it under busybox).
 
 On the device: log `/tmp/neupod-fw.log` (tmpfs, emptied past 256 KB), PID files `/run/neupod-fw.pid` (respawn wrapper, 2 s pause)
 and `/run/neupod-fw.app.pid`, keys from ssh with `echo s > /run/neupod.keys` (`w s` scroll, `e` select, `m` menu, `a d`, `p`).
