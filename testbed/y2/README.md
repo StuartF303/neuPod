@@ -60,7 +60,9 @@ recovery stay real: the kernel reads them for the signature check), `/data/nvram
 open: anything missing, or no `md1:2`, is logged and Bluetooth still starts. Files come from the backup via
 `testbed/y2/scripts/stage-modem.sh` (read-only debugfs, copied over ssh; system files replaced when different, data and protect files
 only added when missing; never committed). Without `/opt/mtk-wmt` it does nothing. `deploy-fw.sh` installs it but does not run it.
-Test: `ctest -R y2_s78_mtk_md`.
+Once `md1:2` is reached it also starts `gsm0710muxd` (stock arguments, setsid) and, when `/dev/radio/pttycmd1` appears, sends `AT+CFUN=4` once per boot
+(flight mode) and checks `AT+CFUN?` -> `+CFUN: 4`; failures are only logged. It never opens `/dev/ttyC0` itself. Not yet verified on the device.
+Test: `ctest -R y2_s78_mtk_md` (the flight-mode part uses a fake multiplexer on a real pseudo-terminal; needs python3).
 
 On the device: log `/tmp/neupod-fw.log` (tmpfs, emptied past 256 KB), PID files `/run/neupod-fw.pid` (respawn wrapper, 2 s pause)
 and `/run/neupod-fw.app.pid`, keys from ssh with `echo s > /run/neupod.keys` (`w s` scroll, `e` select, `m` menu, `a d`, `p`).

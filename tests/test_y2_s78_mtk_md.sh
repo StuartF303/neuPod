@@ -106,6 +106,74 @@ check "missing daemon: exits 0" test "$?" = 0
 check "missing daemon: nothing run" test ! -e "$T/fsd.args"
 check "missing daemon: says why" grep -q "missing" "$T/out.txt"
 
+# --- flight mode through a fake gsm0710muxd (a real pseudo-terminal at $RADIO/pttycmd1 that answers AT commands) ---
+if command -v python3 >/dev/null 2>&1 && command -v stty >/dev/null 2>&1; then
+	cat >"$T/bin/gsm0710muxd" <<'EOF2'
+#!/usr/bin/env python3
+import os, pty, sys, time
+radio = os.environ["MD_RADIO"]
+open(os.environ["MD_TEST_DIR"] + "/muxd.args", "a").write(" ".join(sys.argv[1:]) + "\n")
+mode = os.environ.get("MD_TEST_MODE", "ok")
+if mode == "nochannel":
+    time.sleep(60)
+m, s = pty.openpty()
+os.makedirs(radio, exist_ok=True)
+os.symlink(os.ttyname(s), radio + "/pttycmd1")
+buf = b""
+while True:
+    buf += os.read(m, 256)
+    while b"\r" in buf:
+        cmd, buf = buf.split(b"\r", 1)
+        cmd = cmd.strip().decode()
+        open(os.environ["MD_TEST_DIR"] + "/at.log", "a").write(cmd + "\n")
+        if cmd == "AT+CFUN=4":
+            out = b"" if mode == "noack" else b"\r\nOK\r\n"
+        elif cmd == "AT+CFUN?":
+            out = (b"\r\n+CFUN: 1\r\n\r\nOK\r\n" if mode == "badcfun" else b"\r\n+CFUN: 4\r\n\r\nOK\r\n")
+        else:
+            out = b"\r\nERROR\r\n"
+        os.write(m, out)
+EOF2
+	chmod 755 "$T/bin/gsm0710muxd"
+	mv "$T/bin/ccci_fsd.off" "$T/bin/ccci_fsd"
+	cat >"$T/bin/ccci_mdinit" <<EOF2
+#!/bin/sh
+sleep 1
+echo md1:2 >"$T/ccci_boot"
+exec sleep 60
+EOF2
+	flight() { # <mode> -> runs a fresh boot of the script
+		run stop
+		rm -rf "$T/radio" "$T/at.log" "$T/muxd.args" "$T/run/md_cfun.done"
+		echo md1:0 >"$T/ccci_boot"
+		MD_TEST_DIR=$T MD_TEST_MODE=$1 MD_RADIO="$T/radio" MD_MUX_WAIT_S=3 MD_AT_WAIT_S=2 run start
+	}
+	export MD_TEST_DIR MD_TEST_MODE MD_RADIO
+	flight ok
+	check "flight: muxd started with the stock arguments" test "$(cat "$T/muxd.args")" = "-s /dev/ttyC0 -f 512 -n 8 -m basic"
+	check "flight: AT+CFUN=4 then AT+CFUN?" test "$(tr '\n' ' ' <"$T/at.log")" = "AT+CFUN=4 AT+CFUN? "
+	check "flight: logged as on" grep -q "flight mode on" "$T/out.txt"
+	check "flight: muxd pid file" test -s "$T/run/gsm0710muxd.pid"
+	run start
+	check "flight: not sent twice in one boot" test "$(grep -c 'AT+CFUN=4' "$T/at.log")" = 1
+	flight noack
+	check "flight: no OK is logged, exit 0" grep -q "not acknowledged" "$T/out.txt"
+	flight badcfun
+	check "flight: wrong CFUN? is logged" grep -q "AT+CFUN? replied" "$T/out.txt"
+	flight nochannel
+	check "flight: no channel is logged" grep -q "flight mode not sent" "$T/out.txt"
+	check "flight: no channel, nothing sent" test ! -e "$T/at.log"
+	run stop
+	check "flight: stop removes the muxd pid file" test ! -e "$T/run/gsm0710muxd.pid"
+	mv "$T/bin/gsm0710muxd" "$T/bin/gsm0710muxd.off"
+	flight ok
+	check "flight: muxd missing is logged" grep -q "gsm0710muxd is missing" "$T/out.txt"
+	check "flight: the modem still counts as up" grep -q "modem up (md1:2)" "$T/out.txt"
+	run stop
+else
+	echo "skip flight-mode checks (needs python3 and stty)"
+fi
+
 # --- the script never writes the places it must not touch ---
 check "no nvram_daemon" test "$(grep -v '^#' "$SCRIPT" | grep -c 'nvram_daemon')" = 0
 check "no raw eMMC write" test "$(grep -v '^#' "$SCRIPT" | grep -E 'mmcblk0' | grep -vc 'ln -s')" = 0

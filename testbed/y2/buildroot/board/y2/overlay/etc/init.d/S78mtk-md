@@ -19,11 +19,19 @@
 #      stock arguments, in the background under setsid, pid files in /run. Never started twice.
 #   5. a bounded wait (30 s) for /sys/kernel/ccci/boot to read "md1:2" (modem up); the result is logged.
 #
+#   6. flight mode, once the modem is up (never when it is not): gsm0710muxd with the stock arguments (-s /dev/ttyC0 -f 512 -n 8
+#      -m basic) under setsid, pid file in /run. It owns /dev/ttyC0, speaks the GSM 07.10 multiplexer to the modem and makes the
+#      channels as pseudo-terminals linked at /dev/radio/ (pttycmd1..4 carry AT commands). The script waits (up to 20 s) for
+#      /dev/radio/pttycmd1, sends "AT+CFUN=4" once (marker /run/md_cfun.done, written before the send), expects "OK", then asks
+#      "AT+CFUN?" and expects "+CFUN: 4". Everything is logged; any failure is only logged. /dev/ttyC0 itself is NEVER opened here
+#      (a raw open and close of it left it returning EMFILE and ccci_mdinit then stopped the modem): only the muxer touches it.
+#
 # Never touched here: writes to /dev/mmcblk0* (the eMMC), the NVRAM partition, nvram_daemon. stop signals only the two daemons;
 # the stock never stops them, and stopping them while the modem runs may make ccci_mdinit stop the modem (a reboot is then
 # needed before it boots again).
 #
-# Test hooks (all default to the device's paths): MD_STAGE, MD_BIN, MD_DEV, MD_RUN, MD_DATA, MD_CCCI_BOOT, MD_WAIT_S.
+# Test hooks (all default to the device's paths): MD_STAGE, MD_BIN, MD_DEV, MD_RUN, MD_DATA, MD_CCCI_BOOT, MD_WAIT_S, MD_RADIO,
+# MD_MUX_WAIT_S, MD_AT_WAIT_S.
 STAGE=${MD_STAGE:-/opt/mtk-wmt}
 BIN=${MD_BIN:-/system/bin}
 DEV=${MD_DEV:-/dev}
@@ -31,6 +39,12 @@ RUN=${MD_RUN:-/run}
 DATA=${MD_DATA:-/data}
 CCCI_BOOT=${MD_CCCI_BOOT:-/sys/kernel/ccci/boot}
 WAIT_S=${MD_WAIT_S:-30}
+RADIO=${MD_RADIO:-/dev/radio}
+MUX_WAIT_S=${MD_MUX_WAIT_S:-20}
+AT_WAIT_S=${MD_AT_WAIT_S:-5}
+MUXD=$BIN/gsm0710muxd
+MUXD_PID=$RUN/gsm0710muxd.pid
+CFUN_DONE=$RUN/md_cfun.done
 FSD=$BIN/ccci_fsd
 MDINIT=$BIN/ccci_mdinit
 FSD_PID=$RUN/ccci_fsd.pid
@@ -50,6 +64,65 @@ neutralise() {
 			mv "$DEV/$n" "$DEV/.real-$n" && ln -s /dev/null "$DEV/$n" || log "cannot neutralise $DEV/$n"
 		fi
 	done
+}
+
+# Send one AT command on the channel $1 and wait up to AT_WAIT_S for a final result code. The reply is left in $RUN/at.reply.
+at_cmd() {
+	ch=$1
+	reply=$RUN/at.reply
+	: >"$reply"
+	stty -F "$ch" raw -echo 2>/dev/null
+	cat "$ch" >"$reply" 2>/dev/null &
+	reader=$!
+	printf '%s\r' "$2" >"$ch" 2>/dev/null
+	k=0
+	while [ "$k" -lt "$AT_WAIT_S" ]; do
+		sleep 1
+		grep -q 'OK\|ERROR' "$reply" 2>/dev/null && break
+		k=$((k + 1))
+	done
+	kill "$reader" 2>/dev/null
+	wait "$reader" 2>/dev/null
+	tr -d '\r' <"$reply" | tr '\n' ' '
+}
+
+flight_mode() {
+	if [ -e "$CFUN_DONE" ]; then
+		log "flight mode already requested this boot"
+		return 0
+	fi
+	if [ ! -x "$MUXD" ]; then
+		log "$MUXD is missing: flight mode (AT+CFUN=4) not sent"
+		return 0
+	fi
+	mkdir -p "$RADIO" || { log "cannot create $RADIO"; return 0; }
+	if ! pid_alive "$MUXD_PID"; then
+		(cd / && setsid "$MUXD" -s /dev/ttyC0 -f 512 -n 8 -m basic >/dev/null 2>&1 & echo $! >"$MUXD_PID")
+		log "gsm0710muxd started (pid $(cat "$MUXD_PID" 2>/dev/null))"
+	fi
+	i=0
+	while [ "$i" -lt "$MUX_WAIT_S" ] && [ ! -e "$RADIO/pttycmd1" ]; do
+		pid_alive "$MUXD_PID" || break
+		sleep 1
+		i=$((i + 1))
+	done
+	if [ ! -e "$RADIO/pttycmd1" ]; then
+		log "no $RADIO/pttycmd1 after ${i}s (gsm0710muxd $(pid_alive "$MUXD_PID" && echo running || echo exited)): flight mode not sent"
+		return 0
+	fi
+	# marker first: a hang or a crash here never lets the command be sent twice in one boot
+	echo started >"$CFUN_DONE" || { log "cannot write $CFUN_DONE: flight mode not sent"; return 0; }
+	r=$(at_cmd "$RADIO/pttycmd1" "AT+CFUN=4")
+	case "$r" in
+		*OK*) ;;
+		*) log "AT+CFUN=4 not acknowledged (reply: '$r'): continuing"; return 0 ;;
+	esac
+	r=$(at_cmd "$RADIO/pttycmd1" "AT+CFUN?")
+	case "$r" in
+		*"+CFUN: 4"*) log "flight mode on (AT+CFUN=4 OK, AT+CFUN? -> +CFUN: 4)" ;;
+		*) log "AT+CFUN=4 returned OK but AT+CFUN? replied '$r'" ;;
+	esac
+	return 0
 }
 
 start() {
@@ -90,6 +163,7 @@ start() {
 	done
 	if [ "$state" = "md1:2" ]; then
 		log "modem up (md1:2) after ${i}s"
+		flight_mode
 	else
 		log "modem did not reach md1:2 (state '${state:-unreadable}' after ${i}s): continuing, Bluetooth clock stays untrimmed"
 	fi
@@ -97,11 +171,12 @@ start() {
 }
 
 stop() {
-	for f in "$MDINIT_PID" "$FSD_PID"; do
+	for f in "$MUXD_PID" "$MDINIT_PID" "$FSD_PID"; do
 		pid=$(cat "$f" 2>/dev/null)
 		alive "$pid" && kill "$pid" 2>/dev/null
 		rm -f "$f"
 	done
+	rm -f "$CFUN_DONE"
 	return 0
 }
 
