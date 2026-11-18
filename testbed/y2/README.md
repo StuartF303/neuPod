@@ -58,7 +58,7 @@ in `/proc/dumchar_info` (plus the fixed list nvram, misc, pro_info, protect_f/s,
 fat, bmtpool, uboot) replaced by a symlink to `/dev/null`, EXCEPT the allowlist preloader, misc-sd, seccfg, sec_ro, bootimg, recovery
 (the kernel reads them for the signature check; their permissions are left alone; every one left real is logged), then
 `/data/nvram/md{,2}` and `/data/ccci_cfg`, and the stock `ccci_fsd 0` and `ccci_mdinit 0` under setsid (pid files in `/run`).
-In a background subshell (boot is not delayed): a 30 s wait for `/sys/kernel/ccci/boot` = `md1:2`, then (3 s later) `gsm0710muxd` (stock
+In a background subshell (boot is not delayed): a 90 s wait (the modem takes about 33 s) for `/sys/kernel/ccci/boot` = `md1:2`, then (3 s later) `gsm0710muxd` (stock
 arguments, setsid, stdin from `/dev/null`, output to the log; restarted up to 5 times if it exits early, with its exit status logged) and, when `/dev/radio/pttycmd1` appears, `AT+CFUN=4` (flight mode) then `AT+CFUN?` -> `+CFUN: 4` (or `+CFUN: 0`, how the modem boots; both count as radio off): at most 3
 attempts per boot, marker `/run/md_cfun.done` written when confirmed or the attempts are used up. Everything, including the background stage, is logged to `/tmp/S78mtk-md.log` (tmpfs, capped) as well as stdout. It never opens `/dev/ttyC0`
 itself. It fails open: anything missing, or no `md1:2`, or no flight mode, is logged and Bluetooth still starts. `restart` is a logged

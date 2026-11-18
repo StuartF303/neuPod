@@ -25,7 +25,7 @@
 #      NVRAM partition), as the stock init.modem.rc makes them; then ccci_fsd 0 (serves the modem's file requests) and ccci_mdinit 0
 #      (loads modem_1_2g_n.img and boots it), exactly the stock arguments, in the background under setsid, pid files in /run. Never
 #      started twice.
-#   5. (background) a bounded wait (30 s) for /sys/kernel/ccci/boot to read "md1:2" (modem up); the result is logged.
+#   5. (background) a bounded wait (90 s; the modem takes about 33 s from ccci_mdinit on the bench) for /sys/kernel/ccci/boot to read "md1:2" (modem up); the result is logged.
 #   6. (background, only when the modem is up; 3 s after md1:2, because the modem needs a moment before the muxer can talk to it) flight
 #      mode: gsm0710muxd with the stock arguments (-s /dev/ttyC0 -f 512 -n 8 -m basic) under setsid, stdin from /dev/null, stdout and
 #      stderr to the log, pid file in /run. If it exits early (seen, with its exit status, in the log) it is started again, up to 5
@@ -54,7 +54,7 @@ RUN=${MD_RUN:-/run}
 DATA=${MD_DATA:-/data}
 CCCI_BOOT=${MD_CCCI_BOOT:-/sys/kernel/ccci/boot}
 DUMCHAR_INFO=${MD_DUMCHAR_INFO:-/proc/dumchar_info}
-WAIT_S=${MD_WAIT_S:-30}
+WAIT_S=${MD_WAIT_S:-90}
 RADIO=${MD_RADIO:-/dev/radio}
 MUX_WAIT_S=${MD_MUX_WAIT_S:-20}
 AT_WAIT_S=${MD_AT_WAIT_S:-5}
