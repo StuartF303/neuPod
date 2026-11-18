@@ -61,6 +61,16 @@ bool bt_port_hci_up(void (*done)(void));
  * adapter runs rounds of this length (the last one shortened) and starts another as long as the scan window has at least a whole unit left. Called
  * on BTstack's thread once at the start of each scan (the value is kept for its rounds). */
 uint8_t bt_port_inquiry_round_units(void);
+
+/** Optional, same guard. Called on BTstack's thread before every gap_inquiry_start() (each round too): send extra controller commands, then call @p go()
+ * once, on BTstack's thread. Returns false if there is nothing to send (go() is then not called and the inquiry starts at once). A failing or silent
+ * command is logged and skipped; go() still follows. */
+bool bt_port_inquiry_prepare(void (*go)(void));
+
+/** Optional, same guard. Called on BTstack's thread when an inquiry has ended (completed, cancelled, refused or never started), before the adapter goes
+ * on (next round, name requests, scan done): send extra controller commands, then call @p next() once, on BTstack's thread. Returns false if there is
+ * nothing to send (next() is then not called and the adapter goes on at once). */
+bool bt_port_inquiry_done(void (*next)(void));
 #endif
 
 #ifdef __cplusplus
