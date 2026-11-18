@@ -287,6 +287,18 @@ The controller's own inquiry transmit power is always read and logged (`bt: inqu
      results are de-duplicated by address across rounds, and `bt: scan done` comes once at the end. A scan stopped by the user is not restarted. Stock also passes
      num_responses 25; BTstack's GAP API always sends 0 (unlimited) and has no setter, so that is not reproduced (unlimited is never fewer results). Not sent behind BTstack's back: it
      would desynchronise its inquiry state.
+* `NEUPOD_BT_MTK_FC54=1`: the MediaTek vendor command 0xFC54 with `01`, once after every HCI reset (meaning unknown). Sent after FC66 and, with `NEUPOD_BT_STOCK_INIT`, after the
+  LE host command and before the page timeout. Logged with its status and the bytes it returns (`bt: MTK vendor command FC54 (01) -> status 0x00, returned 01 03 00 ...`; stock's
+  reply after the status was `01 03 00 00 00 00 00 00 00 00`). Exactly `1` enables; anything else set is logged as ignored.
+* `NEUPOD_BT_LE_SCAN_DURING_INQ=1`: stock runs an LE active scan alongside every classic inquiry; this does the same with raw HCI commands (the Y2's BTstack is built without LE, so its
+  `gap_*_scan` functions do not exist, and enabling LE would change the default controller set-up). After every HCI reset: LE Set Scan Parameters (0x200B, `01 40 01 40 01 00 00`:
+  active, interval and window 0x0140, public address, accept all). Around every inquiry (each 4 x 1.28 s round too, if `NEUPOD_BT_STOCK_INIT` is on): LE Set Scan Enable (0x200C) `00 00`,
+  Write Inquiry Transmit Power (0x0C59, only if `NEUPOD_BT_INQ_TXPWR` is set), `01 01` (filter duplicates), then the inquiry; when the inquiry has ended, is cancelled or is refused: `00 00`,
+  before the next round or the name requests. Each step's status is logged. LE advertising reports are counted and dropped (not shown, not logged); one line per inquiry,
+  `bt: le adv reports: N`. The controller only sends them if the LE Meta event is in its event mask, which needs `NEUPOD_BT_STOCK_INIT=1` (BTstack's own mask leaves it out), so without
+  that the count is 0 while the scan still runs. A failing command never keeps the inquiry from starting. Exactly `1` enables; anything else set is logged as ignored.
+* Not implemented: host flow control (0x0C33 Host Buffer Size, 0x0C31). BTstack only supports it as a compile-time option that also changes the default init and makes it send
+  Host_Number_Of_Completed_Packets; see the PR notes.
 
 A command the controller refuses or never answers is logged and skipped; Bluetooth still comes up. The commands run before the radio is reported ON, so each HCI-up
 can take up to 6 s longer in the worst case (an unanswering controller); with the switches unset it is one quick read.

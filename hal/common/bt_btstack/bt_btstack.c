@@ -353,11 +353,56 @@ static void on_name_complete(const uint8_t *packet) {
     next_name_request();
 }
 
-static void on_inquiry_complete(void) {
-    printf("bt: inquiry complete (%u results delivered by BTstack, %u kept)\n", (unsigned)g_raw_results, (unsigned)g_nfound);
+/* Run @p next once the controller is clear of the inquiry. A port may have extra commands to send first (the Y2's concurrent LE scan is switched off here);
+ * where it has none, or on any other platform, @p next runs at once. */
+static void after_inquiry(void (*next)(void)) {
+#ifdef NEUPOD_BT_PORT_HCI_UP
+    if (bt_port_inquiry_done(next)) {
+        return;
+    }
+#endif
+    next();
+}
+
+static void names_phase(void) {
+    g_phase = SCAN_NAMES;
+    if (g_skip_names) {
+        finish_scan();
+    } else {
+        next_name_request();
+    }
+}
+
+static uint8_t g_pending_units; /* the inquiry length inquiry_go() starts */
+static bool g_pending_round;    /* it is a later round: if it cannot start, go on to the names */
+
+static void inquiry_go(void) {
     if (g_phase != SCAN_INQUIRY) {
         return;
     }
+    if (g_skip_names) {
+        after_inquiry(finish_scan); /* the user stopped the scan while the port was preparing the controller */
+        return;
+    }
+    if (gap_inquiry_start(g_pending_units) != 0) {
+        printf(g_pending_round ? "bt: inquiry round could not start\n" : "bt: inquiry could not start\n");
+        after_inquiry(g_pending_round ? names_phase : finish_scan);
+    }
+}
+
+/* Start an inquiry of @p units x 1.28 s, after whatever the port wants sent before it. */
+static void inquiry_begin(uint8_t units, bool later_round) {
+    g_pending_units = units;
+    g_pending_round = later_round;
+#ifdef NEUPOD_BT_PORT_HCI_UP
+    if (bt_port_inquiry_prepare(inquiry_go)) {
+        return; /* inquiry_go() follows */
+    }
+#endif
+    inquiry_go();
+}
+
+static void inquiry_next(void) {
 #ifdef NEUPOD_BT_PORT_HCI_UP
     /* Short rounds (the Y2's stock shape): another one while the window has a whole unit left. Results are de-duplicated by address (find()). */
     if (g_round_units != 0 && !g_skip_names) {
@@ -369,19 +414,20 @@ static void on_inquiry_complete(void) {
         if (units >= 1u) {
             g_round++;
             printf("bt: inquiry round %u (%u x 1.28 s)\n", (unsigned)g_round, (unsigned)units);
-            if (gap_inquiry_start((uint8_t)units) == 0) {
-                return;
-            }
-            printf("bt: inquiry round could not start\n");
+            inquiry_begin((uint8_t)units, true);
+            return;
         }
     }
 #endif
-    g_phase = SCAN_NAMES;
-    if (g_skip_names) {
-        finish_scan();
-    } else {
-        next_name_request();
+    names_phase();
+}
+
+static void on_inquiry_complete(void) {
+    printf("bt: inquiry complete (%u results delivered by BTstack, %u kept)\n", (unsigned)g_raw_results, (unsigned)g_nfound);
+    if (g_phase != SCAN_INQUIRY) {
+        return;
     }
+    after_inquiry(inquiry_next);
 }
 
 static const char *hci_version_name(uint8_t v) {
@@ -462,7 +508,7 @@ static void packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint
          * "scanning" for ever. */
         if (HCI_EVENT_IS_COMMAND_STATUS(packet, hci_inquiry) && hci_event_command_status_get_status(packet) != 0 && g_phase == SCAN_INQUIRY) {
             printf("bt: inquiry refused by the controller (status 0x%02X)\n", (unsigned)hci_event_command_status_get_status(packet));
-            finish_scan();
+            after_inquiry(finish_scan);
         }
         break;
     case GAP_EVENT_INQUIRY_COMPLETE:
@@ -525,10 +571,7 @@ static void worker_scan_start(void *arg) {
         printf("bt: inquiry round 1 (%u x 1.28 s)\n", (unsigned)units);
     }
 #endif
-    if (gap_inquiry_start(units) != 0) {
-        printf("bt: inquiry could not start\n");
-        finish_scan();
-    }
+    inquiry_begin(units, false);
 }
 
 static void worker_scan_stop(void *arg) {

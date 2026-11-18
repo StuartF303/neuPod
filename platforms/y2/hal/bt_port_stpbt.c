@@ -253,6 +253,13 @@ static uint8_t g_up_raw[HCI_OUTGOING_PRE_BUFFER_SIZE + 3 + sizeof g_up_cmd.param
 #define g_up_buf (&g_up_raw[HCI_OUTGOING_PRE_BUFFER_SIZE])
 static void (*g_up_done)(void);
 static bool g_stock_init; /* NEUPOD_BT_STOCK_INIT=1; set in bt_port_hci_up(), before any inquiry */
+static bool g_le_scan;    /* NEUPOD_BT_LE_SCAN_DURING_INQ=1 */
+static bool g_write_txpwr;
+static int8_t g_txpwr;
+/* What the sequence in flight is: the HCI-up plan, or the commands around one inquiry (the shared up_pump() sends either). */
+static enum { UP_HCIUP = 0, UP_BEFORE_INQ, UP_AFTER_INQ } g_up_mode;
+static y2_inqseq_t g_inq_seq;
+static uint32_t g_le_reports; /* LE advertising reports the controller sent since the last inquiry started: counted, never shown */
 static bool g_up_active, g_up_inflight, g_up_env_logged, g_up_registered;
 static uint32_t g_up_start;
 static btstack_timer_source_t g_up_timer;
@@ -293,7 +300,7 @@ static void up_pump(void) {
         btstack_run_loop_add_timer(&g_up_timer);
         return;
     }
-    if (!y2_hciup_next(&g_up_plan, &g_up_cmd)) {
+    if (!(g_up_mode == UP_HCIUP ? y2_hciup_next(&g_up_plan, &g_up_cmd) : y2_inqseq_next(&g_inq_seq, &g_up_cmd))) {
         up_finish();
         return;
     }
@@ -329,6 +336,26 @@ static void up_answer(uint8_t status, const uint8_t *data, uint16_t data_len) {
     case Y2_HCIUP_LE_HOST:
         printf("bt: LE host supported 01 00 (0x0C6D) -> status 0x%02X%s\n", (unsigned)status, ok ? "" : " (refused, carrying on)");
         break;
+    case Y2_HCIUP_FC54:
+        if (ok && data_len >= 1) {
+            char hex[3 * 16 + 1] = "";
+            for (uint16_t i = 0; i < data_len && i < 16; i++) {
+                snprintf(&hex[strlen(hex)], 4, "%s%02X", i ? " " : "", (unsigned)data[i]);
+            }
+            printf("bt: MTK vendor command FC54 (01) -> status 0x%02X, returned %s\n", (unsigned)status, hex);
+        } else {
+            printf("bt: MTK vendor command FC54 (01) -> status 0x%02X%s\n", (unsigned)status, ok ? "" : " (refused, carrying on)");
+        }
+        break;
+    case Y2_HCIUP_LE_SCAN_PARAMS:
+        printf("bt: LE scan parameters active 0x0140/0x0140 (0x200B) -> status 0x%02X%s\n", (unsigned)status, ok ? "" : " (refused, carrying on)");
+        break;
+    case Y2_HCIUP_LE_SCAN_DISABLE:
+        printf("bt: LE scan off (0x200C) -> status 0x%02X%s\n", (unsigned)status, ok ? "" : " (refused, carrying on)");
+        break;
+    case Y2_HCIUP_LE_SCAN_ENABLE:
+        printf("bt: LE scan on (0x200C) -> status 0x%02X%s\n", (unsigned)status, ok ? "" : " (refused, carrying on)");
+        break;
     case Y2_HCIUP_PAGE_TIMEOUT:
         printf("bt: page timeout 0x3800 (0x0C18) -> status 0x%02X%s\n", (unsigned)status, ok ? "" : " (refused, carrying on)");
         break;
@@ -340,7 +367,7 @@ static void up_answer(uint8_t status, const uint8_t *data, uint16_t data_len) {
         }
         break;
     case Y2_HCIUP_WRITE_TXPWR:
-        printf("bt: inquiry tx power set to %d dBm -> status 0x%02X%s\n", (int)g_up_plan.txpwr, (unsigned)status, ok ? "" : " (refused, carrying on)");
+        printf("bt: inquiry tx power set to %d dBm -> status 0x%02X%s\n", (int)g_txpwr, (unsigned)status, ok ? "" : " (refused, carrying on)");
         break;
     case Y2_HCIUP_READBACK:
         if (ok && data_len >= 1) {
@@ -357,7 +384,17 @@ static void up_answer(uint8_t status, const uint8_t *data, uint16_t data_len) {
 
 static void up_event(uint8_t type, uint16_t channel, uint8_t *packet, uint16_t size) {
     (void)channel;
-    if (type != HCI_EVENT_PACKET || !g_up_active || size < 3) {
+    if (type != HCI_EVENT_PACKET || size < 3) {
+        return;
+    }
+    /* Advertising reports of the LE scan: BTstack's LE support is not built in, so it only passes them on; they are counted and nothing else. */
+    if (hci_event_packet_get_type(packet) == HCI_EVENT_LE_META) {
+        if (size >= 4 && packet[2] == 0x02) {
+            g_le_reports++;
+        }
+        return;
+    }
+    if (!g_up_active) {
         return;
     }
     switch (hci_event_packet_get_type(packet)) {
@@ -392,6 +429,32 @@ static void up_event(uint8_t type, uint16_t channel, uint8_t *packet, uint16_t s
     }
 }
 
+/* Stock's LE active scan runs alongside every classic inquiry: off, [inquiry power], on, then the inquiry; off again when it has ended. Same fail-open
+ * stance as the HCI-up commands: a refused or silent command is logged and the inquiry starts anyway. */
+static bool inq_sequence(y2_inqseq_kind_t kind, void (*then)(void)) {
+    if (!g_le_scan || g_up_active) {
+        return false;
+    }
+    if (kind == Y2_INQSEQ_BEFORE) {
+        g_le_reports = 0;
+    } else {
+        printf("bt: le adv reports: %u\n", (unsigned)g_le_reports);
+    }
+    y2_inqseq_init(&g_inq_seq, kind, g_write_txpwr, g_txpwr);
+    g_up_mode = kind == Y2_INQSEQ_BEFORE ? UP_BEFORE_INQ : UP_AFTER_INQ;
+    g_up_done = then;
+    g_up_active = true;
+    g_up_inflight = false;
+    g_up_start = btstack_run_loop_get_time_ms();
+    btstack_run_loop_set_timer_handler(&g_up_timer, up_timer);
+    up_pump();
+    return true;
+}
+
+bool bt_port_inquiry_prepare(void (*go)(void)) { return inq_sequence(Y2_INQSEQ_BEFORE, go); }
+
+bool bt_port_inquiry_done(void (*next)(void)) { return inq_sequence(Y2_INQSEQ_AFTER, next); }
+
 uint8_t bt_port_inquiry_round_units(void) { return g_stock_init ? Y2_STOCK_INQ_ROUND_UNITS : 0; }
 
 bool bt_port_hci_up(void (*done)(void)) {
@@ -402,6 +465,13 @@ bool bt_port_hci_up(void (*done)(void)) {
     uint8_t inq_mode = 0;
     y2_inq_mode_result_t mr = y2_bt_parse_inq_mode(im, &inq_mode);
     bool fc66 = y2_bt_parse_fc66(getenv("NEUPOD_BT_MTK_FC66"));
+    const char *f54 = getenv("NEUPOD_BT_MTK_FC54");
+    y2_switch_result_t f54r = y2_bt_parse_switch(f54);
+    const char *le = getenv("NEUPOD_BT_LE_SCAN_DURING_INQ");
+    y2_switch_result_t ler = y2_bt_parse_switch(le);
+    g_le_scan = ler == Y2_SWITCH_ON;
+    g_write_txpwr = r == Y2_INQ_TXPWR_OK;
+    g_txpwr = pwr;
     const char *si = getenv("NEUPOD_BT_STOCK_INIT");
     y2_stock_init_result_t sr = y2_bt_parse_stock_init(si);
     g_stock_init = sr == Y2_STOCK_INIT_ON;
@@ -427,13 +497,24 @@ bool bt_port_hci_up(void (*done)(void)) {
         if (fc66) {
             printf("bt: NEUPOD_BT_MTK_FC66=1: the MediaTek vendor command FC66 follows every HCI reset\n");
         }
+        if (f54r == Y2_SWITCH_ON) {
+            printf("bt: NEUPOD_BT_MTK_FC54=1: the MediaTek vendor command FC54 follows every HCI reset\n");
+        } else if (f54r == Y2_SWITCH_INVALID) {
+            printf("bt: NEUPOD_BT_MTK_FC54='%s' is not 1: ignored\n", f54);
+        }
+        if (ler == Y2_SWITCH_ON) {
+            printf("bt: NEUPOD_BT_LE_SCAN_DURING_INQ=1: an LE active scan runs alongside every inquiry (advertising reports are counted, not shown)\n");
+        } else if (ler == Y2_SWITCH_INVALID) {
+            printf("bt: NEUPOD_BT_LE_SCAN_DURING_INQ='%s' is not 1: ignored\n", le);
+        }
     }
     if (!g_up_registered) {
         g_up_registered = true;
         g_up_reg.callback = up_event;
         hci_add_event_handler(&g_up_reg);
     }
-    y2_hciup_plan_init(&g_up_plan, fc66, mr == Y2_INQ_MODE_OK, inq_mode, g_stock_init, r == Y2_INQ_TXPWR_OK, pwr);
+    y2_hciup_plan_init(&g_up_plan, fc66, mr == Y2_INQ_MODE_OK, inq_mode, g_stock_init, f54r == Y2_SWITCH_ON, g_le_scan, g_write_txpwr, pwr);
+    g_up_mode = UP_HCIUP;
     g_up_done = done;
     g_up_active = true;
     g_up_inflight = false;
