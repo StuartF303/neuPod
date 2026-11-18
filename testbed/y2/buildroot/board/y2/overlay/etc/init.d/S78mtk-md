@@ -26,11 +26,13 @@
 #      (loads modem_1_2g_n.img and boots it), exactly the stock arguments, in the background under setsid, pid files in /run. Never
 #      started twice.
 #   5. (background) a bounded wait (30 s) for /sys/kernel/ccci/boot to read "md1:2" (modem up); the result is logged.
-#   6. (background, only when the modem is up) flight mode: gsm0710muxd with the stock arguments (-s /dev/ttyC0 -f 512 -n 8 -m basic)
-#      under setsid, pid file in /run. It owns /dev/ttyC0, speaks the GSM 07.10 multiplexer to the modem and makes the channels as
+#   6. (background, only when the modem is up; 3 s after md1:2, because the modem needs a moment before the muxer can talk to it) flight
+#      mode: gsm0710muxd with the stock arguments (-s /dev/ttyC0 -f 512 -n 8 -m basic) under setsid, stdin from /dev/null, stdout and
+#      stderr to the log, pid file in /run. If it exits early (seen, with its exit status, in the log) it is started again, up to 5
+#      times, 3 s apart. It owns /dev/ttyC0, speaks the GSM 07.10 multiplexer to the modem and makes the channels as
 #      pseudo-terminals linked at /dev/radio/ (pttycmd1..4 carry AT commands). The script waits (up to 20 s) for
 #      /dev/radio/pttycmd1, lets it settle (1 s), then up to 3 times: sends "AT+CFUN=4", expects a line that is exactly "OK", sends
-#      "AT+CFUN?" and expects a line "+CFUN: 4" (other lines, such as unsolicited reports, are ignored; each command is read with
+#      "AT+CFUN?" and expects a line "+CFUN: 4" or "+CFUN: 0" (the modem boots with the radio off; both mean radio off) (other lines, such as unsolicited reports, are ignored; each command is read with
 #      the channel opened once, after anything stale has been discarded). AT+CFUN=4 is idempotent, hence the retries. The marker
 #      /run/md_cfun.done means "flight mode confirmed or the attempts used up". Everything is logged; any failure is only logged.
 #      /dev/ttyC0 itself is NEVER opened here (a raw open and close of it left it returning EMFILE and ccci_mdinit then stopped the
@@ -41,8 +43,10 @@
 # ccci_mdinit stop the modem (a reboot is then needed before it boots again). restart is therefore a logged no-op while the modem is
 # up (md1:2); otherwise it is stop then start. Only rcK or a hand call ever runs stop.
 #
+# Log: /tmp/S78mtk-md.log (every line, including the background stage).
+#
 # Test hooks (all default to the device's paths): MD_STAGE, MD_BIN, MD_DEV, MD_RUN, MD_DATA, MD_CCCI_BOOT, MD_DUMCHAR_INFO,
-# MD_WAIT_S, MD_RADIO, MD_MUX_WAIT_S, MD_AT_WAIT_S, MD_SETTLE_S.
+# MD_WAIT_S, MD_RADIO, MD_MUX_WAIT_S, MD_AT_WAIT_S, MD_SETTLE_S, MD_LOG, MD_UP_SETTLE_S, MD_MUX_TRIES, MD_MUX_RETRY_S.
 STAGE=${MD_STAGE:-/opt/mtk-wmt}
 BIN=${MD_BIN:-/system/bin}
 DEV=${MD_DEV:-/dev}
@@ -55,6 +59,10 @@ RADIO=${MD_RADIO:-/dev/radio}
 MUX_WAIT_S=${MD_MUX_WAIT_S:-20}
 AT_WAIT_S=${MD_AT_WAIT_S:-5}
 SETTLE_S=${MD_SETTLE_S:-1}
+LOGFILE=${MD_LOG:-/tmp/S78mtk-md.log}
+UP_SETTLE_S=${MD_UP_SETTLE_S:-3}
+MUX_TRIES=${MD_MUX_TRIES:-5}
+MUX_RETRY_S=${MD_MUX_RETRY_S:-3}
 PROP_SIZE=131072
 MUXD=$BIN/gsm0710muxd
 FSD=$BIN/ccci_fsd
@@ -67,7 +75,18 @@ CFUN_DONE=$RUN/md_cfun.done
 KEEP="preloader misc-sd seccfg sec_ro bootimg recovery"
 FIXED_NULLED="nvram misc pro_info protect_f protect_s mbr ebr1 ebr2 expdb logo android cache usrdata fat bmtpool uboot"
 
-log() { echo "S78mtk-md: $*"; }
+# Logged to the file (tmpfs, so no eMMC wear; capped at 64 KiB, the newest 32 KiB are kept at each start) first, then to stdout, which
+# at boot is the console that nobody captures and may be closed: a write error there is ignored, and the stage ignores SIGPIPE.
+log() {
+	msg="S78mtk-md: $(cut -d' ' -f1 /proc/uptime 2>/dev/null) $*"
+	echo "$msg" >>"$LOGFILE" 2>/dev/null
+	echo "$msg" 2>/dev/null || :
+}
+
+trim_log() {
+	[ "$(wc -c <"$LOGFILE" 2>/dev/null || echo 0)" -gt 65536 ] || return 0
+	tail -c 32768 "$LOGFILE" >"$LOGFILE.tmp" 2>/dev/null && mv "$LOGFILE.tmp" "$LOGFILE"
+}
 
 # Running, and not a zombie (a killed daemon whose parent is gone and not yet reaped still answers kill -0).
 alive() {
@@ -166,6 +185,41 @@ has_line() { printf '%s\n' "$1" | grep -Fxq -- "$2"; }
 
 oneline() { printf '%s' "$1" | tr '\n' ' '; }
 
+# Start gsm0710muxd and wait for its first AT channel; start it again if it exits early. Returns 1 when it would not stay up.
+start_muxd() {
+	tries=1
+	while :; do
+		# links left by a dead muxer point nowhere; the new one makes them again
+		rm -f "$RADIO"/ptty* "$RADIO"/atci* 2>/dev/null
+		setsid "$MUXD" -s /dev/ttyC0 -f 512 -n 8 -m basic </dev/null >>"$LOGFILE" 2>&1 &
+		mpid=$!
+		echo "$mpid" >"$MUXD_PID"
+		log "gsm0710muxd started (pid $mpid, try $tries of $MUX_TRIES)"
+		i=0
+		while [ "$i" -lt "$MUX_WAIT_S" ] && [ ! -e "$RADIO/pttycmd1" ]; do
+			alive "$mpid" || break
+			sleep 1
+			i=$((i + 1))
+		done
+		if alive "$mpid"; then
+			sleep 1
+			if alive "$mpid"; then
+				[ -e "$RADIO/pttycmd1" ] && log "gsm0710muxd alive, $RADIO/pttycmd1 present after ${i}s" || log "gsm0710muxd alive but no $RADIO/pttycmd1 after ${i}s"
+				break
+			fi
+		fi
+		wait "$mpid" 2>/dev/null
+		log "gsm0710muxd exited (status $?) after ${i}s"
+		rm -f "$MUXD_PID"
+		if [ "$tries" -ge "$MUX_TRIES" ]; then
+			log "gsm0710muxd would not stay up after $tries tries: flight mode not sent"
+			return 1
+		fi
+		tries=$((tries + 1))
+		sleep "$MUX_RETRY_S"
+	done
+}
+
 flight_mode() {
 	if [ -e "$CFUN_DONE" ]; then
 		log "flight mode already handled this boot"
@@ -176,19 +230,14 @@ flight_mode() {
 		return 0
 	fi
 	mkdir -p "$RADIO" || { log "cannot create $RADIO"; return 0; }
-	if ! pid_alive "$MUXD_PID"; then
-		setsid "$MUXD" -s /dev/ttyC0 -f 512 -n 8 -m basic >/dev/null 2>&1 &
-		echo $! >"$MUXD_PID"
-		log "gsm0710muxd started (pid $(cat "$MUXD_PID" 2>/dev/null))"
+	if pid_alive "$MUXD_PID"; then
+		log "gsm0710muxd already running"
+	else
+		sleep "$UP_SETTLE_S"
+		start_muxd || return 0
 	fi
-	i=0
-	while [ "$i" -lt "$MUX_WAIT_S" ] && [ ! -e "$RADIO/pttycmd1" ]; do
-		pid_alive "$MUXD_PID" || break
-		sleep 1
-		i=$((i + 1))
-	done
 	if [ ! -e "$RADIO/pttycmd1" ]; then
-		log "no $RADIO/pttycmd1 after ${i}s (gsm0710muxd $(pid_alive "$MUXD_PID" && echo running || echo exited)): flight mode not sent"
+		log "no $RADIO/pttycmd1: flight mode not sent"
 		return 0
 	fi
 	attempt=1
@@ -198,6 +247,12 @@ flight_mode() {
 			r2=$(at_cmd "$RADIO/pttycmd1" "AT+CFUN?")
 			if has_line "$r2" "+CFUN: 4"; then
 				log "flight mode on (attempt $attempt: AT+CFUN=4 OK, AT+CFUN? -> +CFUN: 4)"
+				echo done >"$CFUN_DONE"
+				return 0
+			fi
+			if has_line "$r2" "+CFUN: 0"; then
+				# the modem boots with the radio off; it is off, which is all that is wanted
+				log "radio off (attempt $attempt: AT+CFUN=4 OK, AT+CFUN? -> +CFUN: 0)"
 				echo done >"$CFUN_DONE"
 				return 0
 			fi
@@ -214,6 +269,7 @@ flight_mode() {
 
 # The background stage: wait for md1:2, then flight mode.
 modem_stage() {
+	trap '' PIPE
 	i=0
 	state=
 	while [ "$i" -lt "$WAIT_S" ]; do
@@ -236,6 +292,7 @@ modem_stage() {
 
 start() {
 	[ -d "$STAGE" ] || return 0
+	trim_log
 	if [ ! -x "$FSD" ] || [ ! -x "$MDINIT" ]; then
 		log "$STAGE is staged but $FSD or $MDINIT is missing: modem not started (Bluetooth clock stays untrimmed)"
 		return 0

@@ -52,7 +52,7 @@ done
 
 run() {
 	MD_STAGE="$T/stage" MD_BIN="$T/bin" MD_DEV="$T/dev" MD_RUN="$T/run" MD_DATA="$T/data" MD_CCCI_BOOT="$T/ccci_boot" \
-		MD_DUMCHAR_INFO="$T/dumchar_info" MD_WAIT_S=${WAIT:-6} $SH "$SCRIPT" "$1" >"$T/out.txt" 2>&1
+		MD_DUMCHAR_INFO="$T/dumchar_info" MD_LOG="$T/S78.log" MD_WAIT_S=${WAIT:-6} $SH "$SCRIPT" "$1" >"$T/out.txt" 2>&1
 }
 # start returns before the background stage ends: wait for its last log line (up to ~$1 s)
 wait_finished() {
@@ -73,6 +73,7 @@ check "not staged: nothing run" test ! -e "$T/fsd.args"
 check "not staged: no /dev/block" test ! -e "$T/dev/block"
 check "not staged: no property area" test ! -e "$T/dev/__properties__"
 check "not staged: quiet" test ! -s "$T/out.txt"
+check "not staged: no log file" test ! -e "$T/S78.log"
 check "not staged: nodes untouched" test ! -L "$T/dev/nvram"
 mkdir "$T/stage"
 
@@ -103,6 +104,8 @@ check "ccci_fsd started with stock arg 0" test "$(cat "$T/fsd.args")" = 0
 check "ccci_mdinit started with stock arg 0" test "$(cat "$T/mdinit.args")" = 0
 check "pid files" test -s "$T/run/ccci_fsd.pid" -a -s "$T/run/ccci_mdinit.pid"
 check "logs md1:2" grep -q "modem up (md1:2)" "$T/out.txt"
+check "the log file has the same lines, background stage included" grep -q "modem bring-up finished" "$T/S78.log"
+check "log lines carry an uptime stamp" grep -Eq '^S78mtk-md: [0-9.]+ ccci_fsd started' "$T/S78.log"
 check "no muxd binary: flight mode skipped, logged" grep -q "gsm0710muxd is missing" "$T/out.txt"
 
 # --- a second start: nothing runs again ---
@@ -182,6 +185,15 @@ open(d + "/muxd.args", "a").write(" ".join(sys.argv[1:]) + "\n")
 mode = os.environ.get("MD_TEST_MODE", "ok")
 if mode == "nochannel":
     time.sleep(60)
+if mode == "alwaysdie":
+    sys.exit(4)
+if mode == "diefirst":
+    c = d + "/muxd.count"
+    n = int(open(c).read()) if os.path.exists(c) else 0
+    open(c, "w").write(str(n + 1))
+    if n == 0:
+        print("modem not ready")
+        sys.exit(3)
 m, s = pty.openpty()
 tty.setraw(s)  # as a real mux channel: no echo, so stale data is not looped back as commands
 os.makedirs(radio, exist_ok=True)
@@ -207,6 +219,8 @@ while True:
         elif cmd == "AT+CFUN?":
             if mode == "badcfun":
                 out = b"\r\n+CFUN: 1\r\n\r\nOK\r\n"
+            elif mode == "cfun0":
+                out = b"\r\n+CFUN: 0\r\n\r\nOK\r\n"
             elif mode == "unsolicited":
                 out = b"\r\n+CREG: 0\r\n\r\n+CFUN: 4\r\n\r\nOK\r\n"
             else:
@@ -218,9 +232,9 @@ EOF2
 	chmod 755 "$T/bin/gsm0710muxd"
 	flight() { # <mode>: a fresh boot of the script
 		run stop
-		rm -rf "$T/radio" "$T/at.log" "$T/muxd.args" "$T/run/md_cfun.done"
+		rm -rf "$T/radio" "$T/at.log" "$T/muxd.args" "$T/muxd.count" "$T/run/md_cfun.done" "$T/S78.log"
 		echo md1:0 >"$T/ccci_boot"
-		MD_TEST_DIR=$T MD_TEST_MODE=$1 MD_RADIO="$T/radio" MD_MUX_WAIT_S=3 MD_AT_WAIT_S=2 MD_SETTLE_S=1 run start
+		MD_TEST_DIR=$T MD_TEST_MODE=$1 MD_RADIO="$T/radio" MD_MUX_WAIT_S=3 MD_AT_WAIT_S=2 MD_SETTLE_S=1 MD_UP_SETTLE_S=0 MD_MUX_RETRY_S=1 MD_MUX_TRIES=2 run start
 		wait_finished 60
 	}
 	export MD_TEST_DIR MD_TEST_MODE MD_RADIO
@@ -245,10 +259,23 @@ EOF2
 	check "flight: no OK, 3 attempts then gives up" test "$(grep -c 'AT+CFUN=4' "$T/at.log")" = 3
 	check "flight: gives up, logged, exit 0" grep -q "not confirmed after 3 attempts" "$T/out.txt"
 	check "flight: exhausted marker" test "$(cat "$T/run/md_cfun.done")" = exhausted
+	flight cfun0
+	check "flight: +CFUN: 0 counts as radio off" grep -q "radio off (attempt 1" "$T/out.txt"
+	check "flight: CFUN=4 is still sent" grep -q "AT+CFUN=4" "$T/at.log"
+	check "flight: done marker for radio off" test "$(cat "$T/run/md_cfun.done")" = done
+	flight diefirst
+	check "flight: muxd that exits early is logged with its status" grep -q "gsm0710muxd exited (status 3)" "$T/out.txt"
+	check "flight: and started again" test "$(cat "$T/muxd.count")" = 2
+	check "flight: second try succeeds" grep -q "flight mode on (attempt 1" "$T/out.txt"
+	check "flight: muxd's own output is in the log file" grep -q "modem not ready" "$T/S78.log"
+	flight alwaysdie
+	check "flight: muxd that never stays up: gives up, logged" grep -q "would not stay up after 2 tries" "$T/out.txt"
+	check "flight: gave up, no AT sent" test ! -e "$T/at.log"
+	check "flight: gave up, stage still finished" grep -q "modem bring-up finished" "$T/out.txt"
 	flight badcfun
 	check "flight: wrong CFUN? is logged" grep -q "AT+CFUN? replied" "$T/out.txt"
 	flight nochannel
-	check "flight: no channel is logged" grep -q "flight mode not sent" "$T/out.txt"
+	check "flight: no channel is logged" grep -q "no .*pttycmd1: flight mode not sent" "$T/out.txt"
 	check "flight: no channel, nothing sent" test ! -e "$T/at.log"
 	run stop
 	check "flight: stop removes the muxd pid file" test ! -e "$T/run/gsm0710muxd.pid"
