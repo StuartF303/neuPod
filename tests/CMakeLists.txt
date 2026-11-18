@@ -959,3 +959,8 @@ add_test(NAME ui_frame_keys COMMAND test_ui_frame_keys)
 # The Y2 Bluetooth init script against fake /dev, /run and /proc/devices (needs only /bin/sh).
 add_test(NAME y2_s80_mtk_bt COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/test_y2_s80_mtk_bt.sh
   ${CMAKE_SOURCE_DIR}/testbed/y2/buildroot/board/y2/overlay/etc/init.d/S80mtk-bt)
+
+# The Y2 modem bring-up init script against fake /dev, /run, /data and fake ccci daemons (needs only /bin/sh).
+add_test(NAME y2_s78_mtk_md COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/test_y2_s78_mtk_md.sh
+  ${CMAKE_SOURCE_DIR}/testbed/y2/buildroot/board/y2/overlay/etc/init.d/S78mtk-md)
+set_tests_properties(y2_s78_mtk_md PROPERTIES TIMEOUT 400 LABELS "slow")
