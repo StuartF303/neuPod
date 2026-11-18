@@ -51,17 +51,18 @@ for n in nvram misc pro_info protect_f protect_s mbr ebr1 ebr2 expdb logo androi
 done
 
 run() {
+	rm -f "$T/S78.log"
 	MD_STAGE="$T/stage" MD_BIN="$T/bin" MD_DEV="$T/dev" MD_RUN="$T/run" MD_DATA="$T/data" MD_CCCI_BOOT="$T/ccci_boot" \
 		MD_DUMCHAR_INFO="$T/dumchar_info" MD_LOG="$T/S78.log" MD_WAIT_S=${WAIT:-6} $SH "$SCRIPT" "$1" >"$T/out.txt" 2>&1
 }
-# start returns before the background stage ends: wait for its last log line (up to ~$1 s)
+# start returns before the background stage ends (and the stage's output goes to the log file only): wait for its last log line (up to ~$1 s)
 wait_finished() {
 	w=0
-	while [ "$w" -lt "${1:-30}" ] && ! grep -q "modem bring-up finished" "$T/out.txt"; do
+	while [ "$w" -lt "${1:-30}" ] && ! grep -q "modem bring-up finished" "$T/S78.log"; do
 		sleep 1
 		w=$((w + 1))
 	done
-	grep -q "modem bring-up finished" "$T/out.txt"
+	grep -q "modem bring-up finished" "$T/S78.log"
 }
 count() { [ -f "$1" ] && wc -l <"$1" | tr -d ' ' || echo 0; }
 is_null_link() { [ -L "$T/dev/$1" ] && [ "$(readlink "$T/dev/$1")" = /dev/null ]; }
@@ -82,6 +83,7 @@ t0=$(date +%s)
 run start
 t1=$(date +%s)
 check "start returns success" test "$?" = 0
+check "first start with no log file: no error noise" test "$(grep -c "can't open" "$T/out.txt")" = 0
 check "start does not wait for the modem" test "$((t1 - t0))" -le 3
 check "background stage pid file" test -s "$T/run/md_stage.pid"
 wait_finished 30
@@ -97,16 +99,16 @@ for n in preloader misc-sd seccfg sec_ro bootimg recovery mmcblk0 mmcblk0p4 mmcb
 	check "$n stays real" test ! -L "$T/dev/$n"
 done
 check "names only in dumchar_info are nulled (otp, keystore)" test -e "$T/dev/.real-otp" -a -e "$T/dev/.real-keystore"
-check "kept nodes are logged" grep -q "dumchar node left real: sec_ro" "$T/out.txt"
-check "nulled nodes are not logged as left real" test "$(grep -c 'left real: nvram\|left real: otp' "$T/out.txt")" = 0
+check "kept nodes are logged" grep -q "dumchar node left real: sec_ro" "$T/S78.log"
+check "nulled nodes are not logged as left real" test "$(grep -c 'left real: nvram\|left real: otp' "$T/S78.log")" = 0
 check "modem NVRAM dirs" test -d "$T/data/nvram/md" -a -d "$T/data/nvram/md2" -a -d "$T/data/ccci_cfg"
 check "ccci_fsd started with stock arg 0" test "$(cat "$T/fsd.args")" = 0
 check "ccci_mdinit started with stock arg 0" test "$(cat "$T/mdinit.args")" = 0
 check "pid files" test -s "$T/run/ccci_fsd.pid" -a -s "$T/run/ccci_mdinit.pid"
-check "logs md1:2" grep -q "modem up (md1:2)" "$T/out.txt"
+check "logs md1:2" grep -q "modem up (md1:2)" "$T/S78.log"
 check "the log file has the same lines, background stage included" grep -q "modem bring-up finished" "$T/S78.log"
 check "log lines carry an uptime stamp" grep -Eq '^S78mtk-md: [0-9.]+ ccci_fsd started' "$T/S78.log"
-check "no muxd binary: flight mode skipped, logged" grep -q "gsm0710muxd is missing" "$T/out.txt"
+check "no muxd binary: flight mode skipped, logged" grep -q "gsm0710muxd is missing" "$T/S78.log"
 
 # --- a second start: nothing runs again ---
 run start
@@ -115,7 +117,7 @@ check "mdinit not started twice" test "$(count "$T/mdinit.args")" = 1
 
 # --- restart while the modem is up is a logged no-op ---
 run restart
-check "restart with modem up: logged no-op" grep -q "restart: modem is up" "$T/out.txt"
+check "restart with modem up: logged no-op" grep -q "restart: modem is up" "$T/S78.log"
 check "restart with modem up: daemons still there" test -s "$T/run/ccci_mdinit.pid"
 
 # --- stop ---
@@ -140,8 +142,8 @@ EOF2
 WAIT=2 run start
 check "no md1:2: still exits 0" test "$?" = 0
 wait_finished 10
-check "no md1:2: logged" grep -q "did not reach md1:2" "$T/out.txt"
-check "no md1:2: finished anyway" grep -q "modem bring-up finished" "$T/out.txt"
+check "no md1:2: logged" grep -q "did not reach md1:2" "$T/S78.log"
+check "no md1:2: finished anyway" grep -q "modem bring-up finished" "$T/S78.log"
 echo md1:0 >"$T/ccci_boot"
 rm -f "$T/fsd.args"
 WAIT=2 run restart
@@ -149,13 +151,31 @@ wait_finished 10
 check "restart with the modem down starts the daemons again" test -s "$T/fsd.args"
 run stop
 
+# --- start with stdout on a pipe returns at once (the stage must not hold it open) ---
+run stop
+echo md1:0 >"$T/ccci_boot"
+t0=$(date +%s)
+MD_STAGE="$T/stage" MD_BIN="$T/bin" MD_DEV="$T/dev" MD_RUN="$T/run" MD_DATA="$T/data" MD_CCCI_BOOT="$T/ccci_boot" \
+	MD_DUMCHAR_INFO="$T/dumchar_info" MD_LOG="$T/S78.log" MD_WAIT_S=8 $SH "$SCRIPT" start 2>&1 | cat >/dev/null
+t1=$(date +%s)
+check "start with stdout on a pipe returns promptly" test "$((t1 - t0))" -le 4
+run stop
+
+# --- modem already up but daemons not running: start does not re-run ccci_mdinit ---
+rm -f "$T/fsd.args" "$T/mdinit.args"
+echo md1:2 >"$T/ccci_boot"
+run start
+check "md1:2 and no daemons: nothing started" test ! -e "$T/fsd.args" -a ! -e "$T/mdinit.args"
+check "md1:2 and no daemons: logged" grep -q "modem is already up" "$T/S78.log"
+echo md1:0 >"$T/ccci_boot"
+
 # --- fail open: staged but daemons missing ---
 mv "$T/bin/ccci_fsd" "$T/bin/ccci_fsd.off"
 rm -f "$T/fsd.args"
 run start
 check "missing daemon: exits 0" test "$?" = 0
 check "missing daemon: nothing run" test ! -e "$T/fsd.args"
-check "missing daemon: says why" grep -q "missing" "$T/out.txt"
+check "missing daemon: says why" grep -q "missing" "$T/S78.log"
 mv "$T/bin/ccci_fsd.off" "$T/bin/ccci_fsd"
 
 # --- dumchar_info unreadable: the fixed list still applies ---
@@ -241,48 +261,48 @@ EOF2
 	flight ok
 	check "flight: muxd started with the stock arguments" test "$(cat "$T/muxd.args")" = "-s /dev/ttyC0 -f 512 -n 8 -m basic"
 	check "flight: AT+CFUN=4 then AT+CFUN?" test "$(tr '\n' ' ' <"$T/at.log")" = "AT+CFUN=4 AT+CFUN? "
-	check "flight: logged as on" grep -q "flight mode on (attempt 1" "$T/out.txt"
+	check "flight: logged as on" grep -q "flight mode on (attempt 1" "$T/S78.log"
 	check "flight: muxd pid file" test -s "$T/run/gsm0710muxd.pid"
 	check "flight: marker written" test -e "$T/run/md_cfun.done"
 	MD_TEST_DIR=$T MD_TEST_MODE=ok MD_RADIO="$T/radio" run start
 	check "flight: not handled twice in one boot" test "$(grep -c 'AT+CFUN=4' "$T/at.log")" = 1
 	flight flaky
 	check "flight: retried after an ERROR" test "$(grep -c 'AT+CFUN=4' "$T/at.log")" = 2
-	check "flight: confirmed on attempt 2" grep -q "flight mode on (attempt 2" "$T/out.txt"
+	check "flight: confirmed on attempt 2" grep -q "flight mode on (attempt 2" "$T/S78.log"
 	flight unsolicited
-	check "flight: unsolicited lines are tolerated" grep -q "flight mode on (attempt 1" "$T/out.txt"
+	check "flight: unsolicited lines are tolerated" grep -q "flight mode on (attempt 1" "$T/S78.log"
 	flight stale
-	check "flight: a stale OK before the command does not hurt" grep -q "flight mode on (attempt 1" "$T/out.txt"
+	check "flight: a stale OK before the command does not hurt" grep -q "flight mode on (attempt 1" "$T/S78.log"
 	flight stale-noack
-	check "flight: a stale OK is not taken as the answer" test "$(grep -c 'not acknowledged' "$T/out.txt")" = 3
+	check "flight: a stale OK is not taken as the answer" test "$(grep -c 'not acknowledged' "$T/S78.log")" = 3
 	flight noack
 	check "flight: no OK, 3 attempts then gives up" test "$(grep -c 'AT+CFUN=4' "$T/at.log")" = 3
-	check "flight: gives up, logged, exit 0" grep -q "not confirmed after 3 attempts" "$T/out.txt"
+	check "flight: gives up, logged, exit 0" grep -q "not confirmed after 3 attempts" "$T/S78.log"
 	check "flight: exhausted marker" test "$(cat "$T/run/md_cfun.done")" = exhausted
 	flight cfun0
-	check "flight: +CFUN: 0 counts as radio off" grep -q "radio off (attempt 1" "$T/out.txt"
+	check "flight: +CFUN: 0 counts as radio off" grep -q "radio off (attempt 1" "$T/S78.log"
 	check "flight: CFUN=4 is still sent" grep -q "AT+CFUN=4" "$T/at.log"
 	check "flight: done marker for radio off" test "$(cat "$T/run/md_cfun.done")" = done
 	flight diefirst
-	check "flight: muxd that exits early is logged with its status" grep -q "gsm0710muxd exited (status 3)" "$T/out.txt"
+	check "flight: muxd that exits early is logged with its status" grep -q "gsm0710muxd exited (status 3)" "$T/S78.log"
 	check "flight: and started again" test "$(cat "$T/muxd.count")" = 2
-	check "flight: second try succeeds" grep -q "flight mode on (attempt 1" "$T/out.txt"
+	check "flight: second try succeeds" grep -q "flight mode on (attempt 1" "$T/S78.log"
 	check "flight: muxd's own output is in the log file" grep -q "modem not ready" "$T/S78.log"
 	flight alwaysdie
-	check "flight: muxd that never stays up: gives up, logged" grep -q "would not stay up after 2 tries" "$T/out.txt"
+	check "flight: muxd that never stays up: gives up, logged" grep -q "would not stay up after 2 tries" "$T/S78.log"
 	check "flight: gave up, no AT sent" test ! -e "$T/at.log"
-	check "flight: gave up, stage still finished" grep -q "modem bring-up finished" "$T/out.txt"
+	check "flight: gave up, stage still finished" grep -q "modem bring-up finished" "$T/S78.log"
 	flight badcfun
-	check "flight: wrong CFUN? is logged" grep -q "AT+CFUN? replied" "$T/out.txt"
+	check "flight: wrong CFUN? is logged" grep -q "AT+CFUN? replied" "$T/S78.log"
 	flight nochannel
-	check "flight: no channel is logged" grep -q "no .*pttycmd1: flight mode not sent" "$T/out.txt"
+	check "flight: no channel is logged" grep -q "no .*pttycmd1: flight mode not sent" "$T/S78.log"
 	check "flight: no channel, nothing sent" test ! -e "$T/at.log"
 	run stop
 	check "flight: stop removes the muxd pid file" test ! -e "$T/run/gsm0710muxd.pid"
 	mv "$T/bin/gsm0710muxd" "$T/bin/gsm0710muxd.off"
 	flight ok
-	check "flight: muxd missing is logged" grep -q "gsm0710muxd is missing" "$T/out.txt"
-	check "flight: the modem still counts as up" grep -q "modem up (md1:2)" "$T/out.txt"
+	check "flight: muxd missing is logged" grep -q "gsm0710muxd is missing" "$T/S78.log"
+	check "flight: the modem still counts as up" grep -q "modem up (md1:2)" "$T/S78.log"
 	run stop
 else
 	echo "skip flight-mode checks (needs python3 and stty)"

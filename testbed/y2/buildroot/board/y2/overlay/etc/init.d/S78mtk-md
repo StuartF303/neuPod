@@ -15,7 +15,12 @@
 #   2. /dev/block/mmcblk0 and /dev/block/mmcblk0p4 symlinks: the kernel's image-signature (masp) code and the dumchar driver look
 #      the eMMC up under /dev/block, which Buildroot does not have. They are only symlinks; nothing here opens the eMMC.
 #   3. every dumchar raw-partition node EXCEPT an allowlist is replaced by a symlink to /dev/null (the real node is kept under
-#      /dev/.real-<name> on the tmpfs /dev), so nothing the stock daemons do can write those partitions. The names come from
+#      /dev/.real-<name> on the tmpfs /dev), so the stock daemons cannot write those partitions through their usual /dev names.
+#      RESIDUAL RISK: the kept nodes (preloader/misc-sd, seccfg, sec_ro, bootimg, recovery) and the raw /dev/block/mmcblk0* nodes stay
+#      real, and the daemons run as root: protection relies on the stock daemons not being known to write them. On this device
+#      dumchar_info's MapTo column is /dev/misc-sd (preloader) or /dev/block/mmcblk0[pN] for every other partition, so the name
+#      list below covers every dumchar char node; the MapTo block nodes are deliberately NOT nulled (nulling mmcblk0p7 would break
+#      the rootfs). The names come from
 #      /proc/dumchar_info (first column, lower-cased), plus the fixed list nvram misc pro_info protect_f protect_s mbr ebr1 ebr2
 #      expdb logo android cache usrdata fat bmtpool uboot in case the file is unreadable. KEPT real, because the kernel reads them
 #      during the modem image signature check: preloader, misc-sd, seccfg, sec_ro, bootimg, recovery. Their permissions are left as
@@ -75,7 +80,7 @@ CFUN_DONE=$RUN/md_cfun.done
 KEEP="preloader misc-sd seccfg sec_ro bootimg recovery"
 FIXED_NULLED="nvram misc pro_info protect_f protect_s mbr ebr1 ebr2 expdb logo android cache usrdata fat bmtpool uboot"
 
-# Logged to the file (tmpfs, so no eMMC wear; capped at 64 KiB, the newest 32 KiB are kept at each start) first, then to stdout, which
+# Logged to the file (tmpfs, so no eMMC wear; capped at 64 KiB, the newest 32 KiB are kept when the daemons are about to be launched) first, then to stdout, which
 # at boot is the console that nobody captures and may be closed: a write error there is ignored, and the stage ignores SIGPIPE.
 log() {
 	msg="S78mtk-md: $(cut -d' ' -f1 /proc/uptime 2>/dev/null) $*"
@@ -83,9 +88,13 @@ log() {
 	echo "$msg" 2>/dev/null || :
 }
 
+# Trimmed in place (no rename), so a running daemon that appends to the log keeps writing to the same file.
 trim_log() {
-	[ "$(wc -c <"$LOGFILE" 2>/dev/null || echo 0)" -gt 65536 ] || return 0
-	tail -c 32768 "$LOGFILE" >"$LOGFILE.tmp" 2>/dev/null && mv "$LOGFILE.tmp" "$LOGFILE"
+	[ -f "$LOGFILE" ] || return 0
+	[ "$(wc -c <"$LOGFILE")" -gt 65536 ] || return 0
+	t="$LOGFILE.$$"
+	tail -c 32768 "$LOGFILE" >"$t" 2>/dev/null && cat "$t" >"$LOGFILE" 2>/dev/null
+	rm -f "$t"
 }
 
 # Running, and not a zombie (a killed daemon whose parent is gone and not yet reaped still answers kill -0).
@@ -171,7 +180,7 @@ at_cmd() {
 		k=0
 		while [ "$k" -lt "$AT_WAIT_S" ]; do
 			sleep 1
-			tr -d '\r' <"$reply" | grep -Eq '^(OK|ERROR|\+CME ERROR.*)$' && break
+			tr -d '\r' <"$reply" | grep -Eq '^(OK|ERROR|NO CARRIER|\+CME ERROR.*|\+CMS ERROR.*)$' && break
 			k=$((k + 1))
 		done
 		kill "$reader" 2>/dev/null
@@ -269,6 +278,9 @@ flight_mode() {
 
 # The background stage: wait for md1:2, then flight mode.
 modem_stage() {
+	# Detach from the caller's stdin/stdout/stderr (log() has the log file) so "ssh y2 /etc/init.d/S78mtk-md start" returns at once.
+	# exec, not a redirection on the "&" call: busybox/dash keep a saved copy of the old stdout open in the child that way.
+	exec </dev/null >/dev/null 2>&1
 	trap '' PIPE
 	i=0
 	state=
@@ -292,7 +304,6 @@ modem_stage() {
 
 start() {
 	[ -d "$STAGE" ] || return 0
-	trim_log
 	if [ ! -x "$FSD" ] || [ ! -x "$MDINIT" ]; then
 		log "$STAGE is staged but $FSD or $MDINIT is missing: modem not started (Bluetooth clock stays untrimmed)"
 		return 0
@@ -301,11 +312,17 @@ start() {
 		log "ccci_mdinit already running"
 		return 0
 	fi
+	if [ "$(cat "$CCCI_BOOT" 2>/dev/null)" = "md1:2" ]; then
+		# re-running ccci_mdinit against a live modem can disturb it (restart has the same guard)
+		log "modem is already up (md1:2) but the daemons are not running: not starting them again (a reboot restarts the modem)"
+		return 0
+	fi
+	trim_log
 	cd / || return 0
 	make_props || { log "cannot create $DEV/__properties__: modem not started"; return 0; }
 
 	mkdir -p "$DEV/block" || { log "cannot create $DEV/block"; return 0; }
-	[ -e "$DEV/block/mmcblk0" ] || ln -s "$DEV/mmcblk0" "$DEV/block/mmcblk0"
+	[ -e "$DEV/block/mmcblk0" ] || [ -L "$DEV/block/mmcblk0" ] || ln -s "$DEV/mmcblk0" "$DEV/block/mmcblk0"
 	[ -e "$DEV/block/mmcblk0p4" ] || [ -L "$DEV/block/mmcblk0p4" ] || ln -s "$DEV/mmcblk0p4" "$DEV/block/mmcblk0p4"
 	neutralise
 	mkdir -p "$DATA/nvram/md" "$DATA/nvram/md2" "$DATA/ccci_cfg" || { log "cannot create the modem NVRAM directories under $DATA"; return 0; }
@@ -328,6 +345,15 @@ start() {
 }
 
 stop() {
+	spid=$(cat "$STAGE_PID" 2>/dev/null)
+	if alive "$spid"; then
+		# the stage's own children (a sleep, an AT reader), by parent pid; the stage and the muxer are then killed by pid file
+		for st in /proc/[0-9]*/stat; do
+			c=${st#/proc/}
+			c=${c%/stat}
+			[ "$(sed 's/.*) //' "$st" 2>/dev/null | cut -d' ' -f2)" = "$spid" ] && kill "$c" 2>/dev/null
+		done
+	fi
 	for f in "$STAGE_PID" "$MUXD_PID" "$MDINIT_PID" "$FSD_PID"; do
 		pid=$(cat "$f" 2>/dev/null)
 		alive "$pid" && kill "$pid" 2>/dev/null

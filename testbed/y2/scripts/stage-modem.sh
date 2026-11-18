@@ -12,7 +12,7 @@
 #   PROTECT_F.bin /md, PROTECT_S.bin /md                                                -> /protect_f/md, /protect_s/md
 # and copies them over ssh (tar, no sftp). Files under system/ are replaced only if they differ (a running daemon's binary is
 # replaced by rename, never rewritten in place). Files under data/ and protect_*/ are only ADDED when missing, never overwritten:
-# the modem daemons update them on the device. Touches nothing else: no /dev/mmcblk0*, no /data/nvram/APCFG, no /data/BT_Addr.
+# the modem daemons update them on the device. Touches nothing else except the /system, /data and /protect_* symlinks into /opt/mtk-wmt, made only when absent: no /dev/mmcblk0*, no /data/nvram/APCFG, no /data/BT_Addr.
 set -euo pipefail
 
 HOST="${Y2_HOST:-root@192.168.7.2}"

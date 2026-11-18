@@ -56,7 +56,7 @@ Bluetooth discovery fails (with the stock modem booted: about -4 ppm, AirPods fo
 Synchronously: the property area `/dev/__properties__` if missing, `/dev/block/mmcblk0{,p4}` symlinks, then every dumchar node named
 in `/proc/dumchar_info` (plus the fixed list nvram, misc, pro_info, protect_f/s, mbr, ebr1/2, expdb, logo, android, cache, usrdata,
 fat, bmtpool, uboot) replaced by a symlink to `/dev/null`, EXCEPT the allowlist preloader, misc-sd, seccfg, sec_ro, bootimg, recovery
-(the kernel reads them for the signature check; their permissions are left alone; every one left real is logged), then
+(the kernel reads them for the signature check; their permissions are left alone; every one left real is logged). Residual risk: those kept nodes and the raw `/dev/block/mmcblk0*` nodes stay real and the daemons run as root, so protection relies on the stock daemons not being known to write them. On this device `dumchar_info`'s MapTo column is `/dev/misc-sd` (preloader) or `/dev/block/mmcblk0[pN]` for every other partition, so the name list covers all dumchar char nodes; the MapTo block nodes are deliberately not nulled (nulling `mmcblk0p7` would break the rootfs). Then
 `/data/nvram/md{,2}` and `/data/ccci_cfg`, and the stock `ccci_fsd 0` and `ccci_mdinit 0` under setsid (pid files in `/run`).
 In a background subshell (boot is not delayed): a 90 s wait (the modem takes about 33 s) for `/sys/kernel/ccci/boot` = `md1:2`, then (3 s later) `gsm0710muxd` (stock
 arguments, setsid, stdin from `/dev/null`, output to the log; restarted up to 5 times if it exits early, with its exit status logged) and, when `/dev/radio/pttycmd1` appears, `AT+CFUN=4` (flight mode) then `AT+CFUN?` -> `+CFUN: 4` (or `+CFUN: 0`, how the modem boots; both count as radio off): at most 3
@@ -65,7 +65,7 @@ itself. It fails open: anything missing, or no `md1:2`, or no flight mode, is lo
 no-op while the modem is up (the modem is only restarted by a reboot); `stop` kills the stage and the three daemons. Files come from
 the backup via `testbed/y2/scripts/stage-modem.sh` (read-only debugfs, copied over ssh; system files replaced when different, data and
 protect files only added when missing; never committed; `--dry-run` lists what it would stage). Without `/opt/mtk-wmt` it does nothing.
-`deploy-fw.sh` installs it but does not run it. Flight mode is not yet verified on the device.
+`deploy-fw.sh` installs it but does not run it. Flight mode is verified on the device (cold boot 2026-11-18: `md1:2` after 32 s, `gsm0710muxd` up on try 1, `pttycmd1` after 2 s, `AT+CFUN=4` OK, `+CFUN: 4`).
 Test: `ctest -R y2_s78_mtk_md` (about 2 minutes; the flight-mode part uses a fake multiplexer on a real pseudo-terminal and needs
 python3; `SHELL_UNDER_TEST="busybox sh"` runs it under busybox).
 
