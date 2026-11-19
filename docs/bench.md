@@ -73,6 +73,17 @@ Before the change: 36 stalls per 10 s, catch-up up to 160 ms, bitpool forced to 
 Also check that the higher worker priority does not starve input (4) or I2C (4): during a Bluetooth scan and during the [Wi-Fi download test](wifi.md),
 expect no wheel resync/recovery messages and no increase in the I2C timeout counter.
 
+## Bluetooth walk (Y2, bitpool policy, after 19 Nov 2026)
+
+The bitpool now steps down at the first stall and climbs back only after 30 s clean (doubling to 240 s after a quick fall; [Bluetooth](bluetooth.md#link-robustness-built)). Repeat the 19 Nov walk: Y2 in the **left front pocket**, AirPods Pro, the same route and music,
+the HCI trace on (`NEUPOD_BT_HCI_DUMP` to `/opt/neupod-logs`) and the log kept. Compare against the 19 Nov walk:
+
+1. Per 10 s `bt: link:` line in the bad patches: `stalls` and `drops` (19 Nov: e.g. `stalls 2, catchup 160 ms, drops 1516 ms`). Expect drops far less often and smaller; `catchup` mostly under 90 ms.
+2. `bt: a2dp: bitpool ...` lines: expect a fall to 35 at the start of a bad patch (53 -> 35, or 53 -> 45 -> 35 within about 50 ms), no rise within 30 s of a fall, and far fewer changes per hour than 19 Nov (it went 35 -> 45 after 60 to 90 s and 45 -> 53 soon after, then fell again).
+   Note the time spent at 35 and whether it ever gets back to 53 on a good stretch.
+3. Listen: does 35 sound acceptable compared with the scratchy, glitchy audio of 19 Nov? Note any audible click at a bitpool change.
+4. Stream start (Play after a pause, and after a reconnect): no bitpool change in the first second unless the link is bad.
+
 ## Sleep (Y2)
 
 Steps for the Y2 after flashing a build with [ADR-0021](adr/0021-power-sleep.md). Unplug USB first (a plugged-in Y2 reports external power and never sleeps); watch the log over

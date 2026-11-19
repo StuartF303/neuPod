@@ -51,111 +51,365 @@ TEST(test_ladder_follows_the_headsets_limits) {
     ASSERT_EQ(35, bt_link_bitpool(76, 2, 2));
 }
 
-// Run the policy for @p ms in 8 ms ticks with a fixed verdict (@p bad_percent of the ticks pressured). Returns the last change (0 if none); counts changes.
-static uint8_t run(bt_link_policy_t *p, uint32_t *t, uint32_t ms, unsigned bad_percent, int *changes) {
-    uint8_t last = 0;
-    for (uint32_t end = *t + ms; (int32_t)(end - *t) > 0; *t += 8u) {
-        const unsigned n = (unsigned)((*t / 8u) % 100u);
-        uint8_t r = bt_link_policy_tick(p, *t, n < bad_percent, 53, 2);
-        if (r != 0) {
-            last = r;
-            (*changes)++;
+// ---- The bitpool policy, driven with 8 ms ticks of (wait_ms, owed_ms) ----
+
+typedef struct {
+    bt_link_policy_t p;
+    uint32_t t;
+    uint8_t ceil;
+    uint8_t min_bp;
+    uint8_t bp;            // the bitpool in force
+    int changes;
+    int early_ups;         // step ups less than 30 s after a step down
+    uint32_t last_down_t;
+    bool has_down;
+    unsigned k;            // tick counter (spreads the pressured ticks evenly)
+} sim_t;
+
+static void sim_init(sim_t *s, uint32_t t0, uint8_t ceil, uint8_t min_bp) {
+    *s = (sim_t){.t = t0, .ceil = ceil, .min_bp = min_bp, .bp = ceil};
+    bt_link_policy_init(&s->p, t0);
+}
+
+// One 8 ms tick. Returns the policy's verdict (0 = no change).
+static uint8_t tk(sim_t *s, uint32_t wait_ms, uint32_t owed_ms) {
+    const uint8_t r = bt_link_policy_tick(&s->p, s->t, wait_ms, owed_ms, s->ceil, s->min_bp);
+    if (r != 0) {
+        s->changes++;
+        if (r < s->bp) {
+            s->last_down_t = s->t;
+            s->has_down = true;
+        } else if (s->has_down && (uint32_t)(s->t - s->last_down_t) < 30000u) {
+            s->early_ups++;
         }
+        s->bp = r;
     }
-    return last;
+    s->t += 8u;
+    return r;
 }
 
-TEST(test_one_stall_is_not_sustained_but_two_bad_seconds_step_down) {
-    bt_link_policy_t p;
-    uint32_t t = 1000;
-    bt_link_policy_init(&p, t);
-    int changes = 0;
-    ASSERT_EQ(0, run(&p, &t, 3000, 0, &changes));
-    ASSERT_EQ(0, run(&p, &t, 1100, 100, &changes)); // one bad window
-    ASSERT_EQ(0, run(&p, &t, 3000, 0, &changes));   // clean again: the count restarts
-    ASSERT_EQ(0, run(&p, &t, 1100, 100, &changes));
-    ASSERT_EQ(0, run(&p, &t, 2000, 0, &changes));
-    ASSERT_EQ(0, changes);
-    ASSERT_EQ(45, run(&p, &t, 2300, 100, &changes)); // two in a row
-    ASSERT_EQ(1, changes);
+static void idle(sim_t *s, uint32_t ms) {
+    for (uint32_t end = s->t + ms; (int32_t)(end - s->t) > 0;) {
+        tk(s, 0, 0);
+    }
 }
 
-TEST(test_sustained_pressure_walks_down_to_the_last_step_and_stays) {
-    bt_link_policy_t p;
-    uint32_t t = 0;
-    bt_link_policy_init(&p, t);
-    int changes = 0;
-    uint8_t last = 0, cur = 53;
-    for (int i = 0; i < 30; i++) {
-        uint8_t r = run(&p, &t, 1000, 60, &changes);
-        if (r != 0) {
-            ASSERT_TRUE(r < cur); // only downward under sustained pressure
-            cur = r;
-            last = r;
+// pressured (wait 30 ms, below any stall) for @p pct of the ticks, over @p ms
+static void pressure(sim_t *s, uint32_t ms, unsigned pct) {
+    for (uint32_t end = s->t + ms; (int32_t)(end - s->t) > 0;) {
+        tk(s, (s->k++ * pct) % 100u < pct ? 30u : 0u, 0);
+    }
+}
+
+// A stall episode as the pacer sees it: the debt rises 8 ms a tick to @p peak_ms and falls back (no wait: pressure comes from the debt alone).
+static void episode(sim_t *s, uint32_t peak_ms) {
+    for (uint32_t owed = 0; owed <= peak_ms; owed += 8u) {
+        tk(s, 0, owed);
+    }
+    for (uint32_t owed = peak_ms; owed >= 8u; owed -= 8u) {
+        tk(s, 0, owed - 8u);
+    }
+}
+
+// Run the first second (the start grace) clean, then some more.
+static void settle_in(sim_t *s) { idle(s, BT_LINK_START_GRACE_MS + 1000u); }
+
+// Idle until the policy changes the bitpool: it must take about @p hold_ms (a window boundary can make it up to a second late), and the bitpool goes up.
+static void expect_up_after(sim_t *s, uint32_t hold_ms) {
+    const uint8_t low = s->bp;
+    const uint32_t t0 = s->t;
+    while (s->bp == low && (uint32_t)(s->t - t0) < hold_ms + 5000u) {
+        tk(s, 0, 0);
+    }
+    ASSERT_TRUE(s->bp > low);
+    ASSERT_TRUE((uint32_t)(s->t - t0) + 100u >= hold_ms);
+    ASSERT_TRUE((uint32_t)(s->t - t0) <= hold_ms + 1100u);
+}
+
+TEST(test_the_first_stall_steps_down_on_the_tick_it_crosses_40_ms) {
+    sim_t s;
+    sim_init(&s, 5000, 53, 2);
+    settle_in(&s);
+    uint32_t owed = 0;
+    for (; owed < BT_LINK_STALL_MS; owed += 8u) {
+        ASSERT_EQ(0, tk(&s, 0, owed));
+    }
+    ASSERT_EQ(BT_LINK_STALL_MS, owed);
+    ASSERT_EQ(45, tk(&s, 0, owed)); // 40 ms owed: the episode starts, one level down at once
+    for (owed += 8u; owed <= 48u; owed += 8u) {
+        ASSERT_EQ(0, tk(&s, 0, owed));
+    }
+    idle(&s, 3000);
+    ASSERT_EQ(1, s.changes);
+}
+
+TEST(test_a_severe_stall_jumps_to_the_last_level) {
+    sim_t a;
+    sim_init(&a, 0, 53, 2);
+    settle_in(&a);
+    ASSERT_EQ(35, tk(&a, 0, BT_LINK_SEVERE_OWED_MS)); // owed 90: 53 -> 35 in one change
+    ASSERT_EQ(0, tk(&a, 0, 160));
+    ASSERT_EQ(1, a.changes);
+
+    sim_t w;
+    sim_init(&w, 0, 53, 2);
+    settle_in(&w);
+    ASSERT_EQ(0, tk(&w, BT_LINK_SEVERE_WAIT_MS - 1u, 0)); // 119 ms: not severe (only pressure)
+    ASSERT_EQ(35, tk(&w, BT_LINK_SEVERE_WAIT_MS, 0));     // one packet waiting 120 ms
+    ASSERT_EQ(1, w.changes);
+
+    // from 45 straight to 35, ignoring the settle time
+    sim_t b;
+    sim_init(&b, 0, 53, 2);
+    settle_in(&b);
+    episode(&b, 48);
+    ASSERT_EQ(45, b.bp);
+    idle(&b, 200);
+    ASSERT_EQ(35, tk(&b, 0, 100));
+    ASSERT_EQ(2, b.changes);
+}
+
+TEST(test_a_long_stall_like_the_walk_lands_on_35) {
+    // Jumped straight in (a late tick): exactly one change, 53 -> 35.
+    sim_t j;
+    sim_init(&j, 0, 53, 2);
+    settle_in(&j);
+    ASSERT_EQ(35, tk(&j, 0, 160));
+    for (uint32_t wait = 8; wait < 1700u; wait += 8u) {
+        ASSERT_EQ(0, tk(&j, wait, 160));
+    }
+    ASSERT_EQ(1, j.changes);
+    // Built up tick by tick (owed +8 ms a tick, the wait growing to 1666 ms): 45 at 40 ms, then 35 at 90 ms, and nothing after.
+    sim_t s;
+    sim_init(&s, 0, 53, 2);
+    settle_in(&s);
+    uint32_t wait = 0;
+    for (uint32_t owed = 0; owed < 160u; owed += 8u, wait += 8u) {
+        tk(&s, wait, owed);
+    }
+    for (; wait < 1666u; wait += 8u) {
+        ASSERT_EQ(0, tk(&s, wait, 160));
+    }
+    ASSERT_EQ(35, s.bp);
+    ASSERT_EQ(2, s.changes);
+    idle(&s, 5000);
+    ASSERT_EQ(2, s.changes);
+}
+
+TEST(test_stall_episodes_are_rate_limited_by_the_settle_time) {
+    sim_t s;
+    sim_init(&s, 0, 53, 2);
+    settle_in(&s);
+    episode(&s, 48);
+    ASSERT_EQ(45, s.bp);
+    ASSERT_EQ(1, s.changes);
+    idle(&s, 300 - 104); // the next episode starts 300 ms after the first
+    episode(&s, 48);
+    ASSERT_EQ(45, s.bp); // too soon after the step: still one step
+    ASSERT_EQ(1, s.changes);
+    idle(&s, 1200);
+    episode(&s, 48);
+    ASSERT_EQ(35, s.bp);
+    ASSERT_EQ(2, s.changes);
+}
+
+TEST(test_the_first_second_of_a_stream_ignores_the_start_up_burst) {
+    sim_t s;
+    sim_init(&s, 0, 53, 2);
+    // media_start owes up to 40 ms and the first can-send-now can take a while
+    for (int i = 0; i < 40; i++) {
+        tk(&s, 0, 40u + (unsigned)(i % 3) * 4u);
+    }
+    ASSERT_EQ(0, s.changes);
+    tk(&s, 0, 0); // stall over; an episode and a severe tick inside the grace do nothing either
+    tk(&s, 0, 100);
+    tk(&s, 0, 0);
+    while (s.t < BT_LINK_START_GRACE_MS) {
+        tk(&s, 0, 0);
+    }
+    ASSERT_EQ(0, s.changes);
+    episode(&s, 48); // the same thing after the grace does
+    ASSERT_EQ(45, s.bp);
+    ASSERT_EQ(1, s.changes);
+}
+
+TEST(test_one_bad_window_steps_down_one_level) {
+    sim_t s;
+    sim_init(&s, 0, 53, 2);
+    pressure(&s, 5000, 20); // 20 % pressured: not bad
+    ASSERT_EQ(0, s.changes);
+    sim_t b;
+    sim_init(&b, 0, 53, 2);
+    idle(&b, 3000);
+    uint8_t got = 0;
+    for (uint32_t end = b.t + 1100u; (int32_t)(end - b.t) > 0;) {
+        uint8_t r = tk(&b, (b.k++ * 30u) % 100u < 30u ? 30u : 0u, 0);
+        got = r != 0 ? r : got;
+    }
+    ASSERT_EQ(45, got); // one window of >= 25 % is enough
+    ASSERT_EQ(1, b.changes);
+    // sustained: one level a second, then the bottom
+    pressure(&b, 10000, 60);
+    ASSERT_EQ(35, b.bp);
+    ASSERT_EQ(2, b.changes);
+}
+
+TEST(test_it_steps_up_only_after_a_long_clean_spell) {
+    sim_t s;
+    sim_init(&s, 0, 53, 2);
+    settle_in(&s);
+    ASSERT_EQ(35, tk(&s, 0, 100));
+    expect_up_after(&s, BT_LINK_UP_HOLD_MS);
+    ASSERT_EQ(45, s.bp);
+    expect_up_after(&s, BT_LINK_UP_HOLD_MS); // each level needs its own full hold
+    ASSERT_EQ(53, s.bp);
+    ASSERT_EQ(3, s.changes);
+    ASSERT_EQ(0, s.early_ups);
+}
+
+TEST(test_a_stall_tick_or_a_middling_window_restarts_the_hold) {
+    sim_t s;
+    sim_init(&s, 0, 53, 2);
+    settle_in(&s);
+    tk(&s, 0, 100);
+    idle(&s, 20000);
+    tk(&s, 0, BT_LINK_STALL_MS); // one stall tick at the bottom: no step possible, but the clean spell restarts
+    expect_up_after(&s, BT_LINK_UP_HOLD_MS);
+    ASSERT_EQ(45, s.bp);
+
+    sim_t m;
+    sim_init(&m, 0, 53, 2);
+    settle_in(&m);
+    tk(&m, 0, 100);
+    idle(&m, 20000);
+    pressure(&m, 1000, 10); // 10 % pressured: neither bad nor clean
+    ASSERT_EQ(1, m.changes);
+    expect_up_after(&m, BT_LINK_UP_HOLD_MS);
+    ASSERT_EQ(45, m.bp);
+}
+
+TEST(test_a_quick_return_to_trouble_doubles_the_hold_up_to_a_cap) {
+    sim_t s;
+    sim_init(&s, 0, 53, 2);
+    settle_in(&s);
+    tk(&s, 0, 100);
+    ASSERT_EQ(35, s.bp);
+    expect_up_after(&s, BT_LINK_UP_HOLD_MS);
+    ASSERT_EQ(45, s.bp);
+    const uint32_t holds[] = {2u * BT_LINK_UP_HOLD_MS, 4u * BT_LINK_UP_HOLD_MS, BT_LINK_UP_HOLD_MAX_MS, BT_LINK_UP_HOLD_MAX_MS};
+    for (unsigned i = 0; i < 4; i++) {
+        idle(&s, 10000);
+        episode(&s, 48); // within 120 s of the step up
+        ASSERT_EQ(35, s.bp);
+        expect_up_after(&s, holds[i]);
+        ASSERT_EQ(45, s.bp);
+    }
+    ASSERT_EQ(240000u, holds[2]);
+    ASSERT_EQ(0, s.early_ups);
+    // a step down long after the last step up starts again from the base hold
+    idle(&s, BT_LINK_QUICK_DOWN_MS + 5000u);
+    episode(&s, 48);
+    ASSERT_EQ(35, s.bp);
+    expect_up_after(&s, BT_LINK_UP_HOLD_MS);
+    ASSERT_EQ(45, s.bp);
+}
+
+// One ramping stall after a rise walks 53 -> 45 -> 35 but is one back-off: the hold doubles once, not once per level.
+TEST(test_a_ramping_stall_after_a_rise_doubles_the_hold_once) {
+    sim_t s;
+    sim_init(&s, 0, 53, 2);
+    settle_in(&s);
+    tk(&s, 0, 100);
+    expect_up_after(&s, BT_LINK_UP_HOLD_MS);
+    expect_up_after(&s, BT_LINK_UP_HOLD_MS);
+    ASSERT_EQ(53, s.bp);
+    ASSERT_EQ(BT_LINK_UP_HOLD_MS, s.p.hold_ms);
+    idle(&s, 5000);
+    for (uint32_t owed = 0; owed < 160u; owed += 8u) {
+        tk(&s, 0, owed); // 45 at 40 ms, 35 at 90 ms
+    }
+    ASSERT_EQ(35, s.bp);
+    ASSERT_EQ(2u * BT_LINK_UP_HOLD_MS, s.p.hold_ms);
+    expect_up_after(&s, 2u * BT_LINK_UP_HOLD_MS);
+
+    // an episode step and a bad-window step a second later: also one doubling
+    sim_t b;
+    sim_init(&b, 0, 53, 2);
+    settle_in(&b);
+    tk(&b, 0, 100);
+    expect_up_after(&b, BT_LINK_UP_HOLD_MS);
+    expect_up_after(&b, BT_LINK_UP_HOLD_MS);
+    idle(&b, 5000);
+    episode(&b, 48);
+    ASSERT_EQ(45, b.bp);
+    pressure(&b, 3000, 60);
+    ASSERT_EQ(35, b.bp);
+    ASSERT_EQ(2u * BT_LINK_UP_HOLD_MS, b.p.hold_ms);
+}
+
+TEST(test_a_walk_with_bad_patches_changes_rarely_and_never_climbs_soon_after_a_fall) {
+    sim_t s;
+    sim_init(&s, 123456u, 53, 2);
+    settle_in(&s);
+    const uint32_t patch_s[] = {20, 40, 25, 30, 35, 20};
+    const uint32_t clean_s[] = {60, 40, 90, 45, 80, 50};
+    for (unsigned i = 0; i < 6; i++) {
+        for (uint32_t end = s.t + patch_s[i] * 1000u; (int32_t)(end - s.t) > 0;) {
+            episode(&s, i % 2 ? 100 : 56); // a burst every few seconds, some of them severe
+            pressure(&s, 2000u + 500u * (i % 3), 0);
         }
+        idle(&s, clean_s[i] * 1000u);
     }
-    ASSERT_EQ(2, changes);
-    ASSERT_EQ(35, last);
-}
-
-TEST(test_it_steps_back_up_after_a_clean_spell_not_before) {
-    bt_link_policy_t p;
-    uint32_t t = 0;
-    bt_link_policy_init(&p, t);
-    int changes = 0;
-    ASSERT_EQ(45, run(&p, &t, 2300, 100, &changes));
-    // clean: no change until the hold is over (15 s from the last bad window)
-    ASSERT_EQ(0, run(&p, &t, BT_LINK_UP_HOLD_MS - 2000u, 0, &changes));
-    ASSERT_EQ(53, run(&p, &t, 4000, 0, &changes));
-    ASSERT_EQ(2, changes);
-}
-
-TEST(test_a_middling_link_neither_steps_down_nor_up) {
-    bt_link_policy_t p;
-    uint32_t t = 0;
-    bt_link_policy_init(&p, t);
-    int changes = 0;
-    ASSERT_EQ(45, run(&p, &t, 2300, 100, &changes));
-    ASSERT_EQ(0, run(&p, &t, 60000, 10, &changes)); // 10 % pressured: not bad (25), not clean (5)
-    ASSERT_EQ(1, changes);
-}
-
-TEST(test_a_quick_return_to_pressure_lengthens_the_up_hold) {
-    bt_link_policy_t p;
-    uint32_t t = 0;
-    bt_link_policy_init(&p, t);
-    int changes = 0;
-    ASSERT_EQ(45, run(&p, &t, 2300, 100, &changes));
-    ASSERT_EQ(53, run(&p, &t, BT_LINK_UP_HOLD_MS + 2000u, 0, &changes));
-    ASSERT_EQ(45, run(&p, &t, 2300, 100, &changes)); // soon after the step up: the hold doubles to 30 s
-    ASSERT_EQ(0, run(&p, &t, BT_LINK_UP_HOLD_MS + 2000u, 0, &changes));
-    ASSERT_EQ(53, run(&p, &t, BT_LINK_UP_HOLD_MS + 2000u, 0, &changes));
-    ASSERT_EQ(4, changes);
+    ASSERT_TRUE(s.t - 123456u > 500000u);
+    // Exactly 8 changes, ending at 35: patch 1 falls 53 -> 45 -> 35 (2); its 60 s clean spell climbs back to 53 (2); patch 2 comes soon after, falls
+    // again (2) and doubles the hold to 60 s; the 90 s clean spell climbs one level (1); patch 4 falls (1) and doubles the hold to 120 s; no later
+    // clean stretch is that long, so it stays at 35 to the end.
+    ASSERT_EQ(8, s.changes);
+    ASSERT_EQ(35, s.bp);
+    ASSERT_EQ(0, s.early_ups);
 }
 
 TEST(test_a_headset_without_room_to_step_never_changes) {
-    bt_link_policy_t p;
-    uint32_t t = 0;
-    bt_link_policy_init(&p, t);
-    int changes = 0;
-    for (int i = 0; i < 20; i++) {
-        for (int k = 0; k < 125; k++, t += 8u) {
-            if (bt_link_policy_tick(&p, t, true, 40, 40) != 0) {
-                changes++;
-            }
-        }
+    sim_t s;
+    sim_init(&s, 0, 40, 40);
+    settle_in(&s);
+    for (int i = 0; i < 2500; i++) {
+        tk(&s, 500, 160); // pressured, stalled and severe at once
     }
-    ASSERT_EQ(0, changes);
+    episode(&s, 48);
+    pressure(&s, 5000, 100);
+    ASSERT_EQ(0, s.changes);
+    ASSERT_EQ(40, s.bp);
+}
+
+TEST(test_the_xq_ceiling_steps_to_35_on_a_severe_stall) {
+    sim_t s;
+    sim_init(&s, 0, 76, 2);
+    settle_in(&s);
+    ASSERT_EQ(35, tk(&s, 0, BT_LINK_SEVERE_OWED_MS));
+    expect_up_after(&s, BT_LINK_UP_HOLD_MS);
+    ASSERT_EQ(45, s.bp);
+    expect_up_after(&s, BT_LINK_UP_HOLD_MS);
+    ASSERT_EQ(76, s.bp);
 }
 
 TEST(test_the_clock_wraps) {
-    bt_link_policy_t p;
-    uint32_t t = 0xFFFFFFFFu - 5000u;
-    bt_link_policy_init(&p, t);
-    int changes = 0;
-    ASSERT_EQ(45, run(&p, &t, 2300, 100, &changes));
-    ASSERT_EQ(53, run(&p, &t, BT_LINK_UP_HOLD_MS + 2000u, 0, &changes));
-    ASSERT_EQ(2, changes);
+    // the stall (and the grace before it) straddles the wrap
+    sim_t s;
+    sim_init(&s, 0xFFFFFFFFu - 1500u, 53, 2);
+    idle(&s, 1200);
+    ASSERT_EQ(0, s.changes);
+    episode(&s, 48);
+    ASSERT_EQ(45, s.bp);
+    // down and up across the wrap
+    sim_t u;
+    sim_init(&u, 0xFFFFFFFFu - 20000u, 53, 2);
+    settle_in(&u);
+    ASSERT_EQ(35, tk(&u, 0, 100));
+    expect_up_after(&u, BT_LINK_UP_HOLD_MS);
+    ASSERT_EQ(45, u.bp);
+    ASSERT_TRUE(u.t < 100000u); // the clock did wrap
+    ASSERT_EQ(0, u.early_ups);
 }
 
 TEST(test_phantom_acl_is_reset_once_and_only_without_a_real_link) {
@@ -187,12 +441,19 @@ int main(void) {
     RUN(test_catchup_budget_bounds_what_is_owed_and_counts_the_rest);
     RUN(test_pressure_is_a_long_wait_or_a_big_debt);
     RUN(test_ladder_follows_the_headsets_limits);
-    RUN(test_one_stall_is_not_sustained_but_two_bad_seconds_step_down);
-    RUN(test_sustained_pressure_walks_down_to_the_last_step_and_stays);
-    RUN(test_it_steps_back_up_after_a_clean_spell_not_before);
-    RUN(test_a_middling_link_neither_steps_down_nor_up);
-    RUN(test_a_quick_return_to_pressure_lengthens_the_up_hold);
+    RUN(test_the_first_stall_steps_down_on_the_tick_it_crosses_40_ms);
+    RUN(test_a_severe_stall_jumps_to_the_last_level);
+    RUN(test_a_long_stall_like_the_walk_lands_on_35);
+    RUN(test_stall_episodes_are_rate_limited_by_the_settle_time);
+    RUN(test_the_first_second_of_a_stream_ignores_the_start_up_burst);
+    RUN(test_one_bad_window_steps_down_one_level);
+    RUN(test_it_steps_up_only_after_a_long_clean_spell);
+    RUN(test_a_stall_tick_or_a_middling_window_restarts_the_hold);
+    RUN(test_a_quick_return_to_trouble_doubles_the_hold_up_to_a_cap);
+    RUN(test_a_ramping_stall_after_a_rise_doubles_the_hold_once);
+    RUN(test_a_walk_with_bad_patches_changes_rarely_and_never_climbs_soon_after_a_fall);
     RUN(test_a_headset_without_room_to_step_never_changes);
+    RUN(test_the_xq_ceiling_steps_to_35_on_a_severe_stall);
     RUN(test_the_clock_wraps);
     RUN(test_phantom_acl_is_reset_once_and_only_without_a_real_link);
     RUN(test_phantom_reset_is_rate_limited_per_peer_and_wrap_safe);

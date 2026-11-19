@@ -1468,7 +1468,7 @@ static void media_tick(btstack_timer_source_t *ts) {
             g_w_inflight = (uint8_t)out;
         }
     }
-    const uint8_t nb = bt_link_policy_tick(&g_lp, now, bt_link_pressured(g_ready_to_send ? now - g_req_ms : 0u, owed_ms), g_bp_ceiling, g_bp_min);
+    const uint8_t nb = bt_link_policy_tick(&g_lp, now, g_ready_to_send ? now - g_req_ms : 0u, owed_ms, g_bp_ceiling, g_bp_min);
     if (nb != 0) {
         set_bitpool(nb);
     }
