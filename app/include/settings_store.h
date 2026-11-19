@@ -42,7 +42,7 @@ extern "C" {
 #define SETTINGS_FILE_B SETTINGS_DIR "/settings.b"
 #define SETTINGS_FILE_OLD SETTINGS_DIR "/settings.old" /**< a file written by a NEWER firmware, kept aside instead of being wiped */
 
-#define SETTINGS_MAX_ITEMS 48u /**< distinct tags kept (settings, Wi-Fi networks, link keys, BT device records): worst case about 42 */
+#define SETTINGS_MAX_ITEMS 48u /**< distinct tags kept (settings, Wi-Fi networks, link keys, BT device records): worst case about 43 */
 #define SETTINGS_VALUE_MAX 96u /**< bytes per stored value; a sealed secret holds up to 96 - 29 = 67 bytes of plaintext (Wi-Fi passwords are at most 63) */
 #define SETTINGS_VERSION 2u /**< written; 1 (same layout, at most 32 items) is still read. Firmware older than 2 sets a version-2 file aside instead of reading it */
 #define SETTINGS_VERSION_V1 1u
@@ -65,6 +65,7 @@ extern "C" {
 #define SETTING_AUTODIM_IDX SETTINGS_TAG('N', 'P', 'a', 't')   /**< u8, 0..5: idle time before dimming (ui_logic.h: 10 s .. 5 min); absent = 2 (30 s) */
 #define SETTING_SCREENOFF_IDX SETTINGS_TAG('N', 'P', 's', 'o') /**< u8, 0..6: time after the dim until the backlight is fully off (ui_logic.h: Never .. 5 min); absent = 5 (3 min) */
 #define SETTING_AUTOLOCK SETTINGS_TAG('N', 'P', 'a', 'l')       /**< u8, 0 or 1: Hold turns on by itself when the screen goes off (docs/adr/0020-hold.md); absent = 1 */
+#define SETTING_LOCK_HOLD SETTINGS_TAG('N', 'P', 'l', 'h')     /**< u8, seconds of Power that toggle Hold: 0 (Off), 1, 2, 3 or 5; absent or any other value = 0 (Off). Added without a version bump: an older firmware ignores an unknown tag (docs/adr/0020-hold.md) */
 #define SETTING_SLEEP_IDX SETTINGS_TAG('N', 'P', 's', 'l')     /**< u8, 0..3: idle time before the player sleeps (power_policy.h: Never, 10, 30, 60 min); absent or unknown = 2 (30 min). Added without a version bump: a file from an older firmware simply has no such item (ADR-0021) */
 #define SETTING_THEME SETTINGS_TAG('N', 'P', 't', 'h')         /**< u8, ui_theme_mode_t: 0 Light, 1 Dark, 2 Auto (dark while the backlight is dimmed); absent = 0 (Light) */
 #define SETTING_BT_DEVICE SETTINGS_TAG('N', 'P', 'b', 'd')     /**< the one remembered headset: version, address, class, name (bt_saved.h; 10..58 bytes) */

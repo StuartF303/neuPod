@@ -281,7 +281,7 @@ static void open_backlight_slider(void) {
     }
 }
 
-/* Display (ST-2, design review 3.5): Theme, Brightness (opens the slider), Dim after (10 s ... 5 min, then Off: that is Auto-dim), Off after, Sleep after (ADR-0021), Auto-lock.
+/* Display (ST-2, design review 3.5): Theme, Brightness (opens the slider), Dim after (10 s ... 5 min, then Off: that is Auto-dim), Off after, Sleep after (ADR-0021), Lock hold (Power held 1 to 5 s toggles Hold, or Off), Auto-lock (greyed while Lock hold is Off).
  * The other rows change in place with a tick. */
 
 typedef struct {
@@ -297,7 +297,8 @@ enum {
 #if NEUPOD_POWER_MGMT
     D_SLEEP, /* Sleep after: Never, 10, 30, 60 min (ADR-0021) */
 #endif
-    D_AUTOLOCK,
+    D_LOCK_HOLD, /* Lock hold: Off, 1, 2, 3, 5 s of Power toggle Hold (docs/adr/0020-hold.md) */
+    D_AUTOLOCK,  /* greyed while Lock hold is Off */
     D_COUNT
 };
 
@@ -316,8 +317,17 @@ static void display_get(void *ctx, int32_t i, ui_list_item_t *o) {
     } else if (i == D_SLEEP) {
         put(o, "Sleep after", "%s", power_sleep_name(g_ui_state.sleep_idx)); /* idle this long (nothing playing, no charger): suspend; 24 h asleep: power off */
 #endif
+    } else if (i == D_LOCK_HOLD) {
+        if (g_ui_state.lock_hold_s == 0) {
+            put(o, "Lock hold", "Off");
+        } else {
+            put(o, "Lock hold", "%u s", (unsigned)g_ui_state.lock_hold_s);
+        }
     } else {
-        put(o, "Auto-lock", "%s", g_ui_state.autolock ? "On" : "Off"); /* Hold turns on when the screen goes off */
+        /* Hold turns on when the screen goes off. Without Lock hold nothing could undo it, so the row is greyed and reads Off; the stored choice is kept. */
+        const bool live = g_ui_state.lock_hold_s != 0;
+        put(o, "Auto-lock", "%s", live && g_ui_state.autolock ? "On" : "Off");
+        o->dim = !live;
     }
 }
 
@@ -354,7 +364,14 @@ static bool display_button(ui_screen_t *b, uint8_t btn) {
         g_ui_state.sleep_idx = (uint8_t)((g_ui_state.sleep_idx + 1u) % POWER_SLEEP_STEPS);
         break;
 #endif
+    case D_LOCK_HOLD:
+        g_ui_state.lock_hold_s = ui_hold_toggle_s_next(g_ui_state.lock_hold_s);
+        ui_frame_lock_hold_changed(); /* Off while locked unlocks */
+        break;
     default:
+        if (g_ui_state.lock_hold_s == 0) {
+            return true; /* greyed: nothing to change until Lock hold is on */
+        }
         g_ui_state.autolock = !g_ui_state.autolock;
         break;
     }

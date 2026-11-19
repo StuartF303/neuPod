@@ -118,6 +118,25 @@ TEST(test_round_trip) {
     ASSERT_EQ(60, v);
 }
 
+TEST(test_lock_hold_is_a_new_item_in_an_old_file) {
+    rm_state();
+    ASSERT_EQ(SETTINGS_LOAD_FRESH, boot(true));
+    settings_set_u8(SETTING_AUTOLOCK, 0); // a file from before Lock hold: Auto-lock only
+    ASSERT_EQ(0, settings_flush());
+    ASSERT_EQ(SETTINGS_LOAD_OK, boot(true));
+    uint8_t v = 99;
+    ASSERT_FALSE(settings_get_u8(SETTING_LOCK_HOLD, &v)); // absent: the UI reads that as Off
+    ASSERT_TRUE(settings_get_u8(SETTING_AUTOLOCK, &v));
+    ASSERT_EQ(0, v); // the Auto-lock choice is kept
+    settings_set_u8(SETTING_LOCK_HOLD, 3);
+    ASSERT_EQ(0, settings_flush());
+    ASSERT_EQ(SETTINGS_LOAD_OK, boot(true));
+    ASSERT_TRUE(settings_get_u8(SETTING_LOCK_HOLD, &v));
+    ASSERT_EQ(3, v);
+    ASSERT_TRUE(settings_get_u8(SETTING_AUTOLOCK, &v));
+    ASSERT_EQ(0, v);
+}
+
 TEST(test_crc_and_format_failures_give_defaults) {
     // A good file, then damage it in each way.
     rm_state();
@@ -630,6 +649,7 @@ int main(void) {
     snprintf(g_root, sizeof g_root, "%s", abs);
 
     RUN(test_round_trip);
+    RUN(test_lock_hold_is_a_new_item_in_an_old_file);
     RUN(test_crc_and_format_failures_give_defaults);
     RUN(test_no_card_is_ram_only);
     RUN(test_power_loss_at_every_step);

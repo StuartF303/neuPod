@@ -107,22 +107,26 @@
 // does nothing; 2.1 s locks (confirmation toast, lock icon); keys while locked only remind; held on to 5.9 s the power-off countdown shows (and the
 // 2 s mark unlocks again); 10.5 s asks for the power-off (the host only logs it) and locks once more; the hardware switch (sw:on / sw:off) takes it
 // off and on; a tap (down, then up one 300 ms step later) turns the screen off (auto-lock locks), the next key only wakes it, a 2.3 s hold unlocks and the keys work again; Settings >
-// Display shows the Screen off after and Auto-lock rows.
+// Display shows the Lock hold and Auto-lock rows. The tour starts with Lock hold at 2 s (the default is Off); at the end it is set Off: a 1.2 s press shows the
+// "power off" ring, 3.2 s changes nothing, 5.6 s shows the countdown, a tap still turns the screen off and the screen going off does not lock.
 #define TOUR_HOLD                                                                                  \
-    "x pwr:down sleep:800 snap:hold-ring pwr:up sleep:900 "                                        \
+    "lockhold:2 x pwr:down sleep:800 snap:hold-ring pwr:up sleep:900 "                             \
     "pwr:down sleep:1800 snap:hold-locked pwr:up sleep:300 s s snap:hold-swallowed x x x x x x x "  \
     "snap:hold-locked-idle pwr:down sleep:5400 snap:hold-countdown pwr:up sleep:600 snap:hold-cancelled "  \
     "pwr:down sleep:10200 snap:hold-poweroff pwr:up sleep:600 "                                     \
     "sw:off x x snap:hold-switch-off x x x x x sw:on x x snap:hold-switch-on sw:off x x x x x x x "    \
     "pwr:down pwr:up sleep:600 snap:hold-screen-off s x snap:hold-woke x x x x x x x "    \
     "pwr:down sleep:1800 pwr:up sleep:600 s snap:hold-unlocked-nav s s s _ s _ snap:hold-display "   \
-    "s s s s s _ x snap:hold-autolock-off m m"
+    "s s s s s _ x snap:hold-autolock-off m m "                                                    \
+    "lockhold:0 snap:hold-lockhold-off pwr:down sleep:1200 snap:hold-off-ring sleep:2000 snap:hold-off-still-unlocked " \
+    "sleep:2400 snap:hold-off-countdown pwr:up sleep:600 pwr:down pwr:up sleep:600 snap:hold-off-screen-off x"
 
 // Sleep (docs/adr/0021-power-sleep.md): idlesleep:N makes the policy sleep once after N s of idleness, batt:N sets the gauge to N percent and ext:on / ext:off plug the charger in and out.
 // The host simulates the sleep (hal_power.c; the env of each ctest entry says how it ends). Key wake: the sleep ends with a Select press, which only lights the screen
 // (nothing opens) and the next key works; Hold stays on as the screen-off left it. Timer wake / no suspend: the host logs a simulated power-off request. Charger: no sleep at
 // all. Empty battery: "Battery empty", then the simulated power-off, after 30 s.
-#define TOUR_POWER "x snap:power-home idlesleep:2 sleep:4500 idlesleep:0 x x x snap:power-woke x x snap:power-after pwr:down sleep:2300 pwr:up sleep:600 s s x snap:power-scrolled"
+// The tour sets Lock hold to 2 s first (the default is Off, and Off neither auto-locks nor lets Power unlock).
+#define TOUR_POWER "lockhold:2 x snap:power-home idlesleep:2 sleep:4500 idlesleep:0 x x x snap:power-woke x x snap:power-after pwr:down sleep:2300 pwr:up sleep:600 s s x snap:power-scrolled"
 #define TOUR_POWER_OFF "x idlesleep:2 sleep:4000 idlesleep:0 x x snap:power-off-home"
 #define TOUR_POWER_CHARGER "x ext:on idlesleep:2 sleep:5000 snap:power-ext-home ext:off"
 #define TOUR_POWER_BATTERY "x batt:2 sleep:31500 snap:power-battery-notice sleep:4500 snap:power-battery-off"
