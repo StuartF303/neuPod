@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "../app/storage/ff_alloc.h"
+#include "../app/os/os_alloc_malloc.h"
 #include "ff.h"
 #include "hal_storage.h"
 #include "unit.h"
@@ -33,6 +34,10 @@ TEST(test_ff_alloc_cap) {
     ASSERT_TRUE(ff_memalloc(128u * 1024u) == NULL);
     ASSERT_TRUE(ff_memalloc(0u) == NULL);
     ff_memfree(NULL);
+    // heap short: NULL, not a panic (FatFs then halves the request or uses its window buffer)
+    os_alloc_fail_from(0);
+    ASSERT_TRUE(ff_memalloc(512u) == NULL);
+    os_alloc_fail_from(-1);
 }
 
 TEST(test_fatfs_roundtrip) {

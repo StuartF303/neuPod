@@ -5,7 +5,7 @@ add_test(NAME clickwheel COMMAND test_clickwheel)
 
 add_executable(test_fatfs test_fatfs.c)
 # hal_host last: neupod_fatfs's diskio references hal_storage.
-target_link_libraries(test_fatfs neupod_fatfs hal_host)
+target_link_libraries(test_fatfs neupod_fatfs neupod_os_alloc_malloc hal_host)
 add_test(NAME fatfs COMMAND test_fatfs)
 set_tests_properties(fatfs PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
@@ -433,15 +433,27 @@ add_test(NAME codecs COMMAND test_codecs)
 # Album art: the streamed JPEG decoder, source order and the picture-position parsing of the tag readers.
 add_executable(test_art test_art.c)
 target_compile_definitions(test_art PRIVATE NEUPOD_ART_ASSETS="${CMAKE_SOURCE_DIR}/tests/assets/art")
-target_link_libraries(test_art neupod_rt_core)
+target_link_libraries(test_art neupod_rt_core neupod_os_alloc_malloc)
 set_source_files_properties(test_art.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 add_test(NAME art COMMAND test_art)
+
+# The real os_alloc() (os_freertos.c) on the FreeRTOS POSIX port, heap_4: NULL without a panic, the reserve, the hook for plain allocations.
+add_executable(test_os_alloc test_os_alloc.c ${CMAKE_SOURCE_DIR}/app/os/os_freertos.c)
+target_include_directories(test_os_alloc PRIVATE ${CMAKE_SOURCE_DIR}/app/include ${CMAKE_SOURCE_DIR}/hal/include ${CMAKE_SOURCE_DIR}/app/os)
+target_link_libraries(test_os_alloc neupod_freertos hal_host)
+set_source_files_properties(test_os_alloc.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+add_test(NAME os_alloc COMMAND test_os_alloc)
 
 # The core-1 closure checker must be able to FAIL: a known-good and a known-bad disassembly fixture.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME core1_closure_selftest_good COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_core1_closure.py --text ${CMAKE_SOURCE_DIR}/tests/assets/closure/good.txt)
 add_test(NAME core1_closure_selftest_bad COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_core1_closure.py --text ${CMAKE_SOURCE_DIR}/tests/assets/closure/bad.txt)
 set_tests_properties(core1_closure_selftest_bad PROPERTIES WILL_FAIL TRUE)
+# The failure-tolerant-allocator check (tools/check_app_heap.py, a post-build step of the rp2350 firmware) must be able to FAIL too.
+add_test(NAME app_heap_selftest_good COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_app_heap.py --text ${CMAKE_SOURCE_DIR}/tests/assets/closure/heap_good.txt)
+add_test(NAME app_heap_selftest_bad COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_app_heap.py --text ${CMAKE_SOURCE_DIR}/tests/assets/closure/heap_bad.txt)
+add_test(NAME app_heap_selftest_bad_indirect COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_app_heap.py --text ${CMAKE_SOURCE_DIR}/tests/assets/closure/heap_bad_indirect.txt)
+set_tests_properties(app_heap_selftest_bad app_heap_selftest_bad_indirect PROPERTIES WILL_FAIL TRUE)
 # Debug-only SDK assert() edges are accepted only from the listed SDK callers; assert() in our own code still fails.
 add_test(NAME core1_closure_selftest_sdk_assert_ok COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_core1_closure.py --text ${CMAKE_SOURCE_DIR}/tests/assets/closure/good_sdk_assert.txt)
 add_test(NAME core1_closure_selftest_own_assert_fails COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/check_core1_closure.py --text ${CMAKE_SOURCE_DIR}/tests/assets/closure/bad_own_assert.txt)
@@ -864,7 +876,7 @@ set_source_files_properties(test_playlists.c PROPERTIES COMPILE_OPTIONS "${NEUPO
 # art_service retargeted by a track change in the middle of a decode (gapless handoff): the old picture must not be published.
 add_executable(test_art_service test_art_service.c ${CMAKE_SOURCE_DIR}/app/runtime/art_service.c)
 target_compile_definitions(test_art_service PRIVATE NEUPOD_ART_ASSETS="${CMAKE_SOURCE_DIR}/tests/assets/art")
-target_link_libraries(test_art_service neupod_rt_core neupod_storage_tests hal_host)
+target_link_libraries(test_art_service neupod_rt_core neupod_storage_tests neupod_os_alloc_malloc hal_host)
 set_source_files_properties(test_art_service.c PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra")
 add_test(NAME art_service COMMAND test_art_service)
 
@@ -924,14 +936,14 @@ add_test(NAME caps_rearm COMMAND test_caps_rearm)
 # Music library index (ADR-0017, L1): collation, new tag fields, scanner + reader on a FatFs disk image, swap crash safety.
 # nfs.h on FatFs (the backend the Pico and the Y2 use) instead of the host's POSIX one: the library's writes go through its write scope.
 add_executable(test_library test_library.c ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c)
-target_link_libraries(test_library neupod_library_test neupod_storage_tests neupod_fatfs neupod_rt_core hal_host) # hal_host last: diskio references hal_storage
+target_link_libraries(test_library neupod_library_test neupod_storage_tests neupod_fatfs neupod_rt_core neupod_os_alloc_malloc hal_host) # hal_host last: diskio references hal_storage
 add_test(NAME library COMMAND test_library)
 set_tests_properties(library PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_source_files_properties(test_library.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
 # The Music lists and queue ranges over a small tagged library (library_view.h), and every queue entry's path (lib_resolve).
 add_executable(test_library_view test_library_view.c ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c)
-target_link_libraries(test_library_view neupod_library neupod_storage_tests neupod_fatfs neupod_rt_core hal_host)
+target_link_libraries(test_library_view neupod_library neupod_storage_tests neupod_fatfs neupod_rt_core neupod_os_alloc_malloc hal_host)
 add_test(NAME library_view COMMAND test_library_view)
 set_tests_properties(library_view PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_source_files_properties(test_library_view.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
@@ -939,14 +951,14 @@ set_source_files_properties(test_library_view.c PROPERTIES COMPILE_OPTIONS "${NE
 # The library service (the storage task's half of the Music screens): protocol, row window, build and its refusals, resolver. library_service.c is
 # compiled in with fakes for the player, the audio core and the storage queue.
 add_executable(test_library_service test_library_service.c ${CMAKE_SOURCE_DIR}/app/runtime/library_service.c ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c)
-target_link_libraries(test_library_service neupod_library neupod_storage_tests neupod_fatfs neupod_rt_core hal_host)
+target_link_libraries(test_library_service neupod_library neupod_storage_tests neupod_fatfs neupod_rt_core neupod_os_alloc_malloc hal_host)
 add_test(NAME library_service COMMAND test_library_service)
 set_tests_properties(library_service PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_source_files_properties(test_library_service.c ${CMAKE_SOURCE_DIR}/app/runtime/library_service.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 
 # The same at scale: 100,000 files on a disk image, 32 KB of scratch. About a minute; label "slow" (ctest -LE slow skips it).
 add_executable(test_library_big test_library_big.c ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c)
-target_link_libraries(test_library_big neupod_library neupod_storage_tests neupod_fatfs neupod_rt_core hal_host)
+target_link_libraries(test_library_big neupod_library neupod_storage_tests neupod_fatfs neupod_rt_core neupod_os_alloc_malloc hal_host)
 add_test(NAME library_big COMMAND test_library_big)
 set_tests_properties(library_big PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} LABELS slow TIMEOUT 900)
 set_source_files_properties(test_library_big.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")

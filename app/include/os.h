@@ -160,6 +160,19 @@ size_t os_task_stats(os_task_info_t *out, size_t max);
 size_t os_heap_free(void);
 size_t os_heap_free_min(void);
 
+/**
+ * Allocate from the kernel heap (FreeRTOS heap_4 on the RP2350; the same API everywhere), for scratch memory whose
+ * failure the caller can handle. Returns NULL when the heap cannot satisfy the request: unlike malloc() on the RP2350
+ * (the SDK wraps it and panics) and unlike a task or queue creation (the malloc-failed hook panics), this never
+ * panics. Not for interrupt handlers or core 1; not for blocks that live for the whole run (the heap is the budget
+ * in memory_budget.h, and fragments). Free with os_free() only.
+ *
+ * Unit-test binaries without the kernel link app/os/os_alloc_malloc.c instead (a malloc-backed twin with fault injection).
+ */
+void *os_alloc(size_t size);
+/** Release a block from os_alloc(); NULL is accepted. */
+void os_free(void *p);
+
 #ifdef __cplusplus
 }
 #endif

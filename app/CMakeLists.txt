@@ -16,6 +16,12 @@ target_include_directories(neupod_fatfs PUBLIC ${NEUPOD_APP_DIR}/third_party/fat
                                                ${NEUPOD_APP_DIR}/../hal/include)
 target_compile_features(neupod_fatfs PUBLIC c_std_11)
 
+# os_alloc()/os_free() without the RTOS (os.h): for unit tests and the storage_test bench tool. Binaries that link
+# os_freertos.c (the runtime) must NOT link this. Also offers allocation fault injection.
+add_library(neupod_os_alloc_malloc STATIC ${NEUPOD_APP_DIR}/os/os_alloc_malloc.c)
+target_include_directories(neupod_os_alloc_malloc PUBLIC ${NEUPOD_APP_DIR}/include ${NEUPOD_APP_DIR}/os)
+target_compile_features(neupod_os_alloc_malloc PUBLIC c_std_11)
+
 # Portable application code. Must not depend on any platform SDK.
 add_library(neupod_app STATIC ${NEUPOD_CORE_SOURCES} ${NEUPOD_GFX_SOURCES}
   ${NEUPOD_DEMO_SOURCES})
