@@ -53,12 +53,16 @@ void bt_link_policy_init(bt_link_policy_t *p, uint32_t now_ms) {
                             .hold_ms = BT_LINK_UP_HOLD_MS};
 }
 
-/* A step down to @p to_level: the hold doubles if it follows a step up closely, else it is the base again. */
+/* A step down to @p to_level. The back-off is decided once per step up (has_up): the first fall after a rise doubles the hold if it comes soon after
+ * the rise, else resets it to the base; further falls before the next rise (one ramping stall walks the ladder) leave it alone. */
 static void step_down(bt_link_policy_t *p, uint32_t now_ms, uint8_t to_level) {
-    if (p->has_up && (uint32_t)(now_ms - p->last_up) < BT_LINK_QUICK_DOWN_MS) {
-        p->hold_ms = p->hold_ms * 2u < BT_LINK_UP_HOLD_MAX_MS ? p->hold_ms * 2u : BT_LINK_UP_HOLD_MAX_MS;
-    } else {
-        p->hold_ms = BT_LINK_UP_HOLD_MS;
+    if (p->has_up) {
+        if ((uint32_t)(now_ms - p->last_up) < BT_LINK_QUICK_DOWN_MS) {
+            p->hold_ms = p->hold_ms * 2u < BT_LINK_UP_HOLD_MAX_MS ? p->hold_ms * 2u : BT_LINK_UP_HOLD_MAX_MS;
+        } else {
+            p->hold_ms = BT_LINK_UP_HOLD_MS;
+        }
+        p->has_up = false;
     }
     p->level = to_level;
     p->last_down = now_ms;

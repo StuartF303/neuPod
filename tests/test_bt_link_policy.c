@@ -101,7 +101,7 @@ static void pressure(sim_t *s, uint32_t ms, unsigned pct) {
     }
 }
 
-// A stall episode as the pacer sees it: the debt rises 8 ms a tick to @p peak_ms and falls back (the wait grows with it, up to 25 ms: no pressure by itself).
+// A stall episode as the pacer sees it: the debt rises 8 ms a tick to @p peak_ms and falls back (no wait: pressure comes from the debt alone).
 static void episode(sim_t *s, uint32_t peak_ms) {
     for (uint32_t owed = 0; owed <= peak_ms; owed += 8u) {
         tk(s, 0, owed);
@@ -314,6 +314,39 @@ TEST(test_a_quick_return_to_trouble_doubles_the_hold_up_to_a_cap) {
     ASSERT_EQ(45, s.bp);
 }
 
+// One ramping stall after a rise walks 53 -> 45 -> 35 but is one back-off: the hold doubles once, not once per level.
+TEST(test_a_ramping_stall_after_a_rise_doubles_the_hold_once) {
+    sim_t s;
+    sim_init(&s, 0, 53, 2);
+    settle_in(&s);
+    tk(&s, 0, 100);
+    expect_up_after(&s, BT_LINK_UP_HOLD_MS);
+    expect_up_after(&s, BT_LINK_UP_HOLD_MS);
+    ASSERT_EQ(53, s.bp);
+    ASSERT_EQ(BT_LINK_UP_HOLD_MS, s.p.hold_ms);
+    idle(&s, 5000);
+    for (uint32_t owed = 0; owed < 160u; owed += 8u) {
+        tk(&s, 0, owed); // 45 at 40 ms, 35 at 90 ms
+    }
+    ASSERT_EQ(35, s.bp);
+    ASSERT_EQ(2u * BT_LINK_UP_HOLD_MS, s.p.hold_ms);
+    expect_up_after(&s, 2u * BT_LINK_UP_HOLD_MS);
+
+    // an episode step and a bad-window step a second later: also one doubling
+    sim_t b;
+    sim_init(&b, 0, 53, 2);
+    settle_in(&b);
+    tk(&b, 0, 100);
+    expect_up_after(&b, BT_LINK_UP_HOLD_MS);
+    expect_up_after(&b, BT_LINK_UP_HOLD_MS);
+    idle(&b, 5000);
+    episode(&b, 48);
+    ASSERT_EQ(45, b.bp);
+    pressure(&b, 3000, 60);
+    ASSERT_EQ(35, b.bp);
+    ASSERT_EQ(2u * BT_LINK_UP_HOLD_MS, b.p.hold_ms);
+}
+
 TEST(test_a_walk_with_bad_patches_changes_rarely_and_never_climbs_soon_after_a_fall) {
     sim_t s;
     sim_init(&s, 123456u, 53, 2);
@@ -328,7 +361,11 @@ TEST(test_a_walk_with_bad_patches_changes_rarely_and_never_climbs_soon_after_a_f
         idle(&s, clean_s[i] * 1000u);
     }
     ASSERT_TRUE(s.t - 123456u > 500000u);
-    ASSERT_TRUE(s.changes <= 6);
+    // Exactly 8 changes, ending at 35: patch 1 falls 53 -> 45 -> 35 (2); its 60 s clean spell climbs back to 53 (2); patch 2 comes soon after, falls
+    // again (2) and doubles the hold to 60 s; the 90 s clean spell climbs one level (1); patch 4 falls (1) and doubles the hold to 120 s; no later
+    // clean stretch is that long, so it stays at 35 to the end.
+    ASSERT_EQ(8, s.changes);
+    ASSERT_EQ(35, s.bp);
     ASSERT_EQ(0, s.early_ups);
 }
 
@@ -375,7 +412,6 @@ TEST(test_the_clock_wraps) {
     ASSERT_EQ(0, u.early_ups);
 }
 
-
 TEST(test_phantom_acl_is_reset_once_and_only_without_a_real_link) {
     ASSERT_TRUE(bt_link_phantom_acl(0x0B, false, false));
     ASSERT_FALSE(bt_link_phantom_acl(0x0B, false, true));  // already reset for this attempt: fail as before
@@ -414,6 +450,7 @@ int main(void) {
     RUN(test_it_steps_up_only_after_a_long_clean_spell);
     RUN(test_a_stall_tick_or_a_middling_window_restarts_the_hold);
     RUN(test_a_quick_return_to_trouble_doubles_the_hold_up_to_a_cap);
+    RUN(test_a_ramping_stall_after_a_rise_doubles_the_hold_once);
     RUN(test_a_walk_with_bad_patches_changes_rarely_and_never_climbs_soon_after_a_fall);
     RUN(test_a_headset_without_room_to_step_never_changes);
     RUN(test_the_xq_ceiling_steps_to_35_on_a_severe_stall);

@@ -11,8 +11,9 @@
  *   Down, at once: a severe stall (owed >= 90 ms or one packet waiting >= 120 ms) goes straight to the last level; the first tick of any stall
  *   episode (owed crossing 40 ms) steps one level; one bad 1 s window (>= 25 % pressured ticks) steps one level. Single steps are at least one settle
  *   time apart, and the first second of a stream is exempt from the tick-level triggers (the start-up burst is owed on purpose).
- *   Up, one level at a time, only after a long clean spell (no stall, windows under 5 % pressured): 30 s, doubling to 240 s for every step down soon
- *   after a step up, so a bad patch does not make the bitpool oscillate.
+ *   Up, one level at a time, only after a long clean spell (no stall, windows under 5 % pressured): 30 s. A fall soon after a rise doubles the hold
+ *   (to at most 240 s), once per rise however many levels the fall walks, so a bad patch does not make the bitpool oscillate. The hold does not relax
+ *   until a fall more than 120 s after a rise.
  *
  * Every constant of the behaviour is in this header.
  */
@@ -41,8 +42,8 @@ extern "C" {
 #define BT_LINK_DOWN_SETTLE_MS 1000u  /**< single steps down (stall start, bad window) are at least this far apart; a severe stall ignores it */
 #define BT_LINK_START_GRACE_MS 1000u  /**< after init the tick-level triggers (severe, stall start) are ignored: the start-up burst is owed on purpose */
 #define BT_LINK_UP_HOLD_MS 30000u     /**< clean time before stepping back up (each level needs its own full hold) */
-#define BT_LINK_UP_HOLD_MAX_MS 240000u /**< a step down soon after a step up doubles the hold (up to this): no flapping in a bad patch */
-#define BT_LINK_QUICK_DOWN_MS 120000u /**< "soon after" */
+#define BT_LINK_UP_HOLD_MAX_MS 240000u /**< a fall soon after a step up doubles the hold, once per step up (up to this): no flapping in a bad patch */
+#define BT_LINK_QUICK_DOWN_MS 120000u  /**< "soon after"; a fall later than this after a step up resets the hold to the base */
 #define BT_LINK_BITPOOL_STEP1 45u
 #define BT_LINK_BITPOOL_STEP2 35u
 #define BT_LINK_LEVELS 3u             /**< at most this many bitpools (the ladder: ceiling, STEP1, STEP2) */
