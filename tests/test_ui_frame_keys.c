@@ -63,10 +63,16 @@ void rt_piezo_click(void) {}
 static uint32_t g_set_gen;
 static bool g_set_have; // is a "Sleep after" item stored, and what it holds
 static uint8_t g_set_val, g_set_saved;
+static bool g_lh_have; // is a "Lock hold" item stored, and what it holds
+static uint8_t g_lh_val, g_lh_saved;
 uint32_t settings_generation(void) { return g_set_gen; }
 bool settings_get_u8(uint32_t tag, uint8_t *out) {
     if (tag == SETTING_SLEEP_IDX && g_set_have) {
         *out = g_set_val;
+        return true;
+    }
+    if (tag == SETTING_LOCK_HOLD && g_lh_have) {
+        *out = g_lh_val;
         return true;
     }
     return false;
@@ -74,6 +80,9 @@ bool settings_get_u8(uint32_t tag, uint8_t *out) {
 void settings_set_u8(uint32_t tag, uint8_t v) {
     if (tag == SETTING_SLEEP_IDX) {
         g_set_saved = v;
+    }
+    if (tag == SETTING_LOCK_HOLD) {
+        g_lh_saved = v;
     }
 }
 void hal_display_backlight(uint8_t level) { g_backlight = level; }
@@ -140,6 +149,8 @@ static void reset(bool queue, bool consume) {
     g_idle.dimmed = g_idle.off = g_idle.forced_off = false;
     ui_hold_init(&g_hold);
     g_ui_state.autolock = true;
+    g_ui_state.lock_hold_s = 2; /* the shipped default is Off; most tests are about the 2 s gesture */
+    g_hold.toggle_s = 2;
 }
 
 // ---- Hold (docs/adr/0020-hold.md): what the frame does with the input once the Hold state or the screen state says "swallow" ----
@@ -210,6 +221,70 @@ TEST(a_short_power_press_turns_the_screen_off_and_locks_with_auto_lock) {
     ASSERT_TRUE(g_idle.off);
     ASSERT_EQ(0, g_backlight);
     ASSERT_TRUE(ui_frame_locked());
+}
+
+static void power_reset(void);
+
+TEST(with_lock_hold_off_the_screen_going_off_never_locks_even_with_auto_lock_on) {
+    reset(false, false);
+    g_ui_state.lock_hold_s = 0;
+    ui_frame_lock_hold_changed();
+    ev_at(INPUT_POWER_DOWN, 1000);
+    ev_at(INPUT_POWER_UP, 1200);
+    ASSERT_TRUE(g_idle.off);
+    ASSERT_FALSE(ui_frame_locked());
+    power_reset();
+    g_ui_state.lock_hold_s = 0;
+    ui_frame_lock_hold_changed();
+    g_pw_action = POWER_ACT_SLEEP;
+    power_tick(1000);
+    ASSERT_TRUE(g_idle.off);
+    ASSERT_FALSE(ui_frame_locked());
+    g_ui_state.lock_hold_s = 2; // back on: the same short press locks
+    ui_frame_lock_hold_changed();
+    reset(false, false);
+    ev_at(INPUT_POWER_DOWN, 1000);
+    ev_at(INPUT_POWER_UP, 1200);
+    ASSERT_TRUE(ui_frame_locked());
+}
+
+TEST(with_lock_hold_off_a_long_power_hold_does_nothing_but_the_switch_and_console_key_still_lock) {
+    reset(false, false);
+    g_ui_state.lock_hold_s = 0;
+    ui_frame_lock_hold_changed();
+    ev_at(INPUT_POWER_DOWN, 1000);
+    ev_at(INPUT_POWER_UP, 4100); // late poll: 3.1 s
+    ASSERT_FALSE(ui_frame_locked());
+    ASSERT_FALSE(g_idle.off); // and it was not a short press
+    ev_at(INPUT_HOLD_TOGGLE, 5000); // the console key is a dev override
+    ASSERT_TRUE(ui_frame_locked());
+    input_event_t off = {.type = INPUT_HOLD_SWITCH, .steps = 0}, on = {.type = INPUT_HOLD_SWITCH, .steps = 1};
+    ui_frame_input(&off, 5100);
+    ASSERT_FALSE(ui_frame_locked());
+    ui_frame_input(&on, 5200);
+    ASSERT_TRUE(ui_frame_locked());
+    ev_at(INPUT_POWER_DOWN, 6000); // Power cannot unlock now
+    ev_at(INPUT_POWER_UP, 9100);
+    ASSERT_TRUE(ui_frame_locked());
+}
+
+TEST(setting_lock_hold_off_while_locked_unlocks_and_changing_the_time_moves_the_gesture) {
+    reset(false, false);
+    ev_at(INPUT_HOLD_TOGGLE, 1000);
+    ASSERT_TRUE(ui_frame_locked());
+    g_ui_state.lock_hold_s = 3;
+    ui_frame_lock_hold_changed();
+    ASSERT_TRUE(ui_frame_locked());
+    ev_at(INPUT_POWER_DOWN, 2000);
+    ev_at(INPUT_POWER_UP, 4500); // 2.5 s: not yet for 3 s
+    ASSERT_TRUE(ui_frame_locked());
+    ev_at(INPUT_POWER_DOWN, 6000);
+    ev_at(INPUT_POWER_UP, 9100);
+    ASSERT_FALSE(ui_frame_locked());
+    ev_at(INPUT_HOLD_TOGGLE, 10000);
+    g_ui_state.lock_hold_s = 0;
+    ui_frame_lock_hold_changed();
+    ASSERT_FALSE(ui_frame_locked());
 }
 
 TEST(the_waking_input_is_swallowed_and_the_screen_stays_locked) {
@@ -509,6 +584,48 @@ TEST(sleep_after_defaults_to_30_minutes_loads_from_the_card_and_is_saved) {
     g_set_have = false;
 }
 
+TEST(lock_hold_loads_from_the_card_is_saved_and_anything_unknown_is_off) {
+    reset(false, false);
+    g_ui_state.lock_hold_s = 0; // the shipped default
+    g_hold.toggle_s = 0;
+    g_lh_have = false; // an older firmware's file has only Auto-lock: Lock hold stays Off, Auto-lock keeps its value
+    g_ui_state.autolock = false;
+    g_set_gen += 10;
+    sync_from_settings();
+    ASSERT_EQ(0, g_ui_state.lock_hold_s);
+    ASSERT_FALSE(g_ui_state.autolock);
+    const uint8_t good[] = {0, 1, 2, 3, 5};
+    for (unsigned i = 0; i < sizeof good; i++) {
+        g_lh_have = true;
+        g_lh_val = good[i];
+        g_set_gen++;
+        sync_from_settings();
+        ASSERT_EQ(good[i], g_ui_state.lock_hold_s);
+        ASSERT_EQ(good[i], g_hold.toggle_s);
+        ui_state_persist();
+        ASSERT_EQ(good[i], g_lh_saved);
+    }
+    const uint8_t bad[] = {4, 6, 9, 10, 255};
+    for (unsigned i = 0; i < sizeof bad; i++) {
+        g_lh_val = 3;
+        g_set_gen++;
+        sync_from_settings();
+        g_lh_val = bad[i];
+        g_set_gen++;
+        sync_from_settings();
+        ASSERT_EQ(0, g_ui_state.lock_hold_s);
+        ASSERT_EQ(0, g_hold.toggle_s);
+    }
+    // a lock that is already on (the switch at boot) survives the settings load
+    ui_hold_set(&g_hold, true);
+    g_lh_val = 0;
+    g_set_gen++;
+    sync_from_settings();
+    ASSERT_TRUE(ui_frame_locked());
+    g_lh_have = false;
+    g_ui_state.autolock = true;
+}
+
 TEST(a_failed_sleep_puts_the_screen_back_as_it_was) {
     power_reset();
     g_pw_action = POWER_ACT_SLEEP;
@@ -563,6 +680,10 @@ int main(void) {
     RUN(unlocking_gives_the_input_back_and_a_stale_release_is_still_swallowed);
     RUN(swallowed_keys_give_no_click_but_the_lock_and_unlock_do);
     RUN(a_short_power_press_turns_the_screen_off_and_locks_with_auto_lock);
+    RUN(with_lock_hold_off_the_screen_going_off_never_locks_even_with_auto_lock_on);
+    RUN(with_lock_hold_off_a_long_power_hold_does_nothing_but_the_switch_and_console_key_still_lock);
+    RUN(setting_lock_hold_off_while_locked_unlocks_and_changing_the_time_moves_the_gesture);
+    RUN(lock_hold_loads_from_the_card_is_saved_and_anything_unknown_is_off);
     RUN(the_waking_input_is_swallowed_and_the_screen_stays_locked);
     RUN(without_auto_lock_the_screen_wakes_unlocked_and_only_the_first_input_is_lost);
     RUN(waking_with_a_scroll_swallows_it_too);

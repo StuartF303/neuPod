@@ -76,6 +76,7 @@ void ui_state_persist(void) {
     settings_set_u8(SETTING_AUTODIM_IDX, g_ui_state.dim_idx);
     settings_set_u8(SETTING_SCREENOFF_IDX, g_ui_state.off_idx);
     settings_set_u8(SETTING_AUTOLOCK, g_ui_state.autolock ? 1u : 0u);
+    settings_set_u8(SETTING_LOCK_HOLD, g_ui_state.lock_hold_s);
 #if NEUPOD_POWER_MGMT
     settings_set_u8(SETTING_SLEEP_IDX, g_ui_state.sleep_idx);
 #endif
@@ -121,6 +122,11 @@ static void sync_from_settings(void) {
     }
     if (settings_get_u8(SETTING_AUTOLOCK, &v) && v <= 1) {
         g_ui_state.autolock = v == 1;
+    }
+    if (settings_get_u8(SETTING_LOCK_HOLD, &v)) {
+        /* An unknown value (a newer firmware's) is Off. Stored straight into the model: a lock that is on (the switch at boot) stays on. */
+        g_ui_state.lock_hold_s = ui_hold_toggle_s_valid(v) ? v : 0;
+        g_hold.toggle_s = g_ui_state.lock_hold_s;
     }
 #if NEUPOD_POWER_MGMT
     /* An older settings file has no such item, and one written by a newer firmware may hold a choice this one does not know: both leave the default. */
@@ -276,6 +282,7 @@ void ui_frame_init(lv_obj_t *scr) {
     ui_accel_init(&g_accel);
     ui_idle_init(&g_idle, os_tick_ms());
     ui_hold_init(&g_hold);
+    g_hold.toggle_s = ui_hold_toggle_s_valid(g_ui_state.lock_hold_s) ? g_ui_state.lock_hold_s : 0;
 #if NEUPOD_POWER_MGMT
     g_wake_pending = g_crit_shown = g_crit_done = false;
     power_service_restart(os_tick_ms());
@@ -455,10 +462,24 @@ static void hold_toast(const char *text, uint32_t now_ms) {
     }
 }
 
-// How to get Hold off again, for the reminder: platforms without a Power key are driven from the console.
-static const char *unlock_hint(void) { return hal_input_has_power_key() ? "Locked \xC2\xB7 hold Power 2 s to unlock" : "Locked \xC2\xB7 console key l unlocks"; }
+// Auto-lock only works while the Power gesture can undo it: with Lock hold Off the screen going off never locks (the Settings row shows Auto-lock greyed).
+static bool autolock_active(void) { return g_ui_state.autolock && g_ui_state.lock_hold_s != 0; }
 
-static void hold_reminder(uint32_t now_ms) { hold_toast(unlock_hint(), now_ms); }
+// The reminder says how to get Hold off again. Lock hold Off (locked by the switch or the console key) or no Power key: the console key.
+static void hold_reminder(uint32_t now_ms) {
+    char t[40];
+    if (hal_input_has_power_key() && g_hold.toggle_s != 0) {
+        snprintf(t, sizeof t, "Locked \xC2\xB7 hold Power %u s to unlock", (unsigned)g_hold.toggle_s);
+    } else {
+        snprintf(t, sizeof t, "Locked \xC2\xB7 console key l unlocks");
+    }
+    hold_toast(t, now_ms);
+}
+
+static void hold_apply(uint32_t r, uint32_t now_ms);
+
+// The Settings row (or a tour) changed the Lock hold time: the model follows; Off while locked unlocks (with the usual toast).
+void ui_frame_lock_hold_changed(void) { hold_apply(ui_hold_set_toggle_s(&g_hold, g_ui_state.lock_hold_s), os_tick_ms()); }
 
 // Carry out what ui_hold said happened. Silent (no pill, no click) while the screen is off: nobody is looking.
 static void hold_apply(uint32_t r, uint32_t now_ms) {
@@ -479,7 +500,7 @@ static void hold_apply(uint32_t r, uint32_t now_ms) {
     if ((r & UI_HOLD_SLEEP) != 0 && ui_idle_force_off(&g_idle)) {
         hold_overlay_hide();
         backlight_transition();
-        if (g_ui_state.autolock) {
+        if (autolock_active()) {
             hold_apply(ui_hold_set(&g_hold, true), now_ms);
         }
     }
@@ -500,7 +521,9 @@ static void hold_draw_progress(uint32_t now_ms) {
     char t[48];
     switch (p.phase) {
     case UI_HOLD_P_RING:
-        if (hal_system_can_poweroff()) {
+        if (p.to_off) {
+            snprintf(t, sizeof t, "Keep holding to power off");
+        } else if (hal_system_can_poweroff()) {
             snprintf(t, sizeof t, "Keep holding to %s \xC2\xB7 10 s = off", p.to_lock ? "lock" : "unlock");
         } else {
             snprintf(t, sizeof t, "Keep holding to %s", p.to_lock ? "lock" : "unlock");
@@ -932,7 +955,7 @@ static void power_sleep(uint32_t now_ms) {
     (void)ui_idle_force_off(&g_idle);
     ui_apply_theme();
     backlight_transition();
-    if (!was_off && g_ui_state.autolock) {
+    if (!was_off && autolock_active()) {
         hold_apply(ui_hold_set(&g_hold, true), now_ms);
     }
     hal_display_sleep(true);
@@ -1007,7 +1030,7 @@ void ui_frame_tick(uint32_t now_ms) {
     }
     if (!was_off && g_idle.off) { /* the screen just went off by itself: lock now (docs/adr/0020-hold.md) */
         hold_overlay_hide();
-        if (g_ui_state.autolock) {
+        if (autolock_active()) {
             hold_apply(ui_hold_set(&g_hold, true), now_ms);
         }
     }
