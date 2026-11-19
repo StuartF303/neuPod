@@ -406,7 +406,7 @@ The rings add nothing (shared store). The stack of BTstack's worker (6 KB) now a
    controller's 4 ACL buffers in flight: the host kept sending and the headset did not acknowledge. The owner heard scratchy, glitchy audio. Typical 10 s line in a bad patch: `rssi -24 dB, wait avg/max 7/1666 ms, inflight 8/8, bitpool 35, stalls 2, catchup 160 ms, drops 1516 ms`.
    The old rule stepped 53 to 45 to 35 only after 2 bad windows per step, so by the time it reached 35 the 160 ms budget had been exceeded and audio dropped; and it climbed back (35 to 45 after about 60 to 90 s, 45 to 53 shortly after) only to fall again. The cost of a lower
    bitpool for a while is small next to a drop, so the policy now pays it at the first stall and makes a return earn itself. The catch-up budget (160 ms) is unchanged. Cost (RP2350 Pico 2 W, Release, `arm-none-eabi-size`, origin/main 2cd2adc against this change): text +256 B, bss +4 B
-   (the policy state is 32 bytes, was 28). Host test `bt_link_policy` replays the walk's patterns (single stalls, severe and ramping stalls, settle, start grace, bad windows, the oscillation and its back-off, a 10-minute walk with at most 6 changes and no rise within 30 s of a fall).
+   (the policy state is 32 bytes, was 28). Host test `bt_link_policy` replays the walk's patterns (single stalls, severe and ramping stalls, settle, start grace, bad windows, the oscillation and its back-off, a ramping stall after a rise doubling the hold once, a 10-minute walk with exactly 8 changes ending at 35 and no rise within 30 s of a fall).
 3. **Diagnostics, every 10 s** (UART / Y2 log), next to the existing `bt: a2dp: packets ...` line:
 
    `bt: link: rssi -4 dB, wait avg/max 3/41 ms, inflight 3/4, bitpool 53, stalls 2, catchup 88 ms, drops 0 ms`
