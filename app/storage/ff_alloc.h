@@ -5,9 +5,9 @@
  *
  * FatFs asks for scratch buffers as big as a whole cluster (dir_clear: up to 32 KB; 128 KB clusters on big exFAT
  * cards) and is built to halve the request, or fall back to its window buffer, when it gets NULL. On the RP2350 the
- * newlib heap is about 33 KB and the SDK's malloc wrapper panics instead of returning NULL, so the stock
+ * newlib heap is about 2 KB and the SDK's malloc wrapper panics instead of returning NULL, so the stock
  * ffsystem.c brought the firmware down on the first directory creation. This replacement caps every request and
- * only uses an allocator that reports failure with NULL.
+ * allocates with os_alloc() (the kernel heap), which reports failure with NULL.
  */
 #ifndef NEUPOD_FF_ALLOC_H
 #define NEUPOD_FF_ALLOC_H
