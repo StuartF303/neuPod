@@ -73,6 +73,7 @@ void bt_service_event_flush(void) {
 hal_status_t bt_service_pair(const hal_bt_device_t *dev) {
     /* Wi-Fi coexistence policy point (runtime_config.h NEUPOD_BT_WIFI_COEX_ALLOW): allowed, nothing is checked. */
     bt_rc_user_action(&g_rc);
+    audio_route_connect_cancel(); /* a Play that was waiting for the headset stops waiting */
     hal_bt_device_t d = *dev;
     if (!bt_saved_pair_begin(&d)) { /* before the request: the first event for it can arrive at once */
         return HAL_EBUSY; /* a Pair is already in flight */
@@ -88,6 +89,7 @@ static hal_status_t do_connect(void);
 
 hal_status_t bt_service_connect(void) {
     bt_rc_user_action(&g_rc); /* the user took over */
+    audio_route_connect_cancel();
     return do_connect();
 }
 
@@ -129,6 +131,9 @@ uint32_t bt_service_reconnected_seq(void) { return g_back_seq; }
 
 bool bt_service_reconnecting(void) { return bt_rc_active(&g_rc); }
 
+static uint32_t g_play_seen; /* audio_route_connect_request_seq() taken in so far */
+static bool g_play_run;      /* the armed schedule is one a Play started (not a loss or power-up one that the Play joined) */
+
 static void reconnect_tick(void) {
     const uint32_t now = os_tick_ms();
     if (g_lost) {
@@ -147,14 +152,22 @@ static void reconnect_tick(void) {
             bt_rc_powerup(&g_rc, now);
         }
     }
+    /* Play with the headset away (audio_route.c asks from the monitor task; the policy is UI-task only, so the request is taken in here). A running
+     * schedule is joined as it is; otherwise a short one of its own starts, and it ends when the route stops waiting (paused, or the wait ran out). */
+    const uint32_t want = audio_route_connect_request_seq();
+    if (want != g_play_seen) {
+        g_play_seen = want;
+        if (bt_saved_get(NULL) && hal_bt_link_state() != HAL_BT_LINK_CONNECTED && !bt_rc_active(&g_rc)) {
+            bt_rc_play(&g_rc, now);
+            g_play_run = true;
+        }
+    }
+    if (g_play_run && !audio_route_holding()) {
+        bt_rc_user_action(&g_rc); /* nobody is waiting any more: no further attempts (one in flight finishes by itself) */
+    }
     bt_rc_in_t in = {.bt_on = hal_bt_state() == HAL_BT_ON, .have_saved = bt_saved_get(NULL), .link = hal_bt_link_state()};
     const bool was_active = bt_rc_active(&g_rc);
     const bool make_call = bt_rc_step(&g_rc, now, &in);
-    if (was_active && !bt_rc_active(&g_rc) && in.have_saved && in.link != HAL_BT_LINK_CONNECTED) {
-        g_gave_up++; /* the schedule ended with the headset still away (a user action ends it through bt_rc_user_action, not here) */
-    } else if (was_active && !bt_rc_active(&g_rc) && in.have_saved) {
-        g_back_seq++; /* the schedule ended because the link is up again */
-    }
     if (make_call) {
         if (do_connect() == HAL_OK) {
             bt_rc_attempt_made(&g_rc);
@@ -162,6 +175,22 @@ static void reconnect_tick(void) {
         } else {
             bt_rc_attempt_refused(&g_rc, now);
         }
+    }
+    if (was_active && !bt_rc_active(&g_rc)) {
+        if (in.have_saved && in.link != HAL_BT_LINK_CONNECTED) {
+            /* The schedule ended with the headset still away (a user action ends it through bt_rc_user_action, not here). While the route is waiting
+             * for it, the route's own "Couldn't connect" notice says so and pauses; the generic toast would only say it twice. */
+            if (audio_route_holding()) {
+                audio_route_connect_gave_up();
+            } else {
+                g_gave_up++;
+            }
+        } else if (in.have_saved) {
+            g_back_seq++; /* the schedule ended because the link is up again */
+        }
+    }
+    if (!bt_rc_active(&g_rc)) {
+        g_play_run = false;
     }
 }
 

@@ -1769,6 +1769,18 @@ static void a2dp_packet_handler(uint8_t type, uint16_t channel, uint8_t *packet,
             set_stream(HAL_BT_STREAM_SUSPENDED, HAL_BT_FAIL_NONE);
         }
         break;
+    case A2DP_SUBEVENT_COMMAND_REJECTED: {
+        /* An AVDTP command of ours that the headset refused (BTstack reports it only in the open state). A START that is refused leaves the stream OPEN: nothing
+         * else says so, and the route would only see "no stream" (audio_route.c asks again, then closes and reopens it). */
+        const uint8_t si = a2dp_subevent_command_rejected_get_signal_identifier(packet);
+        printf("bt: a2dp command rejected by the headset (signal %u%s)\n", (unsigned)si, si == AVDTP_SI_START ? ", start" : si == AVDTP_SI_SUSPEND ? ", suspend" : "");
+        if (si == AVDTP_SI_START) {
+            __atomic_store_n(&g_start_ours, false, __ATOMIC_SEQ_CST);
+        } else if (si == AVDTP_SI_SUSPEND) {
+            __atomic_store_n(&g_suspend_ours, false, __ATOMIC_SEQ_CST);
+        }
+        break;
+    }
     case A2DP_SUBEVENT_STREAM_RELEASED:
         printf("bt: a2dp stream released (%s; acl %s; rssi %d; last packet %lu ms ago; bitpool %u)\n", g_we_closing ? "by us" : "by the headset",
                g_acl != HCI_CON_HANDLE_INVALID ? "up" : "down", g_st_rssi, (unsigned long)(btstack_run_loop_get_time_ms() - g_last_pkt_ms),
@@ -1827,6 +1839,8 @@ static void worker_stream_req(void *arg) {
                 __atomic_store_n(&g_start_ours, false, __ATOMIC_SEQ_CST);
                 printf("bt: a2dp start 0x%02X\n", (unsigned)rc);
             }
+        } else {
+            printf("bt: a2dp start dropped (stream %d, cid %u)\n", g_stream, (unsigned)g_a2dp_cid); /* the state moved on between the request and the worker */
         }
         break;
     case REQ_SUSPEND:

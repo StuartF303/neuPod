@@ -695,7 +695,8 @@ static void update_bt(void) {
 
 // BT-2: the link's life as toasts (owner decision 2: playback pauses and stays on Bluetooth; the firmware never switches the output by itself).
 // "<name> disconnected . reconnecting..." when a connected headset goes away (warning), "<name> connected" for 1.2 s (info) when the automatic
-// reconnect succeeds, "Couldn't reconnect - paused" when its schedule runs out (warning). The name is the remembered headset's, cut so the one-row strip holds it.
+// reconnect succeeds, "Couldn't reconnect - paused" when its schedule runs out (warning). Play with the headset away: "Connecting to <name>..." (info) while the
+// track waits, "Couldn't connect to <name> - paused" (warning) when it did not come. The name is the remembered headset's, cut so the one-row strip holds it.
 #define BT_NAME_CHARS 16u
 #define BT_BACK_TOAST_MS 1200u
 static uint32_t g_lost_seen, g_back_seen, g_gaveup_seen;
@@ -763,6 +764,14 @@ static void update_banner(void) {
             ui_toast_show("Headphones unplugged", UI_TOAST_WARN, AUDIO_ROUTE_BANNER_MS);
         } else if (n == ROUTE_NOTICE_LINE_OUT_OFF) {
             ui_toast_show("Line out off", UI_TOAST_WARN, AUDIO_ROUTE_BANNER_MS);
+        } else if (n == ROUTE_NOTICE_CONNECTING) { /* Play with the headset away: the track waits while it connects */
+            bt_toast_name(nm, sizeof nm);
+            snprintf(txt, sizeof txt, "Connecting to %s\xE2\x80\xA6", nm);
+            ui_toast_show(txt, UI_TOAST_INFO, AUDIO_ROUTE_BANNER_MS);
+        } else if (n == ROUTE_NOTICE_CONNECT_FAILED) {
+            bt_toast_name(nm, sizeof nm);
+            snprintf(txt, sizeof txt, "Couldn't connect to %s \xE2\x80\x94 paused", nm);
+            ui_toast_show(txt, UI_TOAST_WARN, AUDIO_ROUTE_BANNER_MS);
         } else if (n == ROUTE_NOTICE_NO_OUTPUT) {
             ui_toast_show("No audio output", UI_TOAST_WARN, AUDIO_ROUTE_BANNER_MS);
         }

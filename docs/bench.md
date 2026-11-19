@@ -43,6 +43,28 @@ queued (64 events); if the UI ever could not keep up the 10 s statistics print `
 7. Bluetooth scan with the AirPods in pairing mode (expect `audio=yes`).
 8. Battery / charging detection (VBUS + CRATE heuristic, [Requirements → Power](requirements.md#power-and-battery)).
 
+## Bluetooth reconnect-on-play (Pico 2 W + AirPods)
+
+For the build with reconnect-on-play ([Bluetooth](bluetooth.md#reconnecting-stage-3-built)). Pair the AirPods once, set Audio output to Auto (or Bluetooth), keep the console open
+(`scripts/console.sh`). Lines to watch: `route: playing with no headset stream, waiting (...)`, `bt: reconnecting`, `bt: connect` / `bt: connected`, `bt: a2dp stream open`,
+`route: asking the headset to start the stream (n)`, `bt: a2dp streaming`, `bt: a2dp command rejected by the headset (signal 7, start)`, `bt: a2dp start dropped`,
+`route: no stream start after 3 requests, closing and reopening it`, and the endings `route: ... , paused`. Toasts: "Connecting to <name>...", "<name> connected", "Couldn't connect to <name> - paused".
+
+1. **Idle hang-up, then Play.** Play a track, pause, wait for the AirPods to hang up (`bt: acl down, reason 0x13`, `bt: link closed ... (idle)`; about 45 s). The output stays Bluetooth and nothing
+   connects by itself. Press Play: the toast says "Connecting to ...", the player shows Playing, `bt: reconnecting` then `bt: connected`, `bt: a2dp stream open`, `bt: a2dp streaming`, sound within a few seconds from where it was paused.
+2. **Drop mid-track, Play after the reconnect.** Play, walk out of range (or put the AirPods in the closed case with the lid shut for a moment): `Headset disconnected` and the player pauses. Come back, let `Reconnecting...` finish
+   (`bt: a2dp stream open`; playback stays paused). Press Play: `bt: a2dp streaming` and sound. **This is bug 2 of 19 Nov:** if it still stays silent, keep the console log from the Play: look for `bt: a2dp command rejected ... start`,
+   `route: asking the headset to start the stream (1..3)`, then `route: no stream start after 3 requests, closing and reopening it`; Play must either stream or end in "Couldn't connect to ... - paused", never in silence.
+3. **Headset not reachable.** Put the AirPods in the closed case (after the 0x13 hang-up), press Play: "Connecting to ..." toast, the player shows Playing, two `bt: reconnecting` attempts about 20 s + 2 s apart, then
+   "Couldn't connect to ... - paused" and `route: could not connect, paused`; the player is paused at the same place, the output is still Bluetooth (nothing from the jack), and no further `bt: reconnecting` follows. Press Play again: it tries again.
+4. **Play during "Reconnecting...".** Drop the link, and while the headset row / toast says reconnecting press Play: "Connecting to ..." (it joins the running reconnect, no extra `bt: reconnecting` earlier than the schedule's own), and
+   when the AirPods are back (open the case) the track starts by itself: `bt: a2dp streaming`.
+5. **Pause while waiting.** In step 3 (case closed) press Pause within the first seconds: no failure toast, the player stays paused, and no second attempt starts (only the one in flight may finish). Also check Disconnect from Settings > Bluetooth
+   while waiting: the player pauses with "Headset not connected" and Auto returns to the wired output.
+6. **Auto with the output wired.** Boot with the AirPods in the case so the boot retries give up (or Disconnect them): the output is wired; Play plays wired and no `bt: reconnecting` appears.
+
+Record in the page for the feature (with the date) what the log showed for step 2.
+
 ## Sleep (Y2)
 
 Steps for the Y2 after flashing a build with [ADR-0021](adr/0021-power-sleep.md). Unplug USB first (a plugged-in Y2 reports external power and never sleeps); watch the log over

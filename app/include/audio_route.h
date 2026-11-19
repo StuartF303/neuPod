@@ -15,6 +15,13 @@
  * Audio output = Speaker never uses Bluetooth; with Speaker Off it plays nothing. Headphones in always win over the speaker (the hardware cannot do both), and
  * pulling them out while playing pauses rather than jumping to the speaker. hal_audio_set_speaker() carries the decision to the HAL, which does the PA safety.
  * The A2DP stream is started when something plays on Bluetooth and suspended after a few seconds of silence.
+ * Reconnect-on-play: on the Bluetooth output with a headset remembered, starting playback (Play, a new track, next / previous) while its stream is not usable
+ * does not pause at once. The player stays PLAYING and waits (the audio core simply stops consuming: the Bluetooth ring is full, the position does not move) while
+ * bt_service connects (one short schedule: now, then 2 s after a failure, two attempts; or the automatic reconnect that is already running). When the stream is
+ * usable it starts at once. If the connect gives up, the link comes up without a stream, or AUDIO_ROUTE_HOLD_MS pass, the player is paused (place kept) with
+ * ROUTE_NOTICE_CONNECT_FAILED, still on Bluetooth. Pausing, Disconnect, Forget, Pair and Connect end the wait. A drop mid-play still pauses at once and is not
+ * resumed by the reconnect (ADR-0019); only a Play after it starts the stream. Under Auto with the output on wired (a boot where the headset never came) Play plays
+ * wired and connects nothing: Auto does not change the output while something plays, and the boot retries cover that case. No remembered headset: "Headset not connected", as before.
  */
 #ifndef NEUPOD_AUDIO_ROUTE_H
 #define NEUPOD_AUDIO_ROUTE_H
@@ -37,10 +44,13 @@ typedef enum {
     ROUTE_NOTICE_HEADPHONES_UNPLUGGED, /**< the wired headphones were pulled out while playing: "Headphones unplugged" */
     ROUTE_NOTICE_LINE_OUT_OFF,    /**< the jack was unplugged with Line out on: it switched itself Off ("Line out off") */
     ROUTE_NOTICE_NO_OUTPUT,       /**< the speaker was playing and was turned off (Settings > Speaker): "No audio output" */
+    ROUTE_NOTICE_CONNECTING,      /**< Play on the Bluetooth output with the headset away: waiting while it connects ("Connecting to <name>...") */
+    ROUTE_NOTICE_CONNECT_FAILED,  /**< ... and it did not come (or its stream did not start): paused ("Couldn't connect to <name> - paused") */
 } audio_route_notice_t;
 
 #define AUDIO_ROUTE_SUSPEND_MS 4000u /**< silence on the Bluetooth output for this long suspends the A2DP stream */
 #define AUDIO_ROUTE_BANNER_MS 3000u  /**< how long the UI shows a notice */
+#define AUDIO_ROUTE_HOLD_MS 50000u   /**< longest Play waits for the headset (two connect attempts take at most 2 x 20 s + 2 s); then it pauses with ROUTE_NOTICE_CONNECT_FAILED */
 
 /** After audio_engine_start() and player_init(): give the Bluetooth stack the PCM source, and apply the saved setting once it is known. */
 void audio_route_init(void);
@@ -65,8 +75,17 @@ void audio_route_set_pref(audio_route_pref_t pref);
 /** The output in use now (wired until a headset's stream opens under Auto). */
 audio_output_t audio_route_output(void);
 
-/** The user disconnected or forgot the headset (Settings > Bluetooth): Bluetooth stops being the output once the link is down. */
+/** The user disconnected or forgot the headset (Settings > Bluetooth): Bluetooth stops being the output once the link is down. Also ends a Play's wait for the headset. */
 void audio_route_user_released(void);
+/** The user took over the link (Pair, Connect): a Play's wait for the headset ends (the player is then paused as for a Play with no headset). */
+void audio_route_connect_cancel(void);
+
+/** Reconnect-on-play, for bt_service (UI task): a running number that changes when a Play asks for the remembered headset to be connected. */
+uint32_t audio_route_connect_request_seq(void);
+/** A Play is waiting for the headset (player held in PLAYING with no stream): bt_service keeps its play schedule going only while this is true. */
+bool audio_route_holding(void);
+/** The connect schedule that a waiting Play depends on ended with the headset still away: the Play is paused with ROUTE_NOTICE_CONNECT_FAILED at the next tick. */
+void audio_route_connect_gave_up(void);
 
 /** Housekeeping, every 100 ms from the monitor task: switch the output, start / suspend the stream, pause on link loss. */
 void audio_route_service(void);

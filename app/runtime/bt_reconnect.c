@@ -16,6 +16,7 @@ static void arm(bt_rc_t *rc, uint32_t now, uint32_t first_delay) {
     rc->armed = true;
     rc->attempting = false;
     rc->failed = 0;
+    rc->max_attempts = 0;
     rc->start_ms = now;
     rc->due_ms = now + first_delay;
 }
@@ -25,11 +26,22 @@ void bt_rc_powerup(bt_rc_t *rc, uint32_t now) {
     arm(rc, now, 0);
     rc->failed = UINT32_MAX; /* the first attempt is at once; its failure counts as step 0 of the schedule (2 s next), not step 1 */
 }
+void bt_rc_play(bt_rc_t *rc, uint32_t now) {
+    if (rc->armed) {
+        return; /* a schedule is already running: the play request rides on it (no restart of its steps or its give-up) */
+    }
+    bt_rc_powerup(rc, now);
+    rc->max_attempts = BT_RC_PLAY_ATTEMPTS;
+}
 void bt_rc_user_action(bt_rc_t *rc) { bt_rc_init(rc); }
 
 static void failed_once(bt_rc_t *rc, uint32_t now) {
     rc->attempting = false;
     rc->failed++;
+    if (rc->max_attempts != 0u && rc->failed + 1u >= rc->max_attempts) {
+        bt_rc_init(rc); /* the play schedule's attempts are used up (failed counts from 0 after the first, see bt_rc_powerup) */
+        return;
+    }
     rc->due_ms = now + bt_rc_delay_ms(rc->failed);
 }
 
