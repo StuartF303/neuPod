@@ -23,6 +23,7 @@
 #include "task.h"
 #endif
 #include "hal_system.h"
+#include "memory_budget.h"
 #include "os.h"
 #include "panic.h"
 
@@ -256,6 +257,38 @@ size_t os_heap_free(void) { return xPortGetFreeHeapSize(); }
 size_t os_heap_free_min(void) { return xPortGetMinimumEverFreeHeapSize(); }
 #endif
 
+// --- Allocation that reports failure -----------------------------------------------------------
+
+/* pvPortMalloc() calls vApplicationMallocFailedHook() (which panics) when heap_4 runs dry, so a plain call would turn "no room for an
+ * album-art thumbnail" into a reboot. os_alloc() keeps the scheduler suspended (no other task can be inside the hook) and raises
+ * this flag so the hook stands down for this one call. ESP-IDF's pvPortMalloc returns NULL without calling the hook, so there the
+ * flag is simply never consulted. */
+static volatile uint8_t s_quiet_alloc;
+
+void *os_alloc(size_t size) {
+    if (size == 0u) {
+        return NULL;
+    }
+    vTaskSuspendAll();
+    void *p = NULL;
+    // Keep NEUPOD_OS_ALLOC_RESERVE free for kernel objects (which panic on failure). Checked with the scheduler suspended so the
+    // free size cannot change between the check and the allocation; written to avoid unsigned underflow.
+    size_t free_now = xPortGetFreeHeapSize();
+    if (free_now >= NEUPOD_OS_ALLOC_RESERVE && size <= free_now - NEUPOD_OS_ALLOC_RESERVE) {
+        s_quiet_alloc = 1u;
+        p = pvPortMalloc(size);
+        s_quiet_alloc = 0u;
+    }
+    (void)xTaskResumeAll();
+    return p;
+}
+
+void os_free(void *p) {
+    if (p != NULL) {
+        vPortFree(p);
+    }
+}
+
 // --- Run-time-stats clock (portGET_RUN_TIME_COUNTER_VALUE in the FreeRTOSConfig.h files) ------
 
 void neupod_rtos_stats_timer_init(void) {}
@@ -269,5 +302,8 @@ void vApplicationStackOverflowHook(TaskHandle_t task, char *name) {
 }
 
 void vApplicationMallocFailedHook(void) {
+    if (s_quiet_alloc != 0u) {
+        return; // os_alloc(): the caller handles NULL
+    }
     neupod_panic(NEUPOD_PANIC_MALLOC_FAILED, "kernel heap exhausted");
 }

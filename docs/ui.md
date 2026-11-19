@@ -319,8 +319,8 @@ decoder to 1/1, 1/2, 1/4 or 1/8 (the largest shrink that keeps the long side at 
 whole picture is never in RAM. LVGL shows the thumbnail scaled to fit the box (1.75 times for a full-size thumbnail; soft edges are the price of the RAM). While it decodes, the task keeps the audio data ring topped up, sleeps 1 ms
 after every 2 ms of work (so input and UI keep running, the storage task outranks them) and stops as soon as another request is queued (it restarts afterwards). The result is
 kept for the album: a track whose folder, album tag and embedded picture size match the last one shows it at once, without decoding again. A big picture takes
-roughly a second or two on the bench (the card read dominates); the `art:` line on the UART gives source, size, scale and time. Decoder working memory (about 8.6 KB at most) comes from the
-heap for the length of one decode; if it is not available the note stays. Colour order: the thumbnail is native-order RGB565 like LVGL's draw buffers (the display driver swaps for the panel).
+roughly a second or two on the bench (the card read dominates); the `art:` line on the UART gives source, size, scale and time. Decoder working memory (about 7.1 KB at most on the 64 px build) comes from the
+kernel (FreeRTOS) heap through `os_alloc` for the length of one decode; if it is not available the decode ends in "no memory", the placeholder stays and the next track tries again ([Storage](storage.md), memory allocation policy). Colour order: the thumbnail is native-order RGB565 like LVGL's draw buffers (the display driver swaps for the panel).
 
 **Click feedback.** Every list step asks the haptic task for a click (ROM effect 3, a gentle click). The request is
 a non-blocking queue write: the UI never waits on the I2C bus, requests closer than 35 ms are dropped, and the

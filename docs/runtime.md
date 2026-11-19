@@ -74,7 +74,7 @@ Priority 7 is the highest; the kernel idle task is 0.
 | monitor | 1 | 3 KB | 100 ms tick: heartbeat 1 s, gauge 5 s, stats 10 s | negligible |
 | boot checks (transient, 6) | 1 | 3 to 5 KB | once at boot | bounded by per-check deadlines |
 
-Core 1 has its own 16 KB stack array and a 116 KB codec arena (both static RAM). Heap: `heap_4`, 80 KB (`NEUPOD_RTOS_HEAP_BYTES`, `app/os/memory_budget.h`), holds task stacks and kernel objects; static RAM beyond that is the LVGL
+Core 1 has its own 16 KB stack array and a 116 KB codec arena (both static RAM). Heap: `heap_4`, 80 KB (`NEUPOD_RTOS_HEAP_BYTES`, `app/os/memory_budget.h`), holds task stacks and kernel objects, and the transient scratch of album art and FatFs (`os_alloc`, [storage](storage.md)); static RAM beyond that is the LVGL
 pool (72 KB, `NEUPOD_LVGL_POOL_BYTES`), the BTstack pools (about 7 KB), the settings store (about 5 KB), the two render buffers (30 KB), the album-art thumbnail (8 KB, `app/runtime/art_service.c`), the directory-listing buffer (about 19 KB) and the audio core's rings and block buffer (about 28 KB), the play queue (about 3.9 KB, plus a 264 B rollback snapshot) and two track contexts for the stream controller (2.8 KB).
 The monitor prints the heap low-water mark and each task's lowest free stack every 10 s. The CYW43 worker
 (radio, BTstack) sits **above storage** on purpose: the A2DP link has a ~40 ms deadline and storage bursts to 32-40 % of core 0 during FLAC playback
