@@ -1773,7 +1773,12 @@ static void a2dp_packet_handler(uint8_t type, uint16_t channel, uint8_t *packet,
         /* An AVDTP command of ours that the headset refused (BTstack reports it only in the open state). A START that is refused leaves the stream OPEN: nothing
          * else says so, and the route would only see "no stream" (audio_route.c asks again, then closes and reopens it). */
         const uint8_t si = a2dp_subevent_command_rejected_get_signal_identifier(packet);
-        printf("bt: a2dp command rejected by the headset (signal %u%s)\n", (unsigned)si, si == AVDTP_SI_START ? ", start" : si == AVDTP_SI_SUSPEND ? ", suspend" : "");
+        const uint16_t cid = a2dp_subevent_command_rejected_get_a2dp_cid(packet);
+        printf("bt: a2dp command rejected by the headset (signal %u%s, cid %u%s)\n", (unsigned)si, si == AVDTP_SI_START ? ", start" : si == AVDTP_SI_SUSPEND ? ", suspend" : "", (unsigned)cid,
+               cid == g_a2dp_cid ? "" : ", not ours: ignored");
+        if (cid != g_a2dp_cid) {
+            break;
+        }
         if (si == AVDTP_SI_START) {
             __atomic_store_n(&g_start_ours, false, __ATOMIC_SEQ_CST);
         } else if (si == AVDTP_SI_SUSPEND) {

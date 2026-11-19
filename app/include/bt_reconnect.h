@@ -60,6 +60,23 @@ void bt_rc_attempt_refused(bt_rc_t *rc, uint32_t now_ms);
 /** "Reconnecting..." is on screen: armed (also while an attempt runs). */
 bool bt_rc_active(const bt_rc_t *rc);
 
+/** What bt_rc_service() saw end. */
+typedef enum {
+    BT_RC_ENDED_NONE = 0,
+    BT_RC_ENDED_AWAY, /**< a schedule ended with the headset still away (gave up, attempts used up) */
+    BT_RC_ENDED_BACK, /**< a schedule ended because the link is up again */
+} bt_rc_end_t;
+
+/** The Connect call of bt_rc_service(): true when the radio took the request. */
+typedef bool (*bt_rc_connect_fn)(void *ctx);
+
+/**
+ * One tick of the policy, for bt_service.c (and its test): takes in a Play's request (@p req_seq against *@p seen: a running schedule is joined, else bt_rc_play() starts
+ * one), ends a play schedule (rc->max_attempts != 0) once nothing is waiting any more (@p holding false; a loss / power-up schedule, max_attempts 0, is never ended
+ * that way, also when it replaced a play schedule), steps the policy, makes the Connect call through @p connect, and reports how a schedule ended.
+ */
+bt_rc_end_t bt_rc_service(bt_rc_t *rc, uint32_t now_ms, const bt_rc_in_t *in, bool holding, uint32_t req_seq, uint32_t *seen, bt_rc_connect_fn connect, void *ctx);
+
 #ifdef __cplusplus
 }
 #endif

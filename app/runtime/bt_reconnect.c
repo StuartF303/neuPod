@@ -75,3 +75,32 @@ bool bt_rc_step(bt_rc_t *rc, uint32_t now, const bt_rc_in_t *in) {
 void bt_rc_attempt_made(bt_rc_t *rc) { rc->attempting = true; }
 void bt_rc_attempt_refused(bt_rc_t *rc, uint32_t now) { failed_once(rc, now); }
 bool bt_rc_active(const bt_rc_t *rc) { return rc->armed; }
+
+bt_rc_end_t bt_rc_service(bt_rc_t *rc, uint32_t now, const bt_rc_in_t *in, bool holding, uint32_t req_seq, uint32_t *seen, bt_rc_connect_fn connect, void *ctx) {
+    if (req_seq != *seen) {
+        *seen = req_seq;
+        if (in->have_saved && in->link != HAL_BT_LINK_CONNECTED && !rc->armed) {
+            bt_rc_play(rc, now);
+        }
+    }
+    if (rc->max_attempts != 0u && !holding) {
+        bt_rc_user_action(rc); /* nobody is waiting any more: no further attempts (one in flight finishes by itself) */
+    }
+    const bool was_active = rc->armed;
+    if (bt_rc_step(rc, now, in)) {
+        if (connect(ctx)) {
+            bt_rc_attempt_made(rc);
+        } else {
+            bt_rc_attempt_refused(rc, now);
+        }
+    }
+    if (was_active && !rc->armed) {
+        if (in->have_saved && in->link != HAL_BT_LINK_CONNECTED) {
+            return BT_RC_ENDED_AWAY;
+        }
+        if (in->have_saved) {
+            return BT_RC_ENDED_BACK;
+        }
+    }
+    return BT_RC_ENDED_NONE;
+}

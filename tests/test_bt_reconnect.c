@@ -246,6 +246,60 @@ TEST(test_play_waits_for_a_scan_and_a_user_action_ends_it) {
     ASSERT_TRUE(bt_rc_active(&rc));
 }
 
+static bool g_called;
+static bool take_call(void *ctx) {
+    (void)ctx;
+    g_called = true;
+    return true;
+}
+
+TEST(test_service_ends_a_play_schedule_with_the_wait_but_not_a_power_up_one_that_replaced_it) {
+    bt_rc_t rc;
+    bt_rc_init(&rc);
+    uint32_t seen = 0;
+    g_called = false;
+    ASSERT_EQ(BT_RC_ENDED_NONE, bt_rc_service(&rc, 1000, &IDLE, true, 1, &seen, take_call, NULL)); // a Play asks: its schedule starts and makes the first call
+    ASSERT_TRUE(g_called);
+    ASSERT_EQ(BT_RC_PLAY_ATTEMPTS, rc.max_attempts);
+    bt_rc_powerup(&rc, 1500); // the power-up retry takes over before the wait ends
+    g_called = false;
+    ASSERT_EQ(BT_RC_ENDED_NONE, bt_rc_service(&rc, 1500, &IDLE, false, 1, &seen, take_call, NULL)); // nobody waits any more
+    ASSERT_TRUE(g_called);                                                                          // it went on with its own first attempt
+    ASSERT_TRUE(bt_rc_active(&rc));
+    // a play schedule on its own does end with the wait
+    bt_rc_init(&rc);
+    ASSERT_EQ(BT_RC_ENDED_NONE, bt_rc_service(&rc, 2000, &IDLE, true, 2, &seen, take_call, NULL));
+    ASSERT_TRUE(bt_rc_active(&rc));
+    ASSERT_EQ(BT_RC_ENDED_NONE, bt_rc_service(&rc, 2100, &IDLE, false, 2, &seen, take_call, NULL));
+    ASSERT_FALSE(bt_rc_active(&rc));
+}
+
+TEST(test_service_joins_a_running_schedule_and_reports_how_a_schedule_ended) {
+    bt_rc_t rc;
+    bt_rc_init(&rc);
+    uint32_t seen = 0;
+    bt_rc_lost(&rc, 0);
+    ASSERT_EQ(BT_RC_ENDED_NONE, bt_rc_service(&rc, 100, &IDLE, true, 1, &seen, take_call, NULL)); // the Play joins the loss schedule: nothing changes
+    ASSERT_EQ(0, rc.max_attempts);
+    ASSERT_EQ(0, rc.failed);
+    ASSERT_EQ(BT_RC_ENDED_NONE, bt_rc_service(&rc, 200, &IDLE, false, 1, &seen, take_call, NULL)); // and the end of the wait leaves it running
+    ASSERT_TRUE(bt_rc_active(&rc));
+    bt_rc_in_t up = IDLE;
+    up.link = HAL_BT_LINK_CONNECTED;
+    ASSERT_EQ(BT_RC_ENDED_BACK, bt_rc_service(&rc, 300, &up, false, 1, &seen, take_call, NULL));
+    bt_rc_init(&rc);
+    seen = 0;
+    bt_rc_play(&rc, 1000);
+    ASSERT_EQ(BT_RC_ENDED_NONE, bt_rc_service(&rc, 1000, &IDLE, true, 0, &seen, take_call, NULL)); // first attempt made
+    bt_rc_in_t busy = IDLE;
+    busy.link = HAL_BT_LINK_CONNECTING;
+    ASSERT_EQ(BT_RC_ENDED_NONE, bt_rc_service(&rc, 1500, &busy, true, 0, &seen, take_call, NULL));
+    ASSERT_EQ(BT_RC_ENDED_NONE, bt_rc_service(&rc, 21000, &IDLE, true, 0, &seen, take_call, NULL)); // it failed: the second is due 2 s on
+    ASSERT_EQ(BT_RC_ENDED_NONE, bt_rc_service(&rc, 23000, &IDLE, true, 0, &seen, take_call, NULL));
+    ASSERT_EQ(BT_RC_ENDED_NONE, bt_rc_service(&rc, 23500, &busy, true, 0, &seen, take_call, NULL));
+    ASSERT_EQ(BT_RC_ENDED_AWAY, bt_rc_service(&rc, 43000, &IDLE, true, 0, &seen, take_call, NULL)); // both used up, the headset is still away
+}
+
 int main(void) {
     RUN(test_play_tries_at_once_twice_at_most_and_then_gives_up);
     RUN(test_play_counts_a_refused_call_as_an_attempt_and_a_connection_ends_it);
@@ -256,6 +310,8 @@ int main(void) {
     RUN(test_it_waits_for_a_scan_and_for_someone_elses_connection_but_ends_on_user_action_or_forget);
     RUN(test_power_up_tries_at_once_and_a_connection_ends_it);
     RUN(test_clock_wrap);
+    RUN(test_service_ends_a_play_schedule_with_the_wait_but_not_a_power_up_one_that_replaced_it);
+    RUN(test_service_joins_a_running_schedule_and_reports_how_a_schedule_ended);
     RUN(test_it_reconnects_a_simulated_headset_that_dropped);
     return RESULT();
 }

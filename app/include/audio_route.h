@@ -19,7 +19,7 @@
  * does not pause at once. The player stays PLAYING and waits (the audio core simply stops consuming: the Bluetooth ring is full, the position does not move) while
  * bt_service connects (one short schedule: now, then 2 s after a failure, two attempts; or the automatic reconnect that is already running). When the stream is
  * usable it starts at once. If the connect gives up, the link comes up without a stream, or AUDIO_ROUTE_HOLD_MS pass, the player is paused (place kept) with
- * ROUTE_NOTICE_CONNECT_FAILED, still on Bluetooth. Pausing, Disconnect, Forget, Pair and Connect end the wait. A drop mid-play still pauses at once and is not
+ * ROUTE_NOTICE_CONNECT_FAILED, still on Bluetooth. Pausing, Disconnect, Forget, Pair and Connect end the wait (the schedule is cancelled; only a connect attempt already in flight finishes by itself). With the radio off or failed Play pauses at once, as with no headset. A drop mid-play still pauses at once and is not
  * resumed by the reconnect (ADR-0019); only a Play after it starts the stream. Under Auto with the output on wired (a boot where the headset never came) Play plays
  * wired and connects nothing: Auto does not change the output while something plays, and the boot retries cover that case. No remembered headset: "Headset not connected", as before.
  */
@@ -50,7 +50,7 @@ typedef enum {
 
 #define AUDIO_ROUTE_SUSPEND_MS 4000u /**< silence on the Bluetooth output for this long suspends the A2DP stream */
 #define AUDIO_ROUTE_BANNER_MS 3000u  /**< how long the UI shows a notice */
-#define AUDIO_ROUTE_HOLD_MS 50000u   /**< longest Play waits for the headset (two connect attempts take at most 2 x 20 s + 2 s); then it pauses with ROUTE_NOTICE_CONNECT_FAILED */
+#define AUDIO_ROUTE_HOLD_MS 60000u   /**< longest Play waits for the headset (two connect attempts take at most 2 x 20 s + 2 s, leaving ~18 s for the stream to open and start); then it pauses with ROUTE_NOTICE_CONNECT_FAILED */
 
 /** After audio_engine_start() and player_init(): give the Bluetooth stack the PCM source, and apply the saved setting once it is known. */
 void audio_route_init(void);
