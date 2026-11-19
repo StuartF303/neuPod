@@ -19,7 +19,7 @@
                             purpose: the A2DP sender has ~40 ms of slack and storage bursts to 32-40 % of core 0 during FLAC. Bench
                             19 Nov 2026 (Pico 2 W, AirPods, Eels FLAC): radio 3 < storage 5 gave 36 stalls/10 s, catch-up to 160 ms,
                             bitpool forced 53 to 45, one disconnect; radio above storage gave 0 stalls, 25-34 ms, bitpool 53 steady.
-                            Shares 6 with the timer service (round-robin; both do microseconds of work) */
+                            Shares 6 with the timer service (round-robin; the timer task does microseconds, the worker is bursty and blocks between events) */
 #define RT_PRIO_UI 2u
 #define RT_PRIO_MONITOR 1u
 #define RT_PRIO_WIFI 1u  /* the Wi-Fi policy task: joins, retries, NTP; the radio worker (6) does the real work */

@@ -48,6 +48,8 @@ queued (64 events); if the UI ever could not keep up the 10 s statistics print `
 The CYW43 worker (BTstack) now runs at priority 6, above storage (5). Re-run Eels FLAC to the AirPods on a static screen and again on
 Now Playing. Expect A2DP stalls about 0 per 10 s, catch-up in the 25-34 ms range, bitpool steady at 53, no drops, no disconnects.
 Before the change: 36 stalls per 10 s, catch-up up to 160 ms, bitpool forced to 45.
+Also check that the higher worker priority does not starve input (4) or I2C (4): during a Bluetooth scan and during the [Wi-Fi download test](wifi.md),
+expect no wheel resync/recovery messages and no increase in the I2C timeout counter.
 
 ## Sleep (Y2)
 

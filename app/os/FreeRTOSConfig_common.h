@@ -39,7 +39,7 @@
 #define configUSE_EVENT_GROUPS 1
 #define configUSE_STREAM_BUFFERS 0
 #define configUSE_TIMERS 1
-#define configTIMER_TASK_PRIORITY 6
+#define configTIMER_TASK_PRIORITY 6 /* keep >= RT_PRIO_RADIO (app/include/runtime_config.h): it shares 6 with the CYW43 worker */
 #define configTIMER_QUEUE_LENGTH 8
 #define configTIMER_TASK_STACK_DEPTH 384
 #define configUSE_CO_ROUTINES 0
