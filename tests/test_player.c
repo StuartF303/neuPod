@@ -59,6 +59,8 @@ bool plays_record(const char *path, uint64_t size, const char *title, const char
     }
     return true;
 }
+static bool g_holding; // a Play waiting for a Bluetooth headset (audio_route.c)
+bool audio_route_holding(void) { return g_holding; }
 bool storage_stop_request(void) { return true; }
 static uint8_t *slot(uint32_t tag) { return tag == SETTING_SHUFFLE ? &g_shuffle_setting : tag == SETTING_REPEAT ? &g_repeat_setting : tag == SETTING_RESUME_PLAY ? &g_resume_play_setting : &g_gapless_setting; }
 bool settings_get_u8(uint32_t tag, uint8_t *out) {
@@ -317,6 +319,19 @@ TEST(periodic_save_only_while_playing_and_only_when_due) {
     ASSERT_EQ(periodic, g_rs_periodic);
 }
 
+#endif
+
+#if PLAYS_MAX > 0
+TEST(a_play_held_for_a_headset_adds_no_heard_time_to_the_play_count) {
+    start_album(0);
+    int before = g_plays_calls;
+    g_holding = true; // PLAYING, but nothing is heard
+    for (int i = 0; i < 200; i++) player_service();
+    ASSERT_EQ(before, g_plays_calls);
+    g_holding = false; // the stream is up: heard time counts again (the fake clock runs 1 s per call)
+    for (int i = 0; i < 200; i++) player_service();
+    ASSERT_EQ(before + 1, g_plays_calls);
+}
 #endif
 
 TEST(resume_folder_starts_paused_at_the_saved_frame_and_elapsed_includes_it) {
@@ -1187,6 +1202,9 @@ int main(void) {
     RUN_T(resume_saves_on_pause_track_change_stop_and_end);
 #if RESUME_WRITE_WHILE_PLAYING
     RUN_T(periodic_save_only_while_playing_and_only_when_due);
+#endif
+#if PLAYS_MAX > 0
+    RUN_T(a_play_held_for_a_headset_adds_no_heard_time_to_the_play_count);
 #endif
     RUN_T(resume_folder_starts_paused_at_the_saved_frame_and_elapsed_includes_it);
     RUN_T(shuffled_player_saves_the_folder_entry_and_resumes_into_a_shuffled_queue);

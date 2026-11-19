@@ -6,6 +6,8 @@
 
 #include "audio_route.h"
 #include "bt_pcm.h"
+#include "bt_reconnect.h"
+#include "bt_saved.h"
 #include "hal_host.h"
 #include "hal_radio.h"
 #include "hal_system.h"
@@ -44,10 +46,29 @@ void player_volume_set_locked(bool l) { g_vol_locked = l; }
 bool player_volume_locked(void) { return g_vol_locked; }
 
 // ---- helpers ----
+
+// What bt_service.c's reconnect_tick() does for a Play, through the same bt_rc_service() (bt_service.c itself needs the RTOS, the control queue and the event plumbing):
+// the route's connect request is taken in, the play schedule runs over the simulator, and the route is told when it gave up.
+static bt_rc_t g_rc;
+static uint32_t g_play_seen;
+static bool test_connect(void *ctx) {
+    (void)ctx;
+    hal_bt_device_t d;
+    return bt_saved_get(&d) && hal_bt_connect(d.addr) == HAL_OK;
+}
+static void svc_step(void) {
+    const bt_rc_in_t in = {.bt_on = hal_bt_state() == HAL_BT_ON, .have_saved = bt_saved_get(NULL), .link = hal_bt_link_state()};
+    const bt_rc_end_t end = bt_rc_service(&g_rc, g_now, &in, audio_route_holding(), audio_route_connect_request_seq(), &g_play_seen, test_connect, NULL);
+    if (end == BT_RC_ENDED_AWAY && audio_route_holding()) {
+        audio_route_connect_gave_up();
+    }
+}
+
 static void tick(uint32_t ms) {
     g_now += ms;
     hal_delay_ms(ms > 50 ? 50 : ms); // the simulator runs on the real clock
     hal_bt_poll();
+    svc_step();
     audio_route_service();
 }
 
@@ -60,11 +81,16 @@ static void pump_stream(hal_bt_stream_state_t want, uint32_t max_ms) {
 static const uint8_t A_AIRPODS[6] = {0x28, 0xCD, 0xC1, 0x01, 0x02, 0x03};
 static bool g_inited;
 
+static void no_event(const hal_bt_event_t *e, void *c) { // (hal_bt_power() needs a registered callback)
+    (void)e;
+    (void)c;
+}
+
 static void connect_headset(void) {
     if (!g_inited) {
         g_inited = true;
         settings_init(NULL);
-        ASSERT_EQ(HAL_OK, hal_bt_init(NULL, NULL, NULL));
+        ASSERT_EQ(HAL_OK, hal_bt_init(no_event, NULL, NULL));
         hal_bt_set_pcm_source(bt_pcm_source());
         for (int i = 0; i < 40 && hal_bt_state() != HAL_BT_ON; i++) {
             hal_delay_ms(20);
@@ -86,6 +112,11 @@ static void connect_headset(void) {
 }
 
 static void reset(void) {
+    settings_delete(SETTING_BT_DEVICE); // no remembered headset unless a test remembers one
+    bt_rc_init(&g_rc);
+    g_play_seen = audio_route_connect_request_seq();
+    hal_host_bt_set_unreachable(false);
+    hal_host_bt_ignore_starts(0);
     hal_bt_disconnect();
     hal_bt_poll();
     // a fresh router: leave Bluetooth the way the user does (Disconnect), then settle
@@ -356,6 +387,375 @@ TEST(the_saved_output_setting_reads_back_and_an_unknown_value_is_auto) {
     ASSERT_EQ(AUDIO_ROUTE_WIRED, audio_route_pref());
     audio_route_set_pref(AUDIO_ROUTE_AUTO);
 }
+// ---- reconnect-on-play ----
+
+static void remember_headset(void) {
+    hal_bt_device_t d;
+    memset(&d, 0, sizeof d);
+    memcpy(d.addr, A_AIRPODS, 6);
+    d.cod = 0x240404;
+    d.audio_sink = true;
+    strcpy(d.name, "AirPods Pro 3");
+    ASSERT_TRUE(bt_saved_put(&d));
+}
+
+static void settle(uint32_t ms) { // time passes with nothing happening
+    for (uint32_t t = 0; t < ms; t += 100) tick(100);
+}
+
+// The headset goes away for good with the output on Bluetooth and the release window of the setup long over; a headset is remembered.
+static void go_bt_remembered_and_gone(bool idle_hangup) {
+    go_bt();
+    remember_headset();
+    g_now += 6000; // the release window of the set-up (5 s) is over
+    tick(100);
+    if (idle_hangup) {
+        hal_host_bt_remote_hangup(); // reason 0x13: DISCONNECTED, no loss
+    } else {
+        hal_host_bt_drop_link();     // reason 0x08: LINK_LOST
+    }
+    settle(300);
+    ASSERT_EQ(AUDIO_OUT_BT, audio_route_output()); // nothing moves the output by itself
+}
+
+TEST(play_after_an_idle_hang_up_waits_connects_and_starts_the_stream) {
+    go_bt_remembered_and_gone(true);
+    const uint32_t c0 = hal_host_bt_connect_count();
+    uint32_t seq0, seq1;
+    (void)audio_route_notice(&seq0);
+    g_pstate = PLAYER_PLAYING; // the user presses Play
+    tick(100);
+    ASSERT_EQ(PLAYER_PLAYING, g_pstate); // not paused: the track waits
+    ASSERT_EQ(0, g_pauses);
+    ASSERT_TRUE(audio_route_holding());
+    ASSERT_TRUE(audio_route_notice(&seq1) == ROUTE_NOTICE_CONNECTING && seq1 != seq0);
+    pump_stream(HAL_BT_STREAM_STREAMING, 8000);
+    ASSERT_EQ(HAL_BT_STREAM_STREAMING, hal_bt_stream_state()); // connected, the stream opened and started by the route
+    ASSERT_EQ(c0 + 1u, hal_host_bt_connect_count());
+    ASSERT_EQ(PLAYER_PLAYING, g_pstate);
+    ASSERT_EQ(0, g_pauses);
+    ASSERT_FALSE(audio_route_holding());
+    ASSERT_EQ(AUDIO_OUT_BT, audio_route_output());
+    ASSERT_TRUE(strcmp(g_calls, "") == 0); // the output was not touched
+}
+
+TEST(a_fresh_track_started_while_the_headset_is_away_waits_in_the_same_way) {
+    go_bt_remembered_and_gone(true);
+    g_pstate = PLAYER_OPENING; // a track chosen from Files is opening for a moment
+    tick(100);
+    ASSERT_FALSE(audio_route_holding()); // nothing to wait for yet
+    g_pstate = PLAYER_PLAYING;
+    tick(100);
+    ASSERT_TRUE(audio_route_holding());
+    ASSERT_EQ(PLAYER_PLAYING, g_pstate);
+    pump_stream(HAL_BT_STREAM_STREAMING, 8000);
+    ASSERT_EQ(HAL_BT_STREAM_STREAMING, hal_bt_stream_state());
+}
+
+TEST(a_drop_mid_play_pauses_then_a_play_after_the_reconnect_starts_the_stream) {
+    go_bt();
+    remember_headset();
+    g_pstate = PLAYER_PLAYING;
+    pump_stream(HAL_BT_STREAM_STREAMING, 3000);
+    ASSERT_EQ(HAL_BT_STREAM_STREAMING, hal_bt_stream_state());
+    uint32_t seq0, seq1;
+    (void)audio_route_notice(&seq0);
+    hal_host_bt_drop_link();
+    tick(100);
+    ASSERT_EQ(PLAYER_PAUSED, g_pstate); // ADR-0019: a drop pauses ...
+    ASSERT_TRUE(audio_route_notice(&seq1) == ROUTE_NOTICE_HEADSET_DROPPED && seq1 != seq0);
+    ASSERT_FALSE(audio_route_holding());
+    ASSERT_EQ(HAL_OK, hal_bt_connect(A_AIRPODS)); // ... and the automatic reconnect brings the headset back
+    for (int i = 0; i < 100 && hal_bt_link_state() != HAL_BT_LINK_CONNECTED; i++) {
+        tick(50);
+    }
+    pump_stream(HAL_BT_STREAM_OPEN, 3000);
+    settle(300);
+    ASSERT_EQ(PLAYER_PAUSED, g_pstate); // ... without resuming
+    ASSERT_TRUE(hal_bt_stream_state() != HAL_BT_STREAM_STREAMING);
+    g_pstate = PLAYER_PLAYING; // the user presses Play
+    pump_stream(HAL_BT_STREAM_STREAMING, 3000);
+    ASSERT_EQ(HAL_BT_STREAM_STREAMING, hal_bt_stream_state());
+    ASSERT_EQ(PLAYER_PLAYING, g_pstate);
+}
+
+TEST(play_during_the_reconnect_after_a_drop_waits_and_goes_on_when_the_headset_is_back) {
+    go_bt();
+    remember_headset();
+    g_pstate = PLAYER_PLAYING;
+    pump_stream(HAL_BT_STREAM_STREAMING, 3000);
+    hal_host_bt_drop_link();
+    tick(100);
+    ASSERT_EQ(PLAYER_PAUSED, g_pstate);
+    bt_rc_lost(&g_rc, g_now); // bt_service: the loss starts the automatic schedule (first attempt in 2 s) ...
+    g_pstate = PLAYER_PLAYING; // ... and the user presses Play while "Reconnecting..." is up
+    tick(100);
+    ASSERT_TRUE(audio_route_holding());
+    ASSERT_EQ(PLAYER_PLAYING, g_pstate);
+    pump_stream(HAL_BT_STREAM_STREAMING, 10000);
+    ASSERT_EQ(HAL_BT_STREAM_STREAMING, hal_bt_stream_state());
+    ASSERT_EQ(PLAYER_PLAYING, g_pstate);
+}
+
+TEST(when_the_headset_cannot_be_reached_play_tries_twice_then_pauses_with_a_notice_and_stays_on_bluetooth) {
+    go_bt_remembered_and_gone(true);
+    hal_host_bt_set_unreachable(true); // in its case
+    const uint32_t c0 = hal_host_bt_connect_count();
+    uint32_t seq0, seq1;
+    (void)audio_route_notice(&seq0);
+    g_pstate = PLAYER_PLAYING;
+    tick(100);
+    ASSERT_TRUE(audio_route_holding());
+    for (int i = 0; i < 400 && g_pstate == PLAYER_PLAYING; i++) {
+        tick(100);
+    }
+    ASSERT_EQ(PLAYER_PAUSED, g_pstate); // place kept, not stopped
+    ASSERT_EQ(0, g_stops);
+    ASSERT_EQ(c0 + BT_RC_PLAY_ATTEMPTS, hal_host_bt_connect_count()); // two attempts, no more
+    ASSERT_TRUE(audio_route_notice(&seq1) == ROUTE_NOTICE_CONNECT_FAILED && seq1 != seq0);
+    ASSERT_FALSE(audio_route_holding());
+    ASSERT_EQ(AUDIO_OUT_BT, audio_route_output()); // the firmware never falls back to wired by itself
+    g_now += 120000; // and nothing retries in the background
+    settle(300);
+    ASSERT_EQ(c0 + BT_RC_PLAY_ATTEMPTS, hal_host_bt_connect_count());
+    ASSERT_EQ(AUDIO_OUT_BT, audio_route_output());
+    ASSERT_EQ(1, g_pauses);
+}
+
+TEST(the_wait_is_bounded_even_if_nothing_answers) {
+    go_bt_remembered_and_gone(true);
+    g_pstate = PLAYER_PLAYING;
+    tick(100);
+    ASSERT_TRUE(audio_route_holding());
+    g_now += AUDIO_ROUTE_HOLD_MS; // the schedule is not serviced here: only the route's own bound can end it
+    audio_route_service();
+    ASSERT_EQ(PLAYER_PAUSED, g_pstate);
+    uint32_t seq;
+    ASSERT_EQ(ROUTE_NOTICE_CONNECT_FAILED, audio_route_notice(&seq));
+    ASSERT_FALSE(audio_route_holding());
+}
+
+TEST(pausing_while_waiting_ends_the_wait_and_the_play_schedule) {
+    go_bt_remembered_and_gone(true);
+    hal_host_bt_set_unreachable(true);
+    g_pstate = PLAYER_PLAYING;
+    tick(100);
+    ASSERT_TRUE(audio_route_holding());
+    tick(100); // bt_service takes the request in
+    ASSERT_TRUE(bt_rc_active(&g_rc));
+    g_pstate = PLAYER_PAUSED; // the user pauses
+    tick(100);
+    ASSERT_FALSE(audio_route_holding());
+    tick(100);
+    ASSERT_FALSE(bt_rc_active(&g_rc)); // no further attempt
+    uint32_t seq;
+    ASSERT_TRUE(audio_route_notice(&seq) == ROUTE_NOTICE_CONNECTING); // no failure notice: the user chose
+    g_now += 60000;
+    settle(300);
+    ASSERT_EQ(PLAYER_PAUSED, g_pstate);
+}
+
+TEST(a_user_action_on_the_link_ends_the_wait_and_pauses_as_before) {
+    go_bt_remembered_and_gone(true);
+    hal_host_bt_set_unreachable(true);
+    g_pstate = PLAYER_PLAYING;
+    tick(100);
+    ASSERT_TRUE(audio_route_holding());
+    audio_route_connect_cancel(); // Settings > Bluetooth > Connect / Pair
+    tick(100);
+    ASSERT_FALSE(audio_route_holding());
+    ASSERT_EQ(PLAYER_PAUSED, g_pstate);
+    uint32_t seq;
+    ASSERT_EQ(ROUTE_NOTICE_NOT_CONNECTED, audio_route_notice(&seq));
+}
+
+TEST(play_with_no_remembered_headset_still_says_not_connected) {
+    go_bt();
+    g_now += 6000; // the release window of the set-up (5 s) is over
+    tick(100);
+    hal_host_bt_remote_hangup();
+    settle(300);
+    const uint32_t c0 = hal_host_bt_connect_count();
+    g_pstate = PLAYER_PLAYING;
+    tick(100);
+    ASSERT_EQ(PLAYER_PAUSED, g_pstate);
+    ASSERT_FALSE(audio_route_holding());
+    uint32_t seq;
+    ASSERT_EQ(ROUTE_NOTICE_NOT_CONNECTED, audio_route_notice(&seq));
+    ASSERT_EQ(c0, hal_host_bt_connect_count());
+}
+
+TEST(under_auto_on_the_wired_output_play_plays_wired_and_connects_nothing) {
+    reset();
+    remember_headset();
+    ASSERT_EQ(AUDIO_OUT_WIRED, audio_route_output());
+    const uint32_t c0 = hal_host_bt_connect_count();
+    const uint32_t req0 = audio_route_connect_request_seq();
+    g_pstate = PLAYER_PLAYING;
+    settle(500);
+    ASSERT_EQ(PLAYER_PLAYING, g_pstate);
+    ASSERT_FALSE(audio_route_holding());
+    ASSERT_EQ(req0, audio_route_connect_request_seq());
+    ASSERT_EQ(c0, hal_host_bt_connect_count());
+    ASSERT_EQ(AUDIO_OUT_WIRED, audio_route_output());
+    g_pstate = PLAYER_IDLE;
+}
+
+TEST(with_the_bluetooth_setting_play_connects_to_the_remembered_headset) {
+    reset();
+    remember_headset();
+    audio_route_set_pref(AUDIO_ROUTE_BLUETOOTH);
+    tick(100);
+    ASSERT_EQ(AUDIO_OUT_BT, audio_route_output());
+    const uint32_t c0 = hal_host_bt_connect_count();
+    g_pstate = PLAYER_PLAYING;
+    tick(100);
+    ASSERT_TRUE(audio_route_holding());
+    ASSERT_EQ(PLAYER_PLAYING, g_pstate);
+    pump_stream(HAL_BT_STREAM_STREAMING, 8000);
+    ASSERT_EQ(HAL_BT_STREAM_STREAMING, hal_bt_stream_state());
+    ASSERT_EQ(c0 + 1u, hal_host_bt_connect_count());
+    g_pstate = PLAYER_IDLE;
+    audio_route_set_pref(AUDIO_ROUTE_AUTO);
+}
+
+TEST(a_headset_that_ignores_the_start_is_asked_again_then_the_stream_is_closed_and_reopened_once) {
+    go_bt();
+    remember_headset();
+    hal_host_bt_ignore_starts(3); // the first three requests are lost
+    g_pstate = PLAYER_PLAYING;
+    for (int i = 0; i < 100 && hal_bt_stream_state() != HAL_BT_STREAM_STREAMING; i++) {
+        tick(100);
+        ASSERT_EQ(PLAYER_PLAYING, g_pstate); // never paused on the way
+    }
+    ASSERT_EQ(HAL_BT_STREAM_STREAMING, hal_bt_stream_state());
+    ASSERT_EQ(PLAYER_PLAYING, g_pstate);
+    ASSERT_EQ(0, g_pauses);
+    ASSERT_FALSE(audio_route_holding());
+}
+
+TEST(a_stream_the_headset_will_not_start_ends_in_a_pause_with_the_failure_notice) {
+    go_bt();
+    remember_headset();
+    hal_host_bt_ignore_starts(1000);
+    g_pstate = PLAYER_PLAYING;
+    for (int i = 0; i < 200 && g_pstate == PLAYER_PLAYING; i++) {
+        tick(100);
+    }
+    ASSERT_EQ(PLAYER_PAUSED, g_pstate);
+    uint32_t seq;
+    ASSERT_EQ(ROUTE_NOTICE_CONNECT_FAILED, audio_route_notice(&seq));
+    ASSERT_EQ(AUDIO_OUT_BT, audio_route_output());
+    ASSERT_FALSE(audio_route_holding());
+    hal_host_bt_ignore_starts(0);
+}
+
+TEST(play_with_the_link_up_and_the_reopen_tries_used_up_tries_again_and_starts_the_stream) {
+    go_bt();
+    remember_headset();
+    g_now += 6000; // the release window of the set-up is over
+    tick(100);
+    hal_host_bt_stream_dropped_by_headset(); // the link stays up, the stream is gone
+    for (int k = 0; k < 3; k++) { // the three reopen tries of the route all fail
+        hal_host_bt_fail_next_stream(HAL_BT_FAIL_STREAM);
+        g_now += 3000;
+        tick(100);
+        pump_stream(HAL_BT_STREAM_FAILED, 3000);
+        ASSERT_EQ(HAL_BT_STREAM_FAILED, hal_bt_stream_state());
+    }
+    g_now += 10000;
+    settle(500); // given up: nothing more is tried while idle
+    ASSERT_EQ(HAL_BT_STREAM_FAILED, hal_bt_stream_state());
+    ASSERT_EQ(HAL_BT_LINK_CONNECTED, hal_bt_link_state());
+    g_pstate = PLAYER_PLAYING; // Play: it must try again, not give up on the spot
+    tick(100);
+    ASSERT_EQ(PLAYER_PLAYING, g_pstate);
+    ASSERT_EQ(0, g_pauses);
+    pump_stream(HAL_BT_STREAM_STREAMING, 5000);
+    ASSERT_EQ(HAL_BT_STREAM_STREAMING, hal_bt_stream_state());
+    ASSERT_EQ(PLAYER_PLAYING, g_pstate);
+    ASSERT_EQ(0, g_pauses);
+    ASSERT_FALSE(audio_route_holding());
+}
+
+TEST(a_play_schedule_replaced_by_the_power_up_one_survives_the_end_of_the_wait) {
+    go_bt_remembered_and_gone(true);
+    hal_host_bt_set_unreachable(true);
+    g_pstate = PLAYER_PLAYING;
+    tick(100);
+    tick(100); // bt_service takes the request in: a play schedule
+    ASSERT_TRUE(bt_rc_active(&g_rc));
+    ASSERT_EQ(BT_RC_PLAY_ATTEMPTS, g_rc.max_attempts);
+    bt_rc_powerup(&g_rc, g_now); // the settings finished loading / Bluetooth came on: the boot schedule takes over (5 minutes, no cap)
+    ASSERT_EQ(0, g_rc.max_attempts);
+    g_pstate = PLAYER_PAUSED; // the user pauses: the wait ends
+    tick(100);
+    tick(100);
+    ASSERT_FALSE(audio_route_holding());
+    ASSERT_TRUE(bt_rc_active(&g_rc)); // the boot retry is not killed with the wait
+}
+
+TEST(play_while_a_connect_is_already_running_waits_for_it_and_makes_no_second_call) {
+    go_bt_remembered_and_gone(true);
+    const uint32_t c0 = hal_host_bt_connect_count();
+    ASSERT_EQ(HAL_OK, hal_bt_connect(A_AIRPODS)); // somebody else's connect (Settings, the boot retry)
+    ASSERT_EQ(HAL_BT_LINK_CONNECTING, hal_bt_link_state());
+    g_pstate = PLAYER_PLAYING;
+    tick(50);
+    ASSERT_TRUE(audio_route_holding());
+    ASSERT_EQ(PLAYER_PLAYING, g_pstate);
+    ASSERT_EQ(c0 + 1u, hal_host_bt_connect_count()); // held back: no second call on top of it
+    pump_stream(HAL_BT_STREAM_STREAMING, 8000);
+    ASSERT_EQ(HAL_BT_STREAM_STREAMING, hal_bt_stream_state());
+    ASSERT_EQ(c0 + 1u, hal_host_bt_connect_count());
+    ASSERT_EQ(PLAYER_PLAYING, g_pstate);
+    ASSERT_EQ(0, g_pauses);
+}
+
+TEST(play_with_the_radio_off_pauses_at_once_with_not_connected) {
+    go_bt_remembered_and_gone(true);
+    ASSERT_EQ(HAL_OK, hal_bt_power(false));
+    tick(100);
+    ASSERT_EQ(HAL_BT_OFF, hal_bt_state());
+    const uint32_t c0 = hal_host_bt_connect_count();
+    const uint32_t req0 = audio_route_connect_request_seq();
+    g_pstate = PLAYER_PLAYING;
+    tick(100);
+    ASSERT_EQ(PLAYER_PAUSED, g_pstate); // no "Connecting..." and no 60 s stall for a radio that cannot answer
+    ASSERT_FALSE(audio_route_holding());
+    uint32_t seq;
+    ASSERT_EQ(ROUTE_NOTICE_NOT_CONNECTED, audio_route_notice(&seq));
+    ASSERT_EQ(req0, audio_route_connect_request_seq());
+    ASSERT_EQ(c0, hal_host_bt_connect_count());
+    ASSERT_EQ(HAL_OK, hal_bt_power(true)); // leave the simulator as the other tests expect it
+    for (int i = 0; i < 40 && hal_bt_state() != HAL_BT_ON; i++) {
+        tick(50);
+    }
+    ASSERT_EQ(HAL_BT_ON, hal_bt_state());
+}
+
+TEST(a_cancel_during_the_close_and_reopen_pauses_as_not_connected_not_as_a_drop) {
+    go_bt();
+    remember_headset();
+    hal_host_bt_ignore_starts(1000); // the headset never starts the stream
+    g_pstate = PLAYER_PLAYING;
+    for (int i = 0; i < 200 && hal_bt_stream_state() != HAL_BT_STREAM_CLOSED; i++) {
+        tick(100); // until the route closes the stream to open it afresh
+    }
+    ASSERT_EQ(HAL_BT_STREAM_CLOSED, hal_bt_stream_state());
+    ASSERT_TRUE(audio_route_holding());
+    audio_route_connect_cancel(); // Settings > Bluetooth > Connect / Pair during the restart
+    tick(100);
+    ASSERT_EQ(PLAYER_PAUSED, g_pstate);
+    ASSERT_FALSE(audio_route_holding());
+    uint32_t seq;
+    ASSERT_EQ(ROUTE_NOTICE_NOT_CONNECTED, audio_route_notice(&seq)); // not "Headset disconnected"
+    hal_host_bt_ignore_starts(0);
+    settle(500);
+    ASSERT_EQ(PLAYER_PAUSED, g_pstate);
+    ASSERT_EQ(ROUTE_NOTICE_NOT_CONNECTED, audio_route_notice(&seq)); // and no second notice when the stream settles
+}
+
 // ---- the internal speaker (Y2): Settings > Speaker and Audio output = Speaker ----
 
 static void speaker_done(void) { // leave the shared simulator the way the other tests expect it
@@ -622,6 +1022,24 @@ int main(void) {
     RUN(the_bluetooth_setting_is_the_output_with_or_without_a_headset_and_survives_a_disconnect);
     RUN(leaving_the_bluetooth_setting_for_auto_with_no_headset_returns_to_wired);
     RUN(the_saved_output_setting_reads_back_and_an_unknown_value_is_auto);
+    RUN(play_after_an_idle_hang_up_waits_connects_and_starts_the_stream);
+    RUN(a_fresh_track_started_while_the_headset_is_away_waits_in_the_same_way);
+    RUN(a_drop_mid_play_pauses_then_a_play_after_the_reconnect_starts_the_stream);
+    RUN(play_during_the_reconnect_after_a_drop_waits_and_goes_on_when_the_headset_is_back);
+    RUN(when_the_headset_cannot_be_reached_play_tries_twice_then_pauses_with_a_notice_and_stays_on_bluetooth);
+    RUN(the_wait_is_bounded_even_if_nothing_answers);
+    RUN(pausing_while_waiting_ends_the_wait_and_the_play_schedule);
+    RUN(a_user_action_on_the_link_ends_the_wait_and_pauses_as_before);
+    RUN(play_with_no_remembered_headset_still_says_not_connected);
+    RUN(under_auto_on_the_wired_output_play_plays_wired_and_connects_nothing);
+    RUN(with_the_bluetooth_setting_play_connects_to_the_remembered_headset);
+    RUN(a_headset_that_ignores_the_start_is_asked_again_then_the_stream_is_closed_and_reopened_once);
+    RUN(a_stream_the_headset_will_not_start_ends_in_a_pause_with_the_failure_notice);
+    RUN(play_with_the_link_up_and_the_reopen_tries_used_up_tries_again_and_starts_the_stream);
+    RUN(a_play_schedule_replaced_by_the_power_up_one_survives_the_end_of_the_wait);
+    RUN(play_while_a_connect_is_already_running_waits_for_it_and_makes_no_second_call);
+    RUN(play_with_the_radio_off_pauses_at_once_with_not_connected);
+    RUN(a_cancel_during_the_close_and_reopen_pauses_as_not_connected_not_as_a_drop);
     RUN(the_speaker_setting_defaults_to_off_is_saved_and_needs_a_speaker);
     RUN(the_speaker_output_setting_is_stored_as_3_and_reads_back);
     RUN(auto_allows_the_speaker_only_when_the_setting_is_on_and_no_headset_is_the_output);

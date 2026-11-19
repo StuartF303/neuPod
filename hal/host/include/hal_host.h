@@ -52,6 +52,13 @@ void hal_host_bt_remote_hangup(void);
 /** Tests: the next stream opening fails with @p reason (HAL_BT_STREAM_FAILED), then everything is normal again. */
 void hal_host_bt_fail_next_stream(hal_bt_fail_t reason);
 
+/** Tests: the remembered headset cannot be reached (in its case): a Connect to it ends FAILED with HAL_BT_FAIL_NOT_FOUND. Pair is unaffected. */
+void hal_host_bt_set_unreachable(bool on);
+/** Tests: how many hal_bt_connect() calls the simulator has accepted. */
+uint32_t hal_host_bt_connect_count(void);
+/** Tests: the next @p n hal_bt_stream_start() requests get no answer (the stream stays OPEN / SUSPENDED), then the headset answers again. */
+void hal_host_bt_ignore_starts(uint32_t n);
+
 /** Tests: the headset releases the audio connection while the link stays up (stream CLOSED, link CONNECTED). */
 void hal_host_bt_stream_dropped_by_headset(void);
 

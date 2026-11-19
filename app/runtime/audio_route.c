@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include "audio_route.h"
+#include "bt_saved.h"
 #include "hal_audio.h"
 #include "bt_pcm.h"
 #include "hal_radio.h"
@@ -10,9 +11,10 @@
 #include "settings_store.h"
 
 #define RELEASE_WINDOW_MS 5000u  /* how long after Disconnect / Forget a link that is still up is waited for */
-#define START_RETRY_MS 1000u     /* between two Start requests while the stream has not begun */
+#define START_RETRY_MS 2000u     /* between two Start requests while the stream has not begun (a headset refuses a second START while one is still pending, so not faster) */
 #define REOPEN_RETRY_MS 3000u    /* between two attempts to reopen a stream the headset released */
 #define REOPEN_TRIES 3u
+#define START_TRIES 3u           /* Start requests the headset may leave unanswered before the stream is closed and opened once more */
 
 static audio_output_t g_out = AUDIO_OUT_WIRED;
 static audio_route_pref_t g_pref = AUDIO_ROUTE_AUTO;
@@ -29,6 +31,16 @@ static uint32_t g_last_reopen;
 static uint32_t g_reopen_tries;
 static audio_route_notice_t g_notice;
 static uint32_t g_notice_seq;
+/* Reconnect-on-play (audio_route.h): Play with the headset away waits (the player stays PLAYING, nothing is consumed) instead of pausing. */
+/* g_hold and g_connect_req are written on the monitor task and read on the UI task, g_cancel and g_gaveup the other way round: __atomic release / acquire
+   (the hold is set before the request counter is bumped, so a reader that sees the request sees the hold). */
+static bool g_hold;                  /* waiting; read by bt_service, which keeps its play schedule going only while it is true */
+static bool g_cancel;                /* the user took over the link (any task): end the wait at the next tick */
+static uint32_t g_connect_req, g_gaveup;
+static uint32_t g_hold_since, g_gaveup_base;
+static uint8_t g_start_tries;        /* Start requests since the stream last streamed */
+static bool g_restarted;             /* the stream has been closed and reopened once for this Play */
+static bool g_restarting;            /* ... and the close is on its way */
 
 static bool stream_usable(void) {
     hal_bt_stream_state_t st = hal_bt_stream_state();
@@ -116,7 +128,14 @@ audio_output_t audio_route_output(void) { return g_out; }
 void audio_route_user_released(void) {
     g_release_until = os_tick_ms() + RELEASE_WINDOW_MS;
     g_release_armed = true;
+    __atomic_store_n(&g_cancel, true, __ATOMIC_RELEASE);
 }
+
+void audio_route_connect_cancel(void) { __atomic_store_n(&g_cancel, true, __ATOMIC_RELEASE); }
+uint32_t audio_route_connect_request_seq(void) { return __atomic_load_n(&g_connect_req, __ATOMIC_ACQUIRE); }
+bool audio_route_holding(void) { return __atomic_load_n(&g_hold, __ATOMIC_ACQUIRE); }
+void audio_route_connect_gave_up(void) { (void)__atomic_add_fetch(&g_gaveup, 1u, __ATOMIC_RELEASE); }
+static void hold_set(bool on) { __atomic_store_n(&g_hold, on, __ATOMIC_RELEASE); }
 
 audio_route_notice_t audio_route_notice(uint32_t *seq) {
     *seq = g_notice_seq;
@@ -151,7 +170,42 @@ static void apply_output(audio_output_t out) {
     g_hp_was_in = hal_audio_headphones_in();
     g_quiet_since = os_tick_ms();
     g_reopen_tries = 0;
+    hold_set(false); /* a Play's wait belongs to the Bluetooth output (the player was stopped above) */
+    g_start_tries = 0;
+    g_restarted = g_restarting = false;
     printf("route: output %s\n", out == AUDIO_OUT_BT ? "Bluetooth" : "wired");
+}
+
+/* Play with no usable stream and a headset remembered: wait for it instead of pausing. With the link down, bt_service is asked (g_connect_req) to connect;
+   with it up there is nothing to ask, the stream is opened by the reopen below. g_hold is set first: bt_service looks at it when it sees the request. */
+static bool hold_begin(uint32_t now, bool link) {
+    const hal_bt_state_t rs = hal_bt_state();
+    if (!bt_saved_get(NULL) || rs == HAL_BT_OFF || rs == HAL_BT_FAILED) {
+        return false; /* nothing to wait for, or the radio is off / broken and would never answer: the plain "Headset not connected" pause (STARTING and SCANNING do wait) */
+    }
+    g_gaveup_base = __atomic_load_n(&g_gaveup, __ATOMIC_ACQUIRE);
+    g_hold_since = now;
+    hold_set(true);
+    if (!link) {
+        __atomic_store_n(&g_connect_req, g_connect_req + 1u, __ATOMIC_RELEASE);
+    } else {
+        g_reopen_tries = 0; /* a fresh Play gets its own reopen tries, whatever earlier ones were used up */
+        g_last_reopen = now - REOPEN_RETRY_MS;
+    }
+    notice(ROUTE_NOTICE_CONNECTING);
+    printf("route: playing with no headset stream, waiting (%s)\n", link ? "link up" : "connect asked for");
+    return true;
+}
+
+/* The wait is over without a stream: pause, place kept, ring emptied (as on a drop); the output stays Bluetooth. */
+static void hold_fail(const char *why) {
+    hold_set(false);
+    g_restarted = g_restarting = false;
+    g_start_tries = 0;
+    player_pause();
+    bt_pcm_request_flush();
+    notice(ROUTE_NOTICE_CONNECT_FAILED);
+    printf("route: %s, paused\n", why);
 }
 
 void audio_route_service(void) {
@@ -207,23 +261,61 @@ void audio_route_service(void) {
     }
     const hal_bt_stream_state_t st = hal_bt_stream_state();
     const bool link = hal_bt_link_state() == HAL_BT_LINK_CONNECTED;
+    player_info_t pi;
+    player_get(&pi);
+    bool playing = pi.state == PLAYER_PLAYING;
+
+    bool cancelled = false; /* the user took over the link: the wait ends, and this tick pauses as a Play with no headset does */
+    if (__atomic_exchange_n(&g_cancel, false, __ATOMIC_ACQ_REL)) {
+        cancelled = g_hold;
+        hold_set(false);
+        if (cancelled) {
+            g_restarting = false; /* a close / reopen in progress is abandoned (the stream may still be OPEN: it is simply left to the idle suspend) */
+            if (up && playing) {
+                player_pause();
+                bt_pcm_request_flush();
+                notice(ROUTE_NOTICE_NOT_CONNECTED);
+                printf("route: wait cancelled, paused\n");
+                playing = false;
+            }
+        }
+    }
+    if (g_hold) {
+        if (!playing && pi.state != PLAYER_OPENING) { /* paused (or stopped) while waiting: nothing more to do; an attempt already in flight finishes by itself, no further one starts */
+            hold_set(false);
+        } else if (up && !g_restarting) {
+            hold_set(false); /* the stream is usable: the playing branch below starts it */
+        } else if ((int32_t)(now - g_hold_since - AUDIO_ROUTE_HOLD_MS) >= 0) {
+            hold_fail("headset did not come in time");
+            playing = false;
+        } else if ((int32_t)(__atomic_load_n(&g_gaveup, __ATOMIC_ACQUIRE) - g_gaveup_base) != 0) {
+            hold_fail("could not connect");
+            playing = false;
+        } else if (!up && link && st != HAL_BT_STREAM_OPENING && g_reopen_tries >= REOPEN_TRIES && now - g_last_reopen >= REOPEN_RETRY_MS) {
+            hold_fail("headset linked but no audio stream");
+            playing = false;
+        }
+    }
     if (link && st == HAL_BT_STREAM_OPENING) {
         return; /* being set up: wait */
     }
-    player_info_t pi;
-    player_get(&pi);
-    const bool playing = pi.state == PLAYER_PLAYING;
 
     if (!up) {
-        if (playing) { /* the headset is gone (or never was): pause at once, position kept, nothing plays from elsewhere */
+        if (playing && !g_hold && (cancelled || g_was_up || !hold_begin(now, link))) { /* the headset is gone (or never was): pause at once, position kept, nothing plays from elsewhere */
             player_pause();
             bt_pcm_request_flush();
-            notice(g_was_up ? ROUTE_NOTICE_HEADSET_DROPPED : ROUTE_NOTICE_NOT_CONNECTED);
-            printf("route: %s, paused\n", g_was_up ? "headset disconnected" : "no headset");
-        } else if (g_was_up) {
+            const bool dropped = g_was_up && !cancelled; /* a cancelled wait is the user's doing, not a drop */
+            notice(dropped ? ROUTE_NOTICE_HEADSET_DROPPED : ROUTE_NOTICE_NOT_CONNECTED);
+            printf("route: %s, paused\n", dropped ? "headset disconnected" : "no headset");
+        } else if (!playing && g_was_up) {
             bt_pcm_request_flush();
         }
+        if (!playing) {
+            g_start_tries = 0;
+            g_restarted = false;
+        }
         g_was_up = false;
+        g_restarting = false;
         if (!link) {
             g_reopen_tries = 0;
         } else if (g_reopen_tries < REOPEN_TRIES && now - g_last_reopen >= REOPEN_RETRY_MS) { /* the link is up but the headset released its stream */
@@ -238,12 +330,34 @@ void audio_route_service(void) {
     g_reopen_tries = 0;
     if (playing) {
         g_quiet_since = now;
-        if ((st == HAL_BT_STREAM_OPEN || st == HAL_BT_STREAM_SUSPENDED) && now - g_last_start >= START_RETRY_MS) {
+        if (st == HAL_BT_STREAM_STREAMING) {
+            g_start_tries = 0;
+            g_restarted = false;
+        } else if (!g_restarting && now - g_last_start >= START_RETRY_MS) { /* OPEN or SUSPENDED: ask for the start, a few times */
             g_last_start = now;
-            (void)hal_bt_stream_start();
+            if (g_start_tries < START_TRIES) {
+                g_start_tries++;
+                printf("route: asking the headset to start the stream (%u)\n", (unsigned)g_start_tries);
+                (void)hal_bt_stream_start();
+            } else if (!g_restarted && hold_begin(now, true)) {
+                /* The headset answered none of them: close the stream and open it afresh once. The wait covers the gap (the player stays PLAYING). */
+                g_restarted = true;
+                g_restarting = true;
+                g_start_tries = 0;
+                g_reopen_tries = 0;
+                g_last_reopen = now - REOPEN_RETRY_MS;
+                printf("route: no stream start after %u requests, closing and reopening it\n", (unsigned)START_TRIES);
+                hal_bt_stream_close();
+            } else {
+                hold_fail("the headset did not start the stream");
+            }
         }
-    } else if (st == HAL_BT_STREAM_STREAMING && now - g_quiet_since >= AUDIO_ROUTE_SUSPEND_MS) {
-        printf("route: not playing for %u ms (player state %d), suspending the stream\n", (unsigned)(now - g_quiet_since), (int)pi.state);
-        hal_bt_stream_suspend();
+    } else {
+        g_start_tries = 0;
+        g_restarted = g_restarting = false;
+        if (st == HAL_BT_STREAM_STREAMING && now - g_quiet_since >= AUDIO_ROUTE_SUSPEND_MS) {
+            printf("route: not playing for %u ms (player state %d), suspending the stream\n", (unsigned)(now - g_quiet_since), (int)pi.state);
+            hal_bt_stream_suspend();
+        }
     }
 }
