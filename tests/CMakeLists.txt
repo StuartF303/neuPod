@@ -82,7 +82,8 @@ add_executable(test_bt_control test_bt_control.c ${CMAKE_SOURCE_DIR}/app/runtime
 target_link_libraries(test_bt_control hal_host neupod_rt_core)
 add_test(NAME bt_control COMMAND test_bt_control)
 set_source_files_properties(test_bt_control.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
-add_executable(test_audio_route test_audio_route.c ${CMAKE_SOURCE_DIR}/app/runtime/audio_route.c ${CMAKE_SOURCE_DIR}/app/audio/bt_pcm.c)
+add_executable(test_audio_route test_audio_route.c ${CMAKE_SOURCE_DIR}/app/runtime/audio_route.c ${CMAKE_SOURCE_DIR}/app/audio/bt_pcm.c
+  ${CMAKE_SOURCE_DIR}/app/runtime/bt_saved.c ${CMAKE_SOURCE_DIR}/app/runtime/bt_reconnect.c)
 target_link_libraries(test_audio_route neupod_settings hal_host neupod_rt_core)
 add_test(NAME audio_route COMMAND test_audio_route)
 set_source_files_properties(test_audio_route.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")

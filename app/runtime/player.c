@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "audio_engine.h"
+#include "audio_route.h"
 #include "os.h"
 #include "play_queue.h"
 #include "play_tracker.h"
@@ -431,7 +432,8 @@ uint32_t player_skip_notice(char *reason, size_t n) {
 }
 
 /* A track counts as played once half of it was heard, or it ran to its end (play_tracker.h): noted in the plays store (plays_store.h), which the
- * Playlists smart lists read. Monitor task only. */
+ * Playlists smart lists read. Monitor task only. A Play held for a Bluetooth headset (audio_route_holding()) is PLAYING but nothing is heard: no time is added. The route
+ * runs on this task just after, so the hold is seen one pass (100 ms) late at most, which the tracker's per-pass cap makes harmless. */
 #if PLAYS_MAX > 0
 static ptrk_t g_ptrk;
 static player_info_t g_cp_pi, g_cp_again; /* monitor task only: off its small stack */
@@ -443,7 +445,7 @@ static void count_plays(void) {
         return;
     }
     uint32_t dur_ms = g_cp_pi.rate != 0 ? (uint32_t)(g_cp_pi.total_frames * 1000u / g_cp_pi.rate) : 0;
-    if (!ptrk_update(&g_ptrk, os_tick_ms(), g_cp_pi.state == PLAYER_PLAYING, g_cp_pi.state == PLAYER_ENDED, g_cp_pi.track_id, dur_ms)) {
+    if (!ptrk_update(&g_ptrk, os_tick_ms(), g_cp_pi.state == PLAYER_PLAYING && !audio_route_holding(), g_cp_pi.state == PLAYER_ENDED, g_cp_pi.track_id, dur_ms)) {
         return;
     }
     if (!player_now_path(g_cp_path, sizeof g_cp_path)) {

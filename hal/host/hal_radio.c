@@ -64,6 +64,9 @@ static hal_bt_stats_t g_stats;
 static uint32_t g_pace_t0, g_pace_frac; /* ms of the last consumption, and the sub-frame remainder (in 1/1000 frame) */
 static uint32_t g_sbc_frames_frac;
 static hal_bt_fail_t g_force_stream_fail;
+static bool g_unreachable;          /* hal_host_bt_set_unreachable(): a Connect finds nobody (the headset is in its case) */
+static uint32_t g_connects;         /* Connect calls accepted */
+static uint32_t g_ignore_starts;    /* hal_host_bt_ignore_starts(): this many Start requests get no answer from the headset */
 
 /* AVRCP (stage 2c): the simulated headset has absolute volume unless it is the speaker or hal_host_bt_set_no_absolute_volume() says so. The first volume is
  * reported SIM_AVRCP_MS after CONNECTED (the headset opens AVRCP once the link is up), a Set Absolute Volume is answered SIM_VOLUME_ANSWER_MS later. */
@@ -416,6 +419,7 @@ hal_status_t hal_bt_connect(const uint8_t addr[6]) {
         return st;
     }
     g_attempt++;
+    g_connects++;
     memset(&g_peer, 0, sizeof g_peer);
     memcpy(g_peer.addr, addr, 6);
     g_peer.rssi = HAL_BT_RSSI_UNKNOWN;
@@ -514,7 +518,7 @@ static void link_poll(void) {
         }
         emit_link(r == HAL_BT_FAIL_NONE ? HAL_BT_LINK_CONNECTED : HAL_BT_LINK_FAILED, r);
     } else if (g_link == HAL_BT_LINK_CONNECTING && dt >= SIM_CONNECT_MS) {
-        hal_bt_fail_t r = sim_outcome(g_peer.addr);
+        hal_bt_fail_t r = g_unreachable ? HAL_BT_FAIL_NOT_FOUND : sim_outcome(g_peer.addr);
         if (r == HAL_BT_FAIL_NONE && key_index(g_peer.addr) < 0) {
             r = HAL_BT_FAIL_AUTH; /* the key was forgotten */
         }
@@ -549,6 +553,10 @@ hal_status_t hal_bt_stream_start(void) {
     }
     if (g_stream != HAL_BT_STREAM_OPEN && g_stream != HAL_BT_STREAM_SUSPENDED) {
         return HAL_ENODEV;
+    }
+    if (g_ignore_starts > 0) {
+        g_ignore_starts--; /* the request goes out, the headset says nothing */
+        return HAL_OK;
     }
     g_start_pending = true;
     g_stream_t0 = hal_millis();
@@ -639,6 +647,9 @@ bool hal_host_bt_track_info(hal_bt_track_t *out, uint32_t *calls) {
 uint32_t hal_host_bt_volume_sets(void) { return g_vol_sets; }
 
 void hal_host_bt_fail_next_stream(hal_bt_fail_t reason) { g_force_stream_fail = reason; }
+void hal_host_bt_set_unreachable(bool on) { g_unreachable = on; }
+uint32_t hal_host_bt_connect_count(void) { return g_connects; }
+void hal_host_bt_ignore_starts(uint32_t n) { g_ignore_starts = n; }
 
 /* Consume the PCM ring at the real rate while STREAMING, like a headset would (the encoder side of the real adapter). */
 static void stream_poll(void) {
