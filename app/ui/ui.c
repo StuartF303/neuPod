@@ -316,7 +316,8 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
     }
     if (strncmp(p, "lockhold:", 9) == 0) {
         /* Tour only: Settings > Display > Lock hold set directly, in seconds (0 = Off; Hold is off by default). */
-        g_ui_state.lock_hold_s = (uint8_t)atoi(p + 9);
+        int v = atoi(p + 9);
+        g_ui_state.lock_hold_s = (v > 0 && v <= 255 && ui_hold_toggle_s_valid((uint8_t)v)) ? (uint8_t)v : 0u; /* as the card load does: anything unknown is Off */
         ui_frame_lock_hold_changed();
         return end;
     }

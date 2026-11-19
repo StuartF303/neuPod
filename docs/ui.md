@@ -396,7 +396,7 @@ shows the lock pill ("Locked · hold Power 2 s to unlock", with the chosen Lock 
 | What | How |
 | --- | --- |
 | Auto-lock | the screen goes fully off (Screen off after, or a Power tap) and Settings > Display > Auto-lock is On |
-| Gesture | **Power held 2 s** (Settings > Display > **Lock hold**: Off, 1, 2, 3 or 5 s; default Off, when it never toggles and the line fills towards the power-off countdown with "Keep holding to power off") toggles Hold: from 0.4 s a 3 px accent line grows under the status bar and a dark pill at the bottom says "Keep holding to lock · 10 s = off" (or "... to unlock"; letting go early does nothing), at 2 s the pill says "Locked" / "Unlocked" and a haptic click plays |
+| Gesture | **Power held for the Lock hold time** toggles Hold (Settings > Display > **Lock hold**: Off, 1, 2, 3 or 5 s, default Off; 2 s shown here; with Off it never toggles and the line fills towards the power-off countdown with "Keep holding to power off"): from 0.4 s a 3 px accent line grows under the status bar and a dark pill at the bottom says "Keep holding to lock · 10 s = off" (or "... to unlock"; letting go early does nothing), at 2 s the pill says "Locked" / "Unlocked" and a haptic click plays |
 | Power-off | still held: at 5 s the line turns red and grows again while the pill counts "Release to cancel · shutting down in 5 ... 1" (letting go cancels), at 10 s the power-off is requested (Y2; the Pico rig cannot, and shows no countdown) |
 | Tap | **Power tapped** (under 0.4 s) turns the screen off now; the next input wakes it (and is lost) |
 | Switch | the iPod 6G donor board's slide switch (`hal_input_hold_switch()`), same state; none on the Y2 or the Pico rig |

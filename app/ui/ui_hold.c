@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "ui_hold.h"
 
+_Static_assert(sizeof(ui_hold_t) == 12u, "ui_hold_t grew: toggle_s must stay in the padding (the Pico 2 W has almost no static RAM spare)");
+
 void ui_hold_init(ui_hold_t *h) { *h = (ui_hold_t){0}; }
 
 // Milliseconds the key has been down; a stamp slightly ahead of the tick clock (the host tour) counts as 0.
