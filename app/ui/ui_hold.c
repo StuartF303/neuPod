@@ -9,6 +9,8 @@ static uint32_t held_ms(const ui_hold_t *h, uint32_t now_ms) {
     return d >= 0x80000000u ? 0u : d;
 }
 
+static uint32_t toggle_ms(const ui_hold_t *h) { return (uint32_t)h->toggle_s * 1000u; }
+
 uint32_t ui_hold_set(ui_hold_t *h, bool locked) {
     if (h->locked == locked) {
         return UI_HOLD_NONE;
@@ -18,6 +20,15 @@ uint32_t ui_hold_set(ui_hold_t *h, bool locked) {
 }
 
 uint32_t ui_hold_toggle(ui_hold_t *h) { return ui_hold_set(h, !h->locked); }
+
+bool ui_hold_toggle_s_valid(uint8_t s) { return s == 0 || s == 1 || s == 2 || s == 3 || s == 5; }
+
+uint8_t ui_hold_toggle_s_next(uint8_t s) { return s == 0 ? 1 : s == 1 ? 2 : s == 2 ? 3 : s == 3 ? 5 : 0; }
+
+uint32_t ui_hold_set_toggle_s(ui_hold_t *h, uint8_t s) {
+    h->toggle_s = ui_hold_toggle_s_valid(s) ? s : 0;
+    return h->toggle_s == 0 ? ui_hold_set(h, false) : UI_HOLD_NONE; // with the gesture off nothing could unlock it again (the switch and the console still can)
+}
 
 uint32_t ui_hold_power_down(ui_hold_t *h, uint32_t now_ms, bool woke) {
     if (!h->down) {
@@ -43,7 +54,7 @@ uint32_t ui_hold_tick(ui_hold_t *h, uint32_t now_ms, bool can_poweroff) {
         return r;
     }
     uint32_t held = held_ms(h, now_ms);
-    if (!h->toggled && held >= UI_HOLD_TOGGLE_MS) {
+    if (h->toggle_s != 0 && !h->toggled && held >= toggle_ms(h)) {
         h->toggled = true;
         r |= ui_hold_toggle(h);
     }
@@ -60,7 +71,7 @@ uint32_t ui_hold_power_up(ui_hold_t *h, uint32_t now_ms) {
     }
     uint32_t r = UI_HOLD_NONE;
     uint32_t held = held_ms(h, now_ms);
-    if (!h->toggled && held >= UI_HOLD_TOGGLE_MS) {
+    if (h->toggle_s != 0 && !h->toggled && held >= toggle_ms(h)) {
         r |= ui_hold_toggle(h); // a poll gap longer than the hold time still counts as a hold
         h->toggled = true;
     }
@@ -96,9 +107,15 @@ ui_hold_progress_t ui_hold_progress(const ui_hold_t *h, uint32_t now_ms, bool ca
         return p;
     }
     if (!h->toggled && held >= UI_HOLD_RING_DELAY_MS) {
-        p.phase = UI_HOLD_P_RING;
-        p.pct = (uint8_t)(held * 100u / UI_HOLD_TOGGLE_MS);
-        p.to_lock = !h->locked;
+        if (h->toggle_s != 0) {
+            p.phase = UI_HOLD_P_RING;
+            p.pct = (uint8_t)(held >= toggle_ms(h) ? 100u : held * 100u / toggle_ms(h)); /* a late poll must not wrap the byte */
+            p.to_lock = !h->locked;
+        } else if (can_poweroff) { // gesture off: the ring fills towards the countdown, which is where the hold does something
+            p.phase = UI_HOLD_P_RING;
+            p.pct = (uint8_t)(held * 100u / (UI_HOLD_SHUTDOWN_MS - UI_HOLD_COUNTDOWN_MS));
+            p.to_off = true;
+        }
     }
     return p;
 }

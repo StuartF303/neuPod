@@ -314,6 +314,12 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
         g_ui_state.dim_idx = 0;
         return end;
     }
+    if (strncmp(p, "lockhold:", 9) == 0) {
+        /* Tour only: Settings > Display > Lock hold set directly, in seconds (0 = Off; Hold is off by default). */
+        g_ui_state.lock_hold_s = (uint8_t)atoi(p + 9);
+        ui_frame_lock_hold_changed();
+        return end;
+    }
 #if NEUPOD_POWER_MGMT
     if (strncmp(p, "idlesleep:", 10) == 0) {
         /* Tour only (docs/adr/0021-power-sleep.md): sleep after N seconds of idleness instead of the setting's 10 minutes or more; 0 = the setting again. */

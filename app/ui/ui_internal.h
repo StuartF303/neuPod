@@ -91,7 +91,8 @@ typedef struct {
     bool autodim;          /* dim the backlight after the idle time */
     uint8_t dim_idx;       /* idle time, an index for ui_autodim_seconds() */
     uint8_t off_idx;       /* time after the dim until the backlight is fully off, an index for ui_screenoff_seconds() */
-    bool autolock;         /* Hold turns on by itself when the screen goes off (docs/adr/0020-hold.md) */
+    bool autolock;         /* Hold turns on by itself when the screen goes off, if Lock hold is not Off (docs/adr/0020-hold.md) */
+    uint8_t lock_hold_s;   /* Settings > Display > Lock hold: seconds of Power that toggle Hold (0 Off, 1, 2, 3, 5); sits in the padding */
 #if NEUPOD_POWER_MGMT
     uint8_t sleep_idx;     /* Settings > Display > Sleep after: an index for power_sleep_seconds() (ADR-0021; sits in the padding before the theme) */
 #endif
@@ -102,6 +103,8 @@ extern ui_state_t g_ui_state;
 void ui_apply_backlight(void);
 /** Apply g_ui_state.theme now (the Settings row changed it, or the settings store was loaded). Auto follows the dim state at the next tick. */
 void ui_apply_theme(void);
+/** Apply g_ui_state.lock_hold_s to the Hold model (the Settings row changed it, or the settings store was loaded); turning it Off while locked unlocks. */
+void ui_frame_lock_hold_changed(void);
 /** True while Hold is on (the screens get no input; ui_hold.h). */
 bool ui_frame_locked(void);
 /** Hold the auto-dim off while a screen previews the backlight (the slider); the idle time restarts when it is released. */
