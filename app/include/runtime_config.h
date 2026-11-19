@@ -15,10 +15,14 @@
 /* Priorities (higher runs first; 0 is the kernel idle task; the timer service task is 6). */
 #define RT_PRIO_STORAGE 5u
 #define RT_PRIO_INPUT 4u
-#define RT_PRIO_RADIO 3u /* the SDK's CYW43 worker, which also runs BTstack; set via CYW43_TASK_PRIORITY on RP2350 */
+#define RT_PRIO_RADIO 6u /* the SDK's CYW43 worker, which also runs BTstack; set via CYW43_TASK_PRIORITY on RP2350. ABOVE storage on
+                            purpose: the A2DP sender has ~40 ms of slack and storage bursts to 32-40 % of core 0 during FLAC. Bench
+                            19 Nov 2026 (Pico 2 W, AirPods, Eels FLAC): radio 3 < storage 5 gave 36 stalls/10 s, catch-up to 160 ms,
+                            bitpool forced 53 to 45, one disconnect; radio above storage gave 0 stalls, 25-34 ms, bitpool 53 steady.
+                            Shares 6 with the timer service (round-robin; both do microseconds of work) */
 #define RT_PRIO_UI 2u
 #define RT_PRIO_MONITOR 1u
-#define RT_PRIO_WIFI 1u  /* the Wi-Fi policy task: joins, retries, NTP; the radio worker (3) does the real work */
+#define RT_PRIO_WIFI 1u  /* the Wi-Fi policy task: joins, retries, NTP; the radio worker (6) does the real work */
 #define RT_PRIO_I2C 4u   /* I2C users run at input priority while on the bus: hal_i2c timeouts are
                             wall-clock (2 ms floor), and a UI frame at priority 2 outlasts that */
 #define RT_PRIO_CHECK 1u /* boot self-check tasks: transient, below the UI so the splash animates */
@@ -98,6 +102,15 @@
 /* The CYW43 worker's stack is set by CYW43_TASK_STACK_SIZE (WORDS, platforms/rp2350/freertos/CMakeLists.txt); keep the two in step. */
 #ifdef CYW43_TASK_STACK_SIZE
 _Static_assert(RT_STACK_RADIO == CYW43_TASK_STACK_SIZE * 4u, "RT_STACK_RADIO must equal CYW43_TASK_STACK_SIZE words in bytes");
+#endif
+
+/* The radio worker must out-rank storage (see RT_PRIO_RADIO). Compile-time guard so a re-tune cannot silently bring back the A2DP stalls. */
+_Static_assert(RT_PRIO_RADIO > RT_PRIO_STORAGE, "RT_PRIO_RADIO must be above RT_PRIO_STORAGE (A2DP link deadline, docs/runtime.md)");
+_Static_assert(RT_PRIO_RADIO <= OS_PRIO_MAX, "RT_PRIO_RADIO exceeds OS_PRIO_MAX");
+
+/* The CYW43 worker's priority is set by CYW43_TASK_PRIORITY (platforms/rp2350/freertos/CMakeLists.txt); keep the two in step. */
+#ifdef CYW43_TASK_PRIORITY
+_Static_assert(RT_PRIO_RADIO == CYW43_TASK_PRIORITY, "RT_PRIO_RADIO must equal CYW43_TASK_PRIORITY");
 #endif
 
 #endif // NEUPOD_RUNTIME_CONFIG_H

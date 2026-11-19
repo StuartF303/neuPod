@@ -50,7 +50,7 @@ BTstack is single-threaded; which thread that is depends on the port. Every `hal
 hands a request over (`bt_port_post()`) or reads an atomic; the BTstack code itself runs on one thread.
 
 **RP2350.** BTstack runs on the **async context of the CYW43 driver**, which with `pico_cyw43_arch_sys_freertos` is one FreeRTOS
-task, the "CYW43 worker" (core 0, priority 3, **6 KB** stack; it was 4 KB before BTstack). Every BTstack callback, and our packet
+task, the "CYW43 worker" (core 0, priority 6, above storage (see [runtime](runtime.md#rtos-tasks-core-0)), **6 KB** stack; it was 4 KB before BTstack). Every BTstack callback, and our packet
 handler, runs on that task.
 
 | Caller | How it reaches BTstack | Blocks the caller? |

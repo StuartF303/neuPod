@@ -26,10 +26,14 @@ if(NOT NEUPOD_BOARD STREQUAL "amoled241") # the amoled241 board has no radio: no
 endif()
 target_include_directories(neupod_freertos INTERFACE ${CMAKE_SOURCE_DIR}/platforms/rp2350/lwip)
 if(NOT NEUPOD_BOARD STREQUAL "amoled241")
-  # SDK knobs for the cyw43 worker task: low-ish priority (RT_PRIO_RADIO), 6 KB of stack (words). This task is also
+  # SDK knobs for the cyw43 worker task: priority 6 (RT_PRIO_RADIO, above storage at 5), 6 KB of stack (words). This task is also
   # BTstack's thread (docs/bluetooth.md): every BTstack callback, and our event handlers, run on it.
+  # Why above storage: the A2DP link has a ~40 ms deadline, while storage only feeds a deep buffer and bursts to 32-40 % of
+  # core 0 during FLAC. Bench 19 Nov 2026 (Pico 2 W, AirPods, Eels FLAC): worker 3 < storage 5 gave 36 stalls per 10 s,
+  # catch-up to 160 ms, bitpool forced 53 to 45, a 0x14 disconnect; worker above storage gave 0 stalls, 25-34 ms, bitpool 53.
+  # Keep equal to RT_PRIO_RADIO (app/include/runtime_config.h; a static assert checks it). Shares 6 with the timer service.
   target_compile_definitions(neupod_freertos INTERFACE
-    CYW43_TASK_PRIORITY=3
+    CYW43_TASK_PRIORITY=6
     CYW43_TASK_STACK_SIZE=1536
     # Bluetooth. The SDK sets this through pico_btstack_hci_transport_cyw43, which only the targets that link it see;
     # but cyw43_arch_init() is compiled into several of the static libraries that link neupod_freertos, and every copy must
