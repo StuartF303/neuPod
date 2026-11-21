@@ -35,6 +35,13 @@ Status: specification, 21 November 2026. Nothing is built. The working instructi
    button or the centre gives a haptic click. It is drawn fresh, never copied from Apple's artwork, with no Apple logo
    and no "iPod"; the store-review risk stays with the owner at submission (Open question 1). This settles Open
    question 2 and most of Open question 3.
+10. **The wheel sets the volume on Now Playing (owner, 21 November 2026)**, as on the device, on both platforms. It
+    sets the phone's own system volume (no separate app volume): Android through `AudioManager`, iOS through a hidden
+    `MPVolumeView`, the common workaround, since iOS has no public API for it. The device's volume bar replaces the
+    progress bar while the wheel turns. If Apple breaks the workaround, the fallback is to be asked for, not guessed.
+11. **Sort rule: the app matches the firmware's code (owner, 21 November 2026)**, `lib_collate_key()` in
+    `app/library/lib_collate.c`, and the rule is written down under [The library](#the-library). The owner may change
+    it later, in the firmware and the app together.
 
 Everything else in this document is the designer's proposal until the owner confirms it. Proposals that most need a
 decision are collected under [Open questions](#open-questions).
@@ -108,6 +115,12 @@ exactly as the device does; it is never hidden and never stops the queue.
   reads files that are new or changed. Removing a folder removes its tracks from the library and nothing else.
 - Sizing target: 20,000 tracks. First scan of 5,000 FLAC files in under five minutes on a mid-range phone; a rescan
   with no changes in under ten seconds. (Targets are proposals; measure and report.)
+- **Sort rule (owner decision 11):** names sort by a collation key built as the firmware's `lib_collate_key()` does.
+  A sort tag is used when present, otherwise the name. One leading article is skipped, in any case, when something
+  follows it: `The `, `A ` or `An ` ("The Beatles" under B, "A Perfect Circle" under P). Letters compare without
+  case and with accents folded. Order: symbols first, then digits, then letters. The fast-scroll letter is the
+  first letter of the key, `#` for a digit or symbol. `docs/ui.md` still says "A "/"An " are not skipped; the code
+  is the reference until the owner changes both.
 - Ratings (0 to 5), play counts, last played and skip counts are kept per track in the app's own database, keyed so
   that they survive a rescan and a file move within the library.
 
@@ -139,7 +152,8 @@ Playing).
   transport buttons; correct behaviour on interruptions (a call pauses; unplugging headphones pauses; another app
   taking audio pauses).
 - **Resume:** reopening the app restores the queue, the track and the position.
-- Volume is the phone's own volume. The app shows no separate volume control beyond the system's.
+- Volume is the phone's own volume. The app has no volume of its own; on Now Playing the wheel sets the system
+  volume and shows the device's volume bar (owner decision 10).
 - The output in use (phone speaker, wired, Bluetooth or AirPlay) is shown by an icon, as on the device. No Cast in R1
   (owner decision 6).
 - No resampling or processing in the app. Where the platform lets the app pass the file's sample rate through to an
