@@ -8,9 +8,9 @@ audit clean, all platforms build, Pico 2 W size delta reported.
 
 ## Phase 0: measure
 
-- [ ] Timing harness on RP2350-Touch-AMOLED-2.41
-- [ ] Timing harness on ESP32-S3-Touch-AMOLED-2.41
-- [ ] Backdrop generation: time and memory per track
+- [ ] Timing harness on RP2350-Touch-AMOLED-2.41. BLOCKED: board not attached on 2026-11-21; bench image builds (`chore/phase0-bench`)
+- [x] Timing harness on ESP32-S3-Touch-AMOLED-2.41 (#99, 2026-11-21)
+- [ ] Backdrop generation: time and memory per track (ESP32-S3 measured, #99; RP2350 to do)
 - [ ] `PHASE0-RESULTS.md` written; **stop and show the owner**
 
 ## Phase 1: the style layer
@@ -151,4 +151,5 @@ audit clean, all platforms build, Pico 2 W size delta reported.
 
 (One line per thing the next session must know. Newest first.)
 
+- 2026-11-21: phase 0 bench is on branch `chore/phase0-bench` (never merge). ESP32-S3 numbers in `PHASE0-RESULTS.md`; full-screen repaints over a picture run at 3-13 fps. The ESP32 board was left running the bench image: reflash `build/esp32s3/neupod.bin` for normal use.
 - 2026-11-21: checklist reconciled against `app/ui/*.c` and the tours before phase 0 (brief, "Before the first item" step 4); items added, none removed. Many of the added states have no tour step yet: add one when the item is worked.
