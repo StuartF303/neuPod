@@ -15,7 +15,7 @@ audit clean, all platforms build, Pico 2 W size delta reported.
 
 ## Phase 1: the style layer
 
-- [ ] Checklist reconciled against `app/ui/*.c` and the tours
+- [x] Checklist reconciled against `app/ui/*.c` and the tours (#98, 2026-11-21)
 - [ ] Theme is style x mode; skins interface; today's look kept as the default
 - [ ] Compile-time gate so the frozen Pico 2 W image is unchanged
 - [ ] Classic Light colour table and contrast test
