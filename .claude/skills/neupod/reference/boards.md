@@ -33,8 +33,9 @@ RP2350B, 16 MB flash, **8 MB PSRAM** (QMI CS1 = GPIO47; Waveshare says 2 MB, wro
 
 ESP32-S3R8 (8 MB octal PSRAM), 16 MB flash. Wi-Fi + **BLE only (no Classic BT, so no A2DP)**. No audio.
 - AMOLED RM690B0 on QSPI: CS 9, CLK 10, D0–3 11–14, RST 21 (wiki's GPIO38 is wrong). TE and PWR_EN are on the TCA9554
-  expander (0x20). The screen only lights with the **factory init table** sent verbatim (see `platforms/esp32s3/main/hal/hal_display.c`);
-  don't write the expander.
+  expander (0x20). The screen needs the expander set to the factory state (output reg 0x03, then config reg 0xDC; `board.c` does this
+  at boot; cold power-on default leaves the panel dark) **and** the factory init table sent verbatim (`hal_display.c`). Expander state
+  survives an ESP reset: test display changes from a full power cycle (USB and battery out).
 - I2C SDA 47 / SCL 48: FT6336 0x38 (RST GPIO3), QMI8658 at **0x6B**, PCF85063, TCA9554 0x20.
   Touch map with MADCTL 0x30: x = raw y, y = 449 − raw x (bench-confirmed 15 Nov 2026).
 - microSD SPI: CS 2, SCK 4, MOSI 5, MISO 6.

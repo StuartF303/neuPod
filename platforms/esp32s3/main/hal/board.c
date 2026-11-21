@@ -29,7 +29,7 @@ static esp_err_t s_result = ESP_FAIL;
 i2c_master_bus_handle_t board_i2c_bus(void) { return s_bus; }
 
 int board_tca_inputs(void) {
-    uint8_t reg = 0x00, v = 0;
+    uint8_t reg = TCA9554_REG_INPUT, v = 0;
     if (s_tca == NULL || i2c_master_transmit_receive(s_tca, &reg, 1, &v, 1, I2C_TIMEOUT_MS) != ESP_OK) {
         return -1;
     }
@@ -65,21 +65,37 @@ esp_err_t board_init(void) {
         return s_result = e;
     }
 
-    // The TCA9554 expander is deliberately NOT written to. The first versions of this file drove EXIO1 ("PWR_EN") high as an output,
-    // as the schematic suggests, and the panel stayed dark; the factory firmware (Espressif/Waveshare example_qspi_with_ram, read out
-    // of its image and from Waveshare's demo source) never touches the expander for the display: every EXIO stays at the chip's
-    // power-on default (input) and the panel works. Only its input register is read here, so the boot log shows the level.
+    // The TCA9554 expander must be configured before the panel is initialised (bench finding, 21 Nov 2026). At a cold power-on it
+    // reads input 0xFE, output 0xFF, polarity 0x00, config 0xFF (every EXIO an input) and the panel stays dark. After the factory
+    // firmware has run it reads output 0x03 and config 0xDC: EXIO0 and EXIO1 (PWR_EN) driven high, EXIO5 driven low, the rest inputs,
+    // and the panel lights. That state survives an ESP32 reset and is lost only on a power cycle, which is why earlier "fixes" (and
+    // the older belief that the factory never writes the expander) appeared to work from a warm expander. The output register is
+    // written first so the pins come up at the right level when the config register turns them into outputs. Verified lighting the
+    // panel from a full cold power cycle. hal_display_init() runs after this (hal_system_init() precedes it in main()).
     i2c_master_dev_handle_t tca = NULL;
     i2c_device_config_t dc = {.dev_addr_length = I2C_ADDR_BIT_LEN_7, .device_address = I2C_ADDR_TCA9554, .scl_speed_hz = 400000};
     e = i2c_master_bus_add_device(s_bus, &dc, &tca);
     if (e == ESP_OK) {
         s_tca = tca;
-        int in = board_tca_inputs();
-        printf("board: TCA9554 left at its power-on defaults, inputs 0x%02X (EXIO0 TE, EXIO1 PWR_EN, EXIO2 TP_INT)\n", in < 0 ? 0xFF : in);
-        e = in < 0 ? ESP_FAIL : ESP_OK;
+        const uint8_t out_seq[2] = {TCA9554_REG_OUTPUT, TCA9554_OUTPUT_INIT};
+        const uint8_t cfg_seq[2] = {TCA9554_REG_CONFIG, TCA9554_CONFIG_INIT};
+        e = i2c_master_transmit(s_tca, out_seq, sizeof out_seq, I2C_TIMEOUT_MS);
+        if (e == ESP_OK) {
+            e = i2c_master_transmit(s_tca, cfg_seq, sizeof cfg_seq, I2C_TIMEOUT_MS);
+        }
+        if (e == ESP_OK) {
+            esp_rom_delay_us(TCA9554_SETTLE_US); // busy-wait: safe whether or not the scheduler is running yet
+            uint8_t reg_out = TCA9554_REG_OUTPUT, reg_cfg = TCA9554_REG_CONFIG, out = 0xFF, cfg = 0xFF;
+            (void)i2c_master_transmit_receive(s_tca, &reg_out, 1, &out, 1, I2C_TIMEOUT_MS);
+            (void)i2c_master_transmit_receive(s_tca, &reg_cfg, 1, &cfg, 1, I2C_TIMEOUT_MS);
+            int in = board_tca_inputs();
+            printf("board: TCA9554 inputs 0x%02X output 0x%02X config 0x%02X (wrote 0x%02X / 0x%02X)\n", in < 0 ? 0xFF : in, out, cfg,
+                   TCA9554_OUTPUT_INIT, TCA9554_CONFIG_INIT);
+            e = in < 0 ? ESP_FAIL : ESP_OK;
+        }
     }
     if (e != ESP_OK) {
-        printf("board: TCA9554 (I2C 0x20) did not answer: %s\n", esp_err_to_name(e));
+        printf("board: TCA9554 (I2C 0x20) init failed: %s\n", esp_err_to_name(e));
     }
     return s_result = e;
 }

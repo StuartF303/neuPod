@@ -47,6 +47,14 @@
 #define EXIO_PWR_EN 1
 #define EXIO_TP_INT 2
 #define I2C_ADDR_TCA9554 0x20
+#define EXIO_LCD_AUX 5 /* driven low by the factory firmware; purpose not identified */
+#define TCA9554_REG_INPUT 0x00
+#define TCA9554_REG_OUTPUT 0x01
+#define TCA9554_REG_CONFIG 0x03 /* 1 = input, 0 = output */
+/* Factory state: EXIO0 and EXIO1 (PWR_EN) outputs high, EXIO5 output low, everything else input. */
+#define TCA9554_OUTPUT_INIT ((1u << EXIO_TE) | (1u << EXIO_PWR_EN))
+#define TCA9554_CONFIG_INIT ((uint8_t)(0xFFu & ~((1u << EXIO_TE) | (1u << EXIO_PWR_EN) | (1u << EXIO_LCD_AUX))))
+#define TCA9554_SETTLE_US 20000
 #define I2C_ADDR_FT6336 0x38
 
 /* Panel: native 450 x 600 portrait RAM, used as 600 x 450 landscape with MADCTL 0x30; the visible area starts 16 rows into RAM. */
@@ -57,8 +65,8 @@
 #define LAND_H 450
 
 /**
- * One-time board bring-up, from hal_system_init(): latch the battery switch and start the I2C bus. The expander is only read, never
- * written (the panel works with it at its defaults; driving EXIO1 high was what kept it dark). Idempotent. Returns ESP_OK if the bus and
+ * One-time board bring-up, from hal_system_init(): latch the battery switch and start the I2C bus. Sets the expander to the factory
+ * state (output 0x03, config 0xDC) so the panel is powered; it is lost on a power cycle, so this must run every boot. Idempotent. Returns ESP_OK if the bus and
  * the expander answered.
  */
 esp_err_t board_init(void);

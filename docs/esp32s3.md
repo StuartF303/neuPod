@@ -12,7 +12,7 @@ fuel gauge; the battery divider on GPIO17 is not read), the IMU and RTC.
 | | |
 |---|---|
 | Chip | ESP32-S3R8: dual Xtensa LX7 at 240 MHz, 8 MB octal PSRAM, 16 MB flash. Wi-Fi + BLE 5 only: **no Classic Bluetooth, so no A2DP** |
-| Display | 450 x 600 RM690B0 AMOLED on QSPI (SPI2: CS 9, CLK 10, D0-3 11-14, RST 21), used as **600 x 450 landscape** (MADCTL 0x30). Panel power enable and TE are on the TCA9554 expander (EXIO1, EXIO0) |
+| Display | 450 x 600 RM690B0 AMOLED on QSPI (SPI2: CS 9, CLK 10, D0-3 11-14, RST 21), used as **600 x 450 landscape** (MADCTL 0x30). Panel power enable and TE are on the TCA9554 expander (EXIO1, EXIO0); `board.c` must write it (output 0x03, config 0xDC) every boot or the panel stays dark |
 | Touch | FT6336 at I2C 0x38, reset GPIO3, polled (its interrupt is EXIO2) |
 | I2C | one bus, SDA 47 / SCL 48: TCA9554 0x20, FT6336 0x38, QMI8658 0x6B, PCF85063 0x51 |
 | microSD | SPI (SPI3): CS 2, SCK 4, MOSI 5, MISO 6, 20 MHz |
@@ -85,8 +85,7 @@ be budgeted against it (trim the doubled stacks that measure small: the monitor 
 **Display bring-up (what the dark-panel hunt found).** The bring-up probe and the first runtime builds left the panel dark, while the factory image lit it. The factory
 firmware's init table was read out of its image (and matches Waveshare's `10_FactoryProgram` demo source). It differs from the probe's in the tail: after sleep-out it sets the
 window, sends **display-on (0x29), MADCTL 0x30 and full brightness (0x51 0xFF) inside the init, before any pixel**, and the driver sends 0x29 once more; the probe switched the display on
-only after the first frame. The factory also **never writes to the TCA9554 expander** (the schematic's EXIO1 "PWR_EN" reads high at the chip's power-on default, `0xC7` on the bench), whereas
-the probe drove EXIO1 as an output. `hal_display.c` now follows the factory sequence and `board.c` only reads the expander. The probe's `esp_lcd_sh8601` 2.0.1 is the same driver version the
+only after the first frame. The expander turned out to be the real cause (bench, 21 Nov 2026): at a cold power-on the TCA9554 reads input 0xFE, output 0xFF, polarity 0x00, config 0xFF (all inputs) and the panel stays dark; after the factory firmware has run it reads output 0x03, config 0xDC (EXIO0 and EXIO1 PWR_EN driven high, EXIO5 driven low, the rest inputs) and the panel lights. That state survives an ESP32 reset and is lost only on a power cycle, so the earlier "fix" (the factory init table) only seemed to work on a warm expander. `board.c` now writes output 0x03 then config 0xDC and waits 20 ms before display init; this lit the panel from a full cold power cycle. **Display tests must start from a full power cycle (USB and battery both out).** `hal_display.c` follows the factory sequence. The probe's `esp_lcd_sh8601` 2.0.1 is the same driver version the
 factory uses, with the same QSPI configuration (40 MHz, mode 0, 0x02/0x32 framing).
 
 **Display.** `hal_display.c` talks to the RM690B0 through `esp_lcd`'s SPI panel IO in QSPI mode (SH8601 framing: opcode 0x02 for commands,
