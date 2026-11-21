@@ -35,3 +35,40 @@ Thumbs.db
 
 # Claude Code agent worktrees (the project skill in .claude/skills is tracked)
 .claude/worktrees/
+
+# Secrets and signing material, anywhere in the repository (the repository is public)
+*.jks
+*.keystore
+key.properties
+*.p12
+*.p8
+*.cer
+*.mobileprovision
+*.provisionprofile
+GoogleService-Info.plist
+google-services.json
+.env
+.env.*
+local.properties
+
+# Phone app (mobile/): build outputs and tool caches
+# (mobile/.gitignore has the full Flutter list; these repeat the essentials at the root)
+mobile/**/.dart_tool/
+mobile/**/build/
+mobile/**/Pods/
+mobile/**/ios/Flutter/ephemeral/
+mobile/**/.flutter-plugins-dependencies
+
+# Phone app: never commit personal music. Test audio for the app goes in mobile/test/assets/;
+# the firmware fixtures in tests/assets/audio are outside mobile/ and unaffected.
+mobile/test_music/
+mobile/**/*.flac
+mobile/**/*.mp3
+mobile/**/*.m4a
+mobile/**/*.aac
+mobile/**/*.wav
+mobile/**/*.aif
+mobile/**/*.aiff
+mobile/**/*.ogg
+mobile/**/*.opus
+!mobile/test/assets/**
