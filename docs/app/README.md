@@ -97,7 +97,7 @@ exactly as the device does; it is never hidden and never stops the queue.
 - Discs of one album (`(Disc 1)`, `(Disc 2)` in tags or folder names) are one album with disc sections.
 - A track whose album artist is `Various Artists`, or whose compilation flag is set, belongs to Compilations and is not
   listed under each contributing artist's albums.
-- The scan runs in the background, shows progress, can be cancelled, and survives the app being closed. A rescan only
+- The scan runs in the background, shows progress, can be cancelled, and survives the app being closed (on iOS it resumes at the next launch; owner decision 8). A rescan only
   reads files that are new or changed. Removing a folder removes its tracks from the library and nothing else.
 - Sizing target: 20,000 tracks. First scan of 5,000 FLAC files in under five minutes on a mid-range phone; a rescan
   with no changes in under ten seconds. (Targets are proposals; measure and report.)
@@ -180,7 +180,8 @@ targets are at least 44 points.
 
 ### Privacy and safety
 
-- R1 makes **no network connection at all**. No analytics, no crash reporting service, no accounts.
+- R1 makes **no network connection at all**. No analytics, no crash reporting service, no accounts. iOS downloading an iCloud file
+  after the user taps Download (owner decision 7), and AirPlay (decision 6), are the system's networking, not the app's.
 - The app requests only the permissions it needs to read the chosen folders, play in the background and show media
   controls.
 - Signing keys, provisioning profiles and store credentials are never committed. The repository is public.

@@ -17,7 +17,7 @@ Status: Proposed (2026-11-21) · Owner: Library engineer
   without a platform-channel hop per read.
 - Hand the audio engine something it can open natively and gaplessly.
 - Never write, move or delete; request nothing beyond what reading needs. No network.
-- Minimum OS is open (proposal: two latest iOS, Android 10+); Flutter 3.50 itself supports Android 24+ and iOS 15+.
+- Minimum OS (owner, 2026-11-21): iOS 18+, Android 10 (API 29)+. Flutter 3.50 itself supports Android 24+ and iOS 15+.
 
 ## Options considered
 
@@ -71,8 +71,10 @@ the plugin slips.
 
 The audio engine gets a **URI string**: `content://...` on Android (Media3's `DefaultDataSource` opens `content`
 URIs itself, and the persisted grant belongs to the whole app process), `file://...` under an actively accessed root
-on iOS (AVPlayer opens it directly). Not an fd and not a Dart byte stream: just_audio's `StreamAudioSource` runs a
-localhost HTTP proxy, which needs cleartext networking enabled and fits badly with "no network connection".
+on iOS. The URI goes to `neupod_audio` ([0001](0001-audio-engine.md)): Media3 opens `content://` itself, and on iOS
+AVAudioFile opens the `file://` URL. **Only `neupod_storage` resolves bookmarks and starts or stops security-scoped
+access**; the audio plugin never does, so neither can end access the other still needs. Not an fd and not a Dart byte
+stream (a Dart stream source would need a localhost HTTP proxy, which fits badly with "no network connection").
 
 ## Consequences and risks
 
@@ -80,14 +82,15 @@ localhost HTTP proxy, which needs cleartext networking enabled and fits badly wi
   Music in `Music/` or any subfolder is fine. The UI must say this when the picker refuses.
 - **MediaStore source and folder art:** `READ_MEDIA_AUDIO` covers audio only. `Folder.jpg`/`cover.jpg` next to the
   tracks are images, and `READ_MEDIA_IMAGES` is restricted by Play policy. Tracks from the shared collection get
-  embedded art only; folder-art fallback works for SAF-picked folders. Spec gap for the lead.
+  embedded art only; folder-art fallback works for SAF-picked folders. **Resolved: owner decision 8.** Spike:
+  `ContentResolver.loadThumbnail` on the album URI may recover some folder art under `READ_MEDIA_AUDIO`.
 - **iCloud not downloaded:** reading or playing an evicted file makes iOS fetch it from iCloud. R1 promises no network
-  connection. Owner decision needed: list greyed and leave it (proposal), or offer an explicit "Download" that asks
-  iOS to fetch. iOS 18.4+ reportedly changed when evicted files are refreshed (forum report, unanswered); test.
+  connection. **Resolved: owner decision 7**, a Download action that asks iOS to fetch; the app never reads an
+  evicted file without that tap. iOS 18.4+ reportedly changed when evicted files are refreshed (forum report, unanswered); test.
 - **Scan surviving the app being closed:** Android can keep a scan going in a foreground service or WorkManager.
   iOS cannot run an arbitrary long task after the user closes the app; the scan checkpoints and resumes at next
-  launch, and keeps going while music plays in the background (the app is then not suspended). Spec wording should
-  say "resumes" for iOS.
+  launch, and keeps going while music plays in the background (the app is then not suspended). **Resolved: owner
+  decision 8.**
 - The iOS picker grants read-write to the tree; read-only is enforced by our code only (no write API in the plugin).
   On Android we request `FLAG_GRANT_READ_URI_PERMISSION` only.
 - Removable drives on iOS: a bookmark to an unplugged drive fails to resolve; the root shows as unavailable, its tracks
@@ -106,7 +109,7 @@ localhost HTTP proxy, which needs cleartext networking enabled and fits badly wi
    `/proc/self/fd`). Try `/proc/self/fd/N` with `RandomAccessFile` as the simpler alternative.
 4. Same fd path on a non-local provider (Google Drive if installed): `openFileDescriptor` may return a pipe (not
    seekable); confirm we detect and grey it.
-5. just_audio (or the chosen engine) plays a `content://` tree URI and a MediaStore URI gaplessly on Android, and a
+5. `neupod_audio` plays a `content://` tree URI and a MediaStore URI gaplessly on Android, and a
    bookmarked iCloud Drive file URL on iOS after relaunch.
 6. iPhone: drag a folder in Finder into Documents; pick an iCloud Drive folder with some files evicted; confirm the
    placeholder names and status keys on the current iOS; relaunch and resolve the bookmark; a USB drive unplugged.

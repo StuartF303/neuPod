@@ -9,7 +9,7 @@ Status: Proposed (2026-11-21) · Owner: Audio engineer
 - Headset and Bluetooth transport buttons.
 - Interruptions: a call pauses, unplugging headphones (becoming noisy) pauses, and another app taking audio focus pauses.
 - Resume: the queue, track and position are restored on reopen. That lives in the domain layer; the session only has to accept a restored queue.
-- An icon shows the output in use: speaker, wired, Bluetooth, AirPlay or cast.
+- An icon shows the output in use: speaker, wired, Bluetooth or AirPlay. No Cast in R1 (owner decision 6).
 - No network: artwork comes from local files only. Only the permissions needed.
 - Fits the engine chosen in [0001](0001-audio-engine.md): Media3 ExoPlayer on Android, AVAudioEngine on iOS.
 - Minimum OS (owner, 2026-11-21): iOS 18, Android 10 (API 29).
@@ -56,7 +56,7 @@ Why: one owner of player, session and focus per platform, no bridging layer, no 
 
 ## Consequences and risks
 
-- **"Cast" can't be supported on Android in R1.** Casting from an app needs the Google Cast SDK and the app's own network connection, which the R1 no-network rule forbids. The Android icon set is therefore speaker, wired, Bluetooth and USB. **Raise this with the owner** as a spec deviation. iOS AirPlay is fine: the OS does the networking, and the route shows as `airPlay`. The AVAudioEngine path must use `routeSharingPolicy = .longFormAudio` for AirPlay 2, which the spike will verify.
+- **"Cast" can't be supported on Android in R1.** Casting from an app needs the Google Cast SDK and the app's own network connection, which the R1 no-network rule forbids. The Android icon set is therefore speaker, wired, Bluetooth and USB. **Resolved: owner decision 6 (README.md), no Cast in R1.** iOS AirPlay is fine: the OS does the networking, and the route shows as `airPlay`. The AVAudioEngine path must use `routeSharingPolicy = .longFormAudio` for AirPlay 2, which the spike will verify.
 - **The active route on Android 10–12 is inferred, not reported.** No public API before API 33 returns the device the media stream is routed to. A rare mismatch is possible, for example Bluetooth connected but audio forced to the speaker.
 - Artwork must be passed as a file or `content://` URI or as bytes, never an `http` URI. The Android release manifest has no `INTERNET` permission, so the OS enforces no network.
 - Android 13+ media-session notifications are exempt from the `POST_NOTIFICATIONS` runtime permission. No extra prompt is expected; the spike will confirm on API 36.

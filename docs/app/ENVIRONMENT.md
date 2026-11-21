@@ -10,7 +10,7 @@ Checked 2026-11-21 on the owner's Mac, over ssh in `tmux`.
 | Flutter | 3.50.1 stable (framework `ae9b586f34`, 2026-11-18), Dart 3.14.0 | Homebrew cask `flutter` |
 | Xcode | 26.5 (17F42), command-line tools at `/Applications/Xcode.app/Contents/Developer` | First launch done |
 | CocoaPods | 1.17.0 | Homebrew |
-| iOS simulator | iOS 26.5 runtime (23F77): iPhone 17, 17 Pro, 17 Pro Max, 17e, Air | No iOS 18 runtime installed yet (the minimum is iOS 18, see below) |
+| iOS simulator | iOS 26.5 runtime (23F77): iPhone 17, 17 Pro, 17 Pro Max, 17e, Air | iOS 18.6 runtime (22G86) added on 2026-11-21 for testing the minimum, with the owner's approval |
 | JDK | Temurin 17.0.21.1, set with `flutter config --jdk-dir` | A Homebrew OpenJDK 21 is also on `PATH`; Flutter is pinned to 17 to match CI |
 | Android SDK | `~/Library/Android/sdk`: platforms 35 and 36, build-tools 35.0.0 and 36.0.0, platform-tools 37.0.3, emulator 37.3.10, cmdline-tools 21.0 | Licences accepted |
 | Android emulator | AVD `neupod_api36`: Pixel 8, API 36, Google APIs, arm64-v8a | |
@@ -27,8 +27,7 @@ is expected while the phone is not attached.
   libevent, libunistring, pcre2 and utf8proc) beside the new one. `brew cleanup <formula>` on each fixed it.
 - The `temurin@17` cask runs a `.pkg` installer that needs the owner's password, which can't be typed at an ssh prompt
   without a terminal. It was run in a separate `tmux` window and the owner typed the password there.
-- The self-hosted GitHub Actions runner on this Mac (`~/actions-runner`) belongs to another project. The app's CI does not
-  use it; iOS CI runs on GitHub-hosted macOS runners.
+- iOS CI runs on GitHub-hosted macOS runners.
 
 ## Owner answers that set the targets (2026-11-21)
 

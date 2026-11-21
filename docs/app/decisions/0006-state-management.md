@@ -60,7 +60,7 @@ Rules for agents (to go into `mobile/README.md` for contributors and be enforced
 - `ref.watch` in `build`, `ref.read` in callbacks, `ref.listen` for one-shot effects (panels).
 - Business rules stay in domain or data, never in a Notifier. A Notifier forwards calls and maps state.
 - The scan is a data-layer `LibraryScanner` with `Stream<ScanProgress>` and `cancel()`. The UI reads it through a
-  `StreamProvider` and calls `cancel` through `ref.read`. Running when the app is closed (WorkManager / BGTask) is a
+  `StreamProvider` and calls `cancel` through `ref.read`. Running when the app is closed (WorkManager on Android; on iOS the scan resumes at next launch, owner decision 8) is a
   data/platform concern, not a Riverpod one.
 - The player is an audio-layer `Player` interface exposing `Stream<PlayerState>`. A single `playerStateProvider`
   (`StreamProvider`) feeds every screen.
