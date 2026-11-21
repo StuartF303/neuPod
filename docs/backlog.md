@@ -33,6 +33,10 @@ the Pico 2 W build is frozen as a compile check; items may assume the RP2350B wi
 | UI-6 | **Rapid presses (bench check)**: the queue is 64 deep, the UI wakes on input and drops are counted (`input: WARNING n events dropped`); send 20 UART keys in one burst on the Pico rig and confirm none are lost. | bench 2026-11-03 | wheel / UART on the bench |
 | UI-23 | **Licences screen, remainder**: the on-device list shows a licence name and a short notice; the full texts (SIL OFL, CC BY 4.0, Apache-2.0, ChaN's licence) are in the source tree only; BTstack's commercial terms (a final board that is not a Raspberry Pi product, and the Y2) are an open legal question ([LICENSE.md](https://github.com/StuartF303/neuPod/blob/main/LICENSE.md)). | req 12 Nov 2026 | decision on shipping full texts; BlueKitchen answer |
 
+## Phone app 2026-11-21
+
+A Flutter music player for iOS and Android in the neuPod styles, later a companion to the device: [specification](app/README.md). Release R1 (files on the phone) is tracked in its own [progress list](app/PROGRESS.md), not here. R3 (companion) depends on the device HTTP API, step W2 in [Wi-Fi](wifi.md).
+
 ## UI styles 2026-11-21
 
 Classic and Modern styles, the status bar, the three feedback places and the Music screens: [design](design/2026-11-21-ui-styles/README.md). The work is tracked item by item in its own [progress list](design/2026-11-21-ui-styles/PROGRESS.md), not here. It overrides parts of the 12 November review (the toast strip, the volume HUD, the Now Playing pills and volume strip, the status-bar clock); the design's README lists them.
