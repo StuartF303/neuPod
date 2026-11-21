@@ -1,0 +1,29 @@
+# Static analysis for the neuPod app. `flutter analyze` must be clean on every PR.
+# The layering rule of decision 0006 is checked by test/architecture_test.dart.
+
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+
+linter:
+  rules:
+    # Keep every edge visible to test/architecture_test.dart.
+    - always_use_package_imports
+    - avoid_dynamic_calls
+    - avoid_print
+    - avoid_relative_lib_imports
+    - cancel_subscriptions
+    - close_sinks
+    - prefer_final_locals
+    - prefer_single_quotes
+    - unawaited_futures
+    - unnecessary_lambdas
+    - use_super_parameters
