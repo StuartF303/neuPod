@@ -1,0 +1,227 @@
+# neuPod phone app: specification
+
+A music player for iOS and Android that looks and behaves like a neuPod, and later talks to one.
+
+Status: specification, 21 November 2026. Nothing is built. The working instructions for building it are in
+[TEAM-BRIEF.md](TEAM-BRIEF.md) and the checklist is [PROGRESS.md](PROGRESS.md).
+
+## Owner decisions (21 November 2026)
+
+1. **The app is both** a full player on the phone and, later, a companion to a neuPod device.
+2. **Music comes from three places, in this order of delivery:** files on the phone first; then the owner's NAS; then
+   the card in a neuPod.
+3. **Built in Flutter**, one codebase for both platforms.
+4. **iOS is built and tested for real**: the owner has a Mac and an Apple developer account.
+
+Everything else in this document is the designer's proposal until the owner confirms it. Proposals that most need a
+decision are collected under [Open questions](#open-questions).
+
+## What it is for
+
+The owner is re-ripping about 300 CDs to FLAC as the library for the neuPod. The app gives the same library, the same
+menus and the same look on the phone he already carries, and becomes the easy way to manage a neuPod once the device
+has a network interface.
+
+**Goals**
+
+- Play a large lossless library from the phone, gaplessly, in the background, with the controls people expect on the
+  lock screen and on headsets.
+- Feel like a neuPod: the same menu structure, vocabulary and visual styles
+  ([Classic and Modern](../design/2026-11-21-ui-styles/README.md)), adapted to touch and to a portrait screen.
+- Work fully offline with no account.
+
+**Not goals**
+
+- Streaming services, a store, social features, recommendations, lyrics, podcasts (podcasts are a later device feature).
+- Video.
+- Editing tags or files. The app reads the library; it never changes the owner's music files.
+- Tablets and desktop layouts in the first release.
+
+**It has failed if**
+
+- it ever alters, moves or deletes a music file without being asked;
+- playback gaps between tracks of a continuous album, or stops when the screen locks;
+- it sends anything about the library off the phone;
+- it looks like a generic player with a neuPod logo on it.
+
+## Releases
+
+| Release | What it adds | Depends on |
+| --- | --- | --- |
+| **R1: local player** | Everything in this document's "R1" sections: files on the phone, library, playback, both styles | Nothing. **This is the work to do now.** |
+| **R2: NAS** | Browse, stream and download from a home server | An owner decision on the server (see Open questions); R1 |
+| **R3: companion** | Find a neuPod on the network, browse and play its card, send music and playlists to it, remote control, device settings | The device's HTTP API, which does not exist yet (it is step W2 in [Wi-Fi](../wifi.md)); R1 |
+
+R2 and R3 are outlined at the end so R1 is built with room for them. They are not to be started without the owner.
+
+## R1: the local player
+
+### Getting music onto the phone
+
+- **Android:** the user picks one or more folders with the system folder picker; the app keeps read access to them. It
+  also offers the device's shared music collection.
+- **iOS:** the app has its own Documents folder, visible in the Files app and in Finder when the phone is plugged into
+  a Mac, so a library is copied in by dragging folders. The user can also pick a folder elsewhere in Files (for example
+  on iCloud Drive or an attached drive) and the app keeps access to it.
+- The app never copies music it can read in place, and never writes into a music folder.
+
+### Formats
+
+Must play: FLAC (up to 24-bit / 192 kHz), ALAC, MP3, AAC (M4A), WAV, Opus and Ogg Vorbis. These match the device's
+required codecs. A file the platform cannot decode is listed greyed with the reason at the right (`Opus, can't play`),
+exactly as the device does; it is never hidden and never stops the queue.
+
+### The library
+
+- Built by scanning the chosen folders and reading tags: title, artist, album artist, album, track and disc number,
+  year, genre, compilation flag, duration, sample rate and bit depth, embedded art.
+- **Where tags are missing, fall back to the folder convention** the owner's library uses:
+  `Artist/Year Album/NN Title.ext`, with `Folder.jpg` (or `cover.jpg`) as the album art. A trailing `, The` on a
+  folder name is displayed as a leading `The` and sorted without it.
+- Discs of one album (`(Disc 1)`, `(Disc 2)` in tags or folder names) are one album with disc sections.
+- A track whose album artist is `Various Artists`, or whose compilation flag is set, belongs to Compilations and is not
+  listed under each contributing artist's albums.
+- The scan runs in the background, shows progress, can be cancelled, and survives the app being closed. A rescan only
+  reads files that are new or changed. Removing a folder removes its tracks from the library and nothing else.
+- Sizing target: 20,000 tracks. First scan of 5,000 FLAC files in under five minutes on a mid-range phone; a rescan
+  with no changes in under ten seconds. (Targets are proposals; measure and report.)
+- Ratings (0 to 5), play counts, last played and skip counts are kept per track in the app's own database, keyed so
+  that they survive a rescan and a file move within the library.
+
+### Browsing
+
+The same structure as the device:
+
+- **Home:** Music, Playlists, Settings, Shuffle Songs, Now Playing (only while something is loaded).
+- **Music:** Cover Flow, Playlists, Artists, Albums, Songs, Genres, Compilations.
+- **An artist:** All Songs, then the albums with cover, year and song count.
+- **An album:** header with the cover, artist, year, song count and total time; numbered tracks, with disc headings.
+- **Songs:** two lines per row, title over artist and album.
+- **Cover Flow:** albums by artist then year; the centred album opens on tap.
+- **Fast scroll:** a letter index on long lists.
+- **Search**, which the device does not have because it has no keyboard: one field, results grouped as artists, albums
+  and songs, working as the user types.
+
+Long names end in an ellipsis in lists and scroll as a ticker where the device scrolls them (the focused title on Now
+Playing).
+
+### Playback
+
+- A play queue with Play, Play Next and Add to Queue from any track, album, artist, genre or playlist. The queue is
+  visible and can be reordered and cleared.
+- **Gapless** between consecutive tracks of the same format; verified by test, not by ear alone.
+- Shuffle (off, on) and repeat (off, all, one), with the same glyphs as the device's status bar.
+- Seek by dragging the progress bar; skip back restarts the track after three seconds, otherwise goes to the previous one.
+- **Background playback** with lock-screen and notification controls, artwork and scrubbing; headset and Bluetooth
+  transport buttons; correct behaviour on interruptions (a call pauses; unplugging headphones pauses; another app
+  taking audio pauses).
+- **Resume:** reopening the app restores the queue, the track and the position.
+- Volume is the phone's own volume. The app shows no separate volume control beyond the system's.
+- The output in use (phone speaker, wired, Bluetooth, AirPlay or cast device) is shown by an icon, as on the device.
+- No resampling or processing in the app. Where the platform lets the app pass the file's sample rate through to an
+  external DAC, do so and say what was achieved in the format line; do not claim bit-perfect output that has not been
+  measured.
+
+### Playlists
+
+- **On-The-Go:** add from any row; reorder; clear; save as a named playlist.
+- Named playlists: create, rename, reorder, delete.
+- Import and export `.m3u8`, with paths relative to the library folder, so playlists can move between the phone and a
+  neuPod's card.
+
+### Now Playing
+
+Art, title, artist, album and year, the small format line (`FLAC 16/44.1`), progress with elapsed and remaining, shuffle
+and repeat, rating stars, and a route to the queue. In Modern the backdrop and the accent come from the album art, by
+the same rule as the device: the dominant colour, clamped until white text on it reaches 4.5:1.
+
+### Look and feel
+
+- Two styles, **Classic** and **Modern**, each in Light and Dark, with the colours and skins in the
+  [UI styles design](../design/2026-11-21-ui-styles/README.md). Mode follows the phone's setting by default; style is
+  chosen in Settings.
+- The device UI is a 4:3 landscape screen driven by a wheel. The phone is a tall touch screen. The app keeps the
+  device's **structure, names, colours, type and component shapes** and replaces the wheel with touch: tap is Select,
+  the back gesture is Menu, lists scroll by drag.
+- **No portrait mock-ups exist yet.** The first thing the build produces is a small set of real screens for the owner
+  to approve before the rest is built (the design gate in the team brief).
+- Type is Montserrat (SIL OFL), icons are Lucide (ISC), as on the device. Every third-party asset and package is listed
+  on an in-app Licences screen.
+- Feedback follows the device's three places where they translate: a row confirms with a brief flash and a tick; a
+  greyed row carries its reason; something lost or about to be lost gets a centred panel. No toasts for routine things.
+
+### Settings
+
+Style and mode; library folders (add, remove, rescan); gapless on or off; skip-back behaviour; reset ratings and play
+counts (with a panel to confirm); About; Licences.
+
+### Accessibility
+
+Every control has a screen-reader label; the app honours the system text size up to the largest standard setting
+without clipping; text contrast is at least 4.5:1 in every style and mode; nothing depends on colour alone; touch
+targets are at least 44 points.
+
+### Privacy and safety
+
+- R1 makes **no network connection at all**. No analytics, no crash reporting service, no accounts.
+- The app requests only the permissions it needs to read the chosen folders, play in the background and show media
+  controls.
+- Signing keys, provisioning profiles and store credentials are never committed. The repository is public.
+
+## How it is built
+
+- **Flutter**, current stable, one codebase in `mobile/` at the repository root. Licence MPL-2.0, like the firmware.
+- Layers, each testable without the ones above it: a pure-Dart **domain** (library model, queue, shuffle and repeat
+  rules, sorting and naming rules); **data** (database, scanner, tag reader, art cache); **audio** (the player and the
+  platform media session); **UI**.
+- Packages (audio engine, media session, tag reading, database, state management) are the team's choice. Each choice is
+  recorded in a short decision note with the alternatives considered. A package must be actively maintained, licensed
+  compatibly with MPL-2.0 distribution on both stores, and checked against its current documentation, not chosen from
+  memory.
+- The domain rules that the device also implements (sort order, `, The` handling, compilation rules, queue behaviour)
+  follow the firmware's behaviour as documented in [UI](../ui.md) and the ADRs, so a library looks the same in both.
+
+## How it is tested
+
+| Level | What | Where |
+| --- | --- | --- |
+| Unit | Domain rules, scanner, tag fallbacks, playlist import and export, the accent-colour rule | Every PR |
+| Widget and golden | Every screen in Classic and Modern, Light and Dark, at a small and a large phone size and at the largest text size | Every PR |
+| Integration | Pick a folder, scan, browse, play, background, resume; on an Android emulator and an iOS simulator | Every PR (CI: Linux for Android, a Mac runner for iOS) |
+| Audio | Decode each fixture in `tests/assets/audio` and compare with its checksum where the platform allows; gapless join measured on a generated two-track fixture | CI where possible, otherwise the bench |
+| Device | The owner's iPhone and an Android phone: real library, lock screen, headset buttons, Bluetooth, interruptions, an hour of continuous play | End of each phase, recorded with the date |
+| Scale | A generated 20,000-track library: scan time, memory, scroll smoothness | End of the library phase |
+
+The repository's audio fixtures (`tests/assets/audio`) are reused; a generated library with the owner's folder
+convention and awkward names is added for scanner tests. The owner's own music is never committed.
+
+## R2 outline: NAS
+
+Browse and play from a home server; download albums for offline use; show clearly what is on the phone and what is
+remote. R1 keeps the library model source-neutral (a track has a source and a location) so this is an addition, not a
+rewrite. The server type is an open question.
+
+## R3 outline: companion
+
+Discover a neuPod on the local network; show its battery, storage and what it is playing; remote control; browse and
+play its card; send albums and playlists to it and remove them; exchange ratings and play counts; set its settings;
+later, firmware update. All of this needs the device's HTTP API. That API is to be specified in an ADR written with the
+firmware, not invented by the app. [Wi-Fi](../wifi.md) currently describes that step as "device HTTP API and a C#
+companion app for library sync"; whether a separate desktop companion is still wanted is an open question.
+
+## Open questions
+
+Not decided. Do not settle these by guessing.
+
+| # | Question | Proposal |
+| --- | --- | --- |
+| 1 | **App name and store listing.** A music player whose name contains "Pod" may meet trademark objections at store review. Not legal advice; the owner should take a view before submitting | Build as "neuPod"; nothing is submitted to a store without the owner |
+| 2 | **An on-screen click wheel.** Apps that reproduce the original wheel have been removed from the App Store in the past (from memory, not checked) | No wheel in R1; touch-native controls in the neuPod visual language |
+| 3 | **Portrait layout**: the split Home with the art pane, the status bar, where Now Playing lives (a full screen, or a mini-player above a tab bar) | Decided at the design gate from real screens |
+| 4 | **Bundle and application ID** | `net.stuartfraser.neupod`, if that is the domain to use |
+| 5 | **Minimum OS versions** | The two most recent major iOS versions; Android 10 and later |
+| 6 | **Which Android phone** is the test device | Emulator only until one is named |
+| 7 | **NAS type** for R2: a Jellyfin-style server, plain SMB, or WebDAV | Ask when R1 is done |
+| 8 | **Desktop C# companion** in the Wi-Fi plan: still wanted alongside the phone app? | Ask when R3 is planned |
+| 9 | **Distribution**: TestFlight and an internal Android track only, or public store releases | TestFlight and sideloaded APK until the owner decides |
+| 10 | **Sync of ratings and play counts** between phone and device | R3 |
