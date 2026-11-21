@@ -6,7 +6,7 @@ not merged: branch `chore/phase0-bench` (`app/ui/ui_bench.c`, CMake option `NEUP
 | Board | Status |
 | --- | --- |
 | ESP32-S3-Touch-AMOLED-2.41 (ESP32-S3R8, 240 MHz, 8 MB octal PSRAM) | **Measured** (below) |
-| RP2350-Touch-AMOLED-2.41 (RP2350B, 8 MB PSRAM) | **Not measured: board not attached.** The bench image builds and links (`build/rp2350-amoled241-bench`) |
+| RP2350-Touch-AMOLED-2.41 (RP2350B, 8 MB QSPI PSRAM at 62.5 MHz SCK) | **Measured** (below). Single UI core: the UI task's core shows almost no idle time |
 
 ## Method
 
@@ -50,26 +50,60 @@ Upscaling either one into a 600x450 buffer (bilinear, 540,000 bytes of PSRAM) ta
 cheap either way. Drawing the result is what costs (above): a pre-scaled full-size backdrop draws in 43 ms of render, LVGL
 scaling the small one on every frame in 171 ms.
 
+## RP2350: frame tests
+
+Same tests, same method. Two rounds agree within 1 %.
+
+| Test | fps | frame ms avg / p95 | flush ms | render ms | vs ESP32-S3 |
+| --- | --- | --- | --- | --- | --- |
+| `grad_bar` | 44.0 | 21.9 / 22.2 | 4.9 | 17.0 | faster (flush) |
+| `ring` | 62.5 | 15.1 / 16.8 | 2.7 | 12.4 | faster (flush) |
+| `alpha_panel` | 13.1 | 75.2 / 75.7 | 9.2 | 66.0 | same |
+| `backdrop_list` | 5.5 | 178 / 186 | 17.6 | 160 | slower |
+| `backdrop_list_smooth` | 5.4 | 177 / 179 | 17.6 | 160 | slower |
+| `flow_flat` | 4.4 | 218 / 232 | 19.0 | 199 | slower |
+| `flow_angled` | 1.9 | 505 / 533 | 17.5 | 488 | slower |
+| `backdrop_draw_scaled` | 4.0-4.2 | 235-244 / 243-253 | 19.1 | 216-225 | same |
+| `backdrop_draw_full` | 11.9 | 82.7 / 88 | 19.4 | 63 | faster |
+
+The flush is about three times cheaper than the ESP32's: 18 ms for a full frame. Rendering is slower, about 1.2 to 1.6
+times, wherever pictures are read from PSRAM. The result is the same picture as the ESP32: small changes are fine, and
+full-screen repaints over a picture run at 2 to 13 fps.
+
+## RP2350: making the backdrop
+
+| Small buffer | Where | Bytes | Scale | Blur | Scrim | Total |
+| --- | --- | --- | --- | --- | --- | --- |
+| 75x56 | internal | 16,800 | 8.1 ms | 10.1 ms | 0.6 ms | **18.8 ms** |
+| 75x56 | PSRAM | 16,800 | 9.8 ms | 17.3 ms | 0.8 ms | **28.0 ms** |
+| 150x112 | PSRAM | 67,200 | 20.6 ms | 89.7 ms | 6.9 ms | **117 ms** |
+| 150x112 | internal | | | | | **does not fit** (2 x 33,600 B from an 80 KB RTOS heap) |
+
+Upscaling to a 600x450 PSRAM buffer: **294-301 ms**, once per track. All of this is still cheap next to a track change.
+
 ## What this means for the design
 
-At 30 fps the budget is 33 ms a frame. On the ESP32-S3 as it is configured today:
+At 30 fps the budget is 33 ms a frame. On both boards as configured today:
 
 - **Classic Light is affordable** for lists, the selection bar and the status bar. Its Cover Flow is not: the angled version
-  draws at under 3 fps, the flat one at about 5.
-- **Modern Dark is not affordable as drawn.** Every scroll over the backdrop repaints the screen (6 fps). Panels and
+  draws at 2 to 3 fps, the flat one at 4 to 5.
+- **Modern Dark is not affordable as drawn.** Every scroll over the backdrop repaints the screen (5 to 6 fps). Panels and
   translucent chrome over a picture are around 13 fps.
 
 Most of the cost is software rendering on one core, plus a flush that blocks it. Engineering options exist that do
 **not** change the look; none has been tried yet:
 
-1. Overlap the flush with rendering (asynchronous DMA flush, both render buffers in use). Saves up to the 53 ms flush per frame.
-2. A second LVGL draw unit on the idle core (`LV_DRAW_SW_DRAW_UNIT_CNT 2` with an RTOS `LV_USE_OS`). Up to about half the render time.
-3. QSPI at 80 MHz, if the RM690B0 and the board allow it (not checked).
+1. Overlap the flush with rendering (asynchronous DMA flush, both render buffers in use). Saves up to the flush per frame:
+   53 ms on the ESP32-S3, 18 ms on the RP2350.
+2. A second LVGL draw unit on the other core (`LV_DRAW_SW_DRAW_UNIT_CNT 2` with an RTOS `LV_USE_OS`). Up to about half the
+   render time. Free on the ESP32-S3 (its second core is 95 % idle); on the RP2350 core 1 runs audio, so only partly.
+3. QSPI to the ESP32's panel at 80 MHz, if the RM690B0 and the board allow it (not checked).
 4. Always pre-scale the backdrop to 600x450 per track (119 ms once), never let LVGL scale it per frame.
 5. Bigger render buffers in internal RAM, and composing the static backdrop once with the list ground baked in, so a scroll
    blends rows over a flat picture instead of picture plus a 40 % layer.
 
-Even all five together are unlikely to bring a full-screen repaint over a picture under 33 ms on this chip. Fallbacks that
+Even all five together are unlikely to bring a full-screen repaint over a picture under 33 ms on either chip: the best
+render alone is 43 ms (ESP32-S3) and 63 ms (RP2350) for a pre-scaled backdrop with nothing on it. Fallbacks that
 **do** change the look (the owner's call, brief "Stop and ask"):
 
 - Modern without the backdrop under lists (art wash only on Now Playing, where nothing scrolls), or the backdrop dimmed to a
@@ -79,6 +113,5 @@ Even all five together are unlikely to bring a full-screen repaint over a pictur
 
 ## Not yet done
 
-- RP2350-Touch-AMOLED-2.41: every test above. Needs the board on USB.
 - Nothing was checked by eye on the panel (the bench prints numbers only).
 - A real JPEG decode at 160x160 (the backdrop numbers start from an already-decoded cover).
