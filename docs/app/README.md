@@ -13,6 +13,36 @@ Status: specification, 21 November 2026. Nothing is built. The working instructi
 3. **Built in Flutter**, one codebase for both platforms.
 4. **iOS is built and tested for real**: the owner has a Mac and an Apple developer account.
 
+**Owner decisions in phase 0 (21 November 2026)**, after the platform research in [decisions/](decisions/):
+
+5. **Ogg Vorbis and Opus on iOS** are played through bundled Xiph decoders (libogg, libvorbis, libopus, BSD-3), because
+   iOS has no decoder for them that apps can use.
+6. **No Cast in R1.** Casting from Android needs the app's own network connection. The output icon covers the phone
+   speaker, wired, Bluetooth and, on iOS, AirPlay (the system does AirPlay's networking).
+7. **iCloud files that are not downloaded** are listed with a Download action. The app never fetches them itself; a tap
+   asks iOS to download the file.
+8. **Platform limits, accepted:** on iOS a scan cannot keep running after the app is closed, so it resumes at the next
+   launch (Android keeps going). Tracks from Android's shared music collection get embedded art only, because folder
+   art would need a restricted image permission. Android 11+ cannot pick the storage root or `Download`, so the folder
+   screen says so. Sample-rate passthrough is best effort and reported, never claimed (Android 14+ USB DACs where the
+   phone supports it, an iOS preferred-rate hint, never over Bluetooth). The active output on Android 10 to 12 is
+   inferred, because there is no public API before Android 13. MP3 and AAC files without encoder-delay metadata cannot
+   be gapless on any engine.
+
+9. **The app is the device (owner, 21 November 2026).** The full-screen view is the front of a neuPod: the 4:3 screen
+   above a touch click wheel with the four click buttons (Menu, previous, next, play/pause) and the centre button, in
+   the device's proportions, scaled to the phone's width. Turning the wheel scrolls with haptic detents, and pressing a
+   button or the centre gives a haptic click. It is drawn fresh, never copied from Apple's artwork, with no Apple logo
+   and no "iPod"; the store-review risk stays with the owner at submission (Open question 1). This settles Open
+   question 2 and most of Open question 3.
+10. **The wheel sets the volume on Now Playing (owner, 21 November 2026)**, as on the device, on both platforms. It
+    sets the phone's own system volume (no separate app volume): Android through `AudioManager`, iOS through a hidden
+    `MPVolumeView`, the common workaround, since iOS has no public API for it. The device's volume bar replaces the
+    progress bar while the wheel turns. If Apple breaks the workaround, the fallback is to be asked for, not guessed.
+11. **Sort rule: the app matches the firmware's code (owner, 21 November 2026)**, `lib_collate_key()` in
+    `app/library/lib_collate.c`, and the rule is written down under [The library](#the-library). The owner may change
+    it later, in the firmware and the app together.
+
 Everything else in this document is the designer's proposal until the owner confirms it. Proposals that most need a
 decision are collected under [Open questions](#open-questions).
 
@@ -81,10 +111,16 @@ exactly as the device does; it is never hidden and never stops the queue.
 - Discs of one album (`(Disc 1)`, `(Disc 2)` in tags or folder names) are one album with disc sections.
 - A track whose album artist is `Various Artists`, or whose compilation flag is set, belongs to Compilations and is not
   listed under each contributing artist's albums.
-- The scan runs in the background, shows progress, can be cancelled, and survives the app being closed. A rescan only
+- The scan runs in the background, shows progress, can be cancelled, and survives the app being closed (on iOS it resumes at the next launch; owner decision 8). A rescan only
   reads files that are new or changed. Removing a folder removes its tracks from the library and nothing else.
 - Sizing target: 20,000 tracks. First scan of 5,000 FLAC files in under five minutes on a mid-range phone; a rescan
   with no changes in under ten seconds. (Targets are proposals; measure and report.)
+- **Sort rule (owner decision 11):** names sort by a collation key built as the firmware's `lib_collate_key()` does.
+  A sort tag is used when present, otherwise the name. One leading article is skipped, in any case, when something
+  follows it: `The `, `A ` or `An ` ("The Beatles" under B, "A Perfect Circle" under P). Letters compare without
+  case and with accents folded. Order: symbols first, then digits, then letters. The fast-scroll letter is the
+  first letter of the key, `#` for a digit or symbol. `docs/ui.md` still says "A "/"An " are not skipped; the code
+  is the reference until the owner changes both.
 - Ratings (0 to 5), play counts, last played and skip counts are kept per track in the app's own database, keyed so
   that they survive a rescan and a file move within the library.
 
@@ -116,8 +152,10 @@ Playing).
   transport buttons; correct behaviour on interruptions (a call pauses; unplugging headphones pauses; another app
   taking audio pauses).
 - **Resume:** reopening the app restores the queue, the track and the position.
-- Volume is the phone's own volume. The app shows no separate volume control beyond the system's.
-- The output in use (phone speaker, wired, Bluetooth, AirPlay or cast device) is shown by an icon, as on the device.
+- Volume is the phone's own volume. The app has no volume of its own; on Now Playing the wheel sets the system
+  volume and shows the device's volume bar (owner decision 10).
+- The output in use (phone speaker, wired, Bluetooth or AirPlay) is shown by an icon, as on the device. No Cast in R1
+  (owner decision 6).
 - No resampling or processing in the app. Where the platform lets the app pass the file's sample rate through to an
   external DAC, do so and say what was achieved in the format line; do not claim bit-perfect output that has not been
   measured.
@@ -140,11 +178,17 @@ the same rule as the device: the dominant colour, clamped until white text on it
 - Two styles, **Classic** and **Modern**, each in Light and Dark, with the colours and skins in the
   [UI styles design](../design/2026-11-21-ui-styles/README.md). Mode follows the phone's setting by default; style is
   chosen in Settings.
-- The device UI is a 4:3 landscape screen driven by a wheel. The phone is a tall touch screen. The app keeps the
-  device's **structure, names, colours, type and component shapes** and replaces the wheel with touch: tap is Select,
-  the back gesture is Menu, lists scroll by drag.
-- **No portrait mock-ups exist yet.** The first thing the build produces is a small set of real screens for the owner
-  to approve before the rest is built (the design gate in the team brief).
+- **The device view (owner decision 9).** The phone shows the device's front: the 4:3 screen, running the device's
+  screens with the UI styles design's values (drawn at 600x450, so they carry over), above the click wheel. The wheel
+  behaves as on the device: turning scrolls, with acceleration and the fast-scroll letter tile on long lists; the
+  centre is Select; Menu goes back; previous, next and play/pause work as on the device, including press-and-hold to
+  scan. Each wheel detent is a light haptic tick, and each button press is a firmer haptic click. An optional click
+  sound, like the original's clicker, can be turned on in Settings.
+- **To decide at the design gate, from real screens:** how the device sits on tall and short phones (the body
+  stretched or the space around it filled); the body finish and whether it follows the style and mode; whether the
+  screen also accepts direct taps on rows alongside the wheel; and how the largest text sizes fit the 4:3 screen
+  (proposal: fewer, larger rows).
+- Search, which needs typing, opens the phone's keyboard from a Search item.
 - Type is Montserrat (SIL OFL), icons are Lucide (ISC), as on the device. Every third-party asset and package is listed
   on an in-app Licences screen.
 - Feedback follows the device's three places where they translate: a row confirms with a brief flash and a tick; a
@@ -157,13 +201,15 @@ counts (with a panel to confirm); About; Licences.
 
 ### Accessibility
 
-Every control has a screen-reader label; the app honours the system text size up to the largest standard setting
+The wheel and buttons have screen-reader equivalents (the list is navigable row by row, and the wheel is an
+adjustable control with actions for Select, Menu, previous, next and play/pause). Every control has a screen-reader label; the app honours the system text size up to the largest standard setting
 without clipping; text contrast is at least 4.5:1 in every style and mode; nothing depends on colour alone; touch
 targets are at least 44 points.
 
 ### Privacy and safety
 
-- R1 makes **no network connection at all**. No analytics, no crash reporting service, no accounts.
+- R1 makes **no network connection at all**. No analytics, no crash reporting service, no accounts. iOS downloading an iCloud file
+  after the user taps Download (owner decision 7), and AirPlay (decision 6), are the system's networking, not the app's.
 - The app requests only the permissions it needs to read the chosen folders, play in the background and show media
   controls.
 - Signing keys, provisioning profiles and store credentials are never committed. The repository is public.
@@ -216,11 +262,11 @@ Not decided. Do not settle these by guessing.
 | # | Question | Proposal |
 | --- | --- | --- |
 | 1 | **App name and store listing.** A music player whose name contains "Pod" may meet trademark objections at store review. Not legal advice; the owner should take a view before submitting | Build as "neuPod"; nothing is submitted to a store without the owner |
-| 2 | **An on-screen click wheel.** Apps that reproduce the original wheel have been removed from the App Store in the past (from memory, not checked) | No wheel in R1; touch-native controls in the neuPod visual language |
-| 3 | **Portrait layout**: the split Home with the art pane, the status bar, where Now Playing lives (a full screen, or a mini-player above a tab bar) | Decided at the design gate from real screens |
-| 4 | **Bundle and application ID** | `net.stuartfraser.neupod`, if that is the domain to use |
-| 5 | **Minimum OS versions** | The two most recent major iOS versions; Android 10 and later |
-| 6 | **Which Android phone** is the test device | Emulator only until one is named |
+| 2 | **An on-screen click wheel.** Apps that reproduce the original wheel have been removed from the App Store in the past (from memory, not checked) | **Decided 2026-11-21 (owner decision 9):** a touch click wheel with haptics, in a drawn-fresh device view |
+| 3 | **Portrait layout**: the split Home with the art pane, the status bar, where Now Playing lives (a full screen, or a mini-player above a tab bar) | Mostly settled by owner decision 9: the screen is the device's 4:3 screen. How the device fits tall and short phones is decided at the design gate |
+| 4 | **Bundle and application ID** | **Decided 2026-11-21:** `net.stuartfraser.neupod` |
+| 5 | **Minimum OS versions** | **Decided 2026-11-21:** iOS 18 and later; Android 10 (API 29) and later |
+| 6 | **Which Android phone** is the test device | **Decided 2026-11-21:** the owner's Pixel (model and version to be recorded) |
 | 7 | **NAS type** for R2: a Jellyfin-style server, plain SMB, or WebDAV | Ask when R1 is done |
 | 8 | **Desktop C# companion** in the Wi-Fi plan: still wanted alongside the phone app? | Ask when R3 is planned |
 | 9 | **Distribution**: TestFlight and an internal Android track only, or public store releases | TestFlight and sideloaded APK until the owner decides |
