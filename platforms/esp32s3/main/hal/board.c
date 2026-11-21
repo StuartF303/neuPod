@@ -85,13 +85,23 @@ esp_err_t board_init(void) {
         }
         if (e == ESP_OK) {
             esp_rom_delay_us(TCA9554_SETTLE_US); // busy-wait: safe whether or not the scheduler is running yet
-            uint8_t reg_out = TCA9554_REG_OUTPUT, reg_cfg = TCA9554_REG_CONFIG, out = 0xFF, cfg = 0xFF;
-            (void)i2c_master_transmit_receive(s_tca, &reg_out, 1, &out, 1, I2C_TIMEOUT_MS);
-            (void)i2c_master_transmit_receive(s_tca, &reg_cfg, 1, &cfg, 1, I2C_TIMEOUT_MS);
+            uint8_t reg_out = TCA9554_REG_OUTPUT, reg_cfg = TCA9554_REG_CONFIG, out = 0, cfg = 0;
+            bool out_ok = i2c_master_transmit_receive(s_tca, &reg_out, 1, &out, 1, I2C_TIMEOUT_MS) == ESP_OK;
+            bool cfg_ok = i2c_master_transmit_receive(s_tca, &reg_cfg, 1, &cfg, 1, I2C_TIMEOUT_MS) == ESP_OK;
             int in = board_tca_inputs();
-            printf("board: TCA9554 inputs 0x%02X output 0x%02X config 0x%02X (wrote 0x%02X / 0x%02X)\n", in < 0 ? 0xFF : in, out, cfg,
-                   TCA9554_OUTPUT_INIT, TCA9554_CONFIG_INIT);
-            e = in < 0 ? ESP_FAIL : ESP_OK;
+            char sin[3] = "??", sout[3] = "??", scfg[3] = "??"; // a failed read prints ??, not a plausible-looking value
+            if (in >= 0) {
+                snprintf(sin, sizeof sin, "%02X", (unsigned)in);
+            }
+            if (out_ok) {
+                snprintf(sout, sizeof sout, "%02X", (unsigned)out);
+            }
+            if (cfg_ok) {
+                snprintf(scfg, sizeof scfg, "%02X", (unsigned)cfg);
+            }
+            printf("board: TCA9554 inputs 0x%s output 0x%s config 0x%s (wrote 0x%02X / 0x%02X)\n", sin, sout, scfg, TCA9554_OUTPUT_INIT,
+                   TCA9554_CONFIG_INIT);
+            e = (in >= 0 && out_ok && cfg_ok) ? ESP_OK : ESP_FAIL;
         }
     }
     if (e != ESP_OK) {
