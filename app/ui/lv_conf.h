@@ -285,7 +285,11 @@
 #define LV_DRAW_SW_COMPLEX 1
 
 /** Each additional stop costs (sizeof(lv_color_t) + 1) bytes. */
+#ifdef NEUPOD_UI_BENCH
+#define LV_GRADIENT_MAX_STOPS 4 /* phase-0 bench only: the Classic bar's 4-stop gradient */
+#else
 #define LV_GRADIENT_MAX_STOPS 2
+#endif
 
 /** Adds linear gradients at an angle, plus radial and conical gradients. */
 #define LV_USE_DRAW_SW_COMPLEX_GRADIENTS 0

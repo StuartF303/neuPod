@@ -133,6 +133,10 @@ else()
 endif()
 
 add_executable(neupod main.c)
+if(NEUPOD_UI_BENCH) # throwaway phase-0 bench: PSRAM bring-up + allocator for the bench buffers (strong override of ui_bench.c's malloc default)
+  target_sources(neupod PRIVATE hal/ui_bench_mem.c hal/bench_psram.c)
+  target_link_libraries(neupod hardware_clocks hardware_gpio hardware_sync)
+endif()
 target_link_libraries(neupod neupod_runtime neupod_drivers hal_rp2350_rtos hal_rp2350_storage_rtos)
 
 if(NEUPOD_BOARD STREQUAL "amoled241")

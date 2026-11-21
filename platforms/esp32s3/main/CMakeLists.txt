@@ -46,6 +46,11 @@ set(NEUPOD_ESP_HAL_SOURCES
   ${NEUPOD_ROOT}/hal/common/hal_storage_common.c
 )
 
+if(NEUPOD_UI_BENCH)
+  list(APPEND NEUPOD_ESP_HAL_SOURCES hal/ui_bench_mem.c)
+  set(NEUPOD_BENCH_DEFS NEUPOD_UI_BENCH=1)
+endif()
+
 set(NEUPOD_PROJECT_SOURCES   # compiled with the project's warning flags
   ${NEUPOD_RT_CORE_SOURCES}
   ${NEUPOD_AUDIO_CORE_SOURCES}
@@ -104,7 +109,7 @@ target_include_directories(${COMPONENT_LIB} PRIVATE
   ${CMAKE_BINARY_DIR}/gen
 )
 # LVGL's pool lives in PSRAM here (main/linker.lf), so it is sized like the hosted builds (192 KB), not the RP2350's 72 KB of internal RAM.
-target_compile_definitions(${COMPONENT_LIB} PRIVATE LV_CONF_INCLUDE_SIMPLE LV_LVGL_H_INCLUDE_SIMPLE NEUPOD_LVGL_POOL_BYTES=196608u ${NEUPOD_UI_PROFILE_DEFS})
+target_compile_definitions(${COMPONENT_LIB} PRIVATE LV_CONF_INCLUDE_SIMPLE LV_LVGL_H_INCLUDE_SIMPLE NEUPOD_LVGL_POOL_BYTES=196608u ${NEUPOD_UI_PROFILE_DEFS} ${NEUPOD_BENCH_DEFS})
 
 # Warning flags for project code only (never for third_party or the SDK), as in app/CMakeLists.txt.
 set_source_files_properties(${NEUPOD_PROJECT_SOURCES} PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")

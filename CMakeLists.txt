@@ -42,6 +42,11 @@ option(NEUPOD_UI_DEBUG "Debug lines on the UI (Home card summary, debug splash)"
 if(NEUPOD_UI_DEBUG)
   add_compile_definitions(NEUPOD_UI_DEBUG=1)
 endif()
+# THROWAWAY phase-0 measurement mode (docs/design/2026-11-21-ui-styles): the UI task runs app/ui/ui_bench.c instead of showing Home.
+option(NEUPOD_UI_BENCH "Phase 0 UI effect benchmark instead of the Home screen (throwaway)" OFF)
+if(NEUPOD_UI_BENCH)
+  add_compile_definitions(NEUPOD_UI_BENCH=1)
+endif()
 # Album art (docs/ui.md "Album art"): 160 x 160 thumbnails and a 24-album cache (1.2 MB) need RAM the Pico 2 W does not have (ADR-0001 amendment:
 # frozen). ON for the hosted builds; an RP2350B board with PSRAM turns it on with -DNEUPOD_ART_HIRES=ON.
 option(NEUPOD_ART_HIRES "160x160 album-art thumbnails with a 24-album cache (hosted builds, RP2350B with PSRAM)" ${NEUPOD_UI_HIRES_DEFAULT})

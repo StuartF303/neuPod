@@ -158,6 +158,9 @@ set(NEUPOD_UI_SOURCES
 if(NEUPOD_UI_HIRES)
   list(APPEND NEUPOD_UI_SOURCES ${NEUPOD_APP_DIR}/ui/ui_metrics.c ${NEUPOD_APP_DIR}/ui/ui_audit.c) # 480x360 profile and layout audit: hosted builds only
 endif()
+if(NEUPOD_UI_BENCH)
+  list(APPEND NEUPOD_UI_SOURCES ${NEUPOD_APP_DIR}/ui/ui_bench.c) # throwaway phase-0 measurement mode
+endif()
 set(NEUPOD_APP_SOURCES
   ${NEUPOD_CORE_SOURCES}
   ${NEUPOD_GFX_SOURCES}

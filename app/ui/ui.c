@@ -24,6 +24,9 @@
 #include "ui.h"
 #include "ui_input.h"
 #include "ui_internal.h"
+#ifdef NEUPOD_UI_BENCH
+#include "ui_bench.h"
+#endif
 
 #define SPLASH_MIN_MS RT_SPLASH_MIN_MS
 #define SPLASH_MAX_MS 5000u
@@ -527,6 +530,9 @@ void ui_task(void *arg) {
     for (unsigned i = 0; i < boot_in.n; i++) { // what was pressed while the splash showed goes to the UI now
         (void)os_queue_send(rt_input_queue(), &boot_in.ev[i], OS_NO_WAIT);
     }
+#ifdef NEUPOD_UI_BENCH
+    ui_bench_main(); // phase-0 measurement: never returns
+#endif
     // --- Transition to the home menu ---
     lv_obj_t *scr = lv_obj_create(NULL);
     ui_frame_init(scr);
