@@ -1,0 +1,2030 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/adr/0021-power-sleep/">
+      
+      
+        <link rel="prev" href="../0020-hold/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
+    
+    
+      
+        <title>ADR-0021 Power and sleep - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#adr-0021-power-sleep-when-idle-power-off-after-a-day-power-off-when-the-battery-is-empty" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              ADR-0021 Power and sleep
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../bluetooth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wifi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../touch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Touch input (600x450 boards)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../y2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Innioasis Y2 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../esp32s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-S3 platform (dev board)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../rp2350-amoled241/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Waveshare RP2350 AMOLED dev board
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../i2c-peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0017-music-library-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0018-ui-resolution-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0018 UI resolution profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0019-bluetooth-audio-sink-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0019 Bluetooth audio boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0020-hold/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0020 Hold
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0021 Power and sleep
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0021 Power and sleep
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Decision">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-sleep-sequence-ui-task-ui_framec-and-power_servicec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The sleep sequence (UI task, ui_frame.c and power_service.c)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#y2-linux-3467-mediatek-android-style-power-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Y2 (Linux 3.4.67, MediaTek, Android-style power management)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-platforms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other platforms
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#failure-paths-review-fixes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failure paths (review fixes)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#consequences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Consequences
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Decision">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-sleep-sequence-ui-task-ui_framec-and-power_servicec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The sleep sequence (UI task, ui_frame.c and power_service.c)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#y2-linux-3467-mediatek-android-style-power-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Y2 (Linux 3.4.67, MediaTek, Android-style power management)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-platforms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other platforms
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#failure-paths-review-fixes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failure paths (review fixes)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#consequences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Consequences
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="adr-0021-power-sleep-when-idle-power-off-after-a-day-power-off-when-the-battery-is-empty">ADR-0021: Power: sleep when idle, power off after a day, power off when the battery is empty<a class="headerlink" href="#adr-0021-power-sleep-when-idle-power-off-after-a-day-power-off-when-the-battery-is-empty" title="Permanent link">&para;</a></h1>
+<p>Status: <strong>accepted</strong> (owner decisions 15 Nov 2026; the four rules in "Decision" were set by the lead and are marked as such)</p>
+<h2 id="context">Context<a class="headerlink" href="#context" title="Permanent link">&para;</a></h2>
+<p>The player must be able to sit on a shelf for a week and still power up, and the owner must never have to remember to switch it off. <a href="../0020-hold/">ADR-0020</a>
+turns the screen off and locks after a few minutes, but the rest of the machine keeps running: the CPU, the Bluetooth controller, the card. The Y2 testbed draws
+tens of milliamps in that state, which is a flat battery in a few days.</p>
+<h2 id="decision">Decision<a class="headerlink" href="#decision" title="Permanent link">&para;</a></h2>
+<p><strong>Idle means suspend, a day of suspend means power off, an empty battery means power off.</strong> One pure policy decides; each platform says what it can do.</p>
+<ul>
+<li><strong>Idle.</strong> After <strong>Sleep after</strong> with nothing happening the player sleeps. Settings &gt; Display &gt; <strong>Sleep after</strong>: Never, 10, <strong>30 (default)</strong>, 60 min, saved
+  (<code>NPsl</code>; an older settings file has no such item and gives the default, so the settings file version is unchanged). Idle is counted by <code>app/power/power_policy.c</code>
+  (unit tested, <code>power_policy</code>) from the last input of any kind (a key, the wheel, the touch panel, including the input that wakes the screen).</li>
+<li><strong>Paused counts as idle</strong> (lead decision): a paused player sleeps; its place is already saved (ADR resume), and Play after the wake continues from it.</li>
+<li><strong>Playing does not</strong>: while audio plays the count is held at zero, so after a two-hour album the 30 minutes start when it ends, not when the last key was pressed.</li>
+<li><strong>Busy does not</strong>: a library build or scan, a Bluetooth pairing, connect or scan, a Wi-Fi join, a haptic calibration, or a card request or write in flight.
+    There is no USB file transfer on any platform yet; it belongs in the same list when one appears.</li>
+<li><strong>Never on external power</strong> (lead decision): USB or a charger holds the count at zero (<code>hal_power_external()</code>).</li>
+<li><strong>A day asleep: power off</strong> (lead decision). The sleep is asked for with a 24 hour limit; when the limit passes (<code>HAL_WAKE_TIMER</code>) the core takes the normal
+  power-off path. The resume position is saved across boots, so the next power-on comes back where the player was.</li>
+<li><strong>Empty battery: clean power-off</strong> (lead decision). Off external power, a valid battery reading at or below <strong>3 %</strong> (or a cell below 3.3 V) for <strong>30 s in a row</strong>
+  shows "Battery empty" for 3 s, writes the settings out and takes the normal power-off path. An unknown reading, a missing gauge or a charger resets the streak:
+  unknown is never empty. The rule does not depend on idleness.</li>
+<li><strong>Where the policy meets the platform.</strong> <code>hal_power.h</code>: <code>hal_power_can_sleep()</code>, <code>hal_power_sleep(max_ms, &amp;why)</code> (blocks; why = key, timer, external power, other),
+  <code>hal_power_external()</code>. A platform that cannot sleep answers <code>can_sleep</code> false and the core, after the same idle time, calls <code>hal_system_poweroff()</code> where
+  <code>hal_system_can_poweroff()</code> is true (the RP2350 AMOLED board and the ESP32-S3 board have a soft latch, so they power off), and does nothing where it is not (the policy
+  does not even ask: <code>power_service_can_act()</code>).</li>
+</ul>
+<h3 id="the-sleep-sequence-ui-task-ui_framec-and-power_servicec">The sleep sequence (UI task, <code>ui_frame.c</code> and <code>power_service.c</code>)<a class="headerlink" href="#the-sleep-sequence-ui-task-ui_framec-and-power_servicec" title="Permanent link">&para;</a></h3>
+<p>The UI task owns it: it owns the idle clock, Hold and the display. In order:</p>
+<ol>
+<li><code>power_service_sleep_prepare()</code>: nothing is playing (checked again); the Bluetooth stream stops and the controller is powered off through the stack-neutral radio
+   interface (<code>hal_bt_power(false)</code>, new in <code>hal_radio.h</code>; BTstack: <code>hci_power_control(OFF)</code>, which on the Y2 closes <code>/dev/stpbt</code> and so powers the chip's Bluetooth
+   function off), remembering whether a headset was linked; the settings (which hold the resume position) are written out and the card synced, waiting at most 4 s for the
+   storage task to be idle. If the card stays busy the sleep is dropped (a write in flight must not be cut by a suspend), Bluetooth is put back, and the count restarts.
+   Wired audio needs nothing: the output stages power down a few seconds after the last sound, long before 10 minutes (<code>docs/audio.md</code>).</li>
+<li>The screen goes off exactly as the idle stage does it (forced off, Hold on under Auto-lock), then <code>hal_display_sleep(true)</code>.</li>
+<li><code>hal_power_sleep(24 h)</code>.</li>
+<li>The wake: <code>hal_display_sleep(false)</code>; the Bluetooth controller back on if it was, and, <strong>if a headset was linked</strong>, the existing power-up auto-reconnect runs (its 5 minutes
+   of tries, "<name> connected" toast); the idle count restarts. Then by reason:</li>
+<li><strong>Key</strong>: the screen stays dark and locked as it was. The input that woke the system is still queued for the input task and arrives like any input that wakes a dark
+     screen: it only lights the screen and is <strong>not delivered</strong>, locked or not (<a href="../0020-hold/">ADR-0020</a>). If it never arrives (2 s) the screen lights by itself.</li>
+<li><strong>Timer</strong>: the normal power-off path. If the platform cannot power off, it carries on awake.</li>
+<li><strong>External power / other / the system would not sleep</strong>: nobody pressed anything, so the screen lights at once.</li>
+</ol>
+<h3 id="y2-linux-3467-mediatek-android-style-power-management">Y2 (Linux 3.4.67, MediaTek, Android-style power management)<a class="headerlink" href="#y2-linux-3467-mediatek-android-style-power-management" title="Permanent link">&para;</a></h3>
+<p><code>hal_power_can_sleep()</code> is true when <code>NEUPOD_SUSPEND</code> is not <code>0</code> (<code>/etc/neupod-fw.env</code>, the kill switch: <code>0</code> makes the core power off instead), <code>/sys/power/state</code> offers
+<code>mem</code>, and <code>/dev/alarm</code> opens. The firmware holds the wake lock <code>neupod</code> while awake. A sleep, on a helper thread (not an RTOS task; the signal and RTOS rules of the Bluetooth
+thread apply): arm <code>/dev/alarm</code> with <code>ANDROID_ALARM_RTC_WAKEUP</code> at now + 24 h (<code>ANDROID_ALARM_SET</code>; the ioctl numbers are written out locally from the driver's uapi
+layout, <code>y2_suspend.h</code>), <code>wake_unlock neupod</code>, then <code>mem</code> to <code>/sys/power/state</code>; wait on the key, touch and ring nodes (own descriptors, <code>poll</code>) and on the two clocks
+(CLOCK_BOOTTIME keeps counting while suspended, CLOCK_MONOTONIC does not: the difference is the time slept). The thaw: <code>wake_lock neupod</code> first, then <code>on</code> to state (cancels
+the standing suspend request and late-resumes the panel), then the alarm is cleared. The race this answers: after any wake the kernel re-suspends as soon as the waking
+device's own wake lock lets go, because the request <code>mem</code> still stands; our lock, retaken within microseconds of the thaw (the helper is runnable the moment userspace
+thaws, and the input event holds its device's lock until read), is what stops that, and <code>on</code> ends the request. If nothing suspends within 12 s (another wake lock) the lock and <code>on</code>
+are put back and the call answers <code>HAL_EBUSY</code>. Only a key <em>press</em> counts as input during the first seconds, because a controller powering down may emit releases or positions.
+<code>hal_millis()</code>, <code>hal_micros()</code> and the FreeRTOS tick (a thread sleeping in <code>usleep</code>) follow CLOCK_MONOTONIC and so never see the sleep: nothing jumps, nothing stalls. External
+power is <code>power_supply/{usb,ac}/online</code>; a plug-in during sleep ends it (if the hardware wakes on it, a bonus).
+Plugged into a PC over USB the Y2 reports external power and therefore never sleeps: test the suspend on battery.</p>
+<h3 id="other-platforms">Other platforms<a class="headerlink" href="#other-platforms" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Host</strong>: simulated (<code>hal/host/hal_power.c</code>): the sleep logs and blocks until something is pressed at the window, or <code>NEUPOD_HOST_SLEEP_WAKE_MS</code> (an injected Select press),
+  or <code>NEUPOD_HOST_SLEEP_MAX_MS</code> (timer); <code>NEUPOD_SUSPEND=0</code> turns it off; <code>NEUPOD_HOST_EXTERNAL_POWER=1</code> simulates a charger. Tour tokens <code>idlesleep:N</code> (sleep once after N s of idleness),
+  <code>batt:N</code> (the gauge reads N %) and <code>ext:on</code> / <code>ext:off</code>.</li>
+<li><strong>RP2350 AMOLED board, ESP32-S3</strong>: <code>hal/common/hal_power_none.c</code>: no suspend yet, so after the idle time they power off (soft latch).</li>
+<li><strong>Pico 2 W</strong> (frozen, about 100 B of static RAM spare): the whole feature is compiled out (<code>NEUPOD_POWER_MGMT=0</code> from the top-level <code>CMakeLists.txt</code>: no setting, no row, no
+  policy, no sequence, no <code>hal_bt_power</code>). It can neither sleep nor switch itself off, so there is nothing for it to do.</li>
+</ul>
+<h3 id="failure-paths-review-fixes">Failure paths (review fixes)<a class="headerlink" href="#failure-paths-review-fixes" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>A sleep that did not happen</strong> (<code>HAL_EBUSY</code> / <code>HAL_ERR</code>): the screen is not lit for it. Everything is put back as it was before the sleep (Bluetooth on, the screen off and locked if
+  it was, otherwise lit and unlocked again), and the count restarts. <strong>Two failures in a row stop further tries for an hour</strong> (<code>power_guard_*</code>, unit tested). Only an
+  external-power or unknown wake lights the screen by itself.</li>
+<li><strong>A last look before the screen goes</strong>: if an input is queued or a charger appeared during the preparation (which can take seconds), the sleep is abandoned, Bluetooth is put back and the
+  count restarts; the input is handled as usual.</li>
+<li><strong>A power-off the platform refuses</strong> (<code>hal_system_poweroff()</code> false although it says it can: a USB-powered dev board, where the latch cannot cut power) is latched as "external
+  power": nothing tries again (no more GPIO pulses or blocked UI) until the gauge shows a discharge (rate of at least -2000 milli-percent/h, the UI's own "discharging" threshold, or the
+  cell 100 mV lower than at the refusal) or 6 h pass. The same latch, and a gauge rate above +2000 (the Y2's rate is synthetic, plus or minus 10 %/h from the supply status; the MAX17048's is its CRATE
+  register: both are the figures the UI already uses for "charging"), count as external power for the battery rule too. A refused critical power-off withdraws the "Battery empty" notice and logs
+  "on external power". A refusal that was not USB (the RP2350 AMOLED board also refuses while the Power key is held over 3 s) latches the same way, so idle and
+  empty-battery power-off stay off for up to 6 h or until the gauge shows a discharge. A user's 10 s Power hold calls the power-off directly and is unaffected.</li>
+<li><strong>Y2, a firmware stopped mid-request.</strong> <code>state</code> stays <code>mem</code> if the firmware is killed after the request and before the thaw, and the next start would find the panel early-suspended.
+  <code>hal_power_init()</code> therefore writes <code>on</code> right after taking the wake lock (idempotent), and the exit handler writes <code>on</code> before releasing the lock.</li>
+<li><strong>Y2, the timer.</strong> Decided by CLOCK_BOOTTIME reaching the limit, or, if that clock did not run on across the sleep, by the alarm driver's own clock (<code>ANDROID_ALARM_GET_TIME</code>) reaching the
+  armed time. Any event at all from the wheel node (<code>mtk-tpd</code>) after the system has been seen to sleep is a key wake (dark, locked, not delivered); before that only a press counts.</li>
+<li><strong>Stale events.</strong> An event queued shortly before the sleep may light the screen just before the wake key does: harmless (the wake key is swallowed either way).</li>
+<li><code>NEUPOD_SLEEP_MAX_S</code> (Y2, bench only, in <code>/etc/neupod-fw.env</code>) shortens the 24 h limit so the timer wake can be tried in minutes.</li>
+<li>With no card (RAM-only settings) the preparation does not wait for a flush; it re-checks that the storage task is idle after the card sync, right before suspending.</li>
+</ul>
+<h2 id="consequences">Consequences<a class="headerlink" href="#consequences" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Failure stance.</strong> Unknown battery, a failed gauge, an unreadable charger sensor: never power off or sleep <em>because of it</em> (the battery rule needs a valid reading; "external power
+  unknown" counts as not on a charger, which only matters for the sleep, and the sleep is always safe to repeat). A sleep that cannot be prepared or entered is abandoned, nothing
+  half done is left (Bluetooth is put back), and the count restarts. The kill switch fails to the power-off path.</li>
+<li><strong>RAM budget:</strong> hosted and ESP32 builds: a few hundred bytes of statics in the UI (wake and notice state) and the power service (policy state, 4 bytes of flags); the setting
+  sits in the padding of <code>ui_state_t</code>. Pico 2 W: 0 (compiled out). Measured sizes are in the pull request.</li>
+<li><strong>Unverified on the device</strong> (the owner does the bench step with the unit on battery): that <code>mem</code> behaves as early suspend or as a plain suspend, that the key, touch and ring
+  nodes wake the system, that the panel and backlight come back after <code>on</code> (the display HAL re-pushes the whole picture and re-writes the backlight on wake), the Bluetooth
+  chip's power cycle, the real draw in suspend, and the length of the whole cycle. See <code>docs/bench.md</code>.</li>
+<li>Tests: <code>power_policy</code> (every rule, the wrap, a stamp ahead, a clock that jumps back), <code>ui_frame_keys</code> (the screen's part of the sequence with fakes), <code>y2_suspend</code> (kill switch,
+  sysfs writes, ioctl numbers, the verdicts from the clocks), <code>y2_power</code> (external power), and the host tours <code>power_tour</code>, <code>power_off_tour</code>, <code>power_nosuspend_tour</code>,
+  <code>power_charger_tour</code>, <code>power_battery_tour</code>.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>
