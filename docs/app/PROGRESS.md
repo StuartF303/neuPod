@@ -121,6 +121,8 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 
 (One line per thing the next session must know. Newest first.)
 
+- 2026-11-21: The owner has asked the designer for a device-view layout framework (`docs/design/<date>-app-device-view/`): device geometry, fit on tall and short phones, wheel hit zones and behaviour in numbers, haptics, direct touch, largest text, accessibility. Phase 2's device-view, click-wheel and design-gate items build from it; phases 0 and 1 do not wait for it.
+
 - 2026-11-21: Owner decision 9: the app is the device, a drawn-fresh front view with a touch click wheel, buttons and haptics. Phase 2 and the design gate are built around it; the device's 600x450 designs apply to the screen.
 
 - 2026-11-21: The owner's iPhone runs iOS 27, and Xcode 26.5 cannot deploy to it. Xcode 27 must be installed (owner, Apple ID) before the gate 1 device check. The iOS 18.6 simulator runtime was installed for testing the minimum.
