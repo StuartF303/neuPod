@@ -16,6 +16,10 @@ iOS can only be built and tested on macOS, so run this on the owner's Mac. Befor
 `gh` signed in. Install what is missing where that is routine; ask the owner before changing anything system-wide. If
 you are not on a Mac, say so and stop: do not build Android alone and call it done.
 
+`scripts/app/bootstrap-mac.sh` installs the base toolchain (Xcode check, Flutter, CocoaPods, a JDK, the Android
+command-line tools) and starts you in a detached `tmux` session named `neupod-app`; `scripts/app/run-agent.sh` restarts
+you. Keep both working as the project's needs change.
+
 ## The team
 
 You plan, delegate, integrate and decide. You do not write feature code yourself. Give each subagent one item, the parts
@@ -35,7 +39,7 @@ The test engineer writes the tests for an item from the specification, not from 
 
 ## Rules
 
-- Work only in `mobile/`, `docs/app/`, the app's CI workflow, and the `LICENSE.md` rows the app needs. **Do not change
+- Work only in `mobile/`, `docs/app/`, `scripts/app/`, the app's CI workflow, and the `LICENSE.md` rows the app needs. **Do not change
   the firmware, the hardware files or their CI.**
 - Branches, commits and PRs follow `CONTRIBUTING.md`, with scope `app`. Small PRs. Squash-merge when CI is green.
   Never force-push.
