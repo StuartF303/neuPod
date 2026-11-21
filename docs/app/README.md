@@ -13,6 +13,22 @@ Status: specification, 21 November 2026. Nothing is built. The working instructi
 3. **Built in Flutter**, one codebase for both platforms.
 4. **iOS is built and tested for real**: the owner has a Mac and an Apple developer account.
 
+**Owner decisions in phase 0 (21 November 2026)**, after the platform research in [decisions/](decisions/):
+
+5. **Ogg Vorbis and Opus on iOS** are played through bundled Xiph decoders (libogg, libvorbis, libopus, BSD-3), because
+   iOS has no decoder for them that apps can use.
+6. **No Cast in R1.** Casting from Android needs the app's own network connection. The output icon covers the phone
+   speaker, wired, Bluetooth and, on iOS, AirPlay (the system does AirPlay's networking).
+7. **iCloud files that are not downloaded** are listed with a Download action. The app never fetches them itself; a tap
+   asks iOS to download the file.
+8. **Platform limits, accepted:** on iOS a scan cannot keep running after the app is closed, so it resumes at the next
+   launch (Android keeps going). Tracks from Android's shared music collection get embedded art only, because folder
+   art would need a restricted image permission. Android 11+ cannot pick the storage root or `Download`, so the folder
+   screen says so. Sample-rate passthrough is best effort and reported, never claimed (Android 14+ USB DACs where the
+   phone supports it, an iOS preferred-rate hint, never over Bluetooth). The active output on Android 10 to 12 is
+   inferred, because there is no public API before Android 13. MP3 and AAC files without encoder-delay metadata cannot
+   be gapless on any engine.
+
 Everything else in this document is the designer's proposal until the owner confirms it. Proposals that most need a
 decision are collected under [Open questions](#open-questions).
 
@@ -117,7 +133,8 @@ Playing).
   taking audio pauses).
 - **Resume:** reopening the app restores the queue, the track and the position.
 - Volume is the phone's own volume. The app shows no separate volume control beyond the system's.
-- The output in use (phone speaker, wired, Bluetooth, AirPlay or cast device) is shown by an icon, as on the device.
+- The output in use (phone speaker, wired, Bluetooth or AirPlay) is shown by an icon, as on the device. No Cast in R1
+  (owner decision 6).
 - No resampling or processing in the app. Where the platform lets the app pass the file's sample rate through to an
   external DAC, do so and say what was achieved in the format line; do not claim bit-perfect output that has not been
   measured.
@@ -218,9 +235,9 @@ Not decided. Do not settle these by guessing.
 | 1 | **App name and store listing.** A music player whose name contains "Pod" may meet trademark objections at store review. Not legal advice; the owner should take a view before submitting | Build as "neuPod"; nothing is submitted to a store without the owner |
 | 2 | **An on-screen click wheel.** Apps that reproduce the original wheel have been removed from the App Store in the past (from memory, not checked) | No wheel in R1; touch-native controls in the neuPod visual language |
 | 3 | **Portrait layout**: the split Home with the art pane, the status bar, where Now Playing lives (a full screen, or a mini-player above a tab bar) | Decided at the design gate from real screens |
-| 4 | **Bundle and application ID** | `net.stuartfraser.neupod`, if that is the domain to use |
-| 5 | **Minimum OS versions** | The two most recent major iOS versions; Android 10 and later |
-| 6 | **Which Android phone** is the test device | Emulator only until one is named |
+| 4 | **Bundle and application ID** | **Decided 2026-11-21:** `net.stuartfraser.neupod` |
+| 5 | **Minimum OS versions** | **Decided 2026-11-21:** iOS 18 and later; Android 10 (API 29) and later |
+| 6 | **Which Android phone** is the test device | **Decided 2026-11-21:** the owner's Pixel (model and version to be recorded) |
 | 7 | **NAS type** for R2: a Jellyfin-style server, plain SMB, or WebDAV | Ask when R1 is done |
 | 8 | **Desktop C# companion** in the Wi-Fi plan: still wanted alongside the phone app? | Ask when R3 is planned |
 | 9 | **Distribution**: TestFlight and an internal Android track only, or public store releases | TestFlight and sideloaded APK until the owner decides |

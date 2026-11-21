@@ -11,7 +11,8 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] Checklist reconciled with the specification
 - [ ] `mobile/` scaffold, layering, ignore rules for keys and personal files
 - [ ] CI: Android on Linux, iOS on a Mac runner, no signing
-- [ ] Decision notes: audio engine, media session, tag reader, database, state management
+- [ ] Decision notes: audio engine, media session, tag reader, folder access, database, state management
+- [ ] Owner answers recorded: bundle ID, minimum OS, Android test phone (spec Open questions 4 to 6)
 - [ ] `LICENSE.md` row for `mobile/` (MPL-2.0)
 
 ## Phase 1: vertical slice
@@ -22,11 +23,12 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] Songs list
 - [ ] Play a FLAC and an MP3
 - [ ] Background playback with lock-screen and notification controls
+- [ ] Device check: the slice on the owner's iPhone and Pixel, recorded with the date
 - [ ] **Gate 1: stop and show the owner**
 
 ## Phase 2: look and feel
 
-- [ ] Style and mode tokens (Classic and Modern, Light and Dark) from the UI styles design
+- [ ] Style and mode tokens (Classic and Modern, Light and Dark) from the UI styles design; mode follows the phone by default
 - [ ] Classic Dark and Modern Light. BLOCKED: not designed (UI styles Open question 1)
 - [ ] Montserrat and Lucide bundled; Licences screen lists them
 - [ ] Components: list row (one and two lines), selection and pressed states, header bar, progress bar, panel, art frame
@@ -39,6 +41,12 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 
 - [ ] Tags: title, artist, album artist, album, track, disc, year, genre, compilation, duration, format, embedded art
 - [ ] Folder-convention fallback (`Artist/Year Album/NN Title.ext`, `Folder.jpg`), `, The` handling
+- [ ] Sort and collation match the firmware (`lib_collate_key` in `docs/ui.md`: leading "The " ignored, accents folded, symbols, digits, letters)
+- [ ] Source-neutral track model (a track has a source and a location), so R2 is an addition
+- [ ] Android: the device's shared music collection offered alongside picked folders
+- [ ] iOS: files in iCloud Drive that are not downloaded are listed with a Download action (owner decision 7); the scan never hangs on them
+- [ ] Generated test library: the owner's folder convention, discs, compilations, awkward names
+- [ ] Read-only guarantee: a test shows no music file or folder is written, moved or deleted
 - [ ] Discs merged into one album with sections
 - [ ] Compilations rule
 - [ ] Background scan with progress, cancel, and survival across app restarts
@@ -47,6 +55,7 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] Ratings, play counts, last played, skip counts that survive a rescan and a move
 - [ ] Unplayable files listed greyed with a reason
 - [ ] Scale test at 20,000 tracks; numbers recorded
+- [ ] Device check: library phase on the iPhone and Pixel, recorded with the date
 
 ## Phase 4: playback
 
@@ -58,8 +67,9 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] Headset and Bluetooth transport buttons
 - [ ] Output route icon
 - [ ] Resume queue, track and position
-- [ ] Each format decodes: FLAC, ALAC, MP3, AAC, WAV, Opus, Ogg Vorbis; fixture checksums where possible
+- [ ] Each format decodes: FLAC, ALAC, MP3, AAC, WAV, Opus, Ogg Vorbis; fixture checksums where possible (iOS Ogg through bundled Xiph decoders; Android ALAC through Apple's Apache-2.0 decoder; Android 24/192 FLAC checked, libflac extension if needed)
 - [ ] Sample-rate passthrough: what each platform allows, measured and reported
+- [ ] Device check: lock screen, headset buttons, Bluetooth, interruptions on the iPhone and Pixel, recorded with the date
 
 ## Phase 5: screens
 
@@ -76,7 +86,9 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] Now Playing, with rating
 - [ ] Queue screen
 - [ ] Row feedback: flash and tick; greyed row with reason; centred panel
+- [ ] Long names: ellipsis in lists; ticker for the focused title on Now Playing
 - [ ] Golden tests: every screen, both styles, both modes, two sizes, largest text
+- [ ] Device check: every screen on the iPhone and Pixel, recorded with the date
 
 ## Phase 6: playlists and settings
 
@@ -85,17 +97,28 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] `.m3u8` import and export with relative paths
 - [ ] Settings: style and mode, folders, gapless, skip-back, reset statistics
 - [ ] About and Licences
+- [ ] Device check: playlists moved between the phone and a neuPod card, recorded with the date
 
 ## Phase 7: finish
 
 - [ ] Accessibility pass: screen reader, text size, contrast, touch targets
 - [ ] Performance against the specification's targets
 - [ ] An hour of continuous play on the iPhone
-- [ ] An hour of continuous play on an Android phone. BLOCKED until a test phone is named (Open question 6)
+- [ ] An hour of continuous play on the owner's Pixel
 - [ ] Full pass of every screen in every style and mode on each device
+- [ ] Privacy check: no network connection (no `INTERNET` permission in the release Android manifest, no networking package), only the permissions needed
+- [ ] Naming and marks check: no "iPod", no Apple marks or artwork in the app or its listing
+- [ ] `LICENSE.md` and the in-app Licences screen list every package and asset
 - [ ] `mobile/README.md`: build, run, install
 - [ ] **Gate 3: final report**
 
 ## Notes
 
 (One line per thing the next session must know. Newest first.)
+
+- 2026-11-21: The owner's iPhone runs iOS 27, and Xcode 26.5 cannot deploy to it. Xcode 27 must be installed (owner, Apple ID) before the gate 1 device check. The iOS 18.6 simulator runtime was installed for testing the minimum.
+- 2026-11-21: Owner decisions 5 to 8 in the spec: bundled Xiph decoders for Ogg on iOS, no Cast in R1, a Download action for iCloud files, and the accepted platform limits. The audio engine and media session are an in-repo native plugin (decisions 0001, 0002): no pub.dev audio package met the spec.
+- 2026-11-21: `docs/ui.md` says "A "/"An " are not ignored in sorting, but `app/library/lib_collate.c` skips them. The app follows the code. The firmware doc is out of the app team's scope, so this is left for its owner.
+
+- 2026-11-21: Owner answered spec Open questions 4 to 6: ID `net.stuartfraser.neupod`; iOS 18+, Android 10 (API 29)+; Android test phone is the owner's Pixel (model and version to record when it is plugged in). The build Mac has 8 GB RAM: one emulator or simulator and one build at a time. See [ENVIRONMENT.md](ENVIRONMENT.md).
+- 2026-11-21: Checklist reconciled with the specification; added items are the spec's requirements that had no line, plus a device check per phase (TEAM-BRIEF.md, The loop).
