@@ -4,6 +4,8 @@ Text, number, level, choice and date entry with the click wheel is one library: 
 
 Design review of 12 November 2026 (colour tokens, type scale, new screens, owner decisions): [design review](design/2026-11-12-ui-review/README.md); its backlog is in [Backlog](backlog.md#design-review-2026-11-12).
 
+Next design, not built yet: **Classic and Modern styles** (21 November 2026: two styles in light and dark, a consistent status bar, no toast strip, volume in the progress bar's place): [UI styles](design/2026-11-21-ui-styles/README.md), with its [implementation brief](design/2026-11-21-ui-styles/IMPLEMENTATION-BRIEF.md) and [progress](design/2026-11-21-ui-styles/PROGRESS.md). This page describes the UI as built and changes as that work merges.
+
 Target: the Phase 1 panel, **320×240 landscape**. Each screen is an original drawing at the
 panel's native size (SVG, `viewBox="0 0 320 240"`); the look follows the classic click-wheel
 player layout — split menu with artwork, blue selection bar — lightly modernised. These are
