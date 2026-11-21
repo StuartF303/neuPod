@@ -12,6 +12,8 @@ analyzer:
     - build/**
     - android/**
     - ios/**
+    # Generated code (drift's part files); the sources they come from are analysed.
+    - "**/*.g.dart"
 
 linter:
   rules:

@@ -12,6 +12,7 @@ This file is for contributors. The user-facing build and install steps come in p
 | --- | --- |
 | Application / bundle ID | `net.stuartfraser.neupod` |
 | Display name | neuPod |
+| Devices | Phones only (iPhone, `TARGETED_DEVICE_FAMILY = 1`), portrait only on both platforms |
 | iOS | 18.0 minimum (Xcode project). iOS dependencies use Swift Package Manager, Flutter's default, so there is no Podfile; if a plugin ever makes Flutter generate one, set `platform :ios, '18.0'` in it. |
 | Android | minSdk 29 (Android 10), compileSdk and targetSdk 36, Java 17 |
 
@@ -67,7 +68,13 @@ Each will be a path dependency in `pubspec.yaml`, under MPL-2.0 like the app.
 - Every Dart file starts with `// SPDX-License-Identifier: MPL-2.0`.
 - R1 makes no network connection: no analytics, crash reporting, advertising or network packages. The release Android
   manifest has no `INTERNET` permission (Flutter adds it only to the debug and profile manifests, for the tool).
-- Never commit signing keys, keystores, `key.properties`, provisioning profiles, `.env` files or music. The ignore rules
-  are in the root `.gitignore` and `mobile/.gitignore`. Test audio goes in `mobile/test/assets/`; anything in
-  `mobile/test_music/` is ignored.
+- Never commit signing keys, keystores, `key.properties`, provisioning profiles, certificates, `ExportOptions.plist`,
+  `.env` files (`.env.example` is allowed) or music. The ignore rules are in the root `.gitignore` and
+  `mobile/.gitignore`.
+- **Fixture rule.** Every audio file under `mobile/` (`.flac`, `.mp3`, `.m4a`, `.wav`, `.ogg`, `.dsf` and the rest, in
+  any letter case) is ignored, except in these fixture folders:
+  `mobile/test/assets/`, `mobile/test/fixtures/`, `mobile/integration_test/assets/`,
+  `mobile/packages/*/test/assets/` and `mobile/packages/*/example/assets/`. Put only generated or freely licensed
+  test audio there, never anyone's own music. Keep personal test music in `mobile/test_music/`, which is always
+  ignored. The firmware fixtures in `tests/assets/audio/` can be reused from there without copying.
 - Every package that ships in the app gets a row in [LICENSE.md](../LICENSE.md).

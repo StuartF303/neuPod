@@ -45,10 +45,15 @@ key.properties
 *.cer
 *.mobileprovision
 *.provisionprofile
+*.pem
+*.pepk
+*.certSigningRequest
+ExportOptions.plist
 GoogleService-Info.plist
 google-services.json
 .env
 .env.*
+!.env.example
 local.properties
 
 # Phone app (mobile/): build outputs and tool caches
@@ -59,16 +64,27 @@ mobile/**/Pods/
 mobile/**/ios/Flutter/ephemeral/
 mobile/**/.flutter-plugins-dependencies
 
-# Phone app: never commit personal music. Test audio for the app goes in mobile/test/assets/;
-# the firmware fixtures in tests/assets/audio are outside mobile/ and unaffected.
+# Phone app: never commit personal music. Audio under mobile/ is ignored (any letter case) except in the
+# fixture folders re-included below; the firmware fixtures in tests/assets/audio are outside mobile/ and unaffected.
 mobile/test_music/
-mobile/**/*.flac
-mobile/**/*.mp3
-mobile/**/*.m4a
-mobile/**/*.aac
-mobile/**/*.wav
-mobile/**/*.aif
-mobile/**/*.aiff
-mobile/**/*.ogg
-mobile/**/*.opus
+mobile/**/*.[Ff][Ll][Aa][Cc]
+mobile/**/*.[Mm][Pp]3
+mobile/**/*.[Mm]4[Aa]
+mobile/**/*.[Mm]4[Bb]
+mobile/**/*.[Aa][Aa][Cc]
+mobile/**/*.[Ww][Aa][Vv]
+mobile/**/*.[Aa][Ii][Ff]
+mobile/**/*.[Aa][Ii][Ff][Ff]
+mobile/**/*.[Oo][Gg][Gg]
+mobile/**/*.[Oo][Pp][Uu][Ss]
+mobile/**/*.[Dd][Ss][Ff]
+mobile/**/*.[Dd][Ff][Ff]
+mobile/**/*.[Ww][Mm][Aa]
+mobile/**/*.[Aa][Pp][Ee]
+mobile/**/*.[Ww][Vv]
+mobile/**/*.[Mm][Kk][Aa]
 !mobile/test/assets/**
+!mobile/test/fixtures/**
+!mobile/integration_test/assets/**
+!mobile/packages/*/test/assets/**
+!mobile/packages/*/example/assets/**

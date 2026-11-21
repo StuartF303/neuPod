@@ -31,10 +31,8 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_riverpod: ^3.5.0
-  material_ui: ^1.1.0
+  material_ui: ^1.11.0
 
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -52,10 +50,9 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
 
-  # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
-  # the material Icons class.
-  uses-material-design: true
+  # The Material Icons font is not bundled: the design uses Lucide icons
+  # (docs/design/2026-11-21-ui-styles), so the Icons class is not used.
+  uses-material-design: false
 
   # To add assets to your application, add an assets section, like this:
   # assets:
