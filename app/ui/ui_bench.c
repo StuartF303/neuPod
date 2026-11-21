@@ -119,12 +119,13 @@ static void reset_screen(void) {
 }
 
 // Runs step() before every pass for WARM_MS + UI_BENCH_MS; counts the passes where LVGL rendered (LV_EVENT_RENDER_READY).
+extern uint64_t g_bench_flush_us;
 static void run(const char *name, step_fn step) {
     lv_refr_now(NULL);
     (void)os_task_stats((os_task_info_t[OS_STATS_MAX_TASKS]){0}, OS_STATS_MAX_TASKS); /* start a cpu window */
     uint64_t t_begin = hal_micros(), t_win = 0;
     uint32_t i = 0, frames = 0, stored = 0, max = 0;
-    uint64_t sum = 0, busy = 0;
+    uint64_t sum = 0, busy = 0, flush = 0;
     for (;;) {
         uint32_t ms = (uint32_t)((hal_micros() - t_begin) / 1000u);
         if (ms >= WARM_MS + UI_BENCH_MS) {
@@ -132,6 +133,7 @@ static void run(const char *name, step_fn step) {
         }
         step(i++, ms);
         uint32_t r0 = g_rendered;
+        uint64_t f0 = g_bench_flush_us;
         uint64_t a = hal_micros();
         (void)lv_timer_handler();
         uint32_t dt = (uint32_t)(hal_micros() - a);
@@ -141,6 +143,7 @@ static void run(const char *name, step_fn step) {
                 t_win = a;
             }
             busy += dt;
+            flush += g_bench_flush_us - f0;
             if (g_rendered != r0) {
                 frames++;
                 sum += dt;
@@ -164,9 +167,9 @@ static void run(const char *name, step_fn step) {
     lv_mem_monitor_t m;
     lv_mem_monitor(&m);
     uint32_t fps10 = (uint32_t)((uint64_t)frames * 10000000u / wall);
-    printf("bench: %s frames=%u fps=%u.%u frame_us avg=%u max=%u p95=%u busy=%u%% lvgl_mem_max=%u\n", name, (unsigned)frames,
+    printf("bench: %s frames=%u fps=%u.%u frame_us avg=%u max=%u p95=%u busy=%u%% flush_us/frame=%u lvgl_mem_max=%u\n", name, (unsigned)frames,
            (unsigned)(fps10 / 10u), (unsigned)(fps10 % 10u), (unsigned)(frames != 0 ? sum / frames : 0), (unsigned)max, (unsigned)p95,
-           (unsigned)(busy * 100u / wall), (unsigned)m.max_used);
+           (unsigned)(busy * 100u / wall), (unsigned)(frames != 0 ? flush / frames : 0), (unsigned)m.max_used);
     print_cpu();
 }
 

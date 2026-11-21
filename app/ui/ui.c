@@ -40,7 +40,13 @@ static uint8_t g_buf2[UI_BUF_W_MAX * UI_BUF_LINES_MAX * 2] __attribute__((aligne
 
 // Blocking flush: set the window, DMA the strip, wait. Async (render the next strip while the
 // previous one is on the wire) is possible later because there are two buffers.
+#ifdef NEUPOD_UI_BENCH
+uint64_t g_bench_flush_us; /* phase 0 bench: time inside the flush (copy to the panel), summed */
+#endif
 static void flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
+#ifdef NEUPOD_UI_BENCH
+    uint64_t bench_t0 = hal_micros();
+#endif
     uint16_t w = (uint16_t)lv_area_get_width(area);
     uint16_t h = (uint16_t)lv_area_get_height(area);
     if (hal_display_set_window((uint16_t)area->x1, (uint16_t)area->y1, w, h) == HAL_OK) {
@@ -50,6 +56,9 @@ static void flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
     if (lv_display_flush_is_last(disp)) {
         hal_display_present(); // host: show / dump the frame; hardware: no-op
     }
+#ifdef NEUPOD_UI_BENCH
+    g_bench_flush_us += hal_micros() - bench_t0;
+#endif
     lv_display_flush_ready(disp);
 }
 
