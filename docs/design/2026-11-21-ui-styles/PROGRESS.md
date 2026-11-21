@@ -8,10 +8,10 @@ audit clean, all platforms build, Pico 2 W size delta reported.
 
 ## Phase 0: measure
 
-- [ ] Timing harness on RP2350-Touch-AMOLED-2.41
-- [ ] Timing harness on ESP32-S3-Touch-AMOLED-2.41
-- [ ] Backdrop generation: time and memory per track
-- [ ] `PHASE0-RESULTS.md` written; **stop and show the owner**
+- [x] Timing harness on RP2350-Touch-AMOLED-2.41 (#99, 2026-11-21)
+- [x] Timing harness on ESP32-S3-Touch-AMOLED-2.41 (#99, 2026-11-21)
+- [x] Backdrop generation: time and memory per track (#99, 2026-11-21)
+- [x] `PHASE0-RESULTS.md` written; **stop and show the owner** (#99, 2026-11-21; shown, awaiting the owner's decision)
 
 ## Phase 1: the style layer
 
@@ -151,4 +151,5 @@ audit clean, all platforms build, Pico 2 W size delta reported.
 
 (One line per thing the next session must know. Newest first.)
 
+- 2026-11-21: phase 0 bench is on branch `chore/phase0-bench` (never merge). both boards measured (`PHASE0-RESULTS.md`); full-screen repaints over a picture run at 2-13 fps. Phase 1 waits on the owner's call on fixes vs fallbacks. Both AMOLED boards were left running the bench image: reflash the normal builds for normal use.
 - 2026-11-21: checklist reconciled against `app/ui/*.c` and the tours before phase 0 (brief, "Before the first item" step 4); items added, none removed. Many of the added states have no tour step yet: add one when the item is worked.
