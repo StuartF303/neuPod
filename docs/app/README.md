@@ -29,6 +29,13 @@ Status: specification, 21 November 2026. Nothing is built. The working instructi
    inferred, because there is no public API before Android 13. MP3 and AAC files without encoder-delay metadata cannot
    be gapless on any engine.
 
+9. **The app is the device (owner, 21 November 2026).** The full-screen view is the front of a neuPod: the 4:3 screen
+   above a touch click wheel with the four click buttons (Menu, previous, next, play/pause) and the centre button, in
+   the device's proportions, scaled to the phone's width. Turning the wheel scrolls with haptic detents, and pressing a
+   button or the centre gives a haptic click. It is drawn fresh, never copied from Apple's artwork, with no Apple logo
+   and no "iPod"; the store-review risk stays with the owner at submission (Open question 1). This settles Open
+   question 2 and most of Open question 3.
+
 Everything else in this document is the designer's proposal until the owner confirms it. Proposals that most need a
 decision are collected under [Open questions](#open-questions).
 
@@ -157,11 +164,17 @@ the same rule as the device: the dominant colour, clamped until white text on it
 - Two styles, **Classic** and **Modern**, each in Light and Dark, with the colours and skins in the
   [UI styles design](../design/2026-11-21-ui-styles/README.md). Mode follows the phone's setting by default; style is
   chosen in Settings.
-- The device UI is a 4:3 landscape screen driven by a wheel. The phone is a tall touch screen. The app keeps the
-  device's **structure, names, colours, type and component shapes** and replaces the wheel with touch: tap is Select,
-  the back gesture is Menu, lists scroll by drag.
-- **No portrait mock-ups exist yet.** The first thing the build produces is a small set of real screens for the owner
-  to approve before the rest is built (the design gate in the team brief).
+- **The device view (owner decision 9).** The phone shows the device's front: the 4:3 screen, running the device's
+  screens with the UI styles design's values (drawn at 600x450, so they carry over), above the click wheel. The wheel
+  behaves as on the device: turning scrolls, with acceleration and the fast-scroll letter tile on long lists; the
+  centre is Select; Menu goes back; previous, next and play/pause work as on the device, including press-and-hold to
+  scan. Each wheel detent is a light haptic tick, and each button press is a firmer haptic click. An optional click
+  sound, like the original's clicker, can be turned on in Settings.
+- **To decide at the design gate, from real screens:** how the device sits on tall and short phones (the body
+  stretched or the space around it filled); the body finish and whether it follows the style and mode; whether the
+  screen also accepts direct taps on rows alongside the wheel; and how the largest text sizes fit the 4:3 screen
+  (proposal: fewer, larger rows).
+- Search, which needs typing, opens the phone's keyboard from a Search item.
 - Type is Montserrat (SIL OFL), icons are Lucide (ISC), as on the device. Every third-party asset and package is listed
   on an in-app Licences screen.
 - Feedback follows the device's three places where they translate: a row confirms with a brief flash and a tick; a
@@ -174,7 +187,8 @@ counts (with a panel to confirm); About; Licences.
 
 ### Accessibility
 
-Every control has a screen-reader label; the app honours the system text size up to the largest standard setting
+The wheel and buttons have screen-reader equivalents (the list is navigable row by row, and the wheel is an
+adjustable control with actions for Select, Menu, previous, next and play/pause). Every control has a screen-reader label; the app honours the system text size up to the largest standard setting
 without clipping; text contrast is at least 4.5:1 in every style and mode; nothing depends on colour alone; touch
 targets are at least 44 points.
 
@@ -234,8 +248,8 @@ Not decided. Do not settle these by guessing.
 | # | Question | Proposal |
 | --- | --- | --- |
 | 1 | **App name and store listing.** A music player whose name contains "Pod" may meet trademark objections at store review. Not legal advice; the owner should take a view before submitting | Build as "neuPod"; nothing is submitted to a store without the owner |
-| 2 | **An on-screen click wheel.** Apps that reproduce the original wheel have been removed from the App Store in the past (from memory, not checked) | No wheel in R1; touch-native controls in the neuPod visual language |
-| 3 | **Portrait layout**: the split Home with the art pane, the status bar, where Now Playing lives (a full screen, or a mini-player above a tab bar) | Decided at the design gate from real screens |
+| 2 | **An on-screen click wheel.** Apps that reproduce the original wheel have been removed from the App Store in the past (from memory, not checked) | **Decided 2026-11-21 (owner decision 9):** a touch click wheel with haptics, in a drawn-fresh device view |
+| 3 | **Portrait layout**: the split Home with the art pane, the status bar, where Now Playing lives (a full screen, or a mini-player above a tab bar) | Mostly settled by owner decision 9: the screen is the device's 4:3 screen. How the device fits tall and short phones is decided at the design gate |
 | 4 | **Bundle and application ID** | **Decided 2026-11-21:** `net.stuartfraser.neupod` |
 | 5 | **Minimum OS versions** | **Decided 2026-11-21:** iOS 18 and later; Android 10 (API 29) and later |
 | 6 | **Which Android phone** is the test device | **Decided 2026-11-21:** the owner's Pixel (model and version to be recorded) |

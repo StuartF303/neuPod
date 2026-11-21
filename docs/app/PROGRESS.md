@@ -34,7 +34,10 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] Components: list row (one and two lines), selection and pressed states, header bar, progress bar, panel, art frame
 - [ ] Accent from album art, clamped to 4.5:1 with white text
 - [ ] Modern backdrop from the art
-- [ ] Design-gate screens: Home, a list, an album, Cover Flow, Now Playing, in portrait
+- [ ] Device view: the body and the 4:3 screen, scaled to the phone's width, drawn fresh (no Apple logo or artwork)
+- [ ] Click wheel: rotation to scroll with acceleration, centre Select, Menu, previous, next, play/pause, press-and-hold; haptic detents and clicks on both platforms; optional click sound
+- [ ] Wheel and buttons accessible: row-by-row screen reader navigation, adjustable control with actions
+- [ ] Design-gate screens: Home, a list, an album, Cover Flow, Now Playing in the device view, with the open choices (fit on tall and short phones, body finish, direct taps on rows, largest text) built as candidates
 - [ ] **Gate 2: stop and show the owner; record the choices here**
 
 ## Phase 3: library
@@ -85,7 +88,7 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] Search
 - [ ] Now Playing, with rating and the format line (`FLAC 16/44.1`)
 - [ ] Queue screen
-- [ ] Touch mapping: tap is Select, the back gesture is Menu, drag scrolls
+- [ ] Wheel behaviour matches the device on every screen, including fast scroll and Now Playing seek and volume (volume is the phone's own, as the spec says)
 - [ ] Integration test: pick a folder, scan, browse, play, background, resume, on the Android emulator and the iOS simulator
 - [ ] Row feedback: flash and tick; greyed row with reason; centred panel
 - [ ] Long names: ellipsis in lists; ticker for the focused title on Now Playing
@@ -117,6 +120,8 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 ## Notes
 
 (One line per thing the next session must know. Newest first.)
+
+- 2026-11-21: Owner decision 9: the app is the device, a drawn-fresh front view with a touch click wheel, buttons and haptics. Phase 2 and the design gate are built around it; the device's 600x450 designs apply to the screen.
 
 - 2026-11-21: The owner's iPhone runs iOS 27, and Xcode 26.5 cannot deploy to it. Xcode 27 must be installed (owner, Apple ID) before the gate 1 device check. The iOS 18.6 simulator runtime was installed for testing the minimum.
 - 2026-11-21: Owner decisions 5 to 8 in the spec: bundled Xiph decoders for Ogg on iOS, no Cast in R1, a Download action for iCloud files, and the accepted platform limits. The audio engine and media session are an in-repo native plugin (decisions 0001, 0002): no pub.dev audio package met the spec.
