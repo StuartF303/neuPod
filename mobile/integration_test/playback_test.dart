@@ -5,6 +5,7 @@
 // (lock screen and notification) populated. Phase 1 of docs/app/PROGRESS.md.
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,7 +19,20 @@ import 'package:neupod_audio/neupod_audio.dart';
 const _timeout = Duration(seconds: 30);
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  // Under `xcodebuild test` (ios/RunnerTests) the tests start as the app
+  // launches, and iOS turns accessibility on moments later; wait for it so
+  // the binding's SemanticsHandle does not open inside a test (as in
+  // app_launch_test.dart).
+  setUpAll(() async {
+    if (!Platform.isIOS) return;
+    final deadline = DateTime.now().add(const Duration(seconds: 10));
+    while (!binding.platformDispatcher.semanticsEnabled &&
+        DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+  });
   // One engine per app, as in the app (playerProvider).
   final audio = NeupodAudio();
   final player = NeupodPlayer(audio);

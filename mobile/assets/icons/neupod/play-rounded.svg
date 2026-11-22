@@ -1,0 +1,4 @@
+<!-- SPDX-License-Identifier: MPL-2.0. Drawn for the neuPod UI styles design (Modern status bar play glyph: filled, with a 2 px round-joined stroke). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+  <path d="M7 4l12 8-12 8z" />
+</svg>

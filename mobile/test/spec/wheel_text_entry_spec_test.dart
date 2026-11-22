@@ -24,6 +24,7 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neupod/domain/text_entry/wheel_text_entry.dart' as port;
 
 enum TextCharset { any, digits, hex }
 
@@ -137,9 +138,101 @@ typedef SearchScreenFactory = SearchScreen Function({
 });
 
 // WIRE: replace null with adapters over the app's code.
-final TextEntryFactory? wiredTextEntry = null;
-final TextEntryFromBytes? wiredTextEntryFromBytes = null;
+// The nullable types stay so each group's skip can test for null.
+// ignore: unnecessary_nullable_for_final_variable_declarations
+final TextEntryFactory? wiredTextEntry = _portedTextEntry;
+// ignore: unnecessary_nullable_for_final_variable_declarations
+final TextEntryFromBytes? wiredTextEntryFromBytes = _portedTextEntryFromBytes;
 final SearchScreenFactory? wiredSearchScreen = null;
+
+TextEntry _portedTextEntry({
+  String initial = '',
+  required int maxChars,
+  TextCharset charset = TextCharset.any,
+  bool masked = false,
+  bool search = false,
+  void Function(String text)? onSearchChanged,
+}) => _PortedTextEntry(
+  port.WheelTextEntry(
+    initial: initial,
+    maxChars: maxChars,
+    charset: port.TextCharset.values[charset.index],
+    masked: masked,
+    search: search,
+    onChange: onSearchChanged,
+  ),
+);
+
+TextEntry _portedTextEntryFromBytes(
+  List<int> initialUtf8, {
+  required int maxChars,
+}) => _PortedTextEntry(
+  port.WheelTextEntry.fromUtf8(initialUtf8, maxChars: maxChars),
+);
+
+/// The spec's TextEntry over the port (mobile/lib/domain/text_entry/); the
+/// enums are the firmware's, in the same order on both sides.
+final class _PortedTextEntry implements TextEntry {
+  _PortedTextEntry(this._t);
+  final port.WheelTextEntry _t;
+
+  TextResult _r(port.WheelResult r) => TextResult.values[r.index];
+
+  @override
+  String get text => _t.text;
+  @override
+  int get lengthBytes => _t.lengthBytes;
+  @override
+  int get cursor => _t.cursor;
+  @override
+  int get chars => _t.chars;
+  @override
+  bool get masked => _t.masked;
+  @override
+  bool get typed => _t.typed;
+  @override
+  bool get changed => _t.changed;
+  @override
+  set changed(bool value) => _t.changed = value;
+  @override
+  TextChip get chip => TextChip.values[_t.chip.index];
+  @override
+  set chip(TextChip value) => _t.chip = port.TextChip.values[value.index];
+  @override
+  int get sel => _t.sel;
+  @override
+  set sel(int value) => _t.sel = value;
+  @override
+  List<TextChip> chips() => [
+    for (final c in _t.chips()) TextChip.values[c.index],
+  ];
+  @override
+  int stripLength() => _t.stripLength();
+  @override
+  (TextKeyKind, String) stripKey(int i) {
+    final (kind, label) = _t.stripKey(i);
+    return (TextKeyKind.values[kind.index], label);
+  }
+
+  @override
+  TextResult scroll(int steps) => _r(_t.event(port.WheelEvent.scroll, steps));
+  @override
+  TextResult select() => _r(_t.event(port.WheelEvent.select));
+  @override
+  TextResult menu() => _r(_t.event(port.WheelEvent.menu));
+  @override
+  TextResult play() => _r(_t.event(port.WheelEvent.play));
+  @override
+  TextResult left() => _r(_t.event(port.WheelEvent.left));
+  @override
+  TextResult right() => _r(_t.event(port.WheelEvent.right));
+  @override
+  bool insert(int codePoint) => _t.insert(codePoint);
+  @override
+  void clear() => _t.clear();
+  @override
+  void setByteLimit(int maxBytes) => _t.setByteLimit(maxBytes);
+}
 
 TextEntry _entry(
   String initial,
