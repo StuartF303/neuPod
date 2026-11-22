@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:neupod/app/library_scan_providers.dart';
 import 'package:neupod/ui/device/device_view.dart';
 import 'package:neupod/ui/screens/browse/browse_root.dart';
 import 'package:neupod/ui/screens/now_playing/now_playing_screen.dart';
@@ -21,11 +24,39 @@ import 'package:neupod/ui/features/player_debug/player_debug_screen.dart';
 /// or the phone's. In debug
 /// builds the player debug screen stays reachable from the gate panel (a long
 /// press on the device's body).
-class NeuPodApp extends ConsumerWidget {
+///
+/// The library is scanned at launch and each time the app comes back to the
+/// front, when there is any folder (on iOS the Documents folder always is),
+/// so music copied in with Finder or the Files app appears by itself. The
+/// scanner reads only new or changed files.
+class NeuPodApp extends ConsumerStatefulWidget {
   const NeuPodApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<NeuPodApp> createState() => _NeuPodAppState();
+}
+
+class _NeuPodAppState extends ConsumerState<NeuPodApp> {
+  late final AppLifecycleListener _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    _scan();
+    _lifecycle = AppLifecycleListener(onResume: _scan);
+  }
+
+  void _scan() =>
+      unawaited(ref.read(libraryScanProvider.notifier).startIfSources());
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final mode = ref.watch(styleChoiceProvider.select((c) => c.mode));
     // Now Playing and Search plug into the shell (idempotent).
     registerGateScreens(ref.read(shellRegistryProvider));

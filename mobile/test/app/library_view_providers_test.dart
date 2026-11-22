@@ -10,13 +10,13 @@ import 'package:neupod/app/library_view_providers.dart';
 import 'package:neupod/app/providers.dart';
 import 'package:neupod/data/db/library_database.dart';
 import 'package:neupod/domain/library/library_ports.dart';
-import 'package:neupod/ui/features/songs/songs_providers.dart';
+import 'package:neupod/app/library_scan_providers.dart';
 import 'package:neupod/ui/screens/browse/home_screen.dart';
 import 'package:neupod/ui/screens/search/search_screen.dart';
 
 import '../data/library_view/seed.dart';
 
-class _FakeScan extends ScanNotifier {
+class _FakeScan extends LibraryScanController {
   @override
   ScanProgress? build() => null;
 
@@ -35,10 +35,10 @@ void main() {
       final container = ProviderContainer.test(
         overrides: [
           libraryDatabaseProvider.overrideWithValue(db),
-          scanProvider.overrideWith(_FakeScan.new),
+          libraryScanProvider.overrideWith(_FakeScan.new),
         ],
       );
-      final scan = container.read(scanProvider.notifier) as _FakeScan;
+      final scan = container.read(libraryScanProvider.notifier) as _FakeScan;
 
       // Something reads the library before the scan has found anything.
       expect(await container.read(songCountProvider.future), 0);
@@ -71,10 +71,10 @@ void main() {
       final container = ProviderContainer.test(
         overrides: [
           libraryDatabaseProvider.overrideWithValue(db),
-          scanProvider.overrideWith(_FakeScan.new),
+          libraryScanProvider.overrideWith(_FakeScan.new),
         ],
       );
-      final scan = container.read(scanProvider.notifier) as _FakeScan;
+      final scan = container.read(libraryScanProvider.notifier) as _FakeScan;
       container.listen(libraryViewProvider, (_, _) {});
 
       final before = await container.read(libraryViewProvider.future);

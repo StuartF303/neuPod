@@ -7,7 +7,7 @@
 /// Not drawn by the design: the pane when nothing is playing (UI styles Open
 /// question 9, since the clock is gone). It shows the cover placeholder,
 /// `Nothing playing` and the song count (docs/ui.md's idle Home, minus the
-/// clock).
+/// clock); with no songs at all, `No songs yet` and `Settings > Library`.
 library;
 
 import 'dart:io';
@@ -23,6 +23,7 @@ import 'package:neupod/ui/components/list_parts.dart';
 import 'package:neupod/ui/components/neupod_screen.dart';
 import 'package:neupod/ui/components/status_bar.dart';
 import 'package:neupod/ui/screens/browse/browse_common.dart';
+import 'package:neupod/ui/screens/browse/library_screen.dart';
 import 'package:neupod/ui/screens/browse/music_menu_screen.dart';
 import 'package:neupod/ui/screens/browse/settings_screen.dart';
 import 'package:neupod/ui/screens/shell/cover_art.dart';
@@ -154,7 +155,13 @@ class _HomePane extends ConsumerWidget {
     final title = current?.title ?? 'Nothing playing';
     final second = current != null
         ? current.artist
-        : (count == null ? null : songsLabel(count));
+        : switch (count) {
+            null => null,
+            0 => noSongsTitle,
+            _ => songsLabel(count),
+          };
+    // An empty library says where music is added.
+    final third = current == null && count == 0 ? addMusicHint : null;
     final progress = current == null || player.duration == null
         ? 0.0
         : (player.position.inMilliseconds / player.duration!.inMilliseconds)
@@ -175,6 +182,12 @@ class _HomePane extends ConsumerWidget {
             if (second != null)
               NeupodText(
                 second,
+                type.small(style.list.secondary),
+                align: TextAlign.center,
+              ),
+            if (third != null)
+              NeupodText(
+                third,
                 type.small(style.list.secondary),
                 align: TextAlign.center,
               ),
