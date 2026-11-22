@@ -63,7 +63,8 @@ Compilations, and a small Settings). Now Playing, the panel's content and Search
 
 ## Where the data comes from
 
-`app/library_view_providers.dart` provides `libraryViewProvider` (a `LibraryView`, `domain/library_view/`). Today it is
-`data/gate_library`'s adapter over the generated test library's manifest. When PR #117's drift-backed adapter lands,
-swap the provider's body; the screens do not change. See that file for the gate's stubs (durations, art, playback of
-sample files).
+`app/library_view_providers.dart` provides `libraryViewProvider` (a `LibraryView`, `domain/library_view/`): the adapter
+over the scanned drift database, `data/library_view/drift_library_view.dart`, sorted by the firmware collation. What the
+database does not hold yet (album artist, year, disc, genre, compilation flag, art) shows as empty Genres and
+Compilations lists and placeholder covers until phase 3. The screens' tests and goldens and the gate-2 tool use
+`test/support/manifest_library_view.dart`, a test-only fake over the generated test library's manifest.

@@ -12,7 +12,9 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/app/library_view_providers.dart';
 import 'package:neupod/app/providers.dart';
-import 'package:neupod/data/gate_library/manifest_library_view.dart';
+
+import '../../support/manifest_library_view.dart';
+
 import 'package:neupod/domain/library_view/library_view.dart';
 import 'package:neupod/domain/playback/player_state.dart';
 import 'package:neupod/domain/playback/queue_item.dart';
@@ -29,7 +31,7 @@ import '../../fakes/fake_player.dart';
 
 /// The gate library, from the committed manifest.
 final ManifestLibraryView gateLibrary = ManifestLibraryView.parse(
-  File('assets/gate_library/manifest.json').readAsStringSync(),
+  File('test/support/gate_library/manifest.json').readAsStringSync(),
 );
 
 /// A text scale for each tier (Android's thresholds, the test platform's).
@@ -102,6 +104,7 @@ Future<ShellRig> pumpShell(
   DeviceStatus? status,
   ShellRegistrySetup? registry,
   List<Override> overrides = const [],
+  LibraryView? library,
 }) async {
   tester.view.physicalSize = const Size(600, 450);
   tester.view.devicePixelRatio = 1;
@@ -111,7 +114,7 @@ Future<ShellRig> pumpShell(
   final container = ProviderContainer.test(
     retry: (_, _) => null,
     overrides: [
-      libraryViewProvider.overrideWith((ref) => gateLibrary),
+      libraryViewProvider.overrideWith((ref) => library ?? gateLibrary),
       // The real mapper copies test tones out of the asset bundle; the
       // screens' tests only need the queue's order and metadata.
       queueMapperProvider.overrideWithValue(

@@ -8,7 +8,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/app/library_view_providers.dart';
 import 'package:neupod/app/neupod_app.dart';
 import 'package:neupod/app/providers.dart';
-import 'package:neupod/data/gate_library/manifest_library_view.dart';
+
+import '../support/manifest_library_view.dart';
+
 import 'package:neupod/ui/device/device_view.dart';
 
 import '../fakes/fake_player.dart';
@@ -20,7 +22,7 @@ void main() {
     tester.view.physicalSize = const Size(393, 852);
     addTearDown(tester.view.reset);
     final library = ManifestLibraryView.parse(
-      File('assets/gate_library/manifest.json').readAsStringSync(),
+      File('test/support/gate_library/manifest.json').readAsStringSync(),
     );
     await tester.pumpWidget(
       ProviderScope(

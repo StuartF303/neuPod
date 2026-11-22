@@ -82,9 +82,6 @@ flutter:
     # Licence texts shown on the Licences screen (lib/ui/features/licences).
     - assets/fonts/OFL-Montserrat.txt
     - assets/icons/lucide/LICENSE-Lucide.txt
-    # The generated test library's manifest, for the design gate's browsing
-    # screens (lib/data/gate_library). A test checks it against the generator.
-    - assets/gate_library/
     # Generated test tones (copies of tests/assets/audio fixtures, about 57 KB)
     # for the player debug screen and the integration tests. To leave out of
     # store builds before release.
