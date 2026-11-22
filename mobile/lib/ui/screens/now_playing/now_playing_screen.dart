@@ -90,6 +90,18 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // A panel over the screen: a held Select, Previous or Next must not go on
+    // to enter seek mode or scan unseen (its release goes to the panel), and
+    // when it goes this screen says what the wheel is again.
+    ref.listenManual(shellProvider.select((s) => s.panel != null), (was, isUp) {
+      if (isUp) {
+        _dropHalfDone();
+        if (mounted) setState(() {});
+      } else {
+        _syncHolds();
+        _describe(force: true);
+      }
+    });
     final player = ref.read(playerProvider);
     _position = player.state.position;
     _positions = player.positions().listen((p) {

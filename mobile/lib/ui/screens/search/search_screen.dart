@@ -52,16 +52,23 @@ final searchFunctionProvider = FutureProvider<SearchFunction>((ref) async {
         detail: '${s.artist} · ${s.album}',
       ),
   ];
-  List<SearchHit> match(List<SearchHit> all, String q) {
+  // Lower-cased once, here, not on every key.
+  List<(String, SearchHit)> fold(List<SearchHit> all) => [
+    for (final h in all) (h.title.toLowerCase(), h),
+  ];
+  final foldedArtists = fold(artists);
+  final foldedAlbums = fold(albums);
+  final foldedSongs = fold(songs);
+
+  List<SearchHit> match(List<(String, SearchHit)> all, String q) {
     final needle = q.toLowerCase();
     final starts = <SearchHit>[];
     final within = <SearchHit>[];
-    for (final h in all) {
-      final name = h.title.toLowerCase();
+    for (final (name, hit) in all) {
       if (name.startsWith(needle)) {
-        starts.add(h);
+        starts.add(hit);
       } else if (name.contains(needle)) {
-        within.add(h);
+        within.add(hit);
       }
     }
     return [...starts, ...within];
@@ -70,9 +77,9 @@ final searchFunctionProvider = FutureProvider<SearchFunction>((ref) async {
   return (String query) => query.isEmpty
       ? SearchResults.none
       : SearchResults(
-          artists: match(artists, query),
-          albums: match(albums, query),
-          songs: match(songs, query),
+          artists: match(foldedArtists, query),
+          albums: match(foldedAlbums, query),
+          songs: match(foldedSongs, query),
         );
 });
 
@@ -99,6 +106,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   ScreenHandle? _screen;
   bool _claimed = false;
   bool _atEnd = false;
+  bool _loading = true;
+  Object? _loadError;
   Map<WheelButton, int> _savedHolds = const {};
   Map<WheelButton, int> _ownHolds = const {};
 
@@ -113,10 +122,25 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _session.onOpen = _open;
     ref.listenManual(searchFunctionProvider, (_, next) {
       final f = next.value;
-      if (f == null) return;
-      _find = f;
-      _session.refresh();
+      if (f != null) {
+        _find = f;
+        _loading = false;
+        _loadError = null;
+        _session.refresh();
+      } else if (next.hasError) {
+        _loading = false;
+        _loadError = next.error;
+        if (mounted) setState(() {});
+      } else {
+        _loading = true;
+        _loadError = null;
+      }
     }, fireImmediately: true);
+    // After a panel goes, say what this screen's wheel is again (the panel's
+    // saved text is only a fallback).
+    ref.listenManual(shellProvider.select((s) => s.panel != null), (was, isUp) {
+      if (!isUp) _describe();
+    });
   }
 
   @override
@@ -297,13 +321,29 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     }
   }
 
+  /// Why there is nothing to show, when there is nothing: still loading, the
+  /// library could not be read, or no match (never silent).
+  String? get _notice {
+    if (_loadError != null) return 'Library unavailable';
+    if (_loading) return 'Loading library';
+    if (_session.text.isNotEmpty && _session.count == 0) return 'No matches';
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final found = _session.text.isEmpty ? null : '${_session.count} found';
+    final found = _session.text.isEmpty || _loading || _loadError != null
+        ? null
+        : '${_session.count} found';
     return ShellFrame(
       title: 'Search',
       context: found,
-      body: SearchView(session: _session, withStatusBar: false, onOpen: _open),
+      body: SearchView(
+        session: _session,
+        withStatusBar: false,
+        onOpen: _open,
+        notice: _notice,
+      ),
     );
   }
 }

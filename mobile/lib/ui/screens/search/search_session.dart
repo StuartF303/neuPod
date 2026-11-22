@@ -91,8 +91,11 @@ class SearchResults {
   /// Matching songs.
   final List<SearchHit> songs;
 
-  /// Every hit, artists first.
-  List<SearchHit> get all => [...artists, ...albums, ...songs];
+  static final Expando<List<SearchHit>> _all = Expando<List<SearchHit>>();
+
+  /// Every hit, artists first. Built once per result set.
+  List<SearchHit> get all =>
+      _all[this] ??= List.unmodifiable([...artists, ...albums, ...songs]);
 
   /// How many in all (`4 found`).
   int get count => artists.length + albums.length + songs.length;
