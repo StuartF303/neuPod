@@ -26,6 +26,7 @@ environment:
 workspace:
   - packages/neupod_audio
   - packages/neupod_device
+  - packages/neupod_storage
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -44,6 +45,9 @@ dependencies:
   # In-repo plugin: click-wheel haptics and the system volume (decision 0007).
   neupod_device:
     path: packages/neupod_device
+  # In-repo plugin: folder access, SAF and security-scoped bookmarks (decision 0004).
+  neupod_storage:
+    path: packages/neupod_storage
 
 dev_dependencies:
   flutter_test:

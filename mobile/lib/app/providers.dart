@@ -11,10 +11,13 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/audio/neupod_player.dart';
 import 'package:neupod/audio/test_media.dart';
+import 'package:neupod/data/platform/storage_folder_access.dart';
+import 'package:neupod/domain/library/library_folder.dart';
 import 'package:neupod/domain/library/library_summary.dart';
 import 'package:neupod/domain/playback/player.dart';
 import 'package:neupod/domain/playback/player_state.dart';
 import 'package:neupod_audio/neupod_audio.dart';
+import 'package:neupod_storage/neupod_storage.dart';
 
 /// A summary of the music library.
 ///
@@ -39,3 +42,12 @@ final playerStateProvider = StreamProvider<PlayerState>(
 
 /// The bundled test tones, for the player debug screen.
 final testMediaProvider = Provider<TestMedia>((ref) => const TestMedia());
+
+/// The neupod_storage plugin (decision 0004): the only code that holds folder
+/// grants and security-scoped access.
+final neupodStorageProvider = Provider<NeupodStorage>((ref) => NeupodStorage());
+
+/// Read-only access to the library folders.
+final folderAccessProvider = Provider<FolderAccess>(
+  (ref) => StorageFolderAccess(ref.watch(neupodStorageProvider)),
+);

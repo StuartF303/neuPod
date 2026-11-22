@@ -64,6 +64,14 @@ jobs:
           flutter pub get
           flutter analyze
           flutter test
+      # The in-repo folder-access plugin: its Dart side, including the pread reader on a real host descriptor.
+      - name: neupod_storage plugin
+        working-directory: mobile/packages/neupod_storage
+        run: |
+          flutter pub get
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze
+          flutter test
 
   # Debug APK, and the privacy check: the merged release manifest must not ask for INTERNET (R1 makes no network
   # connection; Flutter adds INTERNET only to the debug and profile manifests, for the tool).
