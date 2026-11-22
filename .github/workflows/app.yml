@@ -6,19 +6,7 @@ name: app
 on:
   push:
     branches: [main]
-    paths:
-      - "mobile/**"
-      - ".github/workflows/app.yml"
-      # android-integration runs the folder-access script and picker driver and pushes these audio fixtures.
-      - "scripts/app/**"
-      - "tests/assets/audio/**"
   pull_request:
-    paths:
-      - "mobile/**"
-      - ".github/workflows/app.yml"
-      # android-integration runs the folder-access script and picker driver and pushes these audio fixtures.
-      - "scripts/app/**"
-      - "tests/assets/audio/**"
   workflow_dispatch:
 
 permissions:
@@ -37,8 +25,54 @@ defaults:
     working-directory: mobile
 
 jobs:
+  # The workflow is not path-filtered, so that app-gate can be a required check: a firmware-only PR still gets a
+  # (passing) app-gate instead of waiting forever for jobs that never start. Path filtering happens here instead.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      app: ${{ steps.filter.outputs.app }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: filter
+        working-directory: .
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          # The paths that make the app jobs run (the old on.*.paths globs). Git pathspecs: ** is not needed, a
+          # directory prefix matches everything below it.
+          #   - scripts/app and the audio fixtures count because android-integration runs the folder-access script and
+          #     picker driver and pushes these audio fixtures.
+          paths=(
+            "mobile/"
+            ".github/workflows/app.yml"
+            "scripts/app/"
+            "tests/assets/audio/"
+          )
+          app=false
+          if [ "$EVENT" = workflow_dispatch ]; then
+            app=true
+          else
+            if [ "$EVENT" = pull_request ]; then base=$PR_BASE; else base=$PUSH_BEFORE; fi
+            if [ -z "$base" ] || [ "$base" = 0000000000000000000000000000000000000000 ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+              echo "No usable base commit (new branch or unreachable): running the app jobs."
+              app=true
+            elif [ -n "$(git diff --name-only "$base" HEAD -- "${paths[@]}")" ]; then
+              app=true
+            fi
+          fi
+          echo "app=$app"
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+
   # Formatting, static analysis, unit and widget tests.
   check:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -82,6 +116,8 @@ jobs:
   # Debug APK, and the privacy check: the merged release manifest must not ask for INTERNET (R1 makes no network
   # connection; Flutter adds INTERNET only to the debug and profile manifests, for the tool).
   android:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -147,6 +183,8 @@ jobs:
   # 07:08:17). Under instrumentation the Dart tests run inside the app and report to JUnit through the integration_test
   # plugin: no VM service, no logcat scrape.
   android-integration:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -228,6 +266,8 @@ jobs:
   # listening" line and the tool waits forever (runs 44977190298, both attempts). Under xcodebuild the Dart tests run
   # inside the app and report to XCTest through the integration_test plugin: no VM service, no log scrape.
   ios:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: macos-26
     timeout-minutes: 40
     env:
@@ -298,3 +338,35 @@ jobs:
         run: |
           xcrun simctl list devices booted
           xcrun simctl spawn booted log show --last 10m --style compact --predicate 'process == "Runner"' | tail -200 || true
+
+  # The one check to require in branch protection. Passes when every app job succeeded, or when they were all skipped
+  # because the change did not touch the app. Fails on any failure or cancellation, and on a skip when the app changed.
+  app-gate:
+    needs: [changes, check, android, android-integration, ios]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Gate
+        env:
+          APP: ${{ needs.changes.outputs.app }}
+          CHANGES: ${{ needs.changes.result }}
+          RESULTS: |
+            check=${{ needs.check.result }}
+            android=${{ needs.android.result }}
+            android-integration=${{ needs.android-integration.result }}
+            ios=${{ needs.ios.result }}
+        run: |
+          echo "changes: $CHANGES (app=$APP)"
+          if [ "$CHANGES" != success ]; then echo "::error::changes job did not succeed"; exit 1; fi
+          ok=true
+          for line in $RESULTS; do
+            name=${line%%=*}; result=${line#*=}
+            echo "$name: $result"
+            case "$result" in
+              success) ;;
+              skipped) [ "$APP" = true ] && { echo "::error::$name was skipped but the app changed"; ok=false; } ;;
+              *) echo "::error::$name: $result"; ok=false ;;
+            esac
+          done
+          $ok
