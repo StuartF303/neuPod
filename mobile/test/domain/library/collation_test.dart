@@ -87,37 +87,50 @@ void main() {
     expect(collateLetter(collateKey('')), '#');
   });
 
-  test('cutUtf8 cuts at a character boundary, as the firmware stores text', () {
-    expect(cutUtf8('abc', 2), 'ab');
-    expect(cutUtf8('abc', 3), 'abc');
-    expect(cutUtf8('a\u00e9', 2), 'a'); // é is two bytes
-    expect(cutUtf8('a\u00e9', 3), 'a\u00e9');
-    expect(cutUtf8('\u{1F3B5}x', 3), ''); // a 4-byte character never splits
-    expect(cutUtf8('', 0), '');
+  test('firmwareCut is lib_build.c cut(): cap - 1 bytes, whole characters', () {
+    List<int> b(String s) => utf8.encode(s);
+    expect(firmwareCut(b('abc'), 3), b('ab'));
+    expect(firmwareCut(b('abc'), 4), b('abc'));
+    expect(firmwareCut(b('a\u00e9'), 3), b('a')); // é is two bytes
+    expect(firmwareCut(b('a\u00e9'), 4), b('a\u00e9'));
+    expect(firmwareCut(b('\u{1F3B5}x'), 4), isEmpty); // never splits
+    expect(firmwareCut([0x61, 0, 0x62], 10), [0x61]); // a C string
   });
 
   test(
     'songSortKey: title cut to 63 bytes, file name to 64, sort tag to 31',
     () {
-      final t63 = 'a' * 63;
+      List<int> b(String s) => utf8.encode(s);
+      // The title text comes already cut by firmwareText (the data layer).
       expect(
-        songSortKey(title: '${t63}zzz', titleSort: '', fileName: 'x.flac'),
-        collateKey(t63),
+        songSortKey(titleText: b('Title'), titleSortText: [], fileName: 'x'),
+        collateKey('Title'),
       );
       expect(
-        songSortKey(title: '', titleSort: '', fileName: '${'b' * 70}.flac'),
+        songSortKey(
+          titleText: [],
+          titleSortText: [],
+          fileName: '${'b' * 70}.flac',
+        ),
         collateKey('b' * 64),
       );
-      final s31 = 'c' * 31;
       expect(
-        songSortKey(title: 'Title', titleSort: '${s31}ddd', fileName: 'x'),
-        collateKey('Title', sort: s31),
+        songSortKey(
+          titleText: b('Title'),
+          titleSortText: b('Sort'),
+          fileName: 'x',
+        ),
+        collateKey('Title', sort: 'Sort'),
       );
-      // The sort tag wins over the title; an untagged song sorts by its file
-      // name with the extension, as on the device.
+      // An untagged song sorts by its file name with the extension.
       expect(
-        songSortKey(title: '', titleSort: '', fileName: 'The Song.mp3'),
+        songSortKey(titleText: [], titleSortText: [], fileName: 'The Song.mp3'),
         collateKey('Song.mp3'),
+      );
+      // Raw (malformed) bytes collate as the firmware collates them.
+      expect(
+        songSortKey(titleText: [0x43, 0xE9], titleSortText: [], fileName: 'x'),
+        collateKeyBytes([0x43, 0xE9]),
       );
     },
   );
@@ -141,18 +154,32 @@ void main() {
     final mismatches = <String>[];
     for (final line in lines) {
       final [nameHex, sortHex, keyHex] = line.split('\t');
-      final name = utf8.decode(unhex(nameHex));
-      final sort = sortHex == '-' ? null : utf8.decode(unhex(sortHex));
-      final key = collateKey(name, sort: sort);
+      // Raw bytes, as the C saw them (some are not valid UTF-8).
+      final name = unhex(nameHex);
+      final sort = sortHex == '-' ? null : unhex(sortHex);
+      final key = collateKeyBytes(name, sort: sort);
       if (!_same(key, unhex(keyHex))) {
-        mismatches.add(
-          '${jsonEncode(name)} / ${jsonEncode(sort)}: '
-          'dart ${_hex(key)} c $keyHex',
-        );
+        mismatches.add('$nameHex / $sortHex: dart ${_hex(key)} c $keyHex');
+      }
+      // And through the String API wherever the bytes are valid UTF-8.
+      final text = _tryUtf8(name);
+      final sortText = sort == null ? null : _tryUtf8(sort);
+      if (text != null && (sort == null || sortText != null)) {
+        if (!_same(collateKey(text, sort: sortText), key)) {
+          mismatches.add('$nameHex via String');
+        }
       }
     }
     expect(mismatches, isEmpty, reason: mismatches.take(20).join('\n'));
   });
+}
+
+String? _tryUtf8(List<int> b) {
+  try {
+    return utf8.decode(b);
+  } on FormatException {
+    return null;
+  }
 }
 
 bool _same(List<int> a, List<int> b) =>

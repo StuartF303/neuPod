@@ -129,14 +129,17 @@ void main() {
   (DirApi, CountingStorage, LocalLibraryScanner) setUpScanner({
     FakeFolderAccess? access,
     IsolateRunner? runIsolate,
+    int version = scanVersion,
+    DirApi? api,
   }) {
-    final api = DirApi({'m': Directory('${tmp.path}/music')});
+    api ??= DirApi({'m': Directory('${tmp.path}/music')});
     final storage = CountingStorage(api);
     final scanner = LocalLibraryScanner(
       folders: access ?? FakeFolderAccess([folder('m')]),
       storage: storage,
       db: db,
       runIsolate: runIsolate,
+      version: version,
     );
     return (api, storage, scanner);
   }
@@ -297,17 +300,61 @@ void main() {
     },
   );
 
-  test('a new scan version reads every file again', () async {
+  test('a new scan version reads each file again, once', () async {
     put('a.flac', flac(['TITLE=A']));
-    final (_, storage, scanner) = setUpScanner();
-    await scanner.scan().drain<void>();
-    expect(await db.metaValue('scan_version'), scanVersion);
+    final (_, old, oldScanner) = setUpScanner(version: 1);
+    await oldScanner.scan().drain<void>();
+    expect(old.opened, ['a.flac']);
 
-    storage.opened.clear();
-    await db.setMetaValue('scan_version', scanVersion - 1);
+    final (_, storage, scanner) = setUpScanner(version: 2);
     await scanner.scan().drain<void>();
     expect(storage.opened, ['a.flac']);
-    expect(await db.metaValue('scan_version'), scanVersion);
+    await scanner.scan().drain<void>();
+    expect(storage.opened, ['a.flac']); // not again
+  });
+
+  test(
+    'an unavailable folder or a partial walk does not make every scan re-read',
+    () async {
+      put('a.flac', flac(['TITLE=A']));
+      put('skip/b.flac', flac(['TITLE=B']));
+      final api = DirApi({'m': Directory('${tmp.path}/music')});
+      final access = FakeFolderAccess([
+        folder('m'),
+        folder('gone', available: false),
+      ]);
+      final (_, old, oldScanner) = setUpScanner(
+        access: access,
+        version: 1,
+        api: api,
+      );
+      await oldScanner.scan().drain<void>();
+      expect(old.opened, unorderedEquals(['a.flac', 'b.flac']));
+
+      api.unreadablePrefix = 'skip/'; // and a subfolder unreadable this time
+      final (_, storage, scanner) = setUpScanner(
+        access: access,
+        version: 2,
+        api: api,
+      );
+      await scanner.scan().drain<void>();
+      await scanner.scan().drain<void>();
+      expect(storage.opened, ['a.flac']); // once, in spite of both
+    },
+  );
+
+  test('a transient failure keeps the stored tags', () async {
+    put('a.flac', flac(['TITLE=Kept', 'ARTIST=Band']));
+    final (_, ok, okScanner) = setUpScanner(version: 1);
+    await okScanner.scan().drain<void>();
+    expect(ok.opened, ['a.flac']);
+
+    final (_, storage, scanner) = setUpScanner(version: 2);
+    storage.failOpens = true;
+    await scanner.scan().drain<void>();
+    final t = (await tracks()).single;
+    expect((t.title, t.artist), ('Kept', 'Band'));
+    expect(t.unreadableReason, UnreadableReason.cannotOpen);
   });
 
   test(
@@ -378,9 +425,10 @@ void main() {
     };
     final before = snapshot();
     final rootBefore = root.statSync();
+    final (_, _, first) = setUpScanner(version: 0);
+    await first.scan().drain<void>();
     final (_, _, scanner) = setUpScanner();
-    await scanner.scan().drain<void>();
-    await db.setMetaValue('scan_version', 0); // force a full re-read
+    await scanner.scan().drain<void>(); // a full re-read (new version)
     await scanner.scan().drain<void>(); // and a rescan
     expect(snapshot(), before);
     expect(root.statSync().modified, rootBefore.modified);
@@ -416,6 +464,7 @@ void main() {
             title: title,
             titleSort: '',
             titleSortKey: Uint8List.fromList(key),
+            scanVersion: scanVersion,
             artist: '',
             album: '',
             trackNo: 0,

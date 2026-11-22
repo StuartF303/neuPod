@@ -52,24 +52,17 @@ class Tracks extends Table {
   /// `UnreadableReason.code` when the tags could not be read, or null.
   IntColumn get reasonCode => integer().nullable()();
 
+  /// The scanner's `scanVersion` this row was read with; a row from another
+  /// version is read again on the next scan.
+  IntColumn get scanVersion => integer()();
+
   @override
   List<Set<Column>> get uniqueKeys => [
     {sourceId, relPath},
   ];
 }
 
-/// Small facts about the library itself, such as the scan version the rows
-/// were read with.
-@DataClassName('MetaRow')
-class LibraryMeta extends Table {
-  TextColumn get key => text()();
-  IntColumn get value => integer()();
-
-  @override
-  Set<Column> get primaryKey => {key};
-}
-
-@DriftDatabase(tables: [Sources, Tracks, LibraryMeta])
+@DriftDatabase(tables: [Sources, Tracks])
 class LibraryDatabase extends _$LibraryDatabase {
   LibraryDatabase(super.e);
 
@@ -83,21 +76,17 @@ class LibraryDatabase extends _$LibraryDatabase {
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
     onUpgrade: (m, from, to) async {
-      // Version 1 is the first schema. Each later version adds a step here,
-      // tested against the snapshots (phase 3 brings version 2).
-      throw StateError('no migration from schema $from to $to');
+      // Version 1 is the first schema; later versions add their steps here,
+      // tested against the snapshots (phase 3 brings version 2). Until then
+      // any other version (a downgrade, an unknown file) is a cache to drop:
+      // a rescan rebuilds it.
+      for (final table in allTables.toList().reversed) {
+        await m.deleteTable(table.actualTableName);
+      }
+      await m.createAll();
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
     },
   );
-
-  /// The value stored under [key], or null.
-  Future<int?> metaValue(String key) async => (await (select(
-    libraryMeta,
-  )..where((m) => m.key.equals(key))).getSingleOrNull())?.value;
-
-  Future<void> setMetaValue(String key, int value) => into(
-    libraryMeta,
-  ).insertOnConflictUpdate(LibraryMetaCompanion.insert(key: key, value: value));
 }

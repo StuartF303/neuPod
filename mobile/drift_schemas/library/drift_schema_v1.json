@@ -274,6 +274,16 @@
             "default_dart": null,
             "default_client_dart": null,
             "dsl_features": []
+          },
+          {
+            "name": "scan_version",
+            "getter_name": "scanVersion",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
           }
         ],
         "is_virtual": false,
@@ -289,43 +299,6 @@
     },
     {
       "id": 2,
-      "references": [],
-      "type": "table",
-      "data": {
-        "name": "library_meta",
-        "was_declared_in_moor": false,
-        "columns": [
-          {
-            "name": "key",
-            "getter_name": "key",
-            "moor_type": "string",
-            "nullable": false,
-            "customConstraints": null,
-            "default_dart": null,
-            "default_client_dart": null,
-            "dsl_features": []
-          },
-          {
-            "name": "value",
-            "getter_name": "value",
-            "moor_type": "int",
-            "nullable": false,
-            "customConstraints": null,
-            "default_dart": null,
-            "default_client_dart": null,
-            "dsl_features": []
-          }
-        ],
-        "is_virtual": false,
-        "without_rowid": false,
-        "constraints": [],
-        "explicit_pk": [
-          "key"
-        ]
-      }
-    },
-    {
-      "id": 3,
       "references": [
         1
       ],
@@ -363,16 +336,7 @@
       "sql": [
         {
           "dialect": "sqlite",
-          "sql": "CREATE TABLE IF NOT EXISTS \"tracks\" (\"id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, \"source_id\" INTEGER NOT NULL REFERENCES sources (id) ON DELETE CASCADE, \"rel_path\" TEXT NOT NULL, \"uri\" TEXT NOT NULL, \"size\" INTEGER NOT NULL, \"mtime\" INTEGER NOT NULL, \"codec\" TEXT NOT NULL, \"title\" TEXT NOT NULL, \"title_sort\" TEXT NOT NULL, \"title_sort_key\" BLOB NOT NULL, \"artist\" TEXT NOT NULL, \"album\" TEXT NOT NULL, \"track_no\" INTEGER NOT NULL, \"duration_ms\" INTEGER NOT NULL, \"sample_rate\" INTEGER NOT NULL, \"bit_depth\" INTEGER NOT NULL, \"reason_code\" INTEGER NULL, UNIQUE (\"source_id\", \"rel_path\"));"
-        }
-      ]
-    },
-    {
-      "name": "library_meta",
-      "sql": [
-        {
-          "dialect": "sqlite",
-          "sql": "CREATE TABLE IF NOT EXISTS \"library_meta\" (\"key\" TEXT NOT NULL, \"value\" INTEGER NOT NULL, PRIMARY KEY (\"key\"));"
+          "sql": "CREATE TABLE IF NOT EXISTS \"tracks\" (\"id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, \"source_id\" INTEGER NOT NULL REFERENCES sources (id) ON DELETE CASCADE, \"rel_path\" TEXT NOT NULL, \"uri\" TEXT NOT NULL, \"size\" INTEGER NOT NULL, \"mtime\" INTEGER NOT NULL, \"codec\" TEXT NOT NULL, \"title\" TEXT NOT NULL, \"title_sort\" TEXT NOT NULL, \"title_sort_key\" BLOB NOT NULL, \"artist\" TEXT NOT NULL, \"album\" TEXT NOT NULL, \"track_no\" INTEGER NOT NULL, \"duration_ms\" INTEGER NOT NULL, \"sample_rate\" INTEGER NOT NULL, \"bit_depth\" INTEGER NOT NULL, \"reason_code\" INTEGER NULL, \"scan_version\" INTEGER NOT NULL, UNIQUE (\"source_id\", \"rel_path\"));"
         }
       ]
     },

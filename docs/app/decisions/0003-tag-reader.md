@@ -117,17 +117,17 @@ Limits shared with the firmware, kept on purpose so both read the same tags: ID3
 frame only when the tag header flag is set (as `id3v2_tags` does), compressed or encrypted frames are not decoded, and
 a text frame over 400 bytes is skipped.
 
-Where the app's sort can still differ from the device (owner decision 11), recorded for the device check:
-
-- UTF-16 surrogate pairs (emoji and other characters beyond U+FFFF in ID3 UTF-16 frames): the firmware stores `?`,
-  the app keeps the character, so such titles sort as symbols on the device and by code point in the app.
-- Malformed UTF-8 in a tag: the firmware copies the bytes and collates them as Latin-1; the app decodes them to
-  U+FFFD. Both are rare; well-formed text sorts identically.
-- Text is no longer trimmed: leading and trailing spaces are kept and sort, as on the device.
-- An untagged song sorts by its file name with the extension, cut to 64 bytes, as `index_file` does; the Songs list
-  shows the name without the extension (the folder-convention fallback comes in phase 3).
-- The key is built from the title cut to 63 bytes and the sort tag cut to 31 bytes (the firmware's buffers); the app
-  displays the whole title.
+**Display text and key text are separate (owner decision 11: the app matches the firmware's code).** The reader
+decodes the whole tag for display (UTF-16 pairs kept, malformed UTF-8 as U+FFFD), and separately keeps the title and
+title sort tag exactly as the firmware's `meta_text_to_utf8()` stores them (`firmwareText()`, a port): into its
+64- and 32-byte buffers, whole characters only, UTF-16 surrogates (pairs and lone ones) as `?`, malformed UTF-8 copied
+through raw. A FLAC whose comment block is over 4096 bytes (`TAG_SCRATCH` in lib_build.c, which `flac_parse` then
+skips) has no key text, so its key falls back to the file name as on the device. The song key is
+`lib_collate_key()` (ported over raw bytes, `collateKeyBytes`) of that title, or of the file name with its extension
+cut by `cut()` to 64 bytes, with the sort tag. `scripts/app/gen_tag_key_vectors.py` builds small tagged files for
+each of these cases and records what the compiled firmware C makes of them; the app's test compares byte for byte.
+Text is not trimmed (the firmware keeps spaces, and they sort). The Songs list shows an untagged song's name without
+its extension (the folder-convention fallback comes in phase 3).
 
 ## Sources
 

@@ -499,6 +499,17 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _scanVersionMeta = const VerificationMeta(
+    'scanVersion',
+  );
+  @override
+  late final GeneratedColumn<int> scanVersion = GeneratedColumn<int>(
+    'scan_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -518,6 +529,7 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     sampleRate,
     bitDepth,
     reasonCode,
+    scanVersion,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -663,6 +675,17 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         reasonCode.isAcceptableOrUnknown(data['reason_code']!, _reasonCodeMeta),
       );
     }
+    if (data.containsKey('scan_version')) {
+      context.handle(
+        _scanVersionMeta,
+        scanVersion.isAcceptableOrUnknown(
+          data['scan_version']!,
+          _scanVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_scanVersionMeta);
+    }
     return context;
   }
 
@@ -744,6 +767,10 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         DriftSqlType.int,
         data['${effectivePrefix}reason_code'],
       ),
+      scanVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}scan_version'],
+      )!,
     );
   }
 
@@ -779,6 +806,10 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
 
   /// `UnreadableReason.code` when the tags could not be read, or null.
   final int? reasonCode;
+
+  /// The scanner's `scanVersion` this row was read with; a row from another
+  /// version is read again on the next scan.
+  final int scanVersion;
   const TrackRow({
     required this.id,
     required this.sourceId,
@@ -797,6 +828,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     required this.sampleRate,
     required this.bitDepth,
     this.reasonCode,
+    required this.scanVersion,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -820,6 +852,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     if (!nullToAbsent || reasonCode != null) {
       map['reason_code'] = Variable<int>(reasonCode);
     }
+    map['scan_version'] = Variable<int>(scanVersion);
     return map;
   }
 
@@ -844,6 +877,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       reasonCode: reasonCode == null && nullToAbsent
           ? const Value.absent()
           : Value(reasonCode),
+      scanVersion: Value(scanVersion),
     );
   }
 
@@ -870,6 +904,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       sampleRate: serializer.fromJson<int>(json['sampleRate']),
       bitDepth: serializer.fromJson<int>(json['bitDepth']),
       reasonCode: serializer.fromJson<int?>(json['reasonCode']),
+      scanVersion: serializer.fromJson<int>(json['scanVersion']),
     );
   }
   @override
@@ -893,6 +928,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       'sampleRate': serializer.toJson<int>(sampleRate),
       'bitDepth': serializer.toJson<int>(bitDepth),
       'reasonCode': serializer.toJson<int?>(reasonCode),
+      'scanVersion': serializer.toJson<int>(scanVersion),
     };
   }
 
@@ -914,6 +950,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     int? sampleRate,
     int? bitDepth,
     Value<int?> reasonCode = const Value.absent(),
+    int? scanVersion,
   }) => TrackRow(
     id: id ?? this.id,
     sourceId: sourceId ?? this.sourceId,
@@ -932,6 +969,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     sampleRate: sampleRate ?? this.sampleRate,
     bitDepth: bitDepth ?? this.bitDepth,
     reasonCode: reasonCode.present ? reasonCode.value : this.reasonCode,
+    scanVersion: scanVersion ?? this.scanVersion,
   );
   TrackRow copyWithCompanion(TracksCompanion data) {
     return TrackRow(
@@ -960,6 +998,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       reasonCode: data.reasonCode.present
           ? data.reasonCode.value
           : this.reasonCode,
+      scanVersion: data.scanVersion.present
+          ? data.scanVersion.value
+          : this.scanVersion,
     );
   }
 
@@ -982,7 +1023,8 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ..write('durationMs: $durationMs, ')
           ..write('sampleRate: $sampleRate, ')
           ..write('bitDepth: $bitDepth, ')
-          ..write('reasonCode: $reasonCode')
+          ..write('reasonCode: $reasonCode, ')
+          ..write('scanVersion: $scanVersion')
           ..write(')'))
         .toString();
   }
@@ -1006,6 +1048,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     sampleRate,
     bitDepth,
     reasonCode,
+    scanVersion,
   );
   @override
   bool operator ==(Object other) =>
@@ -1027,7 +1070,8 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           other.durationMs == this.durationMs &&
           other.sampleRate == this.sampleRate &&
           other.bitDepth == this.bitDepth &&
-          other.reasonCode == this.reasonCode);
+          other.reasonCode == this.reasonCode &&
+          other.scanVersion == this.scanVersion);
 }
 
 class TracksCompanion extends UpdateCompanion<TrackRow> {
@@ -1048,6 +1092,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
   final Value<int> sampleRate;
   final Value<int> bitDepth;
   final Value<int?> reasonCode;
+  final Value<int> scanVersion;
   const TracksCompanion({
     this.id = const Value.absent(),
     this.sourceId = const Value.absent(),
@@ -1066,6 +1111,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.sampleRate = const Value.absent(),
     this.bitDepth = const Value.absent(),
     this.reasonCode = const Value.absent(),
+    this.scanVersion = const Value.absent(),
   });
   TracksCompanion.insert({
     this.id = const Value.absent(),
@@ -1085,6 +1131,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     required int sampleRate,
     required int bitDepth,
     this.reasonCode = const Value.absent(),
+    required int scanVersion,
   }) : sourceId = Value(sourceId),
        relPath = Value(relPath),
        uri = Value(uri),
@@ -1099,7 +1146,8 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
        trackNo = Value(trackNo),
        durationMs = Value(durationMs),
        sampleRate = Value(sampleRate),
-       bitDepth = Value(bitDepth);
+       bitDepth = Value(bitDepth),
+       scanVersion = Value(scanVersion);
   static Insertable<TrackRow> custom({
     Expression<int>? id,
     Expression<int>? sourceId,
@@ -1118,6 +1166,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Expression<int>? sampleRate,
     Expression<int>? bitDepth,
     Expression<int>? reasonCode,
+    Expression<int>? scanVersion,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1137,6 +1186,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       if (sampleRate != null) 'sample_rate': sampleRate,
       if (bitDepth != null) 'bit_depth': bitDepth,
       if (reasonCode != null) 'reason_code': reasonCode,
+      if (scanVersion != null) 'scan_version': scanVersion,
     });
   }
 
@@ -1158,6 +1208,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Value<int>? sampleRate,
     Value<int>? bitDepth,
     Value<int?>? reasonCode,
+    Value<int>? scanVersion,
   }) {
     return TracksCompanion(
       id: id ?? this.id,
@@ -1177,6 +1228,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       sampleRate: sampleRate ?? this.sampleRate,
       bitDepth: bitDepth ?? this.bitDepth,
       reasonCode: reasonCode ?? this.reasonCode,
+      scanVersion: scanVersion ?? this.scanVersion,
     );
   }
 
@@ -1234,6 +1286,9 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     if (reasonCode.present) {
       map['reason_code'] = Variable<int>(reasonCode.value);
     }
+    if (scanVersion.present) {
+      map['scan_version'] = Variable<int>(scanVersion.value);
+    }
     return map;
   }
 
@@ -1256,213 +1311,8 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
           ..write('durationMs: $durationMs, ')
           ..write('sampleRate: $sampleRate, ')
           ..write('bitDepth: $bitDepth, ')
-          ..write('reasonCode: $reasonCode')
-          ..write(')'))
-        .toString();
-  }
-}
-
-class $LibraryMetaTable extends LibraryMeta
-    with TableInfo<$LibraryMetaTable, MetaRow> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $LibraryMetaTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _keyMeta = const VerificationMeta('key');
-  @override
-  late final GeneratedColumn<String> key = GeneratedColumn<String>(
-    'key',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _valueMeta = const VerificationMeta('value');
-  @override
-  late final GeneratedColumn<int> value = GeneratedColumn<int>(
-    'value',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  @override
-  List<GeneratedColumn> get $columns => [key, value];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'library_meta';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<MetaRow> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('key')) {
-      context.handle(
-        _keyMeta,
-        key.isAcceptableOrUnknown(data['key']!, _keyMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_keyMeta);
-    }
-    if (data.containsKey('value')) {
-      context.handle(
-        _valueMeta,
-        value.isAcceptableOrUnknown(data['value']!, _valueMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_valueMeta);
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {key};
-  @override
-  MetaRow map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return MetaRow(
-      key: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}key'],
-      )!,
-      value: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}value'],
-      )!,
-    );
-  }
-
-  @override
-  $LibraryMetaTable createAlias(String alias) {
-    return $LibraryMetaTable(attachedDatabase, alias);
-  }
-}
-
-class MetaRow extends DataClass implements Insertable<MetaRow> {
-  final String key;
-  final int value;
-  const MetaRow({required this.key, required this.value});
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['key'] = Variable<String>(key);
-    map['value'] = Variable<int>(value);
-    return map;
-  }
-
-  LibraryMetaCompanion toCompanion(bool nullToAbsent) {
-    return LibraryMetaCompanion(key: Value(key), value: Value(value));
-  }
-
-  factory MetaRow.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return MetaRow(
-      key: serializer.fromJson<String>(json['key']),
-      value: serializer.fromJson<int>(json['value']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'key': serializer.toJson<String>(key),
-      'value': serializer.toJson<int>(value),
-    };
-  }
-
-  MetaRow copyWith({String? key, int? value}) =>
-      MetaRow(key: key ?? this.key, value: value ?? this.value);
-  MetaRow copyWithCompanion(LibraryMetaCompanion data) {
-    return MetaRow(
-      key: data.key.present ? data.key.value : this.key,
-      value: data.value.present ? data.value.value : this.value,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('MetaRow(')
-          ..write('key: $key, ')
-          ..write('value: $value')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hash(key, value);
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is MetaRow && other.key == this.key && other.value == this.value);
-}
-
-class LibraryMetaCompanion extends UpdateCompanion<MetaRow> {
-  final Value<String> key;
-  final Value<int> value;
-  final Value<int> rowid;
-  const LibraryMetaCompanion({
-    this.key = const Value.absent(),
-    this.value = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  LibraryMetaCompanion.insert({
-    required String key,
-    required int value,
-    this.rowid = const Value.absent(),
-  }) : key = Value(key),
-       value = Value(value);
-  static Insertable<MetaRow> custom({
-    Expression<String>? key,
-    Expression<int>? value,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (key != null) 'key': key,
-      if (value != null) 'value': value,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  LibraryMetaCompanion copyWith({
-    Value<String>? key,
-    Value<int>? value,
-    Value<int>? rowid,
-  }) {
-    return LibraryMetaCompanion(
-      key: key ?? this.key,
-      value: value ?? this.value,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (key.present) {
-      map['key'] = Variable<String>(key.value);
-    }
-    if (value.present) {
-      map['value'] = Variable<int>(value.value);
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('LibraryMetaCompanion(')
-          ..write('key: $key, ')
-          ..write('value: $value, ')
-          ..write('rowid: $rowid')
+          ..write('reasonCode: $reasonCode, ')
+          ..write('scanVersion: $scanVersion')
           ..write(')'))
         .toString();
   }
@@ -1473,7 +1323,6 @@ abstract class _$LibraryDatabase extends GeneratedDatabase {
   $LibraryDatabaseManager get managers => $LibraryDatabaseManager(this);
   late final $SourcesTable sources = $SourcesTable(this);
   late final $TracksTable tracks = $TracksTable(this);
-  late final $LibraryMetaTable libraryMeta = $LibraryMetaTable(this);
   late final Index tracksTitleSort = Index(
     'tracks_title_sort',
     'CREATE INDEX tracks_title_sort ON tracks (title_sort_key, id)',
@@ -1485,7 +1334,6 @@ abstract class _$LibraryDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     sources,
     tracks,
-    libraryMeta,
     tracksTitleSort,
   ];
   @override
@@ -1794,6 +1642,7 @@ typedef $$TracksTableCreateCompanionBuilder = TracksCompanion Function({
   required int sampleRate,
   required int bitDepth,
   Value<int?> reasonCode,
+  required int scanVersion,
 });
 typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
   Value<int> id,
@@ -1813,6 +1662,7 @@ typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
   Value<int> sampleRate,
   Value<int> bitDepth,
   Value<int?> reasonCode,
+  Value<int> scanVersion,
 });
 
 final class $$TracksTableReferences
@@ -1923,6 +1773,11 @@ class $$TracksTableFilterComposer
 
   ColumnFilters<int> get reasonCode => $composableBuilder(
     column: $table.reasonCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get scanVersion => $composableBuilder(
+    column: $table.scanVersion,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2039,6 +1894,11 @@ class $$TracksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get scanVersion => $composableBuilder(
+    column: $table.scanVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$SourcesTableOrderingComposer get sourceId {
     final $$SourcesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -2128,6 +1988,11 @@ class $$TracksTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get scanVersion => $composableBuilder(
+    column: $table.scanVersion,
+    builder: (column) => column,
+  );
+
   $$SourcesTableAnnotationComposer get sourceId {
     final $$SourcesTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -2197,6 +2062,7 @@ class $$TracksTableTableManager
                 Value<int> sampleRate = const Value.absent(),
                 Value<int> bitDepth = const Value.absent(),
                 Value<int?> reasonCode = const Value.absent(),
+                Value<int> scanVersion = const Value.absent(),
               }) => TracksCompanion(
                 id: id,
                 sourceId: sourceId,
@@ -2215,6 +2081,7 @@ class $$TracksTableTableManager
                 sampleRate: sampleRate,
                 bitDepth: bitDepth,
                 reasonCode: reasonCode,
+                scanVersion: scanVersion,
               ),
           createCompanionCallback:
               ({
@@ -2235,6 +2102,7 @@ class $$TracksTableTableManager
                 required int sampleRate,
                 required int bitDepth,
                 Value<int?> reasonCode = const Value.absent(),
+                required int scanVersion,
               }) => TracksCompanion.insert(
                 id: id,
                 sourceId: sourceId,
@@ -2253,6 +2121,7 @@ class $$TracksTableTableManager
                 sampleRate: sampleRate,
                 bitDepth: bitDepth,
                 reasonCode: reasonCode,
+                scanVersion: scanVersion,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -2320,150 +2189,6 @@ typedef $$TracksTableProcessedTableManager =
       TrackRow,
       PrefetchHooks Function({bool sourceId})
     >;
-typedef $$LibraryMetaTableCreateCompanionBuilder =
-    LibraryMetaCompanion Function({
-      required String key,
-      required int value,
-      Value<int> rowid,
-    });
-typedef $$LibraryMetaTableUpdateCompanionBuilder =
-    LibraryMetaCompanion Function({
-      Value<String> key,
-      Value<int> value,
-      Value<int> rowid,
-    });
-
-class $$LibraryMetaTableFilterComposer
-    extends Composer<_$LibraryDatabase, $LibraryMetaTable> {
-  $$LibraryMetaTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<String> get key => $composableBuilder(
-    column: $table.key,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get value => $composableBuilder(
-    column: $table.value,
-    builder: (column) => ColumnFilters(column),
-  );
-}
-
-class $$LibraryMetaTableOrderingComposer
-    extends Composer<_$LibraryDatabase, $LibraryMetaTable> {
-  $$LibraryMetaTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<String> get key => $composableBuilder(
-    column: $table.key,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get value => $composableBuilder(
-    column: $table.value,
-    builder: (column) => ColumnOrderings(column),
-  );
-}
-
-class $$LibraryMetaTableAnnotationComposer
-    extends Composer<_$LibraryDatabase, $LibraryMetaTable> {
-  $$LibraryMetaTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<String> get key =>
-      $composableBuilder(column: $table.key, builder: (column) => column);
-
-  GeneratedColumn<int> get value =>
-      $composableBuilder(column: $table.value, builder: (column) => column);
-}
-
-class $$LibraryMetaTableTableManager
-    extends
-        RootTableManager<
-          _$LibraryDatabase,
-          $LibraryMetaTable,
-          MetaRow,
-          $$LibraryMetaTableFilterComposer,
-          $$LibraryMetaTableOrderingComposer,
-          $$LibraryMetaTableAnnotationComposer,
-          $$LibraryMetaTableCreateCompanionBuilder,
-          $$LibraryMetaTableUpdateCompanionBuilder,
-          (
-            MetaRow,
-            BaseReferences<_$LibraryDatabase, $LibraryMetaTable, MetaRow>,
-          ),
-          MetaRow,
-          PrefetchHooks Function()
-        > {
-  $$LibraryMetaTableTableManager(_$LibraryDatabase db, $LibraryMetaTable table)
-    : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$LibraryMetaTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$LibraryMetaTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$LibraryMetaTableAnnotationComposer($db: db, $table: table),
-          updateCompanionCallback: ({
-            Value<String> key = const Value.absent(),
-            Value<int> value = const Value.absent(),
-            Value<int> rowid = const Value.absent(),
-          }) => LibraryMetaCompanion(key: key, value: value, rowid: rowid),
-          createCompanionCallback:
-              ({
-                required String key,
-                required int value,
-                Value<int> rowid = const Value.absent(),
-              }) => LibraryMetaCompanion.insert(
-                key: key,
-                value: value,
-                rowid: rowid,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map(
-                (e) => (
-                  e.readTable<$LibraryMetaTable, MetaRow>(table),
-                  BaseReferences<_$LibraryDatabase, $LibraryMetaTable, MetaRow>(
-                    db,
-                    table,
-                    e,
-                  ),
-                ),
-              )
-              .toList(),
-          prefetchHooksCallback: null,
-        ),
-      );
-}
-
-typedef $$LibraryMetaTableProcessedTableManager =
-    ProcessedTableManager<
-      _$LibraryDatabase,
-      $LibraryMetaTable,
-      MetaRow,
-      $$LibraryMetaTableFilterComposer,
-      $$LibraryMetaTableOrderingComposer,
-      $$LibraryMetaTableAnnotationComposer,
-      $$LibraryMetaTableCreateCompanionBuilder,
-      $$LibraryMetaTableUpdateCompanionBuilder,
-      (MetaRow, BaseReferences<_$LibraryDatabase, $LibraryMetaTable, MetaRow>),
-      MetaRow,
-      PrefetchHooks Function()
-    >;
 
 class $LibraryDatabaseManager {
   final _$LibraryDatabase _db;
@@ -2472,6 +2197,4 @@ class $LibraryDatabaseManager {
       $$SourcesTableTableManager(_db, _db.sources);
   $$TracksTableTableManager get tracks =>
       $$TracksTableTableManager(_db, _db.tracks);
-  $$LibraryMetaTableTableManager get libraryMeta =>
-      $$LibraryMetaTableTableManager(_db, _db.libraryMeta);
 }

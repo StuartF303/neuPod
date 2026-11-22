@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import 'dart:io';
 import 'dart:isolate';
 
 import 'package:drift/drift.dart';
@@ -30,12 +31,11 @@ const audioExtensions = {
 const _tagged = {'flac', 'mp3'};
 
 /// The version of what a scan writes per row: the tag reader's fields and
-/// rules and the sort key. Bump it when either changes; the next scan then
-/// reads every file again instead of trusting unchanged size and mtime.
-/// 1: phase 1 (FLAC and MP3 tags, title sort tags, firmware-cut sort key).
+/// rules and the sort key. Bump it when either changes: a row written with
+/// another version is read again, whatever its size and mtime, and only once
+/// (the version is stored on the row).
+/// 1: phase 1 (FLAC and MP3 tags, title sort tags, the firmware's key).
 const scanVersion = 1;
-
-const _scanVersionKey = 'scan_version';
 
 /// The lower-case extension of [path], or ''.
 String extensionOf(String path) {
@@ -60,8 +60,12 @@ final class LocalLibraryScanner implements LibraryScanner {
     required this._storage,
     required this._db,
     this.chunk = 32,
+    this.version = scanVersion,
     IsolateRunner? runIsolate,
   }) : _run = runIsolate ?? Isolate.run;
+
+  /// The [scanVersion] rows are written with (other values in tests only).
+  final int version;
 
   final FolderAccess _folders;
   final NeupodStorage _storage;
@@ -84,16 +88,8 @@ final class LocalLibraryScanner implements LibraryScanner {
       _db.sources,
     )..where((s) => s.kind.equals(_kind) & s.uriOrBookmark.isNotIn(held))).go();
 
-    // Rows read by an older reader or key are read again, whatever their
-    // size and mtime. The version is stored once every folder was walked.
-    final versionChanged = await _db.metaValue(_scanVersionKey) != scanVersion;
-    var allComplete = true;
-
     for (final folder in folders) {
-      if (!folder.available) {
-        allComplete = false;
-        continue; // its tracks stay until it is removed
-      }
+      if (!folder.available) continue; // its tracks stay until it is removed
       final sourceId = await _sourceFor(folder);
       final known = {
         for (final t in await (_db.select(
@@ -111,10 +107,10 @@ final class LocalLibraryScanner implements LibraryScanner {
             found++;
             seen.add(e.relPath);
             final k = known[e.relPath];
-            if (!versionChanged && k != null && _unchanged(k, e)) continue;
+            if (k != null && _unchanged(k, e)) continue;
             pending.add(e);
             if (pending.length >= chunk) {
-              read += await _readAndStore(sourceId, pending);
+              read += await _readAndStore(sourceId, pending, known);
               pending.clear();
             }
           }
@@ -124,7 +120,9 @@ final class LocalLibraryScanner implements LibraryScanner {
       } on StorageException {
         complete = false; // access went away mid-walk: keep what the folder had
       }
-      if (pending.isNotEmpty) read += await _readAndStore(sourceId, pending);
+      if (pending.isNotEmpty) {
+        read += await _readAndStore(sourceId, pending, known);
+      }
 
       if (complete) {
         final gone = known.keys.where((p) => !seen.contains(p)).toList();
@@ -136,17 +134,16 @@ final class LocalLibraryScanner implements LibraryScanner {
               ))
               .go();
         }
-      } else {
-        allComplete = false;
       }
       yield ScanProgress(filesFound: found, filesRead: read);
     }
-    if (allComplete) await _db.setMetaValue(_scanVersionKey, scanVersion);
     yield ScanProgress(filesFound: found, filesRead: read, done: true);
   }
 
-  /// Same file as last time, and its last read did not fail transiently.
-  static bool _unchanged(TrackRow k, StorageEntry e) =>
+  /// Same file as last time, read by this version, and its last read did not
+  /// fail transiently.
+  bool _unchanged(TrackRow k, StorageEntry e) =>
+      k.scanVersion == version &&
       k.size == e.size &&
       k.mtime == e.modifiedMs &&
       k.uri == e.uri &&
@@ -174,8 +171,14 @@ final class LocalLibraryScanner implements LibraryScanner {
         );
   }
 
-  /// Reads [entries] and upserts them; returns how many were read.
-  Future<int> _readAndStore(int sourceId, List<StorageEntry> entries) async {
+  /// Reads [entries] and upserts them; returns how many were read. A
+  /// transient failure on a file already in [known] keeps its stored tags and
+  /// only records the reason (so it is retried next time).
+  Future<int> _readAndStore(
+    int sourceId,
+    List<StorageEntry> entries,
+    Map<String, TrackRow> known,
+  ) async {
     final jobs = <_Job>[];
     try {
       for (final e in entries) {
@@ -201,7 +204,7 @@ final class LocalLibraryScanner implements LibraryScanner {
     List<_Result> results;
     try {
       results = await _parseInIsolate(_run, jobs);
-    } catch (_) {
+    } on IsolateSpawnException {
       // The isolate did not run (spawn failed): it never took the handles.
       _discardAll(jobs);
       results = [
@@ -212,6 +215,15 @@ final class LocalLibraryScanner implements LibraryScanner {
       for (var i = 0; i < entries.length; i++) {
         final e = entries[i];
         final r = results[i];
+        final previous = known[e.relPath];
+        if (r.reason != null && r.reason!.transient && previous != null) {
+          b.update(
+            _db.tracks,
+            TracksCompanion(reasonCode: Value(r.reason!.code)),
+            where: (t) => t.id.equals(previous.id),
+          );
+          continue;
+        }
         final title = r.tags?.title ?? '';
         final titleSort = r.tags?.titleSort ?? '';
         final row = TracksCompanion.insert(
@@ -224,8 +236,8 @@ final class LocalLibraryScanner implements LibraryScanner {
           title: title,
           titleSort: titleSort,
           titleSortKey: songSortKey(
-            title: title,
-            titleSort: titleSort,
+            titleText: r.tags?.titleKeyText ?? const [],
+            titleSortText: r.tags?.titleSortKeyText ?? const [],
             fileName: _fileName(e.relPath),
           ),
           artist: r.tags?.artist ?? '',
@@ -235,6 +247,7 @@ final class LocalLibraryScanner implements LibraryScanner {
           sampleRate: r.tags?.sampleRate ?? 0,
           bitDepth: r.tags?.bitDepth ?? 0,
           reasonCode: Value(r.reason?.code),
+          scanVersion: version,
         );
         b.insert(
           _db.tracks,
@@ -300,9 +313,12 @@ _Result _parse(_Job j) {
     return _Result(readTags(_ReaderSource(reader), j.ext), null);
   } on TagReadException catch (e) {
     return _Result(null, e.reason);
-  } catch (_) {
-    // Open failed (not seekable) or a read failed part-way.
+  } on FileSystemException {
+    // Open failed (not seekable, gone) or a read failed part-way: may pass.
     return const _Result(null, UnreadableReason.cannotRead);
+  } catch (_) {
+    // Anything else is the reader meeting bytes it cannot handle.
+    return const _Result(null, UnreadableReason.damaged);
   } finally {
     reader?.close();
   }

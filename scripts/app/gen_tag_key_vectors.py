@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MPL-2.0
+"""Regenerates mobile/test/fixtures/tag_keys/: small tagged FLAC and MP3 files
+built from the firmware's freely licensed fixtures (tests/assets/audio), and
+expected.tsv with what the firmware itself makes of each one (its tag parser
+app/audio/meta.c and the song key of app/library/lib_build.c, compiled for the
+host with scripts/app/tag_key_vectors.c). The app's test
+test/data/scan/tag_key_vectors_test.dart checks its Dart port against it
+(owner decision 11: the app sorts exactly as the firmware does).
+
+Usage: scripts/app/gen_tag_key_vectors.py   (needs cc and python3)
+"""
+
+import os
+import struct
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(os.path.dirname(HERE))
+OUT = os.path.join(REPO, "mobile", "test", "fixtures", "tag_keys")
+AUDIO = os.path.join(REPO, "tests", "assets", "audio")
+
+
+def flac(comments_raw, last_pad=0):
+    """fLaC + the fixture's STREAMINFO + a VORBIS_COMMENT of raw byte comments
+    (None for no comment block), then a few frame bytes."""
+    src = open(os.path.join(AUDIO, "flac16_48k_mono.flac"), "rb").read()
+    assert src[:4] == b"fLaC"
+    si_len = int.from_bytes(src[5:8], "big")
+    si = src[8 : 8 + si_len]
+    out = bytearray(b"fLaC")
+    if comments_raw is None:
+        out += bytes([0x80]) + si_len.to_bytes(3, "big") + si
+    else:
+        out += bytes([0x00]) + si_len.to_bytes(3, "big") + si
+        body = bytearray(struct.pack("<I", 6) + b"neuPod" + struct.pack("<I", len(comments_raw)))
+        for c in comments_raw:
+            body += struct.pack("<I", len(c)) + c
+        out += bytes([0x84]) + len(body).to_bytes(3, "big") + body
+    return bytes(out) + src[8 + si_len : 8 + si_len + 64]
+
+
+def syncsafe(n):
+    return bytes([(n >> 21) & 0x7F, (n >> 14) & 0x7F, (n >> 7) & 0x7F, n & 0x7F])
+
+
+def frame(fid, enc, payload, version):
+    data = bytes([enc]) + payload
+    size = syncsafe(len(data)) if version == 4 else struct.pack(">I", len(data))
+    return fid.encode() + size + b"\0\0" + data
+
+
+def mp3(frames, version):
+    body = b"".join(frames) + bytes(32)
+    tag = b"ID3" + bytes([version, 0, 0]) + syncsafe(len(body)) + body
+    audio = open(os.path.join(AUDIO, "mp3_44k_st.mp3"), "rb").read()[:3000]
+    return tag + audio
+
+
+def u16le(s):
+    return b"\xff\xfe" + s.encode("utf-16-le")
+
+
+def u16be(s):
+    return s.encode("utf-16-be")
+
+
+CASES = {
+    "utf8_sort.flac": flac([b"TITLE=The \xc3\x89clair", b"TITLESORT=Eclair, The"]),
+    # A title past the 63-byte buffer, with a two-byte character across the cut.
+    "long_title.flac": flac([b"TITLE=" + b"a" * 62 + "é".encode() + b"tail"]),
+    # Malformed UTF-8: a Latin-1 byte, a lead byte without its continuation, a stray continuation.
+    "malformed.flac": flac([b"TITLE=Caf\xe9 \xc3( \x80x", b"TITLESORT=S\xe9rt"]),
+    # A comment block over the 4096-byte scratch: the firmware drops its tags (the key uses the file name).
+    "Big Comments.flac": flac([b"TITLE=Ignored By Device", b"COMMENT=" + b"x" * 5000]),
+    "The Untagged Ümlaut.flac".encode().decode(): flac(None),
+    # UTF-16 with a BOM: an emoji (a surrogate pair) and a lone high surrogate become '?' in the firmware.
+    "utf16_pairs.mp3": mp3(
+        [
+            frame("TIT2", 1, u16le("Mood \U0001f3b5 x") + b"\x3d\xd8\x41\x00", 3),
+            frame("TSOT", 1, u16le("Mood"), 3),
+        ],
+        3,
+    ),
+    "utf16be_latin1.mp3": mp3(
+        [frame("TIT2", 2, u16be("Łódź"), 4), frame("TSOT", 0, b"Lodz \xe9", 4)],
+        4,
+    ),
+    "latin1.mp3": mp3([frame("TIT2", 0, b"Se\xf1or \xd7 2", 3)], 3),
+    "long_sort.mp3": mp3(
+        [frame("TIT2", 3, b"Title", 4), frame("TSOT", 3, b"s" * 30 + "ß".encode() + b"zz", 4)],
+        4,
+    ),
+}
+
+
+def main():
+    os.makedirs(OUT, exist_ok=True)
+    for old in os.listdir(OUT):
+        if old.endswith((".flac", ".mp3", ".tsv")):
+            os.remove(os.path.join(OUT, old))
+    paths = []
+    for name, data in CASES.items():
+        p = os.path.join(OUT, name)
+        open(p, "wb").write(data)
+        paths.append(p)
+    with tempfile.TemporaryDirectory() as tmp:
+        exe = os.path.join(tmp, "tag_key_vectors")
+        subprocess.run(
+            [
+                "cc", "-std=c11", "-O1",
+                "-I" + os.path.join(REPO, "app", "include"),
+                "-I" + os.path.join(REPO, "app", "third_party", "fatfs"),
+                "-o", exe,
+                os.path.join(HERE, "tag_key_vectors.c"),
+                os.path.join(REPO, "app", "audio", "meta.c"),
+                os.path.join(REPO, "app", "library", "lib_collate.c"),
+            ],
+            check=True,
+        )
+        out = subprocess.run([exe] + paths, check=True, capture_output=True).stdout.decode()
+    with open(os.path.join(OUT, "expected.tsv"), "w") as f:
+        f.write("# Generated by scripts/app/gen_tag_key_vectors.py from app/audio/meta.c and app/library; do not edit.\n")
+        f.write("# file\ttitle (hex)\tsort_title (hex)\tsong key (hex)\n")
+        f.write(out)
+    print(f"wrote {len(paths)} cases to {OUT}")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

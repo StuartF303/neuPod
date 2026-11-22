@@ -159,13 +159,14 @@ Built in `mobile/lib/data/db/` (database), `mobile/lib/data/scan/` (scanner, tag
   returns: Android `noBackupFilesDir`, iOS `Application Support/library` marked excluded from backup, never shown in
   Files or Finder. Excluded from backups because version 1 holds only what a rescan rebuilds; phase 3 revisits this
   when ratings and play counts arrive (they should survive a phone restore).
-- **Phase 1 schema (version 1)** is the subset the vertical slice needs: `sources`, `tracks` and `library_meta`, with
-  `artist` and `album` as text on the track, the title sort tag in `title_sort`, `title_sort_key` as an indexed BLOB
-  (`ORDER BY title_sort_key, id`), and `reason_code` (an `UnreadableReason` code, never English text). The schema
-  snapshot is committed in `mobile/drift_schemas/library/drift_schema_v1.json`; `onUpgrade` has no step yet and fails
-  loudly if asked for one. `library_meta.scan_version` records the tag reader and sort key a scan wrote with; when the
-  code's `scanVersion` differs, the next scan reads every file again and stores the new version only after every
-  folder was walked completely. The
+- **Phase 1 schema (version 1)** is the subset the vertical slice needs: `sources` and `tracks`, with `artist` and
+  `album` as text on the track, the title sort tag in `title_sort`, `title_sort_key` as an indexed BLOB
+  (`ORDER BY title_sort_key, id`), `reason_code` (an `UnreadableReason` code, never English text) and `scan_version`
+  per row (the tag reader and sort key the row was read with: a row from another version is read again on the next
+  scan, once, whatever its size and mtime, and an unavailable folder or a partial walk does not keep re-reading the
+  rest). The schema snapshot is committed in `mobile/drift_schemas/library/drift_schema_v1.json`. Until version 2 has
+  real steps, `onUpgrade` (any other version, a downgrade included) drops and recreates the tables: version 1 is a
+  cache a rescan rebuilds. The
   `artists`/`albums`/`genres` tables, `track_key`, `track_stats`, playlists and FTS5 come with their phase 3 and 6
   items, as schema version 2 with a `make-migrations` test. Version 1 holds nothing the user cannot rebuild by
   rescanning.

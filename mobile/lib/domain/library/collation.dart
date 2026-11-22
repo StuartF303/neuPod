@@ -59,11 +59,11 @@ String? _foldLookup(int cp) {
   return null;
 }
 
-/// The C string as bytes: UTF-8, stopping at the first NUL as C would.
-Uint8List _cString(String s) {
-  final bytes = utf8.encode(s);
-  final nul = bytes.indexOf(0);
-  return nul < 0 ? bytes : Uint8List.sublistView(bytes, 0, nul);
+/// [bytes] as a C string: up to the first NUL.
+Uint8List _cBytes(List<int> bytes) {
+  final b = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
+  final nul = b.indexOf(0);
+  return nul < 0 ? b : Uint8List.sublistView(b, 0, nul);
 }
 
 /// `article_len()`: length of a leading "The ", "A " or "An " (any case)
@@ -87,9 +87,26 @@ int _articleLen(Uint8List s) {
 /// The collation key of [name], or of [sort] when it is non-empty, cut at
 /// [cap] bytes (default [collateKeyMax]). Port of `lib_collate_key()`; the
 /// returned list is the key without the C version's trailing zero.
-Uint8List collateKey(String name, {String? sort, int cap = collateKeyMax}) {
+Uint8List collateKey(String name, {String? sort, int cap = collateKeyMax}) =>
+    collateKeyBytes(
+      utf8.encode(name),
+      sort: sort == null ? null : utf8.encode(sort),
+      cap: cap,
+    );
+
+/// [collateKey] over the raw bytes of C strings, as the firmware sees them:
+/// they need not be valid UTF-8 (malformed bytes collate as Latin-1, as in
+/// `next_cp()`), and each stops at its first NUL.
+Uint8List collateKeyBytes(
+  List<int> name, {
+  List<int>? sort,
+  int cap = collateKeyMax,
+}) {
   if (cap <= 0) return Uint8List(0);
-  final src = _cString(sort != null && sort.isNotEmpty ? sort : name);
+  final sortBytes = sort == null ? null : _cBytes(sort);
+  final src = sortBytes != null && sortBytes.isNotEmpty
+      ? sortBytes
+      : _cBytes(name);
   final key = Uint8List(cap);
   var n = 0;
   void put(int b) {
@@ -190,40 +207,36 @@ String collateLetter(List<int> key) {
   return b == 0 ? '#' : String.fromCharCode(0x40 + b);
 }
 
-/// [s] as UTF-8 cut to at most [maxBytes] bytes at a character boundary, as
-/// the firmware's `cut()` and `meta_text_to_utf8()` store text.
-String cutUtf8(String s, int maxBytes) {
-  final b = utf8.encode(s);
-  if (b.length <= maxBytes) return s;
-  var n = maxBytes;
+/// The firmware's `cut()` (app/library/lib_build.c): [s] cut to at most
+/// [cap] - 1 bytes, backing off over UTF-8 continuation bytes.
+Uint8List firmwareCut(List<int> s, int cap) {
+  final b = _cBytes(s);
+  if (b.length <= cap - 1) return b;
+  var n = cap - 1;
   while (n > 0 && (b[n] & 0xC0) == 0x80) {
     n--;
   }
-  return utf8.decode(Uint8List.sublistView(b, 0, n));
+  return Uint8List.sublistView(b, 0, n);
 }
 
-/// The firmware's title buffer (`audio_tags_t.title[64]`): 63 bytes.
-const firmwareTitleBytes = 63;
-
-/// The firmware's sort-tag buffers (`audio_tags_ext_t.sort_title[32]`): 31.
-const firmwareSortBytes = 31;
-
-/// A pool string (`POOL_STR`, 64 characters + NUL): an untagged song's file
-/// name is cut to this.
-const firmwarePoolBytes = 64;
+/// A pool string (`POOL_STR` = `LIB_TEXT_MAX`, 64 bytes + NUL).
+const firmwarePoolCap = 65;
 
 /// The song sort key exactly as the firmware's library builds it
-/// (`index_file` in app/library/lib_build.c): the title as the tag parser
-/// stores it (cut to 63 bytes) or, when untagged, the file name with its
-/// extension (cut to 64 bytes), and the title sort tag cut to 31 bytes. The
-/// app displays the whole title; the order stays the device's.
+/// (`index_file` in app/library/lib_build.c): `lib_collate_key()` of the
+/// title as its tag parser stored it ([titleText], from `firmwareText()` in
+/// the data layer: at most 63 bytes, raw), or, when that is empty, of the
+/// file name with its extension cut to a pool string; with the title sort
+/// tag ([titleSortText], at most 31 bytes). The app displays the whole
+/// decoded title; only the order follows the device.
 Uint8List songSortKey({
-  required String title,
-  required String titleSort,
+  required List<int> titleText,
+  required List<int> titleSortText,
   required String fileName,
-}) => collateKey(
-  title.isNotEmpty
-      ? cutUtf8(title, firmwareTitleBytes)
-      : cutUtf8(fileName, firmwarePoolBytes),
-  sort: cutUtf8(titleSort, firmwareSortBytes),
+}) => collateKeyBytes(
+  firmwareCut(
+    titleText.isNotEmpty ? titleText : utf8.encode(fileName),
+    firmwarePoolCap,
+  ),
+  sort: titleSortText,
 );

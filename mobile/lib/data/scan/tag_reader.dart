@@ -63,6 +63,8 @@ final class AudioTags {
     required this.codec,
     this.title = '',
     this.titleSort = '',
+    this.titleKeyText = const [],
+    this.titleSortKeyText = const [],
     this.artist = '',
     this.album = '',
     this.trackNo = 0,
@@ -74,10 +76,22 @@ final class AudioTags {
 
   /// `flac` or `mp3`.
   final String codec;
+
+  /// The title as displayed: the whole tag, decoded.
   final String title;
 
   /// The title sort tag (TSOT/TST, TITLESORT), or ''.
   final String titleSort;
+
+  /// The title exactly as the firmware's parser stores it, for the sort key
+  /// (owner decision 11): `meta_text_to_utf8` into a 64-byte buffer, so at
+  /// most 63 bytes, UTF-16 surrogates as `?`, malformed UTF-8 copied raw, and
+  /// empty for a FLAC whose comment block is over the scanner's 4096-byte
+  /// scratch.
+  final List<int> titleKeyText;
+
+  /// The title sort tag as the firmware stores it (32-byte buffer).
+  final List<int> titleSortKeyText;
   final String artist;
   final String album;
   final int trackNo;
@@ -99,6 +113,15 @@ const _maxText = 1024;
 /// Largest Vorbis comment block read; larger ones (art stuffed into
 /// comments) are skipped, as the firmware does when it exceeds its scratch.
 const _maxCommentBlock = 256 * 1024;
+
+/// The firmware library scanner's comment scratch (`TAG_SCRATCH` in
+/// lib_build.c): a larger FLAC comment block is skipped there, so its title
+/// and sort tag do not count for the sort key.
+const _firmwareCommentScratch = 4096;
+
+/// The firmware's tag buffers: `title[64]`, `sort_title[32]`.
+const _fwTitleCap = 64;
+const _fwSortCap = 32;
 
 /// Reads the tags of [src], choosing the parser by [extension] (`flac`,
 /// `mp3`; any case).
@@ -229,7 +252,11 @@ AudioTags _readFlac(ByteSource src) {
       totalFrames = ((si[13] & 0xF) << 32) | _be32(si, 14);
       haveInfo = true;
     } else if (type == 4 && len <= _maxCommentBlock && body + len <= size) {
-      _vorbisComments(src.readAt(body, len), fields);
+      _vorbisComments(
+        src.readAt(body, len),
+        fields,
+        forKey: len <= _firmwareCommentScratch,
+      );
     }
     pos = body + len;
     if (last) break;
@@ -242,6 +269,8 @@ AudioTags _readFlac(ByteSource src) {
     codec: 'flac',
     title: fields.title,
     titleSort: fields.titleSort,
+    titleKeyText: fields.titleKey,
+    titleSortKeyText: fields.titleSortKey,
     artist: fields.artist,
     album: fields.album,
     trackNo: fields.track,
@@ -255,11 +284,12 @@ const _damaged = UnreadableReason.damaged;
 
 class _VorbisFields {
   String title = '', titleSort = '', artist = '', album = '';
+  List<int> titleKey = const [], titleSortKey = const [];
   int track = 0;
 }
 
 /// `vorbis_comments` and the phase 1 keys of `vorbis_field`.
-void _vorbisComments(Uint8List b, _VorbisFields t) {
+void _vorbisComments(Uint8List b, _VorbisFields t, {required bool forKey}) {
   final n = b.length;
   if (n < 8) return;
   final vendor = _le32(b, 0);
@@ -280,8 +310,10 @@ void _vorbisComments(Uint8List b, _VorbisFields t) {
       switch (key) {
         case 'TITLE':
           t.title = _text(value, 3);
+          if (forKey) t.titleKey = firmwareText(value, 3, _fwTitleCap);
         case 'TITLESORT':
           t.titleSort = _text(value, 3);
+          if (forKey) t.titleSortKey = firmwareText(value, 3, _fwSortCap);
         case 'ARTIST':
           t.artist = _text(value, 3);
         case 'ALBUM':
@@ -353,6 +385,7 @@ _Mp3Header? _mp3Header(Uint8List h, int o) {
 
 class _Id3Fields {
   String title = '', titleSort = '', artist = '', album = '';
+  List<int> titleKey = const [], titleSortKey = const [];
   int track = 0;
 }
 
@@ -423,8 +456,10 @@ void _id3TextFrame(String id, Uint8List d, _Id3Fields t) {
   switch (id) {
     case 'TIT2' || 'TT2':
       t.title = _text(s, enc);
+      t.titleKey = firmwareText(s, enc, _fwTitleCap);
     case 'TSOT' || 'TST':
       t.titleSort = _text(s, enc);
+      t.titleSortKey = firmwareText(s, enc, _fwSortCap);
     case 'TPE1' || 'TP1':
       t.artist = _text(s, enc);
     case 'TALB' || 'TAL':
@@ -519,6 +554,8 @@ AudioTags _readMp3(ByteSource src) {
     codec: 'mp3',
     title: tags.title,
     titleSort: tags.titleSort,
+    titleKeyText: tags.titleKey,
+    titleSortKeyText: tags.titleSortKey,
     artist: tags.artist,
     album: tags.album,
     trackNo: tags.track,
@@ -546,4 +583,78 @@ int _vbriFrames(Uint8List fr, int got) {
       entryBytes >= 1 &&
       entryBytes <= 4;
   return sane ? frames : 0;
+}
+
+/// Port of the firmware's `meta_text_to_utf8()` (app/audio/meta.c): the text
+/// as the device stores it, for the sort key. [enc] 0 Latin-1, 1 UTF-16 with
+/// a BOM, 2 UTF-16BE, 3 UTF-8; [cap] the buffer size with its NUL. UTF-8 is
+/// copied byte for byte (malformed bytes too, by the lead byte's length),
+/// whole characters only; UTF-16 surrogates (pairs or lone) become `?`. The
+/// result stops at the first zero byte, as a C string does.
+List<int> firmwareText(Uint8List src, int enc, int cap) {
+  final out = <int>[];
+  if (cap == 0) return out;
+  final n = src.length;
+  bool put(int cp) {
+    final List<int> b;
+    if (cp < 0x80) {
+      b = [cp];
+    } else if (cp < 0x800) {
+      b = [0xC0 | (cp >> 6), 0x80 | (cp & 0x3F)];
+    } else {
+      b = [0xE0 | (cp >> 12), 0x80 | ((cp >> 6) & 0x3F), 0x80 | (cp & 0x3F)];
+    }
+    if (out.length + b.length + 1 > cap) return false; // never cut a character
+    out.addAll(b);
+    return true;
+  }
+
+  if (enc == 0 || enc == 3) {
+    for (var i = 0; i < n && src[i] != 0; i++) {
+      if (enc == 3) {
+        final c = src[i];
+        final len = c < 0x80
+            ? 1
+            : (c >> 5) == 6
+            ? 2
+            : (c >> 4) == 14
+            ? 3
+            : (c >> 3) == 30
+            ? 4
+            : 1;
+        if (i + len > n || out.length + len + 1 > cap) break;
+        out.addAll(src.sublist(i, i + len));
+        i += len - 1;
+      } else if (!put(src[i])) {
+        break;
+      }
+    }
+  } else {
+    var le = false;
+    var i = 0;
+    if (enc == 1 && n >= 2) {
+      if (src[0] == 0xFF && src[1] == 0xFE) {
+        le = true;
+        i = 2;
+      } else if (src[0] == 0xFE && src[1] == 0xFF) {
+        i = 2;
+      }
+    }
+    for (; i + 1 < n; i += 2) {
+      var u = le ? src[i] | (src[i + 1] << 8) : (src[i] << 8) | src[i + 1];
+      if (u == 0) break;
+      if (u >= 0xD800 && u < 0xE000) {
+        if (u < 0xDC00 && i + 3 < n) {
+          final lo = le
+              ? src[i + 2] | (src[i + 3] << 8)
+              : (src[i + 2] << 8) | src[i + 3];
+          if (lo >= 0xDC00 && lo < 0xE000) i += 2; // the low half too
+        }
+        u = 0x3F; // '?'
+      }
+      if (!put(u)) break;
+    }
+  }
+  final nul = out.indexOf(0);
+  return nul < 0 ? out : out.sublist(0, nul);
 }

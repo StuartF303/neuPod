@@ -57,11 +57,25 @@ pairs += [("Weird Al", "Yankovic, Weird Al"), ("Weird Al", ""), ("Abba", "Zzz"),
           ("x", "The Y"), ("The Who", "Who, The"), ("Björk", "Bjork"),
           ("Anything", "An Sort"), ("A", "Æ")]
 
+# Raw bytes that are not valid UTF-8, as a tag can carry them (the firmware
+# copies them through and collates each stray byte as Latin-1).
+raw = [
+    b"Caf\xe9", b"\xe9clair", b"\xc3(", b"\x80x", b"a\xc3", b"\xf0\x9f\x8e", b"\xff\xfe",
+    b"The \xd8rsted", b"\xe0\x80\x80", b"\xc0\xaf", b"x\xed\xa0\x80y", b"\xf5\x80\x80\x80",
+    b"A \xdf", b"\xe2\x82", b"\xe2\x82\xacuro",
+]
+raw += [bytes([b]) for b in range(0x80, 0x100)]
+raw += [b"x" + bytes([b]) + b"y" for b in range(0x80, 0x100)]
+
 with open(sys.argv[1], "w") as f:
     for name, sort in pairs:
         n = name.encode("utf-8").hex()
         s = "-" if sort is None else sort.encode("utf-8").hex()
         f.write(f"{n}\t{s}\n")
+    for r in raw:
+        f.write(f"{r.hex()}\t-\n")
+    sert = bytes([0x53, 0xE9, 0x72, 0x74])  # "S" + Latin-1 e-acute + "rt": a raw sort tag
+    f.write("78\t" + sert.hex() + "\n")
 PY
 
 {
