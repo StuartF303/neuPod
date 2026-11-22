@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:neupod/ui/device/device_geometry.dart';
 import 'package:neupod/ui/device/device_options.dart';
 import 'package:neupod/ui/features/player_debug/player_debug_screen.dart';
+import 'package:neupod/ui/screens/now_playing/now_playing_gate.dart';
 
 /// The design gate's switches, for the owner to compare the candidates on
 /// real screens: opened by a long press on the device's body. Temporary:
@@ -113,6 +114,7 @@ class GatePanel extends ConsumerWidget {
                         o.dragProgressToSeek,
                         (v) => o.copyWith(dragProgressToSeek: v),
                       ),
+                      const NowPlayingGateSection(),
                       toggle(
                         'iOS: left-edge swipe is Menu',
                         o.leftEdgeSwipeIsMenu,

@@ -26,6 +26,10 @@ class ShellFrame extends ConsumerWidget {
     required this.title,
     required this.body,
     this.context,
+    this.contextLabel,
+    this.message,
+    this.shuffle = false,
+    this.repeat = RepeatState.off,
     this.palette,
     this.backdrop = BackdropLayout.lists,
     super.key,
@@ -37,6 +41,16 @@ class ShellFrame extends ConsumerWidget {
   /// Text after the play glyph at the left of the status bar (`9 albums`,
   /// `1,204`).
   final String? context;
+
+  /// What a screen reader says for [context] (`track 3 of 12`).
+  final String? contextLabel;
+
+  /// A message in the title's place for about two seconds.
+  final String? message;
+
+  /// Shuffle and repeat glyphs after the play glyph (Now Playing).
+  final bool shuffle;
+  final RepeatState repeat;
 
   /// The album's colours for Modern.
   final ArtPalette? palette;
@@ -69,6 +83,10 @@ class ShellFrame extends ConsumerWidget {
           title: title,
           playState: playState,
           context: context,
+          contextLabel: contextLabel,
+          message: message,
+          shuffle: shuffle,
+          repeat: repeat,
           output: status.output,
           bluetooth: status.bluetooth,
           battery: status.battery,

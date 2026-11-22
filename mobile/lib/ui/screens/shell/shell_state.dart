@@ -93,11 +93,28 @@ class PanelRequest {
     required this.title,
     required this.message,
     this.okLabel = 'OK',
+    this.onDismissed,
   });
 
+  /// Something lost: the library update was stopped before it finished (UI
+  /// styles design, the messages that move to the panel).
+  const PanelRequest.libraryUpdateStopped({this.onDismissed})
+    : title = 'Library update stopped',
+      message =
+          'Some songs may be missing. Update the library again to finish.',
+      okLabel = 'OK';
+
+  /// The title, in Body.
   final String title;
+
+  /// The text under it.
   final String message;
+
+  /// The button's label.
   final String okLabel;
+
+  /// Called once, after the panel went away.
+  final VoidCallback? onDismissed;
 }
 
 /// The stack and the panel.
@@ -180,24 +197,42 @@ class ShellController extends Notifier<ShellState> {
     required String title,
     required String message,
     String okLabel = 'OK',
-  }) {
+    VoidCallback? onDismissed,
+  }) => showPanelRequest(
+    PanelRequest(
+      title: title,
+      message: message,
+      okLabel: okLabel,
+      onDismissed: onDismissed,
+    ),
+  );
+
+  /// Shows [request] (for example `PanelRequest.libraryUpdateStopped()`).
+  ///
+  /// A panel already up is replaced: its future completes and its
+  /// `onDismissed` runs, once, as if it had been dismissed.
+  Future<void> showPanelRequest(PanelRequest request) {
+    final replaced = state.panel;
     _panelDone?.complete();
     final done = Completer<void>();
     _panelDone = done;
     state = ShellState(
       pages: state.pages,
-      panel: PanelRequest(title: title, message: message, okLabel: okLabel),
+      panel: request,
       lastWasPush: state.lastWasPush,
     );
+    replaced?.onDismissed?.call();
     return done.future;
   }
 
   /// Dismisses the panel.
   void dismissPanel() {
-    if (state.panel == null) return;
+    final request = state.panel;
+    if (request == null) return;
     state = ShellState(pages: state.pages, lastWasPush: state.lastWasPush);
     _panelDone?.complete();
     _panelDone = null;
+    request.onDismissed?.call();
   }
 }
 
