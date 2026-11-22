@@ -7,15 +7,17 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:neupod/data/gate_library/manifest_library_view.dart';
 
-import '../../../tool/gen_test_library/gen_test_library.dart';
+import 'manifest_library_view.dart';
+
+import '../../tool/gen_test_library/gen_test_library.dart';
 
 void main() {
-  final asset = File('assets/gate_library/manifest.json').readAsStringSync();
+  final asset = File('test/support/gate_library/manifest.json')
+      .readAsStringSync();
   final view = ManifestLibraryView.parse(asset);
 
-  test('assets/gate_library/manifest.json is the generator\'s manifest', () {
+  test('test/support/gate_library/manifest.json is the generator\'s manifest', () {
     final dir = Directory.systemTemp.createTempSync('neupod_gate_manifest');
     addTearDown(() => dir.deleteSync(recursive: true));
     final result = generate(outDir: Directory('${dir.path}/out'));
@@ -24,7 +26,7 @@ void main() {
       jsonDecode(asset),
       reason:
           'regenerate: dart run tool/gen_test_library/main.dart --out build/'
-          'test_library, then copy manifest.json to assets/gate_library/',
+          'test_library, then copy manifest.json to test/support/gate_library/',
     );
   });
 

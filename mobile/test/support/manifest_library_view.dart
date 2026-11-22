@@ -1,38 +1,27 @@
 // SPDX-License-Identifier: MPL-2.0
 
-/// The design gate's library: a [LibraryView] over the generated test
-/// library's `manifest.json` (`mobile/tool/gen_test_library`), so the gate
-/// shows real names, in the owner's folder convention, with the awkward cases
-/// (articles, accents, symbols, discs, compilations, unplayable files).
+/// TEST ONLY. A [LibraryView] over the generated test library's
+/// `manifest.json` (`mobile/tool/gen_test_library`), for the browsing
+/// screens' tests and goldens and the gate-2 screenshot tool, which need a
+/// library with the awkward cases (articles, accents, symbols, discs,
+/// compilations, unplayable files, genres, years) that the scanned database
+/// does not yet hold. The app itself reads the drift database
+/// (`lib/data/library_view`).
 ///
-/// It shows each track as the manifest's `expect` says the app should, which
-/// is the specification's reading of the tags and the folder convention
-/// (`Artist/Year Album/NN Title.ext`). Tracks without an `expect` (hidden
-/// files, files the specification leaves open) are not shown.
-///
-/// What the manifest does not hold is stubbed, and the gate says so:
-///
-/// - **Duration.** The manifest has none (the fixtures are a second or two of
-///   tone), so each song gets a stable made-up length of 2:30 to 7:00 from its
-///   path, for the album header's total time. The real adapter reads it.
-/// - **Art.** An album gets the folder's `Folder.jpg` or `cover.jpg` when the
-///   manifest lists one and [libraryDir] is given; otherwise a placeholder
-///   cover whose colours come from [ArtRef.seed]. Embedded art is not
-///   extracted here.
-/// - **Playback.** With [libraryDir] a song's [Song.uri] is the generated
-///   file's path, which the player can open. Without it the uri is
-///   `gate-sample:<path>` and the app maps the song to a bundled test tone.
+/// It shows each track as the manifest's `expect` says the app should.
+/// Tracks without an `expect` (hidden files, files the specification leaves
+/// open) are not shown. Durations are made up (the fixtures are a second or
+/// two of tone): 2:30 to 7:00 from the path.
 library;
 
 import 'dart:convert';
 
 import 'package:neupod/domain/library_view/library_view.dart';
-import 'package:neupod/domain/library_view/sort_name.dart';
+import 'package:neupod/domain/library/collation.dart';
 
 /// The artist shown for a compilation's album.
 const variousArtists = 'Various Artists';
 
-// GATE ONLY — remove when #117's drift adapter lands.
 /// A [LibraryView] built from the test library's manifest.
 final class ManifestLibraryView implements LibraryView {
   ManifestLibraryView._(
@@ -129,10 +118,9 @@ final class ManifestLibraryView implements LibraryView {
             artist: r.performer ?? r.albumArtist ?? 'Unknown Artist',
             album: first.album,
             albumId: albumId,
-            uri: full(r.path) ?? 'gate-sample:${r.path}',
+            uri: full(r.path) ?? 'file:///gate/${r.path}',
             track: r.track,
             disc: r.disc,
-            // GATE ONLY — made-up duration; the real adapter reads it.
             duration: Duration(seconds: 150 + _fnv(r.path) % 271),
             genre: r.genre,
             unplayableReason: r.playable ? null : 'Damaged file',
@@ -420,3 +408,12 @@ int _fnv(String s) {
   }
   return h;
 }
+
+String sortKey(String name, {String? sort}) =>
+    String.fromCharCodes(collateKey(name, sort: sort));
+
+int compareNames(String a, String b) =>
+    compareKeys(collateKey(a), collateKey(b));
+
+String sortLetterOf(String name, {String? sort}) =>
+    collateLetter(collateKey(name, sort: sort));

@@ -9,7 +9,14 @@
 // block over the 4096-byte scratch (the key falls back to the file name),
 // an untagged file, UTF-16 surrogate pairs and a lone surrogate ('?'),
 // UTF-16BE with a Latin-1 sort tag, Latin-1, and a sort tag past 31 bytes.
+//
+// The artist and album too, as the firmware's parser stores them and as its
+// library keys them (the artist, or "Unknown Artist"; the album tag): UTF-16
+// artists and albums that differ only in an emoji ('?' in the firmware, so
+// one artist and one album there), a lone surrogate in an album, malformed
+// UTF-8 and an album past 63 bytes, UTF-16BE and Latin-1.
 
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -27,10 +34,21 @@ void main() {
       .where((l) => l.isNotEmpty && !l.startsWith('#'))
       .toList();
 
-  test('the vectors are there', () => expect(lines.length, 9));
+  test('the vectors are there', () => expect(lines.length, 13));
 
   for (final line in lines) {
-    final [name, titleHex, sortHex, keyHex] = line.split('\t');
+    final [
+      name,
+      titleHex,
+      sortHex,
+      keyHex,
+      artistHex,
+      albumHex,
+      artistKeyHex,
+      albumKeyHex,
+    ] = line.split(
+      '\t',
+    );
     test(name, () {
       final bytes = File('$dir/$name').readAsBytesSync();
       final ext = name.substring(name.lastIndexOf('.') + 1);
@@ -43,6 +61,29 @@ void main() {
         fileName: name,
       );
       expect(_hex(key), keyHex, reason: 'song key');
+      expect(_hex(tags.artistKeyText), artistHex, reason: 'artist as stored');
+      expect(_hex(tags.albumKeyText), albumHex, reason: 'album as stored');
+      // The keys `index_file` / `stage_entity` fold on, from that text, as
+      // the library view builds them.
+      final artist = tags.artistKeyText.isNotEmpty
+          ? tags.artistKeyText
+          : utf8.encode('Unknown Artist');
+      expect(
+        _hex(collateKeyBytes(firmwareCut(artist, firmwarePoolCap))),
+        artistKeyHex,
+        reason: 'artist key',
+      );
+      expect(
+        tags.albumKeyText.isEmpty
+            ? ''
+            : _hex(
+                collateKeyBytes(
+                  firmwareCut(tags.albumKeyText, firmwarePoolCap),
+                ),
+              ),
+        albumKeyHex,
+        reason: 'album key',
+      );
     });
   }
 
@@ -54,5 +95,19 @@ void main() {
     final pairs = File('$dir/utf16_pairs.mp3').readAsBytesSync();
     final t = readTags(BytesSource(Uint8List.fromList(pairs)), 'mp3');
     expect(t.title, startsWith('Mood \u{1F3B5} x')); // the emoji is shown
+  });
+
+  test('two artists that differ in an emoji are one to the device, two on '
+      'screen', () {
+    AudioTags read(String name) => readTags(
+      BytesSource(Uint8List.fromList(File('$dir/$name').readAsBytesSync())),
+      'mp3',
+    );
+    final a = read('utf16_band_a.mp3'), b = read('utf16_band_b.mp3');
+    expect(a.artist, '\u{1F600} Band');
+    expect(b.artist, '\u{1F603} Band');
+    expect(a.artistKeyText, b.artistKeyText);
+    expect(utf8.decode(a.artistKeyText), '? Band');
+    expect(a.albumKeyText, b.albumKeyText);
   });
 }

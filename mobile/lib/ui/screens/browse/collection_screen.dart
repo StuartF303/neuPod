@@ -32,12 +32,13 @@ class CollectionScreen extends ConsumerWidget {
     subtitle: (a) => albumDetails(a, length: false).join(' · '),
   );
 
-  /// A genre's screen: its albums as `Artist · 1993`.
+  /// A genre's screen: its albums as `Artist · 1993` (no artist for a
+  /// compilation).
   factory CollectionScreen.genre(Genre genre) => CollectionScreen._(
     title: genre.name,
     albums: (library) => library.albumsOfGenre(genre.id),
     songs: (library) => library.songsOfGenre(genre.id),
-    subtitle: (a) => [a.artist, if (a.year != null) '${a.year}'].join(' · '),
+    subtitle: albumArtistYear,
   );
 
   final String title;

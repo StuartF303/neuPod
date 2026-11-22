@@ -24,7 +24,7 @@ import 'package:neupod/ui/screens/shell/shell_frame.dart';
 import 'package:neupod/ui/screens/shell/shell_state.dart';
 
 /// The library search Search runs after every edit: the library's artists,
-/// albums and songs (read once when Search opens, in the library's collation
+/// albums and songs (read when Search is built and again after a scan, in the library's collation
 /// order), matched by a case-insensitive substring of the name, names that
 /// start with the text first. Tests override it with their own.
 final searchFunctionProvider = FutureProvider<SearchFunction>((ref) async {

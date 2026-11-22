@@ -190,21 +190,27 @@ class _MenuPane extends ConsumerWidget {
   }
 }
 
+List<Album> _firstOfEachArtist(List<Album> byArtist) {
+  final seen = <String?>{};
+  return [
+    for (final a in byArtist)
+      if (a.artistId != null && seen.add(a.artistId)) a,
+  ];
+}
+
 /// The albums whose covers preview [item].
 final _coversProvider = FutureProvider.family<List<Album>, MusicItem>((
   ref,
   item,
 ) async {
   final library = await ref.watch(libraryViewProvider.future);
-  final all = await library.albums();
   return switch (item) {
     MusicItem.coverFlow => await library.albumsForCoverFlow(),
-    MusicItem.artists => [
-      for (final a in await library.artists())
-        ...(await library.albumsOfArtist(a.id)).take(1),
-    ],
-    MusicItem.albums => all,
-    MusicItem.songs => all.reversed.toList(),
+    // The first album of each artist, in artist order: one read, from
+    // Cover Flow's order (by artist), not an albums call per artist.
+    MusicItem.artists => _firstOfEachArtist(await library.albumsForCoverFlow()),
+    MusicItem.albums => await library.albums(),
+    MusicItem.songs => (await library.albums()).reversed.toList(),
     MusicItem.genres => [
       for (final g in await library.genres())
         ...(await library.albumsOfGenre(g.id)).take(1),

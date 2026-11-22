@@ -44,8 +44,23 @@ class Tracks extends Table {
   /// sort tag. `ORDER BY` it gives the device's order, since SQLite compares
   /// BLOBs with memcmp.
   BlobColumn get titleSortKey => blob()();
+
+  /// The artist and album as displayed: the whole tag, decoded.
   TextColumn get artist => text()();
   TextColumn get album => text()();
+
+  /// The artist tag exactly as the firmware's parser stores it
+  /// (`meta_text_to_utf8` into `char artist[64]`: at most 63 bytes, UTF-16
+  /// surrogates as `?`, malformed UTF-8 copied raw, empty for a FLAC whose
+  /// comment block is over the scanner's scratch), for the artist's key and
+  /// the compilation test. Empty when the firmware has no artist tag. Null in
+  /// a row written before schema version 2, until a rescan reads the file
+  /// again (scan version 2); the library view then uses [artist].
+  BlobColumn get artistKeyText => blob().nullable()();
+
+  /// The album tag as the firmware stores it (`char album[64]`), as
+  /// [artistKeyText].
+  BlobColumn get albumKeyText => blob().nullable()();
   IntColumn get trackNo => integer()();
   IntColumn get durationMs => integer()();
   IntColumn get sampleRate => integer()();
@@ -88,7 +103,7 @@ class LibraryDatabase extends _$LibraryDatabase {
   /// test helpers in test/drift/library/generated/), then add the step to
   /// [_upgrade] and run `dart run build_runner build`.
   @override
-  int get schemaVersion => _testVersion ?? 1;
+  int get schemaVersion => _testVersion ?? 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -125,7 +140,16 @@ class LibraryDatabase extends _$LibraryDatabase {
   );
 
   /// The steps, kept apart from [migration] as drift advises, so each step
-  /// runs against its own snapshot. Add `from1To2: (m, schema) async {...}`
-  /// here when version 2 exists.
-  OnUpgrade get _upgrade => stepByStep();
+  /// runs against its own snapshot.
+  ///
+  /// - 1 to 2: `tracks.artist_key_text` and `album_key_text`, the firmware's
+  ///   text of the artist and album tags. Existing rows keep every column
+  ///   and get null in both; the scanner's version went to 2 with them, so
+  ///   the next scan reads every file again and fills them.
+  OnUpgrade get _upgrade => stepByStep(
+    from1To2: (m, schema) async {
+      await m.addColumn(schema.tracks, schema.tracks.artistKeyText);
+      await m.addColumn(schema.tracks, schema.tracks.albumKeyText);
+    },
+  );
 }

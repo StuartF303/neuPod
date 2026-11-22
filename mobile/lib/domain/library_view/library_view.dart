@@ -4,10 +4,9 @@
 /// Music menu lists (artists, an artist's albums, an album's tracks with
 /// discs, songs, genres, compilations), already sorted and counted.
 ///
-/// This is the port the screens depend on. The gate's adapter reads the
-/// generated test library's manifest (`data/gate_library`); the drift-backed
-/// adapter (PR #117) implements the same interface, so the screens do not
-/// change when it lands.
+/// This is the port the screens depend on. The app's adapter reads the
+/// scanned drift database (`data/library_view`); tests use a fake over the
+/// generated test library's manifest (`test/support`).
 ///
 /// Every list is sorted by the firmware's collation (owner decision 11),
 /// except where noted: an artist's albums come in year order (UI styles
