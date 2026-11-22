@@ -53,6 +53,22 @@ Status: specification, 21 November 2026. Nothing is built. The working instructi
     **shown** above the device; the **neuPod wordmark stays on** the body (Open question 8); **rating stars live on
     Now Playing's page 2 only**, as a Rating row set with the wheel; Search keeps its **24-character cap**.
 
+    **Gate 2, remaining choices (owner, 22 November 2026).** Device view Open questions: the accessibility text sizes
+    stay **capped at 5 rows** (3); **holding Play/Pause does nothing** extra (4); **our own proportions** stay (6);
+    routes: the phone speaker shows **no icon**, USB and other wired outputs show the **jack plug**, and AirPlay and
+    other wireless outputs show a **new generic external-speaker icon** in the device's style (never Apple's AirPlay
+    glyph) (7); a **left-edge swipe is Menu** on iOS (9); the click sound is a **system sound that follows the
+    ringer switch** (10); Search stays **in the Music menu** (11); Search shows **up to three live results** (two,
+    then one, at the larger tiers) (13). UI styles: Classic Light is **adjusted to 4.5:1** where the designer's exact
+    values fall short (the selection bar's upper stops under white text, rail letters, ink3 on grey surfaces), and
+    Bluetooth saved versus active gets a cue besides colour; Home's right pane with nothing playing shows a
+    **placeholder cover, "Nothing playing" and the song count**; tapping a side cover in Cover Flow **centres it**
+    (a second tap or Select opens it); the Music menu's **preview pane shows for every item**, not only Albums.
+    Settings: the list under [Settings](#settings) plus the **click sound** switch (off by default) and a **haptics**
+    switch. **Direct touch** (Open question 2) and **drag-to-seek** are judged by feel on the owner's phones at
+    gate 1: until then the build defaults to **candidate 2** (wheel plus screen, candidate 1 kept behind the gate
+    switch) and the progress bar is **not draggable**.
+
 Everything else in this document is the designer's proposal until the owner confirms it. Proposals that most need a
 decision are collected under [Open questions](#open-questions).
 
@@ -210,8 +226,9 @@ the same rule as the device: the dominant colour, clamped until white text on it
 
 ### Settings
 
-Style and mode; library folders (add, remove, rescan); gapless on or off; skip-back behaviour; reset ratings and play
-counts (with a panel to confirm); About; Licences.
+Style and mode; library folders (add, remove, rescan); gapless on or off; skip-back behaviour; click sound (off by
+default); haptics (on by default, and always off when the phone's own setting is off); reset ratings and play counts
+(with a panel to confirm); About; Licences (owner decision 13).
 
 ### Accessibility
 
