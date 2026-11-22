@@ -85,7 +85,8 @@ typedef struct {
     const char *root;         /**< the music folder to walk; NULL = LIB_ROOT_DEFAULT. Missing = an empty library */
     uint64_t fingerprint;     /**< recorded in the manifest (D3: volume serial + free clusters; the caller computes it) */
     uint32_t decoder_version; /**< 0 = LIB_DECODER_SET_VERSION */
-    /** Called after every audio file: files done so far. Return false to cancel (the old library is untouched). May be NULL. */
+    /** Called after every audio file, and then every few records through every later stage (the sorts included), with the final file count
+     *  each time: it is the build's Cancel point and the caller's chance to yield. Return false to cancel (the old library is untouched). May be NULL. */
     bool (*progress)(void *user, uint32_t files_done);
     /** Called once, before the walk, with the number of audio files a quick directory pass found (the progress's denominator). May be NULL. */
     void (*total)(void *user, uint32_t files_total);

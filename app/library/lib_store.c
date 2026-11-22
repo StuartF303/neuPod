@@ -148,36 +148,45 @@ bool lib_path(char *out, size_t cap, const char *base, const char *leaf) {
     return n > 0 && (size_t)n < cap;
 }
 
-// A folder of plain files: take the first entry, close the folder, delete it, repeat (FatFs does not like deleting while a folder is open).
+// A folder of plain files (and, defensively, folders inside it): take the first entry, close the folder, delete it, repeat (FatFs does not
+// like deleting while a folder is open). Iterative on one path buffer: a hostile card with deeply nested folders cannot grow the stack,
+// and the frame stays ~0.7 KB (it used to recurse with the same frame per level, on the build's deepest call chain).
+#define RMTREE_PATH 360u
 lib_err_t lib_rmtree(const char *dir) {
     if (!lib_exists(dir)) return LIB_OK;
+    char path[RMTREE_PATH];
+    if (snprintf(path, sizeof path, "%s", dir) >= (int)sizeof path) return LIB_E_RANGE;
+    size_t root_len = strlen(path);
     for (int guard = 0; guard < 100000; guard++) {
         DIR d;
         FILINFO fi;
-        char path[96 + 260];
-        FRESULT fr = f_opendir(&d, dir);
+        FRESULT fr = f_opendir(&d, path);
         if (fr != FR_OK) return LIB_E_IO;
         fr = f_readdir(&d, &fi);
         f_closedir(&d);
         if (fr != FR_OK) return LIB_E_IO;
-        if (fi.fname[0] == '\0') break;
-        snprintf(path, sizeof path, "%s/%s", dir, fi.fname);
-        if (fi.fattrib & AM_DIR) {
-            lib_err_t e = lib_rmtree(path);
-            if (e != LIB_OK) return e;
-        } else {
+        size_t len = strlen(path);
+        if (fi.fname[0] == '\0') { // empty: delete this folder, then carry on in its parent (the root is deleted last)
             lib_err_t ue = lib_unlink(path);
-            if (ue != LIB_OK) return ue;
+            if (ue != LIB_OK || len <= root_len) return ue;
+            char *slash = strrchr(path, '/');
+            if (slash == NULL || (size_t)(slash - path) < root_len) return LIB_E_IO;
+            *slash = '\0';
+            continue;
         }
+        if (len + 1 + strlen(fi.fname) >= sizeof path) return LIB_E_RANGE;
+        path[len] = '/';
+        strcpy(path + len + 1, fi.fname);
+        if (fi.fattrib & AM_DIR) continue; // descend: the next pass empties it
+        lib_err_t ue = lib_unlink(path);
+        if (ue != LIB_OK) return ue;
+        path[len] = '\0';
     }
-    return lib_unlink(dir);
+    return LIB_E_IO;
 }
 
 /* ---- manifest ----------------------------------------------------------------------------------------------------- */
 
-// payload: generation, decoder, fingerprint(2), tracks, playable, artists, albums, genres, dirs, comp_first, links, genre_tracks, [crc,size]*13, jumps
-#define MF_WORDS (2 + 2 + 9 + 2 * LIB_FILES + LIB_LISTS * LIB_BUCKETS)
-#define MF_BYTES (MF_WORDS * 4u)
 
 size_t lib_manifest_bytes(void) { return LIB_HDR + MF_BYTES; }
 
@@ -283,45 +292,48 @@ static bool manifest_decode(const uint8_t *in, size_t n, lib_manifest_t *m) {
     return manifest_consistent(m);
 }
 
-lib_err_t lib_manifest_load(const char *dir, bool full, lib_manifest_t *out) {
-    char path[96];
-    uint8_t buf[LIB_HDR + MF_BYTES + 1];
-    FIL f;
+// Everything lib_manifest_load needs besides its result, so a caller that is deep in a call chain (the build) can lend it from its arena
+// instead of the stack: this used to be 3.2 KB of locals, the largest frame on the storage task's build path.
+lib_err_t lib_manifest_load_with(lib_mfscratch_t *s, const char *dir, bool full, lib_manifest_t *out) {
     UINT got = 0;
-    snprintf(path, sizeof path, "%s/%s", dir, lib_files[LF_MANIFEST].name);
-    FRESULT fr = f_open(&f, path, FA_READ);
+    snprintf(s->path, sizeof s->path, "%s/%s", dir, lib_files[LF_MANIFEST].name);
+    FRESULT fr = f_open(&s->f, s->path, FA_READ);
     if (fr == FR_NO_FILE || fr == FR_NO_PATH) return LIB_E_NONE;
     if (fr != FR_OK) return LIB_E_IO;
-    fr = f_read(&f, buf, sizeof buf, &got);
-    f_close(&f);
+    fr = f_read(&s->f, s->buf, sizeof s->buf, &got);
+    f_close(&s->f);
     if (fr != FR_OK) return LIB_E_IO;
-    lib_manifest_t m;
-    if (!manifest_decode(buf, got, &m)) return LIB_E_FORMAT;
+    lib_manifest_t *m = &s->m;
+    if (!manifest_decode(s->buf, got, m)) return LIB_E_FORMAT;
     for (unsigned i = 0; i < LIB_FILES; i++) {
-        FILINFO fi;
-        snprintf(path, sizeof path, "%s/%s", dir, lib_files[i].name);
-        if (f_stat(path, &fi) != FR_OK || fi.fsize != m.file_size[i]) return LIB_E_FORMAT;
+        snprintf(s->path, sizeof s->path, "%s/%s", dir, lib_files[i].name);
+        if (f_stat(s->path, &s->fi) != FR_OK || s->fi.fsize != m->file_size[i]) return LIB_E_FORMAT;
         if (!full) continue;
         // header (magic, version, count) and the CRC of the payload
-        uint8_t h[LIB_HDR], blk[512];
-        if (f_open(&f, path, FA_READ) != FR_OK) return LIB_E_IO;
-        fr = f_read(&f, h, LIB_HDR, &got);
+        uint8_t h[LIB_HDR];
+        if (f_open(&s->f, s->path, FA_READ) != FR_OK) return LIB_E_IO;
+        fr = f_read(&s->f, h, LIB_HDR, &got);
         if (fr == FR_OK && got != LIB_HDR) {
-            f_close(&f);
+            f_close(&s->f);
             return LIB_E_FORMAT;
         }
         uint32_t crc = 0;
         while (fr == FR_OK) {
-            fr = f_read(&f, blk, sizeof blk, &got);
+            fr = f_read(&s->f, s->blk, sizeof s->blk, &got);
             if (fr != FR_OK || got == 0) break;
-            crc = lib_crc32(crc, blk, got);
+            crc = lib_crc32(crc, s->blk, got);
         }
-        f_close(&f);
+        f_close(&s->f);
         if (fr != FR_OK) return LIB_E_IO;
-        if (ld32(h) != lib_magic(i) || ld32(h + 4) != LIB_VERSION || ld32(h + 12) != crc || crc != m.file_crc[i]) return LIB_E_FORMAT;
+        if (ld32(h) != lib_magic(i) || ld32(h + 4) != LIB_VERSION || ld32(h + 12) != crc || crc != m->file_crc[i]) return LIB_E_FORMAT;
     }
-    if (out != NULL) *out = m;
+    if (out != NULL) *out = *m;
     return LIB_OK;
+}
+
+lib_err_t lib_manifest_load(const char *dir, bool full, lib_manifest_t *out) {
+    lib_mfscratch_t s; // callers outside the build (open, boot recovery) are shallow: the stack is fine there
+    return lib_manifest_load_with(&s, dir, full, out);
 }
 
 /* ---- swap and recovery -------------------------------------------------------------------------------------------- */
@@ -352,19 +364,19 @@ lib_err_t lib_swap_install(const char *base, int stop_step, int *step_done) {
     return LIB_OK;
 }
 
-lib_err_t lib_recover_locked(const char *base) {
+lib_err_t lib_recover_locked(const char *base, lib_mfscratch_t *s) {
     char lib[64], old[64], tmp[64], work[64];
     if (!lib_path(lib, sizeof lib, base, "lib") || !lib_path(old, sizeof old, base, "lib.old") || !lib_path(tmp, sizeof tmp, base, "lib.tmp") ||
         !lib_path(work, sizeof work, base, "work")) {
         return LIB_E_RANGE;
     }
     lib_err_t res;
-    if (lib_manifest_load(lib, false, NULL) == LIB_OK) {
+    if (lib_manifest_load_with(s, lib, false, NULL) == LIB_OK) {
         res = LIB_OK;
-    } else if (lib_manifest_load(old, false, NULL) == LIB_OK) { // the swap was cut after lib moved aside: put the old library back
+    } else if (lib_manifest_load_with(s, old, false, NULL) == LIB_OK) { // the swap was cut after lib moved aside: put the old library back
         res = lib_rmtree(lib);
         if (res == LIB_OK && (res = lib_rename_path(old, lib)) != LIB_OK) {}
-    } else if (lib_manifest_load(tmp, false, NULL) == LIB_OK) { // first build, cut just before the final rename: the new one is complete
+    } else if (lib_manifest_load_with(s, tmp, false, NULL) == LIB_OK) { // first build, cut just before the final rename: the new one is complete
         res = lib_rmtree(lib);
         if (res == LIB_OK && (res = lib_rename_path(tmp, lib)) != LIB_OK) {}
     } else {
@@ -385,7 +397,8 @@ lib_err_t lib_recover(const char *base) {
     bool was = false;
     lib_err_t e = lib_write_begin(base, &was);
     if (e != LIB_OK) return e;
-    e = lib_recover_locked(base);
+    lib_mfscratch_t s; // boot / settings paths: shallow stack
+    e = lib_recover_locked(base, &s);
     lib_write_end(was);
     return e;
 }
