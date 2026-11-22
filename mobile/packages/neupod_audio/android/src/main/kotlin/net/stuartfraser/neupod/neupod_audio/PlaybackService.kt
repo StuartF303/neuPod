@@ -52,6 +52,8 @@ class PlaybackService : MediaSessionService() {
             // The skip-back rule: previous restarts the track after its first three seconds.
             .setMaxSeekToPreviousPositionMs(SKIP_BACK_RESTARTS_AFTER_MS)
             .build()
+        // Moving on from a track that failed restarts playback (ErrorRecovery.kt).
+        player.addListener(ErrorRecovery(player))
 
         val executor = Executors.newSingleThreadExecutor().also { artExecutor = it }
         val artLoader = DataSourceBitmapLoader(MoreExecutors.listeningDecorator(executor), dataSources)

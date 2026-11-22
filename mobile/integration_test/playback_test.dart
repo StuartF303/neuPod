@@ -184,6 +184,41 @@ void main() {
     expect(state.queueId, 'itest-empty');
   });
 
+  testWidgets('a play racing the skip after an error still reaches the next '
+      'track', (tester) async {
+    // The ordering behind a CI flake on PR #111: after track 0 fails, a play
+    // (which retries track 0) reaches the engine just before the skip to
+    // track 1, and track 0's second error lands after the skip. The engine
+    // must still play track 1. Driven through NeupodAudio with a queue id the
+    // player does not own, so the player's own skip stays out of it. The
+    // race does not hit every time, so it runs several rounds.
+    final mp3 = await media.mp3Item();
+    for (var round = 0; round < 8; round++) {
+      final q = 'race-$round';
+      Future<EngineEvent> next(bool Function(EngineEvent e) test) => audio
+          .events
+          .where((e) => e.queueId == q)
+          .firstWhere(test)
+          .timeout(
+            _timeout,
+            onTimeout: () =>
+                throw TimeoutException('round $round: state not reached'),
+          );
+      final failed = next((e) => e.errorMessage != null && e.index == 0);
+      await audio.setQueue(q, [
+        EngineItem(id: '$q:0', uri: '${mp3.uri}.missing'),
+        EngineItem(id: '$q:1', uri: mp3.uri),
+      ]);
+      await failed;
+      final playing = next((e) => e.index == 1 && e.isPlaying);
+      unawaited(audio.play());
+      unawaited(audio.skipTo(1));
+      unawaited(audio.play());
+      await playing;
+      await next((e) => e.status == EngineStatus.ended);
+    }
+  });
+
   testWidgets('a file that is not there is reported, not fatal', (
     tester,
   ) async {
