@@ -125,6 +125,13 @@ jobs:
           echo "OK: no INTERNET or ACCESS_NETWORK_STATE permission in the release manifest"
 
   # Integration tests on an emulator at the minimum API level (29, Android 10).
+  #
+  # The integration tests run natively as an Android instrumentation test (android/app/src/androidTest, the
+  # integration_test package's "Android Device Testing" route), not `flutter test`. `flutter test` finds the app's Dart
+  # VM service by reading logcat; on the hosted runner it sometimes never sees it for the second test file and waits
+  # until the job timeout (run 44993855662 attempt 1: app installed for app_launch_test.dart at 06:33:14, cancelled at
+  # 07:08:17). Under instrumentation the Dart tests run inside the app and report to JUnit through the integration_test
+  # plugin: no VM service, no logcat scrape.
   android-integration:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
@@ -167,9 +174,16 @@ jobs:
           cache: true
           pub-cache: true
       - run: flutter pub get
-      # Build once before the emulator starts, so Gradle's downloads and first compile don't compete with it.
+      # Build the app and the instrumentation test APK before the emulator starts, so Gradle's downloads and first
+      # compile don't compete with it. `flutter build` also writes android/local.properties for ./gradlew.
       - run: flutter build apk --debug
-      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+      - run: (cd android && ./gradlew app:assembleDebugAndroidTest)
+      # One instrumentation run per test file (tool/android_integration_tests.sh). No retry: a Dart test failure fails
+      # the instrumentation test, which fails Gradle, which fails the step; a hang is caught by the script's per-file
+      # timeout, then by the step timeout. The script is one line because the action runs each script line on its own.
+      - name: Integration tests
+        timeout-minutes: 25
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 29
           target: default
@@ -178,7 +192,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           working-directory: mobile
-          script: flutter test integration_test -d emulator-5554
+          script: bash tool/android_integration_tests.sh
 
   # iOS: simulator build without signing, then the integration tests on an iPhone simulator. macos-26 is Apple
   # silicon; Xcode 26.5 is the version on the owner's Mac (docs/app/ENVIRONMENT.md) and ships the iOS 26.5 simulator.
