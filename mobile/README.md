@@ -51,8 +51,8 @@ is set. Do not change the expectations to fit the code: if a test looks wrong, r
 lead, since it is the specification that decides. Cases the specification leaves open are not asserted either way; the
 generator's manifest marks them with `ambiguous` and a reason.
 
-Run them: `flutter test test/spec` (or `flutter test --tags spec`). On this Mac run tests through
-`~/bin/neupod-buildlock`.
+Run them: `flutter test test/spec` (or `flutter test --tags spec`; the tags are declared in `dart_test.yaml`). On a
+memory-constrained machine, run heavy commands one at a time.
 
 ## The generated test library
 

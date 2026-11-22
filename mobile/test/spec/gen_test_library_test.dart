@@ -143,7 +143,10 @@ void main() {
       final convention = RegExp(r'^[^/]+/(\d{4} )?[^/]+/(\d\d )?[^/]+\.\w+$');
       for (final t in tracks) {
         final path = t['path']! as String;
-        if (t['ambiguous'] != null || t['case'] == 'root-file') continue;
+        if (t['ambiguous'] != null ||
+            ['root-file', 'hidden'].contains(t['case'])) {
+          continue;
+        }
         expect(convention.hasMatch(path), isTrue, reason: path);
       }
     });
@@ -286,6 +289,14 @@ void main() {
       final again = generate(outDir: g.outDir, fixtures: fx);
       expect(again.trackFiles, cases.length);
     });
+  });
+
+  test('regenerating deletes only what it wrote', () {
+    final out = Directory('${tmp.path}/again');
+    generate(outDir: out, fixtures: fx);
+    final mine = File('${out.path}/notes-of-mine.txt')..writeAsStringSync('x');
+    generate(outDir: out, fixtures: fx);
+    expect(mine.readAsStringSync(), 'x');
   });
 
   test('refuses a non-empty folder it did not make', () {

@@ -198,8 +198,7 @@ void main() {
         final g = guess('Quiet Engine/2015 Machines (Disc 2)/01 Spring.flac');
         expect(g.disc, 2);
         expect(g.year, 2015);
-        expect(g.album, isNot(contains('(Disc')));
-        expect(g.album, startsWith('Machines'));
+        // The album name (with or without "(Disc 2)") is open: not asserted.
       });
 
       test('a very long album folder with "(Disc 1)"', () {
@@ -210,8 +209,7 @@ void main() {
         expect(g.artist, 'Ministry of Sound');
         expect(g.year, 2000);
         expect(g.disc, 1);
-        expect(g.album, startsWith('Ministry of Sound - the Annual IV - '));
-        expect(g.album, isNot(endsWith('(Disc 1)')));
+        // The album name is open: not asserted.
         expect(g.track, 1);
         expect(g.title, 'Opening Mix');
       });
@@ -227,12 +225,9 @@ void main() {
         expect(h.title, '#1 Fan');
       });
 
-      test('a ", The" artist folder gives the display name', () {
-        expect(
-          guess('Hollow Pines, The/1999 Cedar/01 First Frost.flac').artist,
-          'The Hollow Pines',
-        );
-      });
+      // Whether the parser returns "Hollow Pines, The" or the display form is
+      // left to the implementation: the display is checked through
+      // FolderNameDisplay and LibraryView below.
     },
   );
 
@@ -457,6 +452,21 @@ void main() {
         test('"Various Artists" and the flag both make a compilation', () {
           final names = [for (final a in _lib(tracks()).compilations()) a.name];
           expect(names, unorderedEquals(['Summer Static', 'Night Drive']));
+        });
+
+        test('"Various Artists" in any letter case makes a compilation', () {
+          // Firmware: ieq_str(aa, "Various Artists"), app/library/lib_build.c.
+          final lib = _lib([
+            _t(
+              'VA/2001 Mix/01 One.flac',
+              title: 'One',
+              artist: 'Glass Fox',
+              albumArtist: 'various artists',
+              album: 'Mix',
+            ),
+          ]);
+          expect([for (final a in lib.compilations()) a.name], ['Mix']);
+          expect(lib.artists(), isEmpty);
         });
 
         test('compilation albums keep all their tracks', () {

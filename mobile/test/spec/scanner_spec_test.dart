@@ -138,6 +138,10 @@ void main() {
         ]) {
           expect(albumsByKase[kase], hasLength(1), reason: kase);
         }
+        // Hidden and AppleDouble files are not songs: the firmware skips every
+        // name starting with '.' (app/library/lib_build.c).
+        expect(byTitle.keys, isNot(contains('Secret')));
+        expect(byTitle.keys.where((t) => t.startsWith('._')), isEmpty);
         // Files that are not audio are not songs.
         expect(byTitle.keys, isNot(contains('notes')));
         expect(byTitle.keys, isNot(contains('notes.txt')));

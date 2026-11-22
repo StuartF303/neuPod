@@ -75,8 +75,16 @@ Uint8List flacWithTags(Uint8List flac, {TagSet? tags, Uint8List? pictureJpeg}) {
   final audio = Uint8List.sublistView(flac, p);
   if (tags != null) kept.add((4, vorbisComment(tags)));
   if (pictureJpeg != null) kept.add((6, flacPicture(pictureJpeg)));
-  // STREAMINFO must stay first.
-  kept.sort((a, b) => (a.$1 == 0 ? 0 : 1).compareTo(b.$1 == 0 ? 0 : 1));
+  // STREAMINFO first, every other block in its original order. Dart's sort
+  // is not stable, so the original index is part of the key.
+  final indexed = [for (var i = 0; i < kept.length; i++) (i, kept[i])]
+    ..sort((a, b) {
+      final sa = a.$2.$1 == 0 ? 0 : 1, sb = b.$2.$1 == 0 ? 0 : 1;
+      return sa != sb ? sa.compareTo(sb) : a.$1.compareTo(b.$1);
+    });
+  kept
+    ..clear()
+    ..addAll([for (final (_, block) in indexed) block]);
 
   final out = BytesBuilder(copy: false)..add(ascii.encode('fLaC'));
   for (var i = 0; i < kept.length; i++) {

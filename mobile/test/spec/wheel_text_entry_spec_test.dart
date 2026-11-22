@@ -194,6 +194,8 @@ void main() {
         expect(t.text, 'ab');
         expect(t.typed, isTrue);
         // Right / Left walk the chips: abc, ABC, 123, #!?, space, del, round.
+        // Six chips including #!? also in Search: owner decision 12
+        // (docs/app/README.md).
         expect(t.chips(), hasLength(6));
         t.right();
         expect(t.chip, TextChip.upper);
@@ -465,8 +467,12 @@ void main() {
       test('at most three live results, the best first', () {
         final s = screen();
         s.centre(); // 'a': six matches
-        expect(s.liveResults, hasLength(3));
-        expect(s.liveResults, search('a').take(3).toList());
+        // At most three: how many fit at the larger text tiers is the
+        // design's Open question 13.
+        expect(s.liveResults, isNotEmpty);
+        expect(s.liveResults.length, lessThanOrEqualTo(3));
+        final best = search('a');
+        expect(s.liveResults, best.take(s.liveResults.length).toList());
       });
 
       test('Previous and Next walk the mode chips', () {

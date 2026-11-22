@@ -193,9 +193,6 @@ const _ambLongDisc =
     'and "[Disc 2 of 2]"), so whether the two discs are one album is open';
 const _ambRoot =
     'no folder convention to fall back on for a file at the library root';
-const _ambHidden =
-    'hidden files and AppleDouble "._" files: the firmware skips them, the app '
-    'specification is silent';
 const _ambExt =
     'which file extensions are audio: a .wma is neither a required format '
     'nor obviously "not music"';
@@ -784,13 +781,13 @@ List<GenFile> get cases => [
     kase: 'root-file',
     ambiguous: _ambRoot,
   ),
-  // Hidden and AppleDouble files.
+  // Hidden and AppleDouble files: not tracks. The firmware skips every name
+  // starting with '.' (app/library/lib_build.c), and the app follows it.
   GenFile(
     '.hidden/Secret.flac',
     Source.flac16,
     kase: 'hidden',
     tags: const TagSet(title: 'Secret', artist: 'Hidden'),
-    ambiguous: _ambHidden,
   ),
 ];
 
@@ -831,14 +828,8 @@ List<OtherFile> get otherFiles => const [
     'Pale Harbour/2004 Tidewater/._01 Low Light.flac',
     'appleDouble',
     kase: 'hidden',
-    ambiguous: _ambHidden,
   ),
-  OtherFile(
-    'Pale Harbour/.DS_Store',
-    'dsStore',
-    kase: 'hidden',
-    ambiguous: _ambHidden,
-  ),
+  OtherFile('Pale Harbour/.DS_Store', 'dsStore', kase: 'hidden'),
 ];
 
 /// The result of a generation.
@@ -1113,8 +1104,12 @@ void _prepare(Directory outDir) {
       'refusing to touch it',
     );
   }
-  for (final e in entries) {
-    e.deleteSync(recursive: true);
+  // Only what this tool writes; anything else in the folder stays.
+  final lib = Directory('${outDir.path}/library');
+  if (lib.existsSync()) lib.deleteSync(recursive: true);
+  for (final name in ['manifest.json', markerName]) {
+    final f = File('${outDir.path}/$name');
+    if (f.existsSync()) f.deleteSync();
   }
 }
 
