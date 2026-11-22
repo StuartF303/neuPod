@@ -74,47 +74,78 @@ void goldenSheet(
 }) {
   for (final MapEntry(key: styleName, value: style) in designedStyles.entries) {
     for (final tier in tiers) {
-      testWidgets('$name, $styleName, ${tier.name}', (tester) async {
-        final h = height(tier);
-        tester.view.physicalSize = Size(600, h);
-        tester.view.devicePixelRatio = 1;
-        addTearDown(tester.view.reset);
-        await tester.pumpWidget(
-          Directionality(
-            textDirection: TextDirection.ltr,
-            child: MediaQuery(
-              data: const MediaQueryData(size: Size(600, 0)),
-              child: NeupodTheme(
-                style: style,
-                tier: tier,
-                child: DefaultTextStyle(
-                  style: NeupodType(tier).body(style.tokens.ink),
-                  child: RepaintBoundary(
-                    key: const ValueKey('sheet'),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        if (style.drawsBackdrop)
-                          ModernBackdrop(
-                            ground: style.ground,
-                            palette: style.palette,
-                          )
-                        else
-                          ColoredBox(color: style.ground),
-                        build(style, tier),
-                      ],
+      testWidgets(
+        '$name, $styleName, ${tier.name}',
+        (tester) => withShadows(() async {
+          final h = height(tier);
+          tester.view.physicalSize = Size(600, h);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.reset);
+          await tester.pumpWidget(
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: MediaQuery(
+                data: const MediaQueryData(size: Size(600, 0)),
+                child: NeupodTheme(
+                  style: style,
+                  tier: tier,
+                  child: DefaultTextStyle(
+                    style: NeupodType(tier).body(style.tokens.ink),
+                    child: RepaintBoundary(
+                      key: const ValueKey('sheet'),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          if (style.drawsBackdrop)
+                            ModernBackdrop(
+                              ground: style.ground,
+                              palette: style.palette,
+                            )
+                          else
+                            ColoredBox(color: style.ground),
+                          build(style, tier),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        );
-        await expectLater(
-          find.byKey(const ValueKey('sheet')),
-          matchesGoldenFile('goldens/$name.$styleName.${tier.name}.png'),
-        );
-      });
+          );
+          await expectGoldenWithShadows(
+            tester,
+            find.byKey(const ValueKey('sheet')),
+            'goldens/$name.$styleName.${tier.name}.png',
+          );
+        }),
+      );
     }
+  }
+}
+
+/// Runs [body] with BoxShadows blurred as on a phone: flutter_test draws
+/// them unblurred by default, and the design's soft shadows are part of the
+/// look. The blur is deterministic. The flag is restored before the test
+/// ends, as flutter_test requires.
+Future<void> withShadows(Future<void> Function() body) async {
+  debugDisableShadows = false;
+  try {
+    await body();
+  } finally {
+    debugDisableShadows = true;
+  }
+}
+
+/// Compares with a golden, then turns the unblurred-shadow default back on
+/// (for tests that turned blur on themselves before pumping).
+Future<void> expectGoldenWithShadows(
+  WidgetTester tester,
+  Finder finder,
+  String golden,
+) async {
+  try {
+    await expectLater(finder, matchesGoldenFile(golden));
+  } finally {
+    debugDisableShadows = true;
   }
 }

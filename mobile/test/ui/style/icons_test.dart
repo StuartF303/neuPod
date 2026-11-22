@@ -52,8 +52,18 @@ void main() {
 
   test('every glyph parses and stays inside its 24x24 view box', () {
     for (final g in NeupodGlyph.values) {
-      final b = g.path.getBounds();
-      expect(b.isEmpty, isFalse, reason: g.name);
+      // getBounds() includes curve control points; sample the outline.
+      var b = Rect.zero;
+      var first = true;
+      for (final m in g.path.computeMetrics()) {
+        for (var d = 0.0; d <= m.length; d += 0.1) {
+          final p = m.getTangentForOffset(d)!.position;
+          final r = Rect.fromLTWH(p.dx, p.dy, 0, 0);
+          b = first ? r : b.expandToInclude(r);
+          first = false;
+        }
+      }
+      expect(first, isFalse, reason: g.name);
       const box = Rect.fromLTRB(-0.01, -0.01, 24.01, 24.01);
       expect(
         box.contains(b.topLeft) && box.contains(b.bottomRight),

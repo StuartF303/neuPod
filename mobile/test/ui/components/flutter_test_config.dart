@@ -5,7 +5,8 @@
 // Determinism:
 // - Montserrat Medium is loaded from the bundled asset, so text renders in the
 //   real face instead of the test font; icons are vector paths, no font.
-// - Every golden is rendered at device pixel ratio 1 on a fixed surface size.
+// - Every golden is rendered at device pixel ratio 1 on a fixed surface size,
+//   with shadows blurred as on a phone (goldenWithShadows in golden_harness).
 //
 // Platform: text rasterisation differs between macOS (Core Text) and Linux
 // (FreeType), so the PNGs are made and compared on macOS only, where the

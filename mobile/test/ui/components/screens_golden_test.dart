@@ -36,6 +36,7 @@ Future<void> _pumpScreen(
   BackdropLayout backdrop,
   Widget child,
 ) async {
+  debugDisableShadows = false;
   tester.view.physicalSize = neupodScreenSize;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -181,9 +182,10 @@ void main() {
           BackdropLayout.lists,
           const _Songs(),
         );
-        await expectLater(
+        await expectGoldenWithShadows(
+          tester,
           find.byKey(const ValueKey('screen')),
-          matchesGoldenFile('goldens/screen_songs.$name.${tier.name}.png'),
+          'goldens/screen_songs.$name.${tier.name}.png',
         );
       });
     }
@@ -195,9 +197,10 @@ void main() {
         BackdropLayout.nowPlaying,
         const _NowPlaying(),
       );
-      await expectLater(
+      await expectGoldenWithShadows(
+        tester,
         find.byKey(const ValueKey('screen')),
-        matchesGoldenFile('goldens/screen_now_playing.$name.standard.png'),
+        'goldens/screen_now_playing.$name.standard.png',
       );
     });
   }
