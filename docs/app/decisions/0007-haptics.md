@@ -60,8 +60,8 @@ are likely.
 
 ## Decision
 
-An in-repo plugin, **`mobile/packages/neupod_device`** (Kotlin and Swift through Pigeon 29, as Flutter 3.50's plugin
-template does), covers both haptics and volume. It was named `neupod_device`, not `neupod_haptics`, because it carries
+An in-repo plugin, **`mobile/packages/neupod_device`** (Kotlin and Swift through Pigeon 30, as Flutter 3.50's plugin
+template does, at the version the other in-repo plugins use), covers both haptics and volume. It was named `neupod_device`, not `neupod_haptics`, because it carries
 both.
 
 | Event | iOS | Android |
@@ -72,31 +72,45 @@ both.
 | Hold took effect | `.medium` | `LONG_PRESS` |
 | End of a list | `.soft` | `REJECT` on API 30+, else `LONG_PRESS` |
 
-- **iOS generators.** One per kind, attached to the key window. They are made and prepared when the wheel is touched,
-  and the selection and light generators are prepared again after each use.
+- **iOS generators.** One per kind, attached to the key window, made when the app's scene becomes active. All five are
+  prepared when the wheel is touched. Each is prepared again after it is used, together with the ones likely to follow:
+  light and medium after a press, soft after a detent.
 - **Android.** The plugin calls `performHapticFeedback` on the activity's decor view.
 - **Rate limit and setting.** In Dart (`DeviceFeedback`): detents at most 30 a second, the rest dropped; nothing at all
   when the in-app Haptics setting is off. A press cancelled by becoming a turn gets no release haptic.
 - **Volume.**
-  - Android: `adjustStreamVolume` with flags 0.
-  - iOS: a hidden `MPVolumeView` inside the key window, off screen at alpha 0.01, whose `UISlider` is set to the next
-    1/16 step. It is in the window because the slider only works there and the system HUD stays away only then.
-  - Both return the new step and the step count, for the device's volume bar.
+  - Android: `adjustStreamVolume` with flags 0, then the volume read back.
+  - iOS: a hidden `MPVolumeView`, a 1x1 view at alpha 0.01 inside the key window. It is created as soon as the scene is
+    active, because a freshly added view needs a moment before its slider works. Its `UISlider` is set to the next
+    1/16 step. It sits in the window because, by community knowledge rather than any Apple documentation, the slider
+    only works there and the system HUD stays away only then. After 150 ms, `AVAudioSession.outputVolume` is read
+    back.
+  - Both return the volume **read back from the system**, never the target. They also return a status: `ok`,
+    `noSlider` (iOS), `noEffect` (the volume did not move although it was not at its limit) or `fixed` (Android
+    fixed-volume devices). The app sees it as `SystemVolume.status` / `failed`, so Now Playing knows when the
+    workaround fails and the owner's fallback can apply (owner decision 10).
 - **Click sound.** A seam only (`ClickSoundPort`, silent). The setting exists (Off by default) and nothing plays yet.
-- **Verifying.** Emulators and simulators cannot vibrate, so every call is logged: Android under the tag
-  `neupod_device` (`adb logcat -s neupod_device`), iOS under subsystem `net.stuartfraser.neupod`, category `device`.
+- **Verifying.** Emulators and simulators cannot vibrate, so every call is logged:
+  - Android, in debuggable builds only, under the tag `neupod_device` (`adb logcat -s neupod_device`). Release builds
+    log nothing.
+  - iOS, at debug level, under subsystem `net.stuartfraser.neupod`, category `device`.
   The feel is for the owner's device check.
 
 ## Consequences and risks
 
 - **The iOS volume workaround is unsupported by Apple and may not work on iOS 27.** Owner decision 10 says: if Apple
   breaks it, the fallback is to be asked for, not guessed. This must be checked on the owner's iPhone (iOS 27) at the
-  first device check. If it fails, the step reports the target but the volume does not move. Options for the owner
+  first device check. If it fails, the step comes back with status `noSlider` or `noEffect` and the level as read
+  back, so the app can tell. Options for the owner
   then: a visible `MPVolumeView` on Now Playing, an app-level volume on the player, or no wheel volume on iOS.
 - It is also an App Review risk, which stays with the owner at submission, like Open question 1 of the spec.
 - `SEGMENT_FREQUENT_TICK` may be silent on phones whose motor cannot make a very soft tick. If the owner's Pixel feels
   nothing, switch the detent to `CLOCK_TICK` on all versions. That is a one-line change in `NeupodDevicePlugin.kt`.
 - Android's `REJECT` fallback on API 29 feels the same as a hold.
+- **EU safe media volume.** On phones sold in the EU (and others with the setting), Android refuses to raise the
+  media volume past the safe-hearing limit on headphones until the user confirms in a system dialog. A raise from the
+  wheel at that point does not move the volume. The plugin reports it as `noEffect`. The system may also show its own
+  warning, which the app cannot suppress. Do Not Disturb can block changes the same way.
 
 ## Sources
 

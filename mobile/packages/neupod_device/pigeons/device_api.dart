@@ -36,6 +36,23 @@ enum HapticEvent {
   endReached,
 }
 
+/// Whether the last volume change worked (owner decision 10: the app must
+/// know when it fails, so the owner's fallback can apply).
+enum VolumeStatus {
+  /// The volume is as asked (or already at its limit), read back from the
+  /// system.
+  ok,
+
+  /// iOS: the hidden MPVolumeView has no slider to move.
+  noSlider,
+
+  /// The volume read back from the system did not change.
+  noEffect,
+
+  /// The device has a fixed volume (Android isVolumeFixed).
+  fixed,
+}
+
 /// The phone's media volume.
 class VolumeState {
   VolumeState({
@@ -43,9 +60,10 @@ class VolumeState {
     required this.step,
     required this.steps,
     required this.fixed,
+    required this.status,
   });
 
-  /// 0 to 1.
+  /// 0 to 1, as read back from the system.
   double level;
 
   /// The current step, 0 to [steps].
@@ -57,6 +75,9 @@ class VolumeState {
 
   /// The volume cannot be changed (Android isVolumeFixed).
   bool fixed;
+
+  /// Whether the change worked; [VolumeStatus.ok] for a plain read.
+  VolumeStatus status;
 }
 
 @HostApi()
@@ -71,6 +92,9 @@ abstract class DeviceApi {
   VolumeState getVolume();
 
   /// Moves the system media volume one platform step up (direction > 0) or
-  /// down (< 0) without the system volume panel; returns the new volume.
+  /// down (< 0) without the system volume panel. Returns the volume read
+  /// back from the system afterwards (iOS: after the change has had a moment
+  /// to land), with a status saying whether it moved.
+  @async
   VolumeState stepVolume(int direction);
 }

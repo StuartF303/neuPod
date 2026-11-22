@@ -57,6 +57,13 @@ jobs:
           out=$(mktemp)
           sh tool/wheel_vectors/gen_wheel_vectors.sh "$out"
           diff -q "$out" test/domain/wheel/fixtures/firmware_vectors.json
+      # The in-repo plugin's own Dart side (its Pigeon messages against a fake host).
+      - name: neupod_device plugin
+        working-directory: mobile/packages/neupod_device
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
 
   # Debug APK, and the privacy check: the merged release manifest must not ask for INTERNET (R1 makes no network
   # connection; Flutter adds INTERNET only to the debug and profile manifests, for the tool).

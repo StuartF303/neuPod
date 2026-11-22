@@ -8,7 +8,7 @@ library;
 import 'package:neupod_device/src/device_api.g.dart';
 
 export 'package:neupod_device/src/device_api.g.dart'
-    show HapticEvent, VolumeState;
+    show HapticEvent, VolumeState, VolumeStatus;
 
 /// The plugin's Dart face.
 class NeupodDevice {
@@ -26,7 +26,8 @@ class NeupodDevice {
   /// The media volume now.
   Future<VolumeState> volume() => _api.getVolume();
 
-  /// One platform volume step up ([direction] > 0) or down; the new volume.
+  /// One platform volume step up ([direction] > 0) or down: the volume read
+  /// back from the system afterwards, with whether it moved.
   Future<VolumeState> stepVolume(int direction) =>
       _api.stepVolume(direction.sign);
 }

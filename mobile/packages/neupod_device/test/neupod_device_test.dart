@@ -33,12 +33,14 @@ void main() {
             step: 8,
             steps: 16,
             fixed: false,
+            status: VolumeStatus.ok,
           ),
           'stepVolume' => VolumeState(
             level: (8 + (args![0]! as int)) / 16,
             step: 8 + (args[0]! as int),
             steps: 16,
             fixed: false,
+            status: VolumeStatus.ok,
           ),
           _ => null,
         };

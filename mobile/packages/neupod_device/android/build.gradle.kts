@@ -56,3 +56,8 @@ kotlin {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
+
+dependencies {
+    // Pigeon 30's generated code runs @async host methods as coroutines.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+}

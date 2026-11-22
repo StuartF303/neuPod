@@ -54,8 +54,17 @@ class PlatformSystemVolume implements SystemVolumePort {
   /// The plugin.
   final NeupodDevice device;
 
-  static SystemVolume _of(VolumeState v) =>
-      SystemVolume(step: v.step, steps: v.steps, fixed: v.fixed);
+  static SystemVolume _of(VolumeState v) => SystemVolume(
+    step: v.step,
+    steps: v.steps,
+    fixed: v.fixed,
+    status: switch (v.status) {
+      VolumeStatus.ok => SystemVolumeStatus.ok,
+      VolumeStatus.noSlider => SystemVolumeStatus.noSlider,
+      VolumeStatus.noEffect => SystemVolumeStatus.noEffect,
+      VolumeStatus.fixed => SystemVolumeStatus.fixed,
+    },
+  );
 
   @override
   Future<SystemVolume> read() async => _of(await device.volume());
