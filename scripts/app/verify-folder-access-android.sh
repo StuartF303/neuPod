@@ -63,7 +63,11 @@ launch() {
   while [ $SECONDS -lt $deadline ]; do
     log="$(adb -s "$SERIAL" logcat -d -s flutter:I 2>/dev/null)"
     if grep -q 'Some tests failed\|\[E\]' <<<"$log"; then echo "$log" | tail -60; return 1; fi
-    if grep -q 'All tests passed' <<<"$log"; then grep -o 'NEUPOD_STEP .*' <<<"$log" | tr -d '\r'; return 0; fi
+    if grep -q 'All tests passed' <<<"$log"; then
+      grep -o 'NEUPOD_\(SCAN\|PLAYED\) .*' <<<"$log" | tr -d '\r' >&2 || true
+      grep -o 'NEUPOD_STEP .*' <<<"$log" | tr -d '\r'
+      return 0
+    fi
     sleep 2
   done
   echo "timed out" >&2

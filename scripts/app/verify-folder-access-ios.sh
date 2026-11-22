@@ -43,7 +43,12 @@ launch() {
   local pid=$! deadline=$((SECONDS + 600)) rc=1
   while [ $SECONDS -lt $deadline ] && kill -0 "$pid" 2>/dev/null; do
     if grep -q 'Some tests failed\|\[E\]' "$LOG"; then tail -60 "$LOG" >&2; break; fi
-    if grep -q 'All tests passed' "$LOG"; then grep -o 'NEUPOD_STEP .*' "$LOG" | tr -d '\r'; rc=0; break; fi
+    if grep -q 'All tests passed' "$LOG"; then
+      grep -o 'NEUPOD_\(SCAN\|PLAYED\) .*' "$LOG" | tr -d '\r' >&2 || true
+      grep -o 'NEUPOD_STEP .*' "$LOG" | tr -d '\r'
+      rc=0
+      break
+    fi
     sleep 2
   done
   [ $rc = 0 ] || tail -40 "$LOG" >&2
