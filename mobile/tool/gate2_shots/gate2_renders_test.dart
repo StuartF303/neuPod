@@ -23,8 +23,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/app/library_view_providers.dart';
 
-import '../../test/support/manifest_library_view.dart';
-
 import 'package:neupod/domain/library_view/library_view.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/ui/device/wheel_bus.dart';
@@ -39,6 +37,7 @@ import 'package:neupod/ui/screens/shell/shell_frame.dart';
 import 'package:neupod/ui/screens/shell/shell_state.dart';
 
 import '../../test/fakes/fake_player.dart';
+import '../../test/support/manifest_library_view.dart';
 import 'gate2_app.dart';
 
 const _out = String.fromEnvironment(

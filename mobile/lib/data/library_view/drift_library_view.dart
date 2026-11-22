@@ -3,10 +3,13 @@
 /// The [LibraryView] over the scanned drift database: what the browsing
 /// screens show.
 ///
-/// Every call reads the database again, so a scan that finishes while a
-/// screen is open shows on the next read. Sorting is the firmware's
-/// collation (`domain/library/collation.dart`, owner decision 11): songs by
-/// the stored `title_sort_key`, artists and albums by the key of their name.
+/// One load of the tracks table (joined to its source) is grouped once and
+/// kept until the table changes (drift's table updates), so a screen that
+/// asks for artists, then each artist's albums, reads the database once.
+/// Sorting is the firmware's (`app/library/lib_build.c`): by collation key,
+/// and equal keys in scan order (`key_tie`, then the first track's id), so
+/// two names that fold to the same key keep a stable order. Songs use the
+/// stored `title_sort_key`.
 ///
 /// What the database holds today is what the lists can show. The minimal scan
 /// stores each track's artist and album as text and nothing else about them,
@@ -14,14 +17,17 @@
 /// compilation flag:
 ///
 /// - an album is one per (artist, album) pair and its artist is the track's
-///   artist; an artist is a distinct artist text;
+///   artist, as the firmware does when there is no album artist; an artist is
+///   a distinct artist text;
+/// - a track without an artist is "Unknown Artist" and a track without an
+///   album tag takes the name of its folder (the source's name for a file at
+///   the root), as `index_file` in `lib_build.c` does (ADR 0017, D5);
 /// - genres and compilations are empty; albums have no year and one disc;
 ///   an album's total time is known only when every song has a duration;
-/// - an empty artist or album shows as "Unknown Artist" / "Unknown Album" in
-///   the Artists and Albums lists (the specification does not word it; song
-///   rows skip the missing part);
 /// - art is a placeholder (seeded from the album).
 library;
+
+import 'dart:async';
 
 import 'package:drift/drift.dart';
 import 'package:neupod/data/db/library_database.dart';
@@ -30,136 +36,99 @@ import 'package:neupod/domain/library/track.dart';
 import 'package:neupod/domain/library_view/library_view.dart';
 import 'package:neupod/domain/library_view/reason_words.dart';
 
+/// The artist of a track with none (`lib_build.c`: `"Unknown Artist"`).
 const unknownArtist = 'Unknown Artist';
-const unknownAlbum = 'Unknown Album';
 
-/// A [LibraryView] over [LibraryDatabase].
+/// A [LibraryView] over [LibraryDatabase]. Call [dispose] when done.
 final class DriftLibraryView implements LibraryView {
   DriftLibraryView(this._db);
 
   final LibraryDatabase _db;
+  Future<_Lib>? _lib;
+  StreamSubscription<Set<TableUpdate>>? _changes;
 
-  Future<List<_Row>> _rows() async {
-    final rows =
-        await (_db.select(_db.tracks)..orderBy([
-              (t) => OrderingTerm.asc(t.titleSortKey),
-              (t) => OrderingTerm.asc(t.id),
-            ]))
-            .get();
-    return [for (final r in rows) _Row(r)];
+  /// Stops watching the database.
+  Future<void> dispose() async => _changes?.cancel();
+
+  Future<_Lib> _load() {
+    _changes ??= _db
+        .tableUpdates(TableUpdateQuery.onTable(_db.tracks))
+        .listen((_) => _lib = null);
+    return _lib ??= _read();
   }
 
-  /// Every album, with its songs in track order.
-  Future<List<_AlbumGroup>> _groups() async {
-    final byKey = <String, _AlbumGroup>{};
-    for (final r in await _rows()) {
-      (byKey[r.albumKey] ??= _AlbumGroup(r)).rows.add(r);
-    }
-    final out = byKey.values.toList();
-    for (final g in out) {
-      g.rows.sort(_byTrack);
-    }
-    return out;
-  }
-
-  static int _byTrack(_Row a, _Row b) {
-    // Untagged track numbers (0) come last, then by title as listed.
-    final at = a.t.trackNo == 0 ? 1 << 30 : a.t.trackNo;
-    final bt = b.t.trackNo == 0 ? 1 << 30 : b.t.trackNo;
-    if (at != bt) return at.compareTo(bt);
-    final c = compareKeys(a.t.titleSortKey, b.t.titleSortKey);
-    return c != 0 ? c : a.t.id.compareTo(b.t.id);
-  }
-
-  static int _byTitle(Album a, Album b) {
-    final c = compareKeys(collateKey(a.title), collateKey(b.title));
-    return c != 0 ? c : compareKeys(collateKey(a.artist), collateKey(b.artist));
-  }
-
-  static int _byArtist(Album a, Album b) {
-    final c = compareKeys(collateKey(a.artist), collateKey(b.artist));
-    return c != 0 ? c : _byTitle(a, b);
+  Future<_Lib> _read() async {
+    final q =
+        _db.select(_db.tracks).join([
+          innerJoin(_db.sources, _db.sources.id.equalsExp(_db.tracks.sourceId)),
+        ])..orderBy([
+          OrderingTerm.asc(_db.tracks.titleSortKey),
+          OrderingTerm.asc(_db.tracks.id),
+        ]);
+    final rows = [
+      for (final r in await q.get())
+        _Row(r.readTable(_db.tracks), r.readTable(_db.sources).displayName),
+    ];
+    return _Lib(rows);
   }
 
   @override
-  Future<List<Song>> songs() async => [for (final r in await _rows()) r.song];
+  Future<List<Song>> songs() async => [
+    for (final r in (await _load()).rows) r.song,
+  ];
 
   @override
   Future<Song?> song(String songId) async {
     final id = int.tryParse(songId);
     if (id == null) return null;
-    final r = await (_db.select(
-      _db.tracks,
-    )..where((t) => t.id.equals(id))).getSingleOrNull();
-    return r == null ? null : _Row(r).song;
+    return (await _load()).byId[id]?.song;
   }
 
   @override
-  Future<List<Artist>> artists() async {
-    final byName = <String, List<_AlbumGroup>>{};
-    for (final g in await _groups()) {
-      (byName[g.artist] ??= []).add(g);
-    }
-    return [
-      for (final MapEntry(:key, :value) in byName.entries)
-        Artist(
-          id: _artistId(key),
-          name: key,
-          albumCount: value.length,
-          songCount: value.fold(0, (n, g) => n + g.rows.length),
-          sortLetter: _letter(key),
-        ),
-    ]..sort((a, b) => compareKeys(collateKey(a.name), collateKey(b.name)));
-  }
+  Future<List<Artist>> artists() async => (await _load()).artists;
 
   @override
   Future<Artist?> artist(String artistId) async {
-    for (final a in await artists()) {
+    for (final a in (await _load()).artists) {
       if (a.id == artistId) return a;
     }
     return null;
   }
 
-  // No year in the database yet: an artist's albums are by title.
+  // No year in the database yet: an artist's albums are in album order.
   @override
   Future<List<Album>> albumsOfArtist(String artistId) async => [
-    for (final g in await _groups())
+    for (final g in (await _load()).byAlbum)
       if (_artistId(g.artist) == artistId) g.album,
-  ]..sort(_byTitle);
+  ];
 
   @override
-  Future<List<Song>> songsOfArtist(String artistId) async {
-    final groups = [
-      for (final g in await _groups())
-        if (_artistId(g.artist) == artistId) g,
-    ]..sort((a, b) => _byTitle(a.album, b.album));
-    return [
-      for (final g in groups)
+  Future<List<Song>> songsOfArtist(String artistId) async => [
+    for (final g in (await _load()).byAlbum)
+      if (_artistId(g.artist) == artistId)
         for (final r in g.rows) r.song,
-    ];
-  }
+  ];
 
   @override
-  Future<List<Album>> albums() async =>
-      [for (final g in await _groups()) g.album]..sort(_byTitle);
+  Future<List<Album>> albums() async => [
+    for (final g in (await _load()).byAlbum) g.album,
+  ];
 
   @override
-  Future<List<Album>> albumsForCoverFlow() async =>
-      [for (final g in await _groups()) g.album]..sort(_byArtist);
+  Future<List<Album>> albumsForCoverFlow() async => [
+    for (final g in (await _load()).byArtist) g.album,
+  ];
 
   @override
   Future<AlbumDetail?> album(String albumId) async {
-    for (final g in await _groups()) {
-      if (g.key == albumId) {
-        return AlbumDetail(
-          album: g.album,
-          discs: [
-            Disc(number: 1, songs: [for (final r in g.rows) r.song]),
-          ],
-        );
-      }
-    }
-    return null;
+    final g = (await _load()).groups[albumId];
+    if (g == null) return null;
+    return AlbumDetail(
+      album: g.album,
+      discs: [
+        Disc(number: 1, songs: [for (final r in g.rows) r.song]),
+      ],
+    );
   }
 
   // Genres and compilations are not stored yet (phase 3).
@@ -183,6 +152,8 @@ String _artistId(String name) => 'artist:$name';
 
 String _letter(String name) => collateLetter(collateKey(name));
 
+int _byKey(String a, String b) => compareKeys(collateKey(a), collateKey(b));
+
 /// FNV-1a, 32 bit: a stable hash (String.hashCode is not).
 int _fnv(String s) {
   var h = 0x811c9dc5;
@@ -192,23 +163,83 @@ int _fnv(String s) {
   return h;
 }
 
+/// The loaded table, grouped.
+final class _Lib {
+  _Lib(this.rows) {
+    byId = {for (final r in rows) r.t.id: r};
+    final g = <String, _Group>{};
+    for (final r in rows) {
+      (g[r.albumKey] ??= _Group(r)).add(r);
+    }
+    groups = g;
+    for (final x in g.values) {
+      x.sortRows();
+    }
+    // The firmware's order: key, then the first track's id (`ent_cmp`).
+    byAlbum = g.values.toList()
+      ..sort((a, b) {
+        final c = _byKey(a.title, b.title);
+        return c != 0 ? c : a.firstId.compareTo(b.firstId);
+      });
+    byArtist = [...byAlbum]
+      ..sort((a, b) {
+        final c = _byKey(a.artist, b.artist);
+        if (c != 0) return c;
+        final d = _byKey(a.title, b.title);
+        return d != 0 ? d : a.firstId.compareTo(b.firstId);
+      });
+
+    final byName = <String, List<_Group>>{};
+    for (final x in byAlbum) {
+      (byName[x.artist] ??= []).add(x);
+    }
+    int firstOf(List<_Group> l) =>
+        l.map((x) => x.firstId).reduce((a, b) => a < b ? a : b);
+    final names = byName.keys.toList()
+      ..sort((a, b) {
+        final c = _byKey(a, b);
+        return c != 0 ? c : firstOf(byName[a]!).compareTo(firstOf(byName[b]!));
+      });
+    artists = [
+      for (final name in names)
+        Artist(
+          id: _artistId(name),
+          name: name,
+          albumCount: byName[name]!.length,
+          songCount: byName[name]!.fold(0, (n, x) => n + x.rows.length),
+          sortLetter: _letter(name),
+        ),
+    ];
+  }
+
+  final List<_Row> rows;
+  late final Map<int, _Row> byId;
+  late final Map<String, _Group> groups;
+  late final List<_Group> byAlbum;
+  late final List<_Group> byArtist;
+  late final List<Artist> artists;
+}
+
 final class _Row {
-  _Row(this.t);
+  _Row(this.t, String sourceName)
+    : artist = t.artist.isEmpty ? unknownArtist : t.artist,
+      album = t.album.isNotEmpty ? t.album : _folderName(t.relPath, sourceName);
 
   final TrackRow t;
+  final String artist;
+  final String album;
 
-  String get artist => t.artist.isEmpty ? unknownArtist : t.artist;
-  String get albumName => t.album.isEmpty ? unknownAlbum : t.album;
-  String get albumKey =>
-      'album:${t.artist.toLowerCase()}|${t.album.toLowerCase()}';
+  /// One album per (artist, album) pair, compared exactly as the firmware's
+  /// pool does (`strcmp`).
+  String get albumKey => 'album:$artist|$album';
 
-  Song get song {
+  late final Song song = () {
     final reason = UnreadableReason.fromCode(t.reasonCode);
     return Song(
       id: '${t.id}',
       title: Track.displayTitleOf(t.title, t.relPath),
-      artist: t.artist,
-      album: t.album,
+      artist: artist,
+      album: album,
       albumId: albumKey,
       uri: t.uri,
       track: t.trackNo == 0 ? null : t.trackNo,
@@ -218,21 +249,44 @@ final class _Row {
           : unreadableReasonText(reason, t.codec),
       sortLetter: collateLetter(t.titleSortKey),
     );
-  }
+  }();
 }
 
-final class _AlbumGroup {
-  _AlbumGroup(_Row first)
+/// The name of the folder that holds [relPath], or [sourceName] for a file
+/// at the source's root.
+String _folderName(String relPath, String sourceName) {
+  final parts = relPath.split('/');
+  return parts.length >= 2 ? parts[parts.length - 2] : sourceName;
+}
+
+final class _Group {
+  _Group(_Row first)
     : artist = first.artist,
-      title = first.albumName,
-      key = first.albumKey;
+      title = first.album,
+      key = first.albumKey,
+      firstId = first.t.id;
 
   final String artist;
   final String title;
   final String key;
+  int firstId;
   final rows = <_Row>[];
 
-  Album get album {
+  void add(_Row r) {
+    rows.add(r);
+    if (r.t.id < firstId) firstId = r.t.id;
+  }
+
+  /// Track number (none first, as `disc<<16|track` sorts in the firmware's
+  /// `alb_cmp`), then the title's key, then the scan order.
+  void sortRows() => rows.sort((a, b) {
+    final t = a.t.trackNo.compareTo(b.t.trackNo);
+    if (t != 0) return t;
+    final c = compareKeys(a.t.titleSortKey, b.t.titleSortKey);
+    return c != 0 ? c : a.t.id.compareTo(b.t.id);
+  });
+
+  late final Album album = () {
     final known = rows.every((r) => r.t.durationMs > 0);
     return Album(
       id: key,
@@ -246,5 +300,5 @@ final class _AlbumGroup {
       art: ArtRef(seed: _fnv(key)),
       sortLetter: _letter(title),
     );
-  }
+  }();
 }

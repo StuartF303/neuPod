@@ -2,11 +2,19 @@
 
 // The library view over a seeded in-memory drift database. Expectations come
 // from the specification (docs/app/README.md, The library: the sort rule is
-// the firmware's collation, owner decision 11: leading "The "/"A "/"An "
-// skipped, accents folded, symbols, then digits, then letters) and from the
-// LibraryView port's documentation, not from the adapter's code.
+// the firmware's collation, owner decision 11) and from the firmware's own
+// index builder (app/library/lib_build.c), not from the adapter's code:
+//
+// - lib_build.c:360-362 (`index_file`): a track's artist is the tag or
+//   "Unknown Artist"; its album is the tag or the leaf (the containing
+//   folder's name); the album artist is the album artist tag or the artist.
+//   ADR 0017 D5 rejects "Unknown Album".
+// - lib_build.c:185-226 (`key_tie`, `ent_cmp`, `key_cmp`, `alb_cmp`): equal
+//   collation keys fall back to scan order (the id); an album's tracks sort
+//   by disc<<16|track (an untagged 0 first), then the key, then the id.
+// - lib_build.c `cut()` / POOL_STR: a title is stored cut to 64 bytes, so
+//   the key is built from at most 63 bytes of it.
 
-import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/data/db/library_database.dart';
@@ -14,63 +22,47 @@ import 'package:neupod/data/library_view/drift_library_view.dart';
 import 'package:neupod/domain/library/collation.dart';
 import 'package:neupod/domain/library/track.dart';
 
+import 'seed.dart';
+
 void main() {
   late LibraryDatabase db;
   late DriftLibraryView view;
+  late int src;
   var n = 0;
 
   setUp(() async {
     db = LibraryDatabase(NativeDatabase.memory());
     view = DriftLibraryView(db);
-    await db
-        .into(db.sources)
-        .insert(
-          SourcesCompanion.insert(
-            kind: 'local_folder',
-            uriOrBookmark: 'm',
-            displayName: 'Music',
-          ),
-        );
+    src = await addSource(db, name: 'Music');
   });
-  tearDown(() => db.close());
+  tearDown(() async {
+    await view.dispose();
+    await db.close();
+  });
 
   Future<void> add(
     String title, {
     String artist = '',
     String album = '',
+    String? path,
+    String titleSort = '',
     int trackNo = 0,
     int durationMs = 0,
     int? reason,
-    String codec = 'flac',
   }) async {
     n++;
-    await db
-        .into(db.tracks)
-        .insert(
-          TracksCompanion.insert(
-            sourceId: 1,
-            relPath: 'f$n.$codec',
-            uri: 'file:///music/f$n.$codec',
-            size: 1,
-            mtime: 1,
-            codec: codec,
-            title: title,
-            titleSort: '',
-            titleSortKey: songSortKey(
-              titleText: title.codeUnits,
-              titleSortText: const [],
-              fileName: 'f$n',
-            ),
-            artist: artist,
-            album: album,
-            trackNo: trackNo,
-            durationMs: durationMs,
-            sampleRate: 44100,
-            bitDepth: 16,
-            reasonCode: Value(reason),
-            scanVersion: 1,
-          ),
-        );
+    await addTrack(
+      db,
+      sourceId: src,
+      relPath: path ?? 'Dir/f$n.flac',
+      title: title,
+      titleSort: titleSort,
+      artist: artist,
+      album: album,
+      trackNo: trackNo,
+      durationMs: durationMs,
+      reason: reason,
+    );
   }
 
   test('an empty database gives empty lists and no detail', () async {
@@ -85,7 +77,6 @@ void main() {
   });
 
   test('songs come in the firmware order, with their letters', () async {
-    // The golden table's kinds: symbols, digits, articles, accents.
     for (final t in [
       'Zed',
       '99 Problems',
@@ -121,6 +112,77 @@ void main() {
     ]);
   });
 
+  test('symbols, then digits, then letters at their boundaries', () async {
+    // '!' and '~' are ASCII symbols (as themselves), '€' another symbol
+    // (0x7F + UTF-8, after them), digits 0xB0.., letters 0xC0..
+    for (final t in ['a', '9e', '0d', '€c', '~b', '!a']) {
+      await add(t);
+    }
+    expect((await view.songs()).map((s) => s.title), [
+      '!a',
+      '~b',
+      '€c',
+      '0d',
+      '9e',
+      'a',
+    ]);
+  });
+
+  test('a sort tag orders a title; the file name stands in for none', () async {
+    await add('Zebra', titleSort: 'Aardvark');
+    await add('Beta');
+    // No title: the key is the file name with its extension ("The " skipped),
+    // and the row shows the name without it.
+    await add('', path: 'Dir/The Wanderer.flac');
+    await add('Wander');
+    await add('Wanderlust');
+    final titles = (await view.songs()).map((s) => s.title).toList();
+    expect(titles, [
+      'Zebra', // sorts as "Aardvark"
+      'Beta',
+      'Wander',
+      'The Wanderer', // "wanderer.flac" between "wander" and "wanderlust"
+      'Wanderlust',
+    ]);
+  });
+
+  test('equal keys keep scan order, whichever came first', () async {
+    // "Ångström" and "Angstrom" fold to the same key.
+    expect(collateKey('Ångström'), collateKey('Angstrom'));
+    await add('Ångström', artist: 'Ångström', album: 'Ångström');
+    await add('Angstrom', artist: 'Angstrom', album: 'Angstrom');
+    expect((await view.songs()).map((s) => s.title), ['Ångström', 'Angstrom']);
+    expect((await view.artists()).map((a) => a.name), ['Ångström', 'Angstrom']);
+    expect((await view.albums()).map((a) => a.title), ['Ångström', 'Angstrom']);
+
+    final other = LibraryDatabase(NativeDatabase.memory());
+    addTearDown(other.close);
+    final s2 = await addSource(other);
+    for (final (i, name) in ['Angstrom', 'Ångström'].indexed) {
+      await addTrack(
+        other,
+        sourceId: s2,
+        relPath: 'D/$i.flac',
+        title: name,
+        artist: name,
+        album: name,
+      );
+    }
+    final v2 = DriftLibraryView(other);
+    addTearDown(v2.dispose);
+    expect((await v2.songs()).map((s) => s.title), ['Angstrom', 'Ångström']);
+    expect((await v2.artists()).map((a) => a.name), ['Angstrom', 'Ångström']);
+    expect((await v2.albums()).map((a) => a.title), ['Angstrom', 'Ångström']);
+  });
+
+  test('titles are stored cut at 63 bytes: the rest does not order', () async {
+    final a = 'a' * 70;
+    await add('${a}x');
+    await add('${a}b');
+    // Same stored key, so scan order, although "b" < "x".
+    expect((await view.songs()).map((s) => s.title.substring(70)), ['x', 'b']);
+  });
+
   test('a song carries its fields; zero means not tagged', () async {
     await add(
       'Salt Road',
@@ -137,11 +199,29 @@ void main() {
     expect(s.duration, const Duration(seconds: 215));
     expect(s.uri, startsWith('file:///music/'));
     expect(s.playable, isTrue);
-    expect(await view.song(s.id), isNotNull);
     expect((await view.song(s.id))!.title, 'Salt Road');
     final bare = (await view.songs()).firstWhere((s) => s.title == 'No Tags');
     expect(bare.track, isNull);
     expect(bare.duration, isNull);
+  });
+
+  test('no artist is Unknown Artist; no album is the folder name', () async {
+    await add('Lone', path: 'Rock/2001 Nowhere/01 Lone.flac');
+    await add('Rooted', path: 'Rooted.flac');
+    final songs = {for (final s in await view.songs()) s.title: s};
+    expect(songs['Lone']!.artist, unknownArtist);
+    expect(songs['Lone']!.album, '2001 Nowhere');
+    // A file at the root of the source: the source's own name.
+    expect(songs['Rooted']!.album, 'Music');
+    expect((await view.artists()).single.name, 'Unknown Artist');
+    expect((await view.albums()).map((a) => a.title), [
+      '2001 Nowhere',
+      'Music',
+    ]);
+    expect(
+      (await view.albums()).any((a) => a.title.contains('Unknown Album')),
+      isFalse,
+    );
   });
 
   test('a file that could not be read is greyed with a reason', () async {
@@ -149,7 +229,8 @@ void main() {
     await add('Elsewhere', reason: UnreadableReason.notDownloaded.code);
     final songs = {for (final s in await view.songs()) s.title: s};
     expect(songs['Broken']!.playable, isFalse);
-    expect(songs['Broken']!.unplayableReason, 'Damaged');
+    // The firmware's wording (library_service.c: "Can't play: damaged file").
+    expect(songs['Broken']!.unplayableReason, 'Damaged file');
     expect(songs['Elsewhere']!.unplayableReason, 'Not downloaded');
   });
 
@@ -181,7 +262,6 @@ void main() {
       'Help!',
       'Zèbre',
     ]);
-    // Cover Flow: by artist, then title.
     expect((await view.albumsForCoverFlow()).map((a) => a.artist), [
       '2Pac',
       'Abba',
@@ -198,10 +278,10 @@ void main() {
       'One',
       'Three',
     ]);
-    expect(await view.artist(beatles.id), isNotNull);
+    expect((await view.artist(beatles.id))!.name, 'The Beatles');
   });
 
-  test('an album lists its songs in track order with its count', () async {
+  test('an album lists its songs by track number, none first', () async {
     await add(
       'Second',
       artist: 'A',
@@ -215,45 +295,19 @@ void main() {
     expect(album.songCount, 3);
     expect(album.totalTime, const Duration(seconds: 180));
     final detail = (await view.album(album.id))!;
-    expect(detail.songs.map((s) => s.title), ['First', 'Second', 'Loose']);
+    // alb_cmp: disc<<16|track, so an untagged 0 sorts first.
+    expect(detail.songs.map((s) => s.title), ['Loose', 'First', 'Second']);
     expect(detail.hasDiscHeadings, isFalse);
     expect(detail.songs.first.albumId, album.id);
   });
 
-  test('missing artist or album show as unknown in the lists', () async {
-    await add('Lone');
-    expect((await view.artists()).single.name, unknownArtist);
-    expect((await view.albums()).single.title, unknownAlbum);
-  });
-
-  test('every list sorts as collateCompare does', () async {
-    const names = [
-      'the zebra',
-      'Ångström',
-      'Ångstrom',
-      '#hash',
-      '7 Seconds',
-      'Æon',
-      'An Orchard',
-      'a b',
-      'ab',
-    ];
-    for (final x in names) {
-      await add(x, artist: x, album: x);
-    }
-    int byKey(String a, String b) => collateCompare(a, null, b, null);
-    final expected = [...names]..sort(byKey);
-    expect(
-      (await view.songs()).map((s) => collateKey(s.title)),
-      expected.map(collateKey),
-    );
-    expect(
-      (await view.artists()).map((a) => collateKey(a.name)),
-      expected.map(collateKey),
-    );
-    expect(
-      (await view.albums()).map((a) => collateKey(a.title)),
-      expected.map(collateKey),
-    );
+  test('the view follows the database after a change', () async {
+    await add('One', artist: 'A', album: 'X');
+    expect(await view.songs(), hasLength(1));
+    await add('Two', artist: 'A', album: 'X');
+    // The table update arrives on a later turn of the event loop.
+    await Future<void>.delayed(Duration.zero);
+    expect(await view.songs(), hasLength(2));
+    expect((await view.albums()).single.songCount, 2);
   });
 }

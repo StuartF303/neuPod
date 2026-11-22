@@ -9,11 +9,10 @@ import 'package:neupod/app/library_view_providers.dart';
 import 'package:neupod/app/neupod_app.dart';
 import 'package:neupod/app/providers.dart';
 
-import '../support/manifest_library_view.dart';
-
 import 'package:neupod/ui/device/device_view.dart';
 
 import '../fakes/fake_player.dart';
+import '../support/manifest_library_view.dart';
 
 void main() {
   testWidgets('the app starts as the device, showing Home', (tester) async {

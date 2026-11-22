@@ -8,11 +8,19 @@ import 'package:neupod/app/providers.dart';
 import 'package:neupod/data/library_view/drift_library_view.dart';
 import 'package:neupod/domain/library_view/library_view.dart';
 import 'package:neupod/domain/playback/queue_item.dart';
+import 'package:neupod/ui/features/songs/songs_providers.dart';
 
 /// The library the browsing screens show: the scanned drift database.
-final libraryViewProvider = FutureProvider<LibraryView>(
-  (ref) async => DriftLibraryView(ref.watch(libraryDatabaseProvider)),
-);
+///
+/// A scan starting or finishing rebuilds it, and with it every provider that
+/// read the library (song count, cover previews, the search index, the
+/// playing album), so lists never keep what a finished scan has changed.
+final libraryViewProvider = FutureProvider<LibraryView>((ref) async {
+  ref.watch(scanProvider.select((s) => s?.done ?? false));
+  final view = DriftLibraryView(ref.watch(libraryDatabaseProvider));
+  ref.onDispose(view.dispose);
+  return view;
+});
 
 /// Turns songs into the player's queue items.
 typedef QueueMapper = Future<List<QueueItem>> Function(List<Song> songs);
