@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- Merged into the app's manifest. Background playback with a media notification (decision 0002):
+     a foreground service of type mediaPlayback that owns the player and the media session.
+     POST_NOTIFICATIONS is not requested: media-session notifications are exempt from it (API 33+). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- ExoPlayer's local wake lock (C.WAKE_MODE_LOCAL), so playback does not stall with the screen off. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Media3 ExoPlayer asks for this to estimate network bandwidth for streaming. R1 makes no network
+         connection, so it is removed; Media3 treats the missing permission as an unknown network type. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+
+    <application>
+        <service
+            android:name="net.stuartfraser.neupod.neupod_audio.PlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

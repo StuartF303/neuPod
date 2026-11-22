@@ -1,0 +1,28 @@
+name: neupod_audio
+description: "The neuPod app's audio engine: Media3 ExoPlayer in a MediaSessionService on Android, AVAudioEngine with the system media controls on iOS."
+version: 0.1.0
+publish_to: 'none'
+resolution: workspace
+
+environment:
+  sdk: ^3.14.0
+  flutter: '>=3.50.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  pigeon: ^30.0.4
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: net.stuartfraser.neupod.neupod_audio
+        pluginClass: NeupodAudioPlugin
+      ios:
+        pluginClass: NeupodAudioPlugin
