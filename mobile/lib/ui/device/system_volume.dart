@@ -14,7 +14,10 @@ import 'package:neupod/domain/wheel/system_volume_port.dart';
 /// step's direction. Give a detent haptic per step that
 /// changed the volume, show the device's volume bar with the returned level
 /// and hide it 1.2 s after the wheel rests; set the wheel's screen-reader
-/// label to `Volume` and value to `<percent> percent`.
+/// label to `Volume` and value to `<percent> percent`. When a step comes
+/// back with `failed` (iOS workaround broken, a fixed-volume device), show
+/// the level that was read back and no detent; the fallback is the owner's
+/// to choose (owner decision 10).
 final systemVolumeProvider = Provider<SystemVolumePort>(
   (ref) => MemorySystemVolume(),
 );

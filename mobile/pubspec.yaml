@@ -25,6 +25,7 @@ environment:
 # pubspec.lock), so `flutter analyze` here also covers them.
 workspace:
   - packages/neupod_audio
+  - packages/neupod_device
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -40,6 +41,9 @@ dependencies:
   # The audio engine and media session (decisions 0001 and 0002).
   neupod_audio:
     path: packages/neupod_audio
+  # In-repo plugin: click-wheel haptics and the system volume (decision 0007).
+  neupod_device:
+    path: packages/neupod_device
 
 dev_dependencies:
   flutter_test:
