@@ -20,14 +20,10 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/app/providers.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
-import 'package:neupod/ui/components/panel.dart';
 import 'package:neupod/ui/device/wheel_bus.dart';
+import 'package:neupod/ui/screens/panel/panel_overlay.dart';
 import 'package:neupod/ui/screens/shell/screen_scope.dart';
 import 'package:neupod/ui/screens/shell/shell_state.dart';
-import 'package:neupod/ui/screens/shell/shell_style.dart';
-import 'package:neupod/ui/style/neupod_style.dart';
-import 'package:neupod/ui/style/neupod_type.dart';
-import 'package:neupod/ui/style/text_tier.dart';
 
 /// The stack, rooted at [home].
 class ShellRoot extends ConsumerStatefulWidget {
@@ -199,7 +195,7 @@ class _ShellRootState extends ConsumerState<ShellRoot>
           ),
           if (st.panel != null)
             Positioned.fill(
-              child: _PanelLayer(
+              child: PanelOverlay(
                 request: st.panel!,
                 onOk: ref.read(shellProvider.notifier).dismissPanel,
               ),
@@ -230,49 +226,5 @@ class _ShellRootState extends ConsumerState<ShellRoot>
       );
     }
     return KeyedSubtree(key: page.key, child: child);
-  }
-}
-
-/// The panel over the screen: the style's scrim and panel.
-class _PanelLayer extends ConsumerWidget {
-  const _PanelLayer({required this.request, required this.onOk});
-
-  final PanelRequest request;
-  final VoidCallback onOk;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final choice = ref.watch(styleChoiceProvider);
-    final mode = effectiveMode(
-      choice,
-      MediaQuery.platformBrightnessOf(context),
-    );
-    final style = NeupodStyles.resolve(
-      choice.family,
-      mode,
-      art: ref.watch(ambientPaletteProvider),
-    );
-    final tier = TextTier.of(context);
-    return NeupodTheme(
-      style: style,
-      tier: tier,
-      child: DefaultTextStyle(
-        style: NeupodType(tier).body(style.tokens.ink),
-        // A tap on the scrim does nothing; the panel's OK is the way out
-        // for touch.
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () {},
-          child: NeupodPanelScrim(
-            panel: NeupodPanel(
-              title: request.title,
-              message: request.message,
-              okLabel: request.okLabel,
-              onOk: onOk,
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
