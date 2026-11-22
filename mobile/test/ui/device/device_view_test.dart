@@ -8,6 +8,7 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/ui/device/click_wheel.dart';
 import 'package:neupod/ui/device/device_finish.dart';
 import 'package:neupod/ui/device/device_geometry.dart';
@@ -39,6 +40,7 @@ class _Probe extends StatelessWidget {
 
 void main() {
   _oddSizeTests();
+  _reparentTests();
   for (final phone in designPhones) {
     for (final fit in DeviceFit.values) {
       testWidgets('${phone.name} ${fit.name}: screen and wheel where the '
@@ -278,7 +280,7 @@ void _oddSizeTests() {
     '800x600 landscape': Size(800, 600),
     'split screen 393x400': Size(393, 400),
     'just below the minimum width': Size(343, 852),
-    'just below the minimum height': Size(393, 400),
+    'a short, narrow window 360x500': Size(360, 500),
   };
   for (final e in {...degenerate, ...scaled}.entries) {
     testWidgets('${e.key}: builds without exceptions, then 393x852 is '
@@ -358,5 +360,41 @@ void _oddSizeTests() {
       ).empty,
       isTrue,
     );
+  });
+}
+
+void _reparentTests() {
+  testWidgets('a plan change keeps the screen stack and its selection', (
+    tester,
+  ) async {
+    final c = await pumpDevice(tester);
+    final bus = c.read(wheelBusProvider);
+    // Move the selection off the first row (the placeholder's state).
+    bus.emit(const WheelStep(2, 1));
+    await tester.pump();
+    expect(bus.semantics.value.value, 'Settings, 3 of 5');
+    final state = tester.state(find.byType(PlaceholderScreen));
+
+    for (final size in const [Size(393, 400), Size(393, 852)]) {
+      _useSize(tester, size);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      // The same State object: the screen was not remounted.
+      expect(tester.state(find.byType(PlaceholderScreen)), same(state));
+      expect(bus.semantics.value.value, 'Settings, 3 of 5');
+    }
+  });
+
+  testWidgets('on the scaled path a wheel press still emits its event', (
+    tester,
+  ) async {
+    final c = await pumpDevice(tester);
+    _useSize(tester, const Size(393, 400));
+    await tester.pump();
+    final events = <WheelEvent>[];
+    c.read(wheelBusProvider).events.listen(events.add);
+    await tester.tapAt(tester.getCenter(find.byType(ClickWheel)));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(events.whereType<WheelPress>(), isNotEmpty);
   });
 }

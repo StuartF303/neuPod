@@ -238,12 +238,13 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
               decoration: BoxDecoration(gradient: finish.bodyGradient),
             )
           : const ColoredBox(color: deviceSurround);
-    } else if (plan.isPlain) {
-      device = deviceStack;
     } else {
-      // Too short or narrow for the device at full width (split screen,
-      // landscape): the whole device scaled down uniformly and centred, the
-      // body finish or surround filling the rest.
+      // The same tree for a phone and for a short or narrow window, so a
+      // plan change (rotation, split screen, a resize near the threshold)
+      // keeps the screen stack's state instead of remounting it. A phone is
+      // scale 1 at offset 0; a window too short or narrow for the device at
+      // full width gets the whole device scaled down uniformly and centred,
+      // the body finish or surround filling the rest.
       device = Stack(
         children: [
           Positioned.fill(
