@@ -30,7 +30,7 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 
 - [x] Style and mode tokens (Classic Light and Modern Dark) from the UI styles design; mode follows the phone by default (#118, #121, 2026-11-22)
 - [ ] Classic Dark and Modern Light. BLOCKED: not designed (UI styles Open question 1)
-- [ ] Montserrat and Lucide bundled; Licences screen lists them
+- [x] Montserrat and Lucide bundled; Licences screen lists them (#118, #138, 2026-11-22)
 - [x] Components: list row (one and two lines), selection and pressed states, header bar, progress bar, panel, art frame (#118, 2026-11-22)
 - [x] Accent from album art, clamped to 4.5:1 with white text (#118, 2026-11-22)
 - [x] Modern backdrop from the art (#118, 2026-11-22)

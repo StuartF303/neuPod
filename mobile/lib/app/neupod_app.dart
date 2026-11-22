@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:neupod/ui/device/device_view.dart';
+import 'package:neupod/ui/features/licences/licences_data.dart';
 import 'package:neupod/ui/screens/browse/browse_root.dart';
 import 'package:neupod/ui/screens/now_playing/now_playing_screen.dart';
 import 'package:neupod/ui/screens/search/search_screen.dart';
@@ -29,6 +30,8 @@ class NeuPodApp extends ConsumerWidget {
     final mode = ref.watch(styleChoiceProvider.select((c) => c.mode));
     // Now Playing and Search plug into the shell (idempotent).
     registerGateScreens(ref.read(shellRegistryProvider));
+    // The bundled fonts' and icons' licences join Flutter's (idempotent).
+    registerBundledLicences();
     return MaterialApp(
       title: 'neuPod',
       debugShowCheckedModeBanner: false,

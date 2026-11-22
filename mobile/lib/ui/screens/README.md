@@ -60,7 +60,7 @@ Compilations, and a small Settings). Now Playing, the panel's content and Search
 - **Cover Flow**: the Albums list's albums in its order (owner decision 14); Classic angled with reflections, Modern
   flat; the wheel moves a cover per step, Select or a tap on the centre cover opens it, a drag moves the covers. Under
   the title, in both styles, the device's caption `Artist · Year · n songs` (`flow_texts` in `app/ui/ui_library.c`).
-- **Settings**: Style (Classic or Modern) and Mode (Auto, Light, Dark) only; the rest is phase 6.
+- **Settings**: Style (Classic or Modern), Mode (Auto, Light, Dark) and, last, Licences (`licences_screen.dart`: Montserrat, Lucide, then the Dart and Flutter packages from `LicenseRegistry`; Select opens a text the wheel scrolls); the rest is phase 6. `NeuPodApp` calls `registerBundledLicences()`.
 
 ## Where the data comes from
 
