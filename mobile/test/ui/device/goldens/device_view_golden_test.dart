@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // Goldens of the device view: the three design phones, fit A and B, silver
-// and black, with the placeholder screen; and the wheel's five states in
-// both finishes. Text is drawn in the test font, so these check the body,
-// frame, screen placement and wheel, not type.
+// and black; and the wheel's five states in both finishes. They check the
+// body, frame, screen placement and wheel. The screen inside is a text-free
+// test pattern: scaled text rasterises differently on macOS (where the
+// goldens are made) and on the Linux CI runner, and the screens have their
+// own goldens.
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -24,7 +26,11 @@ void main() {
         final f = fit == DeviceFit.fillsPhone ? 'a' : 'b';
         final name = 'device_${phone.name}_fit_${f}_${finish.name}';
         testWidgets(name, (tester) async {
-          final c = await pumpDevice(tester, phone: phone);
+          final c = await pumpDevice(
+            tester,
+            phone: phone,
+            screen: const _TestPattern(),
+          );
           c
               .read(deviceViewOptionsProvider.notifier)
               .update(
@@ -84,5 +90,44 @@ void main() {
         matchesGoldenFile('wheel_states_${finish.name}.png'),
       );
     });
+  }
+}
+
+/// A 600x450 pattern without text: a header band, a selection bar, rows and
+/// a right-hand pane, so the screen's placement and scale show.
+class _TestPattern extends StatelessWidget {
+  const _TestPattern();
+
+  @override
+  Widget build(BuildContext context) {
+    Widget bar(double top, double h, Color c, {double w = 336}) => Positioned(
+      left: 0,
+      top: top,
+      width: w,
+      height: h,
+      child: ColoredBox(color: c),
+    );
+    return Stack(
+      children: [
+        const Positioned.fill(child: ColoredBox(color: Color(0xFFFFFFFF))),
+        bar(0, 45, const Color(0xFFC6CAD0), w: 600),
+        bar(45, 56, const Color(0xFF1858C8)),
+        for (var i = 1; i < 7; i++)
+          Positioned(
+            left: 19,
+            top: 45 + 56.0 * i + 18,
+            width: 160.0 + 20 * (i % 3),
+            height: 20,
+            child: const ColoredBox(color: Color(0xFF181818)),
+          ),
+        const Positioned(
+          left: 336,
+          top: 45,
+          right: 0,
+          bottom: 0,
+          child: ColoredBox(color: Color(0xFFE9EBEE)),
+        ),
+      ],
+    );
   }
 }
