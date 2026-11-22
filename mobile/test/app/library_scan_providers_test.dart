@@ -4,6 +4,8 @@
 // cancelled, started at launch only when there is something to scan, and
 // the library view rebuilt when it finishes.
 
+import 'dart:async';
+
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -135,4 +137,100 @@ void main() {
     await pumpEventQueue();
     expect(await c.read(libraryViewProvider.future), isNot(same(before)));
   });
+  test(
+    'back in front, a scan the user cancelled is not started again',
+    () async {
+      access.held.add(documents);
+      await controller().start();
+      await controller().cancel();
+      expect(controller().cancelledByUser, isTrue);
+
+      await controller().startIfSources(resume: true);
+      expect(scanner.started, 1, reason: 'cancelled: resume leaves it');
+
+      // A launch (or Update Library, or a folder change) starts one as usual.
+      await controller().startIfSources();
+      expect(scanner.started, 2);
+      await scanner.finish();
+      await pumpEventQueue();
+
+      // A scan that finished is followed by one on resume.
+      await controller().startIfSources(resume: true);
+      expect(scanner.started, 3);
+    },
+  );
+
+  test('a restart waits for the running scan to stop writing', () async {
+    final blocking = _BlockingScanner();
+    final c = ProviderContainer.test(
+      overrides: [libraryScannerProvider.overrideWithValue(blocking)],
+    );
+    final scan = c.read(libraryScanProvider.notifier);
+    await scan.start();
+    await pumpEventQueue();
+    expect(blocking.log, ['start 1', 'write 1'], reason: 'inside a write');
+
+    final restarted = scan.start(restart: true);
+    await pumpEventQueue();
+    expect(blocking.log, ['start 1', 'write 1'], reason: 'the second waits');
+    expect(c.read(libraryScanProvider), const ScanProgress());
+
+    blocking.write.complete(); // the first scan's write ends; it stops
+    await restarted;
+    await pumpEventQueue();
+    expect(blocking.log, ['start 1', 'write 1', 'end 1', 'start 2', 'end 2']);
+    expect(blocking.overlapped, isFalse);
+    expect(c.read(libraryScanProvider)!.done, isTrue);
+  });
+
+  test('startedByUser follows the last start', () async {
+    await controller().start(byUser: true);
+    expect(controller().startedByUser, isTrue);
+    await controller().start(restart: true);
+    expect(controller().startedByUser, isFalse);
+  });
+
+  test('a failure reads as the firmware status text', () {
+    expect(
+      scanFailureText('SqliteException(13): database or disk is full'),
+      'Storage is full',
+    );
+    expect(
+      scanFailureText('FileSystemException: No space left on device'),
+      'Storage is full',
+    );
+    expect(
+      scanFailureText('FolderAccessException(no-walk)'),
+      'Storage read error',
+    );
+  });
+}
+
+/// A scanner whose first scan stops inside a write until [write] completes,
+/// as the real one does between two yields (an `async*` generator only
+/// stops at a yield). [log] records each scan's start, write and end.
+class _BlockingScanner implements LibraryScanner {
+  final write = Completer<void>();
+  final log = <String>[];
+  int _started = 0;
+  int _active = 0;
+  bool overlapped = false;
+
+  @override
+  Stream<ScanProgress> scan() async* {
+    final n = ++_started;
+    log.add('start $n');
+    if (++_active > 1) overlapped = true;
+    try {
+      yield const ScanProgress(filesFound: 1);
+      if (n == 1) {
+        log.add('write $n');
+        await write.future;
+      }
+      yield const ScanProgress(filesFound: 1, filesRead: 1, done: true);
+    } finally {
+      _active--;
+      log.add('end $n');
+    }
+  }
 }
