@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:neupod/domain/library/library_ports.dart';
 import 'package:neupod/domain/library/track.dart';
+import 'package:neupod/domain/library_view/reason_words.dart';
 import 'package:neupod/ui/features/songs/songs_providers.dart';
 
 /// Plain Songs list (phase 1): title over "artist · album", in the
@@ -73,14 +74,10 @@ class _ScanLine extends StatelessWidget {
   }
 }
 
-/// The words for a reason, at the right of a greyed row.
-String reasonText(UnreadableReason reason, String codec) => switch (reason) {
-  UnreadableReason.notDownloaded => 'Not downloaded',
-  UnreadableReason.cannotOpen => "Can't open",
-  UnreadableReason.cannotRead => "Can't read",
-  UnreadableReason.wrongFormat => 'Not a ${codec.toUpperCase()} file',
-  UnreadableReason.damaged => 'Damaged',
-};
+/// The words for a reason, at the right of a greyed row (one source of
+/// wording with the browsing screens: `domain/library_view/reason_words.dart`).
+String reasonText(UnreadableReason reason, String codec) =>
+    unreadableReasonText(reason, codec);
 
 /// One song: the title over "artist · album". A file whose tags could not
 /// be read is greyed with the reason at the right, as on the device.

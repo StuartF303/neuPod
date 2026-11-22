@@ -63,6 +63,22 @@ jobs:
           out=$(mktemp)
           sh tool/wheel_vectors/gen_wheel_vectors.sh "$out"
           diff -q "$out" test/domain/wheel/fixtures/firmware_vectors.json
+      # The drift library view folds artists and albums as the firmware's library builder does; its expected lists are
+      # printed by lib_build() itself. Regenerate them and fail if they no longer match the committed fixtures.
+      - name: Library entities match the firmware
+        run: |
+          out=$(mktemp -d)
+          sh tool/library_entities/gen_library_entities.sh "$out"
+          for t in test/data/library_view/fixtures/*.tsv; do
+            e="${t%.tsv}.expected"
+            if [ ! -f "$e" ]; then
+              echo "::error file=mobile/$t::$t has no committed $(basename "$e")"
+              exit 1
+            fi
+          done
+          for f in test/data/library_view/fixtures/*.expected; do
+            diff -u "$f" "$out/$(basename "$f")"
+          done
       # The in-repo plugin's own Dart side (its Pigeon messages against a fake host).
       - name: neupod_device plugin
         working-directory: mobile/packages/neupod_device

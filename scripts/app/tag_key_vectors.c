@@ -2,8 +2,11 @@
 // For each file named on the command line, runs the firmware's own tag parser (app/audio/meta.c: flac_parse or
 // mp3_parse, with the library scanner's 4096-byte comment scratch and the library tags enabled, as lib_build.c sets
 // them up) and the song key that index_file() in app/library/lib_build.c builds from it: lib_collate_key() of the
-// title, or of the file name when untagged, with the title sort tag. Prints one line per file:
-//   <file name>\t<title bytes hex>\t<sort_title bytes hex>\t<key hex>
+// title, or of the file name when untagged, with the title sort tag. Also the artist and album tags as the parser stored them
+// and the entity keys index_file() / stage_entity() fold artists and albums on: lib_collate_key() of the artist (or
+// "Unknown Artist") and of the album tag, with no sort tag (the app does not store sort tags for them yet). An untagged
+// album's key is its folder's name, which a lone file does not have: that column is then empty. Prints one line per file:
+//   <file name>\t<title hex>\t<sort_title hex>\t<key hex>\t<artist hex>\t<album hex>\t<artist key hex>\t<album key hex>
 // Built and run by scripts/app/gen_tag_key_vectors.py; the app's tests compare its Dart port with these lines.
 #include <stdio.h>
 #include <string.h>
@@ -32,6 +35,14 @@ static void cut(char *dst, size_t cap, const char *s) { // lib_build.c
 
 static void hex(const char *s) {
     for (; *s; s++) printf("%02x", (uint8_t)*s);
+}
+
+static void key_hex(const char *text) { // lib_collate_key() of a pool string, no sort tag
+    char pooled[POOL_STR];
+    cut(pooled, sizeof pooled, text);
+    uint8_t key[LIB_KEY_MAX];
+    size_t kn = lib_collate_key(pooled, NULL, key, sizeof key);
+    for (size_t k = 0; k < kn; k++) printf("%02x", key[k]);
 }
 
 int main(int argc, char **argv) {
@@ -72,6 +83,14 @@ int main(int argc, char **argv) {
         hex(ext.sort_title);
         printf("\t");
         for (size_t k = 0; k < kn; k++) printf("%02x", key[k]);
+        printf("\t");
+        hex(tags.artist);
+        printf("\t");
+        hex(tags.album);
+        printf("\t");
+        key_hex(tags.artist[0] ? tags.artist : "Unknown Artist");
+        printf("\t");
+        if (tags.album[0]) key_hex(tags.album);
         printf("\n");
     }
     return 0;

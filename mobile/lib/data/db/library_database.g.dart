@@ -444,6 +444,30 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _artistKeyTextMeta = const VerificationMeta(
+    'artistKeyText',
+  );
+  @override
+  late final GeneratedColumn<Uint8List> artistKeyText =
+      GeneratedColumn<Uint8List>(
+        'artist_key_text',
+        aliasedName,
+        true,
+        type: DriftSqlType.blob,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _albumKeyTextMeta = const VerificationMeta(
+    'albumKeyText',
+  );
+  @override
+  late final GeneratedColumn<Uint8List> albumKeyText =
+      GeneratedColumn<Uint8List>(
+        'album_key_text',
+        aliasedName,
+        true,
+        type: DriftSqlType.blob,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _trackNoMeta = const VerificationMeta(
     'trackNo',
   );
@@ -524,6 +548,8 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     titleSortKey,
     artist,
     album,
+    artistKeyText,
+    albumKeyText,
     trackNo,
     durationMs,
     sampleRate,
@@ -637,6 +663,24 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     } else if (isInserting) {
       context.missing(_albumMeta);
     }
+    if (data.containsKey('artist_key_text')) {
+      context.handle(
+        _artistKeyTextMeta,
+        artistKeyText.isAcceptableOrUnknown(
+          data['artist_key_text']!,
+          _artistKeyTextMeta,
+        ),
+      );
+    }
+    if (data.containsKey('album_key_text')) {
+      context.handle(
+        _albumKeyTextMeta,
+        albumKeyText.isAcceptableOrUnknown(
+          data['album_key_text']!,
+          _albumKeyTextMeta,
+        ),
+      );
+    }
     if (data.containsKey('track_no')) {
       context.handle(
         _trackNoMeta,
@@ -747,6 +791,14 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         DriftSqlType.string,
         data['${effectivePrefix}album'],
       )!,
+      artistKeyText: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}artist_key_text'],
+      ),
+      albumKeyText: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}album_key_text'],
+      ),
       trackNo: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}track_no'],
@@ -797,8 +849,23 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
   /// sort tag. `ORDER BY` it gives the device's order, since SQLite compares
   /// BLOBs with memcmp.
   final Uint8List titleSortKey;
+
+  /// The artist and album as displayed: the whole tag, decoded.
   final String artist;
   final String album;
+
+  /// The artist tag exactly as the firmware's parser stores it
+  /// (`meta_text_to_utf8` into `char artist[64]`: at most 63 bytes, UTF-16
+  /// surrogates as `?`, malformed UTF-8 copied raw, empty for a FLAC whose
+  /// comment block is over the scanner's scratch), for the artist's key and
+  /// the compilation test. Empty when the firmware has no artist tag. Null in
+  /// a row written before schema version 2, until a rescan reads the file
+  /// again (scan version 2); the library view then uses [artist].
+  final Uint8List? artistKeyText;
+
+  /// The album tag as the firmware stores it (`char album[64]`), as
+  /// [artistKeyText].
+  final Uint8List? albumKeyText;
   final int trackNo;
   final int durationMs;
   final int sampleRate;
@@ -823,6 +890,8 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     required this.titleSortKey,
     required this.artist,
     required this.album,
+    this.artistKeyText,
+    this.albumKeyText,
     required this.trackNo,
     required this.durationMs,
     required this.sampleRate,
@@ -845,6 +914,12 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     map['title_sort_key'] = Variable<Uint8List>(titleSortKey);
     map['artist'] = Variable<String>(artist);
     map['album'] = Variable<String>(album);
+    if (!nullToAbsent || artistKeyText != null) {
+      map['artist_key_text'] = Variable<Uint8List>(artistKeyText);
+    }
+    if (!nullToAbsent || albumKeyText != null) {
+      map['album_key_text'] = Variable<Uint8List>(albumKeyText);
+    }
     map['track_no'] = Variable<int>(trackNo);
     map['duration_ms'] = Variable<int>(durationMs);
     map['sample_rate'] = Variable<int>(sampleRate);
@@ -870,6 +945,12 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       titleSortKey: Value(titleSortKey),
       artist: Value(artist),
       album: Value(album),
+      artistKeyText: artistKeyText == null && nullToAbsent
+          ? const Value.absent()
+          : Value(artistKeyText),
+      albumKeyText: albumKeyText == null && nullToAbsent
+          ? const Value.absent()
+          : Value(albumKeyText),
       trackNo: Value(trackNo),
       durationMs: Value(durationMs),
       sampleRate: Value(sampleRate),
@@ -899,6 +980,8 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       titleSortKey: serializer.fromJson<Uint8List>(json['titleSortKey']),
       artist: serializer.fromJson<String>(json['artist']),
       album: serializer.fromJson<String>(json['album']),
+      artistKeyText: serializer.fromJson<Uint8List?>(json['artistKeyText']),
+      albumKeyText: serializer.fromJson<Uint8List?>(json['albumKeyText']),
       trackNo: serializer.fromJson<int>(json['trackNo']),
       durationMs: serializer.fromJson<int>(json['durationMs']),
       sampleRate: serializer.fromJson<int>(json['sampleRate']),
@@ -923,6 +1006,8 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       'titleSortKey': serializer.toJson<Uint8List>(titleSortKey),
       'artist': serializer.toJson<String>(artist),
       'album': serializer.toJson<String>(album),
+      'artistKeyText': serializer.toJson<Uint8List?>(artistKeyText),
+      'albumKeyText': serializer.toJson<Uint8List?>(albumKeyText),
       'trackNo': serializer.toJson<int>(trackNo),
       'durationMs': serializer.toJson<int>(durationMs),
       'sampleRate': serializer.toJson<int>(sampleRate),
@@ -945,6 +1030,8 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     Uint8List? titleSortKey,
     String? artist,
     String? album,
+    Value<Uint8List?> artistKeyText = const Value.absent(),
+    Value<Uint8List?> albumKeyText = const Value.absent(),
     int? trackNo,
     int? durationMs,
     int? sampleRate,
@@ -964,6 +1051,10 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     titleSortKey: titleSortKey ?? this.titleSortKey,
     artist: artist ?? this.artist,
     album: album ?? this.album,
+    artistKeyText: artistKeyText.present
+        ? artistKeyText.value
+        : this.artistKeyText,
+    albumKeyText: albumKeyText.present ? albumKeyText.value : this.albumKeyText,
     trackNo: trackNo ?? this.trackNo,
     durationMs: durationMs ?? this.durationMs,
     sampleRate: sampleRate ?? this.sampleRate,
@@ -987,6 +1078,12 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           : this.titleSortKey,
       artist: data.artist.present ? data.artist.value : this.artist,
       album: data.album.present ? data.album.value : this.album,
+      artistKeyText: data.artistKeyText.present
+          ? data.artistKeyText.value
+          : this.artistKeyText,
+      albumKeyText: data.albumKeyText.present
+          ? data.albumKeyText.value
+          : this.albumKeyText,
       trackNo: data.trackNo.present ? data.trackNo.value : this.trackNo,
       durationMs: data.durationMs.present
           ? data.durationMs.value
@@ -1019,6 +1116,8 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ..write('titleSortKey: $titleSortKey, ')
           ..write('artist: $artist, ')
           ..write('album: $album, ')
+          ..write('artistKeyText: $artistKeyText, ')
+          ..write('albumKeyText: $albumKeyText, ')
           ..write('trackNo: $trackNo, ')
           ..write('durationMs: $durationMs, ')
           ..write('sampleRate: $sampleRate, ')
@@ -1043,6 +1142,8 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     $driftBlobEquality.hash(titleSortKey),
     artist,
     album,
+    $driftBlobEquality.hash(artistKeyText),
+    $driftBlobEquality.hash(albumKeyText),
     trackNo,
     durationMs,
     sampleRate,
@@ -1066,6 +1167,8 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           $driftBlobEquality.equals(other.titleSortKey, this.titleSortKey) &&
           other.artist == this.artist &&
           other.album == this.album &&
+          $driftBlobEquality.equals(other.artistKeyText, this.artistKeyText) &&
+          $driftBlobEquality.equals(other.albumKeyText, this.albumKeyText) &&
           other.trackNo == this.trackNo &&
           other.durationMs == this.durationMs &&
           other.sampleRate == this.sampleRate &&
@@ -1087,6 +1190,8 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
   final Value<Uint8List> titleSortKey;
   final Value<String> artist;
   final Value<String> album;
+  final Value<Uint8List?> artistKeyText;
+  final Value<Uint8List?> albumKeyText;
   final Value<int> trackNo;
   final Value<int> durationMs;
   final Value<int> sampleRate;
@@ -1106,6 +1211,8 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.titleSortKey = const Value.absent(),
     this.artist = const Value.absent(),
     this.album = const Value.absent(),
+    this.artistKeyText = const Value.absent(),
+    this.albumKeyText = const Value.absent(),
     this.trackNo = const Value.absent(),
     this.durationMs = const Value.absent(),
     this.sampleRate = const Value.absent(),
@@ -1126,6 +1233,8 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     required Uint8List titleSortKey,
     required String artist,
     required String album,
+    this.artistKeyText = const Value.absent(),
+    this.albumKeyText = const Value.absent(),
     required int trackNo,
     required int durationMs,
     required int sampleRate,
@@ -1161,6 +1270,8 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Expression<Uint8List>? titleSortKey,
     Expression<String>? artist,
     Expression<String>? album,
+    Expression<Uint8List>? artistKeyText,
+    Expression<Uint8List>? albumKeyText,
     Expression<int>? trackNo,
     Expression<int>? durationMs,
     Expression<int>? sampleRate,
@@ -1181,6 +1292,8 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       if (titleSortKey != null) 'title_sort_key': titleSortKey,
       if (artist != null) 'artist': artist,
       if (album != null) 'album': album,
+      if (artistKeyText != null) 'artist_key_text': artistKeyText,
+      if (albumKeyText != null) 'album_key_text': albumKeyText,
       if (trackNo != null) 'track_no': trackNo,
       if (durationMs != null) 'duration_ms': durationMs,
       if (sampleRate != null) 'sample_rate': sampleRate,
@@ -1203,6 +1316,8 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Value<Uint8List>? titleSortKey,
     Value<String>? artist,
     Value<String>? album,
+    Value<Uint8List?>? artistKeyText,
+    Value<Uint8List?>? albumKeyText,
     Value<int>? trackNo,
     Value<int>? durationMs,
     Value<int>? sampleRate,
@@ -1223,6 +1338,8 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       titleSortKey: titleSortKey ?? this.titleSortKey,
       artist: artist ?? this.artist,
       album: album ?? this.album,
+      artistKeyText: artistKeyText ?? this.artistKeyText,
+      albumKeyText: albumKeyText ?? this.albumKeyText,
       trackNo: trackNo ?? this.trackNo,
       durationMs: durationMs ?? this.durationMs,
       sampleRate: sampleRate ?? this.sampleRate,
@@ -1271,6 +1388,12 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     if (album.present) {
       map['album'] = Variable<String>(album.value);
     }
+    if (artistKeyText.present) {
+      map['artist_key_text'] = Variable<Uint8List>(artistKeyText.value);
+    }
+    if (albumKeyText.present) {
+      map['album_key_text'] = Variable<Uint8List>(albumKeyText.value);
+    }
     if (trackNo.present) {
       map['track_no'] = Variable<int>(trackNo.value);
     }
@@ -1307,6 +1430,8 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
           ..write('titleSortKey: $titleSortKey, ')
           ..write('artist: $artist, ')
           ..write('album: $album, ')
+          ..write('artistKeyText: $artistKeyText, ')
+          ..write('albumKeyText: $albumKeyText, ')
           ..write('trackNo: $trackNo, ')
           ..write('durationMs: $durationMs, ')
           ..write('sampleRate: $sampleRate, ')
@@ -1637,6 +1762,8 @@ typedef $$TracksTableCreateCompanionBuilder = TracksCompanion Function({
   required Uint8List titleSortKey,
   required String artist,
   required String album,
+  Value<Uint8List?> artistKeyText,
+  Value<Uint8List?> albumKeyText,
   required int trackNo,
   required int durationMs,
   required int sampleRate,
@@ -1657,6 +1784,8 @@ typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
   Value<Uint8List> titleSortKey,
   Value<String> artist,
   Value<String> album,
+  Value<Uint8List?> artistKeyText,
+  Value<Uint8List?> albumKeyText,
   Value<int> trackNo,
   Value<int> durationMs,
   Value<int> sampleRate,
@@ -1748,6 +1877,16 @@ class $$TracksTableFilterComposer
 
   ColumnFilters<String> get album => $composableBuilder(
     column: $table.album,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get artistKeyText => $composableBuilder(
+    column: $table.artistKeyText,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get albumKeyText => $composableBuilder(
+    column: $table.albumKeyText,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1869,6 +2008,16 @@ class $$TracksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<Uint8List> get artistKeyText => $composableBuilder(
+    column: $table.artistKeyText,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<Uint8List> get albumKeyText => $composableBuilder(
+    column: $table.albumKeyText,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get trackNo => $composableBuilder(
     column: $table.trackNo,
     builder: (column) => ColumnOrderings(column),
@@ -1967,6 +2116,16 @@ class $$TracksTableAnnotationComposer
   GeneratedColumn<String> get album =>
       $composableBuilder(column: $table.album, builder: (column) => column);
 
+  GeneratedColumn<Uint8List> get artistKeyText => $composableBuilder(
+    column: $table.artistKeyText,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<Uint8List> get albumKeyText => $composableBuilder(
+    column: $table.albumKeyText,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get trackNo =>
       $composableBuilder(column: $table.trackNo, builder: (column) => column);
 
@@ -2057,6 +2216,8 @@ class $$TracksTableTableManager
                 Value<Uint8List> titleSortKey = const Value.absent(),
                 Value<String> artist = const Value.absent(),
                 Value<String> album = const Value.absent(),
+                Value<Uint8List?> artistKeyText = const Value.absent(),
+                Value<Uint8List?> albumKeyText = const Value.absent(),
                 Value<int> trackNo = const Value.absent(),
                 Value<int> durationMs = const Value.absent(),
                 Value<int> sampleRate = const Value.absent(),
@@ -2076,6 +2237,8 @@ class $$TracksTableTableManager
                 titleSortKey: titleSortKey,
                 artist: artist,
                 album: album,
+                artistKeyText: artistKeyText,
+                albumKeyText: albumKeyText,
                 trackNo: trackNo,
                 durationMs: durationMs,
                 sampleRate: sampleRate,
@@ -2097,6 +2260,8 @@ class $$TracksTableTableManager
                 required Uint8List titleSortKey,
                 required String artist,
                 required String album,
+                Value<Uint8List?> artistKeyText = const Value.absent(),
+                Value<Uint8List?> albumKeyText = const Value.absent(),
                 required int trackNo,
                 required int durationMs,
                 required int sampleRate,
@@ -2116,6 +2281,8 @@ class $$TracksTableTableManager
                 titleSortKey: titleSortKey,
                 artist: artist,
                 album: album,
+                artistKeyText: artistKeyText,
+                albumKeyText: albumKeyText,
                 trackNo: trackNo,
                 durationMs: durationMs,
                 sampleRate: sampleRate,

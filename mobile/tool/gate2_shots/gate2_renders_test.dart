@@ -22,7 +22,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/app/library_view_providers.dart';
-import 'package:neupod/data/gate_library/manifest_library_view.dart';
+
 import 'package:neupod/domain/library_view/library_view.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/ui/device/wheel_bus.dart';
@@ -37,6 +37,7 @@ import 'package:neupod/ui/screens/shell/shell_frame.dart';
 import 'package:neupod/ui/screens/shell/shell_state.dart';
 
 import '../../test/fakes/fake_player.dart';
+import '../../test/support/manifest_library_view.dart';
 import 'gate2_app.dart';
 
 const _out = String.fromEnvironment(
@@ -48,7 +49,7 @@ const _boundary = ValueKey('gate2');
 /// The gate library, read synchronously (the asset bundle's async load does
 /// not complete reliably in widget tests).
 final ManifestLibraryView _library = ManifestLibraryView.parse(
-  File('assets/gate_library/manifest.json').readAsStringSync(),
+  File('test/support/gate_library/manifest.json').readAsStringSync(),
 );
 
 /// The text tiers (Android's thresholds, the test platform's).

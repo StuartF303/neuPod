@@ -67,6 +67,8 @@ final class AudioTags {
     this.titleSortKeyText = const [],
     this.artist = '',
     this.album = '',
+    this.artistKeyText = const [],
+    this.albumKeyText = const [],
     this.trackNo = 0,
     this.durationMs = 0,
     this.durationEstimated = false,
@@ -92,8 +94,16 @@ final class AudioTags {
 
   /// The title sort tag as the firmware stores it (32-byte buffer).
   final List<int> titleSortKeyText;
+
+  /// The artist and album as displayed: the whole tag, decoded.
   final String artist;
   final String album;
+
+  /// The artist and album tags as the firmware stores them (`char
+  /// artist[64]`, `album[64]`), the way [titleKeyText] is: the text the
+  /// artist and album keys and the compilation test are built from.
+  final List<int> artistKeyText;
+  final List<int> albumKeyText;
   final int trackNo;
   final int durationMs;
 
@@ -119,9 +129,12 @@ const _maxCommentBlock = 256 * 1024;
 /// and sort tag do not count for the sort key.
 const _firmwareCommentScratch = 4096;
 
-/// The firmware's tag buffers: `title[64]`, `sort_title[32]`.
+/// The firmware's tag buffers: `title[64]`, `sort_title[32]`, `artist[64]`,
+/// `album[64]` (meta.h).
 const _fwTitleCap = 64;
 const _fwSortCap = 32;
+const _fwArtistCap = 64;
+const _fwAlbumCap = 64;
 
 /// Reads the tags of [src], choosing the parser by [extension] (`flac`,
 /// `mp3`; any case).
@@ -273,6 +286,8 @@ AudioTags _readFlac(ByteSource src) {
     titleSortKeyText: fields.titleSortKey,
     artist: fields.artist,
     album: fields.album,
+    artistKeyText: fields.artistKey,
+    albumKeyText: fields.albumKey,
     trackNo: fields.track,
     durationMs: rate == 0 ? 0 : totalFrames * 1000 ~/ rate,
     sampleRate: rate,
@@ -285,6 +300,7 @@ const _damaged = UnreadableReason.damaged;
 class _VorbisFields {
   String title = '', titleSort = '', artist = '', album = '';
   List<int> titleKey = const [], titleSortKey = const [];
+  List<int> artistKey = const [], albumKey = const [];
   int track = 0;
 }
 
@@ -316,8 +332,10 @@ void _vorbisComments(Uint8List b, _VorbisFields t, {required bool forKey}) {
           if (forKey) t.titleSortKey = firmwareText(value, 3, _fwSortCap);
         case 'ARTIST':
           t.artist = _text(value, 3);
+          if (forKey) t.artistKey = firmwareText(value, 3, _fwArtistCap);
         case 'ALBUM':
           t.album = _text(value, 3);
+          if (forKey) t.albumKey = firmwareText(value, 3, _fwAlbumCap);
         case 'TRACKNUMBER':
           t.track = _number(_text(value, 3));
       }
@@ -386,6 +404,7 @@ _Mp3Header? _mp3Header(Uint8List h, int o) {
 class _Id3Fields {
   String title = '', titleSort = '', artist = '', album = '';
   List<int> titleKey = const [], titleSortKey = const [];
+  List<int> artistKey = const [], albumKey = const [];
   int track = 0;
 }
 
@@ -462,8 +481,10 @@ void _id3TextFrame(String id, Uint8List d, _Id3Fields t) {
       t.titleSortKey = firmwareText(s, enc, _fwSortCap);
     case 'TPE1' || 'TP1':
       t.artist = _text(s, enc);
+      t.artistKey = firmwareText(s, enc, _fwArtistCap);
     case 'TALB' || 'TAL':
       t.album = _text(s, enc);
+      t.albumKey = firmwareText(s, enc, _fwAlbumCap);
     case 'TRCK' || 'TRK':
       t.track = _number(_text(s, enc));
   }
@@ -558,6 +579,8 @@ AudioTags _readMp3(ByteSource src) {
     titleSortKeyText: tags.titleSortKey,
     artist: tags.artist,
     album: tags.album,
+    artistKeyText: tags.artistKey,
+    albumKeyText: tags.albumKey,
     trackNo: tags.track,
     durationMs: totalSamples * 1000 ~/ h.rate,
     durationEstimated: estimated,

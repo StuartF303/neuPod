@@ -109,7 +109,8 @@ void main() {
         UnreadableReason.cannotOpen: "Can't open",
         UnreadableReason.cannotRead: "Can't read",
         UnreadableReason.wrongFormat: 'Not a MP3 file',
-        UnreadableReason.damaged: 'Damaged',
+        // The firmware's (library_service.c: "Can't play: damaged file").
+        UnreadableReason.damaged: 'Damaged file',
       },
     );
   });

@@ -1,0 +1,23 @@
+# artists (name, albums)
+Abba	1
+Various Artist	1
+Zed	1
+# albums list (title, artist, songs)
+Hits	Abba	1
+Hits	Zed	1
+Hits		2
+Mix	Various Artist	1
+Mix		1
+# album table (title, artist)
+Hits	Abba
+Mix	Various Artist
+Hits	Zed
+Hits	
+Mix	
+# songs (title, artist, album)
+T	various artists	Hits
+U	Abba	Hits
+V	Various Artists	Hits
+W	VARIOUS ARTISTS	Mix
+X	Various Artist	Mix
+Y	Zed	Hits

@@ -36,7 +36,9 @@ const _tagged = {'flac', 'mp3'};
 /// another version is read again, whatever its size and mtime, and only once
 /// (the version is stored on the row).
 /// 1: phase 1 (FLAC and MP3 tags, title sort tags, the firmware's key).
-const scanVersion = 1;
+/// 2: the firmware's text of the artist and album tags (schema version 2),
+///    so rows from version 1 are read again to fill it.
+const scanVersion = 2;
 
 /// The lower-case extension of [path], or ''.
 String extensionOf(String path) {
@@ -248,6 +250,12 @@ final class LocalLibraryScanner implements LibraryScanner {
           ),
           artist: r.tags?.artist ?? '',
           album: r.tags?.album ?? '',
+          artistKeyText: Value(
+            Uint8List.fromList(r.tags?.artistKeyText ?? const []),
+          ),
+          albumKeyText: Value(
+            Uint8List.fromList(r.tags?.albumKeyText ?? const []),
+          ),
           trackNo: r.tags?.trackNo ?? 0,
           durationMs: r.tags?.durationMs ?? 0,
           sampleRate: r.tags?.sampleRate ?? 0,

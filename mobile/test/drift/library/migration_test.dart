@@ -12,7 +12,7 @@
 //   with the same value in every column that is still there.
 // A step that drops a column on purpose lists it in [_droppedOnPurpose].
 
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:drift_dev/api/migrations_native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -77,6 +77,23 @@ void main() {
     test('the check itself (at version $current, no migration)', () async {
       await _expectRowsKept(verifier, current, current);
     });
+  });
+
+  test('1 to 2: tracks keep their rows and get no firmware text until a '
+      'rescan', () async {
+    final schema = await verifier.schemaAt(1);
+    final before = _fillEveryTable(schema.rawDatabase, 1);
+    final db = LibraryDatabase(schema.newConnection());
+    await verifier.migrateAndValidate(db, 2);
+    final row = (await db.select(db.tracks).get()).single;
+    expect(row.artist, before['tracks']!['artist']);
+    expect(row.album, before['tracks']!['album']);
+    // Null: the library view keys the row on its displayed text, and the
+    // scanner (scan version 2) reads the file again on the next scan.
+    expect(row.artistKeyText, isNull);
+    expect(row.albumKeyText, isNull);
+    expect(row.scanVersion, 1);
+    await db.close();
   });
 
   test('a database from a newer build is refused, not dropped', () async {
