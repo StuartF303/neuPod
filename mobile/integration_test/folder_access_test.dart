@@ -87,7 +87,7 @@ Future<Map<String, StorageEntry>> walkAndRead(
   expect(pages.last.complete, isTrue, reason: 'every folder was listed');
   final entries = [for (final p in pages) ...p.entries];
   final byPath = {for (final e in entries) e.relPath: e};
-  expect(byPath.keys.toSet(), {'a.flac', 'sub/b.mp3', 'deliberate-failure.flac'});
+  expect(byPath.keys.toSet(), {'a.flac', 'sub/b.mp3'});
   final flac = byPath['a.flac']!;
   expect(flac.state, EntryState.local);
   expect(flac.size, greaterThan(3));
