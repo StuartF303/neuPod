@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:neupod/data/db/library_database.dart';
 import 'package:neupod/data/scan/tag_reader.dart';
 import 'package:neupod/domain/library/collation.dart';
@@ -307,18 +308,33 @@ List<_Result> _parseAll(List<_Job> jobs) => [for (final j in jobs) _parse(j)];
 _Result _parse(_Job j) {
   final handle = j.handle;
   if (handle == null) return _Result(null, j.reason);
+  final (tags, reason) = readWithReader(handle.open, j.ext);
+  return _Result(tags, reason);
+}
+
+/// Opens a reader with [open] and reads its tags as [ext]; closes it. Never
+/// throws: every failure is a reason. Transient failures ([UnreadableReason]
+/// `cannotRead`) keep the stored tags and are retried on the next scan.
+@visibleForTesting
+(AudioTags?, UnreadableReason?) readWithReader(
+  StorageReader Function() open,
+  String ext,
+) {
   StorageReader? reader;
   try {
-    reader = handle.open();
-    return _Result(readTags(_ReaderSource(reader), j.ext), null);
+    reader = open();
+    return (readTags(_ReaderSource(reader), ext), null);
   } on TagReadException catch (e) {
-    return _Result(null, e.reason);
+    return (null, e.reason);
   } on FileSystemException {
     // Open failed (not seekable, gone) or a read failed part-way: may pass.
-    return const _Result(null, UnreadableReason.cannotRead);
+    return (null, UnreadableReason.cannotRead);
+  } on StorageException {
+    // The storage layer lost access (a provider or grant went away): may pass.
+    return (null, UnreadableReason.cannotRead);
   } catch (_) {
     // Anything else is the reader meeting bytes it cannot handle.
-    return const _Result(null, UnreadableReason.damaged);
+    return (null, UnreadableReason.damaged);
   } finally {
     reader?.close();
   }

@@ -5,6 +5,7 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:drift/native.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/data/db/drift_library_repository.dart';
 import 'package:neupod/data/db/library_database.dart';
@@ -31,6 +32,10 @@ class DirApi extends NeupodStorageApi {
   /// Paths under this prefix are left out and the walk reported incomplete,
   /// as when a subfolder cannot be listed or a drive goes away.
   String? unreadablePrefix;
+
+  /// The platform loses the root mid-walk (a grant revoked, a drive pulled):
+  /// the next page fails, as `root-unavailable`.
+  bool loseRootMidWalk = false;
 
   @override
   Future<String> startWalk(String rootId) async {
@@ -62,6 +67,7 @@ class DirApi extends NeupodStorageApi {
   @override
   Future<WalkBatch> nextWalkBatch(String walkId, int maxEntries) async {
     final all = _walks.remove(walkId)!;
+    if (loseRootMidWalk) throw PlatformException(code: 'root-unavailable');
     return WalkBatch(
       entries: all,
       done: true,
@@ -96,6 +102,23 @@ LibraryFolder folder(String id, {bool available = true}) => LibraryFolder(
   kind: FolderKind.pickedFolder,
   available: available,
 );
+
+/// A reader whose reads fail with [error].
+class FailingReader implements StorageReader {
+  FailingReader(this.error);
+
+  final Object error;
+  bool closed = false;
+
+  @override
+  int get length => 1 << 20;
+
+  @override
+  Uint8List readAt(int offset, int count) => throw error;
+
+  @override
+  void close() => closed = true;
+}
 
 Future<R> failingIsolate<R>(R Function() computation) =>
     Future.error(IsolateSpawnException('no isolate'));
@@ -433,6 +456,125 @@ void main() {
     expect(snapshot(), before);
     expect(root.statSync().modified, rootBefore.modified);
     expect(root.statSync().mode, rootBefore.mode);
+  });
+
+  group('access that goes away and comes back', () {
+    /// Rewrites [rel] with a new title and an older mtime, so a rescan sees
+    /// it changed.
+    void retag(String rel, String title) {
+      put(rel, flac(['TITLE=$title'])).setLastModifiedSync(DateTime(2021));
+    }
+
+    test('an unavailable folder keeps its tracks; they are re-read when it is back', () async {
+      put('a.flac', flac(['TITLE=A']));
+      put('b.flac', flac(['TITLE=B']));
+      final access = FakeFolderAccess([folder('m')]);
+      final (_, storage, scanner) = setUpScanner(access: access);
+      await scanner.scan().drain<void>();
+      final idA = (await tracks()).first.id;
+
+      access.held
+        ..clear()
+        ..add(folder('m', available: false));
+      retag('a.flac', 'A2');
+      File('${tmp.path}/music/b.flac').deleteSync();
+      storage.opened.clear();
+      await scanner.scan().drain<void>();
+      expect(storage.opened, isEmpty);
+      expect((await tracks()).map((t) => t.title), ['A', 'B']);
+
+      access.held
+        ..clear()
+        ..add(folder('m'));
+      await scanner.scan().drain<void>();
+      expect(storage.opened, ['a.flac']);
+      final t = await tracks();
+      expect(t.map((x) => x.title), ['A2']); // b really is gone now
+      expect(t.single.id, idA); // the same row, updated
+    });
+
+    test(
+      'access lost mid-walk deletes nothing; files are re-read when it is back',
+      () async {
+        put('a.flac', flac(['TITLE=A']));
+        put('b.flac', flac(['TITLE=B']));
+        final (api, storage, scanner) = setUpScanner();
+        await scanner.scan().drain<void>();
+
+        api.loseRootMidWalk = true;
+        retag('a.flac', 'A2');
+        File('${tmp.path}/music/b.flac').deleteSync();
+        storage.opened.clear();
+        final progress = await scanner.scan().toList();
+        expect(progress.last.done, isTrue); // the scan itself finishes
+        expect(storage.opened, isEmpty);
+        expect((await tracks()).map((t) => t.title), ['A', 'B']);
+
+        api.loseRootMidWalk = false;
+        await scanner.scan().drain<void>();
+        expect(storage.opened, ['a.flac']);
+        expect((await tracks()).map((t) => t.title), ['A2']);
+      },
+    );
+
+    test(
+      'an unreadable subfolder keeps its tracks; re-read once it is readable',
+      () async {
+        put('sub/a.flac', flac(['TITLE=A']));
+        put('b.flac', flac(['TITLE=B']));
+        final (api, storage, scanner) = setUpScanner();
+        await scanner.scan().drain<void>();
+
+        api.unreadablePrefix = 'sub/';
+        retag('sub/a.flac', 'A2');
+        put('sub/c.flac', flac(['TITLE=C']));
+        storage.opened.clear();
+        await scanner.scan().drain<void>();
+        expect(storage.opened, isEmpty);
+        final kept = await tracks();
+        expect(kept.map((t) => t.title), ['A', 'B']); // stored tags kept
+        expect(kept.first.unreadableReason, isNull);
+
+        api.unreadablePrefix = null;
+        await scanner.scan().drain<void>();
+        expect(storage.opened, unorderedEquals(['a.flac', 'c.flac']));
+        expect((await tracks()).map((t) => t.title), ['A2', 'B', 'C']);
+      },
+    );
+  });
+
+  group('readWithReader', () {
+    test('a StorageException while reading is transient; the reader is '
+        'closed', () {
+      final reader = FailingReader(StorageException('root-unavailable'));
+      final (tags, reason) = readWithReader(() => reader, 'flac');
+      expect(tags, isNull);
+      expect(reason, UnreadableReason.cannotRead);
+      expect(reason!.transient, isTrue);
+      expect(reader.closed, isTrue);
+    });
+
+    test('a StorageException on open is transient', () {
+      final (_, reason) = readWithReader(
+        () => throw StorageException('open-failed'),
+        'mp3',
+      );
+      expect(reason, UnreadableReason.cannotRead);
+    });
+
+    test('an I/O error is transient; anything else is damage', () {
+      expect(
+        readWithReader(
+          () => FailingReader(const FileSystemException('read failed')),
+          'flac',
+        ).$2,
+        UnreadableReason.cannotRead,
+      );
+      expect(
+        readWithReader(() => FailingReader(StateError('odd')), 'flac').$2,
+        UnreadableReason.damaged,
+      );
+    });
   });
 
   test('extensionOf', () {
