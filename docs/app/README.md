@@ -44,7 +44,8 @@ Status: specification, 21 November 2026. Nothing is built. The working instructi
     it later, in the firmware and the app together.
 12. **Search is typed with the wheel (owner, 22 November 2026)**, as text is on the device. It never opens the phone's
     keyboard. It uses the firmware's text entry in search mode (`docs/ui-input.md`, model in
-    `app/include/wheel_input.h`): the letter ring and mode chips, with live results as the user types. The screen is in
+    `app/include/wheel_input.h`): the letter ring and mode chips, with live results as the user types. The chips are the firmware's six: `abc`,
+    `ABC`, `123`, `#!?`, `space`, `del` (owner, 22 November 2026; the design drew five, without `#!?`). The screen is in
     the [device view design](../design/2026-11-21-app-device-view/README.md), "Search, by the wheel".
 
 Everything else in this document is the designer's proposal until the owner confirms it. Proposals that most need a
