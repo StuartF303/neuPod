@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import 'package:drift/drift.dart';
+import 'package:neupod/data/db/library_database.steps.dart';
 
 part 'library_database.g.dart';
 
@@ -66,9 +67,12 @@ class Tracks extends Table {
 class LibraryDatabase extends _$LibraryDatabase {
   LibraryDatabase(super.e);
 
-  /// Schema snapshots are in drift_schemas/library/ (dump a new one with
-  /// `dart run drift_dev schema dump lib/data/db/library_database.dart
-  /// drift_schemas/library/` before changing a table).
+  /// Migrations are stepwise and tested (decision 0008). Version 1 is the
+  /// baseline. To change a table: bump this, run
+  /// `dart run drift_dev make-migrations` (it writes the snapshot in
+  /// drift_schemas/library/, regenerates library_database.steps.dart and the
+  /// test helpers in test/drift/library/generated/), then add the step to
+  /// [_upgrade] and run `dart run build_runner build`.
   @override
   int get schemaVersion => 1;
 
@@ -76,17 +80,27 @@ class LibraryDatabase extends _$LibraryDatabase {
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
     onUpgrade: (m, from, to) async {
-      // Version 1 is the first schema; later versions add their steps here,
-      // tested against the snapshots (phase 3 brings version 2). Until then
-      // any other version (a downgrade, an unknown file) is a cache to drop:
-      // a rescan rebuilds it.
-      for (final table in allTables.toList().reversed) {
-        await m.deleteTable(table.actualTableName);
+      // One step per version, each against its snapshot, so a database at any
+      // earlier version reaches this one with its rows kept. Never drop and
+      // recreate: the database will hold data a rescan cannot rebuild
+      // (ratings, play counts, playlists). A downgrade (a database from a
+      // newer build) throws a StateError instead of being changed.
+      await _upgrade(m, from, to);
+      final broken = await customSelect('PRAGMA foreign_key_check').get();
+      if (broken.isNotEmpty) {
+        throw StateError(
+          'migration $from to $to broke foreign keys: '
+          '${broken.map((r) => r.data).toList()}',
+        );
       }
-      await m.createAll();
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
     },
   );
+
+  /// The steps, kept apart from [migration] as drift advises, so each step
+  /// runs against its own snapshot. Add `from1To2: (m, schema) async {...}`
+  /// here when version 2 exists.
+  OnUpgrade get _upgrade => stepByStep();
 }

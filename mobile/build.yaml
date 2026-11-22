@@ -1,0 +1,13 @@
+# drift's code generator (decision 0005) and its migration tooling (decision 0008).
+# After changing a table: bump schemaVersion, then `dart run drift_dev make-migrations`
+# (snapshots in drift_schemas/, steps next to the database, tests in test/drift/),
+# then `dart run build_runner build`.
+targets:
+  $default:
+    builders:
+      drift_dev:
+        options:
+          databases:
+            library: lib/data/db/library_database.dart
+          schema_dir: drift_schemas/
+          test_dir: test/drift/
