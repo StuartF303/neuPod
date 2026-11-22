@@ -21,6 +21,7 @@ per_file_timeout="${PER_FILE_TIMEOUT:-10m}"
 for file in "${files[@]}"; do
   echo "::group::$file"
   adb logcat -c || true
+  rm -rf build/app/outputs/androidTest-results
   status=0
   (cd android && timeout --kill-after=30s "$per_file_timeout" \
     ./gradlew app:connectedDebugAndroidTest -Ptarget="$PWD/../$file") || status=$?
@@ -39,5 +40,15 @@ for file in "${files[@]}"; do
     echo "::endgroup::"
     exit 1
   fi
+  # Each Dart test is one JUnit test case. A run that reported none (the Dart side never sent its results) is a
+  # failure, not a pass.
+  names=$(find build/app/outputs/androidTest-results -name 'TEST-*.xml' -exec cat {} + 2>/dev/null \
+    | grep -o '<testcase name="[^"]*"' | sed 's/^<testcase name="//; s/"$//' || true)
+  if [ -z "$names" ]; then
+    echo "::error::$file reported no test results"
+    exit 1
+  fi
+  echo "$file: $(printf '%s\n' "$names" | wc -l | tr -d ' ') passed"
+  printf '%s\n' "$names" | sed 's/^/  /'
 done
 echo "OK: ${#files[@]} integration test files passed"
