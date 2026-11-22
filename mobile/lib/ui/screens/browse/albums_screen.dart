@@ -68,6 +68,6 @@ class AlbumsScreen extends StatelessWidget {
   Widget build(BuildContext context) => AlbumListScreen(
     title: 'Albums',
     load: (library) => library.albums(),
-    subtitle: (a) => [a.artist, if (a.year != null) '${a.year}'].join(' · '),
+    subtitle: albumArtistYear,
   );
 }

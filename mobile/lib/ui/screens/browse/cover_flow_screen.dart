@@ -99,7 +99,9 @@ class _CoverFlowScreenState extends ConsumerState<CoverFlowScreen> {
 
   String _say(int i) {
     final a = _albums![i];
-    return '${a.title}, ${a.artist}, ${i + 1} of ${_albums!.length}';
+    final artist = albumRowArtist(a);
+    return '${a.title}, ${artist.isEmpty ? '' : '$artist, '}'
+        '${i + 1} of ${_albums!.length}';
   }
 
   void _describe() {
@@ -275,8 +277,11 @@ class _CoverFlowScreenState extends ConsumerState<CoverFlowScreen> {
                       titleStyle,
                       align: TextAlign.center,
                     ),
+                    // No artist for a compilation, as the firmware's
+                    // caption (`flow_texts` in ui_library.c, from
+                    // `lib_list_row`).
                     NeupodText(
-                      current.artist,
+                      albumRowArtist(current),
                       subStyle,
                       align: TextAlign.center,
                     ),
