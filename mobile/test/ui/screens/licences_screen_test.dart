@@ -60,7 +60,7 @@ void _navigation(StyleFamily family) {
       expect(_rowText('Licences'), findsOneWidget);
       expect(_rowText('Style'), findsOneWidget);
 
-      rig.step(2); // Style, Mode, Licences: the last row
+      rig.step(3); // Style, Mode, Library, Licences: the last row
       await settle(tester);
       await _press(tester, rig, WheelButton.centre);
       expect(find.byType(LicencesScreen), findsOneWidget);

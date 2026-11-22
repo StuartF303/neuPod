@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // An empty scanned library: each browsing list shows the one greyed
-// "None yet" row, as the firmware does (docs/app/README.md).
+// "None yet" row, as the firmware does (docs/app/README.md); Songs instead
+// says "No songs yet" and points to Settings > Library.
 
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,12 +17,12 @@ import 'package:neupod/domain/library_view/library_view.dart';
 import 'screens_harness.dart';
 
 void main() {
-  for (final (name, screen) in <(String, Widget)>[
-    ('Songs', const SongsScreen()),
-    ('Artists', const ArtistsScreen()),
-    ('Albums', const AlbumsScreen()),
+  for (final (name, screen, empty) in <(String, Widget, String)>[
+    ('Songs', const SongsScreen(), 'No songs yet'),
+    ('Artists', const ArtistsScreen(), 'None yet'),
+    ('Albums', const AlbumsScreen(), 'None yet'),
   ]) {
-    testWidgets('$name over an empty database shows None yet', (tester) async {
+    testWidgets('$name over an empty database shows $empty', (tester) async {
       final db = LibraryDatabase(NativeDatabase.memory());
       addTearDown(db.close);
       // The database answers in real time, outside the test's fake clock, so
@@ -35,7 +36,7 @@ void main() {
         ),
       ))!;
       await pumpShell(tester, home: (_) => screen, library: answered);
-      expect(find.text('None yet'), findsOneWidget);
+      expect(find.text(empty), findsOneWidget);
     });
   }
 }

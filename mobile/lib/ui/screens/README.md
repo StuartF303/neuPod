@@ -60,7 +60,17 @@ Compilations, and a small Settings). Now Playing, the panel's content and Search
 - **Cover Flow**: the Albums list's albums in its order (owner decision 14); Classic angled with reflections, Modern
   flat; the wheel moves a cover per step, Select or a tap on the centre cover opens it, a drag moves the covers. Under
   the title, in both styles, the device's caption `Artist · Year · n songs` (`flow_texts` in `app/ui/ui_library.c`).
-- **Settings**: Style (Classic or Modern), Mode (Auto, Light, Dark) and, last, Licences (`licences_screen.dart`: Montserrat, Lucide, then the Dart and Flutter packages from `LicenseRegistry`; Select opens a text the wheel scrolls); the rest is phase 6. `NeuPodApp` calls `registerBundledLicences()`.
+- **Settings**: Style (Classic or Modern), Mode (Auto, Light, Dark), Library and, last, Licences (`licences_screen.dart`: Montserrat, Lucide, then the Dart and Flutter packages from `LicenseRegistry`; Select opens a text the wheel scrolls); the rest is phase 6. `NeuPodApp` calls `registerBundledLicences()`.
+- **Settings > Library** (`browse/library_screen.dart`): a row per folder (`On My iPhone` under the iOS Documents
+  folder, whose Select explains how to fill it; a picked folder opens a screen with Remove), `Add Folder…` (the
+  system picker; a refusal is a panel), and `Update Library`, which becomes `Building library` with `N found · N read
+  · Select: cancel` while a scan runs. A cancelled or failed scan shows the `Library update stopped` panel. Not
+  designed: the simplest wheel list, for the owner to judge.
+- **The scan** is one per app: `libraryScanProvider` (`app/library_scan_providers.dart`) owns it; any screen starts,
+  watches or cancels it. `NeuPodApp` starts one at launch and on each return to the front when there is any folder
+  (always on iOS); adding or removing a folder restarts it. `libraryViewProvider` rebuilds when it finishes.
+- **An empty library**: Home's idle pane says `No songs yet` and `Settings > Library`; Songs shows one row saying the
+  same, whose Select opens Library.
 
 ## Where the data comes from
 

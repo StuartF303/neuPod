@@ -11,6 +11,10 @@ import 'package:neupod/app/providers.dart';
 
 import 'package:neupod/ui/device/device_view.dart';
 
+import 'package:neupod/domain/library/library_folder.dart';
+
+import '../fakes/fake_folder_access.dart';
+import '../fakes/fake_library_scanner.dart';
 import '../fakes/fake_player.dart';
 import '../support/manifest_library_view.dart';
 
@@ -31,6 +35,8 @@ void main() {
         overrides: [
           playerProvider.overrideWithValue(FakePlayer()),
           libraryViewProvider.overrideWith((ref) => library),
+          folderAccessProvider.overrideWithValue(FakeFolderAccess()),
+          libraryScannerProvider.overrideWithValue(FakeLibraryScanner()),
         ],
         child: const NeuPodApp(),
       ),
@@ -44,4 +50,41 @@ void main() {
     // Nothing is loaded, so there is no Now Playing item.
     expect(find.text('Now Playing'), findsNothing);
   });
+
+  for (final (what, folders, scans) in [
+    ('a folder', [_documents], 1),
+    ('no folder', <LibraryFolder>[], 0),
+  ]) {
+    testWidgets('launching with $what starts $scans scan(s)', (tester) async {
+      final scanner = FakeLibraryScanner();
+      await tester.pumpWidget(
+        ProviderScope(
+          retry: (_, _) => null,
+          overrides: [
+            playerProvider.overrideWithValue(FakePlayer()),
+            libraryViewProvider.overrideWith(
+              (ref) => ManifestLibraryView.parse(
+                File('test/support/gate_library/manifest.json')
+                    .readAsStringSync(),
+              ),
+            ),
+            folderAccessProvider.overrideWithValue(FakeFolderAccess(folders)),
+            libraryScannerProvider.overrideWithValue(scanner),
+          ],
+          child: const NeuPodApp(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(scanner.started, scans);
+    });
+  }
 }
+
+/// The iOS Documents folder: always there, so iOS always scans at launch.
+const _documents = LibraryFolder(
+  id: 'documents',
+  name: 'neuPod',
+  kind: FolderKind.appDocuments,
+  available: true,
+);

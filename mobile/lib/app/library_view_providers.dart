@@ -4,11 +4,11 @@
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neupod/app/library_scan_providers.dart';
 import 'package:neupod/app/providers.dart';
 import 'package:neupod/data/library_view/drift_library_view.dart';
 import 'package:neupod/domain/library_view/library_view.dart';
 import 'package:neupod/domain/playback/queue_item.dart';
-import 'package:neupod/ui/features/songs/songs_providers.dart';
 
 /// The library the browsing screens show: the scanned drift database.
 ///
@@ -17,7 +17,7 @@ import 'package:neupod/ui/features/songs/songs_providers.dart';
 /// album), so lists never keep what a finished scan has changed. A scan
 /// starting does not: what was there stays until the new one is done.
 final libraryViewProvider = FutureProvider<LibraryView>((ref) async {
-  ref.listen(scanProvider.select((s) => s?.done ?? false), (was, now) {
+  ref.listen(libraryScanProvider.select((s) => s?.done ?? false), (was, now) {
     if (was == false && now) ref.invalidateSelf();
   });
   final view = DriftLibraryView(ref.watch(libraryDatabaseProvider));
