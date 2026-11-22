@@ -3,7 +3,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:neupod/ui/device/device_geometry.dart';
 import 'package:neupod/ui/device/device_options.dart';
 import 'package:neupod/ui/features/player_debug/player_debug_screen.dart';
 import 'package:neupod/ui/screens/now_playing/now_playing_gate.dart';
@@ -81,15 +80,6 @@ class GatePanel extends ConsumerWidget {
                         'Design gate',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
-                      choice<DeviceFit>('Fit', o.fit, const {
-                        DeviceFit.fillsPhone: 'A: fills',
-                        DeviceFit.fixedProportions: 'B: fixed',
-                      }, (v) => o.copyWith(fit: v)),
-                      choice<BodySetting>('Body', o.body, const {
-                        BodySetting.automatic: 'Automatic',
-                        BodySetting.silver: 'Silver',
-                        BodySetting.black: 'Black',
-                      }, (v) => o.copyWith(body: v)),
                       choice<DirectTouch>(
                         'Touching the screen',
                         o.directTouch,

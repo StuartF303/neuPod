@@ -148,6 +148,29 @@ class _CoverFlowScreenState extends ConsumerState<CoverFlowScreen> {
     _describe();
   }
 
+  /// A tap at [x] (design px) on a side cover centres that cover, however far
+  /// from the middle it sits (owner decision 13): the nearest drawn side
+  /// cover to [x] on that side.
+  void _centre(double x, bool modern, int count) {
+    final sign = x < 300 ? -1 : 1;
+    final offsets = modern ? _modernOffsets : _classicOffsets;
+    var steps = 1;
+    var best = double.infinity;
+    for (var k = 1; k <= 3; k++) {
+      final i = _index + sign * k;
+      if (i < 0 || i >= count) break;
+      final dx = (x - (300 + sign * offsets[k])).abs();
+      if (dx < best) {
+        best = dx;
+        steps = k;
+      }
+    }
+    _step(sign * steps);
+  }
+
+  static const _classicOffsets = [0.0, 153.0, 236.0, 319.0];
+  static const _modernOffsets = [0.0, 180.0, 284.0, 350.0];
+
   void _open() {
     final albums = _albums;
     if (albums == null || albums.isEmpty) return;
@@ -214,7 +237,7 @@ class _CoverFlowScreenState extends ConsumerState<CoverFlowScreen> {
           if ((x - 300).abs() <= half) {
             _open();
           } else {
-            _step(x < 300 ? -1 : 1);
+            _centre(x, modern, albums.length);
           }
         },
         child: Stack(
@@ -316,7 +339,7 @@ class _CoverFlowScreenState extends ConsumerState<CoverFlowScreen> {
     final sign = d < 0 ? -1.0 : 1.0;
     final size = _lerp(ad, const [200, 156, 156, 156]);
     final angle = _lerp(ad, const [0, 58, 58, 58]) * math.pi / 180;
-    final cx = 300 + sign * _lerp(ad, const [0, 153, 236, 319]);
+    final cx = 300 + sign * _lerp(ad, _classicOffsets);
     const centreY = 134.0;
     final card = ArtFrame(
       size: size,
@@ -345,7 +368,7 @@ class _CoverFlowScreenState extends ConsumerState<CoverFlowScreen> {
     final size = _lerp(ad, const [220, 150, 100, 70]);
     final radius = _lerp(ad, const [20, 16, 12, 10]);
     final opacity = _lerp(ad, const [1, 0.85, 0.6, 0.3]);
-    final cx = 300 + sign * _lerp(ad, const [0, 180, 284, 350]);
+    final cx = 300 + sign * _lerp(ad, _modernOffsets);
     const centreY = 140.0;
     final shadows = theme.style.art.shadows(ArtUse.nowPlaying);
     return Positioned(

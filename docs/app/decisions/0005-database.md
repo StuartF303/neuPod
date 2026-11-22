@@ -164,9 +164,8 @@ Built in `mobile/lib/data/db/` (database), `mobile/lib/data/scan/` (scanner, tag
   (`ORDER BY title_sort_key, id`), `reason_code` (an `UnreadableReason` code, never English text) and `scan_version`
   per row (the tag reader and sort key the row was read with: a row from another version is read again on the next
   scan, once, whatever its size and mtime, and an unavailable folder or a partial walk does not keep re-reading the
-  rest). The schema snapshot is committed in `mobile/drift_schemas/library/drift_schema_v1.json`. Until version 2 has
-  real steps, `onUpgrade` (any other version, a downgrade included) drops and recreates the tables: version 1 is a
-  cache a rescan rebuilds. The
+  rest). The schema snapshot is committed in `mobile/drift_schemas/library/drift_schema_v1.json`. Migrations are
+  stepwise from version 1, tested against the snapshots, and a downgrade is refused (decision 0008). The
   `artists`/`albums`/`genres` tables, `track_key`, `track_stats`, playlists and FTS5 come with their phase 3 and 6
   items, as schema version 2 with a `make-migrations` test. Version 1 holds nothing the user cannot rebuild by
   rescanning.

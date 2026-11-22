@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:neupod/data/db/library_database.dart';
 import 'package:neupod/data/scan/tag_reader.dart';
 import 'package:neupod/domain/library/collation.dart';
@@ -62,7 +63,9 @@ final class LocalLibraryScanner implements LibraryScanner {
     this.chunk = 32,
     this.version = scanVersion,
     IsolateRunner? runIsolate,
-  }) : _run = runIsolate ?? Isolate.run;
+    @visibleForTesting ReaderOpener? openReader,
+  }) : _run = runIsolate ?? Isolate.run,
+       _openReader = openReader ?? _openHandle;
 
   /// The [scanVersion] rows are written with (other values in tests only).
   final int version;
@@ -71,6 +74,9 @@ final class LocalLibraryScanner implements LibraryScanner {
   final NeupodStorage _storage;
   final LibraryDatabase _db;
   final IsolateRunner _run;
+  final ReaderOpener _openReader;
+
+  static StorageReader _openHandle(ReaderHandle h) => h.open();
 
   /// Files read per isolate run and written per batch.
   final int chunk;
@@ -190,8 +196,8 @@ final class LocalLibraryScanner implements LibraryScanner {
         } else {
           try {
             jobs.add(_Job(ext, await _storage.openHandle(e), null));
-          } on StorageException {
-            jobs.add(_Job(ext, null, UnreadableReason.cannotOpen));
+          } on StorageException catch (e) {
+            jobs.add(_Job(ext, null, storageReason(e, opening: true)));
           }
         }
       }
@@ -203,7 +209,7 @@ final class LocalLibraryScanner implements LibraryScanner {
     }
     List<_Result> results;
     try {
-      results = await _parseInIsolate(_run, jobs);
+      results = await _parseInIsolate(_run, jobs, _openReader);
     } on IsolateSpawnException {
       // The isolate did not run (spawn failed): it never took the handles.
       _discardAll(jobs);
@@ -296,29 +302,73 @@ final class _Result {
 /// tests (for example one that fails to start).
 typedef IsolateRunner = Future<R> Function<R>(R Function() computation);
 
-/// Top level, so the isolate closure captures only [jobs] (not the scanner
-/// and its database).
-Future<List<_Result>> _parseInIsolate(IsolateRunner run, List<_Job> jobs) =>
-    run(() => _parseAll(jobs));
+/// Turns a [ReaderHandle] into a reader, in the background isolate:
+/// `handle.open()`, or a stand-in in tests (it must be sendable).
+typedef ReaderOpener = StorageReader Function(ReaderHandle handle);
+
+/// Top level, so the isolate closure captures only [jobs] and [open] (not the
+/// scanner and its database).
+Future<List<_Result>> _parseInIsolate(
+  IsolateRunner run,
+  List<_Job> jobs,
+  ReaderOpener open,
+) => run(() => _parseAll(jobs, open));
 
 /// Runs in a background isolate. Never throws: every failure is a reason.
-List<_Result> _parseAll(List<_Job> jobs) => [for (final j in jobs) _parse(j)];
+List<_Result> _parseAll(List<_Job> jobs, ReaderOpener open) => [
+  for (final j in jobs) _parse(j, open),
+];
 
-_Result _parse(_Job j) {
+_Result _parse(_Job j, ReaderOpener open) {
   final handle = j.handle;
   if (handle == null) return _Result(null, j.reason);
+  final (tags, reason) = readWithReader(() => open(handle), j.ext);
+  return _Result(tags, reason);
+}
+
+/// neupod_storage error codes after which the provider can never serve the
+/// file, so retrying is pointless until it changes. The codes the plugin
+/// reports on the read path are `open-failed`, `detached` and `unsupported`
+/// (Android `NeupodStoragePlugin.kt` openFd; iOS `NeupodStoragePlugin.swift`
+/// openFd), `not-downloaded` (the Dart side) and pigeon's `channel-error`;
+/// walks add `root-unavailable` and `busy`. Of those only `unsupported` is
+/// lasting: the others mean access is missing for now (a provider offline, a
+/// grant lost, the engine detaching) and may come back.
+const lastingStorageCodes = {'unsupported'};
+
+/// The reason stored for a [StorageException] while [opening] a file or
+/// reading it: `not-downloaded` is [UnreadableReason.notDownloaded], a
+/// [lastingStorageCodes] code is [UnreadableReason.damaged] (not retried while
+/// the file is unchanged), anything else is transient and retried next scan.
+UnreadableReason storageReason(StorageException e, {required bool opening}) {
+  if (e.code == 'not-downloaded') return UnreadableReason.notDownloaded;
+  if (lastingStorageCodes.contains(e.code)) return UnreadableReason.damaged;
+  return opening ? UnreadableReason.cannotOpen : UnreadableReason.cannotRead;
+}
+
+/// Opens a reader with [open] and reads its tags as [ext]; closes it. Never
+/// throws: every failure is a reason. Transient failures (`cannotRead`) keep
+/// the stored tags and are retried on the next scan.
+@visibleForTesting
+(AudioTags?, UnreadableReason?) readWithReader(
+  StorageReader Function() open,
+  String ext,
+) {
   StorageReader? reader;
   try {
-    reader = handle.open();
-    return _Result(readTags(_ReaderSource(reader), j.ext), null);
+    reader = open();
+    return (readTags(_ReaderSource(reader), ext), null);
   } on TagReadException catch (e) {
-    return _Result(null, e.reason);
+    return (null, e.reason);
   } on FileSystemException {
     // Open failed (not seekable, gone) or a read failed part-way: may pass.
-    return const _Result(null, UnreadableReason.cannotRead);
+    return (null, UnreadableReason.cannotRead);
+  } on StorageException catch (e) {
+    // The storage layer failed: transient unless its code says it is not.
+    return (null, storageReason(e, opening: false));
   } catch (_) {
     // Anything else is the reader meeting bytes it cannot handle.
-    return const _Result(null, UnreadableReason.damaged);
+    return (null, UnreadableReason.damaged);
   } finally {
     reader?.close();
   }

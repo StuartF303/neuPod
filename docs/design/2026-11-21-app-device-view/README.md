@@ -404,6 +404,10 @@ no network connection.
 
 For the owner. Nothing here is settled by the drawings.
 
+**Answered at gate 2 (22 November 2026), see the app spec's owner decision 13:** 1, 3 to 11 and 13 are decided; 2
+(direct touch) is judged by feel at gate 1; 12 stays open. Route icons (7): the speaker shows none, USB and wired
+outputs the jack plug, AirPlay and other wireless outputs a new generic external-speaker icon in the device's style.
+
 | # | Question | What was drawn meanwhile |
 | --- | --- | --- |
 | 1 | **Fit A or B** | Both, at three sizes; the screens use A |

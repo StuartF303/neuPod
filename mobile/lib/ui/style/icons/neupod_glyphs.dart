@@ -33,6 +33,19 @@ enum NeupodGlyph {
         '0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3" />',
   ),
   bluetooth('lucide/bluetooth', '<path d="m7 7 10 10-5 5V2l5 5L7 17" />'),
+  bluetoothConnected(
+    'lucide/bluetooth-connected',
+    '<path d="m7 7 10 10-5 5V2l5 5L7 17" />'
+        '<path d="M18 12h3" />'
+        '<path d="M3 12h3" />',
+  ),
+  speaker(
+    'lucide/speaker',
+    '<rect width="16" height="20" x="4" y="2" rx="2" />'
+        '<path d="M12 6h.01" />'
+        '<circle cx="12" cy="14" r="4" />'
+        '<path d="M12 14h.01" />',
+  ),
   shuffle(
     'lucide/shuffle',
     '<path d="m18 14 4 4-4 4" />'
