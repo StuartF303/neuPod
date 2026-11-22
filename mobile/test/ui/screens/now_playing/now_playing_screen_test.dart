@@ -434,4 +434,57 @@ void main() {
     expect(bus.holdMs, isEmpty);
     expect(bus.screenGivesHoldHaptic, isEmpty);
   });
+
+  testWidgets('page 2: Previous and Next fall through to the shell, once', (
+    tester,
+  ) async {
+    final rig = await _pump(tester);
+    await rig.press(WheelButton.centre);
+    expect(_view(tester).mode, NowPlayingMode.page2);
+    await rig.press(WheelButton.next);
+    expect(rig.player.calls, ['skipToNext']);
+    await rig.press(WheelButton.previous);
+    expect(rig.player.calls, ['skipToNext', 'skipToPrevious']);
+    await rig.press(WheelButton.playPause);
+    expect(rig.player.calls.last, 'pause');
+  });
+
+  testWidgets('after a panel goes, Now Playing says what the wheel is again '
+      '(not the panel\'s saved snapshot)', (tester) async {
+    final rig = await _pump(tester);
+    await rig.turn(1);
+    await tester.pump();
+    expect(rig.bus.semantics.value.label, 'Volume');
+    unawaited(
+      rig.container
+          .read(shellProvider.notifier)
+          .showPanel(title: 'Lost', message: 'Gone'),
+    );
+    await settle(tester);
+    expect(rig.bus.semantics.value.label, 'Lost');
+    // The volume moved while the panel was up (a hardware key, say).
+    rig.volume.current = 12;
+    await rig.press(WheelButton.menu);
+    await settle(tester);
+    expect(rig.bus.semantics.value.label, 'Volume');
+  });
+
+  testWidgets('a panel that appears while Select is held stops the hold: '
+      'no seek mode when it goes', (tester) async {
+    final rig = await _pump(tester);
+    rig.bus.emit(const WheelButtonDown(WheelButton.centre));
+    await rig.advance(300);
+    unawaited(
+      rig.container
+          .read(shellProvider.notifier)
+          .showPanel(title: 'Battery empty', message: 'Charge it.'),
+    );
+    await settle(tester);
+    await rig.advance(800); // past the 500 ms hold, under the panel
+    rig.bus.emit(const WheelButtonUp(WheelButton.centre));
+    await rig.press(WheelButton.menu); // dismiss
+    await settle(tester);
+    expect(_view(tester).mode, NowPlayingMode.rest);
+    expect(rig.volume.asked, isEmpty);
+  });
 }

@@ -16,6 +16,7 @@ import 'package:neupod/ui/components/status_bar.dart';
 import 'package:neupod/ui/screens/common/scroll_window.dart';
 import 'package:neupod/ui/screens/search/search_session.dart';
 import 'package:neupod/ui/style/neupod_style.dart';
+import 'package:neupod/ui/style/neupod_type.dart';
 
 /// The hint under the chips while typing.
 const String searchHint = 'Select: type · Menu: delete · Play: results';
@@ -28,6 +29,7 @@ class SearchView extends StatelessWidget {
     this.playState = PlayState.stopped,
     this.onOpen,
     this.withStatusBar = true,
+    this.notice,
     super.key,
   });
 
@@ -36,6 +38,10 @@ class SearchView extends StatelessWidget {
 
   /// What the status bar's play glyph shows.
   final PlayState playState;
+
+  /// Says why there is nothing to list (`Loading library`, `Library
+  /// unavailable`, `No matches`), in the results' place.
+  final String? notice;
 
   /// Draw the status bar (goldens of the view alone); the shell's frame
   /// draws it for the screen.
@@ -84,6 +90,8 @@ class SearchView extends StatelessWidget {
                 height: rows * SearchResultRow.height * k,
                 child: Column(
                   children: [
+                    if (live.isEmpty && notice != null && rows > 0)
+                      Expanded(child: _Notice(notice!)),
                     for (final hit in live)
                       SearchResultRow(
                         title: hit.title,
@@ -119,34 +127,17 @@ class SearchView extends StatelessWidget {
     final r = session.results;
     final selected = session.selected;
 
-    // The list as rows with their heights, to keep the selection in view.
-    final items = <Widget>[];
-    final heights = <double>[];
+    // The list as entries (a heading or a hit), built into rows only when in
+    // view: a library of 20,000 songs can match almost every search.
+    final entries = <(String?, SearchHit?, int)>[];
     int? selectedItem;
     var index = 0;
     void group(String heading, List<SearchHit> hits) {
       if (hits.isEmpty) return;
-      items.add(SectionHeading(heading));
-      heights.add(30 * k);
+      entries.add((heading, null, 0));
       for (final hit in hits) {
-        final song = hit.kind == SearchKind.song;
-        final isSel = index == selected;
-        if (isSel) selectedItem = items.length;
-        final i = index;
-        items.add(
-          NeupodRow(
-            title: hit.title,
-            subtitle: song ? hit.detail : null,
-            value: hit.kind == SearchKind.album && hit.year != null
-                ? '${hit.year}'
-                : null,
-            chevron: hit.kind == SearchKind.artist,
-            selection: isSel ? RowSelection.selected : RowSelection.none,
-            position: '${i + 1} of ${session.count}',
-            onTap: () => onOpen?.call(hit),
-          ),
-        );
-        heights.add(song ? tier.row2Height : tier.rowHeight);
+        if (index == selected) selectedItem = entries.length;
+        entries.add((null, hit, index));
         index++;
       }
     }
@@ -155,19 +146,70 @@ class SearchView extends StatelessWidget {
     group('Albums', r.albums);
     group('Songs', r.songs);
 
+    Widget row(int i) {
+      final (heading, hit, n) = entries[i];
+      if (heading != null) return SectionHeading(heading);
+      final song = hit!.kind == SearchKind.song;
+      return NeupodRow(
+        title: hit.title,
+        subtitle: song ? hit.detail : null,
+        value: hit.kind == SearchKind.album && hit.year != null
+            ? '${hit.year}'
+            : null,
+        chevron: hit.kind == SearchKind.artist,
+        selection: n == selected ? RowSelection.selected : RowSelection.none,
+        position: '${n + 1} of ${session.count}',
+        onTap: () => onOpen?.call(hit),
+      );
+    }
+
+    double heightOf(int i) {
+      final (heading, hit, _) = entries[i];
+      if (heading != null) return 30 * k;
+      return hit!.kind == SearchKind.song ? tier.row2Height : tier.rowHeight;
+    }
+
     return ListGround(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SearchFieldBox(text: session.text, caret: false),
           Expanded(
-            child: ScrollWindow(
-              heights: heights,
-              selected: selectedItem,
-              children: items,
-            ),
+            child: entries.isEmpty && notice != null
+                ? _Notice(notice!)
+                : LazyScrollWindow(
+                    itemCount: entries.length,
+                    heightOf: heightOf,
+                    itemBuilder: row,
+                    selected: selectedItem,
+                  ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A line saying why a list is empty, centred in its space.
+class _Notice extends StatelessWidget {
+  const _Notice(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = NeupodTheme.of(context);
+    return Semantics(
+      liveRegion: true,
+      label: text,
+      child: ExcludeSemantics(
+        child: Center(
+          child: NeupodText(
+            text,
+            NeupodType(theme.tier).body(theme.style.list.secondary),
+            align: TextAlign.center,
+          ),
+        ),
       ),
     );
   }

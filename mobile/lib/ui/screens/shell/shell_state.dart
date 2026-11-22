@@ -208,7 +208,11 @@ class ShellController extends Notifier<ShellState> {
   );
 
   /// Shows [request] (for example `PanelRequest.libraryUpdateStopped()`).
+  ///
+  /// A panel already up is replaced: its future completes and its
+  /// `onDismissed` runs, once, as if it had been dismissed.
   Future<void> showPanelRequest(PanelRequest request) {
+    final replaced = state.panel;
     _panelDone?.complete();
     final done = Completer<void>();
     _panelDone = done;
@@ -217,6 +221,7 @@ class ShellController extends Notifier<ShellState> {
       panel: request,
       lastWasPush: state.lastWasPush,
     );
+    replaced?.onDismissed?.call();
     return done.future;
   }
 

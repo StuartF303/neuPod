@@ -13,6 +13,7 @@ import 'package:neupod/domain/playback/player_state.dart';
 import 'package:neupod/domain/playback/queue_item.dart';
 import 'package:neupod/domain/wheel/feedback_ports.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
+import 'package:neupod/ui/components/list_row.dart';
 import 'package:neupod/ui/components/search_entry.dart';
 import 'package:neupod/ui/device/wheel_bus.dart';
 import 'package:neupod/ui/screens/shell/shell_state.dart';
@@ -99,6 +100,7 @@ Future<_Rig> _pump(
   bool library = false,
   bool pushed = true,
   PlayerState? playing,
+  Future<SearchFunction> Function()? loader,
 }) async {
   late final _Rig holder;
   final shell = await pumpShell(
@@ -111,7 +113,10 @@ Future<_Rig> _pump(
             onOpen: (h) => holder.opened.add(h),
           ),
     overrides: [
-      if (!library) searchFunctionProvider.overrideWith((ref) async => _find),
+      if (loader != null)
+        searchFunctionProvider.overrideWith((ref) => loader())
+      else if (!library)
+        searchFunctionProvider.overrideWith((ref) async => _find),
     ],
   );
   holder = _Rig(tester, shell);
@@ -308,5 +313,59 @@ void main() {
       expect(songs.skip(firstWithin).any((t) => t.startsWith('s')), isFalse);
     }
     expect(fn('').count, 0);
+  });
+
+  testWidgets('while the library loads, and when it cannot be read, Search '
+      'says so instead of looking like no matches', (tester) async {
+    final gate = Completer<SearchFunction>();
+    final rig = await _pump(tester, loader: () => gate.future);
+    expect(find.text('Loading library'), findsOneWidget);
+    await rig.press(WheelButton.centre);
+    expect(find.text('Loading library'), findsOneWidget);
+    expect(find.textContaining('found'), findsNothing);
+    gate.complete(_find);
+    await settle(tester);
+    expect(find.text('Loading library'), findsNothing);
+    expect(find.text('Abba'), findsOneWidget, reason: 'searched on arrival');
+
+    final rig2 = await _pump(tester, loader: () async => throw StateError('x'));
+    expect(find.text('Library unavailable'), findsOneWidget);
+    expect(find.text('No matches'), findsNothing);
+    expect(rig2.onScreen, isTrue);
+  });
+
+  testWidgets('a search that matches nothing says No matches', (tester) async {
+    final rig = await _pump(tester);
+    await rig.turn(16); // q
+    await rig.press(WheelButton.centre);
+    expect(find.text('No matches'), findsOneWidget);
+  });
+
+  testWidgets('the results build only the rows in view, however many match', (
+    tester,
+  ) async {
+    final many = SearchResults(
+      songs: [
+        for (var i = 0; i < 5000; i++)
+          SearchHit(
+            kind: SearchKind.song,
+            id: 's$i',
+            title: 'Song $i',
+            detail: 'Artist · Album',
+          ),
+      ],
+    );
+    final rig = await _pump(
+      tester,
+      initial: 'song',
+      loader: () async =>
+          (q) => many,
+    );
+    await rig.press(WheelButton.playPause);
+    expect(find.byType(NeupodRow).evaluate().length, lessThan(15));
+    await rig.turn(2400);
+    expect(find.byType(NeupodRow).evaluate().length, lessThan(15));
+    expect(find.text('Song 2400'), findsOneWidget);
+    expect(find.text('Song 0'), findsNothing);
   });
 }

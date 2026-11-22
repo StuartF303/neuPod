@@ -83,9 +83,14 @@ void main() {
     final rig = await pumpShell(tester, home: (_) => const HomeScreen());
     final shell = rig.container.read(shellProvider.notifier);
     var firstDone = false;
+    var firstDismissed = 0;
     unawaited(
       shell
-          .showPanel(title: 'First', message: 'a')
+          .showPanel(
+            title: 'First',
+            message: 'a',
+            onDismissed: () => firstDismissed++,
+          )
           .then((_) => firstDone = true),
     );
     await settle(tester);
@@ -94,6 +99,27 @@ void main() {
     expect(find.text('First'), findsNothing);
     expect(find.text('Second'), findsOneWidget);
     expect(firstDone, isTrue);
+    expect(firstDismissed, 1, reason: 'a replaced panel is dismissed, once');
     expect(rig.bus.semantics.value.label, 'Second');
+  });
+
+  testWidgets('dismissing the second panel does not call the first one\'s '
+      'onDismissed again', (tester) async {
+    final rig = await pumpShell(tester, home: (_) => const HomeScreen());
+    final shell = rig.container.read(shellProvider.notifier);
+    var first = 0;
+    var second = 0;
+    unawaited(
+      shell.showPanel(title: 'A', message: 'a', onDismissed: () => first++),
+    );
+    await settle(tester);
+    unawaited(
+      shell.showPanel(title: 'B', message: 'b', onDismissed: () => second++),
+    );
+    await settle(tester);
+    rig.press(WheelButton.centre);
+    await settle(tester);
+    expect(first, 1);
+    expect(second, 1);
   });
 }
