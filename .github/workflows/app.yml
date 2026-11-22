@@ -201,6 +201,11 @@ jobs:
       # timeout, then by the step timeout. The script is one line because the action runs each script line on its own.
       # The step timeout covers the emulator boot plus every file at the per-file limit (3 files x 8 min), so a hang
       # in any file is reported by the script's own message. Raise it when a file is added.
+      #
+      # -feature RefCountPipe: the API 29 emulator's graphics stack sometimes deadlocks on the first frame (RenderThread
+      # stuck in QemuPipeStream::commitBufferAndReadFully <- rcOpenColorBuffer2_enc <- gralloc.ranchu; ~4 in 10 runs).
+      # Run 45039175170 (25 cold launches per job): 75/75 ok with RefCountPipe across 3 jobs, against 7/75 hung on the
+      # earlier baseline without it. Keep -gpu swiftshader_indirect; -gpu guest timed out.
       - name: Integration tests
         timeout-minutes: 28
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
@@ -210,7 +215,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          emulator-options: -no-window -gpu swiftshader_indirect -feature RefCountPipe -noaudio -no-boot-anim -camera-back none -no-snapshot
           working-directory: mobile
           script: FOLDER_IT_APK=build/folder_it/app-debug.apk bash tool/android_integration_tests.sh
 
