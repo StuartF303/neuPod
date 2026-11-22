@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
 
-// Golden set-up for these tests: the components' (Montserrat loaded, goldens
-// compared on macOS only; see ../components/flutter_test_config.dart).
-
-import 'dart:async';
-
-import '../components/flutter_test_config.dart' as components;
-
-Future<void> testExecutable(FutureOr<void> Function() testMain) =>
-    components.testExecutable(testMain);
+// The golden set-up of the components' tests (Montserrat from the bundled
+// asset; goldens compared on macOS only) applies here too.
+export '../components/flutter_test_config.dart';

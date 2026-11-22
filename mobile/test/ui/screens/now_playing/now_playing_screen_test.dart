@@ -4,27 +4,26 @@
 // volume bar and its 1.2 s return, the failure that must be seen (owner
 // decision 10), seek mode, scan, skip, page 2 and the screen-reader value.
 
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:neupod/app/providers.dart';
 import 'package:neupod/domain/playback/player_state.dart';
 import 'package:neupod/domain/playback/queue_item.dart';
 import 'package:neupod/domain/wheel/system_volume_port.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/ui/components/bars.dart';
 import 'package:neupod/ui/components/status_bar.dart';
-import 'package:neupod/ui/device/device_feedback.dart';
 import 'package:neupod/ui/device/system_volume.dart';
 import 'package:neupod/ui/device/wheel_bus.dart';
 import 'package:neupod/ui/screens/now_playing/now_playing_options.dart';
 import 'package:neupod/ui/screens/now_playing/now_playing_screen.dart';
 import 'package:neupod/ui/screens/now_playing/now_playing_view.dart';
-import 'package:neupod/ui/screens/panel/panel_layer.dart';
+import 'package:neupod/ui/screens/shell/shell_state.dart';
 
 import '../../../fakes/fake_player.dart';
-import '../../device/device_test_harness.dart';
+import '../screens_harness.dart';
 import '../screens_test_support.dart';
 
 const _item = QueueItem(
@@ -51,23 +50,19 @@ PlayerState _playing({Duration? duration = const Duration(seconds: 240)}) =>
     );
 
 class _Rig {
-  _Rig(this.tester, this.player, this.volume, this.clock, this.haptics);
+  _Rig(this.tester, this.rig, this.player, this.volume, this.haptics);
 
   final WidgetTester tester;
+  final ShellRig rig;
   final FakePlayer player;
   final RecordingVolume volume;
-  final TestClock clock;
-  final RecordingHaptics haptics;
-  late ProviderContainer container;
-  int backs = 0;
+  final RecordedHaptics haptics;
   int queues = 0;
 
-  WheelBus get bus => container.read(wheelBusProvider);
+  ProviderContainer get container => rig.container;
+  WheelBus get bus => rig.bus;
 
-  Future<void> advance(int ms) async {
-    clock.ms += ms;
-    await tester.pump(Duration(milliseconds: ms));
-  }
+  Future<void> advance(int ms) => tester.pump(Duration(milliseconds: ms));
 
   /// A full press, as the wheel produces it.
   Future<void> press(WheelButton b, {int holdMs = 0}) async {
@@ -89,46 +84,37 @@ class _Rig {
     bus.emit(WheelStep(steps, 1));
     await tester.pump();
   }
+
+  /// Menu on the shell: goes back when the screen does not take it.
+  bool get onScreen => find.byType(NowPlayingScreen).evaluate().isNotEmpty;
 }
 
+/// Now Playing pushed on a stand-in Home, in the shell.
 Future<_Rig> _pump(
   WidgetTester tester, {
   PlayerState? state,
   SystemVolumeStatus? failWith,
   bool throwOnRead = false,
 }) async {
-  tester.view.physicalSize = const Size(600, 450);
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.reset);
-  final player = FakePlayer(state ?? _playing());
   final volume = RecordingVolume(failWith: failWith, throwOnRead: throwOnRead);
-  final clock = TestClock();
-  final haptics = RecordingHaptics();
-  final rig = _Rig(tester, player, volume, clock, haptics);
-  final List<Override> overrides = [
-    playerProvider.overrideWithValue(player),
-    systemVolumeProvider.overrideWithValue(volume),
-    wheelClockProvider.overrideWithValue(() => clock.ms),
-    hapticsPortProvider.overrideWithValue(haptics),
-  ];
-  rig.container = ProviderContainer.test(overrides: overrides);
-  await tester.pumpWidget(
-    UncontrolledProviderScope(
-      container: rig.container,
-      child: Directionality(
-        textDirection: TextDirection.ltr,
-        child: MediaQuery(
-          data: const MediaQueryData(size: Size(600, 450)),
-          child: NowPlayingScreen(
-            onBack: () => rig.backs++,
-            onOpenQueue: () => rig.queues++,
-          ),
-        ),
-      ),
-    ),
+  late final _Rig holder;
+  final shell = await pumpShell(
+    tester,
+    home: (_) => const SizedBox(),
+    playing: state ?? _playing(),
+    overrides: [systemVolumeProvider.overrideWithValue(volume)],
   );
-  await tester.pump();
-  return rig;
+  holder = _Rig(tester, shell, shell.player, volume, shell.haptics);
+  shell.container
+      .read(shellProvider.notifier)
+      .push(
+        ShellPage(
+          name: 'np',
+          builder: (_) => NowPlayingScreen(onOpenQueue: () => holder.queues++),
+        ),
+      );
+  await settle(tester);
+  return holder;
 }
 
 NowPlayingView _view(WidgetTester tester) =>
@@ -226,15 +212,21 @@ void main() {
     tester,
   ) async {
     final rig = await _pump(tester);
-    rig.container
-        .read(panelProvider.notifier)
-        .show(const PanelRequest(title: 'Lost', message: 'Gone'));
+    unawaited(
+      rig.container
+          .read(shellProvider.notifier)
+          .showPanel(title: 'Lost', message: 'Gone'),
+    );
+    await settle(tester);
     await rig.turn(2);
     await rig.press(WheelButton.next);
     await rig.press(WheelButton.playPause);
     expect(rig.volume.asked, isEmpty);
     expect(rig.player.calls, isEmpty);
-    rig.container.read(panelProvider.notifier).dismiss();
+    // The press that dismisses it is not Now Playing's.
+    await rig.press(WheelButton.centre);
+    await settle(tester);
+    expect(_view(tester).mode, NowPlayingMode.rest);
     await rig.turn(1);
     expect(rig.volume.asked, [1]);
   });
@@ -308,10 +300,11 @@ void main() {
     await rig.turn(1);
     await rig.press(WheelButton.menu);
     expect(_view(tester).mode, NowPlayingMode.rest);
-    expect(rig.backs, 0);
+    expect(rig.onScreen, isTrue, reason: 'Menu only left seek mode');
     expect(rig.player.calls.where((c) => c.startsWith('seek')), isEmpty);
     await rig.press(WheelButton.menu);
-    expect(rig.backs, 1);
+    await settle(tester);
+    expect(rig.onScreen, isFalse, reason: 'the shell went back');
   });
 
   testWidgets('seek mode left alone for 10 s is cancelled', (tester) async {
@@ -380,7 +373,7 @@ void main() {
 
     await rig.press(WheelButton.menu); // back to page 1
     expect(_view(tester).mode, NowPlayingMode.rest);
-    expect(rig.backs, 0);
+    expect(rig.onScreen, isTrue);
   });
 
   testWidgets('page 2: Select on Rating lets the wheel set the stars', (
@@ -398,10 +391,30 @@ void main() {
     expect(_view(tester).mode, NowPlayingMode.page2);
   });
 
-  testWidgets('Play/Pause toggles the player', (tester) async {
+  testWidgets('Play/Pause is the shell\'s: it pauses the player', (
+    tester,
+  ) async {
     final rig = await _pump(tester);
     await rig.press(WheelButton.playPause);
     expect(rig.player.calls, ['pause']);
+  });
+
+  testWidgets('a screen over Now Playing does not get the wheel, and the '
+      'holds are put back when it goes', (tester) async {
+    final rig = await _pump(tester);
+    expect(rig.bus.holdMs, isNotEmpty);
+    rig.container
+        .read(shellProvider.notifier)
+        .push(ShellPage(name: 'over', builder: (_) => const SizedBox()));
+    await settle(tester);
+    expect(rig.bus.holdMs, isEmpty, reason: 'given up while covered');
+    await rig.turn(2);
+    expect(rig.volume.asked, isEmpty);
+    rig.container.read(shellProvider.notifier).pop();
+    await settle(tester);
+    expect(rig.bus.holdMs, isNotEmpty);
+    await rig.turn(1);
+    expect(rig.volume.asked, [1]);
   });
 
   testWidgets('the screen holds its holds and gives the hold haptic itself, '
@@ -416,7 +429,8 @@ void main() {
         WheelButton.centre,
       ]),
     );
-    await tester.pumpWidget(const SizedBox());
+    rig.container.read(shellProvider.notifier).pop();
+    await settle(tester);
     expect(bus.holdMs, isEmpty);
     expect(bus.screenGivesHoldHaptic, isEmpty);
   });

@@ -4,21 +4,23 @@
 // status-bar count, the Menu hold, and the results phase. The model's rules
 // are also run by the spec suite (test/spec/wheel_text_entry_spec_test.dart).
 
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:neupod/app/providers.dart';
+import 'package:neupod/domain/playback/player_state.dart';
+import 'package:neupod/domain/playback/queue_item.dart';
 import 'package:neupod/domain/wheel/feedback_ports.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/ui/components/search_entry.dart';
-import 'package:neupod/ui/device/device_feedback.dart';
 import 'package:neupod/ui/device/wheel_bus.dart';
-import 'package:neupod/ui/screens/panel/panel_layer.dart';
+import 'package:neupod/ui/screens/shell/shell_state.dart';
 import 'package:neupod/ui/screens/search/search_screen.dart';
 import 'package:neupod/ui/screens/search/search_session.dart';
 
 import '../../../fakes/fake_player.dart';
-import '../../device/device_test_harness.dart';
+import '../screens_harness.dart';
 
 const _library = [
   SearchHit(kind: SearchKind.artist, id: 'a', title: 'Abba'),
@@ -67,15 +69,16 @@ SearchResults _find(String q) {
 }
 
 class _Rig {
-  _Rig(this.tester, this.container, this.player);
+  _Rig(this.tester, this.rig);
   final WidgetTester tester;
-  final ProviderContainer container;
-  final FakePlayer player;
-  late RecordingHaptics haptics;
-  int backs = 0;
+  final ShellRig rig;
   final List<SearchHit> opened = [];
 
-  WheelBus get bus => container.read(wheelBusProvider);
+  ProviderContainer get container => rig.container;
+  FakePlayer get player => rig.player;
+  RecordedHaptics get haptics => rig.haptics;
+  WheelBus get bus => rig.bus;
+  bool get onScreen => find.byType(SearchScreen).evaluate().isNotEmpty;
 
   Future<void> press(WheelButton b) async {
     bus.press(b);
@@ -88,42 +91,45 @@ class _Rig {
   }
 }
 
+/// Search pushed on a stand-in Home in the shell, over the test's own
+/// library function ([library] false: the gate library's).
 Future<_Rig> _pump(
   WidgetTester tester, {
   String initial = '',
-  bool withBack = true,
+  bool library = false,
+  bool pushed = true,
+  PlayerState? playing,
 }) async {
-  tester.view.physicalSize = const Size(600, 450);
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.reset);
-  final player = FakePlayer();
-  final haptics = RecordingHaptics();
-  final container = ProviderContainer.test(
+  late final _Rig holder;
+  final shell = await pumpShell(
+    tester,
+    playing: playing,
+    home: (_) => pushed
+        ? const SizedBox()
+        : SearchScreen(
+            initialText: initial,
+            onOpen: (h) => holder.opened.add(h),
+          ),
     overrides: [
-      playerProvider.overrideWithValue(player),
-      searchFunctionProvider.overrideWithValue(_find),
-      hapticsPortProvider.overrideWithValue(haptics),
+      if (!library) searchFunctionProvider.overrideWith((ref) async => _find),
     ],
   );
-  final rig = _Rig(tester, container, player)..haptics = haptics;
-  await tester.pumpWidget(
-    UncontrolledProviderScope(
-      container: container,
-      child: Directionality(
-        textDirection: TextDirection.ltr,
-        child: MediaQuery(
-          data: const MediaQueryData(size: Size(600, 450)),
-          child: SearchScreen(
-            initialText: initial,
-            onBack: withBack ? () => rig.backs++ : null,
-            onOpen: rig.opened.add,
+  holder = _Rig(tester, shell);
+  if (pushed) {
+    shell.container
+        .read(shellProvider.notifier)
+        .push(
+          ShellPage(
+            name: 'search',
+            builder: (_) => SearchScreen(
+              initialText: initial,
+              onOpen: (h) => holder.opened.add(h),
+            ),
           ),
-        ),
-      ),
-    ),
-  );
-  await tester.pump();
-  return rig;
+        );
+  }
+  await settle(tester);
+  return holder;
 }
 
 void main() {
@@ -142,7 +148,6 @@ void main() {
     expect(find.text('space'), findsOneWidget);
     expect(find.text('del'), findsOneWidget);
     expect(rig.bus.holdMs[WheelButton.menu], 600);
-    expect(rig.bus.atRoot.value, isFalse);
   });
 
   testWidgets('the wheel turns the ring and the centre types; live results '
@@ -168,7 +173,7 @@ void main() {
     expect(find.text('A'), findsWidgets);
     await rig.press(WheelButton.centre);
     await rig.press(WheelButton.menu);
-    expect(rig.backs, 0);
+    expect(rig.onScreen, isTrue);
     // Hold Menu: the wheel's WheelHoldStart clears.
     rig.bus.emit(const WheelButtonDown(WheelButton.menu));
     rig.bus.emit(const WheelHoldStart(WheelButton.menu));
@@ -177,14 +182,23 @@ void main() {
     await tester.pump();
     expect(find.byType(SearchResultRow), findsNothing);
     await rig.press(WheelButton.menu);
-    expect(rig.backs, 1);
+    await settle(tester);
+    expect(rig.onScreen, isFalse, reason: 'the shell went back');
   });
 
   testWidgets('Play/Pause goes to the results; the wheel scrolls them; the '
       'centre opens a row; Menu returns to typing with the text kept', (
     tester,
   ) async {
-    final rig = await _pump(tester, initial: 'ab');
+    final rig = await _pump(
+      tester,
+      initial: 'ab',
+      playing: const PlayerState(
+        status: PlaybackStatus.ready,
+        queue: [QueueItem(id: 'x', uri: 'file:///x')],
+        index: 0,
+      ),
+    );
     await rig.press(WheelButton.playPause);
     expect(rig.player.calls, isEmpty, reason: 'not play or pause');
     expect(find.text('Artists'), findsOneWidget);
@@ -197,8 +211,10 @@ void main() {
     await rig.press(WheelButton.menu);
     expect(find.byType(LetterRing), findsOneWidget);
     expect(find.text('ab'), findsOneWidget);
-    // Back in the results, Play/Pause plays or pauses.
+    // Back in typing Play/Pause goes to the results again; there it is the
+    // shell's play or pause.
     await rig.press(WheelButton.playPause);
+    expect(rig.player.calls, isEmpty);
     await rig.press(WheelButton.playPause);
     expect(rig.player.calls, ['play']);
   });
@@ -207,20 +223,44 @@ void main() {
     tester,
   ) async {
     final rig = await _pump(tester);
-    // Search ignores the wheel while a panel is up.
-    // (The panel layer is tested in panel_layer_test.dart.)
-    rig.container
-        .read(panelProvider.notifier)
-        .show(const PanelRequest(title: 'Lost', message: 'Something'));
-    await rig.press(WheelButton.centre);
-    rig.container.read(panelProvider.notifier).dismiss();
-    await tester.pump();
+    unawaited(
+      rig.container
+          .read(shellProvider.notifier)
+          .showPanel(title: 'Lost', message: 'Something'),
+    );
+    await settle(tester);
+    await rig.press(WheelButton.next);
+    await rig.turn(3);
     expect(find.byType(SearchResultRow), findsNothing);
+    await rig.press(WheelButton.centre); // dismisses; not a typed glyph
+    await settle(tester);
+    expect(find.text('Lost'), findsNothing);
+    await rig.press(WheelButton.centre);
+    expect(find.text('a'), findsWidgets);
+  });
+
+  testWidgets('a screen over Search does not get the wheel', (tester) async {
+    final rig = await _pump(tester);
+    rig.container
+        .read(shellProvider.notifier)
+        .push(ShellPage(name: 'over', builder: (_) => const SizedBox()));
+    await settle(tester);
+    expect(rig.bus.holdMs, isEmpty);
+    await rig.press(WheelButton.centre);
+    rig.container.read(shellProvider.notifier).pop();
+    await settle(tester);
+    expect(rig.bus.holdMs[WheelButton.menu], 600);
+    expect(
+      find.byType(SearchResultRow),
+      findsNothing,
+      reason: 'nothing was typed',
+    );
   });
 
   testWidgets('restores the buttons holds when it goes', (tester) async {
     final rig = await _pump(tester);
-    await tester.pumpWidget(const SizedBox());
+    rig.container.read(shellProvider.notifier).pop();
+    await settle(tester);
     expect(rig.bus.holdMs, isEmpty);
   });
 
@@ -248,10 +288,25 @@ void main() {
   testWidgets('Menu on an empty field with nowhere to go does nothing', (
     tester,
   ) async {
-    final rig = await _pump(tester, withBack: false);
+    final rig = await _pump(tester, pushed: false);
     await rig.press(WheelButton.menu);
     expect(find.byType(LetterRing), findsOneWidget);
     await rig.press(WheelButton.centre);
     expect(find.text('a'), findsWidgets);
+  });
+
+  testWidgets('the library search: names starting with the text first, '
+      'grouped, from the gate library', (tester) async {
+    final rig = await _pump(tester, library: true);
+    final fn = await rig.container.read(searchFunctionProvider.future);
+    final r = fn('s');
+    expect(r.count, greaterThan(0));
+    final songs = [for (final h in r.songs) h.title.toLowerCase()];
+    final firstWithin = songs.indexWhere((t) => !t.startsWith('s'));
+    if (firstWithin >= 0) {
+      expect(songs.take(firstWithin).every((t) => t.startsWith('s')), isTrue);
+      expect(songs.skip(firstWithin).any((t) => t.startsWith('s')), isFalse);
+    }
+    expect(fn('').count, 0);
   });
 }

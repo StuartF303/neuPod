@@ -1,57 +1,92 @@
 // SPDX-License-Identifier: MPL-2.0
 
-/// Search, typed with the wheel (owner decision 12): the wheel events drive a
-/// [SearchSession]; the phone's keyboard never comes up.
+/// Search, typed with the wheel (owner decision 12): the wheel events the
+/// shell hands to the top screen drive a [SearchSession]; the phone's keyboard
+/// never comes up.
 library;
-
-import 'dart:async';
 
 import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neupod/app/library_view_providers.dart';
 import 'package:neupod/app/providers.dart';
-import 'package:neupod/domain/playback/player_state.dart';
 import 'package:neupod/domain/text_entry/wheel_text_entry.dart' as entry;
 import 'package:neupod/domain/wheel/wheel_events.dart';
-import 'package:neupod/ui/components/status_bar.dart';
 import 'package:neupod/ui/device/device_feedback.dart';
 import 'package:neupod/ui/device/wheel_bus.dart';
-import 'package:neupod/ui/screens/common/screen_frame.dart';
-import 'package:neupod/ui/screens/panel/panel_layer.dart';
+import 'package:neupod/ui/screens/browse/album_screen.dart';
+import 'package:neupod/ui/screens/browse/browse_common.dart';
+import 'package:neupod/ui/screens/browse/collection_screen.dart';
 import 'package:neupod/ui/screens/search/search_session.dart';
 import 'package:neupod/ui/screens/search/search_view.dart';
-import 'package:neupod/ui/style/neupod_style.dart';
+import 'package:neupod/ui/screens/shell/screen_scope.dart';
+import 'package:neupod/ui/screens/shell/shell_frame.dart';
+import 'package:neupod/ui/screens/shell/shell_state.dart';
 
-/// The library search Search runs after every edit. The shell overrides it
-/// with an adapter over the library's read-only view (artists, albums and
-/// songs, in the library's collation order); by default nothing is found.
-final searchFunctionProvider = Provider<SearchFunction>(
-  (ref) =>
-      (query) => SearchResults.none,
-);
+/// The library search Search runs after every edit: the library's artists,
+/// albums and songs (read once when Search opens, in the library's collation
+/// order), matched by a case-insensitive substring of the name, names that
+/// start with the text first. Tests override it with their own.
+final searchFunctionProvider = FutureProvider<SearchFunction>((ref) async {
+  final library = await ref.watch(libraryViewProvider.future);
+  final artists = [
+    for (final a in await library.artists())
+      SearchHit(kind: SearchKind.artist, id: a.id, title: a.name),
+  ];
+  final albums = [
+    for (final a in await library.albums())
+      SearchHit(
+        kind: SearchKind.album,
+        id: a.id,
+        title: a.title,
+        detail: a.artist,
+        year: a.year,
+      ),
+  ];
+  final songs = [
+    for (final s in await library.songs())
+      SearchHit(
+        kind: SearchKind.song,
+        id: s.id,
+        title: s.title,
+        detail: '${s.artist} · ${s.album}',
+      ),
+  ];
+  List<SearchHit> match(List<SearchHit> all, String q) {
+    final needle = q.toLowerCase();
+    final starts = <SearchHit>[];
+    final within = <SearchHit>[];
+    for (final h in all) {
+      final name = h.title.toLowerCase();
+      if (name.startsWith(needle)) {
+        starts.add(h);
+      } else if (name.contains(needle)) {
+        within.add(h);
+      }
+    }
+    return [...starts, ...within];
+  }
+
+  return (String query) => query.isEmpty
+      ? SearchResults.none
+      : SearchResults(
+          artists: match(artists, query),
+          albums: match(albums, query),
+          songs: match(songs, query),
+        );
+});
 
 /// The Search screen.
 class SearchScreen extends ConsumerStatefulWidget {
-  /// Search, left through [onBack]; a row opens through [onOpen].
-  const SearchScreen({
-    this.onBack,
-    this.onOpen,
-    this.initialText = '',
-    this.style,
-    super.key,
-  });
-
-  /// Menu on an empty field: leave Search.
-  final VoidCallback? onBack;
+  /// Search; a row opens through [onOpen], by default the artist, the album,
+  /// or playing the song.
+  const SearchScreen({this.onOpen, this.initialText = '', super.key});
 
   /// The centre on a result, or a tap on one.
   final void Function(SearchHit hit)? onOpen;
 
-  /// Text to start with (kept when the shell rebuilds Search).
+  /// Text to start with.
   final String initialText;
-
-  /// The style; null takes the designed one for the phone's mode.
-  final NeupodStyle? style;
 
   @override
   ConsumerState<SearchScreen> createState() => _SearchScreenState();
@@ -60,40 +95,82 @@ class SearchScreen extends ConsumerStatefulWidget {
 class _SearchScreenState extends ConsumerState<SearchScreen> {
   late final WheelBus _bus = ref.read(wheelBusProvider);
   late final SearchSession _session;
-  StreamSubscription<WheelEvent>? _sub;
+  SearchFunction _find = (query) => SearchResults.none;
+  ScreenHandle? _screen;
+  bool _claimed = false;
   bool _atEnd = false;
-  late final Map<WheelButton, int> _savedHolds;
-  late final Map<WheelButton, int> _ownHolds;
+  Map<WheelButton, int> _savedHolds = const {};
+  Map<WheelButton, int> _ownHolds = const {};
 
   @override
   void initState() {
     super.initState();
     _session = SearchSession(
-      search: ref.read(searchFunctionProvider),
+      search: (q) => _find(q),
       initial: widget.initialText,
       onChange: _onChange,
     );
-    _session.onLeave = () => widget.onBack?.call();
-    _session.onOpen = (hit) => widget.onOpen?.call(hit);
-    _savedHolds = Map.of(_bus.holdMs);
-    // Menu held 600 ms clears the field (`CLEAR_HOLD_MS`).
-    _bus.holdMs[WheelButton.menu] = entry.kClearHoldTime.inMilliseconds;
-    _ownHolds = Map.of(_bus.holdMs);
-    _bus.atRoot.value = false;
-    _sub = _bus.events.listen(_onEvent);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _describe());
+    _session.onOpen = _open;
+    ref.listenManual(searchFunctionProvider, (_, next) {
+      final f = next.value;
+      if (f == null) return;
+      _find = f;
+      _session.refresh();
+    }, fireImmediately: true);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final handle = ScreenScope.maybeOf(context);
+    if (handle != _screen) {
+      _screen?.isTop.removeListener(_onTop);
+      if (_screen?.wheel == _onWheel) _screen?.wheel = null;
+      _screen = handle;
+      handle?.wheel = _onWheel;
+      handle?.isTop.addListener(_onTop);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _onTop());
+    }
   }
 
   @override
   void dispose() {
-    _sub?.cancel();
+    _screen?.isTop.removeListener(_onTop);
+    if (_screen?.wheel == _onWheel) _screen?.wheel = null;
+    _release();
+    super.dispose();
+  }
+
+  bool get _isTop => _screen?.isTop.value ?? true;
+
+  void _onTop() {
+    if (!mounted) return;
+    if (_isTop) {
+      _claim();
+    } else {
+      _release();
+    }
+  }
+
+  void _claim() {
+    if (_claimed) return;
+    _claimed = true;
+    _savedHolds = Map.of(_bus.holdMs);
+    // Menu held 600 ms clears the field (`CLEAR_HOLD_MS`).
+    _bus.holdMs[WheelButton.menu] = entry.kClearHoldTime.inMilliseconds;
+    _ownHolds = Map.of(_bus.holdMs);
+    _describe();
+  }
+
+  void _release() {
+    if (!_claimed) return;
+    _claimed = false;
     // Only if they are still ours: another screen may have replaced them.
     if (mapEquals(_bus.holdMs, _ownHolds)) {
       _bus.holdMs
         ..clear()
         ..addAll(_savedHolds);
     }
-    super.dispose();
   }
 
   void _onChange() {
@@ -102,16 +179,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   void _describe() {
-    if (!mounted || ref.read(panelProvider) != null) return;
-    final typing = _session.phase == SearchPhase.typing;
-    final player = ref.read(playerProvider).state;
-    if (typing) {
+    if (!mounted || !_claimed || !_isTop) return;
+    if (ref.read(shellProvider).panel != null) return;
+    final playing = ref.read(playerProvider).state.isPlaying;
+    if (_session.phase == SearchPhase.typing) {
       _bus.semantics.value = WheelSemantics(
         label: 'Letter ring',
         value:
             '${SearchSession.chipLabel(_session.chip)}, '
             '${_glyphWords(_session.currentGlyph)}',
-        playing: player.isPlaying,
+        playing: playing,
       );
     } else {
       final all = _session.flatResults;
@@ -121,7 +198,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         value: i < all.length
             ? '${all[i].title}, ${i + 1} of ${all.length}'
             : '',
-        playing: player.isPlaying,
+        playing: playing,
       );
     }
   }
@@ -132,18 +209,40 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _ => g,
   };
 
-  void _onEvent(WheelEvent e) {
-    // Not while a panel is up, or another screen is over this one.
-    if (!mounted ||
-        ref.read(panelProvider) != null ||
-        !(ModalRoute.of(context)?.isCurrent ?? true)) {
+  Future<void> _open(SearchHit hit) async {
+    final custom = widget.onOpen;
+    if (custom != null) {
+      custom(hit);
       return;
     }
+    final library = await ref.read(libraryViewProvider.future);
+    if (!mounted) return;
+    switch (hit.kind) {
+      case SearchKind.album:
+        pushScreen(ref, hit.title, (_) => AlbumScreen(albumId: hit.id));
+      case SearchKind.artist:
+        final artist = await library.artist(hit.id);
+        if (artist != null && mounted) {
+          pushScreen(ref, artist.name, (_) => CollectionScreen.artist(artist));
+        }
+      case SearchKind.song:
+        final song = await library.song(hit.id);
+        if (song != null && mounted) await playFrom(ref, [song], song);
+    }
+  }
+
+  /// The shell gives the top screen every wheel event; true when used. What
+  /// is not taken, the shell does: Menu goes back (on an empty field, which
+  /// is leaving Search), Previous and Next skip tracks and Play/Pause plays
+  /// in the results.
+  bool _onWheel(WheelEvent e) {
+    if (!_isTop) return false;
     final feedback = ref.read(deviceFeedbackProvider);
+    final typing = _session.phase == SearchPhase.typing;
     switch (e) {
       case WheelStep(:final steps):
         final moved = _session.wheel(steps);
-        if (_session.phase == SearchPhase.results) {
+        if (!typing) {
           if (moved) {
             _atEnd = false;
             feedback.detent();
@@ -154,73 +253,57 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         } else {
           feedback.detent();
         }
-      case WheelPress(:final button):
-        _onPress(button);
+        return true;
       case WheelHoldStart(button: WheelButton.menu):
         _session.menuHeld();
+        return true;
+      case WheelPress(:final button):
+        return _onPress(button, typing);
       case _:
-        break;
+        return true;
     }
   }
 
-  void _onPress(WheelButton button) {
-    final player = ref.read(playerProvider);
+  bool _onPress(WheelButton button, bool typing) {
     switch (button) {
       case WheelButton.centre:
         final before = _session.text;
         _session.centre();
         // At the 24-character cap a typed glyph is refused: say so, as a list
         // says it has hit its end.
-        if (_session.phase == SearchPhase.typing &&
+        if (typing &&
             _session.text == before &&
             _session.atLimit &&
             _session.chip != entry.TextChip.delete) {
           ref.read(deviceFeedbackProvider).endReached();
         }
+        return true;
       case WheelButton.previous:
-        if (_session.phase == SearchPhase.typing) {
-          _session.previous();
-        } else {
-          player.skipToPrevious();
-        }
+        if (!typing) return false;
+        _session.previous();
+        return true;
       case WheelButton.next:
-        if (_session.phase == SearchPhase.typing) {
-          _session.next();
-        } else {
-          player.skipToNext();
-        }
+        if (!typing) return false;
+        _session.next();
+        return true;
       case WheelButton.menu:
-        // Menu on an empty field leaves Search; with nowhere to go (Search
-        // on its own) it does nothing rather than strand the screen.
-        if (_session.phase == SearchPhase.typing &&
-            _session.text.isEmpty &&
-            widget.onBack == null) {
-          return;
-        }
+        // Menu on an empty field leaves Search: the shell goes back (and on
+        // its own, with nowhere to go, does nothing).
+        if (typing && _session.text.isEmpty) return false;
         _session.menu();
+        return true;
       case WheelButton.playPause:
-        if (!_session.playPause()) {
-          if (player.state.playWhenReady) {
-            player.pause();
-          } else {
-            player.play();
-          }
-        }
+        return _session.playPause();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(playerStateProvider).value ?? PlayerState.empty;
-    return ScreenFrame(
-      style: widget.style,
-      child: SearchView(
-        session: _session,
-        playState: state.current == null
-            ? PlayState.stopped
-            : (state.isPlaying ? PlayState.playing : PlayState.paused),
-        onOpen: widget.onOpen,
-      ),
+    final found = _session.text.isEmpty ? null : '${_session.count} found';
+    return ShellFrame(
+      title: 'Search',
+      context: found,
+      body: SearchView(session: _session, withStatusBar: false, onOpen: _open),
     );
   }
 }

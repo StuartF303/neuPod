@@ -212,6 +212,15 @@ class SearchSession {
 
   void _changed() => onChange?.call();
 
+  /// The library changed under the results (it finished loading): search
+  /// again for the text so far.
+  void refresh() {
+    final text = _entry.text;
+    _results = text.isEmpty ? SearchResults.none : search(text);
+    _selected = 0;
+    _changed();
+  }
+
   /// The wheel turned by [steps] (already accelerated). True when something
   /// moved: the ring, or the selection.
   bool wheel(int steps) {

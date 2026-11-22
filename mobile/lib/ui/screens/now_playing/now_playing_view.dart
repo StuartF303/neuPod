@@ -159,6 +159,7 @@ class NowPlayingView extends StatelessWidget {
     this.dragToSeek = false,
     this.onSeekFraction,
     this.onPage2Tap,
+    this.withStatusBar = true,
     super.key,
   });
 
@@ -198,9 +199,18 @@ class NowPlayingView extends StatelessWidget {
   /// A page 2 row was tapped.
   final ValueChanged<Page2Row>? onPage2Tap;
 
+  /// Draw the status bar (goldens of the view alone); the shell's frame
+  /// draws it for the screen, from [statusTitle] and the rest of the data.
+  final bool withStatusBar;
+
   @override
   Widget build(BuildContext context) {
+    final body = mode == NowPlayingMode.page2
+        ? _page2(context)
+        : _page1(context);
+    if (!withStatusBar) return body;
     return NeupodScaffold(
+      body: body,
       statusBar: StatusBar(
         title: 'Now Playing',
         playState: data.playState,
@@ -210,7 +220,6 @@ class NowPlayingView extends StatelessWidget {
         contextLabel: data.contextLabel,
         message: message,
       ),
-      body: mode == NowPlayingMode.page2 ? _page2(context) : _page1(context),
     );
   }
 

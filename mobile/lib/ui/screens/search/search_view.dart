@@ -27,6 +27,7 @@ class SearchView extends StatelessWidget {
     required this.session,
     this.playState = PlayState.stopped,
     this.onOpen,
+    this.withStatusBar = true,
     super.key,
   });
 
@@ -35,6 +36,10 @@ class SearchView extends StatelessWidget {
 
   /// What the status bar's play glyph shows.
   final PlayState playState;
+
+  /// Draw the status bar (goldens of the view alone); the shell's frame
+  /// draws it for the screen.
+  final bool withStatusBar;
 
   /// A row was opened by a tap or the screen reader (the host takes pointer
   /// touches away in direct-touch candidate 1; the semantics action stays).
@@ -45,13 +50,15 @@ class SearchView extends StatelessWidget {
     final typing = session.phase != SearchPhase.results;
     final text = session.text;
     final found = text.isEmpty ? null : '${session.count} found';
+    final body = typing ? _typing(context) : _results(context);
+    if (!withStatusBar) return body;
     return NeupodScaffold(
       statusBar: StatusBar(
         title: 'Search',
         playState: playState,
         context: found,
       ),
-      body: typing ? _typing(context) : _results(context),
+      body: body,
     );
   }
 

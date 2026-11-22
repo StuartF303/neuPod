@@ -9,15 +9,12 @@
 library;
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/app/providers.dart';
 import 'package:neupod/domain/playback/player_state.dart';
-import 'package:neupod/domain/playback/queue_item.dart';
-import 'package:neupod/domain/style/art_palette.dart';
 import 'package:neupod/domain/wheel/now_playing_control.dart';
 import 'package:neupod/domain/wheel/system_volume_port.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
@@ -29,14 +26,15 @@ import 'package:neupod/ui/device/device_view.dart' show gateSwitchesEnabled;
 import 'package:neupod/ui/device/screen_host.dart';
 import 'package:neupod/ui/device/system_volume.dart';
 import 'package:neupod/ui/device/wheel_bus.dart';
-import 'package:neupod/ui/screens/common/screen_frame.dart';
+import 'package:neupod/ui/screens/shell/cover_art.dart';
+import 'package:neupod/ui/screens/shell/screen_scope.dart';
+import 'package:neupod/ui/screens/shell/shell_frame.dart';
+import 'package:neupod/ui/screens/shell/shell_state.dart';
+import 'package:neupod/ui/screens/shell/shell_style.dart';
 import 'package:neupod/ui/screens/now_playing/now_playing_format.dart';
 import 'package:neupod/ui/screens/now_playing/now_playing_options.dart';
 import 'package:neupod/ui/screens/now_playing/now_playing_view.dart';
-import 'package:neupod/ui/screens/panel/panel_layer.dart';
-import 'package:neupod/ui/style/art_colours.dart';
 import 'package:neupod/ui/style/backdrop.dart';
-import 'package:neupod/ui/style/neupod_style.dart';
 
 /// The volume bar returns to the progress bar this long after the wheel rests
 /// (device view design, section 5).
@@ -48,43 +46,15 @@ const Duration messageHold = Duration(seconds: 2);
 /// How often `NowPlayingControl.tick` runs.
 const Duration _tickEvery = Duration(milliseconds: 50);
 
-/// The palette of a track's art, made once per art file.
-final artPaletteProvider = FutureProvider.family<ArtPalette?, String?>((
-  ref,
-  uri,
-) async {
-  final bytes = await _artBytes(uri);
-  return bytes == null ? null : paletteFromEncodedArt(bytes);
-});
-
-Future<Uint8List?> _artBytes(String? uri) async {
-  if (uri == null || !uri.startsWith('file:')) return null;
-  try {
-    return await File.fromUri(Uri.parse(uri)).readAsBytes();
-  } on Object {
-    return null;
-  }
-}
-
 /// The Now Playing screen.
 class NowPlayingScreen extends ConsumerStatefulWidget {
-  /// Now Playing. [onBack] is Menu on page 1; [onOpenQueue] is the Queue row
-  /// of page 2.
-  const NowPlayingScreen({
-    this.onBack,
-    this.onOpenQueue,
-    this.style,
-    super.key,
-  });
-
-  /// Menu on page 1 (not in seek mode): back to where the track was chosen.
-  final VoidCallback? onBack;
+  /// Now Playing. Menu on page 1 goes back through the shell;
+  /// [onOpenQueue] is the Queue row of page 2 (the queue screen is not built
+  /// yet).
+  const NowPlayingScreen({this.onOpenQueue, super.key});
 
   /// The route to the queue.
   final VoidCallback? onOpenQueue;
-
-  /// The style; null takes the designed one for the phone's mode.
-  final NeupodStyle? style;
 
   @override
   ConsumerState<NowPlayingScreen> createState() => _NowPlayingScreenState();
@@ -95,12 +65,13 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   late final WheelBus _bus = ref.read(wheelBusProvider);
   late final int Function() _now = ref.read(wheelClockProvider);
   final NowPlayingControl _npc = NowPlayingControl();
-  StreamSubscription<WheelEvent>? _events;
+  ScreenHandle? _screen;
+  bool _claimed = false;
   StreamSubscription<Duration>? _positions;
   Timer? _ticker;
   Timer? _volumeTimer;
   Timer? _messageTimer;
-  late final Map<WheelButton, int> _savedHolds;
+  Map<WheelButton, int> _savedHolds = const {};
   Map<WheelButton, int> _ownHolds = const {};
   int _describedAt = 0;
 
@@ -118,16 +89,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   @override
   void initState() {
     super.initState();
-    _savedHolds = Map.of(_bus.holdMs);
-    _bus.screenGivesHoldHaptic.addAll(const {
-      WheelButton.previous,
-      WheelButton.next,
-      WheelButton.centre,
-    });
     WidgetsBinding.instance.addObserver(this);
-    _bus.atRoot.value = false;
-    _syncHolds();
-    _events = _bus.events.listen(_onEvent);
     final player = ref.read(playerProvider);
     _position = player.state.position;
     _positions = player.positions().listen((p) {
@@ -143,19 +105,54 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
         .catchError((Object e) {
           if (mounted) _recordThrown('read', e);
         });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _describe());
   }
 
   @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _events?.cancel();
-    _positions?.cancel();
-    _ticker?.cancel();
-    _volumeTimer?.cancel();
-    _messageTimer?.cancel();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final handle = ScreenScope.maybeOf(context);
+    if (handle != _screen) {
+      _screen?.isTop.removeListener(_onTop);
+      if (_screen?.wheel == _onWheel) _screen?.wheel = null;
+      _screen = handle;
+      handle?.wheel = _onWheel;
+      handle?.isTop.addListener(_onTop);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _onTop());
+    }
+  }
+
+  bool get _isTop => _screen?.isTop.value ?? true;
+
+  /// This screen became the one on top, or stopped being: take or give up the
+  /// wheel's holds, haptic ownership and screen-reader text.
+  void _onTop() {
+    if (!mounted) return;
+    if (_isTop) {
+      _claim();
+    } else {
+      _release();
+    }
+  }
+
+  void _claim() {
+    if (_claimed) return;
+    _claimed = true;
+    _savedHolds = Map.of(_bus.holdMs);
+    _bus.screenGivesHoldHaptic.addAll(const {
+      WheelButton.previous,
+      WheelButton.next,
+      WheelButton.centre,
+    });
+    _syncHolds();
+    _describe(force: true);
+  }
+
+  void _release() {
+    _dropHalfDone();
+    if (!_claimed) return;
+    _claimed = false;
     // Put the holds back only if they are still ours: another screen may
-    // have replaced them first (a route pushed over this one, then popped).
+    // have replaced them first.
     if (mapEquals(_bus.holdMs, _ownHolds)) {
       _bus.holdMs
         ..clear()
@@ -166,6 +163,29 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
       WheelButton.next,
       WheelButton.centre,
     });
+  }
+
+  /// A hold or a scan is dropped and seek mode is left with nothing applied.
+  void _dropHalfDone() {
+    _npc
+      ..cancelHold()
+      ..selectUp();
+    if (_npc.mode == NowPlayingWheelMode.seek) _npc.menu();
+    _npc.pending = false;
+    _holdingBefore = false;
+    _stopTick();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _screen?.isTop.removeListener(_onTop);
+    if (_screen?.wheel == _onWheel) _screen?.wheel = null;
+    _positions?.cancel();
+    _ticker?.cancel();
+    _volumeTimer?.cancel();
+    _messageTimer?.cancel();
+    _release();
     super.dispose();
   }
 
@@ -198,6 +218,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   /// The holds the wheel watches: Previous and Next scan and the centre seeks
   /// on page 1 (the centre drops out in seek mode, where Select is "go").
   void _syncHolds() {
+    if (!_claimed) return;
     _bus.holdMs.clear();
     if (!_page2) {
       _bus.holdMs.addAll(WheelInput.nowPlayingHoldMs);
@@ -207,13 +228,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     }
     _ownHolds = Map.of(_bus.holdMs);
   }
-
-  /// This screen is the one being shown and nothing is over it: a route
-  /// pushed on top (a list opened from page 2) or a panel covers it.
-  bool get _active =>
-      mounted &&
-      (ModalRoute.of(context)?.isCurrent ?? true) &&
-      ref.read(panelProvider) == null;
 
   // ---- the tick ----------------------------------------------------------
 
@@ -238,15 +252,8 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.paused) return;
-    // Backgrounded: nothing half-done survives. A hold or a scan is dropped,
-    // seek mode is left with nothing applied, and every timer stops.
-    _npc
-      ..cancelHold()
-      ..selectUp();
-    if (_npc.mode == NowPlayingWheelMode.seek) _npc.menu();
-    _npc.pending = false;
-    _holdingBefore = false;
-    _stopTick();
+    // Backgrounded: nothing half-done survives, and every timer stops.
+    _dropHalfDone();
     _volumeTimer?.cancel();
     _messageTimer?.cancel();
     if (mounted) {
@@ -259,12 +266,13 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     }
   }
 
-  void _onEvent(WheelEvent e) {
-    if (!_active) return;
-    if (_page2) {
-      _onEventPage2(e);
-      return;
-    }
+  /// The shell hands the top screen every wheel event; true when used. What
+  /// is not taken, the shell does: Menu goes back, Play/Pause drives the
+  /// player.
+  bool _onWheel(WheelEvent e) {
+    if (!_isTop) return false;
+    if (_page2) return _onEventPage2(e);
+    var used = true;
     final now = _now();
     switch (e) {
       case WheelStep(:final steps):
@@ -304,7 +312,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
       case WheelPress(:final button):
         if (_swallowPress && button == WheelButton.centre) {
           _swallowPress = false;
-          return;
+          return true;
         }
         switch (button) {
           case WheelButton.menu:
@@ -313,10 +321,10 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
               setState(() {});
               _describe();
             } else {
-              widget.onBack?.call();
+              used = false; // the shell goes back
             }
           case WheelButton.playPause:
-            _togglePlay();
+            used = false; // the shell plays or pauses
           case _:
             break;
         }
@@ -324,6 +332,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
         break;
     }
     _refresh();
+    return used;
   }
 
   void _onStep(int steps, int now) {
@@ -446,15 +455,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     _ensureTick();
   }
 
-  void _togglePlay() {
-    final player = ref.read(playerProvider);
-    if (player.state.playWhenReady) {
-      player.pause();
-    } else {
-      player.play();
-    }
-  }
-
   // ---- page 2 ------------------------------------------------------------
 
   void _openPage2({bool swallowPress = true}) {
@@ -465,7 +465,8 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     _ratingEditing = false;
   }
 
-  void _onEventPage2(WheelEvent e) {
+  bool _onEventPage2(WheelEvent e) {
+    var used = true;
     final feedback = ref.read(deviceFeedbackProvider);
     switch (e) {
       case WheelStep(:final steps):
@@ -494,7 +495,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
       case WheelPress(:final button):
         if (_swallowPress && button == WheelButton.centre) {
           _swallowPress = false;
-          return;
+          return true;
         }
         switch (button) {
           case WheelButton.centre:
@@ -505,18 +506,17 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
             } else {
               _closePage2();
             }
-          case WheelButton.playPause:
-            _togglePlay();
-          case WheelButton.previous:
-            ref.read(playerProvider).skipToPrevious();
-          case WheelButton.next:
-            ref.read(playerProvider).skipToNext();
+          case WheelButton.playPause ||
+              WheelButton.previous ||
+              WheelButton.next:
+            used = false; // the shell drives the player
         }
       case _:
         break;
     }
     if (mounted) setState(() {});
     _describe();
+    return used;
   }
 
   void _activate(Page2Row row) {
@@ -541,8 +541,10 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   // ---- the wheel's screen-reader value -----------------------------------
 
   void _describe({bool force = false}) {
-    // A panel's text is the wheel's while it is up.
-    if (!mounted || ref.read(panelProvider) != null) return;
+    // A panel's text is the wheel's while it is up; a screen under another
+    // says nothing.
+    if (!mounted || !_claimed || !_isTop) return;
+    if (ref.read(shellProvider).panel != null) return;
     // While scanning, the position changes every tick: say it four times a
     // second at most.
     final now = _now();
@@ -588,24 +590,13 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
 
   // ---- build -------------------------------------------------------------
 
-  Widget? _art(QueueItem? item) {
-    final uri = item?.artUri;
-    if (uri == null || !uri.startsWith('file:')) return null;
-    return Image.file(
-      File.fromUri(Uri.parse(uri)),
-      fit: BoxFit.cover,
-      gaplessPlayback: true,
-      errorBuilder: (_, _, _) => const SizedBox.shrink(),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(playerStateProvider).value ?? _state;
     final choices = ref.watch(playbackChoicesProvider);
     final placement = ref.watch(ratingPlacementProvider);
     final item = state.current;
-    final palette = ref.watch(artPaletteProvider(item?.artUri)).value;
+    final album = ref.watch(playingAlbumProvider).value;
     final scope = DeviceScreenScope.of(context);
     final touch = scope.directTouch == DirectTouch.wheelAndScreen;
 
@@ -629,7 +620,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
       // big amber time.
       position: _page2 || seek ? _position : _shownPosition,
       duration: duration,
-      art: _art(item),
+      art: album == null ? null : CoverArt(album.art, decodeWidth: 210),
       playState: item == null
           ? PlayState.stopped
           : (state.isPlaying ? PlayState.playing : PlayState.paused),
@@ -642,17 +633,21 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
           : 'track ${state.index! + 1} of ${state.queue.length}',
     );
 
-    return ScreenFrame(
-      style: widget.style,
-      art: palette,
+    return ShellFrame(
+      title: 'Now Playing',
+      context: data.queueLabel,
+      contextLabel: data.contextLabel,
+      message: _message,
+      shuffle: data.shuffle,
+      repeat: data.repeat,
       backdrop: BackdropLayout.nowPlaying,
-      child: NowPlayingView(
+      body: NowPlayingView(
+        withStatusBar: false,
         data: data,
         mode: mode,
         volume: _volume?.level,
         seekTarget: Duration(milliseconds: _npc.target),
         ratingPlacement: placement,
-        message: _message,
         page2Focus: _focus,
         ratingEditing: _ratingEditing,
         onArtTap: touch

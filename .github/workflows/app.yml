@@ -78,11 +78,24 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-          cache: gradle
-          cache-dependency-path: |
-            mobile/android/*.gradle.kts
-            mobile/android/app/*.gradle.kts
-            mobile/android/gradle/wrapper/gradle-wrapper.properties
+      # Gradle User Home cache (dependencies, wrapper, build scripts): restored by the commit-keyed entry of the latest
+      # run, saved at the end of the job, so every dependency (plugin builds included, which setup-java's file-hash key
+      # missed) is cached. Only main writes the cache; pull requests restore main's (the repo's Actions cache budget is limited).
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+      - name: Retry Maven 429s and timeouts
+        working-directory: .
+        run: |
+          # Maven Central answers 429 under load. Gradle retries 429, 408, 5xx and socket errors, default 3 attempts with
+          # a 1 s backoff that doubles; this gives 8 attempts (2 s .. 64 s between them). CI only: ~/.gradle, not the repo.
+          mkdir -p ~/.gradle
+          cat >> ~/.gradle/gradle.properties <<'EOF'
+          systemProp.org.gradle.internal.repository.max.tentatives=8
+          systemProp.org.gradle.internal.repository.initial.backoff=2000
+          systemProp.org.gradle.internal.http.connectionTimeout=60000
+          systemProp.org.gradle.internal.http.socketTimeout=60000
+          EOF
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
@@ -129,11 +142,24 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-          cache: gradle
-          cache-dependency-path: |
-            mobile/android/*.gradle.kts
-            mobile/android/app/*.gradle.kts
-            mobile/android/gradle/wrapper/gradle-wrapper.properties
+      # Gradle User Home cache (dependencies, wrapper, build scripts): restored by the commit-keyed entry of the latest
+      # run, saved at the end of the job, so every dependency (plugin builds included, which setup-java's file-hash key
+      # missed) is cached. Only main writes the cache; pull requests restore main's (the repo's Actions cache budget is limited).
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+      - name: Retry Maven 429s and timeouts
+        working-directory: .
+        run: |
+          # Maven Central answers 429 under load. Gradle retries 429, 408, 5xx and socket errors, default 3 attempts with
+          # a 1 s backoff that doubles; this gives 8 attempts (2 s .. 64 s between them). CI only: ~/.gradle, not the repo.
+          mkdir -p ~/.gradle
+          cat >> ~/.gradle/gradle.properties <<'EOF'
+          systemProp.org.gradle.internal.repository.max.tentatives=8
+          systemProp.org.gradle.internal.repository.initial.backoff=2000
+          systemProp.org.gradle.internal.http.connectionTimeout=60000
+          systemProp.org.gradle.internal.http.socketTimeout=60000
+          EOF
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
