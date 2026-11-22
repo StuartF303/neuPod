@@ -1,0 +1,131 @@
+// SPDX-License-Identifier: MPL-2.0
+package net.stuartfraser.neupod_device
+
+import android.app.Activity
+import android.content.Context
+import android.media.AudioManager
+import android.os.Build
+import android.util.Log
+import android.view.HapticFeedbackConstants
+import android.view.View
+import io.flutter.embedding.engine.plugins.FlutterPlugin
+import io.flutter.embedding.engine.plugins.activity.ActivityAware
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
+
+/**
+ * Click-wheel haptics and the system media volume
+ * (docs/app/decisions/0007-haptics.md).
+ *
+ * Haptics go through View.performHapticFeedback on the activity's window, which needs no
+ * VIBRATE permission and obeys the user's touch-feedback setting (the default since API 33 can no
+ * longer be overridden by apps, and this plugin never asks to). Every call is logged under the tag
+ * "neupod_device" so that an emulator, which cannot vibrate, still shows that the calls were made.
+ */
+class NeupodDevicePlugin : FlutterPlugin, ActivityAware, DeviceApi {
+    private var context: Context? = null
+    private var activity: Activity? = null
+
+    override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        context = binding.applicationContext
+        DeviceApi.setUp(binding.binaryMessenger, this)
+    }
+
+    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        DeviceApi.setUp(binding.binaryMessenger, null)
+        context = null
+    }
+
+    override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+        activity = binding.activity
+    }
+
+    override fun onDetachedFromActivityForConfigChanges() {
+        activity = null
+    }
+
+    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
+        activity = binding.activity
+    }
+
+    override fun onDetachedFromActivity() {
+        activity = null
+    }
+
+    // ---- Haptics ----------------------------------------------------------------------------
+
+    override fun prepareHaptics() {
+        // Nothing to prepare on Android.
+    }
+
+    override fun playHaptic(event: HapticEvent) {
+        val constant = constantFor(event)
+        val view: View? = activity?.window?.decorView
+        val sent = view?.performHapticFeedback(constant) ?: false
+        Log.d(TAG, "haptic $event -> ${nameOf(constant)} sent=$sent")
+    }
+
+    // ---- Volume -----------------------------------------------------------------------------
+
+    private fun audio(): AudioManager? =
+        context?.getSystemService(Context.AUDIO_SERVICE) as AudioManager?
+
+    override fun getVolume(): VolumeState = volumeOf(audio())
+
+    override fun stepVolume(direction: Long): VolumeState {
+        val am = audio() ?: return volumeOf(null)
+        if (direction != 0L && !am.isVolumeFixed) {
+            // Flags 0: no FLAG_SHOW_UI, so the system volume panel stays away; the device's own
+            // volume bar is shown instead (owner decision 10).
+            am.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC,
+                if (direction > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
+                0,
+            )
+        }
+        val v = volumeOf(am)
+        Log.d(TAG, "volume step $direction -> ${v.step}/${v.steps}")
+        return v
+    }
+
+    private fun volumeOf(am: AudioManager?): VolumeState {
+        if (am == null) return VolumeState(level = 0.0, step = 0, steps = 0, fixed = true)
+        val min = am.getStreamMinVolume(AudioManager.STREAM_MUSIC)
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val cur = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val steps = (max - min).coerceAtLeast(0)
+        val step = (cur - min).coerceIn(0, steps)
+        return VolumeState(
+            level = if (steps == 0) 0.0 else step.toDouble() / steps,
+            step = step.toLong(),
+            steps = steps.toLong(),
+            fixed = am.isVolumeFixed,
+        )
+    }
+
+    companion object {
+        private const val TAG = "neupod_device"
+
+        /** The decision 0007 table. minSdk is 29, so two constants need a fallback. */
+        fun constantFor(event: HapticEvent): Int = when (event) {
+            HapticEvent.DETENT ->
+                if (Build.VERSION.SDK_INT >= 34) HapticFeedbackConstants.SEGMENT_FREQUENT_TICK
+                else HapticFeedbackConstants.CLOCK_TICK
+            HapticEvent.BUTTON_DOWN -> HapticFeedbackConstants.VIRTUAL_KEY
+            HapticEvent.BUTTON_UP -> HapticFeedbackConstants.VIRTUAL_KEY_RELEASE
+            HapticEvent.HOLD_TOOK_EFFECT -> HapticFeedbackConstants.LONG_PRESS
+            HapticEvent.END_REACHED ->
+                if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.REJECT
+                else HapticFeedbackConstants.LONG_PRESS
+        }
+
+        private fun nameOf(constant: Int): String = when (constant) {
+            HapticFeedbackConstants.SEGMENT_FREQUENT_TICK -> "SEGMENT_FREQUENT_TICK"
+            HapticFeedbackConstants.CLOCK_TICK -> "CLOCK_TICK"
+            HapticFeedbackConstants.VIRTUAL_KEY -> "VIRTUAL_KEY"
+            HapticFeedbackConstants.VIRTUAL_KEY_RELEASE -> "VIRTUAL_KEY_RELEASE"
+            HapticFeedbackConstants.LONG_PRESS -> "LONG_PRESS"
+            HapticFeedbackConstants.REJECT -> "REJECT"
+            else -> constant.toString()
+        }
+    }
+}
