@@ -23,7 +23,7 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] Songs list
 - [ ] Play a FLAC and an MP3
 - [ ] Background playback with lock-screen and notification controls, artwork and scrubbing
-- [ ] Device check: the slice on the owner's iPhone and Pixel, recorded with the date (needs owner: Xcode 27 installed, phones attached)
+- [ ] Device check: the slice on the owner's iPhone and Pixel, recorded with the date (needs owner: macOS 26.6 or later, then Xcode 27, phones attached)
 - [ ] **Gate 1: stop and show the owner**
 
 ## Phase 2: look and feel
@@ -144,6 +144,8 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - 2026-11-21: Owner decision 9: the app is the device, a drawn-fresh front view with a touch click wheel, buttons and haptics. Phase 2 and the design gate are built around it; the device's 600x450 designs apply to the screen.
 
 - 2026-11-21: The owner's iPhone runs iOS 27, and Xcode 26.5 cannot deploy to it. Xcode 27 must be installed (owner, Apple ID) before the gate 1 device check. The iOS 18.6 simulator runtime was installed for testing the minimum.
+- 2026-11-22: Correction: the iPhone 15 Pro runs iOS 27.2.1 (a release). Xcode 27 is released but needs macOS Tahoe 26.6 or later (Xcode 27.1 release notes); the build Mac ran 26.5.1, so the App Store offered only Xcode 26.5. The owner is updating macOS, then Xcode 27. The iOS 18.6 simulator runtime was removed for disk space (CI still tests the iOS 18 minimum); reinstall it if a local check at the minimum is needed.
+- 2026-11-22: Follow-ups logged: Android 10's folder picker hides internal storage until "Show internal storage" (add `android.content.extra.SHOW_ADVANCED` in `NeupodStoragePlugin.pickFolder`); before release, a handled "library from a newer version" state (a downgrade is refused, and every query then errors); a separate reason for files the platform can never open (stored as "damaged" today); `library_database.dart` imports Flutter only for `visibleForTesting` (use `package:meta`).
 - 2026-11-21: Owner decisions 5 to 8 in the spec: bundled Xiph decoders for Ogg on iOS, no Cast in R1, a Download action for iCloud files, and the accepted platform limits. The audio engine and media session are an in-repo native plugin (decisions 0001, 0002): no pub.dev audio package met the spec.
 - 2026-11-21: Owner decision 11: sorting follows `lib_collate.c` (skips The/A/An); `docs/ui.md` is out of date on this and is the firmware owner's to fix. Owner decision 10: the wheel sets system volume on Now Playing (iOS through a hidden MPVolumeView).
 
