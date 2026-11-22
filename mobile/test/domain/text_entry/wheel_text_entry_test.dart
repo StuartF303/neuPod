@@ -238,21 +238,25 @@ void main() {
 
   group('the port', () {
     test('pages and their rings, as k_pages', () {
-      expect(
-        kTextPages[TextPage.symbols.index],
-        r'''.,-_@!?#$%&*+=/:;'"()[]{}<>~^\|`''',
-      );
+      // Copied from k_pages in app/ui/input/wheel_input.c.
+      const pages = {
+        TextChip.lower: 'abcdefghijklmnopqrstuvwxyz',
+        TextChip.upper: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+        TextChip.digits: '0123456789',
+        TextChip.symbols: r'''.,-_@!?#$%&*+=/:;'"()[]{}<>~^\|`''',
+      };
       final t = init('', 20);
       final rings = <TextChip, String>{};
       for (final c in t.chips()) {
         t.chip = c;
         rings[c] = [for (var i = 0; i < t.stripLength(); i++) t.stripKey(i).$2]
-            .join('|');
+            .join();
       }
-      expect(rings[TextChip.lower], kTextPages[0].split('').join('|'));
-      expect(rings[TextChip.upper], kTextPages[1].split('').join('|'));
-      expect(rings[TextChip.digits], kTextPages[2].split('').join('|'));
-      expect(rings[TextChip.symbols], kTextPages[3].split('').join('|'));
+      for (final MapEntry(key: chip, value: page) in pages.entries) {
+        expect(rings[chip], page, reason: '$chip');
+        expect(kTextPages[chip.index], page, reason: '$chip');
+      }
+      expect(pages[TextChip.symbols], hasLength(32));
       expect(t.stripLength(), 1);
       t.chip = TextChip.space;
       expect(t.stripKey(0), (TextKeyKind.space, 'space'));

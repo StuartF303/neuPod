@@ -218,8 +218,11 @@ final class WheelTextEntry {
   List<int> get utf8Bytes => List.unmodifiable(_text);
 
   /// The text. The firmware's initial-text check admits a few sequences
-  /// strict UTF-8 refuses (overlong and surrogate three-byte forms); they read
-  /// as U+FFFD here, while the bytes are kept as the firmware keeps them.
+  /// strict UTF-8 refuses: overlong and surrogate three-byte forms (E0 80 80,
+  /// ED A0 80) and four-byte forms above U+10FFFF (F4 90 80 80). The bytes are
+  /// kept as the firmware keeps them and [chars] counts each as one, but Dart
+  /// decodes them as one U+FFFD per byte (three or four here). Views must
+  /// size and mask from [chars], not from `text.runes`.
   String get text => utf8.decode(_text, allowMalformed: true);
 
   /// UTF-8 bytes of the text (t->len).
@@ -330,7 +333,8 @@ final class WheelTextEntry {
       case WheelEvent.scroll:
         // The firmware never has an empty ring here (the chips offered all
         // have a key); the guard only keeps a chip set by hand to an empty
-        // page from dividing by zero.
+        // page from dividing by zero. (C adds in int32; Dart ints are 64-bit,
+        // so an overflowing sel + steps differs, but neither is reachable.)
         if (n != 0) sel = _wrap(sel + steps, n);
       case WheelEvent.select:
         final (kind, label) = stripKey(sel);
