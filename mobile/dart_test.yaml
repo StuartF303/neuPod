@@ -1,0 +1,5 @@
+# Test tags (test/spec/): `spec` marks the suites written from the
+# specification, `tool` the tests of tool/gen_test_library.
+tags:
+  spec:
+  tool:
