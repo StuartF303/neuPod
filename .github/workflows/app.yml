@@ -147,6 +147,12 @@ jobs:
 
   # iOS: simulator build without signing, then the integration tests on an iPhone simulator. macos-26 is Apple
   # silicon; Xcode 26.5 is the version on the owner's Mac (docs/app/ENVIRONMENT.md) and ships the iOS 26.5 simulator.
+  #
+  # The integration tests run natively with `xcodebuild test` (ios/RunnerTests, the integration_test package's
+  # "iOS Device Testing" route), not `flutter test`. `flutter test` on a simulator finds the app's Dart VM service by
+  # scraping `simctl spawn log stream`; on the hosted runner that stream sometimes misses the "Dart VM service is
+  # listening" line and the tool waits forever (runs 44977190298, both attempts). Under xcodebuild the Dart tests run
+  # inside the app and report to XCTest through the integration_test plugin: no VM service, no log scrape.
   ios:
     runs-on: macos-26
     timeout-minutes: 40
@@ -163,10 +169,11 @@ jobs:
           cache: true
           pub-cache: true
       - run: xcodebuild -version
-      - run: flutter pub get
-      - run: flutter build ios --simulator --debug --no-codesign
-      - name: Boot an iPhone simulator
+      # Start booting the simulator now and wait for it only before the tests: a cold boot on the hosted runner has
+      # taken up to 7 minutes ("Waiting on Data Migration"), and it overlaps the builds below.
+      - name: Start an iPhone simulator
         id: sim
+        working-directory: .
         run: |
           udid=$(xcrun simctl list devices available --json \
             | jq -r '.devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"] // [] | map(select(.name == "iPhone 17")) | .[0].udid // empty')
@@ -176,27 +183,44 @@ jobs:
             exit 1
           fi
           xcrun simctl boot "$udid"
-          xcrun simctl bootstatus "$udid" -b
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
-      # A normal run takes about 7 minutes. On the hosted runner the install or launch on the simulator has been seen to
-      # hang once (simctl never returned), so the step is time-boxed and retried once. A real test failure fails both.
-      # Verbose, so the log shows where a hang happened.
+      - run: flutter pub get
+      - run: flutter build ios --simulator --debug --no-codesign
+      # One app build per test file: `flutter build ios --config-only <file>` makes that file the app's Dart entry
+      # point, and xcodebuild builds Runner.app with it plus RunnerTests.xctest. Debug, simulator, ad-hoc signed by
+      # Xcode (no team). No retry: a Dart test failure fails XCTest, which fails xcodebuild, which fails the job; a hang
+      # is caught by XCTest's time allowance, then by the step timeout.
       - name: Integration tests
-        id: integration
-        timeout-minutes: 12
-        continue-on-error: true
-        run: flutter test integration_test -v -d "${{ steps.sim.outputs.udid }}"
-      - name: Integration tests (retry)
-        if: steps.integration.outcome == 'failure'
-        timeout-minutes: 12
+        timeout-minutes: 25
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
         run: |
-          echo "::warning::iOS integration tests failed or timed out on the first attempt; retrying once"
-          xcrun simctl shutdown "${{ steps.sim.outputs.udid }}" || true
-          xcrun simctl boot "${{ steps.sim.outputs.udid }}"
-          xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b
-          flutter test integration_test -v -d "${{ steps.sim.outputs.udid }}"
+          shopt -s nullglob
+          files=(integration_test/*_test.dart)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::no integration tests in mobile/integration_test"
+            exit 1
+          fi
+          for file in "${files[@]}"; do
+            name=$(basename "$file" .dart)
+            echo "::group::$file"
+            flutter build ios --config-only --simulator --debug --no-codesign "$file"
+            (cd ios && xcodebuild build-for-testing \
+              -workspace Runner.xcworkspace -scheme Runner -configuration Debug \
+              -destination "id=$UDID" -derivedDataPath ../build/ios_integ \
+              -quiet)
+            echo "Waiting for the simulator to finish booting"
+            xcrun simctl bootstatus "$UDID" -b
+            (cd ios && xcodebuild test-without-building \
+              -workspace Runner.xcworkspace -scheme Runner -configuration Debug \
+              -destination "id=$UDID" -derivedDataPath ../build/ios_integ \
+              -parallel-testing-enabled NO \
+              -test-timeouts-enabled YES -maximum-test-execution-time-allowance 300 \
+              -resultBundlePath "../build/ios_integ/$name.xcresult")
+            echo "::endgroup::"
+          done
       - name: Simulator state on failure
-        if: failure() || steps.integration.outcome == 'failure'
+        if: failure()
         run: |
           xcrun simctl list devices booted
           xcrun simctl spawn booted log show --last 10m --style compact --predicate 'process == "Runner"' | tail -200 || true
