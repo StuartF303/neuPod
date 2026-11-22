@@ -110,7 +110,8 @@ from or defers part of the text above:
 - **iOS position after the system stops the engine:** the node has no render time then, so the engine keeps a render
   anchor (position and `CACurrentMediaTime` when rendering last started or a gapless join happened) and extrapolates
   from it. A route or format change, or an interruption, records the true position and the next play reschedules from
-  it. Engine events report `isPlaying` (sound now) apart from the play intent, so Dart does not extrapolate while
+  it. The unplug burst (a route change and a configuration change, in an undocumented order) is handled by one shared
+  test in both handlers; the residual risk, if `currentRoute` lags the first notification, is in 0002. Engine events report `isPlaying` (sound now) apart from the play intent, so Dart does not extrapolate while
   playback is suppressed.
 - **An unplayable entry never stops the queue:** the engine reports the error with the entry, and the Dart player
   skips to the next one once.

@@ -101,6 +101,31 @@ void main() {
     await audio.dispose();
   });
 
+  test('disposing an older instance keeps the newer one receiving', () async {
+    final old = NeupodAudio();
+    final current = NeupodAudio();
+    await old.dispose();
+    final received = <EngineEvent>[];
+    final sub = current.events.listen(received.add);
+    await messenger.handlePlatformMessage(
+      'dev.flutter.pigeon.neupod_audio.AudioFlutterApi.onEvent',
+      AudioHostApi.pigeonChannelCodec.encodeMessage([
+        EngineEvent(
+          status: EngineStatus.idle,
+          playWhenReady: false,
+          isPlaying: false,
+          positionMs: 0,
+          queueLength: 0,
+        ),
+      ]),
+      (_) {},
+    );
+    await pumpEventQueue();
+    expect(received, hasLength(1));
+    await sub.cancel();
+    await current.dispose();
+  });
+
   test('a host error surfaces as a PlatformException', () async {
     final audio = NeupodAudio();
     messenger.setMockMessageHandler(

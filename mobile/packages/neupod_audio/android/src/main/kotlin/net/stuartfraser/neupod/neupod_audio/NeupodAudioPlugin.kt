@@ -111,7 +111,10 @@ class NeupodAudioPlugin : FlutterPlugin, AudioHostApi {
     }
 
     override suspend fun remove(index: Long) {
-        controller().removeMediaItem(index.toInt())
+        val c = controller()
+        // Removing the last item empties the queue: keep its id, as iOS does.
+        if (c.mediaItemCount == 1) emptyQueueId = queueIdOf(c)
+        c.removeMediaItem(index.toInt())
     }
 
     override suspend fun move(from: Long, to: Long) {

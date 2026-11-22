@@ -55,12 +55,15 @@ class NeupodPlayer implements Player {
   }
 
   /// The position now: the last reported one, plus the time since while
-  /// sound is playing, never past the end.
+  /// sound is playing, never past the end. Without a known duration (or a
+  /// current item) it is not extrapolated, so it cannot run on unbounded.
   Duration get currentPosition {
-    if (!_state.isPlaying) return _state.position;
-    final position = _state.position + (_clock() - _stateTakenAt);
     final duration = _state.duration;
-    return duration != null && position > duration ? duration : position;
+    if (!_state.isPlaying || duration == null || _state.current == null) {
+      return _state.position;
+    }
+    final position = _state.position + (_clock() - _stateTakenAt);
+    return position > duration ? duration : position;
   }
 
   @override
@@ -153,18 +156,27 @@ class NeupodPlayer implements Player {
   /// keeps playing (on Android it belongs to the media session service).
   @override
   Future<void> dispose() async {
+    // First, before any await: a player created meanwhile registers its own
+    // handler, which this must not clear afterwards.
+    final audio = _audio.dispose();
     await _subscription.cancel();
     await _states.close();
-    await _audio.dispose();
+    await audio;
   }
 
   void _onEvent(EngineEvent event) {
     if (_states.isClosed) return;
-    if (event.queueId != _queueId) {
+    // Ours: the queue this player set. Before it has set one (both ids
+    // null), only an empty engine counts as ours; a non-empty queue nobody
+    // here set is someone else's.
+    final ours =
+        event.queueId == _queueId &&
+        (event.queueId != null || event.queueLength == 0);
+    if (!ours) {
       // About another queue. Before this player has set one, show what an
       // engine that is already playing is doing (resume adopts its queue in
       // phase 4); after that, ignore it.
-      if (_queueId == null && event.queueId != null) {
+      if (_queueId == null) {
         _publish(
           _state.copyWith(
             status: _status(event.status),

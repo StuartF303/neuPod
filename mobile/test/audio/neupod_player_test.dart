@@ -311,6 +311,27 @@ void main() {
     },
   );
 
+  test(
+    'before any setQueue, a non-empty queue without an id is transport only',
+    () async {
+      audio.emit(_event(queueId: null, itemId: 'x:0', positionMs: 500));
+      expect(player.state.status, PlaybackStatus.ready);
+      expect(player.state.playWhenReady, isTrue);
+      expect(player.state.queue, isEmpty);
+      expect(player.state.index, isNull);
+      expect(player.state.position, Duration.zero);
+    },
+  );
+
+  test('without a duration the position is not extrapolated', () async {
+    await player.setQueue([_mp3]);
+    audio.emit(
+      _event(queueId: 'q1', positionMs: 700, durationMs: null, queueLength: 1),
+    );
+    now = const Duration(hours: 1);
+    expect(player.currentPosition, const Duration(milliseconds: 700));
+  });
+
   test('an emptied queue of our own empties the player', () async {
     await player.setQueue([_flac]);
     audio.emit(

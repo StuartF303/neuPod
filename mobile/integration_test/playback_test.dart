@@ -20,7 +20,8 @@ const _timeout = Duration(seconds: 30);
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   // One engine per app, as in the app (playerProvider).
-  final player = NeupodPlayer(NeupodAudio());
+  final audio = NeupodAudio();
+  final player = NeupodPlayer(audio);
   const media = TestMedia();
 
   Future<PlayerState> until(
@@ -134,6 +135,39 @@ void main() {
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       expect(session.playbackRate, 0);
     }
+  });
+
+  testWidgets('the queue id survives the trip through the engine', (
+    tester,
+  ) async {
+    // On Android the id rides in each item's metadata through the
+    // MediaController, the session and back in the controller's timeline.
+    final mp3 = await media.mp3Item();
+    final flac = await media.flacItem();
+    await audio.setQueue('itest-queue', [
+      EngineItem(id: 'itest:0', uri: mp3.uri, title: mp3.title),
+    ]);
+    expect((await audio.getState()).queueId, 'itest-queue');
+
+    // Inserted items join the current queue.
+    await audio.insert(1, [
+      EngineItem(id: 'itest:1', uri: flac.uri, title: flac.title),
+    ]);
+    await audio.skipTo(1);
+    var state = await audio.getState();
+    for (var i = 0; i < 50 && state.index != 1; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      state = await audio.getState();
+    }
+    expect(state.index, 1);
+    expect(state.itemId, 'itest:1');
+    expect(state.queueId, 'itest-queue');
+
+    // An emptied queue keeps the id it was given.
+    await audio.setQueue('itest-empty', []);
+    state = await audio.getState();
+    expect(state.queueLength, 0);
+    expect(state.queueId, 'itest-empty');
   });
 
   testWidgets('a file that is not there is reported, not fatal', (

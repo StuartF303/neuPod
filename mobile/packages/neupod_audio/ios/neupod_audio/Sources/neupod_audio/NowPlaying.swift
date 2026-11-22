@@ -34,7 +34,7 @@ final class NowPlaying {
     var info: [String: Any] = [
       MPMediaItemPropertyTitle: item.title ?? fileName(item.uri),
       MPNowPlayingInfoPropertyElapsedPlaybackTime: Double(engine.positionMs) / 1000,
-      MPNowPlayingInfoPropertyPlaybackRate: engine.isPlaying ? 1.0 : 0.0,
+      MPNowPlayingInfoPropertyPlaybackRate: engine.isSounding ? 1.0 : 0.0,
       MPNowPlayingInfoPropertyDefaultPlaybackRate: 1.0,
       MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
       MPNowPlayingInfoPropertyPlaybackQueueIndex: index,

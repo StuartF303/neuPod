@@ -25,8 +25,12 @@ export 'package:neupod_audio/src/messages.g.dart'
 class NeupodAudio {
   NeupodAudio({@visibleForTesting AudioHostApi? hostApi})
     : _host = hostApi ?? AudioHostApi() {
+    _registered = this;
     AudioFlutterApi.setUp(_Receiver(_events));
   }
+
+  /// The instance whose handler receives native events: the newest one.
+  static NeupodAudio? _registered;
 
   final AudioHostApi _host;
   final StreamController<EngineEvent> _events =
@@ -72,8 +76,14 @@ class NeupodAudio {
 
   /// Stops listening for events. The native engine keeps running (it belongs
   /// to the media session, which outlives the Flutter engine on Android).
+  ///
+  /// The handler is cleared only if it is still this instance's, so
+  /// disposing an old instance never cuts off a newer one.
   Future<void> dispose() async {
-    AudioFlutterApi.setUp(null);
+    if (identical(_registered, this)) {
+      _registered = null;
+      AudioFlutterApi.setUp(null);
+    }
     await _events.close();
   }
 }

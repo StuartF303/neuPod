@@ -122,6 +122,10 @@ final class AudioEngine {
     flush()
     engine.stop()
     deactivateSession()
+    playWhenReady = false
+    needsReload = false
+    anchorTime = nil
+    status = .idle
   }
 
   // MARK: - Queries
@@ -378,7 +382,7 @@ final class AudioEngine {
   }
 
   private func segmentFinished(generation: Int, id: String) {
-    guard generation == self.generation, scheduled.first?.id == id else { return }
+    guard generation == self.generation, !needsReload, scheduled.first?.id == id else { return }
     scheduled.removeFirst()
     if let next = scheduled.first, items.contains(where: { $0.id == next.id }) {
       // The pre-scheduled next track is already playing: a gapless join.
@@ -503,18 +507,22 @@ final class AudioEngine {
   ///
   /// Unplugging headphones posts both a route change and a configuration
   /// change, in either order. So: if a personal output (headphones,
-  /// Bluetooth, USB, AirPlay, car) in use has gone, pause; otherwise restart
-  /// one run-loop turn later, unless the route change paused meanwhile.
+  /// Bluetooth, USB, AirPlay, car) in use has gone and none has taken over,
+  /// pause; otherwise restart one run-loop turn later, unless the route
+  /// change paused meanwhile. Both handlers use the same test
+  /// ([unplugged(lost:now:)]), so the order does not change the outcome as
+  /// long as `currentRoute` already shows the new route when the first one
+  /// runs.
   private func engineConfigurationChanged() {
     guard status == .ready, index != nil else { return }
     heldPositionMs = positionMs
     anchorTime = nil
     connectedFormat = nil
-    needsReload = true
+    invalidateSchedule()
     let now = Set(AVAudioSession.sharedInstance().currentRoute.outputs.map(\.portType))
     let lost = lastOutputs.subtracting(now)
     lastOutputs = now
-    if playWhenReady, !lost.isDisjoint(with: Self.personalOutputs) {
+    if playWhenReady, Self.unplugged(lost: lost, now: now) {
       playWhenReady = false
       notify()
       return
@@ -537,12 +545,12 @@ final class AudioEngine {
     let now = Set(AVAudioSession.sharedInstance().currentRoute.outputs.map(\.portType))
     defer { lastOutputs = now }
     guard reason == .oldDeviceUnavailable, playWhenReady,
-      !previous.subtracting(now).isDisjoint(with: Self.personalOutputs)
+      Self.unplugged(lost: previous.subtracting(now), now: now)
     else { return }
     heldPositionMs = positionMs
     anchorTime = nil
     playWhenReady = false
-    needsReload = true
+    invalidateSchedule()
     node.pause()
     if engine.isRunning { engine.pause() }
     notify()
@@ -552,13 +560,30 @@ final class AudioEngine {
   /// the next play reloads from here. Resuming on its own when the
   /// interruption ends is phase 4.
   private func interrupted() {
-    guard playWhenReady else { return }
+    // Even when paused: the system stops the engine either way.
     heldPositionMs = positionMs
     anchorTime = nil
     playWhenReady = false
-    needsReload = true
+    invalidateSchedule()
     node.pause()
     notify()
+  }
+
+  /// A personal output went away and no personal output took over: the
+  /// sound would otherwise move to the phone's speaker.
+  private static func unplugged(lost: Set<AVAudioSession.Port>, now: Set<AVAudioSession.Port>)
+    -> Bool
+  {
+    !lost.isDisjoint(with: personalOutputs) && now.isDisjoint(with: personalOutputs)
+  }
+
+  /// The node's schedule is no longer trusted (the system stopped the
+  /// engine): the next play reloads, and completion callbacks the stop fires
+  /// for the old segments are ignored, so they cannot advance or end the
+  /// queue.
+  private func invalidateSchedule() {
+    needsReload = true
+    generation += 1
   }
 
   private func notify() { onChange?() }

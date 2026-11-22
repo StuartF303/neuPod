@@ -88,12 +88,20 @@ Built as decided, inside `mobile/packages/neupod_audio`. Where it differs from o
   `onPlaybackResumption` need the persisted queue, which does not exist yet. Until then a Bluetooth play press after
   the service has died does nothing.
 - **Interruptions, minimal now:** Android uses ExoPlayer's audio-focus handling and becoming-noisy pause. iOS:
-  - An interruption's start pauses at the true position, and the next play reschedules from there.
-  - `oldDeviceUnavailable` pauses when a personal output (headphones, Bluetooth, USB, AirPlay, car) in the previous
-    route has gone.
-  - `AVAudioEngineConfigurationChange` (which unplugging also posts, in either order with the route change) pauses if
-    a personal output in use has gone. Otherwise it restarts from the current position one run-loop turn later, unless
-    the route change paused meanwhile.
+  - An interruption's start (even while paused) marks the schedule stale, and the next play reschedules from the
+    true position.
+  - The "unplugged" test: a personal output (headphones, Bluetooth, USB, AirPlay, car) has gone **and none is in the
+    new route**. Moving between personal outputs (AirPods to CarPlay, Bluetooth to AirPlay) does not pause.
+  - `oldDeviceUnavailable` pauses when the test holds against the previous route.
+  - `AVAudioEngineConfigurationChange`, which unplugging also posts, pauses when the test holds against the outputs
+    in use. Otherwise it restarts from the current position one run-loop turn later, unless the route change paused
+    meanwhile.
+  - Both handlers apply the same test, so the outcome does not depend on which notification comes first, **provided**
+    `AVAudioSession.currentRoute` already shows the new route when the first one runs. If it lags (not documented
+    either way), the configuration change could see the old route and restart on the speaker for a moment before the
+    route change pauses. To check on the iPhone in phase 4.
+  - Completion callbacks that a system stop fires for the old segments are ignored (the schedule's generation is
+    bumped), so they cannot advance or end the queue.
   - The session is deactivated with `.notifyOthersOnDeactivation` when the queue ends or is cleared.
 
   Resuming after a transient interruption, and checking all of this on a real iPhone (the simulator has no real route
