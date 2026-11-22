@@ -344,7 +344,7 @@ static bool build_progress(void *user, uint32_t done) {
     uint32_t now = os_tick_ms();
     if (now - last_yield >= 20u) {
         os_delay_ms(1);
-        last_yield = os_tick_ms();
+        last_yield = now;
     }
 #ifdef NEUPOD_LIB_POSIX /* simulator only: slow the scan down so a tour can look at the progress screen (NEUPOD_LIB_SLOW_MS per file) */
     static int slow = -1;

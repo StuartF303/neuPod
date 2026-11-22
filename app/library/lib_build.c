@@ -69,6 +69,8 @@ typedef struct {
     char leaf[POOL_STR]; /* the folder name of the file being indexed (walk_dir): one copy here, not one per folder level on the stack */
     char istr[5][POOL_STR]; /* index_file's title, artist, album artist, album, genre: 325 B that would otherwise sit on the stack under 12 folder levels */
     uint32_t jnext[LIB_LISTS], jrows[LIB_LISTS];
+    uint32_t tick_n;
+    bool tick_stop;
     lib_manifest_t m;
 } bctx_t;
 
@@ -119,19 +121,14 @@ static uint32_t dos_to_unix(WORD d, WORD t) {
  * passes through lib_tick(), which (armed once the walk is done: it polls per file itself) calls the progress callback now and then: that is how Cancel reaches the sort stages, and where the
  * caller gets its chance to yield. One build at a time, from the storage task only (the lib_build contract), so plain statics will do. */
 #define TICK_EVERY 16u
-static struct {
-    bool (*cb)(void *, uint32_t);
-    void *user;
-    const uint32_t *done;
-    uint32_t n;
-    bool stop;
-} g_tick;
+static bctx_t *g_tick_c; /* the running build once armed (NULL otherwise): one pointer of static RAM, the rest lives in the context */
 
 bool lib_tick(void) {
-    if (g_tick.cb == NULL) return true;
-    if (g_tick.stop) return false;
-    if ((++g_tick.n % TICK_EVERY) == 0 && !g_tick.cb(g_tick.user, *g_tick.done)) g_tick.stop = true; // sticky: every later step fails too
-    return !g_tick.stop;
+    bctx_t *c = g_tick_c;
+    if (c == NULL) return true;
+    if (c->tick_stop) return false;
+    if ((++c->tick_n % TICK_EVERY) == 0 && !c->cfg->progress(c->cfg->user, c->files_done)) c->tick_stop = true; // sticky: every later step fails too
+    return !c->tick_stop;
 }
 
 static lib_err_t wr(FIL *f, const void *p, uint32_t n) {
@@ -1338,11 +1335,9 @@ static lib_err_t build_inner(bctx_t *c, int *step) {
 
     e = stage_walk(c);
     if (e == LIB_OK) { // the walk polls once per file itself; from here on every record does (see lib_tick)
-        g_tick.cb = c->cfg->progress;
-        g_tick.user = c->cfg->user;
-        g_tick.done = &c->files_done;
-        g_tick.n = 0;
-        g_tick.stop = false;
+        c->tick_n = 0;
+        c->tick_stop = false;
+        if (c->cfg->progress != NULL) g_tick_c = c;
     }
     if (e == LIB_OK) e = stage_entity(c, K_ARTIST);
     if (e == LIB_OK) e = stage_entity(c, K_ALBUM);
@@ -1389,7 +1384,7 @@ lib_err_t lib_build(const lib_build_cfg_t *cfg, void *scratch, size_t scratch_n,
     if (e != LIB_OK) return e;
     int step = 0;
     e = build_inner(c, &step);
-    g_tick.cb = NULL; // (cleanup below must not be cut short)
+    g_tick_c = NULL; // (cleanup below must not be cut short)
     // Failure stance: nothing but lib.tmp / work has been touched before the swap, so a failed or cancelled build only needs those
     // removed; a simulated power cut (tests) leaves everything as it was, for lib_recover().
     if (e != LIB_OK && !LIB_IS_STOP(e) && step < 3) {

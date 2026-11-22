@@ -651,6 +651,9 @@ TEST(progress_polled_in_every_stage_and_cancel_works_anywhere) {
         ASSERT_FALSE(lib_exists("/.neupod/work"));
         expect_whole(2, 17); /* the live library is the one the first rebuild made */
     }
+    /* a cancelled build leaves nothing behind that a later build trips over (sticky stop, arena, scratch): the next one succeeds */
+    ASSERT_EQ(LIB_OK, build(0, NULL));
+    expect_whole(3, 17);
 }
 
 // lib_rmtree is iterative (a hostile card must not grow the storage task's stack): nested folders with files at every level go in one call.
@@ -668,6 +671,13 @@ TEST(recovery_removes_a_nested_leftover_folder) {
         ASSERT_EQ(FR_OK, f_open(&f, p, FA_CREATE_ALWAYS | FA_WRITE));
         ASSERT_EQ(FR_OK, f_close(&f));
     }
+    FIL f; /* siblings of the folders the removal climbs back out of: a file beside a/b, and a second folder with a file in it */
+    ASSERT_EQ(FR_OK, f_open(&f, "/.neupod/work/a/x.bin", FA_CREATE_ALWAYS | FA_WRITE));
+    ASSERT_EQ(FR_OK, f_close(&f));
+    ASSERT_EQ(FR_OK, f_mkdir("/.neupod/work/a/y"));
+    ASSERT_EQ(FR_OK, f_open(&f, "/.neupod/work/a/y/z.bin", FA_CREATE_ALWAYS | FA_WRITE));
+    ASSERT_EQ(FR_OK, f_close(&f));
+    ASSERT_EQ(FR_OK, f_mkdir("/.neupod/work/b"));
     ASSERT_EQ(LIB_E_NONE, lib_recover(NULL)); /* no library: the unfinished work folder is of no use */
     ASSERT_FALSE(lib_exists("/.neupod/work"));
 }
