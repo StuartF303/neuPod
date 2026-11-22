@@ -84,6 +84,7 @@ class SettingsScreen extends ConsumerWidget {
                 NeupodListItem.row(
                   height: h,
                   title: 'Licences',
+                  chevron: true,
                   onActivate: () => pushScreen(
                     ref,
                     'Licences',

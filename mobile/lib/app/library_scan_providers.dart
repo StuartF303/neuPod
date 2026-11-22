@@ -160,17 +160,50 @@ class LibraryScanController extends Notifier<ScanProgress?> {
   }
 }
 
-/// What a failed scan says: the firmware's `library_status_text()`
-/// (`app/runtime/library_service.c`) for the two failures a phone can have,
-/// with its "Card" made "Storage" (the phone has no card): `Card is full`
-/// becomes `Storage is full` (a full disk), `Card read error` becomes
-/// `Storage read error` (anything else).
-String scanFailureText(String error) {
+/// The firmware's `libsvc_status_t` values a failed scan on the phone can be.
+enum ScanFailure {
+  /// `LIBSVC_FULL`: "Card is full", here "Storage is full" (lead-approved).
+  full,
+
+  /// `LIBSVC_DAMAGED`: "Library needs rebuilding".
+  damaged,
+
+  /// `LIBSVC_ERROR`: "Card read error", here "Storage read error"
+  /// (lead-approved).
+  error,
+}
+
+/// Which failure [error] (an exception's text) is. A SQLite result code is
+/// read as `code & 0xff`, so extended codes count: SQLITE_CORRUPT (11) and
+/// SQLITE_NOTADB (26) are a damaged library, SQLITE_FULL (13) a full disk.
+ScanFailure scanFailure(String error) {
+  final match = RegExp(r'SqliteException\((\d+)').firstMatch(error);
+  final code = match == null ? null : int.parse(match.group(1)!) & 0xff;
+  if (code == 11 || code == 26) return ScanFailure.damaged;
   final e = error.toLowerCase();
   final full =
+      code == 13 ||
       e.contains('sqlite_full') ||
       e.contains('no space left') ||
       e.contains('errno = 28') ||
       e.contains('database or disk is full');
-  return full ? 'Storage is full' : 'Storage read error';
+  return full ? ScanFailure.full : ScanFailure.error;
 }
+
+/// What a failed scan says: the firmware's `library_status_text()`
+/// (`app/runtime/library_service.c` 111-125), with its "Card" made "Storage"
+/// where the phone has no card.
+String scanFailureText(String error) => switch (scanFailure(error)) {
+  ScanFailure.full => 'Storage is full',
+  ScanFailure.damaged => 'Library needs rebuilding',
+  ScanFailure.error => 'Storage read error',
+};
+
+/// The second line under it: the firmware's `hint_for()`
+/// (`app/ui/ui_library.c` 504-511). It has a hint only for
+/// LIBSVC_NEEDS_WRITABLE, LIBSVC_NO_CARD and LIBSVC_PLAYING (a write-protected
+/// card, no card, a player the scan does not wait for); for the three a phone
+/// scan can end in it returns NULL, so there is none (an empty string).
+String scanFailureHint(String error) => switch (scanFailure(error)) {
+  ScanFailure.full || ScanFailure.damaged || ScanFailure.error => '',
+};

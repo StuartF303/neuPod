@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/widgets.dart' show AppLifecycleState, Size;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -113,19 +114,51 @@ void main() {
     return (scanner, container);
   }
 
-  testWidgets('a failed scan says why in a panel, as the firmware does', (
-    tester,
-  ) async {
-    final (scanner, container) = await launch(tester);
-    scanner.current.addError(
-      StateError('SqliteException(13): database or disk is full'),
+  for (final (what, error, title) in [
+    (
+      'full',
+      'SqliteException(13): database or disk is full',
+      'Storage is full',
+    ),
+    (
+      'corrupt',
+      'SqliteException(11): database disk image is malformed',
+      'Library needs rebuilding',
+    ),
+    (
+      'not a database',
+      'SqliteException(26): file is not a database',
+      'Library needs rebuilding',
+    ),
+    ('other', 'FolderAccessException(no-walk)', 'Storage read error'),
+  ]) {
+    testWidgets(
+      'a $what scan failure says the firmware title and hint, never the '
+      'raw error',
+      (tester) async {
+        final (scanner, container) = await launch(tester);
+        final logged = <String?>[];
+        final oldPrint = debugPrint;
+        debugPrint = (String? m, {int? wrapWidth}) => logged.add(m);
+        addTearDown(() => debugPrint = oldPrint);
+        scanner.current.addError(StateError(error));
+        await tester.pump();
+        await tester.pump();
+        final panel = container.read(shellProvider).panel!;
+        expect(panel.title, title);
+        // hint_for() (app/ui/ui_library.c 504-511) has none for these.
+        expect(panel.message, '');
+        expect(find.text(title), findsOneWidget);
+        expect(find.textContaining('Sqlite'), findsNothing);
+        expect(find.textContaining('FolderAccess'), findsNothing);
+        expect(
+          logged.any((m) => m != null && m.contains(error)),
+          isTrue,
+          reason: 'the raw error is logged',
+        );
+      },
     );
-    await tester.pump();
-    await tester.pump();
-    final panel = container.read(shellProvider).panel!;
-    expect(panel.title, 'Storage is full');
-    expect(panel.message, contains('database or disk is full'));
-  });
+  }
 
   testWidgets('a cancelled scan says nothing', (tester) async {
     final (scanner, container) = await launch(tester);
