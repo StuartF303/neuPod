@@ -20,7 +20,7 @@ permissions:
 
 concurrency:
   group: app-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}  # every run on main completes
 
 # Flutter as in docs/app/ENVIRONMENT.md. Third-party actions are pinned by commit SHA; the comment names the release.
 env:
