@@ -1,0 +1,5 @@
+<!-- SPDX-License-Identifier: MPL-2.0. Drawn for the neuPod UI styles design (status bar pause glyph; Classic rx 1, Modern rx 1.5). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+  <rect x="5" y="3" width="5" height="18" rx="1" />
+  <rect x="14" y="3" width="5" height="18" rx="1" />
+</svg>
