@@ -332,39 +332,49 @@ struct WalkBatch: Hashable, CustomStringConvertible {
   var entries: [StorageEntry]
   /// True on the last page; the walk is then released.
   var done: Bool
+  /// Meaningful on the last page: true only if every folder of the tree was
+  /// listed. False if a subfolder could not be read, the tree was deeper than
+  /// the depth cap, the provider or drive went away mid-walk, or the
+  /// coordinated read failed. A caller must not treat files missing from an
+  /// incomplete walk as deleted.
+  var complete: Bool
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
   static func fromList(_ pigeonVar_list: [Any?]) -> WalkBatch? {
     let entries = pigeonVar_list[0] as! [StorageEntry]
     let done = pigeonVar_list[1] as! Bool
+    let complete = pigeonVar_list[2] as! Bool
 
     return WalkBatch(
       entries: entries,
-      done: done
+      done: done,
+      complete: complete
     )
   }
   func toList() -> [Any?] {
     return [
       entries,
       done,
+      complete,
     ]
   }
   static func == (lhs: WalkBatch, rhs: WalkBatch) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return MessagesPigeonInternal.deepEquals(lhs.entries, rhs.entries) && MessagesPigeonInternal.deepEquals(lhs.done, rhs.done)
+    return MessagesPigeonInternal.deepEquals(lhs.entries, rhs.entries) && MessagesPigeonInternal.deepEquals(lhs.done, rhs.done) && MessagesPigeonInternal.deepEquals(lhs.complete, rhs.complete)
   }
 
   func hash(into hasher: inout Hasher) {
     hasher.combine("WalkBatch")
     MessagesPigeonInternal.deepHash(value: entries, hasher: &hasher)
     MessagesPigeonInternal.deepHash(value: done, hasher: &hasher)
+    MessagesPigeonInternal.deepHash(value: complete, hasher: &hasher)
   }
 
   public var description: String {
-    return "WalkBatch(entries: \(String(describing: entries)), done: \(String(describing: done)))"
+    return "WalkBatch(entries: \(String(describing: entries)), done: \(String(describing: done)), complete: \(String(describing: complete)))"
   }
 }
 
@@ -445,11 +455,13 @@ protocol NeupodStorageApi {
   /// Documents folder is first.
   func listRoots(completion: @escaping (Result<[StorageRoot], Error>) -> Void)
   /// Releases a picked root (Android: the persisted grant; iOS: the bookmark
-  /// and its security-scoped access). Files are not touched.
-  func removeRoot(rootId: String) throws
+  /// and its security-scoped access) and cancels its walks. Files are not
+  /// touched. Runs off the platform thread.
+  func removeRoot(rootId: String, completion: @escaping (Result<Void, Error>) -> Void)
   /// Starts a recursive walk of [rootId] and returns a walk id for
-  /// [nextWalkBatch]. Throws `root-unavailable` if access is gone.
-  func startWalk(rootId: String) throws -> String
+  /// [nextWalkBatch]. Throws `root-unavailable` if access is gone. Runs off
+  /// the platform thread.
+  func startWalk(rootId: String, completion: @escaping (Result<String, Error>) -> Void)
   /// Returns the next files of a walk, about [maxEntries] at a time (a page
   /// may run over by one directory's files). Runs off the platform thread.
   func nextWalkBatch(walkId: String, maxEntries: Int64, completion: @escaping (Result<WalkBatch, Error>) -> Void)
@@ -458,7 +470,9 @@ protocol NeupodStorageApi {
   /// Android only: opens [uri] read-only and returns a detached file
   /// descriptor, which the caller owns and must close (`FdStorageReader`
   /// does). iOS throws `unsupported`: `file://` URIs are read directly.
-  func openFd(uri: String) throws -> Int64
+  /// Runs on its own background executor (a provider can block), never on
+  /// the platform thread.
+  func openFd(uri: String, completion: @escaping (Result<Int64, Error>) -> Void)
   /// A private directory for the app's own data (the library database):
   /// Android `filesDir`; iOS Application Support, created if needed. Never
   /// the Documents folder, so it is not shown in Files or Finder.
@@ -511,34 +525,40 @@ class NeupodStorageApiSetup {
       listRootsChannel.setMessageHandler(nil)
     }
     /// Releases a picked root (Android: the persisted grant; iOS: the bookmark
-    /// and its security-scoped access). Files are not touched.
+    /// and its security-scoped access) and cancels its walks. Files are not
+    /// touched. Runs off the platform thread.
     let removeRootChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.neupod_storage.NeupodStorageApi.removeRoot\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       removeRootChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let rootIdArg = args[0] as! String
-        do {
-          try api.removeRoot(rootId: rootIdArg)
-          reply(wrapResult(nil))
-        } catch {
-          reply(wrapError(error))
+        api.removeRoot(rootId: rootIdArg) { result in
+          switch result {
+          case .success:
+            reply(wrapResult(nil))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
         }
       }
     } else {
       removeRootChannel.setMessageHandler(nil)
     }
     /// Starts a recursive walk of [rootId] and returns a walk id for
-    /// [nextWalkBatch]. Throws `root-unavailable` if access is gone.
+    /// [nextWalkBatch]. Throws `root-unavailable` if access is gone. Runs off
+    /// the platform thread.
     let startWalkChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.neupod_storage.NeupodStorageApi.startWalk\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       startWalkChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let rootIdArg = args[0] as! String
-        do {
-          let result = try api.startWalk(rootId: rootIdArg)
-          reply(wrapResult(result))
-        } catch {
-          reply(wrapError(error))
+        api.startWalk(rootId: rootIdArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
         }
       }
     } else {
@@ -583,16 +603,20 @@ class NeupodStorageApiSetup {
     /// Android only: opens [uri] read-only and returns a detached file
     /// descriptor, which the caller owns and must close (`FdStorageReader`
     /// does). iOS throws `unsupported`: `file://` URIs are read directly.
+    /// Runs on its own background executor (a provider can block), never on
+    /// the platform thread.
     let openFdChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.neupod_storage.NeupodStorageApi.openFd\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       openFdChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let uriArg = args[0] as! String
-        do {
-          let result = try api.openFd(uri: uriArg)
-          reply(wrapResult(result))
-        } catch {
-          reply(wrapError(error))
+        api.openFd(uri: uriArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
         }
       }
     } else {

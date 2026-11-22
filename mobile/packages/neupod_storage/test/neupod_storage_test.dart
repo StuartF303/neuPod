@@ -18,6 +18,9 @@ class FakeApi extends NeupodStorageApi {
   int _cursor = 0;
   PlatformException? failStart;
 
+  /// What the last page reports as `complete`.
+  bool complete = true;
+
   @override
   Future<String> startWalk(String rootId) async {
     calls.add('start $rootId');
@@ -32,7 +35,8 @@ class FakeApi extends NeupodStorageApi {
     final end = (_cursor + maxEntries).clamp(0, files.length);
     final page = files.sublist(_cursor, end);
     _cursor = end;
-    return WalkBatch(entries: page, done: _cursor >= files.length);
+    final done = _cursor >= files.length;
+    return WalkBatch(entries: page, done: done, complete: done && complete);
   }
 
   @override
@@ -45,13 +49,14 @@ class FakeApi extends NeupodStorageApi {
   }
 }
 
-StorageEntry entry(int i) => StorageEntry(
-  relPath: 'Artist/Album/$i.flac',
-  uri: 'content://x/$i',
-  size: i,
-  modifiedMs: 0,
-  state: EntryState.local,
-);
+StorageEntry entry(int i, {String? uri, EntryState state = EntryState.local}) =>
+    StorageEntry(
+      relPath: 'Artist/Album/$i.flac',
+      uri: uri ?? 'content://x/$i',
+      size: i,
+      modifiedMs: 0,
+      state: state,
+    );
 
 // fopen/fileno/dup/fclose to get a real descriptor on the host, so
 // FdStorageReader runs the same pread path as on Android.
@@ -91,14 +96,33 @@ void main() {
       final pages = await NeupodStorage(api: api)
           .walk('root', batchSize: 3)
           .toList();
-      expect(pages.map((p) => p.length), [3, 3, 1]);
-      expect(pages.expand((p) => p).map((e) => e.size), [0, 1, 2, 3, 4, 5, 6]);
+      expect(pages.map((p) => p.entries.length), [3, 3, 1]);
+      expect(pages.map((p) => p.done), [false, false, true]);
+      expect(pages.last.complete, isTrue);
+      expect(pages.expand((p) => p.entries).map((e) => e.size), [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+      ]);
       expect(api.calls.where((c) => c.startsWith('cancel')), isEmpty);
     });
 
-    test('an empty root yields nothing', () async {
+    test('an empty root yields one empty, complete last page', () async {
       final api = FakeApi([]);
-      expect(await NeupodStorage(api: api).walk('root').toList(), isEmpty);
+      final pages = await NeupodStorage(api: api).walk('root').toList();
+      expect(pages, hasLength(1));
+      expect(pages.single.entries, isEmpty);
+      expect((pages.single.done, pages.single.complete), (true, true));
+    });
+
+    test('an incomplete walk says so on its last page', () async {
+      final api = FakeApi([entry(1)])..complete = false;
+      final pages = await NeupodStorage(api: api).walk('root').toList();
+      expect((pages.last.done, pages.last.complete), (true, false));
     });
 
     test('cancelling the subscription cancels the walk', () async {
@@ -106,7 +130,7 @@ void main() {
       final first = await NeupodStorage(api: api)
           .walk('root', batchSize: 2)
           .first;
-      expect(first, hasLength(2));
+      expect(first.entries, hasLength(2));
       await pumpEventQueue();
       expect(api.calls, contains('cancel w1'));
     });
@@ -152,7 +176,7 @@ void main() {
     test('file:// URIs are read with dart:io, no platform call', () async {
       final api = FakeApi([]);
       final reader = await NeupodStorage(api: api)
-          .openReader(file.uri.toString());
+          .openReader(entry(0, uri: file.uri.toString()));
       checkReader(reader);
       reader.close();
       expect(api.calls, isEmpty);
@@ -161,10 +185,50 @@ void main() {
     test('content:// failures become StorageException', () async {
       final api = FakeApi([]);
       await expectLater(
-        NeupodStorage(api: api).openReader('content://x/1'),
+        NeupodStorage(api: api).openReader(entry(1)),
         throwsA(isA<StorageException>()),
       );
       expect(api.calls, ['openFd content://x/1']);
+    });
+
+    test('a not-downloaded entry is refused without any call', () async {
+      final api = FakeApi([]);
+      await expectLater(
+        NeupodStorage(api: api)
+            .openHandle(entry(1, state: EntryState.notDownloaded)),
+        throwsA(
+          isA<StorageException>().having(
+            (e) => e.code,
+            'code',
+            'not-downloaded',
+          ),
+        ),
+      );
+      expect(api.calls, isEmpty);
+    });
+
+    test('a handle is used exactly once', () {
+      final h = FdReaderHandle(openFdOnHost(file.path));
+      h.discard();
+      expect(h.isUsed, isTrue);
+      expect(h.discard, throwsStateError);
+      expect(h.open, throwsStateError);
+      final f = FileReaderHandle(file.uri.toString());
+      f.open().close();
+      expect(f.open, throwsStateError);
+    });
+
+    test('a missing file throws and leaks nothing', () {
+      expect(
+        () => FileStorageReader.open(Uri.file('${dir.path}/missing')),
+        throwsA(isA<FileSystemException>()),
+      );
+    });
+
+    test('a closed file reader throws on read', () {
+      final r = FileStorageReader.open(file.uri)..close();
+      r.close();
+      expect(() => r.readAt(0, 1), throwsStateError);
     });
 
     test('FdStorageReader reads with pread and closes once', () {
@@ -185,7 +249,9 @@ void main() {
         }
       });
       final storage = NeupodStorage(api: FakeApi([]));
-      final fileHandle = await storage.openHandle(file.uri.toString());
+      final fileHandle = await storage.openHandle(
+        entry(0, uri: file.uri.toString()),
+      );
       expect(fileHandle, isA<FileReaderHandle>());
       expect(await headIn(fileHandle), [0, 1, 2, 3, 4, 5, 6, 7]);
       expect(await headIn(FdReaderHandle(openFdOnHost(file.path))), [

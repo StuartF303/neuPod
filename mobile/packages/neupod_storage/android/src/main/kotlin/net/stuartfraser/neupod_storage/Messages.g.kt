@@ -372,20 +372,30 @@ data class StorageEntry (
 data class WalkBatch (
   val entries: List<StorageEntry>,
   /** True on the last page; the walk is then released. */
-  val done: Boolean
+  val done: Boolean,
+  /**
+   * Meaningful on the last page: true only if every folder of the tree was
+   * listed. False if a subfolder could not be read, the tree was deeper than
+   * the depth cap, the provider or drive went away mid-walk, or the
+   * coordinated read failed. A caller must not treat files missing from an
+   * incomplete walk as deleted.
+   */
+  val complete: Boolean
 )
  {
   companion object {
     fun fromList(pigeonVar_list: List<Any?>): WalkBatch {
       val entries = pigeonVar_list[0] as List<StorageEntry>
       val done = pigeonVar_list[1] as Boolean
-      return WalkBatch(entries, done)
+      val complete = pigeonVar_list[2] as Boolean
+      return WalkBatch(entries, done, complete)
     }
   }
   fun toList(): List<Any?> {
     return listOf(
       entries,
       done,
+      complete,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -396,17 +406,18 @@ data class WalkBatch (
       return true
     }
     val other = other as WalkBatch
-    return MessagesPigeonUtils.deepEquals(this.entries, other.entries) && MessagesPigeonUtils.deepEquals(this.done, other.done)
+    return MessagesPigeonUtils.deepEquals(this.entries, other.entries) && MessagesPigeonUtils.deepEquals(this.done, other.done) && MessagesPigeonUtils.deepEquals(this.complete, other.complete)
   }
 
   override fun hashCode(): Int {
     var result = javaClass.hashCode()
     result = 31 * result + MessagesPigeonUtils.deepHash(this.entries)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.done)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.complete)
     return result
   }
   override fun toString(): String {
-    return "WalkBatch(entries=$entries, done=$done)"
+    return "WalkBatch(entries=$entries, done=$done, complete=$complete)"
   }
 }
 private open class MessagesPigeonCodec : StandardMessageCodec() {
@@ -487,14 +498,16 @@ interface NeupodStorageApi {
   fun listRoots(callback: (Result<List<StorageRoot>>) -> Unit)
   /**
    * Releases a picked root (Android: the persisted grant; iOS: the bookmark
-   * and its security-scoped access). Files are not touched.
+   * and its security-scoped access) and cancels its walks. Files are not
+   * touched. Runs off the platform thread.
    */
-  fun removeRoot(rootId: String)
+  fun removeRoot(rootId: String, callback: (Result<Unit>) -> Unit)
   /**
    * Starts a recursive walk of [rootId] and returns a walk id for
-   * [nextWalkBatch]. Throws `root-unavailable` if access is gone.
+   * [nextWalkBatch]. Throws `root-unavailable` if access is gone. Runs off
+   * the platform thread.
    */
-  fun startWalk(rootId: String): String
+  fun startWalk(rootId: String, callback: (Result<String>) -> Unit)
   /**
    * Returns the next files of a walk, about [maxEntries] at a time (a page
    * may run over by one directory's files). Runs off the platform thread.
@@ -506,8 +519,10 @@ interface NeupodStorageApi {
    * Android only: opens [uri] read-only and returns a detached file
    * descriptor, which the caller owns and must close (`FdStorageReader`
    * does). iOS throws `unsupported`: `file://` URIs are read directly.
+   * Runs on its own background executor (a provider can block), never on
+   * the platform thread.
    */
-  fun openFd(uri: String): Long
+  fun openFd(uri: String, callback: (Result<Long>) -> Unit)
   /**
    * A private directory for the app's own data (the library database):
    * Android `filesDir`; iOS Application Support, created if needed. Never
@@ -573,13 +588,14 @@ interface NeupodStorageApi {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
             val rootIdArg = args[0] as String
-            val wrapped: List<Any?> = try {
-              api.removeRoot(rootIdArg)
-              listOf(null)
-            } catch (exception: Throwable) {
-              MessagesPigeonUtils.wrapError(exception)
+            api.removeRoot(rootIdArg) { result: Result<Unit> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(MessagesPigeonUtils.wrapError(error))
+              } else {
+                reply.reply(MessagesPigeonUtils.wrapResult(null))
+              }
             }
-            reply.reply(wrapped)
           }
         } else {
           channel.setMessageHandler(null)
@@ -591,12 +607,15 @@ interface NeupodStorageApi {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
             val rootIdArg = args[0] as String
-            val wrapped: List<Any?> = try {
-              listOf(api.startWalk(rootIdArg))
-            } catch (exception: Throwable) {
-              MessagesPigeonUtils.wrapError(exception)
+            api.startWalk(rootIdArg) { result: Result<String> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(MessagesPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(MessagesPigeonUtils.wrapResult(data))
+              }
             }
-            reply.reply(wrapped)
           }
         } else {
           channel.setMessageHandler(null)
@@ -647,12 +666,15 @@ interface NeupodStorageApi {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
             val uriArg = args[0] as String
-            val wrapped: List<Any?> = try {
-              listOf(api.openFd(uriArg))
-            } catch (exception: Throwable) {
-              MessagesPigeonUtils.wrapError(exception)
+            api.openFd(uriArg) { result: Result<Long> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(MessagesPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(MessagesPigeonUtils.wrapResult(data))
+              }
             }
-            reply.reply(wrapped)
           }
         } else {
           channel.setMessageHandler(null)

@@ -108,7 +108,7 @@ stream (a Dart stream source would need a localhost HTTP proxy, which fits badly
 3. `detachFd` + FFI `pread` from a background isolate: 5,000 header reads; check fds are always closed (count
    `/proc/self/fd`). Try `/proc/self/fd/N` with `RandomAccessFile` as the simpler alternative.
 4. Same fd path on a non-local provider (Google Drive if installed): `openFileDescriptor` may return a pipe (not
-   seekable); confirm we detect and grey it.
+   seekable); confirm we detect and grey it. (Moot for R1: the picker is local-only, see Implementation.)
 5. `neupod_audio` plays a `content://` tree URI and a MediaStore URI gaplessly on Android, and a
    bookmarked iCloud Drive file URL on iOS after relaunch.
 6. iPhone: drag a folder in Finder into Documents; pick an iCloud Drive folder with some files evicted; confirm the
@@ -143,6 +143,32 @@ by `mobile/lib/data/platform/storage_folder_access.dart`. Where it differs from 
   bookmark storage, resolution after relaunch, walking and reading. It throws in release builds. The picker UI itself
   is driven on Android (adb, `scripts/app/drive_saf_picker.py`) but not on the iOS simulator.
 - **Hidden entries.** Names starting with `.` are skipped on both platforms (except iCloud placeholders on iOS).
+- **Complete or not.** The last page of a walk says whether every folder was listed (`complete`). It is false when a
+  subfolder could not be read (Android: the child query failed; iOS: the enumerator's error handler fired), when the
+  tree is deeper than 64 levels or a document id repeats (a provider loop), when the coordinated read fails, or when the
+  root is no longer reachable at the end (an unplugged drive makes the enumerator simply run dry). The scanner deletes
+  tracks for files missing from a walk only after a complete one.
+- **Threading.** Every ContentResolver call (roots, grants, walks) runs on one background executor and `openFd` on a
+  second one, so a provider that blocks an open cannot stall a walk or the platform thread (`removeRoot`, `startWalk`
+  and `openFd` are asynchronous in the API). On iOS all bookmark, access and walk state lives on one serial queue;
+  bookmarks are resolved there at launch, not on the main thread, and a bookmark that did not resolve is tried again on
+  every `listRoots`. `removeRoot` cancels the root's walks before giving up access.
+- **On-device storage only (lead decision, 2026-11-22, under R1's no-network rule).** The Android picker is opened with
+  `EXTRA_LOCAL_ONLY`, so cloud providers (Drive and the like), whose reads are network fetches, are not offered, and
+  entries flagged `FLAG_VIRTUAL_DOCUMENT` (no bytes of their own) are skipped. Spike item 4 (a non-local provider) is
+  therefore moot for R1; the pipe check in `FdStorageReader` stays as a guard. On iOS the picker cannot be limited this
+  way; iCloud Drive is covered by owner decision 7 (not-downloaded files are never read).
+- **Handles.** `openHandle` takes the `StorageEntry` and refuses a not-downloaded one by construction. A `ReaderHandle`
+  is used exactly once (`open` or `discard`); `pread` is retried on `EINTR`, and failures carry `errno`.
+
+For the device check (phase 1) and phase 3:
+
+- Third-party File Provider extensions may present dataless files without `ubiquitousItemDownloadingStatus`; the walk
+  then reports them as local, and reading them may make the provider fetch them. Check on the owner's iPhone with any
+  provider apps installed.
+- Nested or duplicate roots (a folder picked inside another, or Documents picked as a folder) are not detected yet:
+  their files would be scanned twice. Phase 3 (incremental rescan, removing a folder) handles it.
+
 
 ## Sources
 

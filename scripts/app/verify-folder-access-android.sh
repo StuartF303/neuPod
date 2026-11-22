@@ -16,13 +16,15 @@ REPO="$(cd "$HERE/../.." && pwd)"
 SDK="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 EMU_LOG="$(mktemp -t neupod-emu)"
 
-"$SDK/emulator/emulator" -avd "$AVD" -no-window -no-audio -no-snapshot-save -no-boot-anim >"$EMU_LOG" 2>&1 &
+# Our own console port, so the serial is known and never collides with another emulator.
+PORT="${NEUPOD_EMU_PORT:-5580}"
+SERIAL="emulator-$PORT"
+"$SDK/emulator/emulator" -avd "$AVD" -port "$PORT" -no-window -no-audio -no-snapshot-save -no-boot-anim >"$EMU_LOG" 2>&1 &
 EMU_PID=$!
 cleanup() {
   adb -s "$SERIAL" emu kill >/dev/null 2>&1 || kill "$EMU_PID" 2>/dev/null || true
   wait "$EMU_PID" 2>/dev/null || true
 }
-SERIAL=emulator-5554
 trap cleanup EXIT
 
 adb -s "$SERIAL" wait-for-device

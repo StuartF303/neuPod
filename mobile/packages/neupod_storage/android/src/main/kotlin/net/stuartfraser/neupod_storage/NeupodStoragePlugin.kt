@@ -23,13 +23,18 @@ import java.util.concurrent.Executors
 /**
  * Read-only folder access through the Storage Access Framework (decision 0004).
  *
- * - [pickFolder] opens ACTION_OPEN_DOCUMENT_TREE and persists a **read-only** grant.
+ * - [pickFolder] opens ACTION_OPEN_DOCUMENT_TREE, limited to on-device storage
+ *   (EXTRA_LOCAL_ONLY: R1 makes no network connection), and persists a
+ *   **read-only** grant.
  * - [listRoots] lists the persisted tree grants.
  * - [startWalk] / [nextWalkBatch] walk a tree breadth-first with one
  *   DocumentsContract child query per directory (not DocumentFile, which costs a
- *   binder call per file per attribute).
+ *   binder call per file per attribute). A walk that could not list every folder
+ *   ends with `complete = false`.
  * - [openFd] hands Dart a detached, read-only file descriptor.
  *
+ * Every ContentResolver (binder) call runs off the platform thread: walks and
+ * root queries on one executor, opens on another (a provider can block an open).
  * Nothing here writes, moves or deletes a document, and no write permission is
  * ever requested or taken.
  */
@@ -44,29 +49,59 @@ class NeupodStoragePlugin :
     private var pendingPick: ((Result<StorageRoot?>) -> Unit)? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    /** Roots and walks. Single thread, so a walk's state is touched by one thread only. */
     private var executor: ExecutorService? = null
+
+    /** openFd only, so a slow provider open never delays a walk (or the reverse). */
+    private var openExecutor: ExecutorService? = null
     private val walks = ConcurrentHashMap<String, Walk>()
 
-    private class Walk(val tree: Uri) {
-        /** Directories still to list: (document id, path relative to the root). */
-        val dirs = ArrayDeque<Pair<String, String>>()
+    private class Walk(val rootId: String, val tree: Uri) {
+        /** Directories still to list: (document id, path relative to the root, depth). */
+        val dirs = ArrayDeque<Triple<String, String, Int>>()
+
+        /** Document ids already queued, so a provider loop cannot walk forever. */
+        val seen = HashSet<String>()
+
+        /** Set when a folder was skipped: unreadable, too deep, or already seen. */
+        var incomplete = false
     }
 
     private val resolver: ContentResolver
         get() = context?.contentResolver ?: throw FlutterError("detached", "plugin is detached")
+
+    /** Runs [work] on [on] and posts its result to [callback] on the platform thread. */
+    private fun <T> background(on: ExecutorService?, callback: (Result<T>) -> Unit, work: () -> T) {
+        if (on == null) {
+            callback(Result.failure(FlutterError("detached", "plugin is detached")))
+            return
+        }
+        try {
+            on.execute {
+                val result = runCatching(work)
+                mainHandler.post { callback(result) }
+            }
+        } catch (e: Exception) { // RejectedExecutionException after detach
+            callback(Result.failure(FlutterError("detached", e.message)))
+        }
+    }
 
     // FlutterPlugin
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
         executor = Executors.newSingleThreadExecutor()
+        openExecutor = Executors.newSingleThreadExecutor()
         NeupodStorageApi.setUp(binding.binaryMessenger, this)
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         NeupodStorageApi.setUp(binding.binaryMessenger, null)
         executor?.shutdownNow()
+        openExecutor?.shutdownNow()
         executor = null
+        openExecutor = null
         walks.clear()
         context = null
     }
@@ -101,9 +136,10 @@ class NeupodStoragePlugin :
             return
         }
         // Read only: no FLAG_GRANT_WRITE_URI_PERMISSION, here or when the grant is taken.
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(
-            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION,
-        )
+        // On-device storage only: cloud providers would make reads network fetches.
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+            .putExtra(Intent.EXTRA_LOCAL_ONLY, true)
         pendingPick = callback
         try {
             activity.startActivityForResult(intent, REQUEST_PICK_TREE)
@@ -122,46 +158,41 @@ class NeupodStoragePlugin :
             callback(Result.success(null))
             return true
         }
-        try {
-            resolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        } catch (e: SecurityException) {
-            callback(Result.failure(FlutterError("not-persistable", e.message)))
-            return true
-        }
-        val ex = executor ?: return true
-        ex.execute {
-            val root = rootFor(tree)
-            mainHandler.post { callback(Result.success(root)) }
+        background(executor, callback) {
+            try {
+                resolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (e: SecurityException) {
+                throw FlutterError("not-persistable", e.message)
+            }
+            rootFor(tree)
         }
         return true
     }
 
     // Roots
 
-    override fun listRoots(callback: (Result<List<StorageRoot>>) -> Unit) {
-        val ex = executor ?: return callback(Result.failure(FlutterError("detached", null)))
-        ex.execute {
-            val result = runCatching {
-                resolver.persistedUriPermissions
-                    .filter { it.isReadPermission && DocumentsContract.isTreeUri(it.uri) }
-                    .sortedBy { it.persistedTime }
-                    .map { rootFor(it.uri) }
-            }
-            mainHandler.post { callback(result) }
+    override fun listRoots(callback: (Result<List<StorageRoot>>) -> Unit) =
+        background(executor, callback) {
+            resolver.persistedUriPermissions
+                .filter { it.isReadPermission && DocumentsContract.isTreeUri(it.uri) }
+                .sortedBy { it.persistedTime }
+                .map { rootFor(it.uri) }
         }
-    }
 
-    override fun removeRoot(rootId: String) {
-        val tree = Uri.parse(rootId)
-        val held = resolver.persistedUriPermissions.filter { it.uri == tree }
-        for (permission in held) {
-            var flags = 0
-            if (permission.isReadPermission) flags = flags or Intent.FLAG_GRANT_READ_URI_PERMISSION
-            if (permission.isWritePermission) flags = flags or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            try {
-                resolver.releasePersistableUriPermission(tree, flags)
-            } catch (_: SecurityException) {
-                // Already gone.
+    override fun removeRoot(rootId: String, callback: (Result<Unit>) -> Unit) {
+        // Cancel its walks first, so no further page is served for a released root.
+        walks.entries.removeIf { it.value.rootId == rootId }
+        background(executor, callback) {
+            val tree = Uri.parse(rootId)
+            for (permission in resolver.persistedUriPermissions.filter { it.uri == tree }) {
+                var flags = 0
+                if (permission.isReadPermission) flags = flags or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                if (permission.isWritePermission) flags = flags or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                try {
+                    resolver.releasePersistableUriPermission(tree, flags)
+                } catch (_: SecurityException) {
+                    // Already gone.
+                }
             }
         }
     }
@@ -188,31 +219,29 @@ class NeupodStoragePlugin :
 
     // Walking
 
-    override fun startWalk(rootId: String): String {
-        val tree = Uri.parse(rootId)
-        val held = resolver.persistedUriPermissions.any { it.uri == tree && it.isReadPermission }
-        if (!held) throw FlutterError("root-unavailable", "no read grant for $rootId")
-        val walk = Walk(tree)
-        walk.dirs.addLast(DocumentsContract.getTreeDocumentId(tree) to "")
-        val id = UUID.randomUUID().toString()
-        walks[id] = walk
-        return id
-    }
-
-    override fun nextWalkBatch(walkId: String, maxEntries: Long, callback: (Result<WalkBatch>) -> Unit) {
-        val ex = executor ?: return callback(Result.failure(FlutterError("detached", null)))
-        ex.execute {
-            val result = runCatching { walkStep(walkId, maxEntries.toInt().coerceAtLeast(1)) }
-            mainHandler.post { callback(result) }
+    override fun startWalk(rootId: String, callback: (Result<String>) -> Unit) =
+        background(executor, callback) {
+            val tree = Uri.parse(rootId)
+            val held = resolver.persistedUriPermissions.any { it.uri == tree && it.isReadPermission }
+            if (!held) throw FlutterError("root-unavailable", "no read grant for $rootId")
+            val walk = Walk(rootId, tree)
+            val top = DocumentsContract.getTreeDocumentId(tree)
+            walk.dirs.addLast(Triple(top, "", 0))
+            walk.seen.add(top)
+            val id = UUID.randomUUID().toString()
+            walks[id] = walk
+            id
         }
-    }
+
+    override fun nextWalkBatch(walkId: String, maxEntries: Long, callback: (Result<WalkBatch>) -> Unit) =
+        background(executor, callback) { walkStep(walkId, maxEntries.toInt().coerceAtLeast(1)) }
 
     private fun walkStep(walkId: String, maxEntries: Int): WalkBatch {
-        val walk = walks[walkId] ?: throw FlutterError("no-walk", "unknown or finished walk $walkId")
+        val walk = walks[walkId] ?: throw FlutterError("no-walk", "unknown, cancelled or finished walk $walkId")
         val out = ArrayList<StorageEntry>()
         while (out.size < maxEntries && walk.dirs.isNotEmpty()) {
-            val (docId, prefix) = walk.dirs.removeFirst()
-            val isRoot = prefix.isEmpty()
+            val (docId, prefix, depth) = walk.dirs.removeFirst()
+            val isRoot = depth == 0
             val children = DocumentsContract.buildChildDocumentsUriUsingTree(walk.tree, docId)
             val cursor = try {
                 resolver.query(children, PROJECTION, null, null, null)
@@ -221,21 +250,32 @@ class NeupodStoragePlugin :
                     walks.remove(walkId)
                     throw FlutterError("root-unavailable", e.message)
                 }
-                null // An unreadable subfolder is skipped; the rest of the tree is still walked.
+                null
             }
-            if (cursor == null && isRoot) {
-                walks.remove(walkId)
-                throw FlutterError("root-unavailable", "the provider returned no listing")
+            if (cursor == null) {
+                if (isRoot) {
+                    walks.remove(walkId)
+                    throw FlutterError("root-unavailable", "the provider returned no listing")
+                }
+                walk.incomplete = true // an unreadable subfolder: the walk goes on, but is not complete
+                continue
             }
-            cursor?.use { c ->
+            cursor.use { c ->
                 while (c.moveToNext()) {
                     val id = c.getString(0) ?: continue
                     val name = c.getString(1) ?: continue
                     if (name.startsWith(".")) continue // hidden files and folders (.thumbnails, .nomedia)
                     val mime = c.getString(2)
+                    val flags = if (c.isNull(5)) 0 else c.getInt(5)
+                    // A virtual document has no bytes of its own (it is converted on open): not music.
+                    if (flags and Document.FLAG_VIRTUAL_DOCUMENT != 0) continue
                     val rel = if (isRoot) name else "$prefix/$name"
                     if (mime == Document.MIME_TYPE_DIR) {
-                        walk.dirs.addLast(id to rel)
+                        if (depth + 1 > MAX_DEPTH || !walk.seen.add(id)) {
+                            walk.incomplete = true
+                        } else {
+                            walk.dirs.addLast(Triple(id, rel, depth + 1))
+                        }
                     } else {
                         out.add(
                             StorageEntry(
@@ -252,7 +292,7 @@ class NeupodStoragePlugin :
         }
         val done = walk.dirs.isEmpty()
         if (done) walks.remove(walkId)
-        return WalkBatch(entries = out, done = done)
+        return WalkBatch(entries = out, done = done, complete = done && !walk.incomplete)
     }
 
     override fun cancelWalk(walkId: String) {
@@ -261,14 +301,15 @@ class NeupodStoragePlugin :
 
     // Reading
 
-    override fun openFd(uri: String): Long {
-        val pfd = try {
-            resolver.openFileDescriptor(Uri.parse(uri), "r")
-        } catch (e: Exception) {
-            throw FlutterError("open-failed", e.message)
-        } ?: throw FlutterError("open-failed", "the provider returned no descriptor")
-        return pfd.detachFd().toLong()
-    }
+    override fun openFd(uri: String, callback: (Result<Long>) -> Unit) =
+        background(openExecutor, callback) {
+            val pfd = try {
+                resolver.openFileDescriptor(Uri.parse(uri), "r")
+            } catch (e: Exception) {
+                throw FlutterError("open-failed", e.message)
+            } ?: throw FlutterError("open-failed", "the provider returned no descriptor")
+            pfd.detachFd().toLong()
+        }
 
     override fun appSupportPath(): String =
         context?.filesDir?.absolutePath ?: throw FlutterError("detached", "plugin is detached")
@@ -278,12 +319,16 @@ class NeupodStoragePlugin :
 
     private companion object {
         const val REQUEST_PICK_TREE = 0x4e50 // "NP"
+
+        /** Deeper folders are not walked (and the walk is reported incomplete). */
+        const val MAX_DEPTH = 64
         val PROJECTION = arrayOf(
             Document.COLUMN_DOCUMENT_ID,
             Document.COLUMN_DISPLAY_NAME,
             Document.COLUMN_MIME_TYPE,
             Document.COLUMN_SIZE,
             Document.COLUMN_LAST_MODIFIED,
+            Document.COLUMN_FLAGS,
         )
     }
 }

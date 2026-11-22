@@ -53,16 +53,18 @@ class NeupodStorage {
   Future<void> removeRoot(String rootId) =>
       _guard(() => _api.removeRoot(rootId));
 
-  /// Walks [rootId] recursively, yielding files in pages of about
-  /// [batchSize]. Cancelling the subscription stops the walk.
-  Stream<List<StorageEntry>> walk(String rootId, {int batchSize = 500}) async* {
+  /// Walks [rootId] recursively, yielding pages of about [batchSize] files.
+  /// The last page has `done` set, and `complete` tells whether every folder
+  /// was listed: files missing from an incomplete walk are not known to be
+  /// gone. Cancelling the subscription stops the walk.
+  Stream<WalkBatch> walk(String rootId, {int batchSize = 500}) async* {
     final walkId = await _guard(() => _api.startWalk(rootId));
     var done = false;
     try {
       while (!done) {
         final batch = await _guard(() => _api.nextWalkBatch(walkId, batchSize));
         done = batch.done;
-        if (batch.entries.isNotEmpty) yield batch.entries;
+        yield batch;
       }
     } finally {
       if (!done) {
@@ -72,17 +74,24 @@ class NeupodStorage {
     }
   }
 
-  /// Opens [uri] (from a [StorageEntry]) for random-access reads.
+  /// Opens [entry] for random-access reads.
   ///
   /// `file://` URIs (iOS) are read with `dart:io`; `content://` URIs
   /// (Android) through a detached file descriptor. This call goes through a
   /// platform channel on Android, so make it on the root isolate; to read in
   /// a background isolate, use [openHandle] and send the handle there.
-  Future<StorageReader> openReader(String uri) async =>
-      (await openHandle(uri)).open();
+  Future<StorageReader> openReader(StorageEntry entry) async =>
+      (await openHandle(entry)).open();
 
-  /// Opens [uri] and returns a sendable [ReaderHandle] for another isolate.
-  Future<ReaderHandle> openHandle(String uri) async {
+  /// Opens [entry] and returns a sendable [ReaderHandle] for another isolate.
+  ///
+  /// Refuses an entry that is not downloaded (`not-downloaded`): reading it
+  /// would make iOS fetch it from iCloud (owner decision 7).
+  Future<ReaderHandle> openHandle(StorageEntry entry) async {
+    if (entry.state == EntryState.notDownloaded) {
+      throw StorageException('not-downloaded', entry.relPath);
+    }
+    final uri = entry.uri;
     if (uri.startsWith('file:')) return FileReaderHandle(uri);
     return FdReaderHandle(await _guard(() => _api.openFd(uri)));
   }

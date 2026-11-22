@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MPL-2.0
 #
 # To learn more about a Podspec see http://guides.cocoapods.org/syntax/podspec.html.
 # Run `pod lib lint neupod_storage.podspec` to validate before publishing.

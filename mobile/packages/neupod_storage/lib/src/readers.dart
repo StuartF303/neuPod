@@ -26,16 +26,23 @@ final class FileStorageReader implements StorageReader {
   /// Opens [uri] read-only.
   factory FileStorageReader.open(Uri uri) {
     final file = File.fromUri(uri).openSync();
-    return FileStorageReader._(file, file.lengthSync());
+    try {
+      return FileStorageReader._(file, file.lengthSync());
+    } catch (_) {
+      file.closeSync();
+      rethrow;
+    }
   }
 
   final RandomAccessFile _file;
+  bool _closed = false;
 
   @override
   final int length;
 
   @override
   Uint8List readAt(int offset, int count) {
+    if (_closed) throw StateError('reader is closed');
     if (offset < 0 || count < 0) throw RangeError('negative offset or count');
     if (offset >= length || count == 0) return Uint8List(0);
     _file.setPositionSync(offset);
@@ -43,7 +50,11 @@ final class FileStorageReader implements StorageReader {
   }
 
   @override
-  void close() => _file.closeSync();
+  void close() {
+    if (_closed) return;
+    _closed = true;
+    _file.closeSync();
+  }
 }
 
 // libc, through dart:ffi (no package). Android's bionic and glibc export the
@@ -59,6 +70,7 @@ typedef _MallocC = Pointer<Uint8> Function(IntPtr);
 typedef _MallocD = Pointer<Uint8> Function(int);
 typedef _FreeC = Void Function(Pointer<Uint8>);
 typedef _FreeD = void Function(Pointer<Uint8>);
+typedef _ErrnoC = Pointer<Int32> Function();
 
 final class _Libc {
   _Libc._(DynamicLibrary lib)
@@ -66,21 +78,41 @@ final class _Libc {
       lseek = lib.lookupFunction<_LseekC, _LseekD>(_name(lib, 'lseek')),
       close = lib.lookupFunction<_CloseC, _CloseD>('close'),
       malloc = lib.lookupFunction<_MallocC, _MallocD>('malloc'),
-      free = lib.lookupFunction<_FreeC, _FreeD>('free');
+      free = lib.lookupFunction<_FreeC, _FreeD>('free'),
+      _errno = _errnoFn(lib);
 
   static final instance = _Libc._(DynamicLibrary.process());
 
   static String _name(DynamicLibrary lib, String base) =>
       lib.providesSymbol('${base}64') ? '${base}64' : base;
 
+  // bionic: __errno, glibc: __errno_location, Apple: __error.
+  static _ErrnoC? _errnoFn(DynamicLibrary lib) {
+    for (final name in ['__errno', '__errno_location', '__error']) {
+      if (lib.providesSymbol(name)) {
+        return lib.lookupFunction<_ErrnoC, _ErrnoC>(name);
+      }
+    }
+    return null;
+  }
+
   final _PreadD pread;
   final _LseekD lseek;
   final _CloseD close;
   final _MallocD malloc;
   final _FreeD free;
+  final _ErrnoC? _errno;
+
+  /// The calling thread's errno, best effort (0 if unknown). Read it straight
+  /// after the failing call.
+  int get errno {
+    final f = _errno;
+    return f == null ? 0 : f().value;
+  }
 }
 
 const _seekEnd = 2;
+const _eintr = 4; // the same on Linux, Android and Darwin
 
 /// A [StorageReader] over a file descriptor the reader owns (Android: a
 /// detached SAF descriptor from `openFd`). Uses `pread`, so reads do not move
@@ -93,8 +125,13 @@ final class FdStorageReader implements StorageReader {
     final libc = _Libc.instance;
     final end = libc.lseek(fd, 0, _seekEnd);
     if (end < 0) {
+      final errno = libc.errno;
       libc.close(fd);
-      throw const FileSystemException('descriptor is not seekable');
+      throw FileSystemException(
+        'descriptor is not seekable',
+        '',
+        OSError('lseek', errno),
+      );
     }
     return FdStorageReader._(fd, end);
   }
@@ -119,7 +156,11 @@ final class FdStorageReader implements StorageReader {
       var got = 0;
       while (got < want) {
         final n = libc.pread(_fd, buf + got, want - got, offset + got);
-        if (n < 0) throw const FileSystemException('read failed');
+        if (n < 0) {
+          final errno = libc.errno;
+          if (errno == _eintr) continue; // interrupted by a signal: retry
+          throw FileSystemException('read failed', '', OSError('pread', errno));
+        }
         if (n == 0) break;
         got += n;
       }
@@ -140,10 +181,26 @@ final class FdStorageReader implements StorageReader {
 /// A file opened for reading but not yet wrapped in a [StorageReader]. It is
 /// plain data, so it can be sent to another isolate, which calls [open] there
 /// (the platform call that produced it happened on the root isolate).
+///
+/// Ownership: a handle is used exactly once, by [open] (the reader then owns
+/// the file) or by [discard]; a second use of the same object throws. Sending
+/// a handle to another isolate moves that duty with it: the sender must not
+/// use its copy unless the receiver is known never to have run (for example,
+/// the isolate failed to start).
 sealed class ReaderHandle {
-  const ReaderHandle();
+  ReaderHandle();
 
-  /// Builds the reader. Call once; the reader then owns the file.
+  bool _used = false;
+
+  /// Whether [open] or [discard] has been called on this object.
+  bool get isUsed => _used;
+
+  void _use() {
+    if (_used) throw StateError('reader handle already used');
+    _used = true;
+  }
+
+  /// Builds the reader.
   StorageReader open();
 
   /// Releases the file without reading it.
@@ -152,26 +209,35 @@ sealed class ReaderHandle {
 
 /// A `file://` URI, read with `dart:io`.
 final class FileReaderHandle extends ReaderHandle {
-  const FileReaderHandle(this.uri);
+  FileReaderHandle(this.uri);
 
   final String uri;
 
   @override
-  StorageReader open() => FileStorageReader.open(Uri.parse(uri));
+  StorageReader open() {
+    _use();
+    return FileStorageReader.open(Uri.parse(uri));
+  }
 
   @override
-  void discard() {}
+  void discard() => _use();
 }
 
 /// A detached file descriptor (Android).
 final class FdReaderHandle extends ReaderHandle {
-  const FdReaderHandle(this.fd);
+  FdReaderHandle(this.fd);
 
   final int fd;
 
   @override
-  StorageReader open() => FdStorageReader(fd);
+  StorageReader open() {
+    _use();
+    return FdStorageReader(fd);
+  }
 
   @override
-  void discard() => _Libc.instance.close(fd);
+  void discard() {
+    _use();
+    _Libc.instance.close(fd);
+  }
 }

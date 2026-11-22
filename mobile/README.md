@@ -27,6 +27,56 @@ From `mobile/`:
     flutter build apk --debug
     flutter build ios --simulator --debug --no-codesign
 
+## Spec suites
+
+`test/spec/` holds tests written from the specification, not from the code: the test engineer writes them before or
+while an item is built, against small interfaces declared in each test file. Until an implementer wires them they are
+skipped with the reason `awaiting implementation of <item>`, so `main` stays green. Each file carries `@Tags(['spec'])`
+(the generator's own tests carry `tool`).
+
+| File | Item | Interfaces to wire |
+| --- | --- | --- |
+| `collation_spec_test.dart` | Sort rule (owner decision 11), a port of `lib_collate_key()` | `CollationKey`, `CollationLetter` |
+| `wheel_accel_spec_test.dart` | Wheel acceleration, a port of `ui_accel_feed()` | `WheelAccel` (`WheelAccelFactory`) |
+| `wheel_touch_spec_test.dart` | Wheel hit zones and press-or-turn (device view sections 4 and 5) | `WheelGeometry`, `WheelTouch` |
+| `library_rules_spec_test.dart` | Folder fallback, `, The`, discs, compilations, unplayable files | `FolderFallback`, `FolderNameDisplay`, `LibraryFromTracks` (`LibraryView`) |
+| `scanner_spec_test.dart` | Read-only guarantee and the generated library's manifest | `LibraryFromFolder` |
+| `wheel_text_entry_spec_test.dart` | Search typed with the wheel (owner decision 12): a port of the firmware's text entry, and the Search screen | `TextEntry` (`TextEntryFactory`, `TextEntryFromBytes`), `SearchScreen` |
+| `text_tiers_spec_test.dart` | Screen scale and text tiers (device view sections 1 and 8) | `IosTier`, `AndroidTier`, `MetricsOf`, `ScreenScale` |
+
+**Wiring a suite.** Each file has a `// WIRE:` block with `final <Interface>? wired<Name> = null;`. Replace `null` with
+the app's function, or a small adapter written in that block from the app's types to the ones the test declares (the
+interfaces are deliberately small so adapting is a few lines). The skip lifts by itself once every value a group needs
+is set. Do not change the expectations to fit the code: if a test looks wrong, raise it with the test engineer and the
+lead, since it is the specification that decides. Cases the specification leaves open are not asserted either way; the
+generator's manifest marks them with `ambiguous` and a reason.
+
+Run them: `flutter test test/spec` (or `flutter test --tags spec`; the tags are declared in `dart_test.yaml`). On a
+memory-constrained machine, run heavy commands one at a time.
+
+## The generated test library
+
+`tool/gen_test_library/` writes a library in the owner's convention, `Artist/Year Album/NN Title.ext`, built from the
+repository's own fixtures (`tests/assets/audio` and `tests/assets/art`) with tags written by a small FLAC Vorbis comment
+and ID3v2.3 / v2.4 writer. It is generated on demand and never committed. From `mobile/`:
+
+    dart run tool/gen_test_library/main.dart --out build/test_library
+    dart run tool/gen_test_library/main.dart --out build/scale_library --scale 20000
+
+The curated library (about 60 files, 1.5 MB) covers: full FLAC and ID3 tags, `Folder.jpg` and `cover.jpg`, embedded
+art, `, The` folders with and without tags, discs as `(Disc n)` in album tags and in folder names and as disc-number
+tags over two folders, two albums of the same name, compilations by `Various Artists` and by the flag, very long folder
+names and titles, accents (UTF-8 and UTF-16 tags), symbols and digits leading names, articles and a sort tag, missing
+tags for the folder fallback, partial tags, unplayable files (empty, garbage, truncated), files at the root, and
+hidden, AppleDouble and non-audio files. `manifest.json` beside `library/` lists every file, its case, the tags written
+and what the app should show; `"ambiguous"` marks what the specification does not settle.
+
+The scale library is N tracks (artists of ten albums of ten tracks, alternating FLAC and MP3, a small `Folder.jpg` per
+album, every 50th track untagged, some two-disc albums and `, The` folders). 20,000 tracks take about 330 MB: write
+them only under `build/` and delete them after the scale test. `--out` must be new, empty or an earlier output of the
+tool (it holds a `.neupod-test-library` marker); the tool refuses any other folder, so it cannot delete real music.
+`test/spec/gen_test_library_test.dart` checks the generator itself on every run.
+
 ## Layout
 
 The layers of decision [0006](../docs/app/decisions/0006-state-management.md), each testable without the ones above it:
