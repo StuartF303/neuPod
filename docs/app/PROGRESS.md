@@ -7,13 +7,13 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 
 ## Phase 0: set-up
 
-- [ ] Environment report (Flutter, Xcode, CocoaPods, simulators, Android SDK, `gh`)
-- [ ] Checklist reconciled with the specification
-- [ ] `mobile/` scaffold, layering, ignore rules for keys and personal files
-- [ ] CI: Android on Linux, iOS on a Mac runner, no signing
-- [ ] Decision notes: audio engine, media session, tag reader, folder access, database, state management
-- [ ] Owner answers recorded: bundle ID, minimum OS, Android test phone (spec Open questions 4 to 6)
-- [ ] `LICENSE.md` row for `mobile/` (MPL-2.0)
+- [x] Environment report (Flutter, Xcode, CocoaPods, simulators, Android SDK, `gh`) (#101, 2026-11-21)
+- [x] Checklist reconciled with the specification (#101, 2026-11-21)
+- [x] `mobile/` scaffold, layering, ignore rules for keys and personal files (#102, 2026-11-21)
+- [x] CI: Android on Linux, iOS on a Mac runner, no signing (#104, 2026-11-22)
+- [x] Decision notes: audio engine, media session, tag reader, folder access, database, state management (#101, 2026-11-21)
+- [x] Owner answers recorded: bundle ID, minimum OS, Android test phone (spec Open questions 4 to 6) (#101, 2026-11-21)
+- [x] `LICENSE.md` row for `mobile/` (MPL-2.0) (#102, 2026-11-21)
 
 ## Phase 1: vertical slice
 
@@ -34,10 +34,14 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] Components: list row (one and two lines), selection and pressed states, header bar, progress bar, panel, art frame
 - [ ] Accent from album art, clamped to 4.5:1 with white text
 - [ ] Modern backdrop from the art
-- [ ] Device view: the body and the 4:3 screen, scaled to the phone's width, drawn fresh (no Apple logo or artwork)
-- [ ] Click wheel: rotation to scroll with acceleration, centre Select, Menu, previous, next, play/pause, press-and-hold; haptic detents and clicks on both platforms; optional click sound
-- [ ] Wheel and buttons accessible: row-by-row screen reader navigation, adjustable control with actions
-- [ ] Design-gate screens: Home, a list, an album, Cover Flow, Now Playing in the device view, with the open choices (fit on tall and short phones, body finish, direct taps on rows, largest text) built as candidates
+- [ ] Device view: body, 4:3 screen at s = 0.88 W / 600, wordmark, both finishes, fit A and fit B, safe areas, minimum width, phone status bar shown or hidden, wordmark on or off ([device view design](../design/2026-11-21-app-device-view/README.md) sections 1 to 3, 10)
+- [ ] Click wheel: drawing and states, hit zones, press-or-turn at 7.5 degrees, 15-degree detents, an exact port of `ui_accel_feed()` (`app/ui/ui_logic.c`), holds, system volume on Now Playing (design sections 4 and 5)
+- [ ] Fast-scroll letter tile and rail, trigger and timings confirmed against `app/ui/ui_list.c` and `ui_rail.c` (design section 5)
+- [ ] Haptics on both platforms with the design's event table, API names confirmed against current platform docs, 30 a second cap, obeying the system setting; optional click sound (design section 5)
+- [ ] Accessibility of the device view: rows as elements, the wheel as one adjustable element with five actions, keyboard and switch control (design section 9)
+- [ ] Direct touch candidates 1 (wheel only) and 2 (wheel plus taps and drags), switchable for the gate (design section 6)
+- [ ] Text tiers: 7, 6 and 5 rows by the phone's text size (design section 8)
+- [ ] Design-gate screens in the device view, Classic Light and Modern Dark, with real data: Home, Songs with the letter tile, an album with disc headings, Cover Flow, Now Playing at rest, with volume and in seek, a panel, Search typing with the wheel and in the results; fit A and B; touch 1 and 2; both body finishes; phone status bar shown and hidden; three text tiers (design sections 2, 3, 6, 7, 8 and 10)
 - [ ] **Gate 2: stop and show the owner; record the choices here**
 
 ## Phase 3: library
@@ -85,7 +89,8 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] Compilations
 - [ ] Cover Flow
 - [ ] Fast-scroll letter index
-- [ ] Search
+- [ ] Letter ring model: a port of the firmware's text entry in search mode (`app/include/wheel_input.h`, `app/ui/input/wheel_input.c`, `docs/ui-input.md`), not a reimplementation, with tests mirroring `tests/test_wheel_input.c`
+- [ ] Search, typed with the wheel (owner decision 12; device view design, "Search, by the wheel"): the field, the letter ring and the firmware's six mode chips (`abc`, `ABC`, `123`, `#!?`, `space`, `del`), the wheel turning the ring one glyph a detent, the centre typing the glyph (a space on `space`, a delete on `del`), Previous and Next moving along the chips, the live results (three as drawn; design Open question 13), the count in the status bar, Menu deleting one character, held 0.6 s clearing, on an empty field leaving, Play/Pause to the results list where the wheel scrolls and the centre opens a row, Menu back to typing with the text kept; never the phone's keyboard. The design's chip table shows five chips; it is superseded on that point by the owner's choice of six
 - [ ] Now Playing, with rating and the format line (`FLAC 16/44.1`)
 - [ ] Queue screen
 - [ ] Wheel behaviour matches the device on every screen, including fast scroll, and Now Playing seek and system volume with the device's volume bar (owner decision 10)
@@ -115,13 +120,19 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] Naming and marks check: no "iPod", no Apple marks or artwork in the app or its listing
 - [ ] `LICENSE.md` and the in-app Licences screen list every package and asset
 - [ ] `mobile/README.md`: build, run, install
+- [ ] Release signing from an uncommitted `key.properties` (falls back to debug when absent; CI needs no secrets), and the app's own launcher icons in place of Flutter's default
 - [ ] **Gate 3: final report**
 
 ## Notes
 
 (One line per thing the next session must know. Newest first.)
 
-- 2026-11-21: The owner has asked the designer for a device-view layout framework (`docs/design/<date>-app-device-view/`): device geometry, fit on tall and short phones, wheel hit zones and behaviour in numbers, haptics, direct touch, largest text, accessibility. Phase 2's device-view, click-wheel and design-gate items build from it; phases 0 and 1 do not wait for it.
+- 2026-11-22: Phase 0 done. App CI (`.github/workflows/app.yml`, #104): `check`, `android` (with the no-`INTERNET` release-manifest check), `android-integration` (API 29 emulator) and `ios` (`macos-26`, Xcode 26.5, iPhone 17 simulator, one visible retry if the simulator hangs). Follow-ups: bump the pinned Xcode 26.5 and the `iOS-26-5` runtime when the runner image drops them; consider Dependabot for the SHA-pinned actions; do not make the app jobs required checks without a gate job (they are path-filtered). Every run on main completes; PR runs cancel superseded ones.
+- 2026-11-22: Lead practice: merge only after `gh pr checks <n> --watch` exits 0 (an early script merged #101 and #102 with firmware jobs pending; main was green afterwards). Every subagent is given an explicit model for its task. Reviewers read PRs through `gh pr diff` / `git show`, never `git checkout` in the shared tree. Heavy builds go through `~/bin/neupod-buildlock` (8 GB RAM).
+
+- 2026-11-22: Owner decision 12: Search is typed with the wheel (#107). The owner chose the firmware's six mode chips, keeping `#!?` (the design drew five). Still to settle in code, not by the team's choice: `docs/ui-input.md` gives the letter-jump tile as 6 steps within 400 ms, hidden 700 ms later, where the device view design says the 2x multiplier and a fade after 250 ms at rest; the code (`ui_list.c`, `ui_rail.c`) decides.
+
+- 2026-11-22: The device view design is in [`docs/design/2026-11-21-app-device-view/`](../design/2026-11-21-app-device-view/README.md) (#103). Its Open questions (thirteen as of #107) are the owner's; none is settled by the team. Where its mock-ups and the specification differ, the build follows the specification and the README text, and the difference is shown at gate 2: the mock-ups' Home is the firmware's: it adds Podcasts (a spec Not goal), Photos and Extras and lacks Playlists; some show a Wi-Fi icon that the README says R1 omits; Now Playing has no rating stars (the spec requires them); the album header shows the disc count instead of the song count and total time; the spec's "seek by dragging the progress bar" conflicts with the design's "the progress bar is not draggable (seek mode is the way to seek)", so both are built switchable for the owner. (The earlier note that Search's wheel was not drawn disabled no longer applies: Search is typed with the wheel.)
 
 - 2026-11-21: Owner decision 9: the app is the device, a drawn-fresh front view with a touch click wheel, buttons and haptics. Phase 2 and the design gate are built around it; the device's 600x450 designs apply to the screen.
 

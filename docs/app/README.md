@@ -42,6 +42,11 @@ Status: specification, 21 November 2026. Nothing is built. The working instructi
 11. **Sort rule: the app matches the firmware's code (owner, 21 November 2026)**, `lib_collate_key()` in
     `app/library/lib_collate.c`, and the rule is written down under [The library](#the-library). The owner may change
     it later, in the firmware and the app together.
+12. **Search is typed with the wheel (owner, 22 November 2026)**, as text is on the device. It never opens the phone's
+    keyboard. It uses the firmware's text entry in search mode (`docs/ui-input.md`, model in
+    `app/include/wheel_input.h`): the letter ring and mode chips, with live results as the user types. The chips are the firmware's six: `abc`,
+    `ABC`, `123`, `#!?`, `space`, `del` (owner, 22 November 2026; the design drew five, without `#!?`). The screen is in
+    the [device view design](../design/2026-11-21-app-device-view/README.md), "Search, by the wheel".
 
 Everything else in this document is the designer's proposal until the owner confirms it. Proposals that most need a
 decision are collected under [Open questions](#open-questions).
@@ -135,8 +140,9 @@ The same structure as the device:
 - **Songs:** two lines per row, title over artist and album.
 - **Cover Flow:** albums by artist then year; the centred album opens on tap.
 - **Fast scroll:** a letter index on long lists.
-- **Search**, which the device does not have because it has no keyboard: one field, results grouped as artists, albums
-  and songs, working as the user types.
+- **Search**, typed with the wheel (owner decision 12): the field, the letter ring turned by the wheel with the mode
+  chips under it, and the best matches live as the user types; Play/Pause goes to the full results, grouped as
+  artists, albums and songs, and Menu returns to typing with the text kept. It never opens the phone's keyboard.
 
 Long names end in an ellipsis in lists and scroll as a ticker where the device scrolls them (the focused title on Now
 Playing).
@@ -184,11 +190,14 @@ the same rule as the device: the dominant colour, clamped until white text on it
   centre is Select; Menu goes back; previous, next and play/pause work as on the device, including press-and-hold to
   scan. Each wheel detent is a light haptic tick, and each button press is a firmer haptic click. An optional click
   sound, like the original's clicker, can be turned on in Settings.
-- **To decide at the design gate, from real screens:** how the device sits on tall and short phones (the body
-  stretched or the space around it filled); the body finish and whether it follows the style and mode; whether the
-  screen also accepts direct taps on rows alongside the wheel; and how the largest text sizes fit the 4:3 screen
-  (proposal: fewer, larger rows).
-- Search, which needs typing, opens the phone's keyboard from a Search item.
+- **The layout and the wheel's numbers are in the [device view design](../design/2026-11-21-app-device-view/README.md)**: geometry as ratios of the
+  phone's width, the fit on tall and short phones, body finishes, hit zones, press-or-turn, detents and acceleration
+  (a port of the firmware's `ui_accel_feed()`), holds, haptics, direct touch, the three text tiers, accessibility and
+  the phone's status bar. Its recommendations (the fit, the body finish, direct touch, the phone's status bar shown,
+  the large-text tiers, the wordmark) are proposals the owner picks at gate 2; where it offers candidates, both are
+  built and switchable. Its Open questions are the owner's.
+- Search is typed with the wheel's letter ring, never the phone's keyboard (owner decision 12). Its placement is device
+  view design Open question 11; it sits in the Music menu meanwhile.
 - Type is Montserrat (SIL OFL), icons are Lucide (ISC), as on the device. Every third-party asset and package is listed
   on an in-app Licences screen.
 - Feedback follows the device's three places where they translate: a row confirms with a brief flash and a tick; a
@@ -262,7 +271,7 @@ Not decided. Do not settle these by guessing.
 | # | Question | Proposal |
 | --- | --- | --- |
 | 1 | **App name and store listing.** A music player whose name contains "Pod" may meet trademark objections at store review. Not legal advice; the owner should take a view before submitting | Build as "neuPod"; nothing is submitted to a store without the owner |
-| 2 | **An on-screen click wheel.** Apps that reproduce the original wheel have been removed from the App Store in the past (from memory, not checked) | **Decided 2026-11-21 (owner decision 9):** a touch click wheel with haptics, in a drawn-fresh device view |
+| 2 | **An on-screen click wheel.** Apps that reproduce the original wheel have been removed from the App Store: Rewound, a click-wheel iPod skin for the iPhone, was pulled in December 2019 ([MacRumors](https://www.macrumors.com/2019/12/16/rewound-app-pulled-from-app-store)), and the App Review Guidelines bar apps "confusingly similar to an existing Apple product, interface … or advertising theme" (cited as 5.2.5). Store review is the owner's risk at submission (Open questions 1 and 9) | **Decided 2026-11-21 (owner decision 9):** a touch click wheel with haptics, in a drawn-fresh device view |
 | 3 | **Portrait layout**: the split Home with the art pane, the status bar, where Now Playing lives (a full screen, or a mini-player above a tab bar) | Mostly settled by owner decision 9: the screen is the device's 4:3 screen. How the device fits tall and short phones is decided at the design gate |
 | 4 | **Bundle and application ID** | **Decided 2026-11-21:** `net.stuartfraser.neupod` |
 | 5 | **Minimum OS versions** | **Decided 2026-11-21:** iOS 18 and later; Android 10 (API 29) and later |
