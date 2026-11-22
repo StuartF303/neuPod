@@ -179,7 +179,7 @@ final class DriftLibraryView implements LibraryView {
   ];
 
   @override
-  Future<List<Album>> albumsForCoverFlow() async => [
+  Future<List<Album>> albumsByArtist() async => [
     for (final g in (await _load()).table) g.album,
   ];
 

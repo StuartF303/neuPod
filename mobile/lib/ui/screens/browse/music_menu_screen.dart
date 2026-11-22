@@ -35,7 +35,7 @@ import 'package:neupod/ui/style/skins.dart';
 
 /// The Music menu's items, in order.
 enum MusicItem {
-  coverFlow('Cover Flow', 'Albums by artist'),
+  coverFlow('Cover Flow', 'A to Z'),
   playlists('Playlists', 'None yet'),
   artists('Artists', 'A to Z'),
   albums('Albums', 'A to Z'),
@@ -205,10 +205,11 @@ final _coversProvider = FutureProvider.family<List<Album>, MusicItem>((
 ) async {
   final library = await ref.watch(libraryViewProvider.future);
   return switch (item) {
-    MusicItem.coverFlow => await library.albumsForCoverFlow(),
-    // The first album of each artist, in artist order: one read, from
-    // Cover Flow's order (by artist), not an albums call per artist.
-    MusicItem.artists => _firstOfEachArtist(await library.albumsForCoverFlow()),
+    // Cover Flow is the Albums list's second view (owner decision 14).
+    MusicItem.coverFlow => await library.albums(),
+    // The first album of each artist, in artist order: one read of the
+    // album table, not an albums call per artist.
+    MusicItem.artists => _firstOfEachArtist(await library.albumsByArtist()),
     MusicItem.albums => await library.albums(),
     MusicItem.songs => (await library.albums()).reversed.toList(),
     MusicItem.genres => [

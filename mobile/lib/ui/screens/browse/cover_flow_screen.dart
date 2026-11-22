@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
-/// Cover Flow: albums by artist then year. The wheel moves the covers one
-/// album a step; Select, or a tap on the centred cover, opens the album; a
+/// Cover Flow: the Albums list's second view, as on the device (owner
+/// decision 14; `app/ui/ui_library.c`, LB-6): the same albums in the same
+/// order, [LibraryView.albums], not sorted again. The wheel moves the covers
+/// one album a step; Select, or a tap on the centred cover, opens the album; a
 /// horizontal drag moves the covers (direct-touch candidate 2).
 ///
 /// - **Classic**: the angled version on black with reflections: the centre
@@ -10,9 +12,10 @@
 /// - **Modern**: five flat rounded covers (220 / 150 / 100 px, opacity
 ///   1 / .85 / .6) over a backdrop washed in the centred album's colours.
 ///
-/// The title block names the centred album: title, artist and, in Modern,
-/// `1993 · 10 songs`. (UI styles Open question 11: the rule for long names is
-/// not drawn; they end in an ellipsis here.)
+/// The title block names the centred album: its title over the device's
+/// caption, `Artist · 1993 · 10 songs` ([coverFlowCaption]), in both styles.
+/// (UI styles Open question 11: the rule for long names is not drawn; they
+/// end in an ellipsis here.)
 library;
 
 import 'dart:async';
@@ -39,9 +42,47 @@ import 'package:neupod/ui/style/neupod_style.dart';
 import 'package:neupod/ui/style/neupod_type.dart';
 import 'package:neupod/ui/style/skins.dart';
 
+/// The caption under the centred album's title, as the firmware builds it
+/// (`flow_texts` in `app/ui/ui_library.c`): the album row's artist, the
+/// year, the song count, joined by ` · `, each left out when it has none.
+///
+/// - The artist is the album row's (`lvw_row` in lib_view.c, from
+///   `lib_list_row` in lib_reader.c): none for a compilation
+///   ([albumRowArtist]).
+/// - The year is left out when there is none (the firmware: `r.year != 0`).
+/// - The count is `%u` then `song` for 1, `songs` otherwise, with no digit
+///   grouping, and left out for an album with no songs (`r.songs != 0`).
+String coverFlowCaption(Album a) => _captionParts(a).join(' · ');
+
+/// What a screen reader says for the album at [index] of [count]: the
+/// title, the caption's parts ([coverFlowCaption]) and the place, as
+/// `Gold, Abba, 1992, 1 song, 2 of 7`. A compilation, whose caption has no
+/// artist, says `compilation` in its place: `Hits, compilation, 3 of 7`.
+String coverFlowLabel(Album a, int index, int count) => [
+  a.title,
+  ..._captionParts(a, compilation: 'compilation'),
+  '${index + 1} of $count',
+].join(', ');
+
+/// The caption's parts; [compilation], when given, stands in for a
+/// compilation's missing artist.
+List<String> _captionParts(Album a, {String? compilation}) {
+  final artist = albumRowArtist(a);
+  final year = a.year;
+  final n = a.songCount;
+  return [
+    if (a.compilation && compilation != null)
+      compilation
+    else if (artist.isNotEmpty)
+      artist,
+    if (year != null && year != 0) '$year',
+    if (n != 0) '$n ${n == 1 ? 'song' : 'songs'}',
+  ];
+}
+
 /// Cover Flow.
 class CoverFlowScreen extends ConsumerStatefulWidget {
-  /// Cover Flow over every album.
+  /// Cover Flow over the Albums list.
   const CoverFlowScreen({super.key});
 
   @override
@@ -68,7 +109,9 @@ class _CoverFlowScreenState extends ConsumerState<CoverFlowScreen> {
 
   Future<void> _load() async {
     final library = await ref.read(libraryViewProvider.future);
-    final albums = await library.albumsForCoverFlow();
+    // The Albums list as it is: its order is the firmware's (`key_cmp` over
+    // `albname.rec`), so it is not sorted again here.
+    final albums = await library.albums();
     if (mounted) {
       setState(() => _albums = albums);
       _describe();
@@ -97,12 +140,7 @@ class _CoverFlowScreenState extends ConsumerState<CoverFlowScreen> {
 
   int get _index => _pos.round();
 
-  String _say(int i) {
-    final a = _albums![i];
-    final artist = albumRowArtist(a);
-    return '${a.title}, ${artist.isEmpty ? '' : '$artist, '}'
-        '${i + 1} of ${_albums!.length}';
-  }
+  String _say(int i) => coverFlowLabel(_albums![i], i, _albums!.length);
 
   void _describe() {
     final albums = _albums;
@@ -277,20 +315,13 @@ class _CoverFlowScreenState extends ConsumerState<CoverFlowScreen> {
                       titleStyle,
                       align: TextAlign.center,
                     ),
-                    // No artist for a compilation, as the firmware's
-                    // caption (`flow_texts` in ui_library.c, from
-                    // `lib_list_row`).
+                    // The device's caption, in both styles (owner
+                    // decision 14).
                     NeupodText(
-                      albumRowArtist(current),
+                      coverFlowCaption(current),
                       subStyle,
                       align: TextAlign.center,
                     ),
-                    if (modern)
-                      NeupodText(
-                        albumDetails(current, length: false).join(' · '),
-                        type.small(theme.style.tokens.ink3),
-                        align: TextAlign.center,
-                      ),
                   ],
                 ),
               ),

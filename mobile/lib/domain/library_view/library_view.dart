@@ -10,8 +10,8 @@
 ///
 /// Every list is sorted by the firmware's collation (owner decision 11),
 /// except where noted: an artist's albums come in year order (UI styles
-/// design, drawn; its Open question 6), Cover Flow's albums by artist then
-/// year, an album's tracks by disc then track number.
+/// design, drawn; its Open question 6), the album table by artist, an
+/// album's tracks by disc then track number.
 library;
 
 /// How an album's art is found. The domain does not decode images: a file
@@ -202,8 +202,11 @@ abstract interface class LibraryView {
   /// Every album (compilations included), by title.
   Future<List<Album>> albums();
 
-  /// Every album for Cover Flow: by artist, then year, then title.
-  Future<List<Album>> albumsForCoverFlow();
+  /// Every album by artist: the firmware's album table (artist, then album;
+  /// compilations last). The Music menu's Artists preview takes its covers
+  /// from it. Cover Flow is not in this order: it shows [albums] (owner
+  /// decision 14).
+  Future<List<Album>> albumsByArtist();
 
   /// An album with its tracks, or null if it is gone.
   Future<AlbumDetail?> album(String albumId);

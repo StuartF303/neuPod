@@ -84,7 +84,7 @@ void main() {
     expect(await view.songs(), isEmpty);
     expect(await view.artists(), isEmpty);
     expect(await view.albums(), isEmpty);
-    expect(await view.albumsForCoverFlow(), isEmpty);
+    expect(await view.albumsByArtist(), isEmpty);
     expect(await view.genres(), isEmpty);
     expect(await view.compilations(), isEmpty);
     expect(await view.song('1'), isNull);
@@ -253,7 +253,7 @@ void main() {
             [a.title, albumArtist(a), '${a.songCount}'],
         ], fx.lists['albums list']);
         expect([
-          for (final a in await view.albumsForCoverFlow())
+          for (final a in await view.albumsByArtist())
             [a.title, albumArtist(a)],
         ], fx.lists['album table']);
         expect([
@@ -432,7 +432,7 @@ void main() {
       'Help!',
       'Zèbre',
     ]);
-    expect((await view.albumsForCoverFlow()).map((a) => a.artist), [
+    expect((await view.albumsByArtist()).map((a) => a.artist), [
       '2Pac',
       'Abba',
       'The Beatles',
