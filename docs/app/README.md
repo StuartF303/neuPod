@@ -271,7 +271,7 @@ Not decided. Do not settle these by guessing.
 | # | Question | Proposal |
 | --- | --- | --- |
 | 1 | **App name and store listing.** A music player whose name contains "Pod" may meet trademark objections at store review. Not legal advice; the owner should take a view before submitting | Build as "neuPod"; nothing is submitted to a store without the owner |
-| 2 | **An on-screen click wheel.** Apps that reproduce the original wheel have been removed from the App Store in the past (from memory, not checked) | **Decided 2026-11-21 (owner decision 9):** a touch click wheel with haptics, in a drawn-fresh device view |
+| 2 | **An on-screen click wheel.** Apps that reproduce the original wheel have been removed from the App Store: Rewound, a click-wheel iPod skin for the iPhone, was pulled in December 2019 ([MacRumors](https://www.macrumors.com/2019/12/16/rewound-app-pulled-from-app-store)), and the App Review Guidelines bar apps "confusingly similar to an existing Apple product, interface … or advertising theme" (cited as 5.2.5). Store review is the owner's risk at submission (Open questions 1 and 9) | **Decided 2026-11-21 (owner decision 9):** a touch click wheel with haptics, in a drawn-fresh device view |
 | 3 | **Portrait layout**: the split Home with the art pane, the status bar, where Now Playing lives (a full screen, or a mini-player above a tab bar) | Mostly settled by owner decision 9: the screen is the device's 4:3 screen. How the device fits tall and short phones is decided at the design gate |
 | 4 | **Bundle and application ID** | **Decided 2026-11-21:** `net.stuartfraser.neupod` |
 | 5 | **Minimum OS versions** | **Decided 2026-11-21:** iOS 18 and later; Android 10 (API 29) and later |

@@ -7,13 +7,13 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 
 ## Phase 0: set-up
 
-- [ ] Environment report (Flutter, Xcode, CocoaPods, simulators, Android SDK, `gh`)
-- [ ] Checklist reconciled with the specification
-- [ ] `mobile/` scaffold, layering, ignore rules for keys and personal files
-- [ ] CI: Android on Linux, iOS on a Mac runner, no signing
-- [ ] Decision notes: audio engine, media session, tag reader, folder access, database, state management
-- [ ] Owner answers recorded: bundle ID, minimum OS, Android test phone (spec Open questions 4 to 6)
-- [ ] `LICENSE.md` row for `mobile/` (MPL-2.0)
+- [x] Environment report (Flutter, Xcode, CocoaPods, simulators, Android SDK, `gh`) (#101, 2026-11-21)
+- [x] Checklist reconciled with the specification (#101, 2026-11-21)
+- [x] `mobile/` scaffold, layering, ignore rules for keys and personal files (#102, 2026-11-21)
+- [x] CI: Android on Linux, iOS on a Mac runner, no signing (#104, 2026-11-22)
+- [x] Decision notes: audio engine, media session, tag reader, folder access, database, state management (#101, 2026-11-21)
+- [x] Owner answers recorded: bundle ID, minimum OS, Android test phone (spec Open questions 4 to 6) (#101, 2026-11-21)
+- [x] `LICENSE.md` row for `mobile/` (MPL-2.0) (#102, 2026-11-21)
 
 ## Phase 1: vertical slice
 
@@ -126,6 +126,9 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 ## Notes
 
 (One line per thing the next session must know. Newest first.)
+
+- 2026-11-22: Phase 0 done. App CI (`.github/workflows/app.yml`, #104): `check`, `android` (with the no-`INTERNET` release-manifest check), `android-integration` (API 29 emulator) and `ios` (`macos-26`, Xcode 26.5, iPhone 17 simulator, one visible retry if the simulator hangs). Follow-ups: bump the pinned Xcode 26.5 and the `iOS-26-5` runtime when the runner image drops them; consider Dependabot for the SHA-pinned actions; do not make the app jobs required checks without a gate job (they are path-filtered). Every run on main completes; PR runs cancel superseded ones.
+- 2026-11-22: Lead practice: merge only after `gh pr checks <n> --watch` exits 0 (an early script merged #101 and #102 with firmware jobs pending; main was green afterwards). Every subagent is given an explicit model for its task. Reviewers read PRs through `gh pr diff` / `git show`, never `git checkout` in the shared tree. Heavy builds go through `~/bin/neupod-buildlock` (8 GB RAM).
 
 - 2026-11-22: Owner decision 12: Search is typed with the wheel (#107). The owner chose the firmware's six mode chips, keeping `#!?` (the design drew five). Still to settle in code, not by the team's choice: `docs/ui-input.md` gives the letter-jump tile as 6 steps within 400 ms, hidden 700 ms later, where the device view design says the 2x multiplier and a fade after 250 ms at rest; the code (`ui_list.c`, `ui_rail.c`) decides.
 
