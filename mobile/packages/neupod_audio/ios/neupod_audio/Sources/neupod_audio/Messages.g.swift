@@ -332,9 +332,19 @@ struct EngineFormat: Hashable, CustomStringConvertible {
 ///
 /// Generated class from Pigeon that represents data sent in messages.
 struct EngineEvent: Hashable, CustomStringConvertible {
+  /// The id given to the [AudioHostApi.setQueue] call that made the current
+  /// queue; null for a queue no setQueue made (a fresh engine, or [clear]).
+  /// The Dart side ignores events whose queueId is not its own, so an event
+  /// about an earlier queue (even one set before this Flutter engine
+  /// started, while the Android service lived on) never moves the new one.
+  var queueId: String? = nil
   var status: EngineStatus
   /// The user's intent: true after play, false after pause.
   var playWhenReady: Bool
+  /// Sound is being produced now. False while ready and playWhenReady if
+  /// playback is suppressed (a transient loss of audio focus, an
+  /// interruption), so the position must not be extrapolated.
+  var isPlaying: Bool
   /// Index of the current item, null when the queue is empty.
   var index: Int64? = nil
   var itemId: String? = nil
@@ -348,19 +358,23 @@ struct EngineEvent: Hashable, CustomStringConvertible {
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
   static func fromList(_ pigeonVar_list: [Any?]) -> EngineEvent? {
-    let status = pigeonVar_list[0] as! EngineStatus
-    let playWhenReady = pigeonVar_list[1] as! Bool
-    let index: Int64? = nilOrValue(pigeonVar_list[2])
-    let itemId: String? = nilOrValue(pigeonVar_list[3])
-    let positionMs = pigeonVar_list[4] as! Int64
-    let durationMs: Int64? = nilOrValue(pigeonVar_list[5])
-    let queueLength = pigeonVar_list[6] as! Int64
-    let format: EngineFormat? = nilOrValue(pigeonVar_list[7])
-    let errorMessage: String? = nilOrValue(pigeonVar_list[8])
+    let queueId: String? = nilOrValue(pigeonVar_list[0])
+    let status = pigeonVar_list[1] as! EngineStatus
+    let playWhenReady = pigeonVar_list[2] as! Bool
+    let isPlaying = pigeonVar_list[3] as! Bool
+    let index: Int64? = nilOrValue(pigeonVar_list[4])
+    let itemId: String? = nilOrValue(pigeonVar_list[5])
+    let positionMs = pigeonVar_list[6] as! Int64
+    let durationMs: Int64? = nilOrValue(pigeonVar_list[7])
+    let queueLength = pigeonVar_list[8] as! Int64
+    let format: EngineFormat? = nilOrValue(pigeonVar_list[9])
+    let errorMessage: String? = nilOrValue(pigeonVar_list[10])
 
     return EngineEvent(
+      queueId: queueId,
       status: status,
       playWhenReady: playWhenReady,
+      isPlaying: isPlaying,
       index: index,
       itemId: itemId,
       positionMs: positionMs,
@@ -372,8 +386,10 @@ struct EngineEvent: Hashable, CustomStringConvertible {
   }
   func toList() -> [Any?] {
     return [
+      queueId,
       status,
       playWhenReady,
+      isPlaying,
       index,
       itemId,
       positionMs,
@@ -387,13 +403,15 @@ struct EngineEvent: Hashable, CustomStringConvertible {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return MessagesPigeonInternal.deepEquals(lhs.status, rhs.status) && MessagesPigeonInternal.deepEquals(lhs.playWhenReady, rhs.playWhenReady) && MessagesPigeonInternal.deepEquals(lhs.index, rhs.index) && MessagesPigeonInternal.deepEquals(lhs.itemId, rhs.itemId) && MessagesPigeonInternal.deepEquals(lhs.positionMs, rhs.positionMs) && MessagesPigeonInternal.deepEquals(lhs.durationMs, rhs.durationMs) && MessagesPigeonInternal.deepEquals(lhs.queueLength, rhs.queueLength) && MessagesPigeonInternal.deepEquals(lhs.format, rhs.format) && MessagesPigeonInternal.deepEquals(lhs.errorMessage, rhs.errorMessage)
+    return MessagesPigeonInternal.deepEquals(lhs.queueId, rhs.queueId) && MessagesPigeonInternal.deepEquals(lhs.status, rhs.status) && MessagesPigeonInternal.deepEquals(lhs.playWhenReady, rhs.playWhenReady) && MessagesPigeonInternal.deepEquals(lhs.isPlaying, rhs.isPlaying) && MessagesPigeonInternal.deepEquals(lhs.index, rhs.index) && MessagesPigeonInternal.deepEquals(lhs.itemId, rhs.itemId) && MessagesPigeonInternal.deepEquals(lhs.positionMs, rhs.positionMs) && MessagesPigeonInternal.deepEquals(lhs.durationMs, rhs.durationMs) && MessagesPigeonInternal.deepEquals(lhs.queueLength, rhs.queueLength) && MessagesPigeonInternal.deepEquals(lhs.format, rhs.format) && MessagesPigeonInternal.deepEquals(lhs.errorMessage, rhs.errorMessage)
   }
 
   func hash(into hasher: inout Hasher) {
     hasher.combine("EngineEvent")
+    MessagesPigeonInternal.deepHash(value: queueId, hasher: &hasher)
     MessagesPigeonInternal.deepHash(value: status, hasher: &hasher)
     MessagesPigeonInternal.deepHash(value: playWhenReady, hasher: &hasher)
+    MessagesPigeonInternal.deepHash(value: isPlaying, hasher: &hasher)
     MessagesPigeonInternal.deepHash(value: index, hasher: &hasher)
     MessagesPigeonInternal.deepHash(value: itemId, hasher: &hasher)
     MessagesPigeonInternal.deepHash(value: positionMs, hasher: &hasher)
@@ -404,7 +422,7 @@ struct EngineEvent: Hashable, CustomStringConvertible {
   }
 
   public var description: String {
-    return "EngineEvent(status: \(String(describing: status)), playWhenReady: \(String(describing: playWhenReady)), index: \(String(describing: index)), itemId: \(String(describing: itemId)), positionMs: \(String(describing: positionMs)), durationMs: \(String(describing: durationMs)), queueLength: \(String(describing: queueLength)), format: \(String(describing: format)), errorMessage: \(String(describing: errorMessage)))"
+    return "EngineEvent(queueId: \(String(describing: queueId)), status: \(String(describing: status)), playWhenReady: \(String(describing: playWhenReady)), isPlaying: \(String(describing: isPlaying)), index: \(String(describing: index)), itemId: \(String(describing: itemId)), positionMs: \(String(describing: positionMs)), durationMs: \(String(describing: durationMs)), queueLength: \(String(describing: queueLength)), format: \(String(describing: format)), errorMessage: \(String(describing: errorMessage)))"
   }
 }
 
@@ -546,15 +564,18 @@ class MessagesPigeonCodec: FlutterStandardMessageCodec, @unchecked Sendable {
 
 /// Generated protocol from Pigeon that represents a handler of messages from Flutter.
 protocol AudioHostApi {
-  /// Replaces the queue and prepares [startIndex] at [startPositionMs]. The
-  /// play intent is kept: if playing, the new queue plays; if paused, it
-  /// stays paused. An empty list is [clear].
-  func setQueue(items: [EngineItem], startIndex: Int64, startPositionMs: Int64) async throws
-  /// Inserts [items] before [index] (index == length appends).
+  /// Replaces the queue with [items], identified by [queueId], and prepares
+  /// [startIndex] at [startPositionMs]. The play intent is kept: if playing,
+  /// the new queue plays; if paused, it stays paused. An empty list empties
+  /// the queue as [clear] does, but keeps [queueId].
+  func setQueue(queueId: String, items: [EngineItem], startIndex: Int64, startPositionMs: Int64) async throws
+  /// Inserts [items] before [index] (index == length appends), into the
+  /// current queue (its queueId is kept).
   func insert(index: Int64, items: [EngineItem]) async throws
   func remove(index: Int64) async throws
   func move(from: Int64, to: Int64) async throws
-  /// Empties the queue, stops, and drops the play intent.
+  /// Empties the queue, stops, and drops the play intent. The queueId
+  /// becomes null.
   func clear() async throws
   func play() async throws
   func pause() async throws
@@ -576,19 +597,21 @@ class AudioHostApiSetup {
   /// Sets up an instance of `AudioHostApi` to handle messages through the `binaryMessenger`.
   static func setUp(binaryMessenger: FlutterBinaryMessenger, api: AudioHostApi?, messageChannelSuffix: String = "") {
     let channelSuffix = messageChannelSuffix.count > 0 ? ".\(messageChannelSuffix)" : ""
-    /// Replaces the queue and prepares [startIndex] at [startPositionMs]. The
-    /// play intent is kept: if playing, the new queue plays; if paused, it
-    /// stays paused. An empty list is [clear].
+    /// Replaces the queue with [items], identified by [queueId], and prepares
+    /// [startIndex] at [startPositionMs]. The play intent is kept: if playing,
+    /// the new queue plays; if paused, it stays paused. An empty list empties
+    /// the queue as [clear] does, but keeps [queueId].
     let setQueueChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.neupod_audio.AudioHostApi.setQueue\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       setQueueChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
-        let itemsArg = args[0] as! [EngineItem]
-        let startIndexArg = args[1] as! Int64
-        let startPositionMsArg = args[2] as! Int64
+        let queueIdArg = args[0] as! String
+        let itemsArg = args[1] as! [EngineItem]
+        let startIndexArg = args[2] as! Int64
+        let startPositionMsArg = args[3] as! Int64
         Task { @MainActor in
           do {
-            try await api.setQueue(items: itemsArg, startIndex: startIndexArg, startPositionMs: startPositionMsArg)
+            try await api.setQueue(queueId: queueIdArg, items: itemsArg, startIndex: startIndexArg, startPositionMs: startPositionMsArg)
             reply(wrapResult(nil))
           } catch {
             reply(wrapError(error))
@@ -598,7 +621,8 @@ class AudioHostApiSetup {
     } else {
       setQueueChannel.setMessageHandler(nil)
     }
-    /// Inserts [items] before [index] (index == length appends).
+    /// Inserts [items] before [index] (index == length appends), into the
+    /// current queue (its queueId is kept).
     let insertChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.neupod_audio.AudioHostApi.insert\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       insertChannel.setMessageHandler { message, reply in
@@ -652,7 +676,8 @@ class AudioHostApiSetup {
     } else {
       moveChannel.setMessageHandler(nil)
     }
-    /// Empties the queue, stops, and drops the play intent.
+    /// Empties the queue, stops, and drops the play intent. The queueId
+    /// becomes null.
     let clearChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.neupod_audio.AudioHostApi.clear\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       clearChannel.setMessageHandler { _, reply in

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:neupod/ui/features/home/home_screen.dart';
 import 'package:neupod/ui/features/player_debug/player_debug_screen.dart';
@@ -15,7 +16,8 @@ class NeuPodApp extends StatelessWidget {
       title: 'neuPod',
       debugShowCheckedModeBanner: false,
       home: HomeScreen(),
-      routes: {PlayerDebugScreen.routeName: _playerDebug},
+      // The player debug screen exists only in debug builds.
+      routes: {if (kDebugMode) PlayerDebugScreen.routeName: _playerDebug},
     );
   }
 }

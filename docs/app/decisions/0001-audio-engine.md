@@ -103,13 +103,30 @@ from or defers part of the text above:
   `data:` sources are never reached.
 - **The skip-back rule is native** on both platforms (Media3's `maxSeekToPreviousPositionMs` = 3000; the same rule in
   `AudioEngine.swift`), because the lock screen's previous button reaches the engine without Dart.
-- **Queue entries carry an id unique to each `setQueue`**, so an event about an earlier queue is never applied to the
-  new one (`mobile/lib/audio/neupod_player.dart`).
+- **Every `setQueue` carries a random queue id**, echoed in every engine event, and the Dart player applies only events
+  with its own id. So an event about an earlier queue, a stale empty snapshot, or a queue an earlier Flutter engine set
+  while the Android service lived on, never moves the current one (`mobile/lib/audio/neupod_player.dart`). On Android
+  the id rides in each item's metadata extras, so it lives in the session, not in the plugin.
+- **iOS position after the system stops the engine:** the node has no render time then, so the engine keeps a render
+  anchor (position and `CACurrentMediaTime` when rendering last started or a gapless join happened) and extrapolates
+  from it. A route or format change, or an interruption, records the true position and the next play reschedules from
+  it. Engine events report `isPlaying` (sound now) apart from the play intent, so Dart does not extrapolate while
+  playback is suppressed.
 - **An unplayable entry never stops the queue:** the engine reports the error with the entry, and the Dart player
   skips to the next one once.
 - Not yet (later phases, seams left): Ogg on iOS, ALAC on Android, repeat-one gapless (repeat is a Dart rule, so the
   engine will need the mode to pre-schedule the same track), output-route reporting, measured sample-rate passthrough.
   The iOS session's preferred sample rate is already set to the file's rate as a hint.
+
+### Later (noted in review, 2026-11-22)
+
+- **Late scheduling of the next segment.** Today the next track is scheduled as soon as the current one starts, so an
+  edit to the queue's next entry reschedules the current track from its position, a small blip. Scheduling the next
+  segment a few seconds before the join would make most edits free.
+- **A debug-only PCM capture hook** (a tap on the mixer on iOS, an `AudioProcessor` or `TeeAudioProcessor` on
+  Android) for the phase 4 measured gapless join test.
+- **The bundled test tones ship in the app** (`integration_test/assets/test_media/`, declared as assets for the debug
+  screen and the integration tests). A release blocker, tracked in PROGRESS.md.
 
 ## Sources
 

@@ -9,18 +9,24 @@ import 'package:neupod/domain/playback/queue_item.dart';
 import 'package:neupod_audio/neupod_audio.dart';
 
 /// Stands in for the native engine: records commands, and lets a test send
-/// the events the engine would.
+/// the events the engine would. [getState] can be held back with
+/// [stateReply] to reorder its answer against later events.
 class FakeNeupodAudio implements NeupodAudio {
   final _events = StreamController<EngineEvent>.broadcast(sync: true);
   final calls = <String>[];
   List<EngineItem> queue = [];
-  EngineEvent initial = EngineEvent(
+  String? queueId;
+  Completer<EngineEvent>? stateReply;
+  EngineEvent initial = _event(
+    queueId: null,
+    itemId: null,
+    index: null,
     status: EngineStatus.idle,
     playWhenReady: false,
-    positionMs: 0,
     queueLength: 0,
   );
   SessionInfo session = SessionInfo(hasArtwork: false);
+  bool disposed = false;
 
   void emit(EngineEvent event) => _events.add(event);
 
@@ -29,10 +35,12 @@ class FakeNeupodAudio implements NeupodAudio {
 
   @override
   Future<void> setQueue(
+    String queueId,
     List<EngineItem> items, {
     int startIndex = 0,
     int startPositionMs = 0,
   }) async {
+    this.queueId = queueId;
     queue = items;
     calls.add('setQueue($startIndex, $startPositionMs)');
   }
@@ -69,13 +77,16 @@ class FakeNeupodAudio implements NeupodAudio {
   Future<void> skipToPrevious() async => calls.add('skipToPrevious');
 
   @override
-  Future<EngineEvent> getState() async => initial;
+  Future<EngineEvent> getState() => stateReply?.future ?? Future.value(initial);
 
   @override
   Future<SessionInfo> getSessionInfo() async => session;
 
   @override
-  Future<void> dispose() => _events.close();
+  Future<void> dispose() async {
+    disposed = true;
+    await _events.close();
+  }
 }
 
 const _flac = QueueItem(
@@ -90,20 +101,25 @@ const _flac = QueueItem(
 const _mp3 = QueueItem(id: 't2', uri: 'content://x/2.mp3', title: 'Two');
 
 EngineEvent _event({
-  required String? itemId,
+  required String? queueId,
+  String? itemId,
   int? index = 0,
   EngineStatus status = EngineStatus.ready,
   bool playWhenReady = true,
+  bool? isPlaying,
   int positionMs = 0,
   int? durationMs = 3000,
   int queueLength = 2,
   String? error,
   EngineFormat? format,
 }) => EngineEvent(
+  queueId: queueId,
   status: status,
   playWhenReady: playWhenReady,
+  isPlaying: isPlaying ?? (playWhenReady && status == EngineStatus.ready),
   index: index,
-  itemId: itemId,
+  itemId:
+      itemId ?? (queueId == null || index == null ? null : '$queueId:$index'),
   positionMs: positionMs,
   durationMs: durationMs,
   queueLength: queueLength,
@@ -111,25 +127,40 @@ EngineEvent _event({
   format: format,
 );
 
+/// An empty, idle engine with no queue id: a fresh engine's snapshot.
+EngineEvent _emptyEngine() => _event(
+  queueId: null,
+  index: null,
+  status: EngineStatus.idle,
+  playWhenReady: false,
+  queueLength: 0,
+);
+
 void main() {
   late FakeNeupodAudio audio;
   late Duration now;
   late NeupodPlayer player;
+  late int queues;
+
+  NeupodPlayer makePlayer(FakeNeupodAudio audio) =>
+      NeupodPlayer(audio, clock: () => now, newQueueId: () => 'q${++queues}');
 
   setUp(() async {
     audio = FakeNeupodAudio();
     now = Duration.zero;
-    player = NeupodPlayer(audio, clock: () => now);
+    queues = 0;
+    player = makePlayer(audio);
     await pumpEventQueue();
   });
 
   tearDown(() => player.dispose());
 
-  test('setQueue sends every field, with an id unique to this queue', () async {
+  test('setQueue sends every field, under a new queue id', () async {
     await player.setQueue([_flac, _mp3], startIndex: 1);
 
     expect(audio.calls, ['setQueue(1, 0)']);
-    expect(audio.queue.map((i) => i.id), ['1:0', '1:1']);
+    expect(audio.queueId, 'q1');
+    expect(audio.queue.map((i) => i.id), ['q1:0', 'q1:1']);
     final first = audio.queue.first;
     expect(first.uri, _flac.uri);
     expect(first.title, 'One');
@@ -142,7 +173,18 @@ void main() {
     expect(player.state.status, PlaybackStatus.loading);
 
     await player.setQueue([_flac]);
-    expect(audio.queue.single.id, '2:0');
+    expect(audio.queueId, 'q2');
+  });
+
+  test('queue ids are random by default', () async {
+    final a = FakeNeupodAudio();
+    final p = NeupodPlayer(a);
+    await p.setQueue([_flac]);
+    final first = a.queueId;
+    await p.setQueue([_flac]);
+    expect(first, matches(RegExp(r'^[0-9a-f]{16}$')));
+    expect(a.queueId, isNot(first));
+    await p.dispose();
   });
 
   test('setQueue rejects a start index outside the queue', () {
@@ -157,7 +199,7 @@ void main() {
 
     audio.emit(
       _event(
-        itemId: '1:1',
+        queueId: 'q1',
         index: 1,
         positionMs: 250,
         format: EngineFormat(
@@ -198,33 +240,82 @@ void main() {
     await player.setQueue([_flac, _mp3]);
     await player.setQueue([_mp3]);
 
-    audio.emit(_event(itemId: '1:1', index: 1, positionMs: 999));
+    audio.emit(_event(queueId: 'q1', index: 1, positionMs: 999));
 
     expect(player.state.index, 0);
     expect(player.state.queue, [_mp3]);
     expect(player.state.position, Duration.zero);
   });
 
-  test(
-    'an engine already playing at start-up shows its transport state',
-    () async {
-      final fresh = FakeNeupodAudio()
-        ..initial = _event(itemId: 'old:0', queueLength: 1);
-      final p = NeupodPlayer(fresh);
-      await pumpEventQueue();
+  test('a late empty getState reply does not wipe a queue set since', () async {
+    final a = FakeNeupodAudio()..stateReply = Completer<EngineEvent>();
+    final p = makePlayer(a);
+    await p.setQueue([_flac, _mp3]);
+    a.emit(_event(queueId: 'q1', positionMs: 100));
 
-      expect(p.state.status, PlaybackStatus.ready);
-      expect(p.state.playWhenReady, isTrue);
+    a.stateReply!.complete(_emptyEngine());
+    await pumpEventQueue();
+
+    expect(p.state.queue, [_flac, _mp3]);
+    expect(p.state.index, 0);
+    expect(p.state.position, const Duration(milliseconds: 100));
+    await p.dispose();
+  });
+
+  test(
+    'an empty snapshot before setQueue is applied, then the queue',
+    () async {
+      final a = FakeNeupodAudio()..stateReply = Completer<EngineEvent>();
+      final p = makePlayer(a);
+      a.stateReply!.complete(_emptyEngine());
+      await pumpEventQueue();
       expect(p.state.queue, isEmpty);
+
+      await p.setQueue([_flac]);
+      a.emit(_event(queueId: 'q1', queueLength: 1));
+      expect(p.state.queue, [_flac]);
+      expect(p.state.status, PlaybackStatus.ready);
       await p.dispose();
     },
   );
 
-  test('an emptied engine queue empties the player', () async {
+  test(
+    'an Android controller-connected empty event after setQueue is ignored',
+    () async {
+      await player.setQueue([_flac]);
+      audio.emit(_emptyEngine());
+      expect(player.state.queue, [_flac]);
+      expect(player.state.index, 0);
+    },
+  );
+
+  test(
+    'an old queue from a service that outlived the app is not adopted',
+    () async {
+      // The service still plays a queue an earlier Flutter engine set. Its
+      // item ids even look like this player's would.
+      final a = FakeNeupodAudio()
+        ..initial = _event(queueId: 'old', itemId: 'q1:0', queueLength: 1);
+      final p = makePlayer(a);
+      await pumpEventQueue();
+      expect(p.state.status, PlaybackStatus.ready);
+      expect(p.state.playWhenReady, isTrue);
+      expect(p.state.queue, isEmpty);
+
+      await p.setQueue([_mp3]);
+      a.emit(_event(queueId: 'old', itemId: 'q1:0', positionMs: 777));
+      expect(p.state.queue, [_mp3]);
+      expect(p.state.position, Duration.zero);
+      expect(p.state.status, PlaybackStatus.loading);
+      await p.dispose();
+    },
+  );
+
+  test('an emptied queue of our own empties the player', () async {
     await player.setQueue([_flac]);
     audio.emit(
       _event(
-        itemId: null,
+        queueId: 'q1',
         index: null,
         status: EngineStatus.idle,
         queueLength: 0,
@@ -236,28 +327,40 @@ void main() {
 
   test('the position runs on while playing and stops at the end', () async {
     await player.setQueue([_flac, _mp3]);
-    audio.emit(_event(itemId: '1:0', positionMs: 1000));
+    audio.emit(_event(queueId: 'q1', positionMs: 1000));
 
     now = const Duration(milliseconds: 500);
     expect(player.currentPosition, const Duration(milliseconds: 1500));
     now = const Duration(seconds: 10);
     expect(player.currentPosition, const Duration(seconds: 3));
 
-    audio.emit(_event(itemId: '1:0', positionMs: 1200, playWhenReady: false));
+    audio.emit(_event(queueId: 'q1', positionMs: 1200, playWhenReady: false));
     now = const Duration(seconds: 20);
     expect(player.currentPosition, const Duration(milliseconds: 1200));
   });
 
+  test('the position holds while playback is suppressed', () async {
+    await player.setQueue([_flac]);
+    audio.emit(
+      _event(queueId: 'q1', positionMs: 1000, isPlaying: false, queueLength: 1),
+    );
+    expect(player.state.suppressed, isTrue);
+    expect(player.state.playWhenReady, isTrue);
+    expect(player.state.isPlaying, isFalse);
+    now = const Duration(seconds: 1);
+    expect(player.currentPosition, const Duration(milliseconds: 1000));
+  });
+
   test('positions yields the extrapolated position', () async {
     await player.setQueue([_flac]);
-    audio.emit(_event(itemId: '1:0', positionMs: 400, queueLength: 1));
+    audio.emit(_event(queueId: 'q1', positionMs: 400, queueLength: 1));
     expect(await player.positions().first, const Duration(milliseconds: 400));
   });
 
   test('an unplayable item is skipped, once, and playback goes on', () async {
     await player.setQueue([_flac, _mp3]);
     audio.emit(
-      _event(itemId: '1:0', status: EngineStatus.idle, error: 'cannot decode'),
+      _event(queueId: 'q1', status: EngineStatus.idle, error: 'cannot decode'),
     );
     await pumpEventQueue();
 
@@ -265,17 +368,36 @@ void main() {
     expect(audio.calls.skip(1), ['skipTo(1)', 'play']);
 
     audio.emit(
-      _event(itemId: '1:0', status: EngineStatus.idle, error: 'cannot decode'),
+      _event(queueId: 'q1', status: EngineStatus.idle, error: 'cannot decode'),
     );
     await pumpEventQueue();
     expect(audio.calls.skip(1), ['skipTo(1)', 'play']);
   });
 
+  test(
+    'a skip after an error is dropped if the queue changed meanwhile',
+    () async {
+      await player.setQueue([_flac, _mp3]);
+      audio.emit(
+        _event(
+          queueId: 'q1',
+          status: EngineStatus.idle,
+          error: 'cannot decode',
+        ),
+      );
+      // Same turn: the queue is replaced before the skip runs.
+      final replacing = player.setQueue([_mp3]);
+      await replacing;
+      await pumpEventQueue();
+      expect(audio.calls.where((c) => c.startsWith('skipTo')), isEmpty);
+    },
+  );
+
   test('an unplayable last item stops without skipping', () async {
     await player.setQueue([_flac, _mp3]);
     audio.emit(
       _event(
-        itemId: '1:1',
+        queueId: 'q1',
         index: 1,
         status: EngineStatus.idle,
         error: 'cannot decode',
@@ -322,5 +444,12 @@ void main() {
     expect(s.playbackRate, 1);
     expect(s.hasArtwork, isTrue);
     expect(s.commands, {'play', 'pause', 'seek'});
+  });
+
+  test('dispose releases the engine bridge', () async {
+    final a = FakeNeupodAudio();
+    final p = makePlayer(a);
+    await p.dispose();
+    expect(a.disposed, isTrue);
   });
 }

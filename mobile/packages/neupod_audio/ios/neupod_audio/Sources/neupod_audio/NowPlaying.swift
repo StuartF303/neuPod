@@ -13,6 +13,8 @@ final class NowPlaying {
   private let engine: AudioEngine
   private var artworkItemId: String?
   private var artwork: MPMediaItemArtwork?
+  /// Every addTarget registration, removed again by [shutdown].
+  private var targets: [(MPRemoteCommand, Any)] = []
 
   init(engine: AudioEngine) {
     self.engine = engine
@@ -50,6 +52,16 @@ final class NowPlaying {
     commands.changePlaybackPositionCommand.isEnabled = engine.durationMs != nil
   }
 
+  /// Unregisters the remote commands and clears the lock screen (plugin detach).
+  func shutdown() {
+    for (command, target) in targets {
+      command.removeTarget(target)
+      command.isEnabled = false
+    }
+    targets = []
+    MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+  }
+
   /// What the system shows, read back from MPNowPlayingInfoCenter.
   func sessionInfo() -> SessionInfo {
     let info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
@@ -78,13 +90,14 @@ final class NowPlaying {
       _ command: MPRemoteCommand, _ action: @escaping @MainActor (AudioEngine) -> Void
     ) {
       command.isEnabled = true
-      command.addTarget { [weak self] _ in
+      let target = command.addTarget { [weak self] _ in
         MainActor.assumeIsolated {
           guard let engine = self?.engine else { return .noActionableNowPlayingItem }
           action(engine)
           return .success
         }
       }
+      targets.append((command, target))
     }
     handle(c.playCommand) { $0.play() }
     handle(c.pauseCommand) { $0.pause() }
@@ -94,7 +107,7 @@ final class NowPlaying {
     handle(c.previousTrackCommand) { $0.skipToPrevious() }
     // Lock-screen scrubbing.
     c.changePlaybackPositionCommand.isEnabled = true
-    c.changePlaybackPositionCommand.addTarget { [weak self] event in
+    let seekTarget = c.changePlaybackPositionCommand.addTarget { [weak self] event in
       MainActor.assumeIsolated {
         guard let engine = self?.engine,
           let event = event as? MPChangePlaybackPositionCommandEvent
@@ -103,6 +116,7 @@ final class NowPlaying {
         return .success
       }
     }
+    targets.append((c.changePlaybackPositionCommand, seekTarget))
     // The device has no skip-by-interval buttons; previous and next stay.
     c.skipForwardCommand.isEnabled = false
     c.skipBackwardCommand.isEnabled = false
@@ -116,26 +130,32 @@ final class NowPlaying {
     guard artworkItemId != item.id else { return }
     artworkItemId = item.id
     artwork = nil
-    if let artUri = item.artUri, let url = URL(string: artUri), url.isFileURL,
-      let image = UIImage(contentsOfFile: url.path)
-    {
-      artwork = makeArtwork(image)
-      return
-    }
-    guard let url = URL(string: item.uri), url.isFileURL else { return }
     let id = item.id
-    Task { [weak self] in
-      let asset = AVURLAsset(url: url)
-      guard let metadata = try? await asset.load(.commonMetadata),
-        let entry = AVMetadataItem.metadataItems(
-          from: metadata, filteredByIdentifier: .commonIdentifierArtwork
-        ).first,
-        let data = try? await entry.load(.dataValue),
-        let image = UIImage(data: data)
-      else { return }
-      guard let self, self.artworkItemId == id else { return }
-      self.artwork = makeArtwork(image)
-      self.update()
+    let artURL = item.artUri.flatMap(URL.init(string:)).flatMap { $0.isFileURL ? $0 : nil }
+    let fileURL = URL(string: item.uri).flatMap { $0.isFileURL ? $0 : nil }
+    // Decoding the image (and reading the file's metadata) stays off the
+    // main thread; the result is applied only if the item is still current.
+    Task.detached(priority: .utility) { [weak self] in
+      var image: UIImage? = nil
+      if let artURL { image = UIImage(contentsOfFile: artURL.path) }
+      if image == nil, let fileURL {
+        let asset = AVURLAsset(url: fileURL)
+        if let metadata = try? await asset.load(.commonMetadata),
+          let entry = AVMetadataItem.metadataItems(
+            from: metadata, filteredByIdentifier: .commonIdentifierArtwork
+          ).first,
+          let data = try? await entry.load(.dataValue)
+        {
+          image = UIImage(data: data)
+        }
+      }
+      guard let image else { return }
+      let artwork = makeArtwork(image)
+      await MainActor.run {
+        guard let self, self.artworkItemId == id else { return }
+        self.artwork = artwork
+        self.update()
+      }
     }
   }
 }

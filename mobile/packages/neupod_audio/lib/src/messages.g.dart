@@ -273,8 +273,10 @@ class EngineFormat {
 /// the Dart side extrapolates from [positionMs] while playing.
 class EngineEvent {
   EngineEvent({
+    this.queueId,
     required this.status,
     required this.playWhenReady,
+    required this.isPlaying,
     this.index,
     this.itemId,
     required this.positionMs,
@@ -284,10 +286,22 @@ class EngineEvent {
     this.errorMessage,
   });
 
+  /// The id given to the [AudioHostApi.setQueue] call that made the current
+  /// queue; null for a queue no setQueue made (a fresh engine, or [clear]).
+  /// The Dart side ignores events whose queueId is not its own, so an event
+  /// about an earlier queue (even one set before this Flutter engine
+  /// started, while the Android service lived on) never moves the new one.
+  String? queueId;
+
   EngineStatus status;
 
   /// The user's intent: true after play, false after pause.
   bool playWhenReady;
+
+  /// Sound is being produced now. False while ready and playWhenReady if
+  /// playback is suppressed (a transient loss of audio focus, an
+  /// interruption), so the position must not be extrapolated.
+  bool isPlaying;
 
   /// Index of the current item, null when the queue is empty.
   int? index;
@@ -307,8 +321,10 @@ class EngineEvent {
 
   List<Object?> _toList() {
     return <Object?>[
+      queueId,
       status,
       playWhenReady,
+      isPlaying,
       index,
       itemId,
       positionMs,
@@ -326,15 +342,17 @@ class EngineEvent {
   static EngineEvent decode(Object result) {
     result as List<Object?>;
     return EngineEvent(
-      status: result[0]! as EngineStatus,
-      playWhenReady: result[1]! as bool,
-      index: result[2] as int?,
-      itemId: result[3] as String?,
-      positionMs: result[4]! as int,
-      durationMs: result[5] as int?,
-      queueLength: result[6]! as int,
-      format: result[7] as EngineFormat?,
-      errorMessage: result[8] as String?,
+      queueId: result[0] as String?,
+      status: result[1]! as EngineStatus,
+      playWhenReady: result[2]! as bool,
+      isPlaying: result[3]! as bool,
+      index: result[4] as int?,
+      itemId: result[5] as String?,
+      positionMs: result[6]! as int,
+      durationMs: result[7] as int?,
+      queueLength: result[8]! as int,
+      format: result[9] as EngineFormat?,
+      errorMessage: result[10] as String?,
     );
   }
 
@@ -347,8 +365,10 @@ class EngineEvent {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(status, other.status) &&
+    return _deepEquals(queueId, other.queueId) &&
+        _deepEquals(status, other.status) &&
         _deepEquals(playWhenReady, other.playWhenReady) &&
+        _deepEquals(isPlaying, other.isPlaying) &&
         _deepEquals(index, other.index) &&
         _deepEquals(itemId, other.itemId) &&
         _deepEquals(positionMs, other.positionMs) &&
@@ -364,7 +384,7 @@ class EngineEvent {
 
   @override
   String toString() {
-    return 'EngineEvent(status: $status, playWhenReady: $playWhenReady, index: $index, itemId: $itemId, positionMs: $positionMs, durationMs: $durationMs, queueLength: $queueLength, format: $format, errorMessage: $errorMessage)';
+    return 'EngineEvent(queueId: $queueId, status: $status, playWhenReady: $playWhenReady, isPlaying: $isPlaying, index: $index, itemId: $itemId, positionMs: $positionMs, durationMs: $durationMs, queueLength: $queueLength, format: $format, errorMessage: $errorMessage)';
   }
 }
 
@@ -524,10 +544,12 @@ class AudioHostApi {
 
   final String pigeonVar_messageChannelSuffix;
 
-  /// Replaces the queue and prepares [startIndex] at [startPositionMs]. The
-  /// play intent is kept: if playing, the new queue plays; if paused, it
-  /// stays paused. An empty list is [clear].
+  /// Replaces the queue with [items], identified by [queueId], and prepares
+  /// [startIndex] at [startPositionMs]. The play intent is kept: if playing,
+  /// the new queue plays; if paused, it stays paused. An empty list empties
+  /// the queue as [clear] does, but keeps [queueId].
   Future<void> setQueue(
+    String queueId,
     List<EngineItem> items,
     int startIndex,
     int startPositionMs,
@@ -540,7 +562,7 @@ class AudioHostApi {
       binaryMessenger: pigeonVar_binaryMessenger,
     );
     final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
-      <Object?>[items, startIndex, startPositionMs],
+      <Object?>[queueId, items, startIndex, startPositionMs],
     );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     _extractReplyValueOrThrow(
@@ -550,7 +572,8 @@ class AudioHostApi {
     );
   }
 
-  /// Inserts [items] before [index] (index == length appends).
+  /// Inserts [items] before [index] (index == length appends), into the
+  /// current queue (its queueId is kept).
   Future<void> insert(int index, List<EngineItem> items) async {
     final pigeonVar_channelName =
         'dev.flutter.pigeon.neupod_audio.AudioHostApi.insert$pigeonVar_messageChannelSuffix';
@@ -608,7 +631,8 @@ class AudioHostApi {
     );
   }
 
-  /// Empties the queue, stops, and drops the play intent.
+  /// Empties the queue, stops, and drops the play intent. The queueId
+  /// becomes null.
   Future<void> clear() async {
     final pigeonVar_channelName =
         'dev.flutter.pigeon.neupod_audio.AudioHostApi.clear$pigeonVar_messageChannelSuffix';

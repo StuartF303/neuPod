@@ -87,9 +87,19 @@ Built as decided, inside `mobile/packages/neupod_audio`. Where it differs from o
 - **Playback resumption is deferred to phase 4** (the "Resume" item): the `MediaButtonReceiver` and
   `onPlaybackResumption` need the persisted queue, which does not exist yet. Until then a Bluetooth play press after
   the service has died does nothing.
-- **Interruptions, minimal now:** Android uses ExoPlayer's audio-focus handling and becoming-noisy pause. iOS pauses on
-  an interruption's start and on `oldDeviceUnavailable`, and restarts the engine from the current position on
-  `AVAudioEngineConfigurationChange`. Resuming after a transient interruption and the measured checks are phase 4.
+- **Interruptions, minimal now:** Android uses ExoPlayer's audio-focus handling and becoming-noisy pause. iOS:
+  - An interruption's start pauses at the true position, and the next play reschedules from there.
+  - `oldDeviceUnavailable` pauses when a personal output (headphones, Bluetooth, USB, AirPlay, car) in the previous
+    route has gone.
+  - `AVAudioEngineConfigurationChange` (which unplugging also posts, in either order with the route change) pauses if
+    a personal output in use has gone. Otherwise it restarts from the current position one run-loop turn later, unless
+    the route change paused meanwhile.
+  - The session is deactivated with `.notifyOthersOnDeactivation` when the queue ends or is cleared.
+
+  Resuming after a transient interruption, and checking all of this on a real iPhone (the simulator has no real route
+  changes or calls), are phase 4.
+- **Commands and observers are released on plugin detach:** the `MPRemoteCommandCenter` targets and the
+  NotificationCenter observers are removed.
 - **The lock screen's artwork** comes from the item's `artUri` (the art cache, later), else from art embedded in the
   file: Media3 extracts it itself; on iOS the plugin reads `AVAsset`'s common artwork metadata.
 - **Route detection is not built yet** (phase 4, "Output route icon").

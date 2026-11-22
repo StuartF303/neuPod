@@ -57,7 +57,7 @@ kotlin {
 
 // Media3 (Apache-2.0): only the player and the session. No HTTP module (media3-datasource-okhttp,
 // -cronet) is added. media3-exoplayer's own DefaultHttpDataSource is linked but never reached: the
-// engine builds its data sources without it (LocalDataSources.kt).
+// engine builds its data sources without it (LocalDataSource.kt).
 val media3Version = "1.11.1"
 val coroutinesVersion = "1.11.0"
 

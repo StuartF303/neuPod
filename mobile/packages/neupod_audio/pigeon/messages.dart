@@ -77,14 +77,27 @@ class EngineEvent {
   EngineEvent({
     required this.status,
     required this.playWhenReady,
+    required this.isPlaying,
     required this.positionMs,
     required this.queueLength,
   });
+
+  /// The id given to the [AudioHostApi.setQueue] call that made the current
+  /// queue; null for a queue no setQueue made (a fresh engine, or [clear]).
+  /// The Dart side ignores events whose queueId is not its own, so an event
+  /// about an earlier queue (even one set before this Flutter engine
+  /// started, while the Android service lived on) never moves the new one.
+  String? queueId;
 
   EngineStatus status;
 
   /// The user's intent: true after play, false after pause.
   bool playWhenReady;
+
+  /// Sound is being produced now. False while ready and playWhenReady if
+  /// playback is suppressed (a transient loss of audio focus, an
+  /// interruption), so the position must not be extrapolated.
+  bool isPlaying;
 
   /// Index of the current item, null when the queue is empty.
   int? index;
@@ -118,13 +131,20 @@ class SessionInfo {
 
 @HostApi()
 abstract class AudioHostApi {
-  /// Replaces the queue and prepares [startIndex] at [startPositionMs]. The
-  /// play intent is kept: if playing, the new queue plays; if paused, it
-  /// stays paused. An empty list is [clear].
+  /// Replaces the queue with [items], identified by [queueId], and prepares
+  /// [startIndex] at [startPositionMs]. The play intent is kept: if playing,
+  /// the new queue plays; if paused, it stays paused. An empty list empties
+  /// the queue as [clear] does, but keeps [queueId].
   @async
-  void setQueue(List<EngineItem> items, int startIndex, int startPositionMs);
+  void setQueue(
+    String queueId,
+    List<EngineItem> items,
+    int startIndex,
+    int startPositionMs,
+  );
 
-  /// Inserts [items] before [index] (index == length appends).
+  /// Inserts [items] before [index] (index == length appends), into the
+  /// current queue (its queueId is kept).
   @async
   void insert(int index, List<EngineItem> items);
 
@@ -134,7 +154,8 @@ abstract class AudioHostApi {
   @async
   void move(int from, int to);
 
-  /// Empties the queue, stops, and drops the play intent.
+  /// Empties the queue, stops, and drops the play intent. The queueId
+  /// becomes null.
   @async
   void clear();
 

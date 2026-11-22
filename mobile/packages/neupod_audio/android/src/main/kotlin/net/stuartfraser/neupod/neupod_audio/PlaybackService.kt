@@ -18,6 +18,7 @@ import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 /**
@@ -29,6 +30,7 @@ import java.util.concurrent.Executors
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
     private var session: MediaSession? = null
+    private var artExecutor: ExecutorService? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -51,10 +53,8 @@ class PlaybackService : MediaSessionService() {
             .setMaxSeekToPreviousPositionMs(SKIP_BACK_RESTARTS_AFTER_MS)
             .build()
 
-        val artLoader = DataSourceBitmapLoader(
-            MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor()),
-            dataSources,
-        )
+        val executor = Executors.newSingleThreadExecutor().also { artExecutor = it }
+        val artLoader = DataSourceBitmapLoader(MoreExecutors.listeningDecorator(executor), dataSources)
         val builder = MediaSession.Builder(this, player)
             .setCallback(SessionCallback())
             .setBitmapLoader(CacheBitmapLoader(artLoader))
@@ -70,6 +70,8 @@ class PlaybackService : MediaSessionService() {
             release()
         }
         session = null
+        artExecutor?.shutdown()
+        artExecutor = null
         super.onDestroy()
     }
 

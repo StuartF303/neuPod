@@ -30,6 +30,10 @@ public class NeupodAudioPlugin: NSObject, FlutterPlugin, AudioHostApi {
   public func detachFromEngine(for registrar: FlutterPluginRegistrar) {
     AudioHostApiSetup.setUp(binaryMessenger: registrar.messenger(), api: nil)
     flutterApi = nil
+    MainActor.assumeIsolated {
+      nowPlaying.shutdown()
+      engine.shutdown()
+    }
   }
 
   @MainActor
@@ -46,8 +50,10 @@ public class NeupodAudioPlugin: NSObject, FlutterPlugin, AudioHostApi {
   @MainActor
   private func snapshot() -> EngineEvent {
     EngineEvent(
+      queueId: engine.queueId,
       status: engine.status,
       playWhenReady: engine.playWhenReady,
+      isPlaying: engine.isSounding,
       index: engine.index.map(Int64.init),
       itemId: engine.currentItem?.id,
       positionMs: engine.positionMs,
@@ -60,8 +66,11 @@ public class NeupodAudioPlugin: NSObject, FlutterPlugin, AudioHostApi {
   // MARK: - AudioHostApi
 
   @MainActor
-  func setQueue(items: [EngineItem], startIndex: Int64, startPositionMs: Int64) async throws {
-    engine.setQueue(items, startIndex: Int(startIndex), startPositionMs: startPositionMs)
+  func setQueue(
+    queueId: String, items: [EngineItem], startIndex: Int64, startPositionMs: Int64
+  ) async throws {
+    engine.setQueue(
+      items, queueId: queueId, startIndex: Int(startIndex), startPositionMs: startPositionMs)
   }
 
   @MainActor

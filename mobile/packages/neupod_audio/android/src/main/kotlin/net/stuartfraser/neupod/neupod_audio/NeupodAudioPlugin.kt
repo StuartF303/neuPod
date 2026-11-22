@@ -5,6 +5,7 @@ package net.stuartfraser.neupod.neupod_audio
 import android.content.ComponentName
 import android.content.Context
 import android.net.Uri
+import android.os.Bundle
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.Format
@@ -16,6 +17,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import io.flutter.embedding.engine.plugins.FlutterPlugin
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
@@ -29,9 +31,15 @@ import kotlinx.coroutines.launch
  */
 @OptIn(UnstableApi::class)
 class NeupodAudioPlugin : FlutterPlugin, AudioHostApi {
-    private val scope = MainScope()
+    private var scope: CoroutineScope? = null
     private var flutterApi: AudioFlutterApi? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
+
+    /**
+     * The queue id of an empty queue set by [setQueue]. A non-empty queue carries its id in each
+     * item's metadata extras, which live in the session and so outlast this plugin instance.
+     */
+    private var emptyQueueId: String? = null
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) = emit(player)
@@ -39,6 +47,7 @@ class NeupodAudioPlugin : FlutterPlugin, AudioHostApi {
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         val context: Context = binding.applicationContext
+        val scope = MainScope().also { scope = it }
         AudioHostApi.setUp(binding.binaryMessenger, this)
         flutterApi = AudioFlutterApi(binding.binaryMessenger)
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
@@ -56,7 +65,8 @@ class NeupodAudioPlugin : FlutterPlugin, AudioHostApi {
         flutterApi = null
         controllerFuture?.let(MediaController::releaseFuture)
         controllerFuture = null
-        scope.cancel()
+        scope?.cancel()
+        scope = null
     }
 
     private suspend fun controller(): MediaController =
@@ -65,6 +75,7 @@ class NeupodAudioPlugin : FlutterPlugin, AudioHostApi {
     /** Sends the player's state to Dart, in the order the changes happened. */
     private fun emit(player: Player) {
         val api = flutterApi ?: return
+        val scope = scope ?: return
         val event = snapshot(player)
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             try {
@@ -75,18 +86,28 @@ class NeupodAudioPlugin : FlutterPlugin, AudioHostApi {
         }
     }
 
-    override suspend fun setQueue(items: List<EngineItem>, startIndex: Long, startPositionMs: Long) {
+    override suspend fun setQueue(
+        queueId: String,
+        items: List<EngineItem>,
+        startIndex: Long,
+        startPositionMs: Long,
+    ) {
         val c = controller()
         if (items.isEmpty()) {
             clear()
+            emptyQueueId = queueId
+            emit(c)
             return
         }
-        c.setMediaItems(items.map(::toMediaItem), startIndex.toInt(), startPositionMs)
+        emptyQueueId = null
+        c.setMediaItems(items.map { toMediaItem(it, queueId) }, startIndex.toInt(), startPositionMs)
         c.prepare()
     }
 
     override suspend fun insert(index: Long, items: List<EngineItem>) {
-        controller().addMediaItems(index.toInt(), items.map(::toMediaItem))
+        val c = controller()
+        val queueId = queueIdOf(c)
+        c.addMediaItems(index.toInt(), items.map { toMediaItem(it, queueId) })
     }
 
     override suspend fun remove(index: Long) {
@@ -100,6 +121,7 @@ class NeupodAudioPlugin : FlutterPlugin, AudioHostApi {
     /** Empties the queue and drops the play intent, as on iOS (ExoPlayer's stop() keeps it). */
     override suspend fun clear() {
         val c = controller()
+        emptyQueueId = null
         c.pause()
         c.stop()
         c.clearMediaItems()
@@ -166,9 +188,10 @@ class NeupodAudioPlugin : FlutterPlugin, AudioHostApi {
         )
     }
 
-    private fun toMediaItem(item: EngineItem): MediaItem {
+    private fun toMediaItem(item: EngineItem, queueId: String?): MediaItem {
         val uri = Uri.parse(item.uri)
         val metadata = MediaMetadata.Builder()
+            .setExtras(Bundle().apply { putString(QUEUE_ID, queueId) })
             .setTitle(item.title)
             .setArtist(item.artist)
             .setAlbumTitle(item.album)
@@ -195,8 +218,11 @@ class NeupodAudioPlugin : FlutterPlugin, AudioHostApi {
             else -> EngineStatus.IDLE
         }
         return EngineEvent(
+            queueId = queueIdOf(p),
             status = status,
             playWhenReady = p.playWhenReady,
+            // False while playback is suppressed (a transient loss of audio focus).
+            isPlaying = p.isPlaying,
             index = if (hasItems) p.currentMediaItemIndex.toLong() else null,
             itemId = p.currentMediaItem?.mediaId,
             positionMs = if (hasItems) p.currentPosition else 0,
@@ -206,6 +232,14 @@ class NeupodAudioPlugin : FlutterPlugin, AudioHostApi {
             errorMessage = p.playerError?.let { "${it.errorCodeName}: ${it.message}" },
         )
     }
+
+    /** The current queue's id: from the items' metadata, or the id of an empty queue. */
+    private fun queueIdOf(p: Player): String? =
+        if (p.mediaItemCount == 0) {
+            emptyQueueId
+        } else {
+            p.getMediaItemAt(0).mediaMetadata.extras?.getString(QUEUE_ID)
+        }
 
     private fun audioFormat(p: Player): EngineFormat? {
         val group = p.currentTracks.groups.firstOrNull { it.type == C.TRACK_TYPE_AUDIO && it.isSelected }
@@ -226,5 +260,9 @@ class NeupodAudioPlugin : FlutterPlugin, AudioHostApi {
             channelCount = known(f.channelCount),
             bitsPerSample = bits,
         )
+    }
+
+    private companion object {
+        const val QUEUE_ID = "net.stuartfraser.neupod.queueId"
     }
 }

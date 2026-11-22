@@ -55,6 +55,7 @@ final class PlayerState {
   const PlayerState({
     this.status = PlaybackStatus.idle,
     this.playWhenReady = false,
+    this.suppressed = false,
     this.queue = const [],
     this.index,
     this.position = Duration.zero,
@@ -69,6 +70,10 @@ final class PlayerState {
 
   /// The user's intent: true after play, false after pause.
   final bool playWhenReady;
+
+  /// Ready and asked to play, but the platform is holding the sound back for
+  /// a moment (a transient loss of audio focus, an interruption).
+  final bool suppressed;
 
   final List<QueueItem> queue;
 
@@ -89,14 +94,16 @@ final class PlayerState {
     return i != null && i >= 0 && i < queue.length ? queue[i] : null;
   }
 
-  /// Sound is coming out (or about to, once loaded).
-  bool get isPlaying => playWhenReady && status == PlaybackStatus.ready;
+  /// Sound is coming out: asked to play, ready, and not held back.
+  bool get isPlaying =>
+      playWhenReady && status == PlaybackStatus.ready && !suppressed;
 
   bool get hasNext => index != null && index! + 1 < queue.length;
 
   PlayerState copyWith({
     PlaybackStatus? status,
     bool? playWhenReady,
+    bool? suppressed,
     List<QueueItem>? queue,
     int? Function()? index,
     Duration? position,
@@ -106,6 +113,7 @@ final class PlayerState {
   }) => PlayerState(
     status: status ?? this.status,
     playWhenReady: playWhenReady ?? this.playWhenReady,
+    suppressed: suppressed ?? this.suppressed,
     queue: queue ?? this.queue,
     index: index != null ? index() : this.index,
     position: position ?? this.position,
@@ -119,6 +127,7 @@ final class PlayerState {
       other is PlayerState &&
       other.status == status &&
       other.playWhenReady == playWhenReady &&
+      other.suppressed == suppressed &&
       _sameItems(other.queue, queue) &&
       other.index == index &&
       other.position == position &&
@@ -130,6 +139,7 @@ final class PlayerState {
   int get hashCode => Object.hash(
     status,
     playWhenReady,
+    suppressed,
     Object.hashAll(queue),
     index,
     position,
@@ -141,6 +151,7 @@ final class PlayerState {
   @override
   String toString() =>
       'PlayerState($status, playWhenReady: $playWhenReady, '
+      '${suppressed ? 'suppressed, ' : ''}'
       'index: $index/${queue.length}, position: $position, '
       'duration: $duration, error: $error)';
 }

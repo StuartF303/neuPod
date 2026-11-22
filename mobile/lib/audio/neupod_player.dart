@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import 'dart:async';
+import 'dart:math';
 
 import 'package:neupod/domain/playback/player.dart';
 import 'package:neupod/domain/playback/player_state.dart';
@@ -10,28 +11,38 @@ import 'package:neupod_audio/neupod_audio.dart';
 /// The [Player] port on the in-repo engine plugin `neupod_audio` (decisions
 /// 0001 and 0002).
 ///
-/// The native queue mirrors [PlayerState.queue] index for index. Each queue
-/// entry gets an engine id unique to the [setQueue] call that made it, so an
-/// event about an earlier queue is never applied to the current one.
+/// The native queue mirrors [PlayerState.queue] index for index. Every
+/// [setQueue] gets a fresh random queue id, and only engine events carrying
+/// that id are applied. So an event about an earlier queue is never applied
+/// to the current one: not one still in flight when the queue changed, not
+/// an empty-queue snapshot answering an earlier request, and not one about a
+/// queue an earlier Flutter engine set while the Android service lived on.
 class NeupodPlayer implements Player {
-  NeupodPlayer(this._audio, {Duration Function()? clock})
-    : _clock = clock ?? _monotonic {
+  NeupodPlayer(
+    this._audio, {
+    Duration Function()? clock,
+    String Function()? newQueueId,
+  }) : _clock = clock ?? _monotonic,
+       _newQueueId = newQueueId ?? _randomQueueId {
     _subscription = _audio.events.listen(_onEvent);
     unawaited(_audio.getState().then(_onEvent, onError: (Object _) {}));
   }
 
   final NeupodAudio _audio;
   final Duration Function() _clock;
+  final String Function() _newQueueId;
   late final StreamSubscription<EngineEvent> _subscription;
   final _states = StreamController<PlayerState>.broadcast();
 
   PlayerState _state = PlayerState.empty;
-  int _generation = 0;
+
+  /// The id of the queue this player last set; null until it sets one.
+  String? _queueId;
 
   /// When [_state] was taken, on [_clock]; the base of [currentPosition].
   Duration _stateTakenAt = Duration.zero;
 
-  /// The engine id of the entry an error was last handled for.
+  /// The entry (queue id and item id) an error was last handled for.
   String? _skippedAfterError;
 
   @override
@@ -44,7 +55,7 @@ class NeupodPlayer implements Player {
   }
 
   /// The position now: the last reported one, plus the time since while
-  /// playing, never past the end.
+  /// sound is playing, never past the end.
   Duration get currentPosition {
     if (!_state.isPlaying) return _state.position;
     final position = _state.position + (_clock() - _stateTakenAt);
@@ -69,25 +80,27 @@ class NeupodPlayer implements Player {
     Duration startPosition = Duration.zero,
   }) async {
     if (items.isNotEmpty) RangeError.checkValidIndex(startIndex, items);
-    _generation++;
+    final queueId = _newQueueId();
+    _queueId = queueId;
     _skippedAfterError = null;
-    final prefix = '$_generation:';
     _publish(
       _state.copyWith(
         queue: List.unmodifiable(items),
         index: () => items.isEmpty ? null : startIndex,
         position: startPosition,
         status: items.isEmpty ? PlaybackStatus.idle : PlaybackStatus.loading,
+        suppressed: false,
         duration: () => items.isEmpty ? null : items[startIndex].duration,
         format: () => null,
         error: () => null,
       ),
     );
     await _audio.setQueue(
+      queueId,
       [
         for (final (i, item) in items.indexed)
           EngineItem(
-            id: '$prefix$i',
+            id: '$queueId:$i',
             uri: item.uri,
             title: item.title,
             artist: item.artist,
@@ -136,34 +149,39 @@ class NeupodPlayer implements Player {
     );
   }
 
+  /// Stops listening and unregisters the event handler. The native engine
+  /// keeps playing (on Android it belongs to the media session service).
   @override
   Future<void> dispose() async {
     await _subscription.cancel();
     await _states.close();
+    await _audio.dispose();
   }
 
   void _onEvent(EngineEvent event) {
     if (_states.isClosed) return;
-    final ours = event.itemId?.startsWith('$_generation:') ?? false;
-    final emptied = event.queueLength == 0;
-    if (!ours && !emptied) {
-      // About an earlier queue (or one set before this app started, which
-      // resuming will adopt in phase 4): keep the transport state only.
-      if (_state.queue.isEmpty) {
+    if (event.queueId != _queueId) {
+      // About another queue. Before this player has set one, show what an
+      // engine that is already playing is doing (resume adopts its queue in
+      // phase 4); after that, ignore it.
+      if (_queueId == null && event.queueId != null) {
         _publish(
           _state.copyWith(
             status: _status(event.status),
             playWhenReady: event.playWhenReady,
+            suppressed: _suppressed(event),
           ),
         );
       }
       return;
     }
+    final emptied = event.queueLength == 0;
     final format = event.format;
     _publish(
       _state.copyWith(
         status: _status(event.status),
         playWhenReady: event.playWhenReady,
+        suppressed: _suppressed(event),
         queue: emptied ? const [] : null,
         index: () => emptied ? null : event.index,
         position: Duration(milliseconds: event.positionMs),
@@ -185,17 +203,24 @@ class NeupodPlayer implements Player {
   }
 
   /// An unplayable file never stops the queue (spec, Formats): go on to the
-  /// next entry, once per failed entry.
+  /// next entry, once per failed entry, and only if the queue is still the
+  /// one that failed when the skip is sent.
   void _skipIfUnplayable(EngineEvent event) {
     final index = event.index;
     if (event.errorMessage == null || index == null) return;
-    if (_skippedAfterError == event.itemId) return;
-    _skippedAfterError = event.itemId;
+    final entry = '${event.queueId}/${event.itemId}';
+    if (_skippedAfterError == entry) return;
+    _skippedAfterError = entry;
     if (index + 1 >= event.queueLength) return;
-    unawaited(() async {
-      await _audio.skipTo(index + 1);
-      if (event.playWhenReady) await _audio.play();
-    }());
+    final queueId = event.queueId;
+    // After the current turn, so a queue replaced meanwhile is seen.
+    unawaited(
+      Future.microtask(() async {
+        if (_queueId != queueId) return;
+        await _audio.skipTo(index + 1);
+        if (event.playWhenReady && _queueId == queueId) await _audio.play();
+      }),
+    );
   }
 
   void _publish(PlayerState next) {
@@ -204,6 +229,9 @@ class NeupodPlayer implements Player {
     _state = next;
     _states.add(next);
   }
+
+  static bool _suppressed(EngineEvent e) =>
+      e.playWhenReady && e.status == EngineStatus.ready && !e.isPlaying;
 
   static PlaybackStatus _status(EngineStatus status) => switch (status) {
     EngineStatus.idle => PlaybackStatus.idle,
@@ -215,3 +243,11 @@ class NeupodPlayer implements Player {
 
 final _stopwatch = Stopwatch()..start();
 Duration _monotonic() => _stopwatch.elapsed;
+
+final _random = Random.secure();
+
+/// 64 random bits as hex: unique across queues and app runs in practice.
+String _randomQueueId() => [
+  for (var i = 0; i < 4; i++)
+    _random.nextInt(1 << 16).toRadixString(16).padLeft(4, '0'),
+].join();

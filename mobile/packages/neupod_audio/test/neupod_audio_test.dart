@@ -31,6 +31,7 @@ void main() {
     final skip = recordHostCalls('skipTo');
 
     await audio.setQueue(
+      'q1',
       [EngineItem(id: '1:0', uri: 'content://a', title: 'A')],
       startIndex: 0,
       startPositionMs: 500,
@@ -39,10 +40,11 @@ void main() {
     await audio.skipTo(1);
 
     final args = setQueue.single! as List<Object?>;
-    final items = (args[0]! as List<Object?>).cast<EngineItem>();
+    expect(args[0], 'q1');
+    final items = (args[1]! as List<Object?>).cast<EngineItem>();
     expect(items.single.uri, 'content://a');
     expect(items.single.title, 'A');
-    expect(args.sublist(1), [0, 500]);
+    expect(args.sublist(2), [0, 500]);
     expect(seek.single, [1200]);
     expect(skip.single, [1]);
     await audio.dispose();
@@ -55,6 +57,8 @@ void main() {
       EngineEvent(
         status: EngineStatus.ready,
         playWhenReady: true,
+        isPlaying: true,
+        queueId: 'q1',
         positionMs: 42,
         queueLength: 1,
         index: 0,
@@ -65,6 +69,8 @@ void main() {
     expect(state.status, EngineStatus.ready);
     expect(state.positionMs, 42);
     expect(state.itemId, '1:0');
+    expect(state.queueId, 'q1');
+    expect(state.isPlaying, isTrue);
     await audio.dispose();
   });
 
@@ -79,6 +85,7 @@ void main() {
         EngineEvent(
           status: EngineStatus.ready,
           playWhenReady: true,
+          isPlaying: true,
           positionMs: positionMs,
           queueLength: 1,
         ),

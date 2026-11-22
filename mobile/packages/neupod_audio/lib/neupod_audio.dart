@@ -35,11 +35,14 @@ class NeupodAudio {
   /// Every change of state the engine reports, in order.
   Stream<EngineEvent> get events => _events.stream;
 
+  /// Replaces the queue; [queueId] comes back in every [EngineEvent] about
+  /// it (see [EngineEvent.queueId]).
   Future<void> setQueue(
+    String queueId,
     List<EngineItem> items, {
     int startIndex = 0,
     int startPositionMs = 0,
-  }) => _host.setQueue(items, startIndex, startPositionMs);
+  }) => _host.setQueue(queueId, items, startIndex, startPositionMs);
 
   Future<void> insert(int index, List<EngineItem> items) =>
       _host.insert(index, items);

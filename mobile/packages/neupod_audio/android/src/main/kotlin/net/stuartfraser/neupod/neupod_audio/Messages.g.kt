@@ -356,9 +356,23 @@ data class EngineFormat (
  * Generated class from Pigeon that represents data sent in messages.
  */
 data class EngineEvent (
+  /**
+   * The id given to the [AudioHostApi.setQueue] call that made the current
+   * queue; null for a queue no setQueue made (a fresh engine, or [clear]).
+   * The Dart side ignores events whose queueId is not its own, so an event
+   * about an earlier queue (even one set before this Flutter engine
+   * started, while the Android service lived on) never moves the new one.
+   */
+  val queueId: String? = null,
   val status: EngineStatus,
   /** The user's intent: true after play, false after pause. */
   val playWhenReady: Boolean,
+  /**
+   * Sound is being produced now. False while ready and playWhenReady if
+   * playback is suppressed (a transient loss of audio focus, an
+   * interruption), so the position must not be extrapolated.
+   */
+  val isPlaying: Boolean,
   /** Index of the current item, null when the queue is empty. */
   val index: Long? = null,
   val itemId: String? = null,
@@ -372,22 +386,26 @@ data class EngineEvent (
  {
   companion object {
     fun fromList(pigeonVar_list: List<Any?>): EngineEvent {
-      val status = pigeonVar_list[0] as EngineStatus
-      val playWhenReady = pigeonVar_list[1] as Boolean
-      val index = pigeonVar_list[2] as Long?
-      val itemId = pigeonVar_list[3] as String?
-      val positionMs = pigeonVar_list[4] as Long
-      val durationMs = pigeonVar_list[5] as Long?
-      val queueLength = pigeonVar_list[6] as Long
-      val format = pigeonVar_list[7] as EngineFormat?
-      val errorMessage = pigeonVar_list[8] as String?
-      return EngineEvent(status, playWhenReady, index, itemId, positionMs, durationMs, queueLength, format, errorMessage)
+      val queueId = pigeonVar_list[0] as String?
+      val status = pigeonVar_list[1] as EngineStatus
+      val playWhenReady = pigeonVar_list[2] as Boolean
+      val isPlaying = pigeonVar_list[3] as Boolean
+      val index = pigeonVar_list[4] as Long?
+      val itemId = pigeonVar_list[5] as String?
+      val positionMs = pigeonVar_list[6] as Long
+      val durationMs = pigeonVar_list[7] as Long?
+      val queueLength = pigeonVar_list[8] as Long
+      val format = pigeonVar_list[9] as EngineFormat?
+      val errorMessage = pigeonVar_list[10] as String?
+      return EngineEvent(queueId, status, playWhenReady, isPlaying, index, itemId, positionMs, durationMs, queueLength, format, errorMessage)
     }
   }
   fun toList(): List<Any?> {
     return listOf(
+      queueId,
       status,
       playWhenReady,
+      isPlaying,
       index,
       itemId,
       positionMs,
@@ -405,13 +423,15 @@ data class EngineEvent (
       return true
     }
     val other = other as EngineEvent
-    return MessagesPigeonUtils.deepEquals(this.status, other.status) && MessagesPigeonUtils.deepEquals(this.playWhenReady, other.playWhenReady) && MessagesPigeonUtils.deepEquals(this.index, other.index) && MessagesPigeonUtils.deepEquals(this.itemId, other.itemId) && MessagesPigeonUtils.deepEquals(this.positionMs, other.positionMs) && MessagesPigeonUtils.deepEquals(this.durationMs, other.durationMs) && MessagesPigeonUtils.deepEquals(this.queueLength, other.queueLength) && MessagesPigeonUtils.deepEquals(this.format, other.format) && MessagesPigeonUtils.deepEquals(this.errorMessage, other.errorMessage)
+    return MessagesPigeonUtils.deepEquals(this.queueId, other.queueId) && MessagesPigeonUtils.deepEquals(this.status, other.status) && MessagesPigeonUtils.deepEquals(this.playWhenReady, other.playWhenReady) && MessagesPigeonUtils.deepEquals(this.isPlaying, other.isPlaying) && MessagesPigeonUtils.deepEquals(this.index, other.index) && MessagesPigeonUtils.deepEquals(this.itemId, other.itemId) && MessagesPigeonUtils.deepEquals(this.positionMs, other.positionMs) && MessagesPigeonUtils.deepEquals(this.durationMs, other.durationMs) && MessagesPigeonUtils.deepEquals(this.queueLength, other.queueLength) && MessagesPigeonUtils.deepEquals(this.format, other.format) && MessagesPigeonUtils.deepEquals(this.errorMessage, other.errorMessage)
   }
 
   override fun hashCode(): Int {
     var result = javaClass.hashCode()
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.queueId)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.status)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.playWhenReady)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.isPlaying)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.index)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.itemId)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.positionMs)
@@ -422,7 +442,7 @@ data class EngineEvent (
     return result
   }
   override fun toString(): String {
-    return "EngineEvent(status=$status, playWhenReady=$playWhenReady, index=$index, itemId=$itemId, positionMs=$positionMs, durationMs=$durationMs, queueLength=$queueLength, format=$format, errorMessage=$errorMessage)"
+    return "EngineEvent(queueId=$queueId, status=$status, playWhenReady=$playWhenReady, isPlaying=$isPlaying, index=$index, itemId=$itemId, positionMs=$positionMs, durationMs=$durationMs, queueLength=$queueLength, format=$format, errorMessage=$errorMessage)"
   }
 }
 
@@ -561,16 +581,23 @@ private open class MessagesPigeonCodec : StandardMessageCodec() {
 /** Generated interface from Pigeon that represents a handler of messages from Flutter. */
 interface AudioHostApi {
   /**
-   * Replaces the queue and prepares [startIndex] at [startPositionMs]. The
-   * play intent is kept: if playing, the new queue plays; if paused, it
-   * stays paused. An empty list is [clear].
+   * Replaces the queue with [items], identified by [queueId], and prepares
+   * [startIndex] at [startPositionMs]. The play intent is kept: if playing,
+   * the new queue plays; if paused, it stays paused. An empty list empties
+   * the queue as [clear] does, but keeps [queueId].
    */
-  suspend fun setQueue(items: List<EngineItem>, startIndex: Long, startPositionMs: Long)
-  /** Inserts [items] before [index] (index == length appends). */
+  suspend fun setQueue(queueId: String, items: List<EngineItem>, startIndex: Long, startPositionMs: Long)
+  /**
+   * Inserts [items] before [index] (index == length appends), into the
+   * current queue (its queueId is kept).
+   */
   suspend fun insert(index: Long, items: List<EngineItem>)
   suspend fun remove(index: Long)
   suspend fun move(from: Long, to: Long)
-  /** Empties the queue, stops, and drops the play intent. */
+  /**
+   * Empties the queue, stops, and drops the play intent. The queueId
+   * becomes null.
+   */
   suspend fun clear()
   suspend fun play()
   suspend fun pause()
@@ -601,12 +628,13 @@ interface AudioHostApi {
         if (api != null) {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
-            val itemsArg = args[0] as List<EngineItem>
-            val startIndexArg = args[1] as Long
-            val startPositionMsArg = args[2] as Long
+            val queueIdArg = args[0] as String
+            val itemsArg = args[1] as List<EngineItem>
+            val startIndexArg = args[2] as Long
+            val startPositionMsArg = args[3] as Long
             CoroutineScope(Dispatchers.Main).launch {
               val wrapped: List<Any?> = try {
-                api.setQueue(itemsArg, startIndexArg, startPositionMsArg)
+                api.setQueue(queueIdArg, itemsArg, startIndexArg, startPositionMsArg)
                 listOf(null)
               } catch (exception: Throwable) {
                 MessagesPigeonUtils.wrapError(exception)

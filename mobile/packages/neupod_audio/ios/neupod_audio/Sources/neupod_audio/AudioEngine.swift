@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import AVFoundation
+import QuartzCore
 
 /// The iOS player (decision 0001): one AVAudioEngine with one AVAudioPlayerNode.
 ///
@@ -30,6 +31,9 @@ final class AudioEngine {
   private(set) var errorMessage: String?
   private(set) var currentFile: AVAudioFile?
 
+  /// The id of the setQueue call that made the queue; null after clear().
+  private(set) var queueId: String?
+
   /// The id of the current queue entry (ids are unique within a queue).
   private var currentId: String?
 
@@ -53,33 +57,71 @@ final class AudioEngine {
   /// Position reported while the node is not rendering (paused, loading).
   private var heldPositionMs: Int64 = 0
 
+  /// Where playback was (ms) when rendering last started, and when
+  /// (CACurrentMediaTime). Once the system stops the engine (a route or
+  /// format change) the node has no render time, so the position is
+  /// extrapolated from here instead of falling back to [heldPositionMs].
+  private var anchorMs: Int64 = 0
+  private var anchorTime: CFTimeInterval?
+
+  /// The node's schedule no longer matches the engine (it was stopped by
+  /// the system or an interruption): play must reload from
+  /// [heldPositionMs] rather than just resume the node.
+  private var needsReload = false
+
+  /// The outputs in use when rendering started or the route last changed.
+  private var lastOutputs: Set<AVAudioSession.Port> = []
+
+  private var observers: [NSObjectProtocol] = []
+
+  /// Outputs whose disappearance means "unplugged": pause, never carry on
+  /// out of the speaker.
+  private static let personalOutputs: Set<AVAudioSession.Port> = [
+    .headphones, .bluetoothA2DP, .bluetoothLE, .bluetoothHFP, .usbAudio, .airPlay, .carAudio,
+  ]
+
   init() {
     engine.attach(node)
-    NotificationCenter.default.addObserver(
-      forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
-    ) { [weak self] _ in
-      MainActor.assumeIsolated { self?.engineConfigurationChanged() }
-    }
+    let center = NotificationCenter.default
+    observers.append(
+      center.addObserver(
+        forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
+      ) { [weak self] _ in
+        MainActor.assumeIsolated { self?.engineConfigurationChanged() }
+      })
     let session = AVAudioSession.sharedInstance()
-    NotificationCenter.default.addObserver(
-      forName: AVAudioSession.interruptionNotification, object: session, queue: .main
-    ) { [weak self] note in
-      let began =
-        (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt)
-        .flatMap(AVAudioSession.InterruptionType.init(rawValue:)) == .began
-      MainActor.assumeIsolated { if began { self?.interrupted() } }
-    }
-    NotificationCenter.default.addObserver(
-      forName: AVAudioSession.routeChangeNotification, object: session, queue: .main
-    ) { [weak self] note in
-      let reason =
-        (note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt)
-        .flatMap(AVAudioSession.RouteChangeReason.init(rawValue:))
-      MainActor.assumeIsolated {
-        // Headphones unplugged (the old device went away): pause, as on Android.
-        if reason == .oldDeviceUnavailable { self?.pause() }
-      }
-    }
+    observers.append(
+      center.addObserver(
+        forName: AVAudioSession.interruptionNotification, object: session, queue: .main
+      ) { [weak self] note in
+        let began =
+          (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt)
+          .flatMap(AVAudioSession.InterruptionType.init(rawValue:)) == .began
+        MainActor.assumeIsolated { if began { self?.interrupted() } }
+      })
+    observers.append(
+      center.addObserver(
+        forName: AVAudioSession.routeChangeNotification, object: session, queue: .main
+      ) { [weak self] note in
+        let reason =
+          (note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt)
+          .flatMap(AVAudioSession.RouteChangeReason.init(rawValue:))
+        let previous =
+          (note.userInfo?[AVAudioSessionRouteChangePreviousRouteKey]
+          as? AVAudioSessionRouteDescription)
+          .map { Set($0.outputs.map(\.portType)) } ?? []
+        MainActor.assumeIsolated { self?.routeChanged(reason: reason, previous: previous) }
+      })
+  }
+
+  /// Stops playback and lets go of every system hook (plugin detach).
+  func shutdown() {
+    for observer in observers { NotificationCenter.default.removeObserver(observer) }
+    observers = []
+    onChange = nil
+    flush()
+    engine.stop()
+    deactivateSession()
   }
 
   // MARK: - Queries
@@ -97,15 +139,26 @@ final class AudioEngine {
 
   var isPlaying: Bool { playWhenReady && status == .ready }
 
+  /// Sound is coming out now (not only asked for).
+  var isSounding: Bool { isPlaying && !needsReload && engine.isRunning && node.isPlaying }
+
   var positionMs: Int64 {
-    guard isPlaying, node.isPlaying, let segment = scheduled.first,
+    guard isPlaying else { return heldPositionMs }
+    if engine.isRunning, node.isPlaying, let segment = scheduled.first,
       let renderTime = node.lastRenderTime,
       let playerTime = node.playerTime(forNodeTime: renderTime)
-    else { return heldPositionMs }
-    let played = min(
-      max(playerTime.sampleTime - segment.timelineStart, 0), AVAudioFramePosition(segment.frameCount))
-    let frame = segment.startFrame + played
-    return Int64(Double(frame) * 1000 / segment.file.processingFormat.sampleRate)
+    {
+      let played = min(
+        max(playerTime.sampleTime - segment.timelineStart, 0),
+        AVAudioFramePosition(segment.frameCount))
+      let frame = segment.startFrame + played
+      return Int64(Double(frame) * 1000 / segment.file.processingFormat.sampleRate)
+    }
+    if let anchorTime {
+      let ms = anchorMs + Int64((CACurrentMediaTime() - anchorTime) * 1000)
+      return min(ms, durationMs ?? ms)
+    }
+    return heldPositionMs
   }
 
   var format: EngineFormat? {
@@ -134,12 +187,15 @@ final class AudioEngine {
 
   // MARK: - Queue
 
-  func setQueue(_ newItems: [EngineItem], startIndex: Int, startPositionMs: Int64) {
+  func setQueue(_ newItems: [EngineItem], queueId: String, startIndex: Int, startPositionMs: Int64) {
     items = newItems
     guard !items.isEmpty else {
       clear()
+      self.queueId = queueId
+      notify()
       return
     }
+    self.queueId = queueId
     load(min(max(startIndex, 0), items.count - 1), positionMs: startPositionMs)
   }
 
@@ -160,8 +216,13 @@ final class AudioEngine {
     if removingCurrent, let oldIndex {
       if oldIndex < items.count {
         load(oldIndex, positionMs: 0)
+      } else if let last = items.last {
+        // The current track was the last: end on the new last track.
+        currentId = last.id
+        currentFile = nil
+        clearPlayback(status: .ended)
       } else {
-        clearPlayback(status: items.isEmpty ? .idle : .ended)
+        clearPlayback(status: .idle)
       }
     } else {
       queueChanged()
@@ -176,6 +237,7 @@ final class AudioEngine {
 
   func clear() {
     items = []
+    queueId = nil
     clearPlayback(status: .idle)
   }
 
@@ -188,6 +250,9 @@ final class AudioEngine {
     case .ended, .idle:
       // After the end, play starts the last track again; after an error it retries.
       load(index, positionMs: status == .ended ? 0 : heldPositionMs)
+    case .ready where needsReload:
+      // The engine was stopped under the node: reschedule from where it was.
+      load(index, positionMs: heldPositionMs)
     case .ready:
       startRendering()
       notify()
@@ -200,6 +265,7 @@ final class AudioEngine {
     guard playWhenReady else { return }
     heldPositionMs = positionMs
     playWhenReady = false
+    anchorTime = nil
     node.pause()
     engine.pause()
     notify()
@@ -240,6 +306,8 @@ final class AudioEngine {
     let item = items[index]
     currentId = item.id
     errorMessage = nil
+    needsReload = false
+    anchorTime = nil
     heldPositionMs = max(positionMs, 0)
     let file: AVAudioFile
     do {
@@ -317,6 +385,7 @@ final class AudioEngine {
       currentId = next.id
       currentFile = next.file
       heldPositionMs = 0
+      setAnchor(0)
       scheduleNext()
       notify()
     } else if let index, index + 1 < items.count {
@@ -324,9 +393,11 @@ final class AudioEngine {
       load(index + 1, positionMs: 0)
     } else {
       heldPositionMs = durationMs ?? heldPositionMs
+      anchorTime = nil
       status = .ended
       node.stop()
-      engine.pause()
+      engine.stop()
+      deactivateSession()
       notify()
     }
   }
@@ -359,6 +430,9 @@ final class AudioEngine {
   private func clearPlayback(status: EngineStatus) {
     flush()
     engine.stop()
+    deactivateSession()
+    anchorTime = nil
+    needsReload = false
     currentId = status == .idle ? nil : currentId
     currentFile = status == .idle ? nil : currentFile
     heldPositionMs = status == .idle ? 0 : (durationMs ?? 0)
@@ -392,6 +466,8 @@ final class AudioEngine {
         try engine.start()
       }
       node.play()
+      setAnchor(heldPositionMs)
+      lastOutputs = Set(AVAudioSession.sharedInstance().currentRoute.outputs.map(\.portType))
     } catch {
       playWhenReady = false
       errorMessage = "Audio output unavailable: \(error.localizedDescription)"
@@ -410,22 +486,77 @@ final class AudioEngine {
     try session.setActive(true)
   }
 
+  /// Lets other apps' audio resume once the queue is cleared or has ended.
+  private func deactivateSession() {
+    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+  }
+
+  private func setAnchor(_ ms: Int64) {
+    anchorMs = ms
+    anchorTime = CACurrentMediaTime()
+  }
+
   // MARK: - System events
 
   /// The engine stops itself when the route or the hardware format changes;
   /// reschedule from where it was (decision 0001, risks).
+  ///
+  /// Unplugging headphones posts both a route change and a configuration
+  /// change, in either order. So: if a personal output (headphones,
+  /// Bluetooth, USB, AirPlay, car) in use has gone, pause; otherwise restart
+  /// one run-loop turn later, unless the route change paused meanwhile.
   private func engineConfigurationChanged() {
-    guard let index, status == .ready else { return }
-    let position = positionMs
+    guard status == .ready, index != nil else { return }
+    heldPositionMs = positionMs
+    anchorTime = nil
     connectedFormat = nil
-    load(index, positionMs: position)
+    needsReload = true
+    let now = Set(AVAudioSession.sharedInstance().currentRoute.outputs.map(\.portType))
+    let lost = lastOutputs.subtracting(now)
+    lastOutputs = now
+    if playWhenReady, !lost.isDisjoint(with: Self.personalOutputs) {
+      playWhenReady = false
+      notify()
+      return
+    }
+    notify()
+    DispatchQueue.main.async { [weak self] in
+      MainActor.assumeIsolated {
+        guard let self, self.needsReload, self.playWhenReady, self.status == .ready,
+          let index = self.index
+        else { return }
+        self.load(index, positionMs: self.heldPositionMs)
+      }
+    }
   }
 
-  /// A call or another app's audio. Resuming after it ends is phase 4.
+  /// Headphones unplugged (a personal output went away): pause, as Android
+  /// does on becoming noisy. Other route changes need nothing here; the
+  /// engine's configuration change handles a restart.
+  private func routeChanged(reason: AVAudioSession.RouteChangeReason?, previous: Set<AVAudioSession.Port>) {
+    let now = Set(AVAudioSession.sharedInstance().currentRoute.outputs.map(\.portType))
+    defer { lastOutputs = now }
+    guard reason == .oldDeviceUnavailable, playWhenReady,
+      !previous.subtracting(now).isDisjoint(with: Self.personalOutputs)
+    else { return }
+    heldPositionMs = positionMs
+    anchorTime = nil
+    playWhenReady = false
+    needsReload = true
+    node.pause()
+    if engine.isRunning { engine.pause() }
+    notify()
+  }
+
+  /// A call or another app's audio. The system has stopped the engine, so
+  /// the next play reloads from here. Resuming on its own when the
+  /// interruption ends is phase 4.
   private func interrupted() {
     guard playWhenReady else { return }
     heldPositionMs = positionMs
+    anchorTime = nil
     playWhenReady = false
+    needsReload = true
     node.pause()
     notify()
   }
