@@ -12,11 +12,14 @@ import 'package:neupod/ui/features/songs/songs_providers.dart';
 
 /// The library the browsing screens show: the scanned drift database.
 ///
-/// A scan starting or finishing rebuilds it, and with it every provider that
-/// read the library (song count, cover previews, the search index, the
-/// playing album), so lists never keep what a finished scan has changed.
+/// A scan finishing rebuilds it, and with it every provider that read the
+/// library (song count, cover previews, the search index, the playing
+/// album), so lists never keep what a finished scan has changed. A scan
+/// starting does not: what was there stays until the new one is done.
 final libraryViewProvider = FutureProvider<LibraryView>((ref) async {
-  ref.watch(scanProvider.select((s) => s?.done ?? false));
+  ref.listen(scanProvider.select((s) => s?.done ?? false), (was, now) {
+    if (was == false && now) ref.invalidateSelf();
+  });
   final view = DriftLibraryView(ref.watch(libraryDatabaseProvider));
   ref.onDispose(view.dispose);
   return view;

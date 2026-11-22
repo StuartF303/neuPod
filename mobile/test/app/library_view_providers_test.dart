@@ -6,6 +6,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neupod/app/library_view_providers.dart';
 import 'package:neupod/app/providers.dart';
 import 'package:neupod/data/db/library_database.dart';
 import 'package:neupod/domain/library/library_ports.dart';
@@ -59,6 +60,38 @@ void main() {
       search = await container.read(searchFunctionProvider.future);
       expect(search('tern').artists, hasLength(1));
       expect(search('salt').songs, hasLength(1));
+    },
+  );
+
+  test(
+    'the library is rebuilt when a scan finishes, not when one starts',
+    () async {
+      final db = LibraryDatabase(NativeDatabase.memory());
+      addTearDown(db.close);
+      final container = ProviderContainer.test(
+        overrides: [
+          libraryDatabaseProvider.overrideWithValue(db),
+          scanProvider.overrideWith(_FakeScan.new),
+        ],
+      );
+      final scan = container.read(scanProvider.notifier) as _FakeScan;
+      container.listen(libraryViewProvider, (_, _) {});
+
+      final before = await container.read(libraryViewProvider.future);
+      scan.say(const ScanProgress(done: true));
+      final finished = await container.read(libraryViewProvider.future);
+      expect(finished, isNot(same(before)));
+
+      scan.say(const ScanProgress(filesFound: 3));
+      expect(await container.read(libraryViewProvider.future), same(finished));
+      scan.say(const ScanProgress(filesFound: 3, filesRead: 1));
+      expect(await container.read(libraryViewProvider.future), same(finished));
+
+      scan.say(const ScanProgress(filesFound: 3, filesRead: 3, done: true));
+      expect(
+        await container.read(libraryViewProvider.future),
+        isNot(same(finished)),
+      );
     },
   );
 }

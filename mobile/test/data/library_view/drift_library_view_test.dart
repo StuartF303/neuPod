@@ -9,12 +9,17 @@
 //   "Unknown Artist"; its album is the tag or the leaf (the containing
 //   folder's name); the album artist is the album artist tag or the artist.
 //   ADR 0017 D5 rejects "Unknown Album".
-// - lib_build.c:185-226 (`key_tie`, `ent_cmp`, `key_cmp`, `alb_cmp`): equal
-//   collation keys fall back to scan order (the id); an album's tracks sort
-//   by disc<<16|track (an untagged 0 first), then the key, then the id.
+// - lib_build.c:185-226 (`key_tie`, `ent_cmp`, `key_cmp`, `alb_cmp`): songs
+//   with equal collation keys fall back to scan order (the id); an album's
+//   tracks sort by disc<<16|track (an untagged 0 first), then the key, then
+//   the id.
+// - lib_build.c:742-807 (`stage_entity`): artists and albums with equal
+//   whole keys are folded into one row named after the first in scan order;
+//   an album's group is its artist's entity id (709-720).
 // - lib_build.c `cut()` / POOL_STR: a title is stored cut to 64 bytes, so
 //   the key is built from at most 63 bytes of it.
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/data/db/library_database.dart';
@@ -146,14 +151,18 @@ void main() {
     ]);
   });
 
-  test('equal keys keep scan order, whichever came first', () async {
-    // "Ångström" and "Angstrom" fold to the same key.
+  test('equal keys: songs keep both in scan order, entities fold into one '
+      'named by the first', () async {
+    // "Ångström" and "Angstrom" fold to the same key. Songs are rows of
+    // their own (`key_cmp`, lib_build.c:209-215: key, then the id); artists
+    // and albums are one row each, named after the run's first entry in scan
+    // order (`ent_cmp` 205-207, folded at 778, named at 781).
     expect(collateKey('Ångström'), collateKey('Angstrom'));
     await add('Ångström', artist: 'Ångström', album: 'Ångström');
     await add('Angstrom', artist: 'Angstrom', album: 'Angstrom');
     expect((await view.songs()).map((s) => s.title), ['Ångström', 'Angstrom']);
-    expect((await view.artists()).map((a) => a.name), ['Ångström', 'Angstrom']);
-    expect((await view.albums()).map((a) => a.title), ['Ångström', 'Angstrom']);
+    expect((await view.artists()).map((a) => a.name), ['Ångström']);
+    expect((await view.albums()).map((a) => a.title), ['Ångström']);
 
     final other = LibraryDatabase(NativeDatabase.memory());
     addTearDown(other.close);
@@ -171,8 +180,145 @@ void main() {
     final v2 = DriftLibraryView(other);
     addTearDown(v2.dispose);
     expect((await v2.songs()).map((s) => s.title), ['Angstrom', 'Ångström']);
-    expect((await v2.artists()).map((a) => a.name), ['Angstrom', 'Ångström']);
-    expect((await v2.albums()).map((a) => a.title), ['Angstrom', 'Ångström']);
+    expect((await v2.artists()).map((a) => a.name), ['Angstrom']);
+    expect((await v2.albums()).map((a) => a.title), ['Angstrom']);
+    final album = (await v2.albums()).single;
+    expect(album.songCount, 2);
+    expect((await v2.artists()).single.songCount, 2);
+  });
+
+  // The expected lists below are what the firmware's own builder prints for
+  // the same tracks in the same walk order: lib_build() + lib_list_row() on a
+  // FatFs image, by scripts/app/library_entities.c.
+  test('names folding to one key are one artist and one album, as the '
+      'firmware builds them', () async {
+    final l = 'L' * 63;
+    for (final (path, title, artist, album, no) in [
+      ('a/01.flac', 'Come Together', 'The Beatles', 'Abbey Road', 1),
+      ('a/02.flac', 'Something', 'Beatles', 'abbey road', 2),
+      ('b/01.flac', 'Back in Black', 'AC/DC', 'Back in Black', 1),
+      ('b/02.flac', 'Hells Bells', 'Ac/Dc', 'Back In Black', 2),
+      ('c/01.flac', 'Lumen', 'Ångström', 'Greatest Hits', 1),
+      ('c/02.flac', 'Nadir', 'Angstrom', 'Greatest Hits', 2),
+      ('d/01.flac', 'Zinc', 'Zed', 'Greatest Hits', 1),
+      ('e/01.flac', 'Waterloo', 'Abba', 'Greatest Hits', 1),
+      // Tag text is held in 63 bytes (meta.h `char artist[64]`): these two
+      // differ only after that, so the firmware sees one artist.
+      ('f/01.flac', 'Long A', '${l}x', 'Long', 1),
+      ('f/02.flac', 'Long B', '${l}y', 'Long', 2),
+      ('g/01.flac', 'Help', 'BEATLES', 'Help!', 1),
+    ]) {
+      await add(title, path: path, artist: artist, album: album, trackNo: no);
+    }
+
+    final artists = await view.artists();
+    expect(artists.map((a) => a.name), [
+      'Abba',
+      'AC/DC',
+      'Ångström',
+      'The Beatles',
+      '${l}x', // (the firmware shows it cut at 63 bytes; the app the whole)
+      'Zed',
+    ]);
+    expect(artists.map((a) => a.albumCount), [1, 1, 1, 2, 1, 1]);
+    expect(artists[3].songCount, 3);
+
+    // Equal titles in artist order: key_cmp's last key is the album id, the
+    // place in the (artist, album) table (lib_build.c:797-801, 1039-1041).
+    final albums = await view.albums();
+    expect(albums.map((a) => (a.title, a.artist, a.songCount)), [
+      ('Abbey Road', 'The Beatles', 2),
+      ('Back in Black', 'AC/DC', 2),
+      ('Greatest Hits', 'Abba', 1),
+      ('Greatest Hits', 'Ångström', 2),
+      ('Greatest Hits', 'Zed', 1),
+      ('Help!', 'The Beatles', 1),
+      ('Long', '${l}x', 2),
+    ]);
+    // The album table itself: (artist id, album key).
+    expect((await view.albumsForCoverFlow()).map((a) => (a.title, a.artist)), [
+      ('Greatest Hits', 'Abba'),
+      ('Back in Black', 'AC/DC'),
+      ('Greatest Hits', 'Ångström'),
+      ('Abbey Road', 'The Beatles'),
+      ('Help!', 'The Beatles'),
+      ('Long', '${l}x'),
+      ('Greatest Hits', 'Zed'),
+    ]);
+
+    // A song row: its own artist text, its merged album's name
+    // (lib_reader.c lib_list_row; lib_view.c:183-187).
+    final songs = await view.songs();
+    expect(songs.map((s) => (s.title, s.artist, s.album)), [
+      ('Back in Black', 'AC/DC', 'Back in Black'),
+      ('Come Together', 'The Beatles', 'Abbey Road'),
+      ('Hells Bells', 'Ac/Dc', 'Back in Black'),
+      ('Help', 'BEATLES', 'Help!'),
+      ('Long A', '${l}x', 'Long'),
+      ('Long B', '${l}y', 'Long'),
+      ('Lumen', 'Ångström', 'Greatest Hits'),
+      ('Nadir', 'Angstrom', 'Greatest Hits'),
+      ('Something', 'Beatles', 'Abbey Road'),
+      ('Waterloo', 'Abba', 'Greatest Hits'),
+      ('Zinc', 'Zed', 'Greatest Hits'),
+    ]);
+
+    // The merged entities hold every song, and a song's album is its
+    // merged album.
+    final beatles = artists[3];
+    expect((await view.albumsOfArtist(beatles.id)).map((a) => a.title), [
+      'Abbey Road',
+      'Help!',
+    ]);
+    expect((await view.songsOfArtist(beatles.id)).map((s) => s.title), [
+      'Come Together',
+      'Something',
+      'Help',
+    ]);
+    final abbey = albums.first;
+    expect(abbey.artistId, beatles.id);
+    expect((await view.album(abbey.id))!.songs.map((s) => s.title), [
+      'Come Together',
+      'Something',
+    ]);
+    final something = songs.firstWhere((s) => s.title == 'Something');
+    expect(something.albumId, abbey.id);
+  });
+
+  test('a load in flight when the database changes is not kept', () async {
+    await add('One', artist: 'A', album: 'X');
+    final first = view.songs();
+    await add('Two', artist: 'A', album: 'X');
+    await first; // whatever it read
+    await Future<void>.delayed(Duration.zero);
+    expect(await view.songs(), hasLength(2));
+  });
+
+  test('a failed load is not kept', () async {
+    await add('One', artist: 'A', album: 'X');
+    await db.customStatement('ALTER TABLE tracks RENAME TO tracks_away');
+    await expectLater(view.songs(), throwsA(anything));
+    await db.customStatement('ALTER TABLE tracks_away RENAME TO tracks');
+    expect(await view.songs(), hasLength(1));
+  });
+
+  test('a change to the sources is seen too', () async {
+    await add('Rooted', path: 'Rooted.flac');
+    expect((await view.songs()).single.album, 'Music');
+    await (db.update(db.sources)..where((s) => s.id.equals(src))).write(
+      const SourcesCompanion(displayName: Value('Tunes')),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect((await view.songs()).single.album, 'Tunes');
+  });
+
+  test('after dispose every call reads the database again', () async {
+    await add('One', artist: 'A', album: 'X');
+    expect(await view.songs(), hasLength(1));
+    await view.dispose();
+    await add('Two', artist: 'A', album: 'X');
+    expect(await view.songs(), hasLength(2));
+    await view.dispose(); // twice is harmless
   });
 
   test('titles are stored cut at 63 bytes: the rest does not order', () async {
