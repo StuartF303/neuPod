@@ -14,6 +14,9 @@ analyzer:
     - ios/**
     # Generated code (drift's part files); the sources they come from are analysed.
     - "**/*.g.dart"
+    # Pigeon API definitions: analysed in their own package, where pigeon is a dev
+    # dependency (it is not one of the app's).
+    - "packages/*/pigeon/**"
 
 linter:
   rules:
