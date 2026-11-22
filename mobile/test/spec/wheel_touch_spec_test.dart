@@ -23,8 +23,8 @@
 //   degrees) are one list step. Clockwise is positive.
 // - The first touch that lands on the wheel owns it until it lifts.
 // - Holds: Previous and Next after 600 ms (scan); the centre on Now Playing
-//   after 500 ms (seek mode); nothing for Menu, Play/Pause or the centre
-//   elsewhere in R1.
+//   after 500 ms (seek mode); nothing for Play/Pause or the centre
+//   elsewhere in R1 (Menu: see the holds group).
 //
 // Coordinates in this suite are points relative to the wheel's centre, x to
 // the right and y down (screen coordinates), so clockwise on screen is an
@@ -580,17 +580,15 @@ void main() {
         expect(w.tick(3000), isEmpty);
       });
 
-      for (final (deg, button) in [
-        (0.0, WheelButton.menu),
-        (180.0, WheelButton.playPause),
-      ]) {
-        test('${button.name} has no hold', () {
-          final w = _touch();
-          final (x, y) = _at(80, deg);
-          w.down(1, x, y, 0);
-          expect(w.tick(3000), isEmpty);
-        });
-      }
+      // Menu held is not asserted: the device view says "nothing in R1",
+      // but Search by the wheel (design PR #107) clears the field on a held
+      // Menu. Open question for the owner.
+      test('playPause has no hold', () {
+        final w = _touch();
+        final (x, y) = _at(80, 180);
+        w.down(1, x, y, 0);
+        expect(w.tick(3000), isEmpty);
+      });
     });
   });
 }
