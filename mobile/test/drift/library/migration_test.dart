@@ -97,6 +97,55 @@ void main() {
         reason: '$table was changed by a refused downgrade',
       );
     }
+    expect(_userVersion(schema.rawDatabase), _versions.last + 1);
+  });
+
+  group('a failed upgrade rolls back as one transaction', () {
+    // A database at the current version, opened by a build that claims the
+    // next one, with steps that change things and then fail.
+    Future<void> expectRolledBack(
+      Future<void> Function(GeneratedDatabase db) steps,
+    ) async {
+      final current = _versions.last;
+      final schema = await verifier.schemaAt(current);
+      final before = _fillEveryTable(schema.rawDatabase, current);
+      String schemaSql() => schema.rawDatabase
+          .select('SELECT sql FROM sqlite_schema ORDER BY name')
+          .map((r) => r['sql'])
+          .join('\n');
+      final schemaBefore = schemaSql();
+
+      final db = LibraryDatabase.withStepsForTesting(
+        schema.newConnection(),
+        schemaVersion: current + 1,
+        steps: (m, from, to) => steps(m.database),
+      );
+      await expectLater(db.customSelect('SELECT 1').get(), throwsA(anything));
+      await db.close();
+
+      expect(schemaSql(), schemaBefore);
+      expect(_userVersion(schema.rawDatabase), current);
+      for (final MapEntry(key: table, value: row) in before.entries) {
+        final rows = schema.rawDatabase.select('SELECT * FROM "$table"');
+        expect(rows, hasLength(1), reason: table);
+        expect(rows.single.values, row.values.toList(), reason: table);
+      }
+    }
+
+    test('a step that throws part-way', () async {
+      await expectRolledBack((db) async {
+        await db.customStatement('CREATE TABLE ratings (track_id INTEGER)');
+        await db.customStatement('ALTER TABLE tracks ADD COLUMN extra TEXT');
+        await db.customStatement('DELETE FROM tracks');
+        throw StateError('step 2 failed');
+      });
+    });
+
+    test('a step that breaks a foreign key', () async {
+      await expectRolledBack((db) async {
+        await db.customStatement('DELETE FROM sources');
+      });
+    });
   });
 }
 
@@ -132,26 +181,60 @@ Future<void> _expectRowsKept(SchemaVerifier verifier, int from, int to) async {
 }
 
 /// Inserts one row into every table of the raw database, with a value of the
-/// declared type in every column (integers are 1, so foreign keys point at
-/// the row of the parent table), and returns what was written.
+/// declared type in every column, and returns what was written. Tables are
+/// filled parents first (by their foreign keys), and a foreign key column
+/// gets the value of the column it references in the parent's row, so every
+/// row is valid with foreign keys on (they are on while filling, and checked
+/// after).
 Map<String, Map<String, Object?>> _fillEveryTable(sql.Database raw, int v) {
+  final names = [
+    for (final t in raw.select(
+      "SELECT name FROM sqlite_schema WHERE type = 'table' "
+      "AND name NOT LIKE 'sqlite_%' ORDER BY name",
+    ))
+      t['name'] as String,
+  ];
+  // Per table: child column -> (parent table, parent column).
+  final refs = <String, Map<String, (String, String)>>{
+    for (final table in names)
+      table: {
+        for (final fk in raw.select('PRAGMA foreign_key_list("$table")'))
+          fk['from'] as String: (fk['table'] as String, fk['to'] as String),
+      },
+  };
+  final order = <String>[];
+  void visit(String table, Set<String> path) {
+    if (order.contains(table)) return;
+    if (!path.add(table)) {
+      throw StateError('foreign key cycle through $table: fill it by hand');
+    }
+    for (final (parent, _) in refs[table]!.values) {
+      if (parent != table) visit(parent, path);
+    }
+    path.remove(table);
+    order.add(table);
+  }
+
+  for (final table in names) {
+    visit(table, {});
+  }
+
+  raw.execute('PRAGMA foreign_keys = ON');
   final written = <String, Map<String, Object?>>{};
-  final tables = raw.select(
-    "SELECT name FROM sqlite_schema WHERE type = 'table' "
-    "AND name NOT LIKE 'sqlite_%' ORDER BY name",
-  );
-  for (final t in tables) {
-    final table = t['name'] as String;
+  for (final table in order) {
     final row = <String, Object?>{};
     for (final c in raw.select('PRAGMA table_info("$table")')) {
       final type = (c['type'] as String).toUpperCase();
       final name = c['name'] as String;
-      row[name] = switch (type) {
-        'INTEGER' => 1,
-        'REAL' => 1.5,
-        'BLOB' => Uint8List.fromList([v, 0xC1, 0xFF]),
-        _ => 'v$v $table.$name',
-      };
+      final ref = refs[table]![name];
+      row[name] = ref != null && ref.$1 != table
+          ? written[ref.$1]![ref.$2]
+          : switch (type) {
+              'INTEGER' => 1,
+              'REAL' => 1.5,
+              'BLOB' => Uint8List.fromList([v, 0xC1, 0xFF]),
+              _ => 'v$v $table.$name',
+            };
     }
     final columns = row.keys.map((c) => '"$c"').join(', ');
     final marks = List.filled(row.length, '?').join(', ');
@@ -161,5 +244,10 @@ Map<String, Map<String, Object?>> _fillEveryTable(sql.Database raw, int v) {
     );
     written[table] = row;
   }
+  expect(raw.select('PRAGMA foreign_key_check'), isEmpty);
+  raw.execute('PRAGMA foreign_keys = OFF');
   return written;
 }
+
+int _userVersion(sql.Database raw) =>
+    raw.select('PRAGMA user_version').single.values.single as int;

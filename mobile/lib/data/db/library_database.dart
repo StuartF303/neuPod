@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:neupod/data/db/library_database.steps.dart';
 
 part 'library_database.g.dart';
@@ -65,7 +66,20 @@ class Tracks extends Table {
 
 @DriftDatabase(tables: [Sources, Tracks])
 class LibraryDatabase extends _$LibraryDatabase {
-  LibraryDatabase(super.e);
+  LibraryDatabase(super.e) : _testVersion = null, _testSteps = null;
+
+  /// Tests only: a database that claims [schemaVersion] and upgrades with
+  /// [steps] in place of the real ones, to check what a failing step leaves.
+  @visibleForTesting
+  LibraryDatabase.withStepsForTesting(
+    super.e, {
+    required int schemaVersion,
+    required OnUpgrade steps,
+  }) : _testVersion = schemaVersion,
+       _testSteps = steps;
+
+  final int? _testVersion;
+  final OnUpgrade? _testSteps;
 
   /// Migrations are stepwise and tested (decision 0008). Version 1 is the
   /// baseline. To change a table: bump this, run
@@ -74,7 +88,7 @@ class LibraryDatabase extends _$LibraryDatabase {
   /// test helpers in test/drift/library/generated/), then add the step to
   /// [_upgrade] and run `dart run build_runner build`.
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => _testVersion ?? 1;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -85,14 +99,25 @@ class LibraryDatabase extends _$LibraryDatabase {
       // recreate: the database will hold data a rescan cannot rebuild
       // (ratings, play counts, playlists). A downgrade (a database from a
       // newer build) throws a StateError instead of being changed.
-      await _upgrade(m, from, to);
-      final broken = await customSelect('PRAGMA foreign_key_check').get();
-      if (broken.isNotEmpty) {
-        throw StateError(
-          'migration $from to $to broke foreign keys: '
-          '${broken.map((r) => r.data).toList()}',
-        );
-      }
+      //
+      // drift does not wrap onUpgrade in a transaction, and writes
+      // user_version only after beforeOpen succeeds. So every step and the
+      // foreign key check run in one transaction: if any of them throws, the
+      // whole upgrade rolls back, user_version is unchanged, and the next
+      // launch starts again from the old schema. Foreign keys are turned off
+      // before it (the pragma is a no-op inside a transaction), as in drift's
+      // documented pattern; beforeOpen turns them back on.
+      await customStatement('PRAGMA foreign_keys = OFF');
+      await transaction(() async {
+        await (_testSteps ?? _upgrade)(m, from, to);
+        final broken = await customSelect('PRAGMA foreign_key_check').get();
+        if (broken.isNotEmpty) {
+          throw StateError(
+            'migration $from to $to broke foreign keys: '
+            '${broken.map((r) => r.data).toList()}',
+          );
+        }
+      });
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');

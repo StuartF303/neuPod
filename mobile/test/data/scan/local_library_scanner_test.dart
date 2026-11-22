@@ -33,9 +33,13 @@ class DirApi extends NeupodStorageApi {
   /// as when a subfolder cannot be listed or a drive goes away.
   String? unreadablePrefix;
 
+  /// Entries per page; null serves the whole walk as one page.
+  int? pageSize;
+
   /// The platform loses the root mid-walk (a grant revoked, a drive pulled):
-  /// the next page fails, as `root-unavailable`.
-  bool loseRootMidWalk = false;
+  /// after this many pages the next one fails, as `root-unavailable`.
+  int? loseRootAfterPages;
+  final Map<String, int> _served = {};
 
   @override
   Future<String> startWalk(String rootId) async {
@@ -59,6 +63,7 @@ class DirApi extends NeupodStorageApi {
         ),
       );
     }
+    entries.sort((a, b) => a.relPath.compareTo(b.relPath));
     final id = 'w${_n++}';
     _walks[id] = entries;
     return id;
@@ -66,12 +71,24 @@ class DirApi extends NeupodStorageApi {
 
   @override
   Future<WalkBatch> nextWalkBatch(String walkId, int maxEntries) async {
-    final all = _walks.remove(walkId)!;
-    if (loseRootMidWalk) throw PlatformException(code: 'root-unavailable');
+    final served = _served[walkId] ?? 0;
+    if (loseRootAfterPages != null && served >= loseRootAfterPages!) {
+      _walks.remove(walkId);
+      throw PlatformException(code: 'root-unavailable');
+    }
+    _served[walkId] = served + 1;
+    final rest = _walks[walkId]!;
+    final n = pageSize == null || pageSize! > rest.length
+        ? rest.length
+        : pageSize!;
+    final page = rest.sublist(0, n);
+    rest.removeRange(0, n);
+    final done = rest.isEmpty;
+    if (done) _walks.remove(walkId);
     return WalkBatch(
-      entries: all,
-      done: true,
-      complete: unreadablePrefix == null,
+      entries: page,
+      done: done,
+      complete: done && unreadablePrefix == null,
     );
   }
 
@@ -120,6 +137,19 @@ class FailingReader implements StorageReader {
   void close() => closed = true;
 }
 
+/// Readers that lose access part-way, as `open-failed` (transient). Top
+/// level so the scanner can send it to its isolate.
+StorageReader accessLostOpener(ReaderHandle h) {
+  h.discard();
+  return FailingReader(StorageException('open-failed', 'provider went away'));
+}
+
+/// Readers whose provider can never serve the file (`unsupported`).
+StorageReader unsupportedOpener(ReaderHandle h) {
+  h.discard();
+  return FailingReader(StorageException('unsupported'));
+}
+
 Future<R> failingIsolate<R>(R Function() computation) =>
     Future.error(IsolateSpawnException('no isolate'));
 
@@ -154,6 +184,7 @@ void main() {
     IsolateRunner? runIsolate,
     int version = scanVersion,
     DirApi? api,
+    ReaderOpener? openReader,
   }) {
     api ??= DirApi({'m': Directory('${tmp.path}/music')});
     final storage = CountingStorage(api);
@@ -163,6 +194,7 @@ void main() {
       db: db,
       runIsolate: runIsolate,
       version: version,
+      openReader: openReader,
     );
     return (api, storage, scanner);
   }
@@ -498,22 +530,27 @@ void main() {
       () async {
         put('a.flac', flac(['TITLE=A']));
         put('b.flac', flac(['TITLE=B']));
+        put('c.flac', flac(['TITLE=C']));
         final (api, storage, scanner) = setUpScanner();
+        api.pageSize = 1; // pages: a, b, c
         await scanner.scan().drain<void>();
 
-        api.loseRootMidWalk = true;
-        retag('a.flac', 'A2');
-        File('${tmp.path}/music/b.flac').deleteSync();
+        retag('a.flac', 'A2'); // on the page served before access goes
+        retag('b.flac', 'B2'); // on the page that never comes
+        File('${tmp.path}/music/c.flac').deleteSync();
+        api.loseRootAfterPages = 1;
         storage.opened.clear();
         final progress = await scanner.scan().toList();
         expect(progress.last.done, isTrue); // the scan itself finishes
-        expect(storage.opened, isEmpty);
-        expect((await tracks()).map((t) => t.title), ['A', 'B']);
+        expect(storage.opened, ['a.flac']); // read from the first page
+        // That read is stored; b keeps its old tags; c is not deleted.
+        expect((await tracks()).map((t) => t.title), ['A2', 'B', 'C']);
 
-        api.loseRootMidWalk = false;
+        api.loseRootAfterPages = null;
+        storage.opened.clear();
         await scanner.scan().drain<void>();
-        expect(storage.opened, ['a.flac']);
-        expect((await tracks()).map((t) => t.title), ['A2']);
+        expect(storage.opened, ['b.flac']);
+        expect((await tracks()).map((t) => t.title), ['A2', 'B2']);
       },
     );
 
@@ -574,6 +611,74 @@ void main() {
         readWithReader(() => FailingReader(StateError('odd')), 'flac').$2,
         UnreadableReason.damaged,
       );
+    });
+
+    test('StorageException codes: lasting, not downloaded, or transient', () {
+      UnreadableReason read(String code) => readWithReader(
+        () => FailingReader(StorageException(code)),
+        'flac',
+      ).$2!;
+      expect(read('unsupported'), UnreadableReason.damaged);
+      expect(read('unsupported').transient, isFalse);
+      expect(read('not-downloaded'), UnreadableReason.notDownloaded);
+      for (final code in [
+        'open-failed',
+        'detached',
+        'root-unavailable',
+        'busy',
+        'channel-error',
+        'some-new-code',
+      ]) {
+        expect(read(code), UnreadableReason.cannotRead, reason: code);
+      }
+      expect(
+        storageReason(StorageException('open-failed'), opening: true),
+        UnreadableReason.cannotOpen,
+      );
+      expect(
+        storageReason(StorageException('unsupported'), opening: true),
+        UnreadableReason.damaged,
+      );
+    });
+  });
+
+  group('a StorageException in the scan', () {
+    test('a transient one keeps the stored tags and is retried', () async {
+      put('a.flac', flac(['TITLE=Kept', 'ARTIST=Band']));
+      final (_, _, first) = setUpScanner();
+      await first.scan().drain<void>();
+
+      // The file changes, but its reads now lose access part-way.
+      put(
+        'a.flac',
+        flac(['TITLE=New', 'ARTIST=Band']),
+      ).setLastModifiedSync(DateTime(2021));
+      final (api, lost, failing) = setUpScanner(openReader: accessLostOpener);
+      await failing.scan().drain<void>();
+      expect(lost.opened, ['a.flac']);
+      var t = (await tracks()).single;
+      expect((t.title, t.artist), ('Kept', 'Band'));
+      expect(t.unreadableReason, UnreadableReason.cannotRead);
+
+      // Retried on the next scan, and read this time.
+      final (_, storage, scanner) = setUpScanner(api: api);
+      await scanner.scan().drain<void>();
+      expect(storage.opened, ['a.flac']);
+      t = (await tracks()).single;
+      expect((t.title, t.unreadableReason), ('New', null));
+    });
+
+    test('a lasting one is stored and not retried', () async {
+      put('a.flac', flac(['TITLE=A']));
+      final (api, _, failing) = setUpScanner(openReader: unsupportedOpener);
+      await failing.scan().drain<void>();
+      expect(
+        (await tracks()).single.unreadableReason,
+        UnreadableReason.damaged,
+      );
+      final (_, storage, scanner) = setUpScanner(api: api);
+      await scanner.scan().drain<void>();
+      expect(storage.opened, isEmpty);
     });
   });
 
