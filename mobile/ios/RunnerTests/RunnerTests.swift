@@ -1,13 +1,17 @@
-import Flutter
-import Testing
-import UIKit
+// SPDX-License-Identifier: MPL-2.0
 
-struct RunnerTests {
+import XCTest
+import integration_test
 
-  func testExample() {
-    // If you add code to the Runner application, consider adding tests here.
-    // See https://developer.apple.com/xcode/swift-testing/ for more information about using
-    // Swift Testing.
+// Runs the Dart integration test the app was built with (flutter build ios --config-only <file>) and reports each
+// Dart test as an XCTest assertion, so `xcodebuild test` passes or fails with the Dart tests.
+final class RunnerTests: XCTestCase {
+  func testIntegrationTests() {
+    var results = 0
+    FLTIntegrationTestRunner().testIntegrationTest { testSelector, success, failureMessage in
+      results += 1
+      XCTAssertTrue(success, "\(NSStringFromSelector(testSelector)): \(failureMessage ?? "failed")")
+    }
+    XCTAssertGreaterThan(results, 0, "the Dart integration test reported no results")
   }
-
 }
