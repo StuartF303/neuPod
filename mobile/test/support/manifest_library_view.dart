@@ -258,7 +258,7 @@ final class ManifestLibraryView implements LibraryView {
     });
 
   @override
-  Future<List<Album>> albumsForCoverFlow() async => _all..sort(_byArtistYear);
+  Future<List<Album>> albumsByArtist() async => _all..sort(_byArtistYear);
 
   @override
   Future<AlbumDetail?> album(String albumId) async {

@@ -5,7 +5,8 @@
 // its artist only when the album has one (`en.artist != LIB_NONE`), so the
 // Albums and Compilations lists (`lvw_row`, lib_view.c) and the Cover Flow
 // caption (`flow_texts`, ui_library.c) have none for a compilation, while
-// `album_header` (lib_view.c) writes "Various Artists".
+// `album_header` (lib_view.c) writes "Various Artists". Cover Flow's caption
+// is tested in cover_flow_test.dart.
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,7 +16,6 @@ import 'package:neupod/ui/screens/browse/albums_screen.dart';
 import 'package:neupod/ui/screens/browse/browse_common.dart';
 import 'package:neupod/ui/screens/browse/collection_screen.dart';
 import 'package:neupod/ui/screens/browse/compilations_screen.dart';
-import 'package:neupod/ui/screens/browse/cover_flow_screen.dart';
 
 import 'screens_harness.dart';
 
@@ -77,7 +77,6 @@ void main() {
         const Genre(id: 'g', name: 'Pop', albumCount: 2, songCount: 3),
       ),
     ),
-    ('Cover Flow', const CoverFlowScreen()),
   ]) {
     testWidgets('$name: a compilation shows no artist', (tester) async {
       await pumpShell(tester, home: (_) => screen, library: _Library());
@@ -111,14 +110,10 @@ void main() {
   });
 }
 
-/// A library of one compilation (first, as Cover Flow shows it) and one
-/// ordinary album.
+/// A library of one compilation and one ordinary album.
 class _Library implements LibraryView {
   @override
   Future<List<Album>> albums() async => [_abba, _comp];
-
-  @override
-  Future<List<Album>> albumsForCoverFlow() async => [_comp, _abba];
 
   @override
   Future<List<Album>> compilations() async => [_comp];
