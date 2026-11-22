@@ -204,6 +204,35 @@ void main() {
       'Storage read error',
     );
   });
+  test('a scan that fails while the app goes reports nothing', () async {
+    // As on iOS CI: the database closes under a launch scan when the app
+    // (the container) goes; the stopped scan's error must not escape.
+    final closing = _FailsAfterGate();
+    final c = ProviderContainer(
+      overrides: [libraryScannerProvider.overrideWithValue(closing)],
+    );
+    await c.read(libraryScanProvider.notifier).start();
+    await pumpEventQueue();
+    c.dispose();
+    closing.gate.complete();
+    await pumpEventQueue();
+    expect(closing.threw, isTrue);
+  });
+}
+
+/// A scanner that throws once [gate] completes, as a scan does when its
+/// database is closed under it.
+class _FailsAfterGate implements LibraryScanner {
+  final gate = Completer<void>();
+  bool threw = false;
+
+  @override
+  Stream<ScanProgress> scan() async* {
+    yield const ScanProgress(filesFound: 1);
+    await gate.future;
+    threw = true;
+    throw StateError('Channel was closed before receiving a response');
+  }
 }
 
 /// A scanner whose first scan stops inside a write until [write] completes,

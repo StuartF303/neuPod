@@ -23,6 +23,8 @@ final libraryScanProvider =
 
 /// Owns the scan's subscription: at most one scan runs at a time.
 class LibraryScanController extends Notifier<ScanProgress?> {
+  // Cancelled by _stop (restart, cancel, and on dispose).
+  // ignore: cancel_subscriptions
   StreamSubscription<ScanProgress>? _sub;
 
   /// Bumped by every start and cancel; a callback of an older scan is
@@ -47,7 +49,11 @@ class LibraryScanController extends Notifier<ScanProgress?> {
   ScanProgress? build() {
     ref.onDispose(() {
       _generation++;
-      unawaited(_sub?.cancel());
+      final sub = _sub;
+      _sub = null;
+      // The database may close under the scan as the app goes: what the
+      // stopped scan throws then is of no use to anyone.
+      if (sub != null) unawaited(_stop(sub));
     });
     return null;
   }
@@ -141,8 +147,10 @@ class LibraryScanController extends Notifier<ScanProgress?> {
     if (old != null) await _stop(old);
   }
 
+  /// Cancels [sub] and waits for its scan to stop. An error the scan
+  /// throws while it stops (it was cancelled; nobody listens) is dropped.
   Future<void> _stop(StreamSubscription<ScanProgress> sub) async {
-    final stopping = sub.cancel();
+    final stopping = sub.cancel().catchError((Object _) {});
     _stopping = stopping;
     try {
       await stopping;
