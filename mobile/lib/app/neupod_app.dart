@@ -68,10 +68,15 @@ class _NeuPodAppState extends ConsumerState<NeuPodApp> {
       final ended = was != null && !was.done && now != null && now.done;
       final error = now?.error;
       if (ended && error != null && error != scanCancelled) {
+        // The raw error is for the log, never the panel.
+        debugPrint('neupod: library scan failed: $error');
         unawaited(
           ref
               .read(shellProvider.notifier)
-              .showPanel(title: scanFailureText(error), message: error),
+              .showPanel(
+                title: scanFailureText(error),
+                message: scanFailureHint(error),
+              ),
         );
       }
     });

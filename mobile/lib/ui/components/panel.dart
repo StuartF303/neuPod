@@ -96,7 +96,8 @@ class NeupodPanel extends StatelessWidget {
               child: titleText,
             ),
           ),
-          Padding(padding: skin.padding, child: body),
+          // No message (the firmware's NULL hint): no second line.
+          if (message.isNotEmpty) Padding(padding: skin.padding, child: body),
           ok,
         ],
       );
@@ -109,8 +110,7 @@ class NeupodPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             titleText,
-            SizedBox(height: skin.gap),
-            body,
+            if (message.isNotEmpty) ...[SizedBox(height: skin.gap), body],
             SizedBox(height: skin.gap + skin.okMarginTop),
             ok,
           ],

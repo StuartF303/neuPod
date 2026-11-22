@@ -203,6 +203,21 @@ void main() {
       scanFailureText('FolderAccessException(no-walk)'),
       'Storage read error',
     );
+    // SQLITE_CORRUPT (11), SQLITE_NOTADB (26) and their extended codes.
+    for (final code in [11, 26, 267, 523, 538, 11 | (2 << 8), 26 | (1 << 8)]) {
+      expect(
+        scanFailureText('SqliteException($code): damaged'),
+        'Library needs rebuilding',
+        reason: 'code $code',
+      );
+    }
+    // SQLITE_FULL (13), extended too (13 | 1 << 8 is 269).
+    expect(scanFailureText('SqliteException(269): x'), 'Storage is full');
+    expect(scanFailureText('SqliteException(1): x'), 'Storage read error');
+    // The firmware's hint_for() has none for these statuses.
+    for (final e in ['SqliteException(13): x', 'SqliteException(11): x', 'x']) {
+      expect(scanFailureHint(e), '');
+    }
   });
   test('a scan that fails while the app goes reports nothing', () async {
     // As on iOS CI: the database closes under a launch scan when the app
