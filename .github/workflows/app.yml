@@ -50,6 +50,13 @@ jobs:
         run: dart format --output=none --set-exit-if-changed lib test integration_test
       - run: flutter analyze
       - run: flutter test
+      # The wheel ports (mobile/lib/domain/wheel) are checked against vectors made by the firmware's own C. Regenerate
+      # them from the current firmware sources and fail if they no longer match the committed fixture.
+      - name: Wheel vectors match the firmware
+        run: |
+          out=$(mktemp)
+          sh tool/wheel_vectors/gen_wheel_vectors.sh "$out"
+          diff -q "$out" test/domain/wheel/fixtures/firmware_vectors.json
 
   # Debug APK, and the privacy check: the merged release manifest must not ask for INTERNET (R1 makes no network
   # connection; Flutter adds INTERNET only to the debug and profile manifests, for the tool).
