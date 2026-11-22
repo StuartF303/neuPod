@@ -34,17 +34,23 @@ adb -s "$SERIAL" shell input keyevent KEYCODE_WAKEUP
 adb -s "$SERIAL" shell wm dismiss-keyguard || true
 
 # The test tree: freely licensed fixtures from tests/assets/audio.
-# Shared storage (FUSE) can refuse writes for a while after boot: retry.
-for _ in $(seq 1 30); do
-  adb -s "$SERIAL" shell 'rm -rf /sdcard/Music/neupod_it && mkdir -p /sdcard/Music/neupod_it/sub' 2>/dev/null && break
-  sleep 3
-done
+
 # Pushed to /data/local/tmp and copied by the shell user: a direct push into
 # shared storage can fail on a fresh emulator while MediaProvider starts.
 adb -s "$SERIAL" push "$REPO/tests/assets/audio/flac16_44k_st.flac" /data/local/tmp/a.flac >/dev/null
 adb -s "$SERIAL" push "$REPO/tests/assets/audio/mp3_44k_st.mp3" /data/local/tmp/b.mp3 >/dev/null
-adb -s "$SERIAL" shell cp /data/local/tmp/a.flac /sdcard/Music/neupod_it/a.flac
-adb -s "$SERIAL" shell cp /data/local/tmp/b.mp3 /sdcard/Music/neupod_it/sub/b.mp3
+# Shared storage (FUSE) can refuse writes for a while after boot: retry.
+ok=0
+for _ in $(seq 1 40); do
+  if adb -s "$SERIAL" shell 'rm -rf /sdcard/Music/neupod_it && mkdir -p /sdcard/Music/neupod_it/sub &&
+      cp /data/local/tmp/a.flac /sdcard/Music/neupod_it/a.flac &&
+      cp /data/local/tmp/b.mp3 /sdcard/Music/neupod_it/sub/b.mp3' 2>/dev/null; then
+    ok=1
+    break
+  fi
+  sleep 3
+done
+[ "$ok" = 1 ] || { echo "could not write the test tree to shared storage" >&2; exit 1; }
 adb -s "$SERIAL" shell ls -lR /sdcard/Music/neupod_it
 
 cd "$REPO/mobile"
@@ -63,7 +69,11 @@ launch() {
   while [ $SECONDS -lt $deadline ]; do
     log="$(adb -s "$SERIAL" logcat -d -s flutter:I 2>/dev/null)"
     if grep -q 'Some tests failed\|\[E\]' <<<"$log"; then echo "$log" | tail -60; return 1; fi
-    if grep -q 'All tests passed' <<<"$log"; then grep -o 'NEUPOD_STEP .*' <<<"$log" | tr -d '\r'; return 0; fi
+    if grep -q 'All tests passed' <<<"$log"; then
+      grep -o 'NEUPOD_\(SCAN\|PLAYED\) .*' <<<"$log" | tr -d '\r' >&2 || true
+      grep -o 'NEUPOD_STEP .*' <<<"$log" | tr -d '\r'
+      return 0
+    fi
     sleep 2
   done
   echo "timed out" >&2

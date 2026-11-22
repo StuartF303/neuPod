@@ -94,6 +94,41 @@ recorded fallback.
 6. If 1-5 fail or the port is over its time box, prototype `lofty` via FRB on both CI runners and record the binary
    size and build-time cost.
 
+## Implementation so far (phase 1, 2026-11-22)
+
+`mobile/lib/data/scan/tag_reader.dart` reads FLAC (STREAMINFO, Vorbis comments, an ID3v2 tag in front skipped) and
+MP3 (ID3v2.2 to 2.4 text frames with unsynchronisation and extended headers; first frame confirmed by the next;
+duration from Xing/Info minus the LAME delay and padding, or VBRI, else estimated and flagged) through a `ByteSource`
+(`readAt`, `length`), ported from `app/audio/meta.c`. Phase 1 keeps title, artist, album, track number, duration,
+sample rate and bit depth; text is not cut at the firmware's small buffer sizes (1,024 characters instead), and UTF-16
+surrogate pairs are kept. The scanner opens files on the root isolate (`neupod_storage.openHandle`: a detached fd on
+Android, a `file://` URI on iOS) and parses them in a background isolate with `Isolate.run`, 32 files per run.
+Failures become a reason on the track (`not a FLAC file`, `file is cut short`), never an exception that stops the
+scan; a 2,000-case mutation test checks that. The rest of this note (other containers and fields, art, the
+`audio_metadata_reader` oracle, timing at 5,000 files) is phase 3.
+
+Also read in phase 1: the title sort tag (ID3 `TSOT`/`TST`, Vorbis `TITLESORT`), which the sort key uses (owner
+decision 11). Failures are stored as a reason **code** (`UnreadableReason`: not downloaded, can't open, can't read,
+wrong format, damaged); the UI words it, and the transient ones (can't open, can't read) are retried on the next scan.
+VBRI is accepted only with the firmware's `vbri_parse` checks (62 fixed bytes, non-zero frames, entries, scale and
+frames per entry, entry size 1 to 4).
+
+Limits shared with the firmware, kept on purpose so both read the same tags: ID3v2.3 unsynchronisation is undone per
+frame only when the tag header flag is set (as `id3v2_tags` does), compressed or encrypted frames are not decoded, and
+a text frame over 400 bytes is skipped.
+
+**Display text and key text are separate (owner decision 11: the app matches the firmware's code).** The reader
+decodes the whole tag for display (UTF-16 pairs kept, malformed UTF-8 as U+FFFD), and separately keeps the title and
+title sort tag exactly as the firmware's `meta_text_to_utf8()` stores them (`firmwareText()`, a port): into its
+64- and 32-byte buffers, whole characters only, UTF-16 surrogates (pairs and lone ones) as `?`, malformed UTF-8 copied
+through raw. A FLAC whose comment block is over 4096 bytes (`TAG_SCRATCH` in lib_build.c, which `flac_parse` then
+skips) has no key text, so its key falls back to the file name as on the device. The song key is
+`lib_collate_key()` (ported over raw bytes, `collateKeyBytes`) of that title, or of the file name with its extension
+cut by `cut()` to 64 bytes, with the sort tag. `scripts/app/gen_tag_key_vectors.py` builds small tagged files for
+each of these cases and records what the compiled firmware C makes of them; the app's test compares byte for byte.
+Text is not trimmed (the firmware keeps spaces, and they sort). The Songs list shows an untagged song's name without
+its extension (the folder-convention fallback comes in phase 3).
+
 ## Sources
 
 All checked 2026-11-21.

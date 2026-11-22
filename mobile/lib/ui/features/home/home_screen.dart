@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:neupod/app/providers.dart';
 import 'package:neupod/ui/features/player_debug/player_debug_screen.dart';
 import 'package:neupod/ui/features/library_setup/library_setup_screen.dart';
+import 'package:neupod/ui/features/songs/songs_screen.dart';
 
 /// Scaffold placeholder for the Home screen: the app name and the size of the
 /// library, read through [librarySummaryProvider].
@@ -41,6 +42,12 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 ),
                 child: const Text('Folders'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const SongsScreen()),
+                ),
+                child: const Text('Songs'),
               ),
             ],
           ),

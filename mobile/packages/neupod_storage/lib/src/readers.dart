@@ -113,6 +113,7 @@ final class _Libc {
 
 const _seekEnd = 2;
 const _eintr = 4; // the same on Linux, Android and Darwin
+const _maxEintrRetries = 100;
 
 /// A [StorageReader] over a file descriptor the reader owns (Android: a
 /// detached SAF descriptor from `openFd`). Uses `pread`, so reads do not move
@@ -154,11 +155,13 @@ final class FdStorageReader implements StorageReader {
     if (buf == nullptr) throw const FileSystemException('out of memory');
     try {
       var got = 0;
+      var interrupted = 0;
       while (got < want) {
         final n = libc.pread(_fd, buf + got, want - got, offset + got);
         if (n < 0) {
           final errno = libc.errno;
-          if (errno == _eintr) continue; // interrupted by a signal: retry
+          // Interrupted by a signal: retry, but not forever.
+          if (errno == _eintr && ++interrupted < _maxEintrRetries) continue;
           throw FileSystemException('read failed', '', OSError('pread', errno));
         }
         if (n == 0) break;

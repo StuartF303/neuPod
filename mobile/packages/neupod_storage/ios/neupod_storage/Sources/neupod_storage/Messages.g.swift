@@ -473,9 +473,10 @@ protocol NeupodStorageApi {
   /// Runs on its own background executor (a provider can block), never on
   /// the platform thread.
   func openFd(uri: String, completion: @escaping (Result<Int64, Error>) -> Void)
-  /// A private directory for the app's own data (the library database):
-  /// Android `filesDir`; iOS Application Support, created if needed. Never
-  /// the Documents folder, so it is not shown in Files or Finder.
+  /// A private directory for the app's own data (the library database),
+  /// excluded from backups: Android `noBackupFilesDir`; iOS
+  /// `Application Support/library`, created if needed and marked excluded
+  /// from backup. Never the Documents folder, so not shown in Files or Finder.
   func appSupportPath() throws -> String
   /// iOS debug builds only: stores a bookmark for the folder at [path] as if
   /// it had been picked, so integration tests can exercise bookmark storage,
@@ -622,9 +623,10 @@ class NeupodStorageApiSetup {
     } else {
       openFdChannel.setMessageHandler(nil)
     }
-    /// A private directory for the app's own data (the library database):
-    /// Android `filesDir`; iOS Application Support, created if needed. Never
-    /// the Documents folder, so it is not shown in Files or Finder.
+    /// A private directory for the app's own data (the library database),
+    /// excluded from backups: Android `noBackupFilesDir`; iOS
+    /// `Application Support/library`, created if needed and marked excluded
+    /// from backup. Never the Documents folder, so not shown in Files or Finder.
     let appSupportPathChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.neupod_storage.NeupodStorageApi.appSupportPath\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       appSupportPathChannel.setMessageHandler { _, reply in

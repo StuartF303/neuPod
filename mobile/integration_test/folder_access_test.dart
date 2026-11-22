@@ -19,8 +19,17 @@
 
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:neupod/data/db/drift_library_repository.dart';
+import 'package:neupod/data/db/open_library_database.dart';
+import 'package:neupod/data/platform/storage_folder_access.dart';
+import 'package:neupod/audio/neupod_player.dart';
+import 'package:neupod/data/scan/local_library_scanner.dart';
+import 'package:neupod/domain/playback/player_state.dart';
+import 'package:neupod/domain/playback/queue_item.dart';
+import 'package:neupod_audio/neupod_audio.dart';
 import 'package:neupod_storage/neupod_storage.dart';
 
 const folderName = 'neupod_it';
@@ -29,17 +38,50 @@ const folderName = 'neupod_it';
 /// system picker), so plain `flutter test integration_test` skips it.
 const driven = bool.fromEnvironment('NEUPOD_FOLDER_IT');
 
-Directory iosFixture() {
+Future<Directory> iosFixture() async {
   // Inside the app container; the test writes it, the app code only reads it.
+  // The bundled test tones (copies of the repo fixtures), so the files play.
+  Future<List<int>> asset(String name) async {
+    final data = await rootBundle.load(
+      'integration_test/assets/test_media/$name',
+    );
+    return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+  }
+
   final dir = Directory('${Directory.systemTemp.path}/$folderName');
   Directory('${dir.path}/sub').createSync(recursive: true);
-  File('${dir.path}/a.flac').writeAsBytesSync([0x66, 0x4c, 0x61, 0x43, 0, 0]);
-  File('${dir.path}/sub/b.mp3').writeAsBytesSync([0x49, 0x44, 0x33, 4, 0]);
+  File('${dir.path}/a.flac')
+      .writeAsBytesSync(await asset('flac16_44k_st.flac'));
+  File('${dir.path}/sub/b.mp3').writeAsBytesSync(await asset('mp3_44k_st.mp3'));
   File('${dir.path}/.hidden').writeAsBytesSync([0]);
   return dir;
 }
 
-Future<void> walkAndRead(NeupodStorage storage, StorageRoot root) async {
+/// Spike item 5 of decision 0004: the audio engine plays a file of a picked
+/// folder after the app was restarted (Android: the persisted `content://`
+/// tree URI; iOS: a `file://` URL under the bookmarked root, whose access
+/// only neupod_storage holds).
+Future<void> playAfterRestart(StorageEntry flac) async {
+  final player = NeupodPlayer(NeupodAudio());
+  try {
+    await player.setQueue([QueueItem(id: 'it:a', uri: flac.uri, title: 'a')]);
+    await player.play();
+    final ended = await player.states
+        .firstWhere((s) => s.status == PlaybackStatus.ended || s.error != null)
+        .timeout(const Duration(seconds: 30));
+    expect(ended.error, isNull, reason: 'played ${flac.uri}');
+    expect(ended.format?.codec, contains('flac'));
+    // ignore: avoid_print
+    print('NEUPOD_PLAYED ${flac.uri}');
+  } finally {
+    await player.dispose();
+  }
+}
+
+Future<Map<String, StorageEntry>> walkAndRead(
+  NeupodStorage storage,
+  StorageRoot root,
+) async {
   final pages = await storage.walk(root.id, batchSize: 1).toList();
   expect(pages.last.done, isTrue);
   expect(pages.last.complete, isTrue, reason: 'every folder was listed');
@@ -64,6 +106,36 @@ Future<void> walkAndRead(NeupodStorage storage, StorageRoot root) async {
     expect(String.fromCharCodes(head) == 'ID3' || head[0] == 0xff, isTrue);
   } finally {
     mp3.close();
+  }
+  return byPath;
+}
+
+/// The minimal scan on the device: the real plugin, tags read in a
+/// background isolate through the platform's byte source, the database file
+/// in the app's private directory, and the Songs order.
+Future<void> scanIntoDatabase(NeupodStorage storage) async {
+  final db = openLibraryDatabase(storage.appSupportPath);
+  try {
+    final progress = await LocalLibraryScanner(
+      folders: StorageFolderAccess(storage),
+      storage: storage,
+      db: db,
+    ).scan().last;
+    expect(progress.done, isTrue);
+    final songs = await DriftLibraryRepository(db).watchSongs().first;
+    final mine = songs.where((t) => t.source.id != 'documents').toList();
+    expect(mine.map((t) => t.displayTitle), ['a', 'b']);
+    // Real fixtures, read through a detached fd (Android) or the file URL
+    // under the bookmark (iOS).
+    expect(mine.map((t) => t.unreadableReason), [null, null]);
+    expect(mine.map((t) => t.codec), ['flac', 'mp3']);
+    expect(mine.first.durationMs, 300);
+    final dir = await storage.appSupportPath();
+    expect(File('$dir/library.sqlite').existsSync(), isTrue);
+    // ignore: avoid_print
+    print('NEUPOD_SCAN ${mine.length} songs in $dir');
+  } finally {
+    await db.close();
   }
 }
 
@@ -124,7 +196,7 @@ void main() {
         // First launch: pick.
         final StorageRoot root;
         if (Platform.isIOS) {
-          root = await storage.debugAddRoot(iosFixture().path);
+          root = await storage.debugAddRoot((await iosFixture()).path);
         } else {
           final picked = await storage.pickFolder();
           expect(picked, isNotNull, reason: 'the picker was cancelled');
@@ -134,12 +206,14 @@ void main() {
         expect(root.available, isTrue);
         expect(findTestRoot(await storage.roots())?.id, root.id);
         await walkAndRead(storage, root);
+        await scanIntoDatabase(storage);
         // ignore: avoid_print
         print('NEUPOD_STEP picked');
       } else {
         // A later launch: the grant or bookmark was kept across the restart.
         expect(held.available, isTrue);
-        await walkAndRead(storage, held);
+        final files = await walkAndRead(storage, held);
+        await playAfterRestart(files['a.flac']!);
         await storage.removeRoot(held.id);
         expect(findTestRoot(await storage.roots()), isNull);
         await expectLater(

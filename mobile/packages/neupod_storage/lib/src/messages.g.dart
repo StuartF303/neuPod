@@ -536,9 +536,10 @@ class NeupodStorageApi {
     return pigeonVar_replyValue! as int;
   }
 
-  /// A private directory for the app's own data (the library database):
-  /// Android `filesDir`; iOS Application Support, created if needed. Never
-  /// the Documents folder, so it is not shown in Files or Finder.
+  /// A private directory for the app's own data (the library database),
+  /// excluded from backups: Android `noBackupFilesDir`; iOS
+  /// `Application Support/library`, created if needed and marked excluded
+  /// from backup. Never the Documents folder, so not shown in Files or Finder.
   Future<String> appSupportPath() async {
     final pigeonVar_channelName =
         'dev.flutter.pigeon.neupod_storage.NeupodStorageApi.appSupportPath$pigeonVar_messageChannelSuffix';

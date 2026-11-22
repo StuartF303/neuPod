@@ -241,9 +241,16 @@ public class NeupodStoragePlugin: NSObject, FlutterPlugin, NeupodStorageApi, UID
 
   func appSupportPath() throws -> String {
     do {
-      return try FileManager.default.url(
+      // Application Support/library, excluded from iCloud and device backups:
+      // the library is rebuilt by rescanning (decision 0005).
+      var dir = try FileManager.default.url(
         for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
-      ).path
+      ).appendingPathComponent("library", isDirectory: true)
+      try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+      var values = URLResourceValues()
+      values.isExcludedFromBackup = true
+      try dir.setResourceValues(values)
+      return dir.path
     } catch {
       throw PigeonError(code: "no-directory", message: error.localizedDescription, details: nil)
     }

@@ -147,6 +147,37 @@ retag, a rename and a move.
    If not, choose another change signal.
 8. `make-migrations` round trip: v1 to v2 with a generated test, run in CI.
 
+## Implementation (phase 1, 2026-11-22)
+
+Built in `mobile/lib/data/db/` (database), `mobile/lib/data/scan/` (scanner, tag reader) and
+`mobile/lib/domain/library/` (track model, collation, ports). Where it differs from the decision above, and why:
+
+- **drift 2.35.4 and sqlite3 3.9.1 as decided, without `drift_flutter` and without `path_provider`.** `drift_flutter`
+  0.3.1 still depends on the `+eol` `sqlite3_flutter_libs` and `sqlcipher_flutter_libs`, and `path_provider` 2.1 now
+  pulls `jni`, `jni_flutter`, `objective_c` and `ffi` into the app for one directory name. The database is opened with
+  `NativeDatabase.createInBackground` behind a `LazyDatabase`, in the directory that `neupod_storage.appSupportPath()`
+  returns: Android `noBackupFilesDir`, iOS `Application Support/library` marked excluded from backup, never shown in
+  Files or Finder. Excluded from backups because version 1 holds only what a rescan rebuilds; phase 3 revisits this
+  when ratings and play counts arrive (they should survive a phone restore).
+- **Phase 1 schema (version 1)** is the subset the vertical slice needs: `sources` and `tracks`, with `artist` and
+  `album` as text on the track, the title sort tag in `title_sort`, `title_sort_key` as an indexed BLOB
+  (`ORDER BY title_sort_key, id`), `reason_code` (an `UnreadableReason` code, never English text) and `scan_version`
+  per row (the tag reader and sort key the row was read with: a row from another version is read again on the next
+  scan, once, whatever its size and mtime, and an unavailable folder or a partial walk does not keep re-reading the
+  rest). The schema snapshot is committed in `mobile/drift_schemas/library/drift_schema_v1.json`. Until version 2 has
+  real steps, `onUpgrade` (any other version, a downgrade included) drops and recreates the tables: version 1 is a
+  cache a rescan rebuilds. The
+  `artists`/`albums`/`genres` tables, `track_key`, `track_stats`, playlists and FTS5 come with their phase 3 and 6
+  items, as schema version 2 with a `make-migrations` test. Version 1 holds nothing the user cannot rebuild by
+  rescanning.
+- **Collation** is ported exactly as decided (`collateKey`, `compareKeys`, `collateBucket` in
+  `domain/library/collation.dart`). Besides the cases of `tests/test_library.c`, a golden table generated from the C
+  source itself (`scripts/app/gen-collate-golden.sh`, 1,176 names: every Latin-1 and Latin Extended-A/B code point,
+  articles, symbols, other scripts, long names) is checked byte for byte.
+- **Tag reading (decision 0003), phase 1 subset:** FLAC (STREAMINFO, Vorbis comments) and MP3 (ID3v2.2 to 2.4 text
+  frames, Xing/Info with the LAME delay and padding, VBRI, else an estimate), title, artist, album, track number and
+  duration, ported from `app/audio/meta.c`. Other formats are listed by file name until phase 3.
+
 ## Sources
 
 All checked 2026-11-21.
