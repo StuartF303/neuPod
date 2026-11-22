@@ -94,7 +94,7 @@ NeupodStyle classicLight() {
       pause: NeupodGlyph.pause,
       playPaint: GlyphPaint.fill,
       battery: BatterySkin(
-        outline: const Color(0xff5d626a),
+        outline: const Color(0xff6d626a),
         radius: 4,
         inside: const Color(0xfff4f5f6),
         fill: vertical(
