@@ -39,4 +39,23 @@ void main() {
     }
     expect(names, containsAll(['Montserrat', 'Lucide icons']));
   });
+
+  test('the Lucide icon count matches the SVGs, LICENSE.md and the entry', () {
+    final svgs = Directory('assets/icons/lucide')
+        .listSync()
+        .where((f) => f.path.endsWith('.svg'))
+        .toList();
+    final n = svgs.length;
+    final lucide = bundledLicences[1];
+    expect(lucide.version, contains('$n icons'));
+    final row = File('../LICENSE.md')
+        .readAsLinesSync()
+        .firstWhere((l) => l.contains('mobile/assets/icons/lucide'));
+    expect(row, contains('$n icons'));
+    for (final f in svgs) {
+      final name = f.uri.pathSegments.last.replaceAll('.svg', '');
+      expect(lucide.use, contains(name));
+      expect(row, contains(name));
+    }
+  });
 }

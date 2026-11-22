@@ -50,7 +50,8 @@ const List<BundledLicence> bundledLicences = [
     use:
         'Icons: chevron-right, check, headphones, bluetooth, '
         'bluetooth-connected, speaker, shuffle, repeat, repeat-1, volume, '
-        'volume-2, lock, star and search. Some derive from Feather (MIT).',
+        'volume-2, lock, star and search; also skip-back and skip-forward '
+        '(the wheel\'s Previous and Next). Some derive from Feather (MIT).',
     textAsset: 'assets/icons/lucide/LICENSE-Lucide.txt',
   ),
 ];

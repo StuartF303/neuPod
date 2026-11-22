@@ -3,8 +3,9 @@
 /// Settings, as far as the gate needs: Style (Classic or Modern) and Mode
 /// (Auto, Light or Dark), the choices the specification puts in Settings
 /// ("style is chosen in Settings; mode follows the phone by default"), and
-/// Library (the folders: add, remove, rescan). Select changes a value in
-/// place, or opens Library. The rest of Settings is phase 6.
+/// Library (the folders: add, remove, rescan), then Licences. Select changes
+/// a value in place, or opens Library or Licences. The rest of Settings is
+/// phase 6.
 ///
 /// Classic Dark and Modern Light are not designed (UI styles Open question
 /// 1): they show the style's designed mode while the body follows the mode.
@@ -14,6 +15,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/ui/screens/browse/browse_common.dart';
 import 'package:neupod/ui/screens/browse/library_screen.dart';
+import 'package:neupod/ui/screens/browse/licences_screen.dart';
 import 'package:neupod/ui/screens/shell/neupod_list.dart';
 import 'package:neupod/ui/screens/shell/shell_frame.dart';
 import 'package:neupod/ui/screens/shell/shell_style.dart';
@@ -77,6 +79,16 @@ class SettingsScreen extends ConsumerWidget {
                   chevron: true,
                   onActivate: () =>
                       pushScreen(ref, 'Library', (_) => const LibraryScreen()),
+                ),
+                // Last, where the specification lists it ("About; Licences").
+                NeupodListItem.row(
+                  height: h,
+                  title: 'Licences',
+                  onActivate: () => pushScreen(
+                    ref,
+                    'Licences',
+                    (_) => const LicencesScreen(),
+                  ),
                 ),
               ],
             );
