@@ -120,7 +120,7 @@ class WheelInput {
   /// The acceleration port the turn feeds.
   final WheelAccel accel = WheelAccel();
 
-  /// False while the wheel cannot act (Search with the keyboard up): touches
+  /// False while the wheel cannot act (design section 4, Disabled): touches
   /// are ignored. Turning it off cancels a touch in progress (see
   /// [setEnabled]).
   bool get enabled => _enabled;
