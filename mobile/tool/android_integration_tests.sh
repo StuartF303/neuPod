@@ -24,15 +24,18 @@ if [ ${#files[@]} -eq 0 ]; then
   exit 1
 fi
 
+# adb for diagnostics and housekeeping, bounded: with the device gone (emulator offline), adb waits for it forever.
+dadb() { timeout 30 adb "$@"; }
+
 # For a failed file: what the system did (warnings and errors from every buffer, including native crashes and
 # ActivityManager/WindowManager events), the activity stack and the screen state.
 system_log() {
   echo "::group::system log (warnings and errors, activity events)"
-  adb logcat -d -v time -b main -b system -b crash '*:W' | tail -300 || true
-  adb logcat -d -v time -b events | grep -E 'am_|wm_|screen_toggled|power_' | tail -150 || true
-  adb shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp|mShowingLockscreen|mScreenOnFully|mAwake' || true
-  adb shell dumpsys power | grep -E 'mWakefulness=|Display Power' || true
-  adb shell dumpsys activity activities | grep -E 'Hist #|mResumedActivity|state=' | head -40 || true
+  dadb logcat -d -v time -b main -b system -b crash '*:W' | tail -300 || true
+  dadb logcat -d -v time -b events | grep -E 'am_|wm_|screen_toggled|power_' | tail -150 || true
+  dadb shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp|mShowingLockscreen|mScreenOnFully|mAwake' || true
+  dadb shell dumpsys power | grep -E 'mWakefulness=|Display Power' || true
+  dadb shell dumpsys activity activities | grep -E 'Hist #|mResumedActivity|state=' | head -40 || true
   echo "::endgroup::"
 }
 
@@ -40,7 +43,7 @@ per_file_timeout="${PER_FILE_TIMEOUT:-8m}"
 for file in "${files[@]}"; do
   if [ "$file" = integration_test/folder_access_test.dart ]; then
     echo "::group::$file (driven: scripts/app/verify-folder-access-android.sh)"
-    serial=$(adb get-serialno | tr -d '\r')
+    serial=$(dadb get-serialno | tr -d '\r')
     status=0
     NEUPOD_ANDROID_SERIAL="$serial" NEUPOD_FOLDER_IT_APK="${FOLDER_IT_APK:-}" \
       timeout --kill-after=30s "$per_file_timeout" bash ../scripts/app/verify-folder-access-android.sh || status=$?
@@ -52,7 +55,7 @@ for file in "${files[@]}"; do
         echo "::error::$file failed (exit $status)"
       fi
       echo "::group::logcat (flutter, crashes)"
-      adb logcat -d -s flutter:V AndroidRuntime:E | tail -300 || true
+      dadb logcat -d -s flutter:V AndroidRuntime:E | tail -300 || true
       echo "::endgroup::"
       system_log
       exit 1
@@ -61,7 +64,7 @@ for file in "${files[@]}"; do
     continue
   fi
   echo "::group::$file"
-  adb logcat -c || true
+  dadb logcat -c || true
   rm -rf build/app/outputs/androidTest-results
   status=0
   (cd android && timeout --kill-after=30s "$per_file_timeout" \
@@ -77,7 +80,7 @@ for file in "${files[@]}"; do
     find build/app/outputs/androidTest-results -name '*.xml' -exec cat {} + 2>/dev/null || true
     echo "::endgroup::"
     echo "::group::logcat (flutter, test runner, crashes)"
-    adb logcat -d -s flutter:V TestRunner:V FlutterTestRunner:V AndroidRuntime:E | tail -300 || true
+    dadb logcat -d -s flutter:V TestRunner:V FlutterTestRunner:V AndroidRuntime:E | tail -300 || true
     echo "::endgroup::"
     system_log
     exit 1
