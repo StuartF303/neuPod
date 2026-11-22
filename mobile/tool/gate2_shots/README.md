@@ -15,8 +15,7 @@ PNGs go to `<output dir>` (default `build/gate2_renders`); nothing is compared.
 
 ## Simulator shots (iOS)
 
-Real simulator screenshots of Home and Now Playing for each variant (fits,
-body finishes, status bar, wordmark). From `mobile/`:
+Real simulator screenshots of Home and Now Playing for each variant (status bar, wordmark; fit A and the mode's body finish, as the owner chose). From `mobile/`:
 
     flutter build ios --simulator --debug --no-codesign \
       -t tool/gate2_shots/gate2_sim_main.dart

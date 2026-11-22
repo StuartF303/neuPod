@@ -11,6 +11,7 @@ import 'package:neupod/domain/wheel/feedback_ports.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/ui/components/list_row.dart';
 import 'package:neupod/ui/screens/browse/album_screen.dart';
+import 'package:neupod/ui/screens/browse/cover_flow_screen.dart';
 import 'package:neupod/ui/screens/browse/home_screen.dart';
 import 'package:neupod/ui/screens/browse/songs_screen.dart';
 import 'package:neupod/ui/screens/browse/browse_common.dart';
@@ -77,6 +78,24 @@ void main() {
         rig.haptics.played.where((k) => k == FeedbackKind.endReached),
         hasLength(1),
       );
+    });
+  });
+
+  group('Cover Flow', () {
+    testWidgets('a tap on a side cover centres it, near or far', (
+      tester,
+    ) async {
+      final rig = await pumpShell(tester, home: (_) => const CoverFlowScreen());
+      final first = _wheelValue(rig);
+      expect(first, contains('1 of'));
+      // Classic: the far right cover is centred 319 px right of the middle, half off screen.
+      await tester.tapAt(const Offset(595, 200));
+      await settle(tester);
+      expect(_wheelValue(rig), contains('4 of'));
+      // The first cover on the left of the new centre.
+      await tester.tapAt(const Offset(300 - 153, 200));
+      await settle(tester);
+      expect(_wheelValue(rig), contains('3 of'));
     });
   });
 

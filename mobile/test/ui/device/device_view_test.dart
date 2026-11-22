@@ -42,20 +42,15 @@ void main() {
   _oddSizeTests();
   _reparentTests();
   for (final phone in designPhones) {
-    for (final fit in DeviceFit.values) {
-      testWidgets('${phone.name} ${fit.name}: screen and wheel where the '
+    {
+      testWidgets('${phone.name}: screen and wheel where the '
           'geometry puts them', (tester) async {
-        final c = await pumpDevice(tester, phone: phone);
-        c
-            .read(deviceViewOptionsProvider.notifier)
-            .update((o) => o.copyWith(fit: fit));
-        await tester.pump();
+        await pumpDevice(tester, phone: phone);
         final g = DeviceGeometry.compute(
           width: phone.w,
           height: phone.h,
           safeTop: phone.top,
           safeBottom: phone.bottom,
-          fit: fit,
         );
         final host = tester.getRect(find.byType(DeviceScreenHost));
         expect(host.left, closeTo(g.screen.left, 1e-6));
@@ -136,34 +131,23 @@ void main() {
     expect(tester.widgetList(find.text('neuPod')).length, before - 1);
   });
 
-  testWidgets('status bar text: dark on silver, light on black and on the '
-      'fit B surround', (tester) async {
-    SystemUiOverlayStyle style() => tester
-        .widget<AnnotatedRegion<SystemUiOverlayStyle>>(
-          find.byType(AnnotatedRegion<SystemUiOverlayStyle>).first,
-        )
-        .value;
-    final c = await pumpDevice(tester);
-    expect(style().statusBarIconBrightness, Brightness.dark);
-    expect(style().statusBarBrightness, Brightness.light);
-    c
-        .read(deviceViewOptionsProvider.notifier)
-        .update((o) => o.copyWith(body: BodySetting.black));
-    await tester.pump();
-    expect(style().statusBarIconBrightness, Brightness.light);
-    c
-        .read(deviceViewOptionsProvider.notifier)
-        .update(
-          (o) => o.copyWith(
-            body: BodySetting.silver,
-            fit: DeviceFit.fixedProportions,
-          ),
-        );
-    await tester.pump();
-    expect(style().statusBarIconBrightness, Brightness.light);
-  });
+  testWidgets(
+    'status bar text: dark on silver (Light), light on black (Dark)',
+    (tester) async {
+      SystemUiOverlayStyle style() => tester
+          .widget<AnnotatedRegion<SystemUiOverlayStyle>>(
+            find.byType(AnnotatedRegion<SystemUiOverlayStyle>).first,
+          )
+          .value;
+      await pumpDevice(tester);
+      expect(style().statusBarIconBrightness, Brightness.dark);
+      expect(style().statusBarBrightness, Brightness.light);
+      await pumpDevice(tester, brightness: Brightness.dark);
+      expect(style().statusBarIconBrightness, Brightness.light);
+    },
+  );
 
-  testWidgets('the body follows the mode unless pinned', (tester) async {
+  testWidgets('the body follows the mode (owner decision 13)', (tester) async {
     expect(
       const DeviceViewOptions().finishFor(Brightness.light),
       DeviceFinish.silver,
@@ -172,22 +156,9 @@ void main() {
       const DeviceViewOptions().finishFor(Brightness.dark),
       DeviceFinish.black,
     );
-    expect(
-      const DeviceViewOptions(body: BodySetting.black)
-          .finishFor(Brightness.light),
-      DeviceFinish.black,
-    );
-    final c = await pumpDevice(tester, brightness: Brightness.dark);
+    await pumpDevice(tester, brightness: Brightness.dark);
     final wheel = tester.widget<ClickWheel>(find.byType(ClickWheel));
     expect(wheel.finish, DeviceFinish.black);
-    c
-        .read(deviceViewOptionsProvider.notifier)
-        .update((o) => o.copyWith(body: BodySetting.silver));
-    await tester.pump();
-    expect(
-      tester.widget<ClickWheel>(find.byType(ClickWheel)).finish,
-      DeviceFinish.silver,
-    );
   });
 
   testWidgets('a long press on the body opens the gate switches', (
@@ -197,9 +168,14 @@ void main() {
     await tester.longPressAt(const Offset(8, 500));
     await tester.pumpAndSettle();
     expect(find.byType(GatePanel), findsOneWidget);
-    await tester.tap(find.text('B: fixed'));
+    expect(find.text('A: fills'), findsNothing);
+    expect(find.text('Silver'), findsNothing);
+    await tester.tap(find.text('1: wheel only'));
     await tester.pump();
-    expect(c.read(deviceViewOptionsProvider).fit, DeviceFit.fixedProportions);
+    expect(
+      c.read(deviceViewOptionsProvider).directTouch,
+      DirectTouch.wheelOnly,
+    );
     // The panel scrolls; Now Playing's section made it longer than the phone.
     await tester.ensureVisible(find.text('Done'));
     await tester.pump();

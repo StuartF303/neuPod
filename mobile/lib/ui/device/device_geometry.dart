@@ -3,16 +3,6 @@
 import 'dart:math' as math;
 import 'dart:ui' show Offset, Rect;
 
-/// How the device sits on the phone (design section 2; Open question 1).
-enum DeviceFit {
-  /// A: the body fills the phone, edge to edge (recommended, drawn).
-  fillsPhone,
-
-  /// B: the body at fixed proportions (1.675 W high) on a dark surround;
-  /// falls back to A when the body is taller than the safe height.
-  fixedProportions,
-}
-
 /// Where and how large the device is drawn in a window (see
 /// [DeviceGeometry.plan]).
 class FitPlan {
@@ -59,8 +49,6 @@ class DeviceGeometry {
   DeviceGeometry._({
     required this.width,
     required this.height,
-    required this.requestedFit,
-    required this.fit,
     required this.screen,
     required this.frameWidth,
     required this.wheelCentre,
@@ -89,12 +77,6 @@ class DeviceGeometry {
   /// The smallest the wheel may shrink to in fit A, as a ratio of W.
   static const double minWheelRatio = 0.56;
 
-  /// Fit B: body height as a ratio of W.
-  static const double bodyAspect = 1.675;
-
-  /// Fit B: body corner radius as a ratio of W.
-  static const double bodyRadiusRatio = 0.08;
-
   /// The screens are designed at this size and scaled uniformly.
   static const double designWidth = 600;
 
@@ -120,7 +102,6 @@ class DeviceGeometry {
     required double height,
     required double safeTop,
     required double safeBottom,
-    DeviceFit fit = DeviceFit.fillsPhone,
   }) {
     final w = width;
     var sw = screenRatio * w;
@@ -135,30 +116,13 @@ class DeviceGeometry {
     final bz = frameRatio * w;
     var d = wheelRatio * w;
 
-    var used = fit;
-    final bodyHeight = bodyAspect * w;
-    if (fit == DeviceFit.fixedProportions &&
-        bodyHeight > height - safeTop - safeBottom) {
-      used = DeviceFit.fillsPhone; // B does not fit: fall back to A
-    }
-
-    double scrTop;
-    double floor;
-    Rect body;
-    if (used == DeviceFit.fillsPhone) {
-      body = Rect.fromLTWH(0, 0, w, height);
-      scrTop = safeTop + math.max(8, 0.03 * w) + bz;
-      floor = height - math.max(safeBottom, 0.03 * w);
-    } else {
-      final bodyBottom = safeBottom > 0 ? height - safeBottom : height;
-      body = Rect.fromLTRB(0, bodyBottom - bodyHeight, w, bodyBottom);
-      scrTop = body.top + 0.075 * w + bz;
-      floor = bodyBottom - 0.03 * w;
-    }
+    final body = Rect.fromLTWH(0, 0, w, height);
+    final scrTop = safeTop + math.max(8, 0.03 * w) + bz;
+    final floor = height - math.max(safeBottom, 0.03 * w);
     final scrBottom = scrTop + sh;
     final frameBottom = scrBottom + bz;
     final space = floor - frameBottom;
-    if (used == DeviceFit.fillsPhone && space < d + 24) {
+    if (space < d + 24) {
       d = math.max(minWheelRatio * w, space - 24);
     }
     d = math.max(0, d);
@@ -170,8 +134,6 @@ class DeviceGeometry {
     return DeviceGeometry._(
       width: w,
       height: height,
-      requestedFit: fit,
-      fit: used,
       screen: screen,
       frameWidth: bz,
       wheelCentre: Offset(w / 2, cy),
@@ -183,8 +145,7 @@ class DeviceGeometry {
     );
   }
 
-  /// How the device sits in a window [width] x [height] (fit A's needs; fit B
-  /// falls back to A when short). A window that is tall and wide enough gets
+  /// How the device sits in a window [width] x [height] (the body fills the phone). A window that is tall and wide enough gets
   /// the device at full width, scale 1. A short one is narrowed (laid out at
   /// the largest width whose height fits, not below [minPhoneWidth]); one
   /// narrower than that, or too short even then (split screen, landscape, a
@@ -271,12 +232,6 @@ class DeviceGeometry {
   /// The phone's height.
   final double height;
 
-  /// The fit asked for.
-  final DeviceFit requestedFit;
-
-  /// The fit used (B falls back to A when it does not fit).
-  final DeviceFit fit;
-
   /// The 4:3 screen.
   final Rect screen;
 
@@ -289,7 +244,7 @@ class DeviceGeometry {
   /// The wheel's diameter, D.
   final double wheelDiameter;
 
-  /// The body: the whole phone in fit A, the fixed body in fit B.
+  /// The body: the whole phone (fit A, the owner's choice).
   final Rect body;
 
   /// The wordmark's vertical centre.
@@ -320,9 +275,6 @@ class DeviceGeometry {
   /// The wheel's drawn square.
   Rect get wheelRect =>
       Rect.fromCircle(center: wheelCentre, radius: wheelRadius);
-
-  /// Fit B: the body's corner radius.
-  double get bodyRadius => bodyRadiusRatio * width;
 
   /// The phone is narrower than the design supports.
   bool get tooNarrow => width < minPhoneWidth;

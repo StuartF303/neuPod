@@ -2,7 +2,7 @@
 
 // The device geometry against the design's reference implementation:
 // fixtures/render_py_geometry.json is render.py's geom() for the three phones
-// and both fits (docs/design/2026-11-21-app-device-view/render.py, run with
+// (fit A; fit B was dropped at gate 2) (docs/design/2026-11-21-app-device-view/render.py, run with
 // `python3 -I`; regenerate with the snippet in the PR that added it).
 
 import 'dart:convert';
@@ -19,9 +19,8 @@ void main() {
   ) as Map<String, dynamic>;
 
   for (final phone in designPhones) {
-    for (final fit in DeviceFit.values) {
-      final key =
-          '${phone.w.toInt()}${fit == DeviceFit.fillsPhone ? 'A' : 'B'}';
+    {
+      final key = '${phone.w.toInt()}A';
       test('$key agrees with render.py', () {
         final r = ref[key] as Map<String, dynamic>;
         double v(String k) => (r[k] as num).toDouble();
@@ -30,10 +29,8 @@ void main() {
           height: phone.h,
           safeTop: phone.top,
           safeBottom: phone.bottom,
-          fit: fit,
         );
         const e = 1e-9;
-        expect(g.fit, fit, reason: 'no fallback at the design sizes');
         expect(g.screen.width, closeTo(v('sw'), e));
         expect(g.screen.height, closeTo(v('sh'), e));
         expect(g.screen.left, closeTo(v('scr_x'), e));
@@ -117,22 +114,6 @@ void main() {
     );
     expect(h.wheelDiameter, closeTo(0.56 * 375, 1e-9));
   });
-
-  test(
-    'fit B falls back to A when the body is taller than the safe height',
-    () {
-      final g = DeviceGeometry.compute(
-        width: 375,
-        height: 640,
-        safeTop: 20,
-        safeBottom: 0,
-        fit: DeviceFit.fixedProportions,
-      );
-      expect(1.675 * 375, greaterThan(620));
-      expect(g.requestedFit, DeviceFit.fixedProportions);
-      expect(g.fit, DeviceFit.fillsPhone);
-    },
-  );
 
   test('the wordmark is omitted when its gap is under 44 pt', () {
     final g = DeviceGeometry.compute(

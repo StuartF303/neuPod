@@ -79,7 +79,7 @@ enum DeviceFinish {
   /// Tint of the wedge under a turning finger.
   final Color touch;
 
-  /// The phone's status bar text is dark on this finish (fit A).
+  /// The phone's status bar text is dark on this finish.
   final bool darkStatusText;
 
   /// The body as a gradient.
@@ -90,14 +90,11 @@ enum DeviceFinish {
     stops: bodyStops,
   );
 
-  /// The finish for a brightness when the Body setting is Automatic: silver
-  /// in Light, black in Dark (the mode, not the style, decides).
+  /// The finish for a brightness silver in Light, black in
+  /// Dark (the mode, not the style, decides; owner decision 13).
   static DeviceFinish forBrightness(Brightness b) =>
       b == Brightness.dark ? black : silver;
 }
-
-/// The surround round the body in fit B, in every style and mode.
-const Color deviceSurround = Color(0xFF0B0C0E);
 
 /// The screen frame (black glass), both finishes.
 const Color deviceFrame = Color(0xFF050608);

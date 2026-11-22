@@ -45,10 +45,10 @@ const List<BundledLicence> bundledLicences = [
   ),
   BundledLicence(
     name: 'Lucide icons',
-    version: '1.72.0 (a subset of 12 icons)',
+    version: '1.72.0 (a subset of 14 icons)',
     spdx: 'ISC AND MIT',
     use:
-        'Icons: chevron-right, check, headphones, bluetooth, shuffle, repeat, '
+        'Icons: chevron-right, check, headphones, bluetooth, bluetooth-connected, speaker, shuffle, repeat, '
         'repeat-1, volume, volume-2, lock, star and search. Some derive from '
         'Feather (MIT).',
     textAsset: 'assets/icons/lucide/LICENSE-Lucide.txt',

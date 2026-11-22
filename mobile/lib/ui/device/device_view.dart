@@ -102,10 +102,8 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
       height: plan.empty ? 1 : plan.virtualHeight,
       safeTop: plan.safeTop ?? pad.top,
       safeBottom: plan.safeBottom ?? pad.bottom,
-      fit: options.fit,
     );
-    final fitA = g.fit == DeviceFit.fillsPhone;
-    final darkText = fitA && finish.darkStatusText;
+    final darkText = finish.darkStatusText;
     final overlay = SystemUiOverlayStyle(
       statusBarColor: const Color(0x00000000),
       systemNavigationBarColor: const Color(0x00000000),
@@ -136,14 +134,9 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
               onLongPress: gateSwitchesEnabled
                   ? () => setState(() => _gateOpen = true)
                   : null,
-              child: fitA
-                  ? DecoratedBox(
-                      decoration: BoxDecoration(gradient: finish.bodyGradient),
-                    )
-                  : ColoredBox(
-                      color: deviceSurround,
-                      child: Stack(children: [_fixedBody(g, finish)]),
-                    ),
+              child: DecoratedBox(
+                decoration: BoxDecoration(gradient: finish.bodyGradient),
+              ),
             ),
           ),
         ),
@@ -233,26 +226,22 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
     if (plan.empty) {
       // A window under 1 pt (Android's first frame can be 0x0): only the
       // empty, correctly coloured body, no screen host or wheel.
-      device = fitA
-          ? DecoratedBox(
-              decoration: BoxDecoration(gradient: finish.bodyGradient),
-            )
-          : const ColoredBox(color: deviceSurround);
+      device = DecoratedBox(
+        decoration: BoxDecoration(gradient: finish.bodyGradient),
+      );
     } else {
       // The same tree for a phone and for a short or narrow window, so a
       // plan change (rotation, split screen, a resize near the threshold)
       // keeps the screen stack's state instead of remounting it. A phone is
       // scale 1 at offset 0; a window too short or narrow for the device at
       // full width gets the whole device scaled down uniformly and centred,
-      // the body finish or surround filling the rest.
+      // the body finish filling the rest.
       device = Stack(
         children: [
           Positioned.fill(
-            child: fitA
-                ? DecoratedBox(
-                    decoration: BoxDecoration(gradient: finish.bodyGradient),
-                  )
-                : const ColoredBox(color: deviceSurround),
+            child: DecoratedBox(
+              decoration: BoxDecoration(gradient: finish.bodyGradient),
+            ),
           ),
           Positioned(
             left: plan.offsetX,
@@ -282,27 +271,6 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
         ),
         // While the gate panel is open its own controls take the keys.
         child: WheelKeyboard(enabled: !_gateOpen, child: device),
-      ),
-    );
-  }
-
-  Widget _fixedBody(DeviceGeometry g, DeviceFinish finish) {
-    return Positioned.fromRect(
-      rect: g.body,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: finish.bodyGradient,
-          borderRadius: BorderRadius.circular(g.bodyRadius),
-          boxShadow: [
-            if (finish == DeviceFinish.black)
-              const BoxShadow(color: Color(0x24FFFFFF), spreadRadius: 1),
-            const BoxShadow(
-              color: Color(0x99000000),
-              offset: Offset(0, 18),
-              blurRadius: 40,
-            ),
-          ],
-        ),
       ),
     );
   }
