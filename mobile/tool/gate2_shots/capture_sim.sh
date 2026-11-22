@@ -5,8 +5,8 @@
 # Playing, in Classic Light and Modern Dark, for fit A / fit B, the body
 # finishes (the mode's own and the other one), the phone's status bar hidden
 # and the wordmark off. The scene is chosen by settings read by
-# gate2_sim_main.dart (here a scene file, /tmp/neupod-gate2-scene.env, which the simulator app can read), so one build
-# serves every shot.
+# gate2_sim_main.dart (here a scene file, /tmp/neupod-gate2-scene.env, which
+# the simulator app can read), so one build serves every shot.
 #
 #   cd mobile
 #   flutter build ios --simulator --debug --no-codesign -t tool/gate2_shots/gate2_sim_main.dart
@@ -15,6 +15,7 @@
 # Run it through ~/bin/neupod-buildlock on the shared machine. Shuts each
 # simulator down when done.
 set -euo pipefail
+trap 'rm -f /tmp/neupod-gate2-scene.env' EXIT
 
 out=$1
 shift
