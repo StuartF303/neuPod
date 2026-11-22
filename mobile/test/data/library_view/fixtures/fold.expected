@@ -1,0 +1,35 @@
+# artists (name, albums)
+Abba	1
+AC/DC	1
+Ångström	1
+The Beatles	2
+LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL	1
+Zed	1
+# albums list (title, artist, songs)
+Abbey Road	The Beatles	2
+Back in Black	AC/DC	2
+Greatest Hits	Abba	1
+Greatest Hits	Ångström	2
+Greatest Hits	Zed	1
+Help!	The Beatles	1
+Long	LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL	2
+# album table (title, artist)
+Greatest Hits	Abba
+Back in Black	AC/DC
+Greatest Hits	Ångström
+Abbey Road	The Beatles
+Help!	The Beatles
+Long	LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+Greatest Hits	Zed
+# songs (title, artist, album)
+Back in Black	AC/DC	Back in Black
+Come Together	The Beatles	Abbey Road
+Hells Bells	Ac/Dc	Back in Black
+Help	BEATLES	Help!
+Long A	LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL	Long
+Long B	LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL	Long
+Lumen	Ångström	Greatest Hits
+Nadir	Angstrom	Greatest Hits
+Something	Beatles	Abbey Road
+Waterloo	Abba	Greatest Hits
+Zinc	Zed	Greatest Hits

@@ -2,18 +2,14 @@
 // What the firmware's library builder makes of a list of tracks: builds a library with lib_build() (app/library/lib_build.c)
 // on a FatFs disk image, from tiny FLAC files carrying the tags given on stdin, then prints the Artists list, the Albums list,
 // the album table and the Songs list as lib_list_row() / lib_album() give them. The app's drift library view
-// (mobile/lib/data/library_view/drift_library_view.dart) folds artists and albums the same way; its test "names folding to
-// one key are one artist and one album" (mobile/test/data/library_view/drift_library_view_test.dart) takes this program's
-// output as its expectations.
+// (mobile/lib/data/library_view/drift_library_view.dart) folds artists and albums the same way; its entity tests
+// (mobile/test/data/library_view/drift_library_view_test.dart) seed the tracks of fixtures/<name>.tsv and expect what this
+// program printed for them, fixtures/<name>.expected.
 //
 // Input, one track per line, created (and so walked) in that order: path<TAB>title<TAB>artist<TAB>album<TAB>track
-// Build and run from the repository root (a scratch disk image is made in the current folder and removed at the end):
-//   cc -std=c11 -O1 -w -DNEUPOD_LIB_TEST_HOOKS=1 -Iapp/include -Iapp/third_party/fatfs -Ihal/include -Ihal/host/include \
-//     -Ihal/common -Itests -o /tmp/library_entities scripts/app/library_entities.c app/library/lib_*.c \
-//     app/third_party/fatfs/ff.c app/third_party/fatfs/ffunicode.c app/storage/ff_alloc.c app/storage/diskio.c \
-//     app/storage/nfs_fatfs.c app/storage/nfs_path.c app/audio/meta.c app/audio/mp4.c app/audio/wav.c \
-//     hal/host/hal_storage.c hal/common/hal_storage_common.c app/os/os_alloc_malloc.c
-//   printf '/Music/a/01.flac\tCome Together\tThe Beatles\tAbbey Road\t1\n' | /tmp/library_entities
+// (an empty field is no tag). mobile/tool/library_entities/gen_library_entities.sh builds this program and regenerates
+// every fixture; CI runs it and fails if a fixture no longer matches the firmware. A scratch disk image is made in the
+// current folder and removed at the end.
 #include "library_fixture.h"
 
 #include "library.h"

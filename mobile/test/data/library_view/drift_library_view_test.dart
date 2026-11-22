@@ -19,6 +19,9 @@
 // - lib_build.c `cut()` / POOL_STR: a title is stored cut to 64 bytes, so
 //   the key is built from at most 63 bytes of it.
 
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -187,85 +190,69 @@ void main() {
     expect((await v2.artists()).single.songCount, 2);
   });
 
-  // The expected lists below are what the firmware's own builder prints for
-  // the same tracks in the same walk order: lib_build() + lib_list_row() on a
-  // FatFs image, by scripts/app/library_entities.c.
-  test('names folding to one key are one artist and one album, as the '
-      'firmware builds them', () async {
-    final l = 'L' * 63;
-    for (final (path, title, artist, album, no) in [
-      ('a/01.flac', 'Come Together', 'The Beatles', 'Abbey Road', 1),
-      ('a/02.flac', 'Something', 'Beatles', 'abbey road', 2),
-      ('b/01.flac', 'Back in Black', 'AC/DC', 'Back in Black', 1),
-      ('b/02.flac', 'Hells Bells', 'Ac/Dc', 'Back In Black', 2),
-      ('c/01.flac', 'Lumen', 'Ångström', 'Greatest Hits', 1),
-      ('c/02.flac', 'Nadir', 'Angstrom', 'Greatest Hits', 2),
-      ('d/01.flac', 'Zinc', 'Zed', 'Greatest Hits', 1),
-      ('e/01.flac', 'Waterloo', 'Abba', 'Greatest Hits', 1),
-      // Tag text is held in 63 bytes (meta.h `char artist[64]`): these two
-      // differ only after that, so the firmware sees one artist.
-      ('f/01.flac', 'Long A', '${l}x', 'Long', 1),
-      ('f/02.flac', 'Long B', '${l}y', 'Long', 2),
-      ('g/01.flac', 'Help', 'BEATLES', 'Help!', 1),
-    ]) {
-      await add(title, path: path, artist: artist, album: album, trackNo: no);
+  // The firmware's own builder on the same tracks, walked in the same order:
+  // fixtures/<name>.tsv is given to scripts/app/library_entities.c (lib_build()
+  // + lib_list_row() on a FatFs image) and fixtures/<name>.expected is what it
+  // printed. Regenerate with mobile/tool/library_entities/gen_library_entities.sh
+  // (CI checks the fixtures still match the firmware).
+  //
+  // fold.tsv: names with equal collation keys and different text ("The
+  // Beatles" / "Beatles" / "BEATLES", "AC/DC" / "Ac/Dc", "Ångström" /
+  // "Angstrom"); two artists that differ only after 63 bytes (meta.h `char
+  // artist[64]`); "Greatest Hits" under four artists, two of them one.
+  // folders.tsv: untagged albums named after their folder (lib_build.c:362,
+  // ADR 0017 D5), "Live" under three artists, "live" folding into "Live", a
+  // file at the root of /Music, a tag equal to a folder's name.
+  for (final name in ['fold', 'folders']) {
+    test(
+      '$name: artists, albums and songs as the firmware builds them',
+      () async {
+        final fx = _EntityFixture.read(name);
+        for (final t in fx.tracks) {
+          await add(
+            t.title,
+            path: t.path,
+            artist: t.artist,
+            album: t.album,
+            trackNo: t.track,
+          );
+        }
+        // The firmware holds an artist's text in 63 bytes and shows it so; the
+        // app shows the whole text (only the keys follow the device).
+        expect([
+          for (final a in await view.artists())
+            [_held(a.name), '${a.albumCount}'],
+        ], fx.lists['artists']);
+        expect([
+          for (final a in await view.albums())
+            [a.title, _held(a.artist), '${a.songCount}'],
+        ], fx.lists['albums list']);
+        expect([
+          for (final a in await view.albumsForCoverFlow())
+            [a.title, _held(a.artist)],
+        ], fx.lists['album table']);
+        expect([
+          for (final s in await view.songs())
+            [s.title, _held(s.artist), s.album],
+        ], fx.lists['songs']);
+      },
+    );
+  }
+
+  test('a folded artist and album hold every song of the run', () async {
+    final fx = _EntityFixture.read('fold');
+    for (final t in fx.tracks) {
+      await add(
+        t.title,
+        path: t.path,
+        artist: t.artist,
+        album: t.album,
+        trackNo: t.track,
+      );
     }
-
     final artists = await view.artists();
-    expect(artists.map((a) => a.name), [
-      'Abba',
-      'AC/DC',
-      'Ångström',
-      'The Beatles',
-      '${l}x', // (the firmware shows it cut at 63 bytes; the app the whole)
-      'Zed',
-    ]);
-    expect(artists.map((a) => a.albumCount), [1, 1, 1, 2, 1, 1]);
-    expect(artists[3].songCount, 3);
-
-    // Equal titles in artist order: key_cmp's last key is the album id, the
-    // place in the (artist, album) table (lib_build.c:797-801, 1039-1041).
-    final albums = await view.albums();
-    expect(albums.map((a) => (a.title, a.artist, a.songCount)), [
-      ('Abbey Road', 'The Beatles', 2),
-      ('Back in Black', 'AC/DC', 2),
-      ('Greatest Hits', 'Abba', 1),
-      ('Greatest Hits', 'Ångström', 2),
-      ('Greatest Hits', 'Zed', 1),
-      ('Help!', 'The Beatles', 1),
-      ('Long', '${l}x', 2),
-    ]);
-    // The album table itself: (artist id, album key).
-    expect((await view.albumsForCoverFlow()).map((a) => (a.title, a.artist)), [
-      ('Greatest Hits', 'Abba'),
-      ('Back in Black', 'AC/DC'),
-      ('Greatest Hits', 'Ångström'),
-      ('Abbey Road', 'The Beatles'),
-      ('Help!', 'The Beatles'),
-      ('Long', '${l}x'),
-      ('Greatest Hits', 'Zed'),
-    ]);
-
-    // A song row: its own artist text, its merged album's name
-    // (lib_reader.c lib_list_row; lib_view.c:183-187).
-    final songs = await view.songs();
-    expect(songs.map((s) => (s.title, s.artist, s.album)), [
-      ('Back in Black', 'AC/DC', 'Back in Black'),
-      ('Come Together', 'The Beatles', 'Abbey Road'),
-      ('Hells Bells', 'Ac/Dc', 'Back in Black'),
-      ('Help', 'BEATLES', 'Help!'),
-      ('Long A', '${l}x', 'Long'),
-      ('Long B', '${l}y', 'Long'),
-      ('Lumen', 'Ångström', 'Greatest Hits'),
-      ('Nadir', 'Angstrom', 'Greatest Hits'),
-      ('Something', 'Beatles', 'Abbey Road'),
-      ('Waterloo', 'Abba', 'Greatest Hits'),
-      ('Zinc', 'Zed', 'Greatest Hits'),
-    ]);
-
-    // The merged entities hold every song, and a song's album is its
-    // merged album.
-    final beatles = artists[3];
+    final beatles = artists.firstWhere((a) => a.name == 'The Beatles');
+    expect(beatles.songCount, 3);
     expect((await view.albumsOfArtist(beatles.id)).map((a) => a.title), [
       'Abbey Road',
       'Help!',
@@ -275,14 +262,24 @@ void main() {
       'Something',
       'Help',
     ]);
-    final abbey = albums.first;
+    final abbey = (await view.albums()).first;
+    expect(abbey.title, 'Abbey Road');
     expect(abbey.artistId, beatles.id);
     expect((await view.album(abbey.id))!.songs.map((s) => s.title), [
       'Come Together',
       'Something',
     ]);
-    final something = songs.firstWhere((s) => s.title == 'Something');
-    expect(something.albumId, abbey.id);
+    final songs = await view.songs();
+    expect(songs.firstWhere((s) => s.title == 'Something').albumId, abbey.id);
+    // The long artist: one entity, named by its first track; both songs keep
+    // their own text.
+    final long = artists.firstWhere((a) => a.name.startsWith('LLL'));
+    expect(long.name.substring(63), 'x');
+    expect(long.songCount, 2);
+    expect(
+      songs.where((s) => s.album == 'Long').map((s) => s.artist.substring(63)),
+      ['x', 'y'],
+    );
   });
 
   test('a load in flight when the database changes is not kept', () async {
@@ -459,3 +456,56 @@ void main() {
     expect((await view.albums()).single.songCount, 2);
   });
 }
+
+/// Text as the firmware holds a tag: at most 63 bytes (meta.h, `cut()`).
+String _held(String s) =>
+    utf8.decode(firmwareCut(utf8.encode(s), 64), allowMalformed: true);
+
+/// `fixtures/<name>.tsv` (the tracks, in walk order) and
+/// `fixtures/<name>.expected`
+/// (what scripts/app/library_entities.c printed for them).
+final class _EntityFixture {
+  _EntityFixture(this.tracks, this.lists);
+
+  factory _EntityFixture.read(String name) {
+    const dir = 'test/data/library_view/fixtures';
+    const root = '/Music/';
+    final tracks = <_FixtureTrack>[];
+    for (final line in File('$dir/$name.tsv').readAsLinesSync()) {
+      if (line.isEmpty) continue;
+      final f = line.split('\t');
+      if (!f[0].startsWith(root)) {
+        throw FormatException('not under /Music', line);
+      }
+      tracks.add((
+        path: f[0].substring(root.length),
+        title: f[1],
+        artist: f[2],
+        album: f[3],
+        track: int.parse(f[4]),
+      ));
+    }
+    final lists = <String, List<List<String>>>{};
+    var at = <List<String>>[];
+    for (final line in File('$dir/$name.expected').readAsLinesSync()) {
+      if (line.startsWith('# ')) {
+        // "# artists (name, albums)" -> "artists"
+        at = lists[line.substring(2).split(' (').first] = [];
+      } else if (line.isNotEmpty) {
+        at.add(line.split('\t'));
+      }
+    }
+    return _EntityFixture(tracks, lists);
+  }
+
+  final List<_FixtureTrack> tracks;
+  final Map<String, List<List<String>>> lists;
+}
+
+typedef _FixtureTrack = ({
+  String path,
+  String title,
+  String artist,
+  String album,
+  int track,
+});
