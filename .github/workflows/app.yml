@@ -9,10 +9,16 @@ on:
     paths:
       - "mobile/**"
       - ".github/workflows/app.yml"
+      # android-integration runs the folder-access script and picker driver and pushes these audio fixtures.
+      - "scripts/app/**"
+      - "tests/assets/audio/**"
   pull_request:
     paths:
       - "mobile/**"
       - ".github/workflows/app.yml"
+      # android-integration runs the folder-access script and picker driver and pushes these audio fixtures.
+      - "scripts/app/**"
+      - "tests/assets/audio/**"
   workflow_dispatch:
 
 permissions:
@@ -133,6 +139,13 @@ jobs:
           echo "OK: no INTERNET or ACCESS_NETWORK_STATE permission in the release manifest"
 
   # Integration tests on an emulator at the minimum API level (29, Android 10).
+  #
+  # The integration tests run natively as an Android instrumentation test (android/app/src/androidTest, the
+  # integration_test package's "Android Device Testing" route), not `flutter test`. `flutter test` finds the app's Dart
+  # VM service by reading logcat; on the hosted runner it sometimes never sees it for the second test file and waits
+  # until the job timeout (run 44993855662 attempt 1: app installed for app_launch_test.dart at 06:33:14, cancelled at
+  # 07:08:17). Under instrumentation the Dart tests run inside the app and report to JUnit through the integration_test
+  # plugin: no VM service, no logcat scrape.
   android-integration:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
@@ -175,18 +188,36 @@ jobs:
           cache: true
           pub-cache: true
       - run: flutter pub get
-      # Build once before the emulator starts, so Gradle's downloads and first compile don't compete with it.
+      # Build the app and the instrumentation test APK before the emulator starts, so Gradle's downloads and first
+      # compile don't compete with it. `flutter build` also writes android/local.properties for ./gradlew.
       - run: flutter build apk --debug
-      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+      - run: (cd android && ./gradlew app:assembleDebugAndroidTest)
+      # The folder-access test app (tool/android_integration_tests.sh runs it through its adb-driven script).
+      - run: |
+          flutter build apk --debug -t integration_test/folder_access_test.dart --dart-define=NEUPOD_FOLDER_IT=true
+          mkdir -p build/folder_it && cp build/app/outputs/flutter-apk/app-debug.apk build/folder_it/app-debug.apk
+      # One instrumentation run per test file (tool/android_integration_tests.sh). No retry: a Dart test failure fails
+      # the instrumentation test, which fails Gradle, which fails the step; a hang is caught by the script's per-file
+      # timeout, then by the step timeout. The script is one line because the action runs each script line on its own.
+      # The step timeout covers the emulator boot plus every file at the per-file limit (3 files x 8 min), so a hang
+      # in any file is reported by the script's own message. Raise it when a file is added.
+      #
+      # -feature RefCountPipe: the API 29 emulator's graphics stack sometimes deadlocks on the first frame (RenderThread
+      # stuck in QemuPipeStream::commitBufferAndReadFully <- rcOpenColorBuffer2_enc <- gralloc.ranchu; ~4 in 10 runs).
+      # Run 45039175170 (25 cold launches per job): 75/75 ok with RefCountPipe across 3 jobs, against 7/75 hung on the
+      # earlier baseline without it. Keep -gpu swiftshader_indirect; -gpu guest timed out.
+      - name: Integration tests
+        timeout-minutes: 28
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 29
           target: default
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          emulator-options: -no-window -gpu swiftshader_indirect -feature RefCountPipe -noaudio -no-boot-anim -camera-back none -no-snapshot
           working-directory: mobile
-          script: flutter test integration_test -d emulator-5554
+          script: FOLDER_IT_APK=build/folder_it/app-debug.apk bash tool/android_integration_tests.sh
 
   # iOS: simulator build without signing, then the integration tests on an iPhone simulator. macos-26 is Apple
   # silicon; Xcode 26.5 is the version on the owner's Mac (docs/app/ENVIRONMENT.md) and ships the iOS 26.5 simulator.

@@ -57,6 +57,26 @@ def text_is(*words):
     return lambda n: (n.get("text") or "").strip().lower() in wanted
 
 
+_last_seen = None
+
+
+def describe(root):
+    """Prints the screen's labels when they change, so a run that gets stuck
+    shows what the picker looked like."""
+    global _last_seen
+    if root is None:
+        return
+    labels = []
+    for n in nodes(root):
+        label = (n.get("text") or "").strip() or (n.get("content-desc") or "").strip()
+        if label and label not in labels:
+            labels.append(label)
+    seen = " | ".join(labels)
+    if seen != _last_seen:
+        _last_seen = seen
+        print(f"drive_saf_picker: screen: {seen}", flush=True)
+
+
 def tap(serial, node, label):
     x, y = centre(node)
     print(f"drive_saf_picker: tap {label} at {x},{y}", flush=True)
@@ -74,8 +94,25 @@ def main():
     deadline = time.time() + args.timeout
     in_music = False
     in_folder = False
+    last_focus = None
     while time.time() < deadline:
         f = focus(s)
+        if f != last_focus:
+            print(f"drive_saf_picker: focus: {f or '(none)'}", flush=True)
+            last_focus = f
+        # A slow emulator can show "<app> isn't responding" over everything,
+        # for any app (often System UI just after boot, but it could be
+        # neuPod or DocumentsUI too): Wait keeps that app running rather than
+        # closing it, and a genuine hang still fails on the launch timeout.
+        if "Not Responding" in f:
+            root = dump(s)
+            describe(root)
+            wait = None if root is None else find(root, text_is("wait"))
+            if wait is not None:
+                tap(s, wait, "Wait")
+            else:
+                time.sleep(1)
+            continue
         if "documentsui" not in f and "permissioncontroller" not in f:
             if in_folder:
                 print("drive_saf_picker: picker closed", flush=True)
@@ -86,15 +123,19 @@ def main():
         if root is None:
             time.sleep(1)
             continue
+        describe(root)
         # Confirmation dialog: "Allow <app> to access files in <folder>?"
         allow = find(root, text_is("allow"))
         if allow is not None and in_folder:
             tap(s, allow, "Allow")
             continue
         if in_folder:
-            use = find(root, text_is("use this folder"))
+            # Android 11+: "Use this folder". Android 10 and earlier: "Select"
+            # (some builds: "Allow access to <folder>").
+            use = find(root, lambda n: text_is("use this folder", "select")(n)
+                       or (n.get("text") or "").strip().lower().startswith("allow access to"))
             if use is not None:
-                tap(s, use, "Use this folder")
+                tap(s, use, use.get("text"))
                 continue
         target = find(root, text_is(args.folder))
         if target is not None and in_music:
@@ -113,13 +154,30 @@ def main():
             if drawer is not None:
                 tap(s, drawer, "roots drawer")
                 root = dump(s)
-                storage = root is not None and find(
+                describe(root)
+                storage = None if root is None else find(
                     root,
                     lambda n: n.get("resource-id", "").endswith(":id/title")
-                    and re.search(r"(sdk_gphone|internal|pixel|phone|storage)", (n.get("text") or ""), re.I),
+                    and re.search(r"(sdk_gphone|sdk built for|internal|pixel|phone|storage)", (n.get("text") or ""), re.I),
                 )
-                if storage:
+                if storage is not None:
                     tap(s, storage, storage.get("text"))
+                    continue
+                # Android 10 and earlier hide internal storage from the roots
+                # until "Show internal storage" is chosen in the overflow menu.
+                adb(s, "shell", "input", "keyevent", "KEYCODE_BACK")
+                time.sleep(1)
+                root = dump(s)
+                more = None if root is None else find(root, lambda n: (n.get("content-desc") or "").lower() == "more options")
+                if more is not None:
+                    tap(s, more, "More options")
+                    root = dump(s)
+                    describe(root)
+                    show = None if root is None else find(root, text_is("show internal storage"))
+                    if show is not None:
+                        tap(s, show, "Show internal storage")
+                    else:
+                        adb(s, "shell", "input", "keyevent", "KEYCODE_BACK")
                 continue
         time.sleep(1)
     print("drive_saf_picker: timed out", file=sys.stderr)

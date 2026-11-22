@@ -26,6 +26,9 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // The integration tests run as an instrumentation test (src/androidTest), the integration_test package's
+        // "Android Device Testing" route.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -46,4 +49,10 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // The versions the integration_test plugin itself depends on, so nothing new is downloaded.
+    androidTestImplementation("androidx.test:runner:1.3.0")
+    androidTestImplementation("androidx.test:rules:1.2.0")
 }
