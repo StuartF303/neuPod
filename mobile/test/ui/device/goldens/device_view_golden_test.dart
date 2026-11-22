@@ -3,9 +3,9 @@
 // Goldens of the device view: the three design phones, fit A only, silver
 // and black; and the wheel's five states in both finishes. They check the
 // body, frame, screen placement and wheel. The screen inside is a text-free
-// test pattern: scaled text rasterises differently on macOS (where the
-// goldens are made) and on the Linux CI runner, and the screens have their
-// own goldens.
+// test pattern: scaled text rasterises differently on macOS (the CI
+// `goldens` job's image, where the goldens are made) and on the Linux CI
+// runner, and the screens have their own goldens.
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
