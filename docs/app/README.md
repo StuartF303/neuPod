@@ -187,10 +187,11 @@ the same rule as the device: the dominant colour, clamped until white text on it
 - **The layout and the wheel's numbers are in the [device view design](../design/2026-11-21-app-device-view/README.md)**: geometry as ratios of the
   phone's width, the fit on tall and short phones, body finishes, hit zones, press-or-turn, detents and acceleration
   (a port of the firmware's `ui_accel_feed()`), holds, haptics, direct touch, the three text tiers, accessibility and
-  the phone's status bar. Where it offers candidates (fit A or B, wheel only or wheel plus screen), both are built
-  for the design gate. Its Open questions are the owner's.
-- Search, which needs typing, opens the phone's keyboard from a Search item (in the Music menu for now; device view
-  design Open question 11).
+  the phone's status bar. Its recommendations (the fit, the body finish, direct touch, the phone's status bar shown,
+  the large-text tiers, the wordmark) are proposals the owner picks at gate 2; where it offers candidates, both are
+  built and switchable. Its Open questions are the owner's.
+- Search, which needs typing, opens the phone's keyboard from a Search item (placement is device view design Open question 11;
+  it sits in the Music menu meanwhile).
 - Type is Montserrat (SIL OFL), icons are Lucide (ISC), as on the device. Every third-party asset and package is listed
   on an in-app Licences screen.
 - Feedback follows the device's three places where they translate: a row confirms with a brief flash and a tick; a

@@ -34,14 +34,14 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] Components: list row (one and two lines), selection and pressed states, header bar, progress bar, panel, art frame
 - [ ] Accent from album art, clamped to 4.5:1 with white text
 - [ ] Modern backdrop from the art
-- [ ] Device view: body, 4:3 screen at s = 0.88 W / 600, wordmark, both finishes, fit A and fit B, safe areas, minimum width ([device view design](../design/2026-11-21-app-device-view/README.md) sections 1 to 3, 10)
+- [ ] Device view: body, 4:3 screen at s = 0.88 W / 600, wordmark, both finishes, fit A and fit B, safe areas, minimum width, phone status bar shown or hidden, wordmark on or off ([device view design](../design/2026-11-21-app-device-view/README.md) sections 1 to 3, 10)
 - [ ] Click wheel: drawing and states, hit zones, press-or-turn at 7.5 degrees, 15-degree detents, an exact port of `ui_accel_feed()` (`app/ui/ui_logic.c`), holds, system volume on Now Playing (design sections 4 and 5)
-- [ ] Fast-scroll letter tile and rail, trigger and timings confirmed against `app/ui/ui_list.c` and `ui_rail.c`
+- [ ] Fast-scroll letter tile and rail, trigger and timings confirmed against `app/ui/ui_list.c` and `ui_rail.c` (design section 5)
 - [ ] Haptics on both platforms with the design's event table, API names confirmed against current platform docs, 30 a second cap, obeying the system setting; optional click sound (design section 5)
 - [ ] Accessibility of the device view: rows as elements, the wheel as one adjustable element with five actions, keyboard and switch control (design section 9)
 - [ ] Direct touch candidates 1 (wheel only) and 2 (wheel plus taps and drags), switchable for the gate (design section 6)
 - [ ] Text tiers: 7, 6 and 5 rows by the phone's text size (design section 8)
-- [ ] Design-gate screens in the device view, Classic Light and Modern Dark, with real data: Home, Songs with the letter tile, an album with disc headings, Cover Flow, Now Playing at rest, with volume and in seek, a panel, Search with the keyboard; fit A and B; touch 1 and 2; both body finishes; three text tiers (design section 7)
+- [ ] Design-gate screens in the device view, Classic Light and Modern Dark, with real data: Home, Songs with the letter tile, an album with disc headings, Cover Flow, Now Playing at rest, with volume and in seek, a panel, Search with the keyboard; fit A and B; touch 1 and 2; both body finishes; phone status bar shown and hidden; three text tiers (design sections 2, 3, 6, 7, 8 and 10)
 - [ ] **Gate 2: stop and show the owner; record the choices here**
 
 ## Phase 3: library
@@ -126,7 +126,7 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 
 (One line per thing the next session must know. Newest first.)
 
-- 2026-11-22: The device view design is in [`docs/design/2026-11-21-app-device-view/`](../design/2026-11-21-app-device-view/README.md) (#103). Its twelve Open questions are the owner's; none is settled by the team. Where its mock-ups and the specification differ, the build follows the specification and the README text, and the difference is shown at gate 2: the mock-ups' Home has the firmware's items (Podcasts, Photos, Extras) where the app spec has Music, Playlists, Settings, Shuffle Songs, Now Playing; some show a Wi-Fi icon that the README says R1 omits; Now Playing has no rating stars (the spec requires them); the album header lacks the total time; Search's wheel is not drawn disabled.
+- 2026-11-22: The device view design is in [`docs/design/2026-11-21-app-device-view/`](../design/2026-11-21-app-device-view/README.md) (#103). Its twelve Open questions are the owner's; none is settled by the team. Where its mock-ups and the specification differ, the build follows the specification and the README text, and the difference is shown at gate 2: the mock-ups' Home is the firmware's: it adds Podcasts (a spec Not goal), Photos and Extras and lacks Playlists; some show a Wi-Fi icon that the README says R1 omits; Now Playing has no rating stars (the spec requires them); the album header shows the disc count instead of the song count and total time; the spec's "seek by dragging the progress bar" conflicts with the design's "the progress bar is not draggable (seek mode is the way to seek)", so both are built switchable for the owner; Search's wheel is not drawn disabled.
 
 - 2026-11-21: Owner decision 9: the app is the device, a drawn-fresh front view with a touch click wheel, buttons and haptics. Phase 2 and the design gate are built around it; the device's 600x450 designs apply to the screen.
 
