@@ -127,6 +127,8 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 
 (One line per thing the next session must know. Newest first.)
 
+- 2026-11-22: Design gate, browsing half (UI engineer A): shell, Home, Music, Songs, Artists/artist, Albums/album, Cover Flow, Genres/genre, Compilations, Settings (style, mode), over a `LibraryView` port fed by the test library's manifest (`mobile/lib/ui/screens/README.md`). Interim sort (`domain/library_view/sort_name.dart`) until #117's `collateKey` is on main; gate durations are made up (the manifest has none). Greyed rows are skipped by the wheel.
+
 - 2026-11-22: Phase 0 done. App CI (`.github/workflows/app.yml`, #104): `check`, `android` (with the no-`INTERNET` release-manifest check), `android-integration` (API 29 emulator) and `ios` (`macos-26`, Xcode 26.5, iPhone 17 simulator, one visible retry if the simulator hangs). Follow-ups: bump the pinned Xcode 26.5 and the `iOS-26-5` runtime when the runner image drops them; consider Dependabot for the SHA-pinned actions; do not make the app jobs required checks without a gate job (they are path-filtered). Every run on main completes; PR runs cancel superseded ones.
 - 2026-11-22: Lead practice: merge only after `gh pr checks <n> --watch` exits 0 (an early script merged #101 and #102 with firmware jobs pending; main was green afterwards). Every subagent is given an explicit model for its task. Reviewers read PRs through `gh pr diff` / `git show`, never `git checkout` in the shared tree. Heavy builds go through `~/bin/neupod-buildlock` (8 GB RAM).
 

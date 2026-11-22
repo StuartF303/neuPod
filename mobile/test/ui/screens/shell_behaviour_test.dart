@@ -285,7 +285,10 @@ void main() {
       );
       expect(tile, findsOneWidget);
       expect(tileOpacity(), 1);
-      await tester.pump(const Duration(milliseconds: 400));
+      // Still showing 200 ms later; hidden once 250 ms have passed.
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tileOpacity(), 1);
+      await tester.pump(const Duration(milliseconds: 100));
       await tester.pumpAndSettle();
       expect(tileOpacity(), 0);
     });

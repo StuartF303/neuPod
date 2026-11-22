@@ -127,6 +127,10 @@ Future<ShellRig> pumpShell(
       ),
       playerProvider.overrideWithValue(player),
       hapticsPortProvider.overrideWithValue(haptics),
+      // The wheel's clock is the test's own (it moves with pump).
+      wheelClockProvider.overrideWithValue(
+        () => tester.binding.clock.now().millisecondsSinceEpoch,
+      ),
       if (status != null) deviceStatusProvider.overrideWithValue(status),
     ],
   );
