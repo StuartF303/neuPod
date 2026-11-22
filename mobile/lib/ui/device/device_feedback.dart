@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import 'dart:async';
+
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/domain/wheel/feedback_ports.dart';
 import 'package:neupod/domain/wheel/rate_limiter.dart';
@@ -12,10 +15,25 @@ final hapticsPortProvider = Provider<HapticsPort>(
   (ref) => const SilentHaptics(),
 );
 
-/// The click sound. A seam: silent until the Click sound item lands.
+/// The click sound: a platform system sound, so it follows the phone's own
+/// rules (on iOS the ringer switch; on Android the touch-sounds setting;
+/// owner decision 13). Only played while the Click sound setting is on (off
+/// by default; its switch lands with Settings).
 final clickSoundPortProvider = Provider<ClickSoundPort>(
-  (ref) => const SilentClicks(),
+  (ref) => const SystemClicks(),
 );
+
+/// Plays the platform's click system sound for every detent and press.
+class SystemClicks implements ClickSoundPort {
+  /// The system click.
+  const SystemClicks();
+
+  @override
+  void play(FeedbackKind kind) {
+    // A missing platform channel (tests, desktop) is no reason to fail.
+    unawaited(SystemSound.play(SystemSoundType.click).catchError((_) {}));
+  }
+}
 
 /// Haptics and click sounds for the device view, with the design's rules
 /// (section 5): detents limited to 30 a second with the

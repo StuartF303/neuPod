@@ -57,6 +57,21 @@ void main() {
       );
     });
 
+    test('the route decides the output icon (owner decision 13)', () {
+      expect(outputIconFor(OutputRoute.phoneSpeaker), OutputIcon.none);
+      expect(outputIconFor(OutputRoute.usb), OutputIcon.line);
+      expect(outputIconFor(OutputRoute.wired), OutputIcon.line);
+      expect(outputIconFor(OutputRoute.wireless), OutputIcon.external);
+      expect(outputIconFor(OutputRoute.bluetooth), OutputIcon.none);
+    });
+
+    test('Bluetooth saved and connected differ in words and in shape', () {
+      const saved = StatusBar(title: 'a', bluetooth: BluetoothIcon.saved);
+      const active = StatusBar(title: 'a', bluetooth: BluetoothIcon.active);
+      expect(saved.semanticsLabel, contains('Bluetooth not connected'));
+      expect(active.semanticsLabel, contains('Bluetooth connected'));
+    });
+
     test('volume wins over a message', () {
       const bar = StatusBar(
         title: 'Songs',

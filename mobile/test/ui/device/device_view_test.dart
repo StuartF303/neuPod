@@ -8,6 +8,7 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/ui/device/click_wheel.dart';
 import 'package:neupod/ui/device/device_finish.dart';
 import 'package:neupod/ui/device/device_geometry.dart';
@@ -39,33 +40,27 @@ class _Probe extends StatelessWidget {
 
 void main() {
   _oddSizeTests();
+  _reparentTests();
   for (final phone in designPhones) {
-    for (final fit in DeviceFit.values) {
-      testWidgets('${phone.name} ${fit.name}: screen and wheel where the '
-          'geometry puts them', (tester) async {
-        final c = await pumpDevice(tester, phone: phone);
-        c
-            .read(deviceViewOptionsProvider.notifier)
-            .update((o) => o.copyWith(fit: fit));
-        await tester.pump();
-        final g = DeviceGeometry.compute(
-          width: phone.w,
-          height: phone.h,
-          safeTop: phone.top,
-          safeBottom: phone.bottom,
-          fit: fit,
-        );
-        final host = tester.getRect(find.byType(DeviceScreenHost));
-        expect(host.left, closeTo(g.screen.left, 1e-6));
-        expect(host.top, closeTo(g.screen.top, 1e-6));
-        expect(host.width, closeTo(g.screen.width, 1e-6));
-        expect(host.height, closeTo(g.screen.height, 1e-6));
-        final wheel = tester.getRect(find.byType(ClickWheel));
-        expect(wheel.center.dx, closeTo(g.wheelCentre.dx, 1e-6));
-        expect(wheel.center.dy, closeTo(g.wheelCentre.dy, 1e-6));
-        expect(wheel.width, closeTo(g.wheelDiameter * 1.06, 1e-6));
-      });
-    }
+    testWidgets('${phone.name}: screen and wheel where the '
+        'geometry puts them', (tester) async {
+      await pumpDevice(tester, phone: phone);
+      final g = DeviceGeometry.compute(
+        width: phone.w,
+        height: phone.h,
+        safeTop: phone.top,
+        safeBottom: phone.bottom,
+      );
+      final host = tester.getRect(find.byType(DeviceScreenHost));
+      expect(host.left, closeTo(g.screen.left, 1e-6));
+      expect(host.top, closeTo(g.screen.top, 1e-6));
+      expect(host.width, closeTo(g.screen.width, 1e-6));
+      expect(host.height, closeTo(g.screen.height, 1e-6));
+      final wheel = tester.getRect(find.byType(ClickWheel));
+      expect(wheel.center.dx, closeTo(g.wheelCentre.dx, 1e-6));
+      expect(wheel.center.dy, closeTo(g.wheelCentre.dy, 1e-6));
+      expect(wheel.width, closeTo(g.wheelDiameter * 1.06, 1e-6));
+    });
   }
 
   testWidgets('the screen is laid out at 600x450 and scaled by s', (
@@ -134,34 +129,23 @@ void main() {
     expect(tester.widgetList(find.text('neuPod')).length, before - 1);
   });
 
-  testWidgets('status bar text: dark on silver, light on black and on the '
-      'fit B surround', (tester) async {
-    SystemUiOverlayStyle style() => tester
-        .widget<AnnotatedRegion<SystemUiOverlayStyle>>(
-          find.byType(AnnotatedRegion<SystemUiOverlayStyle>).first,
-        )
-        .value;
-    final c = await pumpDevice(tester);
-    expect(style().statusBarIconBrightness, Brightness.dark);
-    expect(style().statusBarBrightness, Brightness.light);
-    c
-        .read(deviceViewOptionsProvider.notifier)
-        .update((o) => o.copyWith(body: BodySetting.black));
-    await tester.pump();
-    expect(style().statusBarIconBrightness, Brightness.light);
-    c
-        .read(deviceViewOptionsProvider.notifier)
-        .update(
-          (o) => o.copyWith(
-            body: BodySetting.silver,
-            fit: DeviceFit.fixedProportions,
-          ),
-        );
-    await tester.pump();
-    expect(style().statusBarIconBrightness, Brightness.light);
-  });
+  testWidgets(
+    'status bar text: dark on silver (Light), light on black (Dark)',
+    (tester) async {
+      SystemUiOverlayStyle style() => tester
+          .widget<AnnotatedRegion<SystemUiOverlayStyle>>(
+            find.byType(AnnotatedRegion<SystemUiOverlayStyle>).first,
+          )
+          .value;
+      await pumpDevice(tester);
+      expect(style().statusBarIconBrightness, Brightness.dark);
+      expect(style().statusBarBrightness, Brightness.light);
+      await pumpDevice(tester, brightness: Brightness.dark);
+      expect(style().statusBarIconBrightness, Brightness.light);
+    },
+  );
 
-  testWidgets('the body follows the mode unless pinned', (tester) async {
+  testWidgets('the body follows the mode (owner decision 13)', (tester) async {
     expect(
       const DeviceViewOptions().finishFor(Brightness.light),
       DeviceFinish.silver,
@@ -170,22 +154,9 @@ void main() {
       const DeviceViewOptions().finishFor(Brightness.dark),
       DeviceFinish.black,
     );
-    expect(
-      const DeviceViewOptions(body: BodySetting.black)
-          .finishFor(Brightness.light),
-      DeviceFinish.black,
-    );
-    final c = await pumpDevice(tester, brightness: Brightness.dark);
+    await pumpDevice(tester, brightness: Brightness.dark);
     final wheel = tester.widget<ClickWheel>(find.byType(ClickWheel));
     expect(wheel.finish, DeviceFinish.black);
-    c
-        .read(deviceViewOptionsProvider.notifier)
-        .update((o) => o.copyWith(body: BodySetting.silver));
-    await tester.pump();
-    expect(
-      tester.widget<ClickWheel>(find.byType(ClickWheel)).finish,
-      DeviceFinish.silver,
-    );
   });
 
   testWidgets('a long press on the body opens the gate switches', (
@@ -195,9 +166,14 @@ void main() {
     await tester.longPressAt(const Offset(8, 500));
     await tester.pumpAndSettle();
     expect(find.byType(GatePanel), findsOneWidget);
-    await tester.tap(find.text('B: fixed'));
+    expect(find.text('A: fills'), findsNothing);
+    expect(find.text('Silver'), findsNothing);
+    await tester.tap(find.text('1: wheel only'));
     await tester.pump();
-    expect(c.read(deviceViewOptionsProvider).fit, DeviceFit.fixedProportions);
+    expect(
+      c.read(deviceViewOptionsProvider).directTouch,
+      DirectTouch.wheelOnly,
+    );
     // The panel scrolls; Now Playing's section made it longer than the phone.
     await tester.ensureVisible(find.text('Done'));
     await tester.pump();
@@ -278,7 +254,7 @@ void _oddSizeTests() {
     '800x600 landscape': Size(800, 600),
     'split screen 393x400': Size(393, 400),
     'just below the minimum width': Size(343, 852),
-    'just below the minimum height': Size(393, 400),
+    'a short, narrow window 360x500': Size(360, 500),
   };
   for (final e in {...degenerate, ...scaled}.entries) {
     testWidgets('${e.key}: builds without exceptions, then 393x852 is '
@@ -358,5 +334,41 @@ void _oddSizeTests() {
       ).empty,
       isTrue,
     );
+  });
+}
+
+void _reparentTests() {
+  testWidgets('a plan change keeps the screen stack and its selection', (
+    tester,
+  ) async {
+    final c = await pumpDevice(tester);
+    final bus = c.read(wheelBusProvider);
+    // Move the selection off the first row (the placeholder's state).
+    bus.emit(const WheelStep(2, 1));
+    await tester.pump();
+    expect(bus.semantics.value.value, 'Settings, 3 of 5');
+    final state = tester.state(find.byType(PlaceholderScreen));
+
+    for (final size in const [Size(393, 400), Size(393, 852)]) {
+      _useSize(tester, size);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      // The same State object: the screen was not remounted.
+      expect(tester.state(find.byType(PlaceholderScreen)), same(state));
+      expect(bus.semantics.value.value, 'Settings, 3 of 5');
+    }
+  });
+
+  testWidgets('on the scaled path a wheel press still emits its event', (
+    tester,
+  ) async {
+    final c = await pumpDevice(tester);
+    _useSize(tester, const Size(393, 400));
+    await tester.pump();
+    final events = <WheelEvent>[];
+    c.read(wheelBusProvider).events.listen(events.add);
+    await tester.tapAt(tester.getCenter(find.byType(ClickWheel)));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(events.whereType<WheelPress>(), isNotEmpty);
   });
 }

@@ -4,7 +4,7 @@
 // them up) and the song key that index_file() in app/library/lib_build.c builds from it: lib_collate_key() of the
 // title, or of the file name when untagged, with the title sort tag. Prints one line per file:
 //   <file name>\t<title bytes hex>\t<sort_title bytes hex>\t<key hex>
-// Built and run by scripts/app/gen-tag-key-vectors.sh; the app's tests compare its Dart port with these lines.
+// Built and run by scripts/app/gen_tag_key_vectors.py; the app's tests compare its Dart port with these lines.
 #include <stdio.h>
 #include <string.h>
 

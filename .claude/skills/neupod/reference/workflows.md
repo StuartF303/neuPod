@@ -81,3 +81,6 @@ ssh root@192.168.7.2 'echo s > /run/neupod.keys'            # keys: w/s scroll, 
 gh pr checks <n> --watch --interval 30      # run in the background; jobs: host, rp2350, rp2350-amoled241, esp32s3, y2, build-deploy
 gh pr merge <n> --squash --delete-branch    # once green (standing OK)
 ```
+
+App PRs run `.github/workflows/app.yml` (jobs: check, android, android-integration, ios). Merge only after
+`gh pr checks <n> --watch` exits 0; never pipe `gh pr merge` through tail or grep; confirm with `gh pr view <n> --json state`.

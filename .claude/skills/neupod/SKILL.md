@@ -1,6 +1,6 @@
 ---
 name: neupod
-description: neuPod firmware and bench work. Use for building, flashing, deploying or driving any neuPod target (host, Pico 2 W, Waveshare RP2350/ESP32-S3 AMOLED dev boards, Innioasis Y2 Linux testbed), reading their consoles, sending keys, taking screenshots, or checking which boards are attached. Also covers the safety rules that apply to each device.
+description: neuPod firmware, bench and phone-app work. Use for the Flutter phone app in mobile/ (building, testing, CI, leading the app team), and for building, flashing, deploying or driving any neuPod target (host, Pico 2 W, Waveshare RP2350/ESP32-S3 AMOLED dev boards, Innioasis Y2 Linux testbed), reading their consoles, sending keys, taking screenshots, or checking which boards are attached. Also covers the safety rules that apply to each device.
 ---
 
 # neuPod: hardware and software
@@ -52,6 +52,20 @@ The Y2 runs Buildroot in place of its stock Android. The stock backup is at `~/y
 
 Both Waveshare AMOLED boards are the owner's dev boards ("dev only so we can test capabilities"). Flashing them is approved.
 The ESP32 radio is scan-only (no joins). Always keep a full flash backup before replacing a factory image.
+
+## Phone app (`mobile/`)
+
+Flutter app that reads a neuPod's music in place. Spec `docs/app/README.md`, checklist `docs/app/PROGRESS.md`, how the
+team works `docs/app/TEAM-BRIEF.md`, **where the last lead stopped `docs/app/HANDOFF.md` (read first)**.
+
+- Build and test from `mobile/`: `flutter test --timeout 120s`, `dart analyze`. Integration: iOS via XCTest
+  (`FLTIntegrationTestRunner`), Android via `connectedDebugAndroidTest`. CI is `.github/workflows/app.yml`.
+- Firmware behaviour is the rule: wheel acceleration, letter ring, letter jump, sort keys and tag text are exact ports
+  of `app/ui/*.c` and `app/audio/meta.c`, verified against the compiled C with vectors. Never approximate; where the
+  firmware is silent, ask the owner.
+- Gates in PROGRESS.md stop the work until the owner answers. Never settle a design Open question yourself.
+- Subagents: set the model explicitly; tell every agent not to run `gh pr merge`; reviewers read via `gh pr diff` only.
+- Small machine: one heavy build at a time, delete `mobile/build` and `.dart_tool` after, remove merged worktrees.
 
 ## Finishing work
 

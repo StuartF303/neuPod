@@ -11,10 +11,12 @@ import 'package:neupod/domain/wheel/feedback_ports.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/ui/components/list_row.dart';
 import 'package:neupod/ui/screens/browse/album_screen.dart';
+import 'package:neupod/ui/screens/browse/cover_flow_screen.dart';
 import 'package:neupod/ui/screens/browse/home_screen.dart';
 import 'package:neupod/ui/screens/browse/songs_screen.dart';
 import 'package:neupod/ui/screens/browse/browse_common.dart';
 import 'package:neupod/ui/screens/shell/neupod_list.dart';
+import 'package:neupod/ui/style/neupod_style.dart';
 import 'package:neupod/ui/screens/shell/shell_frame.dart';
 import 'package:neupod/ui/screens/shell/shell_state.dart';
 
@@ -77,6 +79,59 @@ void main() {
         rig.haptics.played.where((k) => k == FeedbackKind.endReached),
         hasLength(1),
       );
+    });
+  });
+
+  group('Cover Flow', () {
+    testWidgets('a tap on a side cover centres it, near or far', (
+      tester,
+    ) async {
+      final rig = await pumpShell(tester, home: (_) => const CoverFlowScreen());
+      final first = _wheelValue(rig);
+      expect(first, contains('1 of'));
+      // Classic: the far right cover is centred 319 px right of the middle,
+      // half off screen.
+      await tester.tapAt(const Offset(595, 200));
+      await settle(tester);
+      expect(_wheelValue(rig), contains('4 of'));
+      // The first cover on the left of the new centre.
+      await tester.tapAt(const Offset(300 - 153, 200));
+      await settle(tester);
+      expect(_wheelValue(rig), contains('3 of'));
+    });
+  });
+
+  group('Cover Flow centre and Modern', () {
+    for (final modern in [false, true]) {
+      final name = modern ? 'Modern' : 'Classic';
+      testWidgets('$name: a tap on the centre cover opens its album', (
+        tester,
+      ) async {
+        final rig = await pumpShell(
+          tester,
+          home: (_) => const CoverFlowScreen(),
+          family: modern ? StyleFamily.modern : StyleFamily.classic,
+          dark: modern,
+        );
+        expect(rig.container.read(shellProvider).pages, hasLength(1));
+        await tester.tapAt(const Offset(300, 200));
+        await settle(tester);
+        expect(rig.container.read(shellProvider).pages, hasLength(2));
+      });
+    }
+
+    testWidgets('Modern: a tap on a side cover centres it', (tester) async {
+      final rig = await pumpShell(
+        tester,
+        home: (_) => const CoverFlowScreen(),
+        family: StyleFamily.modern,
+        dark: true,
+      );
+      expect(_wheelValue(rig), contains('1 of'));
+      await tester.tapAt(const Offset(300 + 284, 200)); // two covers right
+      await settle(tester);
+      expect(_wheelValue(rig), contains('3 of'));
+      expect(rig.container.read(shellProvider).pages, hasLength(1));
     });
   });
 

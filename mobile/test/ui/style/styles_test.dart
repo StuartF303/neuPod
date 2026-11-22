@@ -94,9 +94,11 @@ void main() {
         contrastRatio(_rgb(s.selection.flashText), 0xd6eafd),
         greaterThanOrEqualTo(4.5),
       );
-      // White on the selection bar's lower half (its upper half carries the
-      // design's 1 px text shadow; see the PR notes).
-      expect(contrastRatio(0xffffff, 0x1b62cf), greaterThanOrEqualTo(4.5));
+      // White on every stop of the selection bar (gate 2 darkened the upper
+      // stops; classic_light_contrast_test.dart covers every other pair).
+      for (final c in [0x2273d8, 0x1d6ed4, 0x1b62cf, 0x1858c8]) {
+        expect(contrastRatio(0xffffff, c), greaterThanOrEqualTo(4.5));
+      }
     });
 
     test('Modern Dark: inks on the list ground over the darkest backdrop', () {

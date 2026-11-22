@@ -6,9 +6,10 @@
 // point size. Run with
 //
 //   flutter test tool/gate2_shots/gate2_renders_test.dart \
-//     --dart-define=GATE2_OUT=/Users/stuart/neupod-gate2/renders
+//     --dart-define=GATE2_OUT=<output dir>
 //
-// (see README.md). The PNGs are written to GATE2_OUT; nothing is compared.
+// (see README.md). The PNGs are written to GATE2_OUT (default
+// build/gate2_renders); nothing is compared.
 // Montserrat comes from the bundled asset (flutter_test_config.dart of the
 // components' tests), as in the goldens.
 

@@ -12,7 +12,9 @@ import 'package:neupod/ui/style/skins.dart';
 
 const _ink = Color(0xff181818);
 const _ink2 = Color(0xff606060);
-const _ink3 = Color(0xff767676);
+// Darker than the design's #767676, which is only 4.1:1 on the grey surface
+// (gate 2: Classic Light is adjusted to 4.5:1; 4.6:1 on #f3f4f6).
+const _ink3 = Color(0xff6e6e6e);
 const _disabled = Color(0xffa0a0a0);
 const _glyph = Color(0xff3a3d42);
 
@@ -27,11 +29,13 @@ final _statusGradient = vertical(
   const [0, 0.50, 0.51, 1],
 );
 
-/// The selection bar's gradient.
+/// The selection bar's gradient. The design's upper stops (#6db3f5, #2f80e0)
+/// are only 2.2:1 and 4.0:1 under the white text; gate 2 adjusts them to
+/// 4.65:1 and 4.96:1 (the lower stops were already 5.7:1 and 6.4:1).
 final _selectionGradient = vertical(
   const [
-    Color(0xff6db3f5),
-    Color(0xff2f80e0),
+    Color(0xff2273d8),
+    Color(0xff1d6ed4),
     Color(0xff1b62cf),
     Color(0xff1858c8),
   ],
@@ -278,7 +282,7 @@ NeupodStyle classicLight() {
     index: const IndexSkin(
       tile: Color(0xdb181818), // rgba(24,24,24,.86)
       tileLetter: Color(0xffffffff),
-      rail: _disabled,
+      rail: _ink3, // the design's #a0a0a0 is 2.6:1; now 5.1:1 on white
       railCurrent: _ink,
     ),
     section: const SectionSkin(ground: Color(0xffe9ebee), text: _ink2),

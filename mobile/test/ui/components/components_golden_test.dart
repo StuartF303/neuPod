@@ -87,6 +87,7 @@ void main() {
           context: '1,204',
           message: 'Headphones unplugged',
           bluetooth: BluetoothIcon.saved,
+          output: OutputIcon.external,
           battery: BatteryState(level: 0.5, charging: true),
         ),
       ),

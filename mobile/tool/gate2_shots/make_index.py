@@ -18,8 +18,6 @@ PHONES = [
 ]
 VARIANTS = [
     ("base", "Fit A, mode's own body, status bar, wordmark (the defaults)"),
-    ("fit-b", "Fit B: fixed proportions on a dark surround"),
-    ("other-body", "Other body: black under Classic Light, silver under Modern Dark"),
     ("no-statusbar", "Phone status bar hidden"),
     ("no-wordmark", "Wordmark off"),
 ]

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-// Goldens of the device view: the three design phones, fit A and B, silver
+// Goldens of the device view: the three design phones, fit A only, silver
 // and black; and the wheel's five states in both finishes. They check the
 // body, frame, screen placement and wheel. The screen inside is a text-free
 // test pattern: scaled text rasterises differently on macOS (where the
@@ -12,8 +12,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/domain/wheel/wheel_input.dart';
 import 'package:neupod/ui/device/device_finish.dart';
-import 'package:neupod/ui/device/device_geometry.dart';
-import 'package:neupod/ui/device/device_options.dart';
 import 'package:neupod/ui/device/device_view.dart';
 import 'package:neupod/ui/device/wheel_painter.dart';
 
@@ -21,33 +19,22 @@ import '../device_test_harness.dart';
 
 void main() {
   for (final phone in designPhones) {
-    for (final fit in DeviceFit.values) {
-      for (final finish in DeviceFinish.values) {
-        final f = fit == DeviceFit.fillsPhone ? 'a' : 'b';
-        final name = 'device_${phone.name}_fit_${f}_${finish.name}';
-        testWidgets(name, (tester) async {
-          final c = await pumpDevice(
-            tester,
-            phone: phone,
-            screen: const _TestPattern(),
-          );
-          c
-              .read(deviceViewOptionsProvider.notifier)
-              .update(
-                (o) => o.copyWith(
-                  fit: fit,
-                  body: finish == DeviceFinish.silver
-                      ? BodySetting.silver
-                      : BodySetting.black,
-                ),
-              );
-          await tester.pump();
-          await expectLater(
-            find.byType(DeviceView),
-            matchesGoldenFile('$name.png'),
-          );
-        });
-      }
+    for (final finish in DeviceFinish.values) {
+      final name = 'device_${phone.name}_fit_a_${finish.name}';
+      testWidgets(name, (tester) async {
+        await pumpDevice(
+          tester,
+          phone: phone,
+          screen: const _TestPattern(),
+          brightness: finish == DeviceFinish.silver
+              ? Brightness.light
+              : Brightness.dark,
+        );
+        await expectLater(
+          find.byType(DeviceView),
+          matchesGoldenFile('$name.png'),
+        );
+      });
     }
   }
 
