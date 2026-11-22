@@ -73,10 +73,10 @@ jobs:
           java-version: "17"
       # Gradle User Home cache (dependencies, wrapper, build scripts): restored by the commit-keyed entry of the latest
       # run, saved at the end of the job, so every dependency (plugin builds included, which setup-java's file-hash key
-      # missed) is cached. Pull requests write too (cache-read-only: ${{ github.ref != 'refs/heads/main' }}  # only main writes; PRs restore main's cache (repo cache budget)) so a rerun of a PR restores its own cache.
+      # missed) is cached. Only main writes the cache; pull requests restore main's (the repo's Actions cache budget is limited).
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main' }}  # only main writes; PRs restore main's cache (repo cache budget)
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       - name: Retry Maven 429s and timeouts
         working-directory: .
         run: |
@@ -137,10 +137,10 @@ jobs:
           java-version: "17"
       # Gradle User Home cache (dependencies, wrapper, build scripts): restored by the commit-keyed entry of the latest
       # run, saved at the end of the job, so every dependency (plugin builds included, which setup-java's file-hash key
-      # missed) is cached. Pull requests write too (cache-read-only: ${{ github.ref != 'refs/heads/main' }}  # only main writes; PRs restore main's cache (repo cache budget)) so a rerun of a PR restores its own cache.
+      # missed) is cached. Only main writes the cache; pull requests restore main's (the repo's Actions cache budget is limited).
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main' }}  # only main writes; PRs restore main's cache (repo cache budget)
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       - name: Retry Maven 429s and timeouts
         working-directory: .
         run: |
