@@ -201,6 +201,9 @@ jobs:
       # timeout, then by the step timeout. The script is one line because the action runs each script line on its own.
       # The step timeout covers the emulator boot plus every file at the per-file limit (3 files x 8 min), so a hang
       # in any file is reported by the script's own message. Raise it when a file is added.
+      # GPU: swangle_indirect (ANGLE on SwiftShader), not swiftshader_indirect. Under swiftshader_indirect about 4 runs
+      # in 10 had the app's first frame never drawn: MainActivity resumed, "Launch timeout has expired" 10 s later, no
+      # frame after 45 s (run 45032649085 attempt 1, job 137239409642).
       - name: Integration tests
         timeout-minutes: 28
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
@@ -210,7 +213,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          emulator-options: -no-window -gpu swangle_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           working-directory: mobile
           script: FOLDER_IT_APK=build/folder_it/app-debug.apk bash tool/android_integration_tests.sh
 
