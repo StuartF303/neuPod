@@ -13,21 +13,10 @@
 #include <string.h>
 
 #include "runtime_config.h"
+#include "ui_logic.h"
 #include "wheel_input.h"
 
-typedef struct {
-    int32_t residue;
-    uint32_t energy;
-    uint32_t last_ms;
-} ui_accel_t;
-
-static void ui_accel_init(ui_accel_t *a) {
-    a->residue = 0;
-    a->energy = 0;
-    a->last_ms = 0;
-}
-
-#include "extracted.inc" /* ui_accel_feed, norm, wi_letterjump_init, wi_letterjump_scroll, wi_letterjump_tick */
+#include "extracted.inc" /* ui_accel_init, ui_accel_feed, norm, wi_letterjump_init, wi_letterjump_scroll, wi_letterjump_tick */
 
 static uint32_t g_rs = 12345u;
 static uint32_t rnd(void) {
