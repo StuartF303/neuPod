@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/domain/wheel/feedback_ports.dart';
@@ -94,4 +95,29 @@ void main() {
     expect((await v.step(-3)).step, 15);
     expect((await v.read()).percent, 94);
   });
+
+  test(
+    'the click sound is the platform system click (follows the ringer)',
+    () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      final calls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+            calls.add(call);
+            return null;
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+      const SystemClicks().play(FeedbackKind.detent);
+      await Future<void>.delayed(Duration.zero);
+      expect(calls.single.method, 'SystemSound.play');
+      expect(calls.single.arguments, 'SystemSoundType.click');
+      expect(
+        ProviderContainer.test().read(clickSoundPortProvider),
+        isA<SystemClicks>(),
+      );
+    },
+  );
 }

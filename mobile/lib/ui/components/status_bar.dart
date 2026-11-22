@@ -6,8 +6,9 @@
 ///
 /// No Wi-Fi icon: the app makes no network connection in R1 (device view
 /// design, section 10), so the right-hand group is, in the design's order,
-/// Bluetooth, output, lock and battery. The output icon follows the phone's route; what shows for AirPlay,
-/// the speaker and USB is device view Open question 7 (the speaker shows none).
+/// Bluetooth, output, lock and battery. The output icon follows the phone's
+/// route (owner decision 13): the speaker shows none, USB and wired the jack
+/// plug, AirPlay and other wireless a generic speaker.
 library;
 
 import 'package:flutter/widgets.dart';
@@ -22,12 +23,29 @@ enum PlayState { stopped, playing, paused }
 enum RepeatState { off, all, one }
 
 /// Bluetooth: no headset saved, saved but not connected (drawn dim, UI styles
-/// Open question 4), connected or in use (blue).
+/// Open question 4), connected or in use (blue). Colour is not the only cue:
+/// saved is the plain Bluetooth rune, connected is the same rune with a short
+/// bar either side (Lucide `bluetooth-connected`).
 enum BluetoothIcon { none, saved, active }
 
-/// The wired output icon: none, headphones (a plug in the jack) or the jack
-/// plug (output set to Line).
-enum OutputIcon { none, headphones, line }
+/// The output icon: none, headphones (a plug in the jack), the jack plug
+/// (output set to Line, USB and other wired outputs) or the generic external
+/// speaker (AirPlay and other wireless, non-Bluetooth outputs).
+enum OutputIcon { none, headphones, line, external }
+
+/// Where the phone's audio goes, as the platform reports it (device view
+/// Open question 7, owner decision 13).
+enum OutputRoute { phoneSpeaker, wired, usb, wireless, bluetooth }
+
+/// The status bar's output icon for [route]: the phone's own speaker shows
+/// none, USB and other wired outputs the jack plug, AirPlay and other
+/// wireless outputs the generic speaker. A Bluetooth route is shown by the
+/// Bluetooth icon, not here. Never Apple's AirPlay glyph.
+OutputIcon outputIconFor(OutputRoute route) => switch (route) {
+  OutputRoute.phoneSpeaker || OutputRoute.bluetooth => OutputIcon.none,
+  OutputRoute.wired || OutputRoute.usb => OutputIcon.line,
+  OutputRoute.wireless => OutputIcon.external,
+};
 
 @immutable
 final class BatteryState {
@@ -105,6 +123,7 @@ class StatusBar extends StatelessWidget {
         ?message,
       if (output == OutputIcon.headphones) 'headphones',
       if (output == OutputIcon.line) 'line out',
+      if (output == OutputIcon.external) 'external speaker',
       if (bluetooth == BluetoothIcon.active) 'Bluetooth connected',
       if (bluetooth == BluetoothIcon.saved) 'Bluetooth not connected',
       if (locked) 'locked',
@@ -139,7 +158,9 @@ class StatusBar extends StatelessWidget {
       children: [
         if (bluetooth != BluetoothIcon.none)
           _hardware(
-            NeupodGlyph.bluetooth,
+            bluetooth == BluetoothIcon.active
+                ? NeupodGlyph.bluetoothConnected
+                : NeupodGlyph.bluetooth,
             bluetooth == BluetoothIcon.active ? skin.bluetoothActive : skin.dim,
             bluetooth == BluetoothIcon.active ? 2.75 : 2.5,
             skin,
@@ -147,9 +168,11 @@ class StatusBar extends StatelessWidget {
           ),
         if (output != OutputIcon.none)
           _hardware(
-            output == OutputIcon.headphones
-                ? NeupodGlyph.headphones
-                : NeupodGlyph.jackPlug,
+            switch (output) {
+              OutputIcon.headphones => NeupodGlyph.headphones,
+              OutputIcon.external => NeupodGlyph.speaker,
+              _ => NeupodGlyph.jackPlug,
+            },
             skin.glyph,
             2.5,
             skin,
