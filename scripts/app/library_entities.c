@@ -13,7 +13,8 @@
 // the walk (a lead decision) is depth first, each folder's entries (files and folders together) in byte order of their
 // UTF-8 names. This program creates the files in exactly that order (walk_cmp below, the same order as the app's
 // walkCompare in drift_library_view.dart): every folder is made when its first file is, and each folder's entries are
-// made in byte order, so the firmware's own walk over the image is the app's model, whatever the order of the lines. mobile/tool/library_entities/gen_library_entities.sh builds this program and regenerates
+// made in byte order, so the firmware's own walk over the image is the app's model, whatever the order of the lines.
+// Paths whose folders or files differ only in case are refused (exit 1): FAT folds case, so they would merge. mobile/tool/library_entities/gen_library_entities.sh builds this program and regenerates
 // every fixture; CI runs it and fails if a fixture no longer matches the firmware. A scratch disk image is made in the
 // current folder and removed at the end.
 #include "library_fixture.h"
@@ -41,6 +42,29 @@ static int walk_cmp(const void *pa, const void *pb) {
         a++;
         b++;
     }
+}
+
+// FAT and exFAT fold case: "Live" and "live" in one folder are one entry, so the second line would land in the first's
+// folder (or overwrite its file) and the walk would no longer be the app's model, without any error. Before a path is
+// created, each of its folders and the file are looked up; an entry that exists under a name differing from the one asked
+// for (FatFs's own case folding, the volume's up-case table) is a clash. Returns the clashing prefix in @p clash, or false.
+static bool case_clash(const char *path, char *clash, size_t cap) {
+    char pre[256];
+    size_t n = strlen(path);
+    if (n >= sizeof pre) return false;
+    for (size_t i = 1; i <= n; i++) {
+        if (path[i] != '/' && path[i] != '\0') continue;
+        memcpy(pre, path, i);
+        pre[i] = '\0';
+        const char *seg = strrchr(pre, '/');
+        seg = seg != NULL ? seg + 1 : pre;
+        FILINFO fno;
+        if (f_stat(pre, &fno) == FR_OK && strcmp(fno.fname, seg) != 0) {
+            snprintf(clash, cap, "%s (already there as \"%s\")", pre, fno.fname);
+            return true;
+        }
+    }
+    return false;
 }
 
 int main(void) {
@@ -73,6 +97,12 @@ int main(void) {
             char *t = p ? strchr(p, '\t') : NULL;
             if (t) *t = '\0';
             p = t ? t + 1 : NULL;
+        }
+        char clash[512];
+        if (case_clash(f[0], clash, sizeof clash)) {
+            fprintf(stderr, "paths that differ only in case: %s; FAT folds case, so they would be one entry\n", clash);
+            fx_cleanup();
+            return 1;
         }
         fx_tags_t tg = {.title = f[1], .artist = f[2], .album = f[3], .track = f[4] ? atoi(f[4]) : 0};
         size_t n = fx_flac(g_file, &tg, 10);

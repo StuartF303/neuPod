@@ -54,6 +54,21 @@ List<String> albumDetails(Album a, {bool length = true}) => [
   if (length && a.totalTime != null) durationLabel(a.totalTime!),
 ];
 
+/// The artist an album's list row shows: none for a compilation. The
+/// firmware's `lib_list_row` (lib_reader.c) gives an album row its artist
+/// only when the album has one (`en.artist != LIB_NONE`), so a compilation's
+/// row in the Albums or Compilations list, and its Cover Flow caption, has
+/// no artist; only the album's header says "Various Artists" (`album_header`
+/// in lib_view.c).
+String albumRowArtist(Album a) => a.compilation ? '' : a.artist;
+
+/// An album row's second line, `Artist · 1993`: the artist left out for a
+/// compilation ([albumRowArtist]).
+String albumArtistYear(Album a) => [
+  if (albumRowArtist(a).isNotEmpty) albumRowArtist(a),
+  if (a.year != null) '${a.year}',
+].join(' · ');
+
 /// Pushes a screen.
 void pushScreen(WidgetRef ref, String name, WidgetBuilder builder) => ref
     .read(shellProvider.notifier)
