@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: MPL-2.0
+name: neupod_device
+description: "neuPod's device feel: click-wheel haptics and the system media volume (in-repo plugin)."
+version: 0.1.0
+publish_to: 'none'
+resolution: workspace
+
+environment:
+  sdk: ^3.14.0
+  flutter: '>=3.50.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  meta: ^1.19.0 # used by Pigeon's generated Dart
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  pigeon: ^30.0.4
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: net.stuartfraser.neupod_device
+        pluginClass: NeupodDevicePlugin
+      ios:
+        pluginClass: NeupodDevicePlugin

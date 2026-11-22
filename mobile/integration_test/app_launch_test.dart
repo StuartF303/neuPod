@@ -22,13 +22,15 @@ void main() {
     }
   });
 
-  testWidgets('the app launches on a device and shows the Home placeholder', (
+  testWidgets('the app launches on a device as the device view', (
     tester,
   ) async {
     app.main();
     await tester.pumpAndSettle();
 
-    expect(find.text('neuPod'), findsOneWidget);
+    // The device view's placeholder screen (the title and the wordmark both
+    // read neuPod, so look for a Home item instead).
+    expect(find.text('Music'), findsOneWidget);
     expect(find.text('No songs'), findsOneWidget);
   });
 }

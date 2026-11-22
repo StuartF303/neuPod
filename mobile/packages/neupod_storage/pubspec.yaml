@@ -2,6 +2,7 @@ name: neupod_storage
 description: "Read-only folder access for the neuPod app: Android SAF trees, iOS Documents and security-scoped bookmarks (decision 0004)."
 version: 0.1.0
 publish_to: 'none'
+resolution: workspace
 
 environment:
   sdk: ^3.14.0
