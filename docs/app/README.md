@@ -47,6 +47,9 @@ Status: specification, 21 November 2026. Nothing is built. The working instructi
     `app/include/wheel_input.h`): the letter ring and mode chips, with live results as the user types. The chips are the firmware's six: `abc`,
     `ABC`, `123`, `#!?`, `space`, `del` (owner, 22 November 2026; the design drew five, without `#!?`). The screen is in
     the [device view design](../design/2026-11-21-app-device-view/README.md), "Search, by the wheel".
+13. **Gate 2, first choices (owner, 22 November 2026)**, from the screenshots of the device view: **fit A** (the body
+    fills the phone; device view design Open question 1), and the **body finish follows the mode** (silver in Light,
+    black in Dark) with no separate Silver/Black setting (Open question 5).
 
 Everything else in this document is the designer's proposal until the owner confirms it. Proposals that most need a
 decision are collected under [Open questions](#open-questions).
