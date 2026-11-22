@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:drift/native.dart';
@@ -9,6 +10,7 @@ import 'package:neupod/data/db/drift_library_repository.dart';
 import 'package:neupod/data/db/library_database.dart';
 import 'package:neupod/data/scan/local_library_scanner.dart';
 import 'package:neupod/domain/library/library_folder.dart';
+import 'package:neupod/domain/library/track.dart';
 import 'package:neupod_storage/neupod_storage.dart';
 // ignore: implementation_imports
 import 'package:neupod_storage/src/messages.g.dart';
@@ -26,6 +28,10 @@ class DirApi extends NeupodStorageApi {
   final Map<String, List<StorageEntry>> _walks = {};
   int _n = 0;
 
+  /// Paths under this prefix are left out and the walk reported incomplete,
+  /// as when a subfolder cannot be listed or a drive goes away.
+  String? unreadablePrefix;
+
   @override
   Future<String> startWalk(String rootId) async {
     final dir = roots[rootId];
@@ -33,6 +39,9 @@ class DirApi extends NeupodStorageApi {
     final entries = <StorageEntry>[];
     for (final f in dir.listSync(recursive: true).whereType<File>()) {
       final rel = f.path.substring(dir.path.length + 1);
+      if (unreadablePrefix != null && rel.startsWith(unreadablePrefix!)) {
+        continue;
+      }
       entries.add(
         StorageEntry(
           relPath: rel,
@@ -53,22 +62,31 @@ class DirApi extends NeupodStorageApi {
   @override
   Future<WalkBatch> nextWalkBatch(String walkId, int maxEntries) async {
     final all = _walks.remove(walkId)!;
-    return WalkBatch(entries: all, done: true);
+    return WalkBatch(
+      entries: all,
+      done: true,
+      complete: unreadablePrefix == null,
+    );
   }
 
   @override
   Future<void> cancelWalk(String walkId) async => _walks.remove(walkId);
 }
 
-/// Counts handles opened, by wrapping NeupodStorage.
+/// Counts handles opened, and can make opens fail.
 class CountingStorage extends NeupodStorage {
   CountingStorage(DirApi api) : super(api: api);
   final opened = <String>[];
+  final handles = <ReaderHandle>[];
+  bool failOpens = false;
 
   @override
-  Future<ReaderHandle> openHandle(String uri) {
-    opened.add(uri.split('/').last);
-    return super.openHandle(uri);
+  Future<ReaderHandle> openHandle(StorageEntry entry) async {
+    opened.add(entry.relPath.split('/').last);
+    if (failOpens) throw StorageException('open-failed');
+    final h = await super.openHandle(entry);
+    handles.add(h);
+    return h;
   }
 }
 
@@ -78,6 +96,9 @@ LibraryFolder folder(String id, {bool available = true}) => LibraryFolder(
   kind: FolderKind.pickedFolder,
   available: available,
 );
+
+Future<R> failingIsolate<R>(R Function() computation) =>
+    Future.error(IsolateSpawnException('no isolate'));
 
 void main() {
   late Directory tmp;
@@ -96,22 +117,34 @@ void main() {
     ..createSync(recursive: true)
     ..writeAsBytesSync(bytes);
 
+  Uint8List flac(List<String> comments) =>
+      flacWithComments(fixture('flac16_44k_st.flac'), comments);
+
+  Future<List<Track>> tracks() => DriftLibraryRepository(db).watchSongs().first;
+
   Future<List<(String, String)>> songs() async => [
-    for (final t in await DriftLibraryRepository(db).watchSongs().first)
-      (t.displayTitle, t.artistAndAlbum),
+    for (final t in await tracks()) (t.displayTitle, t.artistAndAlbum),
   ];
+
+  (DirApi, CountingStorage, LocalLibraryScanner) setUpScanner({
+    FakeFolderAccess? access,
+    IsolateRunner? runIsolate,
+  }) {
+    final api = DirApi({'m': Directory('${tmp.path}/music')});
+    final storage = CountingStorage(api);
+    final scanner = LocalLibraryScanner(
+      folders: access ?? FakeFolderAccess([folder('m')]),
+      storage: storage,
+      db: db,
+      runIsolate: runIsolate,
+    );
+    return (api, storage, scanner);
+  }
 
   test(
     'scans tags, sorts by the firmware rule, skips what is not audio',
     () async {
-      put(
-        'B/b.flac',
-        flacWithComments(fixture('flac16_44k_st.flac'), [
-          'TITLE=The Zebra',
-          'ARTIST=Band',
-          'ALBUM=One',
-        ]),
-      );
+      put('B/b.flac', flac(['TITLE=The Zebra', 'ARTIST=Band', 'ALBUM=One']));
       put('A/a.mp3', [
         ...id3v2([textFrame('TIT2', 'Apple'), textFrame('TPE1', 'Artist')]),
         ...fixture('mp3_44k_st.mp3'),
@@ -120,30 +153,61 @@ void main() {
       put('A/Folder.jpg', [1, 2, 3]);
       put('notes.txt', [1]);
       put('A/10 Track.m4a', [0, 0, 0]); // listed by name until phase 3
+      put('A/clip.mp4', [0, 0, 0]); // the firmware accepts .mp4 too
 
-      final storage = CountingStorage(
-        DirApi({'m': Directory('${tmp.path}/music')}),
-      );
-      final scanner = LocalLibraryScanner(
-        folders: FakeFolderAccess([folder('m')]),
-        storage: storage,
-        db: db,
-      );
+      final (_, storage, scanner) = setUpScanner();
       final progress = await scanner.scan().toList();
       expect(progress.last.done, isTrue);
-      expect(progress.last.filesFound, 4);
-      expect(progress.last.filesRead, 4);
+      expect(progress.last.filesFound, 5);
+      expect(progress.last.filesRead, 5);
 
       // Digits first, then letters with accents folded and "The " skipped.
       expect(await songs(), [
         ('10 Track', ''),
         ('Apple', 'Artist'),
+        ('clip', ''),
         ('Éclair', ''),
         ('The Zebra', 'Band · One'),
       ]);
       expect(
         storage.opened,
-        unorderedEquals(['a.mp3', 'b.flac', '%C3%89clair.flac']),
+        unorderedEquals(['a.mp3', 'b.flac', 'Éclair.flac']),
+      );
+    },
+  );
+
+  test('title sort tags decide the order (owner decision 11)', () async {
+    put('a.flac', flac(['TITLE=Aardvark', 'TITLESORT=Zzz']));
+    put('b.mp3', [
+      ...id3v2([textFrame('TIT2', 'Zulu'), textFrame('TSOT', 'Aaa')]),
+      ...fixture('mp3_44k_st.mp3'),
+    ]);
+    put('c.flac', flac(['TITLE=Middle']));
+    final (_, _, scanner) = setUpScanner();
+    await scanner.scan().drain<void>();
+    final t = await tracks();
+    expect(t.map((x) => x.title), ['Zulu', 'Middle', 'Aardvark']);
+    final row = await (db.select(
+      db.tracks,
+    )..where((r) => r.relPath.equals('a.flac'))).getSingle();
+    expect(row.titleSort, 'Zzz');
+  });
+
+  test(
+    'the key uses the firmware truncations; the title is kept whole',
+    () async {
+      final long = 'B${'x' * 70}'; // past the 63-byte title buffer
+      put('1.flac', flac(['TITLE=${long}1']));
+      put('2.flac', flac(['TITLE=${long}0']));
+      final (_, _, scanner) = setUpScanner();
+      await scanner.scan().drain<void>();
+      // Both cut to the same 63 bytes, so the same key: the tails the firmware
+      // never sees do not order them (ties go by id).
+      final rows = await db.select(db.tracks).get();
+      expect(rows[0].titleSortKey, rows[1].titleSortKey);
+      expect(
+        (await tracks()).map((x) => x.title),
+        unorderedEquals(['${long}1', '${long}0']),
       );
     },
   );
@@ -151,55 +215,107 @@ void main() {
   test(
     'a rescan reads only new or changed files and drops removed ones',
     () async {
-      put(
-        'a.flac',
-        flacWithComments(fixture('flac16_44k_st.flac'), ['TITLE=A']),
-      );
-      final gone = put(
-        'b.flac',
-        flacWithComments(fixture('flac16_44k_st.flac'), ['TITLE=B']),
-      );
-      final storage = CountingStorage(
-        DirApi({'m': Directory('${tmp.path}/music')}),
-      );
-      final scanner = LocalLibraryScanner(
-        folders: FakeFolderAccess([folder('m')]),
-        storage: storage,
-        db: db,
-      );
+      put('a.flac', flac(['TITLE=A']));
+      final gone = put('b.flac', flac(['TITLE=B']));
+      final (_, storage, scanner) = setUpScanner();
       await scanner.scan().drain<void>();
-      final idA = (await DriftLibraryRepository(
-        db,
-      ).watchSongs().first).first.id;
+      final idA = (await tracks()).first.id;
 
       storage.opened.clear();
       gone.deleteSync();
-      put(
-        'c.flac',
-        flacWithComments(fixture('flac16_44k_st.flac'), ['TITLE=C']),
-      );
+      put('c.flac', flac(['TITLE=C']));
       final last = (await scanner.scan().toList()).last;
 
       expect(storage.opened, ['c.flac']); // a.flac unchanged: not opened
       expect(last.filesRead, 1);
-      final tracks = await DriftLibraryRepository(db).watchSongs().first;
-      expect(tracks.map((t) => t.title), ['A', 'C']);
-      expect(tracks.first.id, idA); // the row (and its id) survives
+      final t = await tracks();
+      expect(t.map((x) => x.title), ['A', 'C']);
+      expect(t.first.id, idA); // the row (and its id) survives
     },
   );
+
+  test('an incomplete walk deletes nothing it did not see', () async {
+    put('keep/a.flac', flac(['TITLE=A']));
+    put('b.flac', flac(['TITLE=B']));
+    final (api, _, scanner) = setUpScanner();
+    await scanner.scan().drain<void>();
+    expect(await songs(), hasLength(2));
+
+    api.unreadablePrefix = 'keep/'; // that folder cannot be listed this time
+    await scanner.scan().drain<void>();
+    expect((await tracks()).map((t) => t.title), ['A', 'B']);
+
+    api.unreadablePrefix = null; // listed again, and the file really is gone
+    File('${tmp.path}/music/keep/a.flac').deleteSync();
+    await scanner.scan().drain<void>();
+    expect((await tracks()).map((t) => t.title), ['B']);
+  });
+
+  test('a transient failure is retried on the next scan', () async {
+    put('a.flac', flac(['TITLE=A']));
+    final (_, storage, scanner) = setUpScanner();
+    storage.failOpens = true;
+    await scanner.scan().drain<void>();
+    expect(
+      (await tracks()).single.unreadableReason,
+      UnreadableReason.cannotOpen,
+    );
+
+    storage
+      ..failOpens = false
+      ..opened.clear();
+    await scanner.scan().drain<void>(); // same size and mtime, but retried
+    expect(storage.opened, ['a.flac']);
+    final t = (await tracks()).single;
+    expect((t.title, t.unreadableReason), ('A', null));
+  });
+
+  test(
+    'a lasting failure is not retried while the file is unchanged',
+    () async {
+      put('bad.flac', Uint8List.fromList(List.filled(100, 7)));
+      final (_, storage, scanner) = setUpScanner();
+      await scanner.scan().drain<void>();
+      storage.opened.clear();
+      await scanner.scan().drain<void>();
+      expect(storage.opened, isEmpty);
+    },
+  );
+
+  test(
+    'if the isolate cannot start, the handles are closed and the files retried',
+    () async {
+      put('a.flac', flac(['TITLE=A']));
+      final (_, storage, scanner) = setUpScanner(runIsolate: failingIsolate);
+      await scanner.scan().drain<void>();
+      expect(storage.handles, hasLength(1));
+      expect(storage.handles.single.isUsed, isTrue); // discarded
+      expect(
+        (await tracks()).single.unreadableReason,
+        UnreadableReason.cannotRead,
+      );
+    },
+  );
+
+  test('a new scan version reads every file again', () async {
+    put('a.flac', flac(['TITLE=A']));
+    final (_, storage, scanner) = setUpScanner();
+    await scanner.scan().drain<void>();
+    expect(await db.metaValue('scan_version'), scanVersion);
+
+    storage.opened.clear();
+    await db.setMetaValue('scan_version', scanVersion - 1);
+    await scanner.scan().drain<void>();
+    expect(storage.opened, ['a.flac']);
+    expect(await db.metaValue('scan_version'), scanVersion);
+  });
 
   test(
     'a removed folder removes its tracks; an unavailable one keeps them',
     () async {
       put('a.flac', fixture('flac16_44k_st.flac'));
       final access = FakeFolderAccess([folder('m')]);
-      final scanner = LocalLibraryScanner(
-        folders: access,
-        storage: NeupodStorage(
-          api: DirApi({'m': Directory('${tmp.path}/music')}),
-        ),
-        db: db,
-      );
+      final (_, _, scanner) = setUpScanner(access: access);
       await scanner.scan().drain<void>();
       expect(await songs(), hasLength(1));
 
@@ -215,45 +331,60 @@ void main() {
     },
   );
 
-  test('damaged and not-downloaded files are listed with a reason', () async {
-    put('bad.flac', Uint8List.fromList(List.filled(100, 7)));
-    put('icloud/x.mp3', [1, 2, 3]); // DirApi marks "cloud" paths not downloaded
-    final storage = CountingStorage(
-      DirApi({'m': Directory('${tmp.path}/music')}),
-    );
-    await LocalLibraryScanner(
-      folders: FakeFolderAccess([folder('m')]),
-      storage: storage,
-      db: db,
-    ).scan().drain<void>();
+  test(
+    'damaged and not-downloaded files are listed with a reason code',
+    () async {
+      put('bad.flac', Uint8List.fromList(List.filled(100, 7)));
+      put('cut.flac', fixture('flac16_44k_st.flac').sublist(0, 20));
+      put('icloud/x.mp3', [
+        1,
+        2,
+        3,
+      ]); // DirApi marks "cloud" paths not downloaded
+      final (_, storage, scanner) = setUpScanner();
+      await scanner.scan().drain<void>();
 
-    final tracks = await DriftLibraryRepository(db).watchSongs().first;
-    final reasons = {
-      for (final t in tracks) t.displayTitle: t.unreadableReason,
+      final reasons = {
+        for (final t in await tracks()) t.displayTitle: t.unreadableReason,
+      };
+      expect(reasons, {
+        'bad': UnreadableReason.wrongFormat,
+        'cut': UnreadableReason.damaged,
+        'x': UnreadableReason.notDownloaded,
+      });
+      expect(storage.opened, unorderedEquals(['bad.flac', 'cut.flac']));
+      final codes = await db
+          .customSelect('SELECT reason_code FROM tracks')
+          .get();
+      expect(
+        codes.map((r) => r.read<int>('reason_code')),
+        unorderedEquals([4, 5, 1]),
+      );
+    },
+  );
+
+  test('scans never change the music: bytes, modes, mtimes, folders', () async {
+    put('a.flac', flac(['TITLE=A']));
+    put('sub/b.mp3', fixture('mp3_44k_st.mp3'));
+    put('sub/bad.flac', [1, 2, 3]);
+    final root = Directory('${tmp.path}/music');
+    Map<String, (String?, int, DateTime)> snapshot() => {
+      for (final e in root.listSync(recursive: true))
+        e.path: (
+          e is File ? e.readAsBytesSync().join(',') : null,
+          e.statSync().mode,
+          e.statSync().modified,
+        ),
     };
-    expect(reasons, {'bad': 'not a FLAC file', 'x': 'Not downloaded'});
-    expect(storage.opened, ['bad.flac']); // never opened the evicted file
-  });
-
-  test('the music files are not modified by a scan', () async {
-    final f = put(
-      'a.flac',
-      flacWithComments(fixture('flac16_44k_st.flac'), ['TITLE=A']),
-    );
-    final before = (f.readAsBytesSync(), f.lastModifiedSync());
-    await LocalLibraryScanner(
-      folders: FakeFolderAccess([folder('m')]),
-      storage: NeupodStorage(
-        api: DirApi({'m': Directory('${tmp.path}/music')}),
-      ),
-      db: db,
-    ).scan().drain<void>();
-    expect(f.readAsBytesSync(), before.$1);
-    expect(f.lastModifiedSync(), before.$2);
-    expect(
-      Directory('${tmp.path}/music').listSync(recursive: true),
-      hasLength(1),
-    );
+    final before = snapshot();
+    final rootBefore = root.statSync();
+    final (_, _, scanner) = setUpScanner();
+    await scanner.scan().drain<void>();
+    await db.setMetaValue('scan_version', 0); // force a full re-read
+    await scanner.scan().drain<void>(); // and a rescan
+    expect(snapshot(), before);
+    expect(root.statSync().modified, rootBefore.modified);
+    expect(root.statSync().mode, rootBefore.mode);
   });
 
   test('extensionOf', () {
@@ -283,6 +414,7 @@ void main() {
             mtime: 0,
             codec: 'flac',
             title: title,
+            titleSort: '',
             titleSortKey: Uint8List.fromList(key),
             artist: '',
             album: '',
@@ -296,9 +428,7 @@ void main() {
     await add('2', 'short', [0xC1]); // a prefix sorts first, as memcmp
     await add('3', 'high', [0xFF]);
     await add('4', 'tie', [0xC1]);
-    final titles = (await DriftLibraryRepository(
-      db,
-    ).watchSongs().first).map((t) => t.title);
+    final titles = (await tracks()).map((t) => t.title);
     expect(titles, ['short', 'tie', 'long', 'high']);
   });
 }

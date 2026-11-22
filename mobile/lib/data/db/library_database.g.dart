@@ -403,6 +403,17 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _titleSortMeta = const VerificationMeta(
+    'titleSort',
+  );
+  @override
+  late final GeneratedColumn<String> titleSort = GeneratedColumn<String>(
+    'title_sort',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
   static const VerificationMeta _titleSortKeyMeta = const VerificationMeta(
     'titleSortKey',
   );
@@ -477,15 +488,15 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _unreadableReasonMeta = const VerificationMeta(
-    'unreadableReason',
+  static const VerificationMeta _reasonCodeMeta = const VerificationMeta(
+    'reasonCode',
   );
   @override
-  late final GeneratedColumn<String> unreadableReason = GeneratedColumn<String>(
-    'unreadable_reason',
+  late final GeneratedColumn<int> reasonCode = GeneratedColumn<int>(
+    'reason_code',
     aliasedName,
     true,
-    type: DriftSqlType.string,
+    type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
   @override
@@ -498,6 +509,7 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     mtime,
     codec,
     title,
+    titleSort,
     titleSortKey,
     artist,
     album,
@@ -505,7 +517,7 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     durationMs,
     sampleRate,
     bitDepth,
-    unreadableReason,
+    reasonCode,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -578,6 +590,14 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     } else if (isInserting) {
       context.missing(_titleMeta);
     }
+    if (data.containsKey('title_sort')) {
+      context.handle(
+        _titleSortMeta,
+        titleSort.isAcceptableOrUnknown(data['title_sort']!, _titleSortMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleSortMeta);
+    }
     if (data.containsKey('title_sort_key')) {
       context.handle(
         _titleSortKeyMeta,
@@ -637,13 +657,10 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     } else if (isInserting) {
       context.missing(_bitDepthMeta);
     }
-    if (data.containsKey('unreadable_reason')) {
+    if (data.containsKey('reason_code')) {
       context.handle(
-        _unreadableReasonMeta,
-        unreadableReason.isAcceptableOrUnknown(
-          data['unreadable_reason']!,
-          _unreadableReasonMeta,
-        ),
+        _reasonCodeMeta,
+        reasonCode.isAcceptableOrUnknown(data['reason_code']!, _reasonCodeMeta),
       );
     }
     return context;
@@ -691,6 +708,10 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         DriftSqlType.string,
         data['${effectivePrefix}title'],
       )!,
+      titleSort: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title_sort'],
+      )!,
       titleSortKey: attachedDatabase.typeMapping.read(
         DriftSqlType.blob,
         data['${effectivePrefix}title_sort_key'],
@@ -719,9 +740,9 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         DriftSqlType.int,
         data['${effectivePrefix}bit_depth'],
       )!,
-      unreadableReason: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}unreadable_reason'],
+      reasonCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}reason_code'],
       ),
     );
   }
@@ -742,8 +763,12 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
   final String codec;
   final String title;
 
-  /// `collateKey()` of the displayed title: `ORDER BY` it gives the
-  /// firmware's order, since SQLite compares BLOBs with memcmp.
+  /// The title sort tag (TSOT / TITLESORT), or ''.
+  final String titleSort;
+
+  /// `songSortKey()`: the firmware's key of the title (or file name) and its
+  /// sort tag. `ORDER BY` it gives the device's order, since SQLite compares
+  /// BLOBs with memcmp.
   final Uint8List titleSortKey;
   final String artist;
   final String album;
@@ -752,8 +777,8 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
   final int sampleRate;
   final int bitDepth;
 
-  /// Why the tags could not be read, or null.
-  final String? unreadableReason;
+  /// `UnreadableReason.code` when the tags could not be read, or null.
+  final int? reasonCode;
   const TrackRow({
     required this.id,
     required this.sourceId,
@@ -763,6 +788,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     required this.mtime,
     required this.codec,
     required this.title,
+    required this.titleSort,
     required this.titleSortKey,
     required this.artist,
     required this.album,
@@ -770,7 +796,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     required this.durationMs,
     required this.sampleRate,
     required this.bitDepth,
-    this.unreadableReason,
+    this.reasonCode,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -783,6 +809,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     map['mtime'] = Variable<int>(mtime);
     map['codec'] = Variable<String>(codec);
     map['title'] = Variable<String>(title);
+    map['title_sort'] = Variable<String>(titleSort);
     map['title_sort_key'] = Variable<Uint8List>(titleSortKey);
     map['artist'] = Variable<String>(artist);
     map['album'] = Variable<String>(album);
@@ -790,8 +817,8 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     map['duration_ms'] = Variable<int>(durationMs);
     map['sample_rate'] = Variable<int>(sampleRate);
     map['bit_depth'] = Variable<int>(bitDepth);
-    if (!nullToAbsent || unreadableReason != null) {
-      map['unreadable_reason'] = Variable<String>(unreadableReason);
+    if (!nullToAbsent || reasonCode != null) {
+      map['reason_code'] = Variable<int>(reasonCode);
     }
     return map;
   }
@@ -806,6 +833,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       mtime: Value(mtime),
       codec: Value(codec),
       title: Value(title),
+      titleSort: Value(titleSort),
       titleSortKey: Value(titleSortKey),
       artist: Value(artist),
       album: Value(album),
@@ -813,9 +841,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       durationMs: Value(durationMs),
       sampleRate: Value(sampleRate),
       bitDepth: Value(bitDepth),
-      unreadableReason: unreadableReason == null && nullToAbsent
+      reasonCode: reasonCode == null && nullToAbsent
           ? const Value.absent()
-          : Value(unreadableReason),
+          : Value(reasonCode),
     );
   }
 
@@ -833,6 +861,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       mtime: serializer.fromJson<int>(json['mtime']),
       codec: serializer.fromJson<String>(json['codec']),
       title: serializer.fromJson<String>(json['title']),
+      titleSort: serializer.fromJson<String>(json['titleSort']),
       titleSortKey: serializer.fromJson<Uint8List>(json['titleSortKey']),
       artist: serializer.fromJson<String>(json['artist']),
       album: serializer.fromJson<String>(json['album']),
@@ -840,7 +869,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       durationMs: serializer.fromJson<int>(json['durationMs']),
       sampleRate: serializer.fromJson<int>(json['sampleRate']),
       bitDepth: serializer.fromJson<int>(json['bitDepth']),
-      unreadableReason: serializer.fromJson<String?>(json['unreadableReason']),
+      reasonCode: serializer.fromJson<int?>(json['reasonCode']),
     );
   }
   @override
@@ -855,6 +884,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       'mtime': serializer.toJson<int>(mtime),
       'codec': serializer.toJson<String>(codec),
       'title': serializer.toJson<String>(title),
+      'titleSort': serializer.toJson<String>(titleSort),
       'titleSortKey': serializer.toJson<Uint8List>(titleSortKey),
       'artist': serializer.toJson<String>(artist),
       'album': serializer.toJson<String>(album),
@@ -862,7 +892,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       'durationMs': serializer.toJson<int>(durationMs),
       'sampleRate': serializer.toJson<int>(sampleRate),
       'bitDepth': serializer.toJson<int>(bitDepth),
-      'unreadableReason': serializer.toJson<String?>(unreadableReason),
+      'reasonCode': serializer.toJson<int?>(reasonCode),
     };
   }
 
@@ -875,6 +905,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     int? mtime,
     String? codec,
     String? title,
+    String? titleSort,
     Uint8List? titleSortKey,
     String? artist,
     String? album,
@@ -882,7 +913,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     int? durationMs,
     int? sampleRate,
     int? bitDepth,
-    Value<String?> unreadableReason = const Value.absent(),
+    Value<int?> reasonCode = const Value.absent(),
   }) => TrackRow(
     id: id ?? this.id,
     sourceId: sourceId ?? this.sourceId,
@@ -892,6 +923,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     mtime: mtime ?? this.mtime,
     codec: codec ?? this.codec,
     title: title ?? this.title,
+    titleSort: titleSort ?? this.titleSort,
     titleSortKey: titleSortKey ?? this.titleSortKey,
     artist: artist ?? this.artist,
     album: album ?? this.album,
@@ -899,9 +931,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     durationMs: durationMs ?? this.durationMs,
     sampleRate: sampleRate ?? this.sampleRate,
     bitDepth: bitDepth ?? this.bitDepth,
-    unreadableReason: unreadableReason.present
-        ? unreadableReason.value
-        : this.unreadableReason,
+    reasonCode: reasonCode.present ? reasonCode.value : this.reasonCode,
   );
   TrackRow copyWithCompanion(TracksCompanion data) {
     return TrackRow(
@@ -913,6 +943,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       mtime: data.mtime.present ? data.mtime.value : this.mtime,
       codec: data.codec.present ? data.codec.value : this.codec,
       title: data.title.present ? data.title.value : this.title,
+      titleSort: data.titleSort.present ? data.titleSort.value : this.titleSort,
       titleSortKey: data.titleSortKey.present
           ? data.titleSortKey.value
           : this.titleSortKey,
@@ -926,9 +957,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ? data.sampleRate.value
           : this.sampleRate,
       bitDepth: data.bitDepth.present ? data.bitDepth.value : this.bitDepth,
-      unreadableReason: data.unreadableReason.present
-          ? data.unreadableReason.value
-          : this.unreadableReason,
+      reasonCode: data.reasonCode.present
+          ? data.reasonCode.value
+          : this.reasonCode,
     );
   }
 
@@ -943,6 +974,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ..write('mtime: $mtime, ')
           ..write('codec: $codec, ')
           ..write('title: $title, ')
+          ..write('titleSort: $titleSort, ')
           ..write('titleSortKey: $titleSortKey, ')
           ..write('artist: $artist, ')
           ..write('album: $album, ')
@@ -950,7 +982,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ..write('durationMs: $durationMs, ')
           ..write('sampleRate: $sampleRate, ')
           ..write('bitDepth: $bitDepth, ')
-          ..write('unreadableReason: $unreadableReason')
+          ..write('reasonCode: $reasonCode')
           ..write(')'))
         .toString();
   }
@@ -965,6 +997,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     mtime,
     codec,
     title,
+    titleSort,
     $driftBlobEquality.hash(titleSortKey),
     artist,
     album,
@@ -972,7 +1005,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     durationMs,
     sampleRate,
     bitDepth,
-    unreadableReason,
+    reasonCode,
   );
   @override
   bool operator ==(Object other) =>
@@ -986,6 +1019,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           other.mtime == this.mtime &&
           other.codec == this.codec &&
           other.title == this.title &&
+          other.titleSort == this.titleSort &&
           $driftBlobEquality.equals(other.titleSortKey, this.titleSortKey) &&
           other.artist == this.artist &&
           other.album == this.album &&
@@ -993,7 +1027,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           other.durationMs == this.durationMs &&
           other.sampleRate == this.sampleRate &&
           other.bitDepth == this.bitDepth &&
-          other.unreadableReason == this.unreadableReason);
+          other.reasonCode == this.reasonCode);
 }
 
 class TracksCompanion extends UpdateCompanion<TrackRow> {
@@ -1005,6 +1039,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
   final Value<int> mtime;
   final Value<String> codec;
   final Value<String> title;
+  final Value<String> titleSort;
   final Value<Uint8List> titleSortKey;
   final Value<String> artist;
   final Value<String> album;
@@ -1012,7 +1047,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
   final Value<int> durationMs;
   final Value<int> sampleRate;
   final Value<int> bitDepth;
-  final Value<String?> unreadableReason;
+  final Value<int?> reasonCode;
   const TracksCompanion({
     this.id = const Value.absent(),
     this.sourceId = const Value.absent(),
@@ -1022,6 +1057,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.mtime = const Value.absent(),
     this.codec = const Value.absent(),
     this.title = const Value.absent(),
+    this.titleSort = const Value.absent(),
     this.titleSortKey = const Value.absent(),
     this.artist = const Value.absent(),
     this.album = const Value.absent(),
@@ -1029,7 +1065,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.durationMs = const Value.absent(),
     this.sampleRate = const Value.absent(),
     this.bitDepth = const Value.absent(),
-    this.unreadableReason = const Value.absent(),
+    this.reasonCode = const Value.absent(),
   });
   TracksCompanion.insert({
     this.id = const Value.absent(),
@@ -1040,6 +1076,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     required int mtime,
     required String codec,
     required String title,
+    required String titleSort,
     required Uint8List titleSortKey,
     required String artist,
     required String album,
@@ -1047,7 +1084,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     required int durationMs,
     required int sampleRate,
     required int bitDepth,
-    this.unreadableReason = const Value.absent(),
+    this.reasonCode = const Value.absent(),
   }) : sourceId = Value(sourceId),
        relPath = Value(relPath),
        uri = Value(uri),
@@ -1055,6 +1092,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
        mtime = Value(mtime),
        codec = Value(codec),
        title = Value(title),
+       titleSort = Value(titleSort),
        titleSortKey = Value(titleSortKey),
        artist = Value(artist),
        album = Value(album),
@@ -1071,6 +1109,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Expression<int>? mtime,
     Expression<String>? codec,
     Expression<String>? title,
+    Expression<String>? titleSort,
     Expression<Uint8List>? titleSortKey,
     Expression<String>? artist,
     Expression<String>? album,
@@ -1078,7 +1117,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Expression<int>? durationMs,
     Expression<int>? sampleRate,
     Expression<int>? bitDepth,
-    Expression<String>? unreadableReason,
+    Expression<int>? reasonCode,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1089,6 +1128,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       if (mtime != null) 'mtime': mtime,
       if (codec != null) 'codec': codec,
       if (title != null) 'title': title,
+      if (titleSort != null) 'title_sort': titleSort,
       if (titleSortKey != null) 'title_sort_key': titleSortKey,
       if (artist != null) 'artist': artist,
       if (album != null) 'album': album,
@@ -1096,7 +1136,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       if (durationMs != null) 'duration_ms': durationMs,
       if (sampleRate != null) 'sample_rate': sampleRate,
       if (bitDepth != null) 'bit_depth': bitDepth,
-      if (unreadableReason != null) 'unreadable_reason': unreadableReason,
+      if (reasonCode != null) 'reason_code': reasonCode,
     });
   }
 
@@ -1109,6 +1149,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Value<int>? mtime,
     Value<String>? codec,
     Value<String>? title,
+    Value<String>? titleSort,
     Value<Uint8List>? titleSortKey,
     Value<String>? artist,
     Value<String>? album,
@@ -1116,7 +1157,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Value<int>? durationMs,
     Value<int>? sampleRate,
     Value<int>? bitDepth,
-    Value<String?>? unreadableReason,
+    Value<int?>? reasonCode,
   }) {
     return TracksCompanion(
       id: id ?? this.id,
@@ -1127,6 +1168,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       mtime: mtime ?? this.mtime,
       codec: codec ?? this.codec,
       title: title ?? this.title,
+      titleSort: titleSort ?? this.titleSort,
       titleSortKey: titleSortKey ?? this.titleSortKey,
       artist: artist ?? this.artist,
       album: album ?? this.album,
@@ -1134,7 +1176,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       durationMs: durationMs ?? this.durationMs,
       sampleRate: sampleRate ?? this.sampleRate,
       bitDepth: bitDepth ?? this.bitDepth,
-      unreadableReason: unreadableReason ?? this.unreadableReason,
+      reasonCode: reasonCode ?? this.reasonCode,
     );
   }
 
@@ -1165,6 +1207,9 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     if (title.present) {
       map['title'] = Variable<String>(title.value);
     }
+    if (titleSort.present) {
+      map['title_sort'] = Variable<String>(titleSort.value);
+    }
     if (titleSortKey.present) {
       map['title_sort_key'] = Variable<Uint8List>(titleSortKey.value);
     }
@@ -1186,8 +1231,8 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     if (bitDepth.present) {
       map['bit_depth'] = Variable<int>(bitDepth.value);
     }
-    if (unreadableReason.present) {
-      map['unreadable_reason'] = Variable<String>(unreadableReason.value);
+    if (reasonCode.present) {
+      map['reason_code'] = Variable<int>(reasonCode.value);
     }
     return map;
   }
@@ -1203,6 +1248,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
           ..write('mtime: $mtime, ')
           ..write('codec: $codec, ')
           ..write('title: $title, ')
+          ..write('titleSort: $titleSort, ')
           ..write('titleSortKey: $titleSortKey, ')
           ..write('artist: $artist, ')
           ..write('album: $album, ')
@@ -1210,7 +1256,213 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
           ..write('durationMs: $durationMs, ')
           ..write('sampleRate: $sampleRate, ')
           ..write('bitDepth: $bitDepth, ')
-          ..write('unreadableReason: $unreadableReason')
+          ..write('reasonCode: $reasonCode')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $LibraryMetaTable extends LibraryMeta
+    with TableInfo<$LibraryMetaTable, MetaRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LibraryMetaTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _keyMeta = const VerificationMeta('key');
+  @override
+  late final GeneratedColumn<String> key = GeneratedColumn<String>(
+    'key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _valueMeta = const VerificationMeta('value');
+  @override
+  late final GeneratedColumn<int> value = GeneratedColumn<int>(
+    'value',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [key, value];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'library_meta';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MetaRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('key')) {
+      context.handle(
+        _keyMeta,
+        key.isAcceptableOrUnknown(data['key']!, _keyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_keyMeta);
+    }
+    if (data.containsKey('value')) {
+      context.handle(
+        _valueMeta,
+        value.isAcceptableOrUnknown(data['value']!, _valueMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_valueMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {key};
+  @override
+  MetaRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MetaRow(
+      key: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}key'],
+      )!,
+      value: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}value'],
+      )!,
+    );
+  }
+
+  @override
+  $LibraryMetaTable createAlias(String alias) {
+    return $LibraryMetaTable(attachedDatabase, alias);
+  }
+}
+
+class MetaRow extends DataClass implements Insertable<MetaRow> {
+  final String key;
+  final int value;
+  const MetaRow({required this.key, required this.value});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['key'] = Variable<String>(key);
+    map['value'] = Variable<int>(value);
+    return map;
+  }
+
+  LibraryMetaCompanion toCompanion(bool nullToAbsent) {
+    return LibraryMetaCompanion(key: Value(key), value: Value(value));
+  }
+
+  factory MetaRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MetaRow(
+      key: serializer.fromJson<String>(json['key']),
+      value: serializer.fromJson<int>(json['value']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'key': serializer.toJson<String>(key),
+      'value': serializer.toJson<int>(value),
+    };
+  }
+
+  MetaRow copyWith({String? key, int? value}) =>
+      MetaRow(key: key ?? this.key, value: value ?? this.value);
+  MetaRow copyWithCompanion(LibraryMetaCompanion data) {
+    return MetaRow(
+      key: data.key.present ? data.key.value : this.key,
+      value: data.value.present ? data.value.value : this.value,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MetaRow(')
+          ..write('key: $key, ')
+          ..write('value: $value')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(key, value);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MetaRow && other.key == this.key && other.value == this.value);
+}
+
+class LibraryMetaCompanion extends UpdateCompanion<MetaRow> {
+  final Value<String> key;
+  final Value<int> value;
+  final Value<int> rowid;
+  const LibraryMetaCompanion({
+    this.key = const Value.absent(),
+    this.value = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LibraryMetaCompanion.insert({
+    required String key,
+    required int value,
+    this.rowid = const Value.absent(),
+  }) : key = Value(key),
+       value = Value(value);
+  static Insertable<MetaRow> custom({
+    Expression<String>? key,
+    Expression<int>? value,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (key != null) 'key': key,
+      if (value != null) 'value': value,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LibraryMetaCompanion copyWith({
+    Value<String>? key,
+    Value<int>? value,
+    Value<int>? rowid,
+  }) {
+    return LibraryMetaCompanion(
+      key: key ?? this.key,
+      value: value ?? this.value,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (key.present) {
+      map['key'] = Variable<String>(key.value);
+    }
+    if (value.present) {
+      map['value'] = Variable<int>(value.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LibraryMetaCompanion(')
+          ..write('key: $key, ')
+          ..write('value: $value, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -1221,6 +1473,7 @@ abstract class _$LibraryDatabase extends GeneratedDatabase {
   $LibraryDatabaseManager get managers => $LibraryDatabaseManager(this);
   late final $SourcesTable sources = $SourcesTable(this);
   late final $TracksTable tracks = $TracksTable(this);
+  late final $LibraryMetaTable libraryMeta = $LibraryMetaTable(this);
   late final Index tracksTitleSort = Index(
     'tracks_title_sort',
     'CREATE INDEX tracks_title_sort ON tracks (title_sort_key, id)',
@@ -1232,6 +1485,7 @@ abstract class _$LibraryDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     sources,
     tracks,
+    libraryMeta,
     tracksTitleSort,
   ];
   @override
@@ -1531,6 +1785,7 @@ typedef $$TracksTableCreateCompanionBuilder = TracksCompanion Function({
   required int mtime,
   required String codec,
   required String title,
+  required String titleSort,
   required Uint8List titleSortKey,
   required String artist,
   required String album,
@@ -1538,7 +1793,7 @@ typedef $$TracksTableCreateCompanionBuilder = TracksCompanion Function({
   required int durationMs,
   required int sampleRate,
   required int bitDepth,
-  Value<String?> unreadableReason,
+  Value<int?> reasonCode,
 });
 typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
   Value<int> id,
@@ -1549,6 +1804,7 @@ typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
   Value<int> mtime,
   Value<String> codec,
   Value<String> title,
+  Value<String> titleSort,
   Value<Uint8List> titleSortKey,
   Value<String> artist,
   Value<String> album,
@@ -1556,7 +1812,7 @@ typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
   Value<int> durationMs,
   Value<int> sampleRate,
   Value<int> bitDepth,
-  Value<String?> unreadableReason,
+  Value<int?> reasonCode,
 });
 
 final class $$TracksTableReferences
@@ -1625,6 +1881,11 @@ class $$TracksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get titleSort => $composableBuilder(
+    column: $table.titleSort,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<Uint8List> get titleSortKey => $composableBuilder(
     column: $table.titleSortKey,
     builder: (column) => ColumnFilters(column),
@@ -1660,8 +1921,8 @@ class $$TracksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get unreadableReason => $composableBuilder(
-    column: $table.unreadableReason,
+  ColumnFilters<int> get reasonCode => $composableBuilder(
+    column: $table.reasonCode,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1733,6 +1994,11 @@ class $$TracksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get titleSort => $composableBuilder(
+    column: $table.titleSort,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<Uint8List> get titleSortKey => $composableBuilder(
     column: $table.titleSortKey,
     builder: (column) => ColumnOrderings(column),
@@ -1768,8 +2034,8 @@ class $$TracksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get unreadableReason => $composableBuilder(
-    column: $table.unreadableReason,
+  ColumnOrderings<int> get reasonCode => $composableBuilder(
+    column: $table.reasonCode,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -1827,6 +2093,9 @@ class $$TracksTableAnnotationComposer
   GeneratedColumn<String> get title =>
       $composableBuilder(column: $table.title, builder: (column) => column);
 
+  GeneratedColumn<String> get titleSort =>
+      $composableBuilder(column: $table.titleSort, builder: (column) => column);
+
   GeneratedColumn<Uint8List> get titleSortKey => $composableBuilder(
     column: $table.titleSortKey,
     builder: (column) => column,
@@ -1854,8 +2123,8 @@ class $$TracksTableAnnotationComposer
   GeneratedColumn<int> get bitDepth =>
       $composableBuilder(column: $table.bitDepth, builder: (column) => column);
 
-  GeneratedColumn<String> get unreadableReason => $composableBuilder(
-    column: $table.unreadableReason,
+  GeneratedColumn<int> get reasonCode => $composableBuilder(
+    column: $table.reasonCode,
     builder: (column) => column,
   );
 
@@ -1919,6 +2188,7 @@ class $$TracksTableTableManager
                 Value<int> mtime = const Value.absent(),
                 Value<String> codec = const Value.absent(),
                 Value<String> title = const Value.absent(),
+                Value<String> titleSort = const Value.absent(),
                 Value<Uint8List> titleSortKey = const Value.absent(),
                 Value<String> artist = const Value.absent(),
                 Value<String> album = const Value.absent(),
@@ -1926,7 +2196,7 @@ class $$TracksTableTableManager
                 Value<int> durationMs = const Value.absent(),
                 Value<int> sampleRate = const Value.absent(),
                 Value<int> bitDepth = const Value.absent(),
-                Value<String?> unreadableReason = const Value.absent(),
+                Value<int?> reasonCode = const Value.absent(),
               }) => TracksCompanion(
                 id: id,
                 sourceId: sourceId,
@@ -1936,6 +2206,7 @@ class $$TracksTableTableManager
                 mtime: mtime,
                 codec: codec,
                 title: title,
+                titleSort: titleSort,
                 titleSortKey: titleSortKey,
                 artist: artist,
                 album: album,
@@ -1943,7 +2214,7 @@ class $$TracksTableTableManager
                 durationMs: durationMs,
                 sampleRate: sampleRate,
                 bitDepth: bitDepth,
-                unreadableReason: unreadableReason,
+                reasonCode: reasonCode,
               ),
           createCompanionCallback:
               ({
@@ -1955,6 +2226,7 @@ class $$TracksTableTableManager
                 required int mtime,
                 required String codec,
                 required String title,
+                required String titleSort,
                 required Uint8List titleSortKey,
                 required String artist,
                 required String album,
@@ -1962,7 +2234,7 @@ class $$TracksTableTableManager
                 required int durationMs,
                 required int sampleRate,
                 required int bitDepth,
-                Value<String?> unreadableReason = const Value.absent(),
+                Value<int?> reasonCode = const Value.absent(),
               }) => TracksCompanion.insert(
                 id: id,
                 sourceId: sourceId,
@@ -1972,6 +2244,7 @@ class $$TracksTableTableManager
                 mtime: mtime,
                 codec: codec,
                 title: title,
+                titleSort: titleSort,
                 titleSortKey: titleSortKey,
                 artist: artist,
                 album: album,
@@ -1979,7 +2252,7 @@ class $$TracksTableTableManager
                 durationMs: durationMs,
                 sampleRate: sampleRate,
                 bitDepth: bitDepth,
-                unreadableReason: unreadableReason,
+                reasonCode: reasonCode,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -2047,6 +2320,150 @@ typedef $$TracksTableProcessedTableManager =
       TrackRow,
       PrefetchHooks Function({bool sourceId})
     >;
+typedef $$LibraryMetaTableCreateCompanionBuilder =
+    LibraryMetaCompanion Function({
+      required String key,
+      required int value,
+      Value<int> rowid,
+    });
+typedef $$LibraryMetaTableUpdateCompanionBuilder =
+    LibraryMetaCompanion Function({
+      Value<String> key,
+      Value<int> value,
+      Value<int> rowid,
+    });
+
+class $$LibraryMetaTableFilterComposer
+    extends Composer<_$LibraryDatabase, $LibraryMetaTable> {
+  $$LibraryMetaTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LibraryMetaTableOrderingComposer
+    extends Composer<_$LibraryDatabase, $LibraryMetaTable> {
+  $$LibraryMetaTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LibraryMetaTableAnnotationComposer
+    extends Composer<_$LibraryDatabase, $LibraryMetaTable> {
+  $$LibraryMetaTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get key =>
+      $composableBuilder(column: $table.key, builder: (column) => column);
+
+  GeneratedColumn<int> get value =>
+      $composableBuilder(column: $table.value, builder: (column) => column);
+}
+
+class $$LibraryMetaTableTableManager
+    extends
+        RootTableManager<
+          _$LibraryDatabase,
+          $LibraryMetaTable,
+          MetaRow,
+          $$LibraryMetaTableFilterComposer,
+          $$LibraryMetaTableOrderingComposer,
+          $$LibraryMetaTableAnnotationComposer,
+          $$LibraryMetaTableCreateCompanionBuilder,
+          $$LibraryMetaTableUpdateCompanionBuilder,
+          (
+            MetaRow,
+            BaseReferences<_$LibraryDatabase, $LibraryMetaTable, MetaRow>,
+          ),
+          MetaRow,
+          PrefetchHooks Function()
+        > {
+  $$LibraryMetaTableTableManager(_$LibraryDatabase db, $LibraryMetaTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LibraryMetaTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LibraryMetaTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LibraryMetaTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> key = const Value.absent(),
+            Value<int> value = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) => LibraryMetaCompanion(key: key, value: value, rowid: rowid),
+          createCompanionCallback:
+              ({
+                required String key,
+                required int value,
+                Value<int> rowid = const Value.absent(),
+              }) => LibraryMetaCompanion.insert(
+                key: key,
+                value: value,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$LibraryMetaTable, MetaRow>(table),
+                  BaseReferences<_$LibraryDatabase, $LibraryMetaTable, MetaRow>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LibraryMetaTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LibraryDatabase,
+      $LibraryMetaTable,
+      MetaRow,
+      $$LibraryMetaTableFilterComposer,
+      $$LibraryMetaTableOrderingComposer,
+      $$LibraryMetaTableAnnotationComposer,
+      $$LibraryMetaTableCreateCompanionBuilder,
+      $$LibraryMetaTableUpdateCompanionBuilder,
+      (MetaRow, BaseReferences<_$LibraryDatabase, $LibraryMetaTable, MetaRow>),
+      MetaRow,
+      PrefetchHooks Function()
+    >;
 
 class $LibraryDatabaseManager {
   final _$LibraryDatabase _db;
@@ -2055,4 +2472,6 @@ class $LibraryDatabaseManager {
       $$SourcesTableTableManager(_db, _db.sources);
   $$TracksTableTableManager get tracks =>
       $$TracksTableTableManager(_db, _db.tracks);
+  $$LibraryMetaTableTableManager get libraryMeta =>
+      $$LibraryMetaTableTableManager(_db, _db.libraryMeta);
 }

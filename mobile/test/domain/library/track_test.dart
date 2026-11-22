@@ -40,4 +40,24 @@ void main() {
     expect(t('a', album: 'B').artistAndAlbum, 'B');
     expect(t('a').artistAndAlbum, '');
   });
+
+  test('reason codes are stable (they are stored in the database)', () {
+    expect(
+      {for (final r in UnreadableReason.values) r.name: r.code},
+      {
+        'notDownloaded': 1,
+        'cannotOpen': 2,
+        'cannotRead': 3,
+        'wrongFormat': 4,
+        'damaged': 5,
+      },
+    );
+    expect(UnreadableReason.fromCode(3), UnreadableReason.cannotRead);
+    expect(UnreadableReason.fromCode(null), isNull);
+    expect(UnreadableReason.fromCode(99), isNull);
+    expect(UnreadableReason.values.where((r) => r.transient), [
+      UnreadableReason.cannotOpen,
+      UnreadableReason.cannotRead,
+    ]);
+  });
 }

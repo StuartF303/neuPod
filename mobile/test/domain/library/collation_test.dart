@@ -87,6 +87,41 @@ void main() {
     expect(collateLetter(collateKey('')), '#');
   });
 
+  test('cutUtf8 cuts at a character boundary, as the firmware stores text', () {
+    expect(cutUtf8('abc', 2), 'ab');
+    expect(cutUtf8('abc', 3), 'abc');
+    expect(cutUtf8('a\u00e9', 2), 'a'); // é is two bytes
+    expect(cutUtf8('a\u00e9', 3), 'a\u00e9');
+    expect(cutUtf8('\u{1F3B5}x', 3), ''); // a 4-byte character never splits
+    expect(cutUtf8('', 0), '');
+  });
+
+  test(
+    'songSortKey: title cut to 63 bytes, file name to 64, sort tag to 31',
+    () {
+      final t63 = 'a' * 63;
+      expect(
+        songSortKey(title: '${t63}zzz', titleSort: '', fileName: 'x.flac'),
+        collateKey(t63),
+      );
+      expect(
+        songSortKey(title: '', titleSort: '', fileName: '${'b' * 70}.flac'),
+        collateKey('b' * 64),
+      );
+      final s31 = 'c' * 31;
+      expect(
+        songSortKey(title: 'Title', titleSort: '${s31}ddd', fileName: 'x'),
+        collateKey('Title', sort: s31),
+      );
+      // The sort tag wins over the title; an untagged song sorts by its file
+      // name with the extension, as on the device.
+      expect(
+        songSortKey(title: '', titleSort: '', fileName: 'The Song.mp3'),
+        collateKey('Song.mp3'),
+      );
+    },
+  );
+
   test('keys are cut at 96 bytes and never contain zero', () {
     expect(collateKey('x' * 500), hasLength(collateKeyMax));
     expect(collateKey('日' * 100), hasLength(collateKeyMax));

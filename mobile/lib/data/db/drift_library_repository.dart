@@ -38,7 +38,7 @@ final class DriftLibraryRepository implements LibraryRepository {
     album: t.album,
     trackNo: t.trackNo,
     durationMs: t.durationMs,
-    unreadableReason: t.unreadableReason,
+    unreadableReason: UnreadableReason.fromCode(t.reasonCode),
   );
 
   static SourceKind _kind(String k) => switch (k) {

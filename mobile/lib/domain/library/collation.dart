@@ -189,3 +189,41 @@ String collateLetter(List<int> key) {
   final b = collateBucket(key);
   return b == 0 ? '#' : String.fromCharCode(0x40 + b);
 }
+
+/// [s] as UTF-8 cut to at most [maxBytes] bytes at a character boundary, as
+/// the firmware's `cut()` and `meta_text_to_utf8()` store text.
+String cutUtf8(String s, int maxBytes) {
+  final b = utf8.encode(s);
+  if (b.length <= maxBytes) return s;
+  var n = maxBytes;
+  while (n > 0 && (b[n] & 0xC0) == 0x80) {
+    n--;
+  }
+  return utf8.decode(Uint8List.sublistView(b, 0, n));
+}
+
+/// The firmware's title buffer (`audio_tags_t.title[64]`): 63 bytes.
+const firmwareTitleBytes = 63;
+
+/// The firmware's sort-tag buffers (`audio_tags_ext_t.sort_title[32]`): 31.
+const firmwareSortBytes = 31;
+
+/// A pool string (`POOL_STR`, 64 characters + NUL): an untagged song's file
+/// name is cut to this.
+const firmwarePoolBytes = 64;
+
+/// The song sort key exactly as the firmware's library builds it
+/// (`index_file` in app/library/lib_build.c): the title as the tag parser
+/// stores it (cut to 63 bytes) or, when untagged, the file name with its
+/// extension (cut to 64 bytes), and the title sort tag cut to 31 bytes. The
+/// app displays the whole title; the order stays the device's.
+Uint8List songSortKey({
+  required String title,
+  required String titleSort,
+  required String fileName,
+}) => collateKey(
+  title.isNotEmpty
+      ? cutUtf8(title, firmwareTitleBytes)
+      : cutUtf8(fileName, firmwarePoolBytes),
+  sort: cutUtf8(titleSort, firmwareSortBytes),
+);

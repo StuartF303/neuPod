@@ -73,6 +73,15 @@ class _ScanLine extends StatelessWidget {
   }
 }
 
+/// The words for a reason, at the right of a greyed row.
+String reasonText(UnreadableReason reason, String codec) => switch (reason) {
+  UnreadableReason.notDownloaded => 'Not downloaded',
+  UnreadableReason.cannotOpen => "Can't open",
+  UnreadableReason.cannotRead => "Can't read",
+  UnreadableReason.wrongFormat => 'Not a ${codec.toUpperCase()} file',
+  UnreadableReason.damaged => 'Damaged',
+};
+
 /// One song: the title over "artist · album". A file whose tags could not
 /// be read is greyed with the reason at the right, as on the device.
 class SongRow extends StatelessWidget {
@@ -93,7 +102,7 @@ class SongRow extends StatelessWidget {
       subtitle: subtitle.isEmpty
           ? null
           : Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: reason == null ? null : Text(reason),
+      trailing: reason == null ? null : Text(reasonText(reason, track.codec)),
     );
     return reason == null ? row : Opacity(opacity: 0.5, child: row);
   }

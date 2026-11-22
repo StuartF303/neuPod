@@ -14,6 +14,8 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:neupod/domain/library/track.dart';
+
 /// Random-access bytes of one file (implemented over neupod_storage's
 /// `StorageReader`, or over test bytes).
 abstract interface class ByteSource {
@@ -42,13 +44,16 @@ final class BytesSource implements ByteSource {
 
 /// The file could not be read as the format its name says.
 final class TagReadException implements Exception {
-  const TagReadException(this.reason);
+  const TagReadException(this.reason, this.detail);
 
-  /// Short and user-facing, for the greyed row: "not a FLAC file".
-  final String reason;
+  /// Stored on the track as a code; the UI words it.
+  final UnreadableReason reason;
+
+  /// For logs and tests only: "file is cut short".
+  final String detail;
 
   @override
-  String toString() => 'TagReadException($reason)';
+  String toString() => 'TagReadException(${reason.name}: $detail)';
 }
 
 /// What phase 1 reads from a file. Empty strings and zeros mean "not
@@ -57,6 +62,7 @@ final class AudioTags {
   const AudioTags({
     required this.codec,
     this.title = '',
+    this.titleSort = '',
     this.artist = '',
     this.album = '',
     this.trackNo = 0,
@@ -69,6 +75,9 @@ final class AudioTags {
   /// `flac` or `mp3`.
   final String codec;
   final String title;
+
+  /// The title sort tag (TSOT/TST, TITLESORT), or ''.
+  final String titleSort;
   final String artist;
   final String album;
   final int trackNo;
@@ -97,7 +106,10 @@ AudioTags readTags(ByteSource src, String extension) =>
     switch (extension.toLowerCase()) {
       'flac' => _readFlac(src),
       'mp3' => _readMp3(src),
-      _ => throw TagReadException('$extension tags are not read yet'),
+      _ => throw TagReadException(
+        UnreadableReason.wrongFormat,
+        '$extension tags are not read yet',
+      ),
     };
 
 int _be32(Uint8List b, int o) =>
@@ -116,7 +128,9 @@ bool _startsWith(Uint8List b, int o, String ascii) {
 
 Uint8List _need(ByteSource src, int offset, int count) {
   final b = src.readAt(offset, count);
-  if (b.length != count) throw const TagReadException('file is cut short');
+  if (b.length != count) {
+    throw const TagReadException(UnreadableReason.damaged, 'file is cut short');
+  }
   return b;
 }
 
@@ -157,8 +171,9 @@ final _loneSurrogate = RegExp(
   r'[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]',
 );
 
-String _cut(String s) {
-  final t = s.trim();
+/// Caps a text at [_maxText] UTF-16 units without splitting a pair. Not
+/// trimmed: the firmware keeps leading and trailing spaces, and they sort.
+String _cut(String t) {
   if (t.length <= _maxText) return t;
   var end = _maxText;
   if (end > 0 && (t.codeUnitAt(end - 1) & 0xFC00) == 0xD800) end--;
@@ -191,7 +206,10 @@ AudioTags _readFlac(ByteSource src) {
   final size = src.length;
   var pos = _id3v2Size(src.readAt(0, 10)); // some files carry ID3v2 in front
   if (!_startsWith(src.readAt(pos, 4), 0, 'fLaC')) {
-    throw const TagReadException('not a FLAC file');
+    throw const TagReadException(
+      UnreadableReason.wrongFormat,
+      'not a FLAC file',
+    );
   }
   pos += 4;
   var rate = 0, bits = 0, totalFrames = 0;
@@ -204,7 +222,7 @@ AudioTags _readFlac(ByteSource src) {
     final len = (bh[1] << 16) | (bh[2] << 8) | bh[3];
     final body = pos + 4;
     if (type == 0) {
-      if (len < 34) throw const TagReadException('damaged FLAC header');
+      if (len < 34) throw const TagReadException(_damaged, 'STREAMINFO short');
       final si = _need(src, body, 34);
       rate = (si[10] << 12) | (si[11] << 4) | (si[12] >> 4);
       bits = (((si[12] & 1) << 4) | (si[13] >> 4)) + 1;
@@ -215,12 +233,15 @@ AudioTags _readFlac(ByteSource src) {
     }
     pos = body + len;
     if (last) break;
-    if (pos >= size) throw const TagReadException('damaged FLAC header');
+    if (pos >= size) {
+      throw const TagReadException(_damaged, 'blocks run past the end');
+    }
   }
-  if (!haveInfo) throw const TagReadException('damaged FLAC header');
+  if (!haveInfo) throw const TagReadException(_damaged, 'no STREAMINFO');
   return AudioTags(
     codec: 'flac',
     title: fields.title,
+    titleSort: fields.titleSort,
     artist: fields.artist,
     album: fields.album,
     trackNo: fields.track,
@@ -230,8 +251,10 @@ AudioTags _readFlac(ByteSource src) {
   );
 }
 
+const _damaged = UnreadableReason.damaged;
+
 class _VorbisFields {
-  String title = '', artist = '', album = '';
+  String title = '', titleSort = '', artist = '', album = '';
   int track = 0;
 }
 
@@ -257,6 +280,8 @@ void _vorbisComments(Uint8List b, _VorbisFields t) {
       switch (key) {
         case 'TITLE':
           t.title = _text(value, 3);
+        case 'TITLESORT':
+          t.titleSort = _text(value, 3);
         case 'ARTIST':
           t.artist = _text(value, 3);
         case 'ALBUM':
@@ -327,7 +352,7 @@ _Mp3Header? _mp3Header(Uint8List h, int o) {
 }
 
 class _Id3Fields {
-  String title = '', artist = '', album = '';
+  String title = '', titleSort = '', artist = '', album = '';
   int track = 0;
 }
 
@@ -398,6 +423,8 @@ void _id3TextFrame(String id, Uint8List d, _Id3Fields t) {
   switch (id) {
     case 'TIT2' || 'TT2':
       t.title = _text(s, enc);
+    case 'TSOT' || 'TST':
+      t.titleSort = _text(s, enc);
     case 'TPE1' || 'TP1':
       t.artist = _text(s, enc);
     case 'TALB' || 'TAL':
@@ -437,7 +464,12 @@ AudioTags _readMp3(ByteSource src) {
     }
     pos += 256;
   }
-  if (h == null) throw const TagReadException('not an MP3 file');
+  if (h == null) {
+    throw const TagReadException(
+      UnreadableReason.wrongFormat,
+      'no MPEG audio frame',
+    );
+  }
 
   var frames = 0, delay = 0, padding = 0;
   final fr = src.readAt(found, 192);
@@ -470,10 +502,9 @@ AudioTags _readMp3(ByteSource src) {
     }
   }
   // VBRI (Fraunhofer): 32 bytes after the frame header; the frame count is
-  // exact and there is no LAME tag.
-  if (frames == 0 && got >= 36 + 14 && _startsWith(fr, 36, 'VBRI')) {
-    frames = _be32(fr, 36 + 14);
-  }
+  // exact and there is no LAME tag. `vbri_parse`: the fixed part must be
+  // there and sane.
+  if (frames == 0) frames = _vbriFrames(fr, got);
   final audioBytes = size > found ? size - found : 0;
   int totalSamples;
   var estimated = false;
@@ -487,6 +518,7 @@ AudioTags _readMp3(ByteSource src) {
   return AudioTags(
     codec: 'mp3',
     title: tags.title,
+    titleSort: tags.titleSort,
     artist: tags.artist,
     album: tags.album,
     trackNo: tags.track,
@@ -494,4 +526,24 @@ AudioTags _readMp3(ByteSource src) {
     durationEstimated: estimated,
     sampleRate: h.rate,
   );
+}
+
+/// `vbri_parse`: the VBRI frame count, or 0 when the header is absent, short
+/// (under 62 bytes from the frame start) or not sane.
+int _vbriFrames(Uint8List fr, int got) {
+  const fixed = 62; // VBRI_FIXED: from the frame start to the table
+  if (got < fixed || !_startsWith(fr, 36, 'VBRI')) return 0;
+  final frames = _be32(fr, 50);
+  final entries = (fr[54] << 8) | fr[55];
+  final scale = (fr[56] << 8) | fr[57];
+  final entryBytes = (fr[58] << 8) | fr[59];
+  final framesPerEntry = (fr[60] << 8) | fr[61];
+  final sane =
+      frames != 0 &&
+      entries != 0 &&
+      scale != 0 &&
+      framesPerEntry != 0 &&
+      entryBytes >= 1 &&
+      entryBytes <= 4;
+  return sane ? frames : 0;
 }

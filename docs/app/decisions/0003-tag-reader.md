@@ -107,6 +107,28 @@ Failures become a reason on the track (`not a FLAC file`, `file is cut short`), 
 scan; a 2,000-case mutation test checks that. The rest of this note (other containers and fields, art, the
 `audio_metadata_reader` oracle, timing at 5,000 files) is phase 3.
 
+Also read in phase 1: the title sort tag (ID3 `TSOT`/`TST`, Vorbis `TITLESORT`), which the sort key uses (owner
+decision 11). Failures are stored as a reason **code** (`UnreadableReason`: not downloaded, can't open, can't read,
+wrong format, damaged); the UI words it, and the transient ones (can't open, can't read) are retried on the next scan.
+VBRI is accepted only with the firmware's `vbri_parse` checks (62 fixed bytes, non-zero frames, entries, scale and
+frames per entry, entry size 1 to 4).
+
+Limits shared with the firmware, kept on purpose so both read the same tags: ID3v2.3 unsynchronisation is undone per
+frame only when the tag header flag is set (as `id3v2_tags` does), compressed or encrypted frames are not decoded, and
+a text frame over 400 bytes is skipped.
+
+Where the app's sort can still differ from the device (owner decision 11), recorded for the device check:
+
+- UTF-16 surrogate pairs (emoji and other characters beyond U+FFFF in ID3 UTF-16 frames): the firmware stores `?`,
+  the app keeps the character, so such titles sort as symbols on the device and by code point in the app.
+- Malformed UTF-8 in a tag: the firmware copies the bytes and collates them as Latin-1; the app decodes them to
+  U+FFFD. Both are rare; well-formed text sorts identically.
+- Text is no longer trimmed: leading and trailing spaces are kept and sort, as on the device.
+- An untagged song sorts by its file name with the extension, cut to 64 bytes, as `index_file` does; the Songs list
+  shows the name without the extension (the folder-convention fallback comes in phase 3).
+- The key is built from the title cut to 63 bytes and the sort tag cut to 31 bytes (the firmware's buffers); the app
+  displays the whole title.
+
 ## Sources
 
 All checked 2026-11-21.

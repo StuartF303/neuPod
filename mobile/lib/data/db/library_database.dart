@@ -35,8 +35,12 @@ class Tracks extends Table {
   TextColumn get codec => text()();
   TextColumn get title => text()();
 
-  /// `collateKey()` of the displayed title: `ORDER BY` it gives the
-  /// firmware's order, since SQLite compares BLOBs with memcmp.
+  /// The title sort tag (TSOT / TITLESORT), or ''.
+  TextColumn get titleSort => text()();
+
+  /// `songSortKey()`: the firmware's key of the title (or file name) and its
+  /// sort tag. `ORDER BY` it gives the device's order, since SQLite compares
+  /// BLOBs with memcmp.
   BlobColumn get titleSortKey => blob()();
   TextColumn get artist => text()();
   TextColumn get album => text()();
@@ -45,8 +49,8 @@ class Tracks extends Table {
   IntColumn get sampleRate => integer()();
   IntColumn get bitDepth => integer()();
 
-  /// Why the tags could not be read, or null.
-  TextColumn get unreadableReason => text().nullable()();
+  /// `UnreadableReason.code` when the tags could not be read, or null.
+  IntColumn get reasonCode => integer().nullable()();
 
   @override
   List<Set<Column>> get uniqueKeys => [
@@ -54,17 +58,46 @@ class Tracks extends Table {
   ];
 }
 
-@DriftDatabase(tables: [Sources, Tracks])
+/// Small facts about the library itself, such as the scan version the rows
+/// were read with.
+@DataClassName('MetaRow')
+class LibraryMeta extends Table {
+  TextColumn get key => text()();
+  IntColumn get value => integer()();
+
+  @override
+  Set<Column> get primaryKey => {key};
+}
+
+@DriftDatabase(tables: [Sources, Tracks, LibraryMeta])
 class LibraryDatabase extends _$LibraryDatabase {
   LibraryDatabase(super.e);
 
+  /// Schema snapshots are in drift_schemas/library/ (dump a new one with
+  /// `dart run drift_dev schema dump lib/data/db/library_database.dart
+  /// drift_schemas/library/` before changing a table).
   @override
   int get schemaVersion => 1;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) => m.createAll(),
+    onUpgrade: (m, from, to) async {
+      // Version 1 is the first schema. Each later version adds a step here,
+      // tested against the snapshots (phase 3 brings version 2).
+      throw StateError('no migration from schema $from to $to');
+    },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
     },
   );
+
+  /// The value stored under [key], or null.
+  Future<int?> metaValue(String key) async => (await (select(
+    libraryMeta,
+  )..where((m) => m.key.equals(key))).getSingleOrNull())?.value;
+
+  Future<void> setMetaValue(String key, int value) => into(
+    libraryMeta,
+  ).insertOnConflictUpdate(LibraryMetaCompanion.insert(key: key, value: value));
 }

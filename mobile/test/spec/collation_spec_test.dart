@@ -19,6 +19,7 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neupod/domain/library/collation.dart';
 
 /// The collation key of a name: bytes such that comparing two keys byte by
 /// byte (a shorter key that is a prefix of a longer one first) is the display
@@ -31,18 +32,14 @@ typedef CollationKey = List<int> Function(String name, {String? sort});
 /// with a digit or a symbol, or is empty (lib_collate_bucket(): 0 is '#').
 typedef CollationLetter = String Function(List<int> key);
 
-// WIRE: replace null with the app's functions, for example
-//   final CollationKey? wiredCollationKey = collationKey;
-//   final CollationLetter? wiredCollationLetter = collationLetter;
-final CollationKey? wiredCollationKey = null;
-final CollationLetter? wiredCollationLetter = null;
+// WIRED: the app's port of lib_collate.c (domain/library/collation.dart).
+final CollationKey wiredCollationKey = collateKey;
+final CollationLetter wiredCollationLetter = collateLetter;
 
-final Object _skip = wiredCollationKey == null || wiredCollationLetter == null
-    ? 'awaiting implementation of the collation key (lib_collate_key port)'
-    : false;
+const Object _skip = false;
 
 List<int> _key(String name, [String? sort]) =>
-    wiredCollationKey!(name, sort: sort);
+    wiredCollationKey(name, sort: sort);
 
 /// memcmp over the common length, then the shorter first (lib_collate_cmp).
 int _cmpKeys(List<int> a, List<int> b) {
@@ -57,7 +54,7 @@ int _cmp(String a, String b, {String? sa, String? sb}) =>
     _cmpKeys(_key(a, sa), _key(b, sb));
 
 String _letter(String name, [String? sort]) =>
-    wiredCollationLetter!(_key(name, sort));
+    wiredCollationLetter(_key(name, sort));
 
 void _same(String a, String b, String why) =>
     test('"$a" == "$b": $why', () => expect(_cmp(a, b), 0));

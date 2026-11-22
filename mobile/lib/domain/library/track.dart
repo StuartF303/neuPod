@@ -1,5 +1,40 @@
 // SPDX-License-Identifier: MPL-2.0
 
+/// Why a file's tags could not be read. Stored as [code] (never as text, so
+/// the wording can change and be translated); the UI words it.
+enum UnreadableReason {
+  /// iCloud file not on the device (owner decision 7); never opened.
+  notDownloaded(1),
+
+  /// The file could not be opened. Transient: retried on the next scan.
+  cannotOpen(2, transient: true),
+
+  /// Reading failed part-way (I/O, a provider gone). Transient: retried.
+  cannotRead(3, transient: true),
+
+  /// Not the kind of file its name says.
+  wrongFormat(4),
+
+  /// The right kind of file, but damaged or cut short.
+  damaged(5);
+
+  const UnreadableReason(this.code, {this.transient = false});
+
+  /// Stable code stored in the database.
+  final int code;
+
+  /// Whether a later scan should try the file again even if it is unchanged.
+  final bool transient;
+
+  /// The reason stored as [code], or null for none or an unknown code.
+  static UnreadableReason? fromCode(int? code) {
+    for (final r in values) {
+      if (r.code == code) return r;
+    }
+    return null;
+  }
+}
+
 /// Where a track comes from. R1 has only local folders; R2 (NAS) and R3 (a
 /// neuPod's card) add kinds, not a new model (decision 0005).
 enum SourceKind { localFolder, nas, device }
@@ -76,7 +111,7 @@ final class Track {
   final int durationMs;
 
   /// Why the file's tags could not be read (shown greyed), or null.
-  final String? unreadableReason;
+  final UnreadableReason? unreadableReason;
 
   /// The title, or the file name without its extension when untagged.
   /// (The folder-convention fallback comes with the full scanner, phase 3.)

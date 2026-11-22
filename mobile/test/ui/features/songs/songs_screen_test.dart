@@ -36,7 +36,7 @@ Track track(
   String title = '',
   String artist = '',
   String album = '',
-  String? reason,
+  UnreadableReason? reason,
 }) => Track(
   id: id,
   source: const TrackSource(SourceKind.localFolder, 'f'),
@@ -94,9 +94,24 @@ void main() {
   });
 
   testWidgets('an unreadable file is greyed with its reason', (tester) async {
-    await pump(tester, [track(1, 'bad.flac', reason: 'not a FLAC file')]);
-    expect(find.text('not a FLAC file'), findsOneWidget);
+    await pump(tester, [
+      track(1, 'bad.flac', reason: UnreadableReason.wrongFormat),
+    ]);
+    expect(find.text('Not a FLAC file'), findsOneWidget);
     expect(find.byType(Opacity), findsOneWidget);
+  });
+
+  test('every reason has words', () {
+    expect(
+      {for (final r in UnreadableReason.values) r: reasonText(r, 'mp3')},
+      {
+        UnreadableReason.notDownloaded: 'Not downloaded',
+        UnreadableReason.cannotOpen: "Can't open",
+        UnreadableReason.cannotRead: "Can't read",
+        UnreadableReason.wrongFormat: 'Not a MP3 file',
+        UnreadableReason.damaged: 'Damaged',
+      },
+    );
   });
 
   testWidgets('empty library', (tester) async {

@@ -156,9 +156,16 @@ Built in `mobile/lib/data/db/` (database), `mobile/lib/data/scan/` (scanner, tag
   0.3.1 still depends on the `+eol` `sqlite3_flutter_libs` and `sqlcipher_flutter_libs`, and `path_provider` 2.1 now
   pulls `jni`, `jni_flutter`, `objective_c` and `ffi` into the app for one directory name. The database is opened with
   `NativeDatabase.createInBackground` behind a `LazyDatabase`, in the directory that `neupod_storage.appSupportPath()`
-  returns (Android `filesDir`, iOS Application Support, so it is never shown in Files or Finder).
-- **Phase 1 schema (version 1)** is the subset the vertical slice needs: `sources` and `tracks`, with `artist` and
-  `album` as text on the track and `title_sort_key` as an indexed BLOB (`ORDER BY title_sort_key, id`). The
+  returns: Android `noBackupFilesDir`, iOS `Application Support/library` marked excluded from backup, never shown in
+  Files or Finder. Excluded from backups because version 1 holds only what a rescan rebuilds; phase 3 revisits this
+  when ratings and play counts arrive (they should survive a phone restore).
+- **Phase 1 schema (version 1)** is the subset the vertical slice needs: `sources`, `tracks` and `library_meta`, with
+  `artist` and `album` as text on the track, the title sort tag in `title_sort`, `title_sort_key` as an indexed BLOB
+  (`ORDER BY title_sort_key, id`), and `reason_code` (an `UnreadableReason` code, never English text). The schema
+  snapshot is committed in `mobile/drift_schemas/library/drift_schema_v1.json`; `onUpgrade` has no step yet and fails
+  loudly if asked for one. `library_meta.scan_version` records the tag reader and sort key a scan wrote with; when the
+  code's `scanVersion` differs, the next scan reads every file again and stores the new version only after every
+  folder was walked completely. The
   `artists`/`albums`/`genres` tables, `track_key`, `track_stats`, playlists and FTS5 come with their phase 3 and 6
   items, as schema version 2 with a `make-migrations` test. Version 1 holds nothing the user cannot rebuild by
   rescanning.

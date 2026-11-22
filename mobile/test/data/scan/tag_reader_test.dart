@@ -7,6 +7,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/data/scan/tag_reader.dart';
+import 'package:neupod/domain/library/track.dart';
 
 import '../../fixtures/tagged_audio.dart';
 
@@ -124,6 +125,70 @@ void main() {
         throwsA(isA<TagReadException>()),
       );
     });
+  });
+
+  test('title sort tags: TITLESORT, TSOT (v2.3/2.4) and TST (v2.2)', () {
+    final f = flacWithComments(fixture('flac16_44k_st.flac'), [
+      'TITLE=The Song',
+      'titlesort=Song, The',
+    ]);
+    expect(readTags(BytesSource(f), 'flac').titleSort, 'Song, The');
+    final m = Uint8List.fromList([
+      ...id3v2([textFrame('TIT2', 'X'), textFrame('TSOT', 'Sorted')]),
+      ...fixture('mp3_44k_st.mp3'),
+    ]);
+    expect(readTags(BytesSource(m), 'mp3').titleSort, 'Sorted');
+  });
+
+  test(
+    'text keeps its spaces (the firmware does not trim, and spaces sort)',
+    () {
+      final f = flacWithComments(fixture('flac16_44k_st.flac'), ['TITLE= x ']);
+      expect(readTags(BytesSource(f), 'flac').title, ' x ');
+    },
+  );
+
+  test('reasons: wrong format vs damaged', () {
+    UnreadableReason reasonOf(Uint8List b, String ext) {
+      try {
+        readTags(BytesSource(b), ext);
+      } on TagReadException catch (e) {
+        return e.reason;
+      }
+      fail('no exception');
+    }
+
+    expect(reasonOf(Uint8List(64), 'flac'), UnreadableReason.wrongFormat);
+    expect(
+      reasonOf(fixture('flac16_44k_st.flac').sublist(0, 20), 'flac'),
+      UnreadableReason.damaged,
+    );
+    expect(reasonOf(Uint8List(5000), 'mp3'), UnreadableReason.wrongFormat);
+  });
+
+  test('VBRI needs its 62 fixed bytes and sane fields (vbri_parse)', () {
+    final plain = readTags(BytesSource(fixture('mp3_44k_st.mp3')), 'mp3');
+    Uint8List withVbri({required int entries}) {
+      final b = Uint8List.fromList(fixture('mp3_44k_st.mp3'));
+      // The fixture starts with a frame; put a VBRI header 36 bytes in.
+      b.setAll(36, 'VBRI'.codeUnits);
+      final d = ByteData.sublistView(b);
+      d.setUint32(50, 1000); // frames
+      d.setUint16(54, entries);
+      d.setUint16(56, 1); // scale
+      d.setUint16(58, 2); // entry size
+      d.setUint16(60, 1); // frames per entry
+      return b;
+    }
+
+    final sane = readTags(BytesSource(withVbri(entries: 10)), 'mp3');
+    expect(sane.durationEstimated, isFalse);
+    expect(sane.durationMs, 1000 * 1152 * 1000 ~/ 44100);
+    // The VBRI header replaced the fixture's Xing header at the same offset;
+    // with no entries it is ignored, so the duration is only estimated.
+    final bogus = readTags(BytesSource(withVbri(entries: 0)), 'mp3');
+    expect(bogus.durationEstimated, isTrue);
+    expect(plain.durationEstimated, isFalse);
   });
 
   test('other extensions are refused for now', () {

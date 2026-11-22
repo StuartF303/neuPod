@@ -11,11 +11,13 @@ import 'package:neupod/domain/library/library_ports.dart';
 import 'package:neupod/domain/library/track.dart';
 import 'package:neupod_storage/neupod_storage.dart';
 
-/// File extensions the scanner lists as tracks (the spec's formats).
+/// File extensions the scanner lists as tracks: the spec's formats, plus
+/// `.mp4`, which the firmware also accepts.
 const audioExtensions = {
   'flac',
   'mp3',
   'm4a',
+  'mp4',
   'aac',
   'wav',
   'ogg',
@@ -27,6 +29,14 @@ const audioExtensions = {
 /// until phase 3 adds their containers.
 const _tagged = {'flac', 'mp3'};
 
+/// The version of what a scan writes per row: the tag reader's fields and
+/// rules and the sort key. Bump it when either changes; the next scan then
+/// reads every file again instead of trusting unchanged size and mtime.
+/// 1: phase 1 (FLAC and MP3 tags, title sort tags, firmware-cut sort key).
+const scanVersion = 1;
+
+const _scanVersionKey = 'scan_version';
+
 /// The lower-case extension of [path], or ''.
 String extensionOf(String path) {
   final slash = path.lastIndexOf('/');
@@ -36,20 +46,27 @@ String extensionOf(String path) {
 
 /// Minimal phase 1 scanner: walks every available folder with neupod_storage,
 /// reads the tags of new or changed FLAC and MP3 files in a background
-/// isolate, and writes tracks in batches. Files whose size and modification
-/// time are unchanged are not opened. Tracks of files that have gone, and of
-/// folders no longer held, are deleted. Music files are only ever read.
+/// isolate, and writes tracks in batches.
+///
+/// - Files whose size and modification time are unchanged are not opened,
+///   unless their last read failed transiently or the scan version changed.
+/// - Tracks of files missing from a walk are deleted only when the walk was
+///   complete (every folder listed); tracks of folders no longer held are
+///   deleted; an unavailable folder keeps its tracks.
+/// - Music files are only ever read.
 final class LocalLibraryScanner implements LibraryScanner {
   LocalLibraryScanner({
     required this._folders,
     required this._storage,
     required this._db,
     this.chunk = 32,
-  });
+    IsolateRunner? runIsolate,
+  }) : _run = runIsolate ?? Isolate.run;
 
   final FolderAccess _folders;
   final NeupodStorage _storage;
   final LibraryDatabase _db;
+  final IsolateRunner _run;
 
   /// Files read per isolate run and written per batch.
   final int chunk;
@@ -67,8 +84,16 @@ final class LocalLibraryScanner implements LibraryScanner {
       _db.sources,
     )..where((s) => s.kind.equals(_kind) & s.uriOrBookmark.isNotIn(held))).go();
 
+    // Rows read by an older reader or key are read again, whatever their
+    // size and mtime. The version is stored once every folder was walked.
+    final versionChanged = await _db.metaValue(_scanVersionKey) != scanVersion;
+    var allComplete = true;
+
     for (final folder in folders) {
-      if (!folder.available) continue; // its tracks stay until it is removed
+      if (!folder.available) {
+        allComplete = false;
+        continue; // its tracks stay until it is removed
+      }
       final sourceId = await _sourceFor(folder);
       final known = {
         for (final t in await (_db.select(
@@ -78,47 +103,54 @@ final class LocalLibraryScanner implements LibraryScanner {
       };
       final seen = <String>{};
       final pending = <StorageEntry>[];
+      var complete = false;
       try {
         await for (final page in _storage.walk(folder.id)) {
-          for (final e in page) {
+          for (final e in page.entries) {
             if (!audioExtensions.contains(extensionOf(e.relPath))) continue;
             found++;
             seen.add(e.relPath);
             final k = known[e.relPath];
-            if (k != null &&
-                k.size == e.size &&
-                k.mtime == e.modifiedMs &&
-                k.uri == e.uri) {
-              continue;
-            }
+            if (!versionChanged && k != null && _unchanged(k, e)) continue;
             pending.add(e);
             if (pending.length >= chunk) {
               read += await _readAndStore(sourceId, pending);
               pending.clear();
             }
           }
+          if (page.done) complete = page.complete;
           yield ScanProgress(filesFound: found, filesRead: read);
         }
       } on StorageException {
-        continue; // access went away mid-walk: keep what the folder had
+        complete = false; // access went away mid-walk: keep what the folder had
       }
       if (pending.isNotEmpty) read += await _readAndStore(sourceId, pending);
 
-      final gone = known.keys.where((p) => !seen.contains(p)).toList();
-      for (var i = 0; i < gone.length; i += 500) {
-        final part = gone.sublist(
-          i,
-          i + 500 > gone.length ? gone.length : i + 500,
-        );
-        await (_db.delete(
-              _db.tracks,
-            )..where((t) => t.sourceId.equals(sourceId) & t.relPath.isIn(part)))
-            .go();
+      if (complete) {
+        final gone = known.keys.where((p) => !seen.contains(p)).toList();
+        for (var i = 0; i < gone.length; i += 500) {
+          final end = i + 500 > gone.length ? gone.length : i + 500;
+          final part = gone.sublist(i, end);
+          await (_db.delete(_db.tracks)..where(
+                (t) => t.sourceId.equals(sourceId) & t.relPath.isIn(part),
+              ))
+              .go();
+        }
+      } else {
+        allComplete = false;
       }
       yield ScanProgress(filesFound: found, filesRead: read);
     }
+    if (allComplete) await _db.setMetaValue(_scanVersionKey, scanVersion);
     yield ScanProgress(filesFound: found, filesRead: read, done: true);
   }
+
+  /// Same file as last time, and its last read did not fail transiently.
+  static bool _unchanged(TrackRow k, StorageEntry e) =>
+      k.size == e.size &&
+      k.mtime == e.modifiedMs &&
+      k.uri == e.uri &&
+      !(UnreadableReason.fromCode(k.reasonCode)?.transient ?? false);
 
   Future<int> _sourceFor(LibraryFolder folder) async {
     final existing = await (_db.select(
@@ -145,26 +177,43 @@ final class LocalLibraryScanner implements LibraryScanner {
   /// Reads [entries] and upserts them; returns how many were read.
   Future<int> _readAndStore(int sourceId, List<StorageEntry> entries) async {
     final jobs = <_Job>[];
-    for (final e in entries) {
-      final ext = extensionOf(e.relPath);
-      if (e.state == EntryState.notDownloaded) {
-        jobs.add(_Job(ext, null, 'Not downloaded'));
-      } else if (!_tagged.contains(ext)) {
-        jobs.add(_Job(ext, null, null));
-      } else {
-        try {
-          jobs.add(_Job(ext, await _storage.openHandle(e.uri), null));
-        } on StorageException {
-          jobs.add(_Job(ext, null, "Can't open"));
+    try {
+      for (final e in entries) {
+        final ext = extensionOf(e.relPath);
+        if (e.state == EntryState.notDownloaded) {
+          jobs.add(_Job(ext, null, UnreadableReason.notDownloaded));
+        } else if (!_tagged.contains(ext)) {
+          jobs.add(_Job(ext, null, null));
+        } else {
+          try {
+            jobs.add(_Job(ext, await _storage.openHandle(e), null));
+          } on StorageException {
+            jobs.add(_Job(ext, null, UnreadableReason.cannotOpen));
+          }
         }
       }
+    } catch (_) {
+      _discardAll(
+        jobs,
+      ); // an unexpected failure while opening: close what is open
+      rethrow;
     }
-    final results = await _parseInIsolate(jobs);
+    List<_Result> results;
+    try {
+      results = await _parseInIsolate(_run, jobs);
+    } catch (_) {
+      // The isolate did not run (spawn failed): it never took the handles.
+      _discardAll(jobs);
+      results = [
+        for (final _ in jobs) const _Result(null, UnreadableReason.cannotRead),
+      ];
+    }
     await _db.batch((b) {
       for (var i = 0; i < entries.length; i++) {
         final e = entries[i];
         final r = results[i];
         final title = r.tags?.title ?? '';
+        final titleSort = r.tags?.titleSort ?? '';
         final row = TracksCompanion.insert(
           sourceId: sourceId,
           relPath: e.relPath,
@@ -173,14 +222,19 @@ final class LocalLibraryScanner implements LibraryScanner {
           mtime: e.modifiedMs,
           codec: r.tags?.codec ?? jobs[i].ext,
           title: title,
-          titleSortKey: collateKey(Track.displayTitleOf(title, e.relPath)),
+          titleSort: titleSort,
+          titleSortKey: songSortKey(
+            title: title,
+            titleSort: titleSort,
+            fileName: _fileName(e.relPath),
+          ),
           artist: r.tags?.artist ?? '',
           album: r.tags?.album ?? '',
           trackNo: r.tags?.trackNo ?? 0,
           durationMs: r.tags?.durationMs ?? 0,
           sampleRate: r.tags?.sampleRate ?? 0,
           bitDepth: r.tags?.bitDepth ?? 0,
-          unreadableReason: Value(r.reason),
+          reasonCode: Value(r.reason?.code),
         );
         b.insert(
           _db.tracks,
@@ -194,6 +248,18 @@ final class LocalLibraryScanner implements LibraryScanner {
     });
     return entries.length;
   }
+
+  static void _discardAll(List<_Job> jobs) {
+    for (final j in jobs) {
+      final h = j.handle;
+      if (h != null && !h.isUsed) h.discard();
+    }
+  }
+
+  static String _fileName(String relPath) {
+    final slash = relPath.lastIndexOf('/');
+    return slash < 0 ? relPath : relPath.substring(slash + 1);
+  }
 }
 
 /// One file to read in the isolate: a handle to open, or a reason it is not
@@ -203,20 +269,24 @@ final class _Job {
 
   final String ext;
   final ReaderHandle? handle;
-  final String? reason;
+  final UnreadableReason? reason;
 }
 
 final class _Result {
   const _Result(this.tags, this.reason);
 
   final AudioTags? tags;
-  final String? reason;
+  final UnreadableReason? reason;
 }
+
+/// Runs a computation in a new isolate: [Isolate.run], or a stand-in in
+/// tests (for example one that fails to start).
+typedef IsolateRunner = Future<R> Function<R>(R Function() computation);
 
 /// Top level, so the isolate closure captures only [jobs] (not the scanner
 /// and its database).
-Future<List<_Result>> _parseInIsolate(List<_Job> jobs) =>
-    Isolate.run(() => _parseAll(jobs));
+Future<List<_Result>> _parseInIsolate(IsolateRunner run, List<_Job> jobs) =>
+    run(() => _parseAll(jobs));
 
 /// Runs in a background isolate. Never throws: every failure is a reason.
 List<_Result> _parseAll(List<_Job> jobs) => [for (final j in jobs) _parse(j)];
@@ -231,7 +301,8 @@ _Result _parse(_Job j) {
   } on TagReadException catch (e) {
     return _Result(null, e.reason);
   } catch (_) {
-    return _Result(null, "Can't read");
+    // Open failed (not seekable) or a read failed part-way.
+    return const _Result(null, UnreadableReason.cannotRead);
   } finally {
     reader?.close();
   }
