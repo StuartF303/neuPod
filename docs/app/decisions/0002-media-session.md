@@ -72,6 +72,46 @@ Why: one owner of player, session and focus per platform, no bridging layer, no 
 5. Route icon: speaker, wired, Bluetooth, USB DAC (Android) and AirPlay (iOS) each show correctly. Switching mid-track updates the icon within 1 s and, on iOS, playback continues after the engine restart.
 6. Confirm no `POST_NOTIFICATIONS` prompt is needed on API 33+ for the media notification.
 
+## Phase 1 implementation (2026-11-22)
+
+Built as decided, inside `mobile/packages/neupod_audio`. Where it differs from or defers part of the text above:
+
+- **Manifest entries live in the plugin's manifest** (merged into the app's): `FOREGROUND_SERVICE`,
+  `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, the exported `PlaybackService` with `foregroundServiceType="mediaPlayback"`,
+  and also **`WAKE_LOCK`**, a normal (no prompt) permission ExoPlayer's `WAKE_MODE_LOCAL` needs so playback does not
+  stall with the screen off. No `POST_NOTIFICATIONS`.
+- **The Flutter side is a MediaController** connected to the service, so the app, the notification and the buttons
+  drive one player. Items cross the session boundary without their URI, so the URI travels in
+  `RequestMetadata.mediaUri` and the session restores it. Only the app's own package may set the queue; the system UI,
+  Bluetooth and other controllers may only control playback.
+- **Playback resumption is deferred to phase 4** (the "Resume" item): the `MediaButtonReceiver` and
+  `onPlaybackResumption` need the persisted queue, which does not exist yet. Until then a Bluetooth play press after
+  the service has died does nothing.
+- **Interruptions, minimal now:** Android uses ExoPlayer's audio-focus handling and becoming-noisy pause. iOS:
+  - An interruption's start (even while paused) marks the schedule stale, and the next play reschedules from the
+    true position.
+  - The "unplugged" test: a personal output (headphones, Bluetooth, USB, AirPlay, car) has gone **and none is in the
+    new route**. Moving between personal outputs (AirPods to CarPlay, Bluetooth to AirPlay) does not pause.
+  - `oldDeviceUnavailable` pauses when the test holds against the previous route.
+  - `AVAudioEngineConfigurationChange`, which unplugging also posts, pauses when the test holds against the outputs
+    in use. Otherwise it restarts from the current position one run-loop turn later, unless the route change paused
+    meanwhile.
+  - Both handlers apply the same test, so the outcome does not depend on which notification comes first, **provided**
+    `AVAudioSession.currentRoute` already shows the new route when the first one runs. If it lags (not documented
+    either way), the configuration change could see the old route and restart on the speaker for a moment before the
+    route change pauses. To check on the iPhone in phase 4.
+  - Completion callbacks that a system stop fires for the old segments are ignored (the schedule's generation is
+    bumped), so they cannot advance or end the queue.
+  - The session is deactivated with `.notifyOthersOnDeactivation` when the queue ends or is cleared.
+
+  Resuming after a transient interruption, and checking all of this on a real iPhone (the simulator has no real route
+  changes or calls), are phase 4.
+- **Commands and observers are released on plugin detach:** the `MPRemoteCommandCenter` targets and the
+  NotificationCenter observers are removed.
+- **The lock screen's artwork** comes from the item's `artUri` (the art cache, later), else from art embedded in the
+  file: Media3 extracts it itself; on iOS the plugin reads `AVAsset`'s common artwork metadata.
+- **Route detection is not built yet** (phase 4, "Output route icon").
+
 ## Sources
 
 All checked 2026-11-21.

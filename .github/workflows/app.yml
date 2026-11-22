@@ -78,7 +78,7 @@ jobs:
       - run: flutter pub get
       - run: flutter build apk --debug
       # The Flutter build above writes android/local.properties and the Gradle wrapper that this step needs.
-      - name: Release manifest has no INTERNET permission
+      - name: Release manifest has no network permission
         run: |
           (cd android && ./gradlew --no-daemon :app:processReleaseMainManifest)
           manifest=build/app/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml
@@ -88,11 +88,14 @@ jobs:
             exit 1
           fi
           grep -n 'uses-permission' "$manifest" || true
-          if grep -q 'android.permission.INTERNET' "$manifest"; then
-            echo "::error::the release manifest asks for android.permission.INTERNET; R1 makes no network connection"
-            exit 1
-          fi
-          echo "OK: no INTERNET permission in the release manifest"
+          # ACCESS_NETWORK_STATE comes in with Media3; the audio plugin's manifest removes it.
+          for permission in INTERNET ACCESS_NETWORK_STATE; do
+            if grep -q "\"android.permission.$permission\"" "$manifest"; then
+              echo "::error::the release manifest asks for android.permission.$permission; R1 makes no network connection"
+              exit 1
+            fi
+          done
+          echo "OK: no INTERNET or ACCESS_NETWORK_STATE permission in the release manifest"
 
   # Integration tests on an emulator at the minimum API level (29, Android 10).
   android-integration:
