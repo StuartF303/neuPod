@@ -1,0 +1,1324 @@
+{
+  "generator": "mobile/tool/gen_test_library",
+  "mode": "cases",
+  "library": "library",
+  "tracks": [
+    {
+      "path": "Pale Harbour/2004 Tidewater/01 Low Light.flac",
+      "case": "full-tags-flac",
+      "source": "flac16",
+      "tags": {
+        "title": "Low Light",
+        "artist": "Pale Harbour",
+        "albumArtist": "Pale Harbour",
+        "album": "Tidewater",
+        "track": "1/3",
+        "disc": "1/1",
+        "year": "2004",
+        "genre": "Rock",
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Low Light",
+        "artist": "Pale Harbour",
+        "performer": "Pale Harbour",
+        "album": "Tidewater",
+        "year": 2004,
+        "disc": 1,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Pale Harbour/2004 Tidewater/02 Salt Road.flac",
+      "case": "full-tags-flac",
+      "source": "flacMono",
+      "tags": {
+        "title": "Salt Road",
+        "artist": "Pale Harbour",
+        "albumArtist": "Pale Harbour",
+        "album": "Tidewater",
+        "track": "2/3",
+        "disc": "1/1",
+        "year": "2004",
+        "genre": "Rock",
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Salt Road",
+        "artist": "Pale Harbour",
+        "performer": "Pale Harbour",
+        "album": "Tidewater",
+        "year": 2004,
+        "disc": 1,
+        "track": 2,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Pale Harbour/2004 Tidewater/03 Breakwater.flac",
+      "case": "full-tags-flac",
+      "source": "flac24",
+      "tags": {
+        "title": "Breakwater",
+        "artist": "Pale Harbour",
+        "albumArtist": "Pale Harbour",
+        "album": "Tidewater",
+        "track": "3/3",
+        "disc": "1/1",
+        "year": "2004",
+        "genre": "Rock",
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Breakwater",
+        "artist": "Pale Harbour",
+        "performer": "Pale Harbour",
+        "album": "Tidewater",
+        "year": 2004,
+        "disc": 1,
+        "track": 3,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Lanterns, The/2011 Night Market/01 Paper Moon.mp3",
+      "case": "id3v24-the-folder",
+      "source": "mp3",
+      "tags": {
+        "title": "Paper Moon",
+        "artist": "The Lanterns",
+        "albumArtist": "The Lanterns",
+        "album": "Night Market",
+        "track": "1",
+        "disc": null,
+        "year": "2011",
+        "genre": "Pop",
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": 4,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Paper Moon",
+        "artist": "The Lanterns",
+        "performer": "The Lanterns",
+        "album": "Night Market",
+        "year": 2011,
+        "disc": null,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Lanterns, The/2011 Night Market/02 Neon Rain.mp3",
+      "case": "id3v24-the-folder",
+      "source": "mp3",
+      "tags": {
+        "title": "Neon Rain",
+        "artist": "The Lanterns",
+        "albumArtist": "The Lanterns",
+        "album": "Night Market",
+        "track": "2",
+        "disc": null,
+        "year": "2011",
+        "genre": "Pop",
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": 4,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Neon Rain",
+        "artist": "The Lanterns",
+        "performer": "The Lanterns",
+        "album": "Night Market",
+        "year": 2011,
+        "disc": null,
+        "track": 2,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Hollow Pines, The/1999 Cedar/01 First Frost.flac",
+      "case": "the-folder-no-tags",
+      "source": "flac16",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "First Frost",
+        "artist": "The Hollow Pines",
+        "performer": "The Hollow Pines",
+        "album": "Cedar",
+        "year": 1999,
+        "disc": null,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Hollow Pines, The/1999 Cedar/02 Thaw.flac",
+      "case": "the-folder-no-tags",
+      "source": "flac16",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Thaw",
+        "artist": "The Hollow Pines",
+        "performer": "The Hollow Pines",
+        "album": "Cedar",
+        "year": 1999,
+        "disc": null,
+        "track": 2,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Kestrel Lane/2016 Long Division (Disc 1)/01 Opening.flac",
+      "case": "disc-in-album-tag",
+      "source": "flacMono",
+      "tags": {
+        "title": "Opening",
+        "artist": "Kestrel Lane",
+        "albumArtist": null,
+        "album": "Long Division (Disc 1)",
+        "track": "1",
+        "disc": null,
+        "year": "2016",
+        "genre": null,
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Opening",
+        "artist": "Kestrel Lane",
+        "performer": "Kestrel Lane",
+        "album": null,
+        "year": 2016,
+        "disc": 1,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Kestrel Lane/2016 Long Division (Disc 1)/02 Middle Distance.flac",
+      "case": "disc-in-album-tag",
+      "source": "flacMono",
+      "tags": {
+        "title": "Middle Distance",
+        "artist": "Kestrel Lane",
+        "albumArtist": null,
+        "album": "Long Division (Disc 1)",
+        "track": "2",
+        "disc": null,
+        "year": "2016",
+        "genre": null,
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Middle Distance",
+        "artist": "Kestrel Lane",
+        "performer": "Kestrel Lane",
+        "album": null,
+        "year": 2016,
+        "disc": 1,
+        "track": 2,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Kestrel Lane/2016 Long Division (Disc 2)/01 Return.flac",
+      "case": "disc-in-album-tag",
+      "source": "flacMono",
+      "tags": {
+        "title": "Return",
+        "artist": "Kestrel Lane",
+        "albumArtist": null,
+        "album": "Long Division (Disc 2)",
+        "track": "1",
+        "disc": null,
+        "year": "2016",
+        "genre": null,
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Return",
+        "artist": "Kestrel Lane",
+        "performer": "Kestrel Lane",
+        "album": null,
+        "year": 2016,
+        "disc": 2,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Zed Zone/2005 Greatest Hits/01 Zulu.flac",
+      "case": "disc-tags-two-folders",
+      "source": "flac16",
+      "tags": {
+        "title": "Zulu",
+        "artist": "Zed Zone",
+        "albumArtist": null,
+        "album": "Greatest Hits",
+        "track": "1",
+        "disc": "1/2",
+        "year": "2005",
+        "genre": null,
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Zulu",
+        "artist": "Zed Zone",
+        "performer": "Zed Zone",
+        "album": "Greatest Hits",
+        "year": 2005,
+        "disc": 1,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Zed Zone/2005 Greatest Hits/02 Zebra.flac",
+      "case": "disc-tags-two-folders",
+      "source": "flac16",
+      "tags": {
+        "title": "Zebra",
+        "artist": "Zed Zone",
+        "albumArtist": null,
+        "album": "Greatest Hits",
+        "track": "2",
+        "disc": "1/2",
+        "year": "2005",
+        "genre": null,
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Zebra",
+        "artist": "Zed Zone",
+        "performer": "Zed Zone",
+        "album": "Greatest Hits",
+        "year": 2005,
+        "disc": 1,
+        "track": 2,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Zed Zone/2005 Greatest Hits CD2/01 Zinc.flac",
+      "case": "disc-tags-two-folders",
+      "source": "flac16",
+      "tags": {
+        "title": "Zinc",
+        "artist": "Zed Zone",
+        "albumArtist": null,
+        "album": "Greatest Hits",
+        "track": "1",
+        "disc": "2/2",
+        "year": "2005",
+        "genre": null,
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Zinc",
+        "artist": "Zed Zone",
+        "performer": "Zed Zone",
+        "album": "Greatest Hits",
+        "year": 2005,
+        "disc": 2,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Ember Field/2005 Greatest Hits/01 Spark.mp3",
+      "case": "same-album-name-two-artists",
+      "source": "mp3",
+      "tags": {
+        "title": "Spark",
+        "artist": "Ember Field",
+        "albumArtist": null,
+        "album": "Greatest Hits",
+        "track": "1",
+        "disc": null,
+        "year": "2005",
+        "genre": null,
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": 4,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Spark",
+        "artist": "Ember Field",
+        "performer": "Ember Field",
+        "album": "Greatest Hits",
+        "year": 2005,
+        "disc": null,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Quiet Engine/2015 Machines (Disc 1)/01 Gear.flac",
+      "case": "disc-folder-no-tags",
+      "source": "flacMono",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Gear",
+        "artist": "Quiet Engine",
+        "performer": "Quiet Engine",
+        "album": null,
+        "year": 2015,
+        "disc": 1,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Quiet Engine/2015 Machines (Disc 1)/02 Piston.flac",
+      "case": "disc-folder-no-tags",
+      "source": "flacMono",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Piston",
+        "artist": "Quiet Engine",
+        "performer": "Quiet Engine",
+        "album": null,
+        "year": 2015,
+        "disc": 1,
+        "track": 2,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Quiet Engine/2015 Machines (Disc 2)/01 Spring.flac",
+      "case": "disc-folder-no-tags",
+      "source": "flacMono",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Spring",
+        "artist": "Quiet Engine",
+        "performer": "Quiet Engine",
+        "album": null,
+        "year": 2015,
+        "disc": 2,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Various Artists/2001 Summer Static/01 Riptide.flac",
+      "case": "compilation-various-artists",
+      "source": "flac16",
+      "tags": {
+        "title": "Riptide",
+        "artist": "Pale Harbour",
+        "albumArtist": "Various Artists",
+        "album": "Summer Static",
+        "track": "1",
+        "disc": null,
+        "year": "2001",
+        "genre": null,
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Riptide",
+        "artist": null,
+        "performer": "Pale Harbour",
+        "album": "Summer Static",
+        "year": 2001,
+        "disc": null,
+        "track": 1,
+        "compilation": true,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Various Artists/2001 Summer Static/02 Ripple.flac",
+      "case": "compilation-various-artists",
+      "source": "flac16",
+      "tags": {
+        "title": "Ripple",
+        "artist": "Glass Fox",
+        "albumArtist": "Various Artists",
+        "album": "Summer Static",
+        "track": "2",
+        "disc": null,
+        "year": "2001",
+        "genre": null,
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Ripple",
+        "artist": null,
+        "performer": "Glass Fox",
+        "album": "Summer Static",
+        "year": 2001,
+        "disc": null,
+        "track": 2,
+        "compilation": true,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Compilations/2003 Night Drive/01 Drift.mp3",
+      "case": "compilation-flag",
+      "source": "mp3",
+      "tags": {
+        "title": "Drift",
+        "artist": "Neon Saint",
+        "albumArtist": null,
+        "album": "Night Drive",
+        "track": "1",
+        "disc": null,
+        "year": "2003",
+        "genre": null,
+        "compilation": true,
+        "artistSort": null
+      },
+      "id3Version": 4,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Drift",
+        "artist": null,
+        "performer": "Neon Saint",
+        "album": "Night Drive",
+        "year": 2003,
+        "disc": null,
+        "track": 1,
+        "compilation": true,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Compilations/2003 Night Drive/02 Overpass.flac",
+      "case": "compilation-flag",
+      "source": "flac16",
+      "tags": {
+        "title": "Overpass",
+        "artist": "Low Orbit",
+        "albumArtist": null,
+        "album": "Night Drive",
+        "track": "2",
+        "disc": null,
+        "year": "2003",
+        "genre": null,
+        "compilation": true,
+        "artistSort": null
+      },
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Overpass",
+        "artist": null,
+        "performer": "Low Orbit",
+        "album": "Night Drive",
+        "year": 2003,
+        "disc": null,
+        "track": 2,
+        "compilation": true,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Ministry of Sound/2000 Ministry of Sound - the Annual IV - [Disc 1 of 2] (Judge Jules) (Disc 1)/01 Opening Mix.flac",
+      "case": "long-names",
+      "source": "flacMono",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Opening Mix",
+        "artist": "Ministry of Sound",
+        "performer": "Ministry of Sound",
+        "album": null,
+        "year": 2000,
+        "disc": 1,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": "disc merging: the folder names differ before \"(Disc n)\" (\"[Disc 1 of 2]\" and \"[Disc 2 of 2]\"), so whether the two discs are one album is open"
+    },
+    {
+      "path": "Ministry of Sound/2000 Ministry of Sound - the Annual IV - [Disc 2 of 2] (Judge Jules) (Disc 2)/01 Closing Mix.flac",
+      "case": "long-names",
+      "source": "flacMono",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Closing Mix",
+        "artist": "Ministry of Sound",
+        "performer": "Ministry of Sound",
+        "album": null,
+        "year": 2000,
+        "disc": 2,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": "disc merging: the folder names differ before \"(Disc n)\" (\"[Disc 1 of 2]\" and \"[Disc 2 of 2]\"), so whether the two discs are one album is open"
+    },
+    {
+      "path": "Glass Fox/2018 Longform/01 A Remarkably Long Title That Goes On and On Past Any Sensible Width, Through a Second Clause About Rivers, Harbours and Lanterns, Then a Third About Night Markets and Neon Rain, an.mp3",
+      "case": "long-title",
+      "source": "mp3",
+      "tags": {
+        "title": "A Remarkably Long Title That Goes On and On Past Any Sensible Width, Through a Second Clause About Rivers, Harbours and Lanterns, Then a Third About Night Markets and Neon Rain, and Finally a Parenthetical (Extended Twelve-Inch Remix by Somebody With an Equally Long Name, Part One of Two)",
+        "artist": "Glass Fox",
+        "albumArtist": null,
+        "album": "Longform",
+        "track": "1",
+        "disc": null,
+        "year": "2018",
+        "genre": null,
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": 4,
+      "embeddedArt": false,
+      "expect": {
+        "title": "A Remarkably Long Title That Goes On and On Past Any Sensible Width, Through a Second Clause About Rivers, Harbours and Lanterns, Then a Third About Night Markets and Neon Rain, and Finally a Parenthetical (Extended Twelve-Inch Remix by Somebody With an Equally Long Name, Part One of Two)",
+        "artist": "Glass Fox",
+        "performer": "Glass Fox",
+        "album": "Longform",
+        "year": 2018,
+        "disc": null,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Sigrún Ósk/2010 Ljós/01 Þögn.flac",
+      "case": "accents",
+      "source": "flac16",
+      "tags": {
+        "title": "Þögn",
+        "artist": "Sigrún Ósk",
+        "albumArtist": null,
+        "album": "Ljós",
+        "track": "1",
+        "disc": null,
+        "year": "2010",
+        "genre": null,
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Þögn",
+        "artist": "Sigrún Ósk",
+        "performer": "Sigrún Ósk",
+        "album": "Ljós",
+        "year": 2010,
+        "disc": null,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Motörbike/1995 Überfahrt/01 Straße.mp3",
+      "case": "accents",
+      "source": "mp3",
+      "tags": {
+        "title": "Straße",
+        "artist": "Motörbike",
+        "albumArtist": null,
+        "album": "Überfahrt",
+        "track": "1",
+        "disc": null,
+        "year": "1995",
+        "genre": null,
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": 3,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Straße",
+        "artist": "Motörbike",
+        "performer": "Motörbike",
+        "album": "Überfahrt",
+        "year": 1995,
+        "disc": null,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Émilie Côté/2007 Été/01 Ça va.flac",
+      "case": "accents",
+      "source": "flacMono",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Ça va",
+        "artist": "Émilie Côté",
+        "performer": "Émilie Côté",
+        "album": "Été",
+        "year": 2007,
+        "disc": null,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "!Aktion/2012 ?Why Not/01 #1 Fan.flac",
+      "case": "symbols-digits",
+      "source": "flac16",
+      "tags": {
+        "title": "#1 Fan",
+        "artist": "!Aktion",
+        "albumArtist": null,
+        "album": "?Why Not",
+        "track": "1",
+        "disc": null,
+        "year": "2012",
+        "genre": null,
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "#1 Fan",
+        "artist": "!Aktion",
+        "performer": "!Aktion",
+        "album": "?Why Not",
+        "year": 2012,
+        "disc": null,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "10 Tonne Truck/1988 99 Problems/01 7 Seconds.flac",
+      "case": "symbols-digits",
+      "source": "flacMono",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "7 Seconds",
+        "artist": "10 Tonne Truck",
+        "performer": "10 Tonne Truck",
+        "album": "99 Problems",
+        "year": 1988,
+        "disc": null,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "+44 Minus/2006 & More/01 (Untitled).mp3",
+      "case": "symbols-digits",
+      "source": "mp3",
+      "tags": {
+        "title": "(Untitled)",
+        "artist": "+44 Minus",
+        "albumArtist": null,
+        "album": "& More",
+        "track": "1",
+        "disc": null,
+        "year": "2006",
+        "genre": null,
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": 4,
+      "embeddedArt": false,
+      "expect": {
+        "title": "(Untitled)",
+        "artist": "+44 Minus",
+        "performer": "+44 Minus",
+        "album": "& More",
+        "year": 2006,
+        "disc": null,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Year Zero/1982 1999/01 1999.flac",
+      "case": "symbols-digits",
+      "source": "flac16",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "1999",
+        "artist": "Year Zero",
+        "performer": "Year Zero",
+        "album": "1999",
+        "year": 1982,
+        "disc": null,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "An Orchard/2019 A Quiet Year/01 The Apple.flac",
+      "case": "articles",
+      "source": "flac16",
+      "tags": {
+        "title": "The Apple",
+        "artist": "An Orchard",
+        "albumArtist": null,
+        "album": "A Quiet Year",
+        "track": "1",
+        "disc": null,
+        "year": "2019",
+        "genre": null,
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "The Apple",
+        "artist": "An Orchard",
+        "performer": "An Orchard",
+        "album": "A Quiet Year",
+        "year": 2019,
+        "disc": null,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Weird Owl/2014 Eat Its/01 Parody.flac",
+      "case": "articles",
+      "source": "flac16",
+      "tags": {
+        "title": "Parody",
+        "artist": "Weird Owl",
+        "albumArtist": null,
+        "album": "Eat Its",
+        "track": "1",
+        "disc": null,
+        "year": "2014",
+        "genre": null,
+        "compilation": false,
+        "artistSort": "Owl, Weird"
+      },
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Parody",
+        "artist": "Weird Owl",
+        "performer": "Weird Owl",
+        "album": "Eat Its",
+        "year": 2014,
+        "disc": null,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Marrow/1977 Bone Dry/01 Dust.flac",
+      "case": "missing-tags",
+      "source": "flac16",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Dust",
+        "artist": "Marrow",
+        "performer": "Marrow",
+        "album": "Bone Dry",
+        "year": 1977,
+        "disc": null,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Marrow/1977 Bone Dry/02 Ash.mp3",
+      "case": "missing-tags",
+      "source": "mp3",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Ash",
+        "artist": "Marrow",
+        "performer": "Marrow",
+        "album": "Bone Dry",
+        "year": 1977,
+        "disc": null,
+        "track": 2,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Marrow/1977 Bone Dry/Song Without Number.flac",
+      "case": "missing-tags",
+      "source": "flacMono",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Song Without Number",
+        "artist": "Marrow",
+        "performer": "Marrow",
+        "album": "Bone Dry",
+        "year": 1977,
+        "disc": null,
+        "track": null,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Marrow/1977 Bone Dry/04 Upper Case Extension.FLAC",
+      "case": "missing-tags",
+      "source": "flac16",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Upper Case Extension",
+        "artist": "Marrow",
+        "performer": "Marrow",
+        "album": "Bone Dry",
+        "year": 1977,
+        "disc": null,
+        "track": 4,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Marrow/1977 Bone Dry/05 Mr. Blue Dot.flac",
+      "case": "missing-tags",
+      "source": "flac16",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Mr. Blue Dot",
+        "artist": "Marrow",
+        "performer": "Marrow",
+        "album": "Bone Dry",
+        "year": 1977,
+        "disc": null,
+        "track": 5,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Marrow/1977 Bone Dry/06 Marrow Bones.m4a",
+      "case": "missing-tags",
+      "source": "alac",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Marrow Bones",
+        "artist": "Marrow",
+        "performer": "Marrow",
+        "album": "Bone Dry",
+        "year": 1977,
+        "disc": null,
+        "track": 6,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Marrow/Odds and Ends/03 Scrap.flac",
+      "case": "missing-tags",
+      "source": "flac16",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Scrap",
+        "artist": "Marrow",
+        "performer": "Marrow",
+        "album": "Odds and Ends",
+        "year": null,
+        "disc": null,
+        "track": 3,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Marrow/1977 Bone Dry/07 Folder Title.flac",
+      "case": "partial-tags",
+      "source": "flac16",
+      "tags": {
+        "title": "Tag Title",
+        "artist": null,
+        "albumArtist": null,
+        "album": null,
+        "track": null,
+        "disc": null,
+        "year": null,
+        "genre": null,
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Tag Title",
+        "artist": null,
+        "performer": null,
+        "album": null,
+        "year": null,
+        "disc": null,
+        "track": null,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": "per-field fallback: the spec says \"where tags are missing\" but not whether one present tag (here the title) stops the folder fallback for the other fields"
+    },
+    {
+      "path": "Broken Things/2020 Damage/01 Zero Bytes.flac",
+      "case": "unplayable",
+      "source": "zeroBytes",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Zero Bytes",
+        "artist": "Broken Things",
+        "performer": "Broken Things",
+        "album": "Damage",
+        "year": 2020,
+        "disc": null,
+        "track": 1,
+        "compilation": false,
+        "playable": false
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Broken Things/2020 Damage/02 Not Audio.flac",
+      "case": "unplayable",
+      "source": "garbage",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Not Audio",
+        "artist": "Broken Things",
+        "performer": "Broken Things",
+        "album": "Damage",
+        "year": 2020,
+        "disc": null,
+        "track": 2,
+        "compilation": false,
+        "playable": false
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Broken Things/2020 Damage/03 Truncated.flac",
+      "case": "unplayable",
+      "source": "truncatedFlac",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Truncated",
+        "artist": "Broken Things",
+        "performer": "Broken Things",
+        "album": "Damage",
+        "year": 2020,
+        "disc": null,
+        "track": 3,
+        "compilation": false,
+        "playable": false
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Broken Things/2020 Damage/04 Garbage.mp3",
+      "case": "unplayable",
+      "source": "garbage",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Garbage",
+        "artist": "Broken Things",
+        "performer": "Broken Things",
+        "album": "Damage",
+        "year": 2020,
+        "disc": null,
+        "track": 4,
+        "compilation": false,
+        "playable": false
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Broken Things/2020 Damage/05 Old Format.wma",
+      "case": "unplayable",
+      "source": "garbage",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": null,
+      "ambiguous": "which file extensions are audio: a .wma is neither a required format nor obviously \"not music\""
+    },
+    {
+      "path": "Pale Harbour/2006 Undertow EP/01 Undertow.flac",
+      "case": "art-everywhere",
+      "source": "flac16",
+      "tags": {
+        "title": "Undertow",
+        "artist": "Pale Harbour",
+        "albumArtist": "Pale Harbour",
+        "album": "Undertow EP",
+        "track": "1",
+        "disc": null,
+        "year": "2006",
+        "genre": null,
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": null,
+      "embeddedArt": true,
+      "expect": {
+        "title": "Undertow",
+        "artist": "Pale Harbour",
+        "performer": "Pale Harbour",
+        "album": "Undertow EP",
+        "year": 2006,
+        "disc": null,
+        "track": 1,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Loose Track.flac",
+      "case": "root-file",
+      "source": "flac16",
+      "tags": {
+        "title": "Loose Track",
+        "artist": "Nobody Band",
+        "albumArtist": null,
+        "album": "Singles",
+        "track": null,
+        "disc": null,
+        "year": null,
+        "genre": null,
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": {
+        "title": "Loose Track",
+        "artist": "Nobody Band",
+        "performer": "Nobody Band",
+        "album": "Singles",
+        "year": null,
+        "disc": null,
+        "track": null,
+        "compilation": false,
+        "playable": true
+      },
+      "ambiguous": null
+    },
+    {
+      "path": "Untagged At Root.mp3",
+      "case": "root-file",
+      "source": "mp3",
+      "tags": null,
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": null,
+      "ambiguous": "no folder convention to fall back on for a file at the library root"
+    },
+    {
+      "path": ".hidden/Secret.flac",
+      "case": "hidden",
+      "source": "flac16",
+      "tags": {
+        "title": "Secret",
+        "artist": "Hidden",
+        "albumArtist": null,
+        "album": null,
+        "track": null,
+        "disc": null,
+        "year": null,
+        "genre": null,
+        "compilation": false,
+        "artistSort": null
+      },
+      "id3Version": null,
+      "embeddedArt": false,
+      "expect": null,
+      "ambiguous": null
+    }
+  ],
+  "otherFiles": [
+    {
+      "path": "Pale Harbour/2004 Tidewater/Folder.jpg",
+      "case": "art",
+      "kind": "folderJpg",
+      "ambiguous": null
+    },
+    {
+      "path": "Lanterns, The/2011 Night Market/cover.jpg",
+      "case": "art",
+      "kind": "coverJpg",
+      "ambiguous": null
+    },
+    {
+      "path": "Quiet Engine/2015 Machines (Disc 1)/Folder.jpg",
+      "case": "art",
+      "kind": "folderJpg",
+      "ambiguous": null
+    },
+    {
+      "path": "Pale Harbour/2006 Undertow EP/Folder.jpg",
+      "case": "art-everywhere",
+      "kind": "folderJpg",
+      "ambiguous": "art order when an album has embedded art, Folder.jpg and cover.jpg"
+    },
+    {
+      "path": "Pale Harbour/2006 Undertow EP/cover.jpg",
+      "case": "art-everywhere",
+      "kind": "coverJpg",
+      "ambiguous": "art order when an album has embedded art, Folder.jpg and cover.jpg"
+    },
+    {
+      "path": "Pale Harbour/2004 Tidewater/notes.txt",
+      "case": "not-audio",
+      "kind": "text",
+      "ambiguous": null
+    },
+    {
+      "path": "Pale Harbour/2004 Tidewater/._01 Low Light.flac",
+      "case": "hidden",
+      "kind": "appleDouble",
+      "ambiguous": null
+    },
+    {
+      "path": "Pale Harbour/.DS_Store",
+      "case": "hidden",
+      "kind": "dsStore",
+      "ambiguous": null
+    }
+  ]
+}

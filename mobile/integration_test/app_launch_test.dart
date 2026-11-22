@@ -28,9 +28,9 @@ void main() {
     app.main();
     await tester.pumpAndSettle();
 
-    // The device view's placeholder screen (the title and the wordmark both
-    // read neuPod, so look for a Home item instead).
+    // Home inside the device view (the title and the wordmark both read
+    // neuPod, so look for a Home item and the idle right pane instead).
     expect(find.text('Music'), findsOneWidget);
-    expect(find.text('No songs'), findsOneWidget);
+    expect(find.text('Nothing playing'), findsOneWidget);
   });
 }
