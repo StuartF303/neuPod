@@ -1,6 +1,6 @@
 # 0004: Folder access
 
-Status: Proposed (2026-11-21) · Owner: Library engineer
+Status: Accepted (phase 1, 2026-11-22; see Implementation) · Owner: Library engineer
 
 ## Context
 
@@ -114,6 +114,34 @@ stream (a Dart stream source would need a localhost HTTP proxy, which fits badly
 6. iPhone: drag a folder in Finder into Documents; pick an iCloud Drive folder with some files evicted; confirm the
    placeholder names and status keys on the current iOS; relaunch and resolve the bookmark; a USB drive unplugged.
 7. Android 10 device or emulator: MediaStore query with `READ_EXTERNAL_STORAGE`, URI reads work without legacy storage.
+
+## Implementation (phase 1, 2026-11-22)
+
+Built as decided, in `mobile/packages/neupod_storage` (Kotlin + Swift, Pigeon 30.0.4 as a dev dependency only), used
+by `mobile/lib/data/platform/storage_folder_access.dart`. Where it differs from the decision above, and why:
+
+- **Calls.** `pickFolder`, `listRoots`, `removeRoot`, `startWalk` / `nextWalkBatch` / `cancelWalk`, `openFd`
+  (Android) and `debugAddRoot` (iOS debug builds only). `mediaStoreAudio` is left to its own phase 3 item ("Android:
+  the device's shared music collection"), so phase 1 requests **no permission at all** on either platform.
+- **Walk as pages, not a stream.** The walk is pull-based: each `nextWalkBatch` continues the breadth-first
+  DocumentsContract walk (Android) or the `FileManager` enumerator (iOS) on a background thread until it has about N
+  files. Dart wraps it as a `Stream<List<StorageEntry>>`; cancelling the subscription calls `cancelWalk`. This gives
+  back-pressure and cancel with plain host-API calls, where a Pigeon event channel cannot take a root argument.
+- **Callback-style async (`@asyncCallback`).** Pigeon 28+ generates Kotlin `suspend` functions for `@async`, which
+  would add `kotlinx-coroutines-android` to the app. The callback form needs no new shipped library.
+- **No `ffi` package.** `FdStorageReader` calls `pread`/`lseek`/`close` (the `64` variants where libc has them) through
+  `dart:ffi` and `DynamicLibrary.process()`, with `malloc`/`free` from libc too, so nothing new ships. `lseek` to the
+  end gives the length and fails on a pipe, which is how a non-seekable provider descriptor is detected and refused.
+- **iOS bookmarks** are kept in the plugin's own `UserDefaults` key, resolved and held open (one
+  `startAccessingSecurityScopedResource` per root) when the plugin registers at launch, and re-saved when stale.
+  Listing runs inside `NSFileCoordinator` with `.immediatelyAvailableMetadataOnly`, one coordinated read per page.
+  iCloud placeholders (`.Name.ext.icloud`) and items whose downloading status is `notDownloaded` come back with
+  `state = notDownloaded` and their real name; other hidden files are skipped. The privacy manifest declares the file
+  timestamp (3B52.1, C617.1) and `UserDefaults` (CA92.1) reasons.
+- **Test hook.** `debugAddRoot(path)` stores a bookmark exactly as a pick does, so the iOS integration test covers
+  bookmark storage, resolution after relaunch, walking and reading. It throws in release builds. The picker UI itself
+  is driven on Android (adb, `scripts/app/drive_saf_picker.py`) but not on the iOS simulator.
+- **Hidden entries.** Names starting with `.` are skipped on both platforms (except iCloud placeholders on iOS).
 
 ## Sources
 

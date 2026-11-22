@@ -1,0 +1,30 @@
+name: neupod_storage
+description: "Read-only folder access for the neuPod app: Android SAF trees, iOS Documents and security-scoped bookmarks (decision 0004)."
+version: 0.1.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.14.0
+  flutter: '>=3.50.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  # Generates lib/src/messages.g.dart and the Kotlin and Swift glue from
+  # pigeon/messages.dart. Dev only: nothing from Pigeon ships except the
+  # generated code, which is ours.
+  pigeon: ^30.0.4
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: net.stuartfraser.neupod_storage
+        pluginClass: NeupodStoragePlugin
+      ios:
+        pluginClass: NeupodStoragePlugin

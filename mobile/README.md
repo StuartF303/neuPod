@@ -44,14 +44,17 @@ Dependency rule: `domain` imports nothing from this app, no Flutter and no River
 only. `ui` imports `domain` and `app/`, never `data` or `audio`. Riverpod appears only in `app/`, `ui/` and
 `main.dart`. Imports inside `lib/` are `package:neupod/...` only. `test/architecture_test.dart` fails on a violation.
 
-Planned in-repo plugins, added by their own items (not yet present):
+In-repo plugins:
 
-- `packages/neupod_audio`: the thin audio engine plugin ([0001](../docs/app/decisions/0001-audio-engine.md)), used by
-  `audio/`.
-- `packages/neupod_storage`: folder access, SAF and security-scoped bookmarks
-  ([0004](../docs/app/decisions/0004-folder-access.md)), used by `data/`.
+- `packages/neupod_storage` (present): read-only folder access, Android SAF trees and iOS Documents plus
+  security-scoped bookmarks ([0004](../docs/app/decisions/0004-folder-access.md)), used by `data/`. Its platform API
+  is defined in `pigeon/messages.dart`; after changing it run `dart run pigeon --input pigeon/messages.dart` in the
+  package and commit the generated files. Test it with `flutter test` in the package, and on an emulator or simulator
+  with `scripts/app/verify-folder-access-android.sh` and `scripts/app/verify-folder-access-ios.sh`.
+- `packages/neupod_audio` (planned): the thin audio engine plugin ([0001](../docs/app/decisions/0001-audio-engine.md)),
+  used by `audio/`.
 
-Each will be a path dependency in `pubspec.yaml`, under MPL-2.0 like the app.
+Each is a path dependency in `pubspec.yaml`, under MPL-2.0 like the app.
 
 ## Riverpod rules (decision 0006)
 

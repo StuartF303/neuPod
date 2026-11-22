@@ -32,6 +32,9 @@ dependencies:
     sdk: flutter
   flutter_riverpod: ^3.5.0
   material_ui: ^1.11.0
+  # In-repo plugin: folder access, SAF and security-scoped bookmarks (decision 0004).
+  neupod_storage:
+    path: packages/neupod_storage
 
 dev_dependencies:
   flutter_test:
