@@ -168,6 +168,8 @@ class StatusBar extends StatelessWidget {
     return Semantics(
       container: true,
       label: semanticsLabel,
+      // A message swapped into the title is announced as it appears.
+      liveRegion: message != null && volume == null,
       child: ExcludeSemantics(
         child: SkinBox(
           skin: skin.ground,

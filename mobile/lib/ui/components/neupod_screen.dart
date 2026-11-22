@@ -41,34 +41,39 @@ class NeupodScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = tier ?? TextTier.of(context);
     final media = MediaQuery.maybeOf(context) ?? const MediaQueryData();
-    return FittedBox(
-      fit: BoxFit.contain,
-      child: SizedBox.fromSize(
-        size: neupodScreenSize,
-        child: ClipRect(
-          child: MediaQuery(
-            data: media.copyWith(
-              textScaler: TextScaler.noScaling,
-              size: neupodScreenSize,
-            ),
-            child: NeupodTheme(
-              style: style,
-              tier: t,
-              child: DefaultTextStyle(
-                style: NeupodType(t).body(style.tokens.ink),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (style.drawsBackdrop)
-                      ModernBackdrop(
-                        ground: style.ground,
-                        palette: style.palette,
-                        layout: backdrop,
-                      )
-                    else
-                      ColoredBox(color: style.ground),
-                    child,
-                  ],
+    // The device's screens are left to right; set it here so the canvas
+    // works under any root.
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: FittedBox(
+        fit: BoxFit.contain,
+        child: SizedBox.fromSize(
+          size: neupodScreenSize,
+          child: ClipRect(
+            child: MediaQuery(
+              data: media.copyWith(
+                textScaler: TextScaler.noScaling,
+                size: neupodScreenSize,
+              ),
+              child: NeupodTheme(
+                style: style,
+                tier: t,
+                child: DefaultTextStyle(
+                  style: NeupodType(t).body(style.tokens.ink),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (style.drawsBackdrop)
+                        ModernBackdrop(
+                          ground: style.ground,
+                          palette: style.palette,
+                          layout: backdrop,
+                        )
+                      else
+                        ColoredBox(color: style.ground),
+                      child,
+                    ],
+                  ),
                 ),
               ),
             ),

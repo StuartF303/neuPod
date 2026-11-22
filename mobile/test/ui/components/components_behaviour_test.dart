@@ -6,6 +6,7 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/domain/style/art_palette.dart';
@@ -123,7 +124,7 @@ void main() {
         ),
       );
       expect(
-        find.bySemanticsLabel("Carrier Wave, AAC, can't play"),
+        find.bySemanticsLabel("Carrier Wave, Beacon · Signal, AAC, can't play"),
         findsOneWidget,
       );
       await tester.tap(find.byType(NeupodRow));
@@ -187,16 +188,96 @@ void main() {
 
       await _pump(
         tester,
-        NeupodProgressBar(
-          value: 0.2,
-          seekable: true,
-          onSeek: (v) => seeked = v,
+        Column(
+          children: [
+            const SizedBox(height: 40),
+            NeupodProgressBar(
+              value: 0.2,
+              seekable: true,
+              onSeek: (v) => seeked = v,
+            ),
+            const SizedBox(height: 40),
+          ],
         ),
       );
       final box = tester.getRect(find.byType(NeupodProgressBar));
       await tester.tapAt(Offset(box.left + box.width * 0.75, box.center.dy));
       expect(seeked, closeTo(0.75, 0.01));
+
+      // The touch area reaches 12 px above and below without taking layout
+      // height (a 12 px Classic bar stays 12 px tall).
+      expect(box.height, 12);
+      seeked = null;
+      await tester.tapAt(Offset(box.left + box.width * 0.5, box.top - 10));
+      expect(seeked, closeTo(0.5, 0.01));
+      seeked = null;
+      await tester.tapAt(Offset(box.left + box.width * 0.5, box.bottom + 20));
+      expect(seeked, isNull);
     });
+
+    testWidgets('seekable: the screen reader can step it', (tester) async {
+      final handle = tester.ensureSemantics();
+      double? seeked;
+      await _pump(
+        tester,
+        NeupodProgressBar(
+          value: 0.5,
+          seekable: true,
+          step: 0.1,
+          onSeek: (v) => seeked = v,
+        ),
+      );
+      final node = tester.getSemantics(find.bySemanticsLabel('Progress'));
+      expect(node.flagsCollection.isSlider, isTrue);
+      node.owner!.performAction(node.id, SemanticsAction.increase);
+      expect(seeked, closeTo(0.6, 1e-9));
+      node.owner!.performAction(node.id, SemanticsAction.decrease);
+      expect(seeked, closeTo(0.4, 1e-9));
+      handle.dispose();
+    });
+  });
+
+  testWidgets('seek bar reads as Seek with its value', (tester) async {
+    await _pump(
+      tester,
+      const SeekBar(
+        value: 0.55,
+        semanticsValue: '2 minutes 14 seconds of 4 minutes 1',
+      ),
+    );
+    expect(
+      tester.getSemantics(find.byType(SeekBar)),
+      matchesSemantics(
+        label: 'Seek',
+        value: '2 minutes 14 seconds of 4 minutes 1',
+      ),
+    );
+  });
+
+  test('a row label leads with the track number and keeps the value', () {
+    const row = NeupodRow(
+      title: 'Planet of the Shapes',
+      number: '2',
+      subtitle: 'Orbital',
+      value: '5:12',
+      position: '2 of 10',
+    );
+    expect(
+      row.semanticsLabel,
+      '2, Planet of the Shapes, Orbital, 5:12, 2 of 10',
+    );
+  });
+
+  testWidgets('a status-bar message is a live region', (tester) async {
+    await _pump(
+      tester,
+      const SizedBox(
+        height: 45,
+        child: StatusBar(title: 'Songs', message: 'Library updated'),
+      ),
+    );
+    final node = tester.getSemantics(find.byType(StatusBar));
+    expect(node.flagsCollection.isLiveRegion, isTrue);
   });
 
   testWidgets('panel: OK is a button with its label', (tester) async {

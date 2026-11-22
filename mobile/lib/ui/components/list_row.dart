@@ -73,10 +73,14 @@ class NeupodRow extends StatelessWidget {
   bool get twoLine => subtitle != null;
   bool get greyed => disabledReason != null;
 
+  /// What a screen reader says: the track number, the title, the second line
+  /// and the value, then the reason (greyed) or the position (`4 of 7`).
   String get semanticsLabel => [
+    ?number,
     title,
-    if (greyed) disabledReason! else ?(subtitle ?? value),
-    if (!greyed) ?position,
+    ?subtitle,
+    ?value,
+    if (greyed) disabledReason! else ?position,
   ].join(', ');
 
   @override

@@ -6,6 +6,7 @@
 library;
 
 import 'package:flutter/widgets.dart';
+import 'package:neupod/domain/style/accent.dart';
 import 'package:neupod/domain/style/art_palette.dart';
 import 'package:neupod/ui/style/icons/neupod_glyphs.dart';
 import 'package:neupod/ui/style/neupod_style.dart';
@@ -18,8 +19,11 @@ const _disabled = Color(0xff7c7c7c);
 
 /// The accent with no art. The design does not give one ("No art: the ground
 /// alone" covers only the backdrop); this is the firmware's dark-theme accent
-/// (`k_ui_theme_dark`), 5.2:1 with white. To confirm with the owner.
-const Color modernAccentWithoutArt = Color(0xff2868d8);
+/// (`k_ui_theme_dark`, `#2868d8`) put through the same clamp, so white text
+/// reaches 4.5:1 under the gloss. To confirm with the owner.
+final Color modernAccentWithoutArt = Color(
+  0xff000000 | clampAccentForWhiteText(0x2868d8),
+);
 
 /// The progress fill with no art: a light tint of [modernAccentWithoutArt].
 const Color modernProgressWithoutArt = Color(0xff9dbcf0);

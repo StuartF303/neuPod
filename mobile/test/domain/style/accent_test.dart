@@ -9,6 +9,10 @@ import 'package:neupod/domain/style/colour_math.dart';
 
 double _onWhite(int rgb) => contrastRatio(rgb, white);
 
+/// White text on [rgb] under the gloss at the top of the text.
+double _glossed(int rgb) =>
+    contrastRatio(withWhite(rgb, accentTextGloss), white);
+
 Uint8List _image(List<(int, int)> colourCounts) {
   final out = <int>[];
   for (final (rgb, n) in colourCounts) {
@@ -51,33 +55,90 @@ void main() {
       expect(_onWhite(0xb8502c), closeTo(4.97, 0.01));
     });
 
-    test('the drawn outputs are fixed points of the rule', () {
-      expect(clampAccentForWhiteText(0xb8502c), 0xb8502c);
-      expect(clampAccentForWhiteText(0x8a5a12), 0x8a5a12);
+    test(
+      'under the gloss at the text top, #b8502c fails and #8a5a12 passes',
+      () {
+        expect(_glossed(0xb8502c), closeTo(4.04, 0.02));
+        expect(_glossed(0x8a5a12), greaterThanOrEqualTo(4.5));
+        expect(clampAccentForWhiteText(0x8a5a12), 0x8a5a12);
+        expect(clampAccentForWhiteText(0xb8502c), isNot(0xb8502c));
+      },
+    );
+
+    test('without the gloss the rule gives the lightest flat colour', () {
+      expect(hexOf(clampAccentForWhiteText(0xd9734e, gloss: 0)), '#c5532a');
+      expect(hexOf(clampAccentForWhiteText(0xe9c46a, gloss: 0)), '#967016');
     });
 
-    test('the literal rule clamps to the lightest passing colour', () {
-      // Hue and saturation kept, lightness lowered just enough. The design's
-      // hand-picked colours are darker than this (see accent.dart).
-      expect(hexOf(clampAccentForWhiteText(0xd9734e)), '#c5532a');
-      expect(hexOf(clampAccentForWhiteText(0xe9c46a)), '#967016');
+    test('with the gloss counted (the rule in use)', () {
+      expect(hexOf(clampAccentForWhiteText(0xd9734e)), '#ac4925');
+      expect(hexOf(clampAccentForWhiteText(0xe9c46a)), '#806013');
     });
 
-    test('the clamped colours keep the hue and reach 4.5:1 by a hair', () {
-      for (final c in [0xd9734e, 0xe9c46a]) {
-        final out = clampAccentForWhiteText(c);
-        expect(_onWhite(out), inInclusiveRange(4.5, 4.6), reason: hexOf(out));
-        expect(Hsl.fromRgb(out).hue, closeTo(Hsl.fromRgb(c).hue, 1.0));
-        expect(Hsl.fromRgb(out).lightness, lessThan(Hsl.fromRgb(c).lightness));
-      }
-    });
+    test(
+      'the clamped colours keep the hue and reach 4.5:1 under the gloss',
+      () {
+        for (final c in [0xd9734e, 0xe9c46a]) {
+          final out = clampAccentForWhiteText(c);
+          expect(
+            _glossed(out),
+            inInclusiveRange(4.5, 4.65),
+            reason: hexOf(out),
+          );
+          expect(Hsl.fromRgb(out).hue, closeTo(Hsl.fromRgb(c).hue, 1.5));
+        }
+      },
+    );
+  });
+
+  group('white text on the glossed accent, where it sits', () {
+    // (surface height, text block height) for every accent surface at every
+    // tier: one-line rows, two-line rows, the panel's OK.
+    const surfaces = [
+      (56.0, 29.0),
+      (66.0, 29.0 * 7 / 6),
+      (77.0, 29.0 * 7 / 5),
+      (75.0, 53.0),
+      (99.0, 53.0 * 7 / 6),
+      (129.0, 53.0 * 7 / 5),
+      (50.0, 29.0),
+      (50.0 * 7 / 6, 29.0 * 7 / 6),
+      (50.0 * 7 / 5, 29.0 * 7 / 5),
+    ];
+    const covers = [
+      0xd9734e,
+      0xe9c46a,
+      0xffffff,
+      0x40ff40,
+      0x00e0ff,
+      0xff40c0,
+      0x2868d8,
+      0x808080,
+      0xf2a586,
+    ];
+    for (final cover in covers) {
+      test('cover ${hexOf(cover)}', () {
+        final accent = clampAccentForWhiteText(cover);
+        for (final (h, block) in surfaces) {
+          final top = (h - block) / 2 / h;
+          for (final f in [top, 0.5]) {
+            final under = withWhite(accent, glossAlphaAt(f));
+            expect(
+              contrastRatio(under, white),
+              greaterThanOrEqualTo(4.5),
+              reason: '${hexOf(accent)} on a $h px surface at $f',
+            );
+          }
+        }
+      });
+    }
   });
 
   group('clampAccentForWhiteText', () {
-    test('every result reaches 4.5:1 with white', () {
+    test('every result reaches 4.5:1 with white under the gloss', () {
       for (var c = 0; c <= 0xffffff; c += 0x0f0f0f ~/ 3 + 7919) {
         final out = clampAccentForWhiteText(c);
-        expect(_onWhite(out), greaterThanOrEqualTo(4.5), reason: hexOf(c));
+        expect(_glossed(out), greaterThanOrEqualTo(4.5), reason: hexOf(c));
       }
     });
 
