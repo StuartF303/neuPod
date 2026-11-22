@@ -29,6 +29,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('neuPod'), findsOneWidget);
-    expect(find.text('DELIBERATE FAILURE: not on screen'), findsOneWidget);
+    expect(find.text('No songs'), findsOneWidget);
   });
 }
