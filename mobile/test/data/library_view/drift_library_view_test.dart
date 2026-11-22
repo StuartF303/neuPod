@@ -211,7 +211,9 @@ void main() {
     final songs = {for (final s in await view.songs()) s.title: s};
     expect(songs['Lone']!.artist, unknownArtist);
     expect(songs['Lone']!.album, '2001 Nowhere');
-    // A file at the root of the source: the source's own name.
+    // A file at the root of the source: lib_build.c:483-484 takes the leaf of
+    // c->path, which for a root file is the music folder itself
+    // (LIB_ROOT_DEFAULT "/Music" gives "Music"), so the source's own name.
     expect(songs['Rooted']!.album, 'Music');
     expect((await view.artists()).single.name, 'Unknown Artist');
     expect((await view.albums()).map((a) => a.title), [
