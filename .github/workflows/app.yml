@@ -425,7 +425,7 @@ jobs:
           path: mobile/test/**/failures/
           if-no-files-found: ignore
           retention-days: 14
-      # The archive holds components/goldens, screens/goldens and device/goldens: unzip it over mobile/test/ui.
+      # The archive keeps the paths below mobile/test (ui/components/goldens/...): unzip it over mobile/test.
       - name: Upload regenerated goldens
         if: env.UPDATE_GOLDENS == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
