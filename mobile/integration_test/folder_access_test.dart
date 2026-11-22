@@ -80,62 +80,77 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   final storage = NeupodStorage();
 
-  testWidgets('iOS: Documents is always a root and is walkable', (_) async {
-    final roots = await storage.roots();
-    expect(roots.first.kind, RootKind.appDocuments);
-    expect(roots.first.id, 'documents');
-    await expectLater(
-      storage.removeRoot('documents'),
-      throwsA(isA<StorageException>()),
-    );
-    // A file in Documents (as if copied in through Files or Finder) is
-    // listed. The test writes it; the plugin only reads.
-    final docs = Directory('${Directory.systemTemp.parent.path}/Documents');
-    final copied = Directory('${docs.path}/$folderName')
-      ..createSync(recursive: true);
-    File('${copied.path}/c.flac').writeAsBytesSync([0x66, 0x4c, 0x61, 0x43]);
-    try {
-      final paths = await storage
-          .walk('documents')
-          .expand((p) => p)
-          .map((e) => e.relPath)
-          .toList();
-      expect(paths, contains('$folderName/c.flac'));
-    } finally {
-      copied.deleteSync(recursive: true);
-    }
-  }, skip: !Platform.isIOS);
+  // Under `flutter run` the platform turns semantics on shortly after start;
+  // let that happen before the first test, whose end-of-test check would
+  // otherwise count the new SemanticsHandle as leaked.
+  setUpAll(() => Future<void>.delayed(const Duration(seconds: 2)));
 
-  testWidgets('pick, or after a relaunch: still held, then removed', (_) async {
-    final held = findTestRoot(await storage.roots());
-    if (held == null) {
-      // First launch: pick.
-      final StorageRoot root;
-      if (Platform.isIOS) {
-        root = await storage.debugAddRoot(iosFixture().path);
-      } else {
-        final picked = await storage.pickFolder();
-        expect(picked, isNotNull, reason: 'the picker was cancelled');
-        root = picked!;
-      }
-      expect(root.displayName, folderName);
-      expect(root.available, isTrue);
-      expect(findTestRoot(await storage.roots())?.id, root.id);
-      await walkAndRead(storage, root);
-      // ignore: avoid_print
-      print('NEUPOD_STEP picked');
-    } else {
-      // A later launch: the grant or bookmark was kept across the restart.
-      expect(held.available, isTrue);
-      await walkAndRead(storage, held);
-      await storage.removeRoot(held.id);
-      expect(findTestRoot(await storage.roots()), isNull);
+  testWidgets(
+    'iOS: Documents is always a root and is walkable',
+    (_) async {
+      final roots = await storage.roots();
+      expect(roots.first.kind, RootKind.appDocuments);
+      expect(roots.first.id, 'documents');
       await expectLater(
-        storage.walk(held.id).toList(),
+        storage.removeRoot('documents'),
         throwsA(isA<StorageException>()),
       );
-      // ignore: avoid_print
-      print('NEUPOD_STEP persisted-and-removed');
-    }
-  }, skip: !driven);
+      // A file in Documents (as if copied in through Files or Finder) is
+      // listed. The test writes it; the plugin only reads.
+      final docs = Directory('${Directory.systemTemp.parent.path}/Documents');
+      final copied = Directory('${docs.path}/$folderName')
+        ..createSync(recursive: true);
+      File('${copied.path}/c.flac').writeAsBytesSync([0x66, 0x4c, 0x61, 0x43]);
+      try {
+        final paths = await storage
+            .walk('documents')
+            .expand((p) => p)
+            .map((e) => e.relPath)
+            .toList();
+        expect(paths, contains('$folderName/c.flac'));
+      } finally {
+        copied.deleteSync(recursive: true);
+      }
+    },
+    skip: !Platform.isIOS,
+    semanticsEnabled: false,
+  );
+
+  testWidgets(
+    'pick, or after a relaunch: still held, then removed',
+    (_) async {
+      final held = findTestRoot(await storage.roots());
+      if (held == null) {
+        // First launch: pick.
+        final StorageRoot root;
+        if (Platform.isIOS) {
+          root = await storage.debugAddRoot(iosFixture().path);
+        } else {
+          final picked = await storage.pickFolder();
+          expect(picked, isNotNull, reason: 'the picker was cancelled');
+          root = picked!;
+        }
+        expect(root.displayName, folderName);
+        expect(root.available, isTrue);
+        expect(findTestRoot(await storage.roots())?.id, root.id);
+        await walkAndRead(storage, root);
+        // ignore: avoid_print
+        print('NEUPOD_STEP picked');
+      } else {
+        // A later launch: the grant or bookmark was kept across the restart.
+        expect(held.available, isTrue);
+        await walkAndRead(storage, held);
+        await storage.removeRoot(held.id);
+        expect(findTestRoot(await storage.roots()), isNull);
+        await expectLater(
+          storage.walk(held.id).toList(),
+          throwsA(isA<StorageException>()),
+        );
+        // ignore: avoid_print
+        print('NEUPOD_STEP persisted-and-removed');
+      }
+    },
+    skip: !driven,
+    semanticsEnabled: false,
+  );
 }
