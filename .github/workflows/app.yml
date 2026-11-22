@@ -9,10 +9,16 @@ on:
     paths:
       - "mobile/**"
       - ".github/workflows/app.yml"
+      # android-integration runs the folder-access script and picker driver and pushes these audio fixtures.
+      - "scripts/app/**"
+      - "tests/assets/audio/**"
   pull_request:
     paths:
       - "mobile/**"
       - ".github/workflows/app.yml"
+      # android-integration runs the folder-access script and picker driver and pushes these audio fixtures.
+      - "scripts/app/**"
+      - "tests/assets/audio/**"
   workflow_dispatch:
 
 permissions:
@@ -193,8 +199,10 @@ jobs:
       # One instrumentation run per test file (tool/android_integration_tests.sh). No retry: a Dart test failure fails
       # the instrumentation test, which fails Gradle, which fails the step; a hang is caught by the script's per-file
       # timeout, then by the step timeout. The script is one line because the action runs each script line on its own.
+      # The step timeout covers the emulator boot plus every file at the per-file limit (3 files x 8 min), so a hang
+      # in any file is reported by the script's own message. Raise it when a file is added.
       - name: Integration tests
-        timeout-minutes: 25
+        timeout-minutes: 28
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 29

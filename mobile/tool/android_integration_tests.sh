@@ -13,7 +13,7 @@
 # scripts/app/verify-folder-access-android.sh, on the same device: shared-storage fixtures pushed with adb, the picker
 # driven with uiautomator, two launches. Set FOLDER_IT_APK to an APK built for it to skip that build.
 #
-#   bash tool/android_integration_tests.sh    (from mobile/; PER_FILE_TIMEOUT=10m by default)
+#   bash tool/android_integration_tests.sh    (from mobile/; PER_FILE_TIMEOUT=8m by default)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -24,7 +24,7 @@ if [ ${#files[@]} -eq 0 ]; then
   exit 1
 fi
 
-per_file_timeout="${PER_FILE_TIMEOUT:-10m}"
+per_file_timeout="${PER_FILE_TIMEOUT:-8m}"
 for file in "${files[@]}"; do
   if [ "$file" = integration_test/folder_access_test.dart ]; then
     echo "::group::$file (driven: scripts/app/verify-folder-access-android.sh)"
@@ -68,12 +68,20 @@ for file in "${files[@]}"; do
     echo "::endgroup::"
     exit 1
   fi
-  # Each Dart test is one JUnit test case. A run that reported none (the Dart side never sent its results) is a
-  # failure, not a pass.
-  names=$(find build/app/outputs/androidTest-results -name 'TEST-*.xml' -exec cat {} + 2>/dev/null \
-    | grep -o '<testcase name="[^"]*"' | sed 's/^<testcase name="//; s/"$//' || true)
+  # Each Dart test is one JUnit test case. A run in which none ran (the Dart side never sent its results, or every
+  # test was skipped) is a failure, not a pass. Skipped test cases are listed but not counted.
+  names=$(find build/app/outputs/androidTest-results -name 'TEST-*.xml' -print0 2>/dev/null \
+    | xargs -0 python3 -I -c '
+import sys, xml.etree.ElementTree as ET
+for path in sys.argv[1:]:
+    for case in ET.parse(path).getroot().iter("testcase"):
+        if case.find("skipped") is None:
+            print(case.get("name"))
+        else:
+            print("skipped: " + case.get("name"), file=sys.stderr)
+' || true)
   if [ -z "$names" ]; then
-    echo "::error::$file reported no test results"
+    echo "::error::$file ran no tests (none reported, or all skipped)"
     exit 1
   fi
   echo "$file: $(printf '%s\n' "$names" | wc -l | tr -d ' ') passed"

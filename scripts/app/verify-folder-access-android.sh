@@ -21,6 +21,19 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 SDK="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 
+# On exit: stop the picker driver if it is still running, and the emulator if
+# this script started it.
+DRIVER=""
+EMU_PID=""
+cleanup() {
+  if [ -n "$DRIVER" ]; then kill "$DRIVER" 2>/dev/null || true; wait "$DRIVER" 2>/dev/null || true; fi
+  if [ -n "$EMU_PID" ]; then
+    adb -s "$SERIAL" emu kill >/dev/null 2>&1 || kill "$EMU_PID" 2>/dev/null || true
+    wait "$EMU_PID" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT
+
 if [ -n "${NEUPOD_ANDROID_SERIAL:-}" ]; then
   SERIAL="$NEUPOD_ANDROID_SERIAL"
 else
@@ -30,11 +43,6 @@ else
   EMU_LOG="$(mktemp "${TMPDIR:-/tmp}/neupod-emu.XXXXXX")"
   "$SDK/emulator/emulator" -avd "$AVD" -port "$PORT" -no-window -no-audio -no-snapshot-save -no-boot-anim >"$EMU_LOG" 2>&1 &
   EMU_PID=$!
-  cleanup() {
-    adb -s "$SERIAL" emu kill >/dev/null 2>&1 || kill "$EMU_PID" 2>/dev/null || true
-    wait "$EMU_PID" 2>/dev/null || true
-  }
-  trap cleanup EXIT
 fi
 
 adb -s "$SERIAL" wait-for-device
@@ -80,7 +88,7 @@ adb -s "$SERIAL" install -r "$APK" >/dev/null
 launch() {
   adb -s "$SERIAL" logcat -c
   adb -s "$SERIAL" shell am start -W -n "$PKG/.MainActivity" >/dev/null
-  local deadline=$((SECONDS + 240)) log pid=""
+  local deadline=$((SECONDS + 180)) log pid=""
   while [ -z "$pid" ] && [ $SECONDS -lt $deadline ]; do
     pid="$(adb -s "$SERIAL" shell pidof "$PKG" 2>/dev/null | tr -d '\r' || true)"
     [ -n "$pid" ] || sleep 1
@@ -102,10 +110,11 @@ launch() {
   return 1
 }
 
-python3 "$HERE/drive_saf_picker.py" -s "$SERIAL" --timeout 240 &
+python3 "$HERE/drive_saf_picker.py" -s "$SERIAL" --timeout 180 &
 DRIVER=$!
 STEP1="$(launch)"
 wait "$DRIVER"
+DRIVER=""
 echo "launch 1: $STEP1"
 [ "$STEP1" = "NEUPOD_STEP picked" ]
 

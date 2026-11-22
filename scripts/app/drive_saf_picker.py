@@ -100,8 +100,10 @@ def main():
         if f != last_focus:
             print(f"drive_saf_picker: focus: {f or '(none)'}", flush=True)
             last_focus = f
-        # A slow emulator can show "<app> isn't responding" (often System UI,
-        # just after boot) over everything: keep waiting rather than close it.
+        # A slow emulator can show "<app> isn't responding" over everything,
+        # for any app (often System UI just after boot, but it could be
+        # neuPod or DocumentsUI too): Wait keeps that app running rather than
+        # closing it, and a genuine hang still fails on the launch timeout.
         if "Not Responding" in f:
             root = dump(s)
             describe(root)
