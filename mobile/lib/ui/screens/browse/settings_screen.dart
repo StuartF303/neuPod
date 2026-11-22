@@ -12,6 +12,7 @@ library;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/ui/screens/browse/browse_common.dart';
+import 'package:neupod/ui/screens/browse/licences_screen.dart';
 import 'package:neupod/ui/screens/shell/neupod_list.dart';
 import 'package:neupod/ui/screens/shell/shell_frame.dart';
 import 'package:neupod/ui/screens/shell/shell_style.dart';
@@ -67,6 +68,16 @@ class SettingsScreen extends ConsumerWidget {
                         StyleMode.dark => null,
                       },
                     ),
+                  ),
+                ),
+                // Last, where the specification lists it ("About; Licences").
+                NeupodListItem.row(
+                  height: h,
+                  title: 'Licences',
+                  onActivate: () => pushScreen(
+                    ref,
+                    'Licences',
+                    (_) => const LicencesScreen(),
                   ),
                 ),
               ],

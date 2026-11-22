@@ -59,7 +59,7 @@ Compilations, and a small Settings). Now Playing, the panel's content and Search
   wheel); on a compilation each track shows its own artist at the right.
 - **Cover Flow**: Classic angled with reflections, Modern flat; the wheel moves a cover per step, Select or a tap on the
   centre cover opens it, a drag moves the covers.
-- **Settings**: Style (Classic or Modern) and Mode (Auto, Light, Dark) only; the rest is phase 6.
+- **Settings**: Style (Classic or Modern), Mode (Auto, Light, Dark) and, last, Licences (`licences_screen.dart`: Montserrat, Lucide, then the Dart and Flutter packages from `LicenseRegistry`; Select opens a text the wheel scrolls); the rest is phase 6. `NeuPodApp` calls `registerBundledLicences()`.
 
 ## Where the data comes from
 
