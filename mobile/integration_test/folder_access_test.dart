@@ -40,24 +40,24 @@ Directory iosFixture() {
 }
 
 Future<void> walkAndRead(NeupodStorage storage, StorageRoot root) async {
-  final entries = await storage
-      .walk(root.id, batchSize: 1)
-      .expand((p) => p)
-      .toList();
+  final pages = await storage.walk(root.id, batchSize: 1).toList();
+  expect(pages.last.done, isTrue);
+  expect(pages.last.complete, isTrue, reason: 'every folder was listed');
+  final entries = [for (final p in pages) ...p.entries];
   final byPath = {for (final e in entries) e.relPath: e};
   expect(byPath.keys.toSet(), {'a.flac', 'sub/b.mp3'});
   final flac = byPath['a.flac']!;
   expect(flac.state, EntryState.local);
   expect(flac.size, greaterThan(3));
   expect(flac.modifiedMs, greaterThan(0));
-  final reader = await storage.openReader(flac.uri);
+  final reader = await storage.openReader(flac);
   try {
     expect(reader.length, flac.size);
     expect(String.fromCharCodes(reader.readAt(0, 4)), 'fLaC');
   } finally {
     reader.close();
   }
-  final mp3 = await storage.openReader(byPath['sub/b.mp3']!.uri);
+  final mp3 = await storage.openReader(byPath['sub/b.mp3']!);
   try {
     final head = mp3.readAt(0, 3);
     // An ID3v2 tag, or straight into an MPEG frame (sync byte 0xFF).
@@ -104,7 +104,7 @@ void main() {
       try {
         final paths = await storage
             .walk('documents')
-            .expand((p) => p)
+            .expand((p) => p.entries)
             .map((e) => e.relPath)
             .toList();
         expect(paths, contains('$folderName/c.flac'));

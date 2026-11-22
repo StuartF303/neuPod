@@ -95,6 +95,18 @@ void main() {
     expect(find.text('No folders yet'), findsOneWidget);
   });
 
+  testWidgets('a Remove failure is shown, not thrown', (tester) async {
+    final access = FakeFolderAccess([music])
+      ..removeError = const FolderAccessException('detached');
+    await pumpScreen(tester, access);
+
+    await tester.tap(find.text('Remove'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Could not remove the folder (detached)'), findsOneWidget);
+    expect(find.text('Music'), findsOneWidget);
+  });
+
   test('the Android hint names the folders Android refuses', () {
     final hint = LibrarySetupScreen.hintFor(TargetPlatform.android);
     expect(hint, contains('Download'));

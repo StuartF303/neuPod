@@ -81,6 +81,17 @@ class _FolderRow extends ConsumerWidget {
 
   final LibraryFolder folder;
 
+  Future<void> _remove(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(libraryFoldersProvider.notifier).remove(folder.id);
+    } on FolderAccessException catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not remove the folder (${e.code})')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final subtitle = [
@@ -92,8 +103,7 @@ class _FolderRow extends ConsumerWidget {
       subtitle: subtitle.isEmpty ? null : Text(subtitle),
       trailing: folder.removable
           ? TextButton(
-              onPressed: () =>
-                  ref.read(libraryFoldersProvider.notifier).remove(folder.id),
+              onPressed: () => _remove(context, ref),
               child: const Text('Remove'),
             )
           : null,

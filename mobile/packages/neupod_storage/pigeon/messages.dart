@@ -93,12 +93,19 @@ class StorageEntry {
 
 /// One page of a walk.
 class WalkBatch {
-  WalkBatch({required this.entries, required this.done});
+  WalkBatch({required this.entries, required this.done, required this.complete});
 
   final List<StorageEntry> entries;
 
   /// True on the last page; the walk is then released.
   final bool done;
+
+  /// Meaningful on the last page: true only if every folder of the tree was
+  /// listed. False if a subfolder could not be read, the tree was deeper than
+  /// the depth cap, the provider or drive went away mid-walk, or the
+  /// coordinated read failed. A caller must not treat files missing from an
+  /// incomplete walk as deleted.
+  final bool complete;
 }
 
 /// Read-only folder access. There is deliberately no call that writes,
@@ -116,11 +123,15 @@ abstract class NeupodStorageApi {
   List<StorageRoot> listRoots();
 
   /// Releases a picked root (Android: the persisted grant; iOS: the bookmark
-  /// and its security-scoped access). Files are not touched.
+  /// and its security-scoped access) and cancels its walks. Files are not
+  /// touched. Runs off the platform thread.
+  @asyncCallback
   void removeRoot(String rootId);
 
   /// Starts a recursive walk of [rootId] and returns a walk id for
-  /// [nextWalkBatch]. Throws `root-unavailable` if access is gone.
+  /// [nextWalkBatch]. Throws `root-unavailable` if access is gone. Runs off
+  /// the platform thread.
+  @asyncCallback
   String startWalk(String rootId);
 
   /// Returns the next files of a walk, about [maxEntries] at a time (a page
@@ -134,7 +145,15 @@ abstract class NeupodStorageApi {
   /// Android only: opens [uri] read-only and returns a detached file
   /// descriptor, which the caller owns and must close (`FdStorageReader`
   /// does). iOS throws `unsupported`: `file://` URIs are read directly.
+  /// Runs on its own background executor (a provider can block), never on
+  /// the platform thread.
+  @asyncCallback
   int openFd(String uri);
+
+  /// A private directory for the app's own data (the library database):
+  /// Android `filesDir`; iOS Application Support, created if needed. Never
+  /// the Documents folder, so it is not shown in Files or Finder.
+  String appSupportPath();
 
   /// iOS debug builds only: stores a bookmark for the folder at [path] as if
   /// it had been picked, so integration tests can exercise bookmark storage,

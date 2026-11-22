@@ -258,15 +258,26 @@ class StorageEntry {
 
 /// One page of a walk.
 class WalkBatch {
-  WalkBatch({required this.entries, required this.done});
+  WalkBatch({
+    required this.entries,
+    required this.done,
+    required this.complete,
+  });
 
   List<StorageEntry> entries;
 
   /// True on the last page; the walk is then released.
   bool done;
 
+  /// Meaningful on the last page: true only if every folder of the tree was
+  /// listed. False if a subfolder could not be read, the tree was deeper than
+  /// the depth cap, the provider or drive went away mid-walk, or the
+  /// coordinated read failed. A caller must not treat files missing from an
+  /// incomplete walk as deleted.
+  bool complete;
+
   List<Object?> _toList() {
-    return <Object?>[entries, done];
+    return <Object?>[entries, done, complete];
   }
 
   Object encode() {
@@ -278,6 +289,7 @@ class WalkBatch {
     return WalkBatch(
       entries: (result[0]! as List<Object?>).cast<StorageEntry>(),
       done: result[1]! as bool,
+      complete: result[2]! as bool,
     );
   }
 
@@ -290,7 +302,9 @@ class WalkBatch {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(entries, other.entries) && _deepEquals(done, other.done);
+    return _deepEquals(entries, other.entries) &&
+        _deepEquals(done, other.done) &&
+        _deepEquals(complete, other.complete);
   }
 
   @override
@@ -299,7 +313,7 @@ class WalkBatch {
 
   @override
   String toString() {
-    return 'WalkBatch(entries: $entries, done: $done)';
+    return 'WalkBatch(entries: $entries, done: $done, complete: $complete)';
   }
 }
 
@@ -411,7 +425,8 @@ class NeupodStorageApi {
   }
 
   /// Releases a picked root (Android: the persisted grant; iOS: the bookmark
-  /// and its security-scoped access). Files are not touched.
+  /// and its security-scoped access) and cancels its walks. Files are not
+  /// touched. Runs off the platform thread.
   Future<void> removeRoot(String rootId) async {
     final pigeonVar_channelName =
         'dev.flutter.pigeon.neupod_storage.NeupodStorageApi.removeRoot$pigeonVar_messageChannelSuffix';
@@ -432,7 +447,8 @@ class NeupodStorageApi {
   }
 
   /// Starts a recursive walk of [rootId] and returns a walk id for
-  /// [nextWalkBatch]. Throws `root-unavailable` if access is gone.
+  /// [nextWalkBatch]. Throws `root-unavailable` if access is gone. Runs off
+  /// the platform thread.
   Future<String> startWalk(String rootId) async {
     final pigeonVar_channelName =
         'dev.flutter.pigeon.neupod_storage.NeupodStorageApi.startWalk$pigeonVar_messageChannelSuffix';
@@ -498,6 +514,8 @@ class NeupodStorageApi {
   /// Android only: opens [uri] read-only and returns a detached file
   /// descriptor, which the caller owns and must close (`FdStorageReader`
   /// does). iOS throws `unsupported`: `file://` URIs are read directly.
+  /// Runs on its own background executor (a provider can block), never on
+  /// the platform thread.
   Future<int> openFd(String uri) async {
     final pigeonVar_channelName =
         'dev.flutter.pigeon.neupod_storage.NeupodStorageApi.openFd$pigeonVar_messageChannelSuffix';
@@ -516,6 +534,27 @@ class NeupodStorageApi {
       isNullValid: false,
     );
     return pigeonVar_replyValue! as int;
+  }
+
+  /// A private directory for the app's own data (the library database):
+  /// Android `filesDir`; iOS Application Support, created if needed. Never
+  /// the Documents folder, so it is not shown in Files or Finder.
+  Future<String> appSupportPath() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.neupod_storage.NeupodStorageApi.appSupportPath$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as String;
   }
 
   /// iOS debug builds only: stores a bookmark for the folder at [path] as if

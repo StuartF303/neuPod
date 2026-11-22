@@ -10,6 +10,7 @@ class FakeFolderAccess implements FolderAccess {
   final List<LibraryFolder> held;
   LibraryFolder? nextPick;
   FolderAccessException? pickError;
+  FolderAccessException? removeError;
   final removed = <String>[];
 
   @override
@@ -25,6 +26,7 @@ class FakeFolderAccess implements FolderAccess {
 
   @override
   Future<void> removeFolder(String id) async {
+    if (removeError != null) throw removeError!;
     removed.add(id);
     held.removeWhere((f) => f.id == id);
   }
