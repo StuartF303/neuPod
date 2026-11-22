@@ -58,14 +58,13 @@ Status: specification, 21 November 2026. Nothing is built. The working instructi
     routes: the phone speaker shows **no icon**, USB and other wired outputs show the **jack plug**, and AirPlay and
     other wireless outputs show a **new generic external-speaker icon** in the device's style (never Apple's AirPlay
     glyph) (7); a **left-edge swipe is Menu** on iOS (9); the click sound is a **system sound that follows the
-    ringer switch** (10); Search stays **in the Music menu** (11); Search shows **up to three live results** (two,
-    then one, at the larger tiers) (13). UI styles: Classic Light is **adjusted to 4.5:1** where the designer's exact
+    ringer switch** (10); Search stays **in the Music menu** (11); Search shows **up to three live results**, fewer
+    at the larger text tiers (13). UI styles: Classic Light is **adjusted to 4.5:1** where the designer's exact
     values fall short (the selection bar's upper stops under white text, rail letters, ink3 on grey surfaces), and
     Bluetooth saved versus active gets a cue besides colour; Home's right pane with nothing playing shows a
-    **placeholder cover, "Nothing playing" and the song count**; tapping a side cover in Cover Flow **centres it**
-    (a second tap or Select opens it); the Music menu's **preview pane shows for every item**, not only Albums.
+    **placeholder cover, "Nothing playing" and the song count**; tapping a side cover in Cover Flow **centres it**; the Music menu's **preview pane shows for every item**, not only Albums.
     Settings: the list under [Settings](#settings) plus the **click sound** switch (off by default) and a **haptics**
-    switch. **Direct touch** (Open question 2) and **drag-to-seek** are judged by feel on the owner's phones at
+    switch. **Direct touch** (device view Open question 2) and **drag-to-seek** are judged by feel on the owner's phones at
     gate 1: until then the build defaults to **candidate 2** (wheel plus screen, candidate 1 kept behind the gate
     switch) and the progress bar is **not draggable**.
 
@@ -215,10 +214,10 @@ the same rule as the device: the dominant colour, clamped until white text on it
   phone's width, the fit on tall and short phones, body finishes, hit zones, press-or-turn, detents and acceleration
   (a port of the firmware's `ui_accel_feed()`), holds, haptics, direct touch, the three text tiers, accessibility and
   the phone's status bar. Its recommendations (the fit, the body finish, direct touch, the phone's status bar shown,
-  the large-text tiers, the wordmark) are proposals the owner picks at gate 2; where it offers candidates, both are
-  built and switchable. Its Open questions are the owner's.
-- Search is typed with the wheel's letter ring, never the phone's keyboard (owner decision 12). Its placement is device
-  view design Open question 11; it sits in the Music menu meanwhile.
+  the large-text tiers, the wordmark) were proposals for the owner, settled at gate 2 (owner decision 13); direct touch and
+  drag-to-seek are judged at gate 1, so both candidates stay switchable until then.
+- Search is typed with the wheel's letter ring, never the phone's keyboard (owner decision 12). It sits in the Music menu
+  (device view design Open question 11, owner decision 13).
 - Type is Montserrat (SIL OFL), icons are Lucide (ISC), as on the device. Every third-party asset and package is listed
   on an in-app Licences screen.
 - Feedback follows the device's three places where they translate: a row confirms with a brief flash and a tick; a
@@ -227,7 +226,7 @@ the same rule as the device: the dominant colour, clamped until white text on it
 ### Settings
 
 Style and mode; library folders (add, remove, rescan); gapless on or off; skip-back behaviour; click sound (off by
-default); haptics (on by default, and always off when the phone's own setting is off); reset ratings and play counts
+default, as the device view design says); haptics (the design's rule: off whenever the phone's own setting is off); reset ratings and play counts
 (with a panel to confirm); About; Licences (owner decision 13).
 
 ### Accessibility

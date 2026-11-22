@@ -203,6 +203,10 @@ repeat are both on; the track position may drop out in that one state.
 
 Not decided. Do not settle these by guessing; ask the owner.
 
+**Gate 2 (22 November 2026), app spec owner decision 13:** 9 is decided (placeholder cover, "Nothing playing" and the
+song count). Classic Light is adjusted to 4.5:1 contrast where the values below fall short, and Bluetooth saved versus
+connected gets a cue besides colour (bears on 4).
+
 | # | Question | What was drawn meanwhile |
 | --- | --- | --- |
 | 1 | **Classic Dark and Modern Light** have not been designed | Only Classic Light and Modern Dark exist |
