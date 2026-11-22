@@ -94,17 +94,24 @@ Dependency rule: `domain` imports nothing from this app, no Flutter and no River
 only. `ui` imports `domain` and `app/`, never `data` or `audio`. Riverpod appears only in `app/`, `ui/` and
 `main.dart`. Imports inside `lib/` are `package:neupod/...` only. `test/architecture_test.dart` fails on a violation.
 
-In-repo plugins:
+In-repo plugins, each a path dependency in `pubspec.yaml` and a member of its pub workspace (so one `flutter pub get`
+here resolves them and `flutter analyze` here covers them), under MPL-2.0 like the app:
 
-- `packages/neupod_storage` (present): read-only folder access, Android SAF trees and iOS Documents plus
-  security-scoped bookmarks ([0004](../docs/app/decisions/0004-folder-access.md)), used by `data/`. Its platform API
-  is defined in `pigeon/messages.dart`; after changing it run `dart run pigeon --input pigeon/messages.dart` in the
-  package and commit the generated files. Test it with `flutter test` in the package, and on an emulator or simulator
-  with `scripts/app/verify-folder-access-android.sh` and `scripts/app/verify-folder-access-ios.sh`.
-- `packages/neupod_audio` (planned): the thin audio engine plugin ([0001](../docs/app/decisions/0001-audio-engine.md)),
-  used by `audio/`.
+- `packages/neupod_audio`: the audio engine and media session ([0001](../docs/app/decisions/0001-audio-engine.md),
+  [0002](../docs/app/decisions/0002-media-session.md)), used by `audio/`. Its Dart/native contract is
+  `pigeon/messages.dart`; after changing it run `dart run pigeon --input pigeon/messages.dart` and `dart format lib` in
+  the package. Its own tests: `flutter test` in the package.
+- `packages/neupod_storage`: read-only folder access, Android SAF trees and iOS Documents plus security-scoped
+  bookmarks ([0004](../docs/app/decisions/0004-folder-access.md)), used by `data/`. Its platform API is
+  `pigeon/messages.dart`; after changing it run `dart run pigeon --input pigeon/messages.dart` and `dart format lib` in
+  the package. Its own tests: `flutter test` in the package; on an emulator and a simulator,
+  `scripts/app/verify-folder-access-android.sh` and `scripts/app/verify-folder-access-ios.sh`.
 
-Each is a path dependency in `pubspec.yaml`, under MPL-2.0 like the app.
+A new plugin is added to the `workspace:` list in `pubspec.yaml` and declares `resolution: workspace`.
+
+The player debug screen (`ui/features/player_debug/`, reached from Home in debug builds) plays the bundled test tones
+or any typed URI and shows the player and media-session state. `integration_test/playback_test.dart` drives the real
+engine: `flutter test integration_test/playback_test.dart -d <device>`.
 
 ## Riverpod rules (decision 0006)
 

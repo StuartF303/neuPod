@@ -137,6 +137,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
+  code_builder:
+    dependency: transitive
+    description:
+      name: code_builder
+      sha256: "811709c1badd02fc054039a13f66e0db1961865f9a314175f68c3eaeebec786f"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.13.0"
   collection:
     dependency: transitive
     description:
@@ -431,13 +439,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.19.6"
-  neupod_storage:
-    dependency: "direct main"
-    description:
-      path: "packages/neupod_storage"
-      relative: true
-    source: path
-    version: "0.1.0"
   package_config:
     dependency: transitive
     description:
@@ -454,6 +455,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.9.1"
+  pigeon:
+    dependency: transitive
+    description:
+      name: pigeon
+      sha256: "5c2ac8dd19571590eaf4c178bf4a093b5646dc376d2d2619943ce2aa0aa860d0"
+      url: "https://pub.dev"
+    source: hosted
+    version: "30.0.4"
   platform:
     dependency: transitive
     description:

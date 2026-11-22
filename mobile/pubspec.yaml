@@ -21,6 +21,13 @@ version: 1.0.0+1
 environment:
   sdk: ^3.14.0
 
+# In-repo plugins share this package's resolution (one `flutter pub get`, one
+# pubspec.lock), so `flutter analyze` here also covers them.
+workspace:
+  - packages/neupod_audio
+  - packages/neupod_device
+  - packages/neupod_storage
+
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
 # consider running `flutter pub upgrade --major-versions`. Alternatively,
@@ -34,6 +41,12 @@ dependencies:
     sdk: flutter
   flutter_riverpod: ^3.5.0
   material_ui: ^1.11.0
+  # The audio engine and media session (decisions 0001 and 0002).
+  neupod_audio:
+    path: packages/neupod_audio
+  # In-repo plugin: click-wheel haptics and the system volume (decision 0007).
+  neupod_device:
+    path: packages/neupod_device
   # In-repo plugin: folder access, SAF and security-scoped bookmarks (decision 0004).
   neupod_storage:
     path: packages/neupod_storage
@@ -65,10 +78,14 @@ flutter:
   # (docs/design/2026-11-21-ui-styles), so the Icons class is not used.
   uses-material-design: false
 
-  # Licence texts shown on the Licences screen (lib/ui/features/licences).
   assets:
+    # Licence texts shown on the Licences screen (lib/ui/features/licences).
     - assets/fonts/OFL-Montserrat.txt
     - assets/icons/lucide/LICENSE-Lucide.txt
+    # Generated test tones (copies of tests/assets/audio fixtures, about 57 KB)
+    # for the player debug screen and the integration tests. To leave out of
+    # store builds before release.
+    - integration_test/assets/test_media/
 
   # Montserrat Medium (SIL OFL 1.1), the design's one weight: v9.000 of
   # github.com/JulietaUla/Montserrat, fonts/ttf/Montserrat-Medium.ttf
