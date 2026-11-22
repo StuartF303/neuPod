@@ -2,7 +2,8 @@
 
 // Golden comparison for the device view, with a small tolerance.
 //
-// The goldens are made on macOS and checked on the Linux CI runner. The
+// The goldens are made on the CI macOS image (the `goldens` job of
+// .github/workflows/app.yml) and checked there and on the Linux CI runner. The
 // device goldens host a text-free test pattern in the screen, but they still
 // draw text: MENU on the wheel (TextPainter) and the wordmark, in the
 // FlutterTest font. Small text and anti-aliased edges (the wheel's circles,
@@ -14,9 +15,12 @@
 // within 1e-9 pt, and device_view_test.dart checks the rendered screen and
 // wheel rects. The goldens catch drawing changes (colours, shapes, states),
 // which move far more than 0.5 % of the image.
-// Regenerate with `flutter test --update-goldens test/ui/device/goldens`.
+// Regenerate them with the other goldens: run the app workflow by hand with
+// `update_goldens` (docs/app/ENVIRONMENT.md). `--update-goldens` writes PNGs
+// only on GitHub Actions.
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -49,5 +53,14 @@ class _TolerantComparator extends LocalFileComparator {
     final error = await generateFailureOutput(result, golden, basedir);
     result.dispose();
     throw FlutterError(error);
+  }
+
+  @override
+  Future<void> update(Uri golden, Uint8List imageBytes) async {
+    if (Platform.environment['GITHUB_ACTIONS'] == 'true') {
+      return super.update(golden, imageBytes);
+    }
+    // ignore: avoid_print
+    print('neupod: not writing $golden: goldens are made in CI');
   }
 }

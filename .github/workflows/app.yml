@@ -8,6 +8,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      update_goldens:
+        description: "Regenerate the golden PNGs on the goldens job's macOS image and upload them as an artifact (runs only that job)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -32,6 +37,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       app: ${{ steps.filter.outputs.app }}
+      update_goldens: ${{ steps.filter.outputs.update_goldens }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -43,6 +49,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
+          UPDATE_GOLDENS: ${{ github.event_name == 'workflow_dispatch' && inputs.update_goldens }}
         run: |
           # The paths that make the app jobs run (the old on.*.paths globs). Git pathspecs: ** is not needed, a
           # directory prefix matches everything below it.
@@ -55,7 +62,11 @@ jobs:
             "tests/assets/audio/"
           )
           app=false
-          if [ "$EVENT" = workflow_dispatch ]; then
+          update_goldens=false
+          if [ "$EVENT" = workflow_dispatch ] && [ "$UPDATE_GOLDENS" = true ]; then
+            # Regenerating goldens runs the goldens job alone; the other app jobs are skipped as for an unrelated change.
+            update_goldens=true
+          elif [ "$EVENT" = workflow_dispatch ]; then
             app=true
           else
             if [ "$EVENT" = pull_request ]; then base=$PR_BASE; else base=$PUSH_BEFORE; fi
@@ -66,8 +77,9 @@ jobs:
               app=true
             fi
           fi
-          echo "app=$app"
+          echo "app=$app update_goldens=$update_goldens"
           echo "app=$app" >> "$GITHUB_OUTPUT"
+          echo "update_goldens=$update_goldens" >> "$GITHUB_OUTPUT"
 
   # Formatting, static analysis, unit and widget tests.
   check:
@@ -355,10 +367,78 @@ jobs:
           xcrun simctl list devices booted
           xcrun simctl spawn booted log show --last 10m --style compact --predicate 'process == "Runner"' | tail -200 || true
 
+  # Golden (screenshot) tests, compared pixel for pixel. Text rasterises differently on Linux, and on each macOS release
+  # (macOS 27 moved ~0.1 % of the pixels of every golden made on macOS 26, all on glyph edges), so the PNGs are made and
+  # compared on this one image only: macos-26, as the ios job, never -latest. The test config
+  # (mobile/test/ui/components/flutter_test_config.dart) compares only with NEUPOD_GOLDENS=compare and lets
+  # --update-goldens write only on GitHub Actions; the Linux check job renders the same tests without comparing.
+  #
+  # A job of its own rather than a step in ios: it costs ~2 macOS minutes more per run (its own checkout and Flutter
+  # set-up), but a golden failure doesn't stop the integration tests, it runs in parallel with ios instead of after
+  # its ~25 minutes, and regenerating (workflow_dispatch with update_goldens) runs this job alone, ~3 minutes, instead
+  # of dragging the whole ios job along. Regenerating: docs/app/ENVIRONMENT.md "Goldens".
+  goldens:
+    needs: changes
+    if: needs.changes.outputs.app == 'true' || needs.changes.outputs.update_goldens == 'true'
+    runs-on: macos-26
+    timeout-minutes: 15
+    env:
+      NEUPOD_GOLDENS: compare
+      UPDATE_GOLDENS: ${{ needs.changes.outputs.update_goldens }}
+      # Every folder with golden tests. The component and screen goldens are compared exactly; the device goldens with
+      # their own 0.5 % tolerance (test/ui/device/goldens/flutter_test_config.dart), which the check job also applies.
+      GOLDEN_TESTS: test/ui/components test/ui/screens test/ui/device/goldens
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+          pub-cache: true
+      # The image version (it changes under the macos-26 label with GitHub's image updates): when every golden fails by
+      # ~0.1 % on glyph edges, compare this line with the run that made the PNGs, then regenerate.
+      - name: Runner image
+        run: |
+          echo "image: ${ImageOS:-?} ${ImageVersion:-?}"
+          sw_vers
+          echo "Goldens $([ "$UPDATE_GOLDENS" = true ] && echo made || echo compared) on ${ImageOS:-?} ${ImageVersion:-?} ($(sw_vers -productVersion))" >> "$GITHUB_STEP_SUMMARY"
+      - run: flutter pub get
+      - name: Compare goldens
+        if: env.UPDATE_GOLDENS != 'true'
+        run: |
+          # shellcheck disable=SC2086 # GOLDEN_TESTS is a list of folders
+          flutter test $GOLDEN_TESTS
+      - name: Regenerate goldens
+        if: env.UPDATE_GOLDENS == 'true'
+        run: |
+          # shellcheck disable=SC2086 # GOLDEN_TESTS is a list of folders
+          flutter test --update-goldens $GOLDEN_TESTS
+          git status --short -- test
+      - name: Upload golden failures
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: golden-failures
+          path: mobile/test/**/failures/
+          if-no-files-found: ignore
+          retention-days: 14
+      # The archive keeps the paths below mobile/test (ui/components/goldens/...): unzip it over mobile/test.
+      - name: Upload regenerated goldens
+        if: env.UPDATE_GOLDENS == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: goldens
+          path: mobile/test/**/goldens/*.png
+          if-no-files-found: error
+          retention-days: 14
+
   # The one check to require in branch protection. Passes when every app job succeeded, or when they were all skipped
   # because the change did not touch the app. Fails on any failure or cancellation, and on a skip when the app changed.
   app-gate:
-    needs: [changes, check, android, android-integration, ios]
+    needs: [changes, check, android, android-integration, ios, goldens]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -373,6 +453,7 @@ jobs:
             android=${{ needs.android.result }}
             android-integration=${{ needs.android-integration.result }}
             ios=${{ needs.ios.result }}
+            goldens=${{ needs.goldens.result }}
         run: |
           echo "changes: $CHANGES (app=$APP)"
           if [ "$CHANGES" != success ]; then echo "::error::changes job did not succeed"; exit 1; fi
