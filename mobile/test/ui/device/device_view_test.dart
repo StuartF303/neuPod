@@ -38,6 +38,7 @@ class _Probe extends StatelessWidget {
 }
 
 void main() {
+  _oddSizeTests();
   for (final phone in designPhones) {
     for (final fit in DeviceFit.values) {
       testWidgets('${phone.name} ${fit.name}: screen and wheel where the '
@@ -255,5 +256,107 @@ void main() {
       findsNothing,
     );
     handle.dispose();
+  });
+}
+
+void _useSize(WidgetTester tester, Size size) {
+  tester.view.physicalSize = size;
+  tester.view.padding = FakeViewPadding.zero;
+  tester.view.viewPadding = FakeViewPadding.zero;
+}
+
+void _oddSizeTests() {
+  // Degenerate: only the body.
+  const degenerate = <String, Size>{
+    'Size.zero': Size.zero,
+    '0.5x0.5': Size(0.5, 0.5),
+  };
+  // Scaled to fit: the Home items stay visible.
+  const scaled = <String, Size>{
+    '1x1': Size(1, 1),
+    '100x100': Size(100, 100),
+    '800x600 landscape': Size(800, 600),
+    'split screen 393x400': Size(393, 400),
+    'just below the minimum width': Size(343, 852),
+    'just below the minimum height': Size(393, 400),
+  };
+  for (final e in {...degenerate, ...scaled}.entries) {
+    testWidgets('${e.key}: builds without exceptions, then 393x852 is '
+        'normal', (tester) async {
+      await pumpDevice(tester);
+      _useSize(tester, e.value);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      if (degenerate.containsKey(e.key)) {
+        expect(find.byType(DeviceScreenHost), findsNothing);
+        expect(find.byType(ClickWheel), findsNothing);
+      } else {
+        expect(find.text('Music'), findsOneWidget);
+        expect(find.byType(ClickWheel), findsOneWidget);
+        final screen = tester.getRect(find.byType(DeviceScreenHost));
+        expect(screen.left, greaterThanOrEqualTo(-1e-6));
+        expect(screen.right, lessThanOrEqualTo(e.value.width + 1e-6));
+        expect(screen.bottom, lessThanOrEqualTo(e.value.height + 1e-6));
+        final wheel = tester.getRect(find.byType(ClickWheel));
+        expect(wheel.bottom, lessThanOrEqualTo(e.value.height + 1e-6));
+      }
+
+      _useSize(tester, const Size(393, 852));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      final g = DeviceGeometry.compute(
+        width: 393,
+        height: 852,
+        safeTop: 0,
+        safeBottom: 0,
+      );
+      final host = tester.getRect(find.byType(DeviceScreenHost));
+      expect(host.left, closeTo(g.screen.left, 1e-6));
+      expect(host.width, closeTo(g.screen.width, 1e-6));
+      expect(find.byType(ClickWheel), findsOneWidget);
+    });
+  }
+
+  test('geometry never has negative sizes at tiny windows', () {
+    for (final s in const [Size.zero, Size(1, 1), Size(100, 100)]) {
+      final g = DeviceGeometry.compute(
+        width: s.width,
+        height: s.height,
+        safeTop: 0,
+        safeBottom: 0,
+      );
+      expect(g.screen.width, greaterThanOrEqualTo(0));
+      expect(g.screen.height, greaterThanOrEqualTo(0));
+      expect(g.wheelDiameter, greaterThanOrEqualTo(0));
+    }
+  });
+
+  test('the fit plan is plain for phones and scaled for short windows', () {
+    for (final p in designPhones) {
+      final plan = DeviceGeometry.plan(
+        width: p.w,
+        height: p.h,
+        safeTop: p.top,
+        safeBottom: p.bottom,
+      );
+      expect(plan.isPlain, isTrue, reason: p.name);
+    }
+    final landscape = DeviceGeometry.plan(
+      width: 800,
+      height: 600,
+      safeTop: 0,
+      safeBottom: 0,
+    );
+    expect(landscape.isPlain, isFalse);
+    expect(landscape.virtualHeight * landscape.scale, closeTo(600, 1e-6));
+    expect(
+      DeviceGeometry.plan(
+        width: double.nan,
+        height: 100,
+        safeTop: 0,
+        safeBottom: 0,
+      ).empty,
+      isTrue,
+    );
   });
 }

@@ -2,6 +2,7 @@
 
 import 'dart:io';
 
+import 'package:flutter/widgets.dart' show Size;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/app/library_view_providers.dart';
@@ -14,6 +15,10 @@ import '../fakes/fake_player.dart';
 
 void main() {
   testWidgets('the app starts as the device, showing Home', (tester) async {
+    // A phone, as the design requires (the default test view is 800x600).
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(393, 852);
+    addTearDown(tester.view.reset);
     final library = ManifestLibraryView.parse(
       File('assets/gate_library/manifest.json').readAsStringSync(),
     );
