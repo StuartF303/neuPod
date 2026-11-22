@@ -57,8 +57,9 @@ Compilations, and a small Settings). Now Playing, the panel's content and Search
 - **An album**: header (cover, artist, `year · N songs · total time`), then numbered tracks; `Disc n` headings only when
   the album has several discs; a track that cannot play is greyed with the reason at its right (and skipped by the
   wheel); on a compilation each track shows its own artist at the right.
-- **Cover Flow**: Classic angled with reflections, Modern flat; the wheel moves a cover per step, Select or a tap on the
-  centre cover opens it, a drag moves the covers.
+- **Cover Flow**: the Albums list's albums in its order (owner decision 14); Classic angled with reflections, Modern
+  flat; the wheel moves a cover per step, Select or a tap on the centre cover opens it, a drag moves the covers. Under
+  the title, in both styles, the device's caption `Artist · Year · n songs` (`flow_texts` in `app/ui/ui_library.c`).
 - **Settings**: Style (Classic or Modern), Mode (Auto, Light, Dark) and, last, Licences (`licences_screen.dart`: Montserrat, Lucide, then the Dart and Flutter packages from `LicenseRegistry`; Select opens a text the wheel scrolls); the rest is phase 6. `NeuPodApp` calls `registerBundledLicences()`.
 
 ## Where the data comes from
