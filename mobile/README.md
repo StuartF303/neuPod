@@ -41,6 +41,7 @@ skipped with the reason `awaiting implementation of <item>`, so `main` stays gre
 | `wheel_touch_spec_test.dart` | Wheel hit zones and press-or-turn (device view sections 4 and 5) | `WheelGeometry`, `WheelTouch` |
 | `library_rules_spec_test.dart` | Folder fallback, `, The`, discs, compilations, unplayable files | `FolderFallback`, `FolderNameDisplay`, `LibraryFromTracks` (`LibraryView`) |
 | `scanner_spec_test.dart` | Read-only guarantee and the generated library's manifest | `LibraryFromFolder` |
+| `wheel_text_entry_spec_test.dart` | Search typed with the wheel (owner decision 12): a port of the firmware's text entry, and the Search screen | `TextEntry` (`TextEntryFactory`, `TextEntryFromBytes`), `SearchScreen` |
 | `text_tiers_spec_test.dart` | Screen scale and text tiers (device view sections 1 and 8) | `IosTier`, `AndroidTier`, `MetricsOf`, `ScreenScale` |
 
 **Wiring a suite.** Each file has a `// WIRE:` block with `final <Interface>? wired<Name> = null;`. Replace `null` with
