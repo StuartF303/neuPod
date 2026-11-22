@@ -2,6 +2,10 @@
 
 For the designer. Context first, then the brief.
 
+> **Superseded in part (22 November 2026):** Search no longer opens the phone's keyboard; it is typed with the
+> wheel (owner decision 12 in [README.md](README.md)). The statements about the keyboard below are kept as the
+> original request.
+
 Project: neuPod, a public open-source repo: https://github.com/StuartF303/neuPod
 Read the app spec from branch `docs/app-phase0` (PR #101, merging soon; after that `main` has the same files) and everything
 else from `main`. If you can clone, clone the repo and check out `docs/app-phase0`. If you can only fetch URLs, use these raw links.
