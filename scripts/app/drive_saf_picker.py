@@ -92,9 +92,12 @@ def main():
             tap(s, allow, "Allow")
             continue
         if in_folder:
-            use = find(root, text_is("use this folder"))
+            # Android 11+: "Use this folder". Android 10 and earlier: "Select"
+            # (some builds: "Allow access to <folder>").
+            use = find(root, lambda n: text_is("use this folder", "select")(n)
+                       or (n.get("text") or "").strip().lower().startswith("allow access to"))
             if use is not None:
-                tap(s, use, "Use this folder")
+                tap(s, use, use.get("text"))
                 continue
         target = find(root, text_is(args.folder))
         if target is not None and in_music:
@@ -116,10 +119,25 @@ def main():
                 storage = root is not None and find(
                     root,
                     lambda n: n.get("resource-id", "").endswith(":id/title")
-                    and re.search(r"(sdk_gphone|internal|pixel|phone|storage)", (n.get("text") or ""), re.I),
+                    and re.search(r"(sdk_gphone|sdk built for|internal|pixel|phone|storage)", (n.get("text") or ""), re.I),
                 )
                 if storage:
                     tap(s, storage, storage.get("text"))
+                    continue
+                # Android 10 and earlier hide internal storage from the roots
+                # until "Show internal storage" is chosen in the overflow menu.
+                adb(s, "shell", "input", "keyevent", "KEYCODE_BACK")
+                time.sleep(1)
+                root = dump(s)
+                more = root is not None and find(root, lambda n: (n.get("content-desc") or "").lower() == "more options")
+                if more:
+                    tap(s, more, "More options")
+                    root = dump(s)
+                    show = root is not None and find(root, text_is("show internal storage"))
+                    if show:
+                        tap(s, show, "Show internal storage")
+                    else:
+                        adb(s, "shell", "input", "keyevent", "KEYCODE_BACK")
                 continue
         time.sleep(1)
     print("drive_saf_picker: timed out", file=sys.stderr)

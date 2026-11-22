@@ -186,6 +186,10 @@ jobs:
       # compile don't compete with it. `flutter build` also writes android/local.properties for ./gradlew.
       - run: flutter build apk --debug
       - run: (cd android && ./gradlew app:assembleDebugAndroidTest)
+      # The folder-access test app (tool/android_integration_tests.sh runs it through its adb-driven script).
+      - run: |
+          flutter build apk --debug -t integration_test/folder_access_test.dart --dart-define=NEUPOD_FOLDER_IT=true
+          mkdir -p build/folder_it && cp build/app/outputs/flutter-apk/app-debug.apk build/folder_it/app-debug.apk
       # One instrumentation run per test file (tool/android_integration_tests.sh). No retry: a Dart test failure fails
       # the instrumentation test, which fails Gradle, which fails the step; a hang is caught by the script's per-file
       # timeout, then by the step timeout. The script is one line because the action runs each script line on its own.
@@ -200,7 +204,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           working-directory: mobile
-          script: bash tool/android_integration_tests.sh
+          script: FOLDER_IT_APK=build/folder_it/app-debug.apk bash tool/android_integration_tests.sh
 
   # iOS: simulator build without signing, then the integration tests on an iPhone simulator. macos-26 is Apple
   # silicon; Xcode 26.5 is the version on the owner's Mac (docs/app/ENVIRONMENT.md) and ships the iOS 26.5 simulator.

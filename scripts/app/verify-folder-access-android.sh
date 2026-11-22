@@ -8,28 +8,38 @@
 # Usage: scripts/app/verify-folder-access-android.sh [AVD]   (default neupod_api36)
 # On the shared build Mac run it under the build lock:
 #   ~/bin/neupod-buildlock scripts/app/verify-folder-access-android.sh
+#
+# To use a device or emulator that is already running (CI), set
+# NEUPOD_ANDROID_SERIAL to its adb serial: no emulator is started or killed.
+# NEUPOD_FOLDER_IT_APK names an APK already built with
+#   flutter build apk --debug -t integration_test/folder_access_test.dart --dart-define=NEUPOD_FOLDER_IT=true
+# so the script does not build one.
 set -euo pipefail
 
 AVD="${1:-neupod_api36}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 SDK="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
-EMU_LOG="$(mktemp -t neupod-emu)"
 
-# Our own console port, so the serial is known and never collides with another emulator.
-PORT="${NEUPOD_EMU_PORT:-5580}"
-SERIAL="emulator-$PORT"
-"$SDK/emulator/emulator" -avd "$AVD" -port "$PORT" -no-window -no-audio -no-snapshot-save -no-boot-anim >"$EMU_LOG" 2>&1 &
-EMU_PID=$!
-cleanup() {
-  adb -s "$SERIAL" emu kill >/dev/null 2>&1 || kill "$EMU_PID" 2>/dev/null || true
-  wait "$EMU_PID" 2>/dev/null || true
-}
-trap cleanup EXIT
+if [ -n "${NEUPOD_ANDROID_SERIAL:-}" ]; then
+  SERIAL="$NEUPOD_ANDROID_SERIAL"
+else
+  # Our own console port, so the serial is known and never collides with another emulator.
+  PORT="${NEUPOD_EMU_PORT:-5580}"
+  SERIAL="emulator-$PORT"
+  EMU_LOG="$(mktemp "${TMPDIR:-/tmp}/neupod-emu.XXXXXX")"
+  "$SDK/emulator/emulator" -avd "$AVD" -port "$PORT" -no-window -no-audio -no-snapshot-save -no-boot-anim >"$EMU_LOG" 2>&1 &
+  EMU_PID=$!
+  cleanup() {
+    adb -s "$SERIAL" emu kill >/dev/null 2>&1 || kill "$EMU_PID" 2>/dev/null || true
+    wait "$EMU_PID" 2>/dev/null || true
+  }
+  trap cleanup EXIT
+fi
 
 adb -s "$SERIAL" wait-for-device
 until [ "$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; do sleep 2; done
-echo "emulator: $(adb -s "$SERIAL" shell getprop ro.build.version.release | tr -d '\r') (API $(adb -s "$SERIAL" shell getprop ro.build.version.sdk | tr -d '\r'))"
+echo "device $SERIAL: Android $(adb -s "$SERIAL" shell getprop ro.build.version.release | tr -d '\r') (API $(adb -s "$SERIAL" shell getprop ro.build.version.sdk | tr -d '\r'))"
 adb -s "$SERIAL" shell input keyevent KEYCODE_WAKEUP
 adb -s "$SERIAL" shell wm dismiss-keyguard || true
 
@@ -54,8 +64,12 @@ done
 adb -s "$SERIAL" shell ls -lR /sdcard/Music/neupod_it
 
 cd "$REPO/mobile"
-flutter build apk --debug -t integration_test/folder_access_test.dart --dart-define=NEUPOD_FOLDER_IT=true
-APK=build/app/outputs/flutter-apk/app-debug.apk
+if [ -n "${NEUPOD_FOLDER_IT_APK:-}" ]; then
+  APK="$NEUPOD_FOLDER_IT_APK"
+else
+  flutter build apk --debug -t integration_test/folder_access_test.dart --dart-define=NEUPOD_FOLDER_IT=true
+  APK=build/app/outputs/flutter-apk/app-debug.apk
+fi
 PKG=net.stuartfraser.neupod
 adb -s "$SERIAL" uninstall "$PKG" >/dev/null 2>&1 || true
 adb -s "$SERIAL" install -r "$APK" >/dev/null
