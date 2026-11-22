@@ -4,7 +4,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:neupod/domain/wheel/firmware_constants.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/domain/wheel/wheel_input.dart';
 
@@ -92,10 +91,17 @@ class WheelBus {
   /// the left-edge swipe does nothing.
   final ValueNotifier<bool> atRoot = ValueNotifier(true);
 
-  /// The hold times of the buttons, shared with the wheel: Previous / Next at
-  /// 600 ms by default. Now Playing adds the centre at [uiSelHoldMs] while it
-  /// shows, and removes it when it goes.
+  /// The hold times of the buttons, shared with the wheel. Empty by default
+  /// (every press is a plain press); screens add what they act on: Now
+  /// Playing `WheelInput.nowPlayingHoldMs` (leaving the centre out in seek
+  /// mode), Search Menu at 600 ms. Remove them when the screen goes.
   final Map<WheelButton, int> holdMs = Map.of(WheelInput.defaultHoldMs);
+
+  /// Buttons whose hold haptic the screen gives itself, so the wheel gives
+  /// none on [WheelHoldStart]. Now Playing adds Previous, Next and the
+  /// centre: its haptic comes from `NowPlayingControl` (seek mode entered,
+  /// a scan started on a seekable track), never on a track that cannot seek.
+  final Set<WheelButton> screenGivesHoldHaptic = {};
 
   /// Closes the stream.
   void dispose() {

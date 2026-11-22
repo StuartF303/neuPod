@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/domain/wheel/feedback_ports.dart';
 import 'package:neupod/domain/wheel/rate_limiter.dart';
 import 'package:neupod/ui/device/device_options.dart';
+import 'package:neupod/ui/device/wheel_bus.dart';
 
 /// The platform haptics. The composition root (`app/`) overrides it with the
 /// in-repo plugin; by default the app is silent (tests, goldens).
@@ -15,13 +16,6 @@ final hapticsPortProvider = Provider<HapticsPort>(
 final clickSoundPortProvider = Provider<ClickSoundPort>(
   (ref) => const SilentClicks(),
 );
-
-/// A monotonic clock in microseconds, for the 30-a-second limit. Tests
-/// override it.
-final feedbackClockProvider = Provider<int Function()>((ref) {
-  final watch = Stopwatch()..start();
-  return () => watch.elapsedMicroseconds;
-});
 
 /// Haptics and click sounds for the device view, with the design's rules
 /// (section 5): detents limited to 30 a second with the
@@ -41,7 +35,7 @@ class DeviceFeedback {
     required this.haptics,
     required this.clicks,
     required this.options,
-    required this.nowUs,
+    required this.nowMs,
   });
 
   /// The platform haptics.
@@ -53,8 +47,8 @@ class DeviceFeedback {
   /// The current options (read at each call).
   final DeviceViewOptions Function() options;
 
-  /// Microseconds, monotonic.
-  final int Function() nowUs;
+  /// Milliseconds, monotonic (the wheel's clock).
+  final int Function() nowMs;
 
   final RateLimiter _ticks = RateLimiter();
 
@@ -65,7 +59,7 @@ class DeviceFeedback {
 
   /// A list, volume or seek step.
   void detent() {
-    if (!_ticks.allow(nowUs())) return;
+    if (!_ticks.allow(nowMs())) return;
     _play(FeedbackKind.detent);
   }
 
@@ -94,6 +88,6 @@ final deviceFeedbackProvider = Provider<DeviceFeedback>((ref) {
     haptics: ref.watch(hapticsPortProvider),
     clicks: ref.watch(clickSoundPortProvider),
     options: () => ref.read(deviceViewOptionsProvider),
-    nowUs: ref.watch(feedbackClockProvider),
+    nowMs: ref.watch(wheelClockProvider),
   );
 });

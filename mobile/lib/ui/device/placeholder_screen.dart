@@ -104,68 +104,78 @@ class _PlaceholderScreenState extends ConsumerState<PlaceholderScreen> {
         DeviceScreenScope.of(context).directTouch == DirectTouch.wheelAndScreen;
     const ink = Color(0xFF181818);
     const style = TextStyle(fontSize: 26, color: ink, height: 1.1);
-    return ColoredBox(
-      color: const Color(0xFFFFFFFF),
-      child: DefaultTextStyle(
-        style: style,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Semantics(
-              header: true,
-              child: Container(
-                height: _barH,
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xFFFDFDFD), Color(0xFFC6CAD0)],
-                  ),
-                  border: Border(bottom: BorderSide(color: Color(0xFF8C9199))),
-                ),
-                child: const Text('neuPod'),
-              ),
-            ),
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    width: 336,
-                    child: Column(
-                      children: [
-                        for (var i = 0; i < PlaceholderScreen.items.length; i++)
-                          _row(i, touch),
-                      ],
+    // The real screens apply the design's text tiers (section 8); this
+    // stand-in does not scale its text at all.
+    return MediaQuery.withNoTextScaling(
+      child: ColoredBox(
+        color: const Color(0xFFFFFFFF),
+        child: DefaultTextStyle(
+          style: style,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Semantics(
+                header: true,
+                child: Container(
+                  height: _barH,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xFFFDFDFD), Color(0xFFC6CAD0)],
+                    ),
+                    border: Border(
+                      bottom: BorderSide(color: Color(0xFF8C9199)),
                     ),
                   ),
-                  Expanded(
-                    child: ExcludeSemantics(
-                      child: Container(
-                        color: const Color(0xFFE9EBEE),
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(summary.songCountLabel),
-                            const SizedBox(height: 12),
-                            Text(
-                              _last.isEmpty ? 'Placeholder screen' : _last,
-                              style: const TextStyle(
-                                fontSize: 20,
-                                color: Color(0xFF606060),
+                  child: const Text('neuPod'),
+                ),
+              ),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      width: 336,
+                      child: Column(
+                        children: [
+                          for (
+                            var i = 0;
+                            i < PlaceholderScreen.items.length;
+                            i++
+                          )
+                            _row(i, touch),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: ExcludeSemantics(
+                        child: Container(
+                          color: const Color(0xFFE9EBEE),
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(summary.songCountLabel),
+                              const SizedBox(height: 12),
+                              Text(
+                                _last.isEmpty ? 'Placeholder screen' : _last,
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  color: Color(0xFF606060),
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

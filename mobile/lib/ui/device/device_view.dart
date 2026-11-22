@@ -40,15 +40,38 @@ class DeviceView extends ConsumerStatefulWidget {
   ConsumerState<DeviceView> createState() => _DeviceViewState();
 }
 
+/// The design gate's switches are in the build unless it is made with
+/// `--dart-define=NEUPOD_GATE=false` (store builds).
+const bool gateSwitchesEnabled = bool.fromEnvironment(
+  'NEUPOD_GATE',
+  defaultValue: true,
+);
+
 class _DeviceViewState extends ConsumerState<DeviceView> {
   bool _gateOpen = false;
-  bool? _statusBarShown;
 
-  void _applyStatusBar(bool show) {
-    if (_statusBarShown == show) return;
-    _statusBarShown = show;
+  @override
+  void initState() {
+    super.initState();
+    // A system UI change is a side effect: made once now, then on each
+    // change of the option, never from build.
+    _applyStatusBar(ref.read(deviceViewOptionsProvider).showStatusBar);
+    ref.listenManual(
+      deviceViewOptionsProvider.select((o) => o.showStatusBar),
+      (_, show) => _applyStatusBar(show),
+    );
+  }
+
+  @override
+  void dispose() {
+    _applyStatusBar(true); // leave the system UI as the app found it
+    super.dispose();
+  }
+
+  static void _applyStatusBar(bool show) {
     // Edge to edge: the body is drawn under the status bar and the gesture
-    // bar. Hidden: only the status bar goes; the notch space stays reserved.
+    // bar. Hidden: only the status bar goes; the notch space stays reserved
+    // (on a phone without a notch the device moves up by the bar's height).
     SystemChrome.setEnabledSystemUIMode(
       show ? SystemUiMode.edgeToEdge : SystemUiMode.manual,
       overlays: show ? null : const [SystemUiOverlay.bottom],
@@ -62,7 +85,6 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
     final brightness =
         widget.brightness ?? MediaQuery.platformBrightnessOf(context);
     final finish = options.finishFor(brightness);
-    _applyStatusBar(options.showStatusBar);
 
     final media = MediaQuery.of(context);
     final size = media.size;
@@ -99,17 +121,24 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
       children: [
         // The body, which also takes the long press for the gate switches.
         Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onLongPress: () => setState(() => _gateOpen = true),
-            child: fitA
-                ? DecoratedBox(
-                    decoration: BoxDecoration(gradient: finish.bodyGradient),
-                  )
-                : ColoredBox(
-                    color: deviceSurround,
-                    child: Stack(children: [_fixedBody(g, finish)]),
-                  ),
+          // The gate's long press is for sighted testers only: hidden from
+          // the screen reader, which would otherwise offer an unlabelled
+          // long-press action on the body.
+          child: ExcludeSemantics(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onLongPress: gateSwitchesEnabled
+                  ? () => setState(() => _gateOpen = true)
+                  : null,
+              child: fitA
+                  ? DecoratedBox(
+                      decoration: BoxDecoration(gradient: finish.bodyGradient),
+                    )
+                  : ColoredBox(
+                      color: deviceSurround,
+                      child: Stack(children: [_fixedBody(g, finish)]),
+                    ),
+            ),
           ),
         ),
         Positioned.fromRect(
@@ -151,6 +180,9 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
                   child: Text(
                     'neuPod',
                     textDirection: TextDirection.ltr,
+                    // Always 0.036 W: the wordmark is part of the body, and
+                    // the 44 pt gap rule assumes its size.
+                    textScaler: TextScaler.noScaling,
                     style: TextStyle(
                       fontFamily: 'Montserrat',
                       fontWeight: FontWeight.w500,
@@ -202,7 +234,8 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
           },
           child: child!,
         ),
-        child: WheelKeyboard(child: device),
+        // While the gate panel is open its own controls take the keys.
+        child: WheelKeyboard(enabled: !_gateOpen, child: device),
       ),
     );
   }

@@ -4,6 +4,7 @@
 // the screen hosted at 600x450, fits, finishes, the wordmark, the status bar
 // style, direct touch candidates and the gate panel.
 
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,6 +15,7 @@ import 'package:neupod/ui/device/device_options.dart';
 import 'package:neupod/ui/device/gate_panel.dart';
 import 'package:neupod/ui/device/placeholder_screen.dart';
 import 'package:neupod/ui/device/screen_host.dart';
+import 'package:neupod/ui/device/wheel_bus.dart';
 
 import 'device_test_harness.dart';
 
@@ -208,5 +210,47 @@ void main() {
       expect(find.text(item), findsOneWidget);
     }
     expect(find.text('Podcasts'), findsNothing);
+  });
+
+  testWidgets('the wordmark stays 0.036 W at a large text size', (
+    tester,
+  ) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await pumpDevice(tester);
+    final mark = find.byWidgetPredicate(
+      (w) =>
+          w is Text &&
+          w.data == 'neuPod' &&
+          w.textScaler == TextScaler.noScaling,
+    );
+    expect(mark, findsOneWidget);
+    // The test font's line box is the font size: 0.036 x 393 = 14.1 pt.
+    expect(tester.getSize(mark).height, closeTo(0.036 * 393, 0.5));
+  });
+
+  testWidgets('the gate panel takes the keys while open', (tester) async {
+    final c = await pumpDevice(tester);
+    final events = <Object>[];
+    c.read(wheelBusProvider).events.listen(events.add);
+    await tester.longPressAt(const Offset(8, 500));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(events, isEmpty);
+  });
+
+  testWidgets('the body\'s long press is not offered to the screen reader', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    await pumpDevice(tester);
+    expect(
+      find.semantics.byPredicate(
+        (n) => n.getSemanticsData().hasAction(SemanticsAction.longPress),
+      ),
+      findsNothing,
+    );
+    handle.dispose();
   });
 }
