@@ -301,3 +301,4 @@ Not decided. Do not settle these by guessing.
 | 8 | **Desktop C# companion** in the Wi-Fi plan: still wanted alongside the phone app? | Ask when R3 is planned |
 | 9 | **Distribution**: TestFlight and an internal Android track only, or public store releases | TestFlight and sideloaded APK until the owner decides |
 | 10 | **Sync of ratings and play counts** between phone and device | R3 |
+
