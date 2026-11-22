@@ -29,7 +29,12 @@ import 'package:neupod/ui/features/player_debug/player_debug_screen.dart';
 /// The library is scanned at launch and each time the app comes back to the
 /// front, when there is any folder (on iOS the Documents folder always is),
 /// so music copied in with Finder or the Files app appears by itself. The
-/// scanner reads only new or changed files.
+/// scanner reads only new or changed files. A scan the user cancelled is not
+/// started again on return to the front.
+///
+/// A scan that fails, however it was started, says why in a panel (the
+/// firmware shows `library_status_text()` for a failed build, in its pane or
+/// as a toast); one the user cancelled says nothing, as on the firmware.
 class NeuPodApp extends ConsumerStatefulWidget {
   const NeuPodApp({super.key});
 
@@ -43,12 +48,13 @@ class _NeuPodAppState extends ConsumerState<NeuPodApp> {
   @override
   void initState() {
     super.initState();
-    _scan();
-    _lifecycle = AppLifecycleListener(onResume: _scan);
+    unawaited(ref.read(libraryScanProvider.notifier).startIfSources());
+    _lifecycle = AppLifecycleListener(
+      onResume: () => unawaited(
+        ref.read(libraryScanProvider.notifier).startIfSources(resume: true),
+      ),
+    );
   }
-
-  void _scan() =>
-      unawaited(ref.read(libraryScanProvider.notifier).startIfSources());
 
   @override
   void dispose() {
@@ -58,6 +64,17 @@ class _NeuPodAppState extends ConsumerState<NeuPodApp> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(libraryScanProvider, (was, now) {
+      final ended = was != null && !was.done && now != null && now.done;
+      final error = now?.error;
+      if (ended && error != null && error != scanCancelled) {
+        unawaited(
+          ref
+              .read(shellProvider.notifier)
+              .showPanel(title: scanFailureText(error), message: error),
+        );
+      }
+    });
     final mode = ref.watch(styleChoiceProvider.select((c) => c.mode));
     // Now Playing and Search plug into the shell (idempotent).
     registerGateScreens(ref.read(shellRegistryProvider));

@@ -151,6 +151,40 @@ void main() {
     expect(_wheelValue(rig), startsWith('Update Library'));
     await _select(tester, rig);
     expect(scanner.started, 1);
+    expect(
+      rig.container.read(libraryScanProvider.notifier).startedByUser,
+      isTrue,
+    );
+
+    // It ends as the firmware's Update Library does: the counts, then Done.
+    await scanner.finish(found: 3);
+    await settle(tester);
+    final panel = rig.container.read(shellProvider).panel!;
+    expect(panel.title, 'Library updated');
+    expect(panel.message, await libraryUpdatedLine(gateLibrary));
+    expect(
+      panel.message,
+      matches(RegExp(r'^\d[\d,]* songs · \d+ artists · \d+ albums$')),
+    );
+    expect(panel.okLabel, 'Done');
+  });
+
+  testWidgets('a failed Update Library leaves the panel to the app', (
+    tester,
+  ) async {
+    final scanner = FakeLibraryScanner();
+    final rig = await _openLibrary(tester, FakeFolderAccess(), scanner);
+    await _step(tester, rig, 1);
+    await _select(tester, rig);
+    scanner.current.addError(StateError('x'));
+    await settle(tester);
+    // No Library updated (NeuPodApp shows the failure; see neupod_app_test).
+    expect(rig.container.read(shellProvider).panel, isNull);
+    expect(_row('Update Library'), findsOneWidget);
+  });
+
+  test('the Library updated line is singular at one', () async {
+    expect(await libraryUpdatedLine(_One()), '1 song · 1 artist · 1 album');
   });
 
   testWidgets('Remove gives up the folder, goes back and rescans', (
@@ -196,13 +230,8 @@ void main() {
     await _select(tester, rig);
     expect(scanner.cancelled, 1);
     expect(rig.container.read(libraryScanProvider)!.error, scanCancelled);
-    expect(
-      rig.container.read(shellProvider).panel?.title,
-      'Library update stopped',
-    );
-    // Dismiss the panel: Update Library is back.
-    rig.press(WheelButton.centre);
-    await settle(tester);
+    // As on the firmware, a cancel says nothing; Update Library is back.
+    expect(rig.container.read(shellProvider).panel, isNull);
     expect(_row('Update Library'), findsOneWidget);
   });
 
@@ -257,6 +286,22 @@ void main() {
       expect(find.byType(LibraryScreen), findsOneWidget);
     });
   });
+}
+
+/// A library of one song by one artist on one album.
+class _One implements LibraryView {
+  @override
+  Future<List<Song>> songs() async => [(await gateLibrary.songs()).first];
+
+  @override
+  Future<List<Artist>> artists() async => [(await gateLibrary.artists()).first];
+
+  @override
+  Future<List<Album>> albums() async => [(await gateLibrary.albums()).first];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('${invocation.memberName}');
 }
 
 /// A library with nothing in it.

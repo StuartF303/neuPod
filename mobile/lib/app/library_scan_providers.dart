@@ -23,6 +23,8 @@ final libraryScanProvider =
 
 /// Owns the scan's subscription: at most one scan runs at a time.
 class LibraryScanController extends Notifier<ScanProgress?> {
+  // Cancelled by _stop (restart, cancel, and on dispose).
+  // ignore: cancel_subscriptions
   StreamSubscription<ScanProgress>? _sub;
 
   /// Bumped by every start and cancel; a callback of an older scan is
@@ -33,11 +35,25 @@ class LibraryScanController extends Notifier<ScanProgress?> {
   /// scan waits for it so that two never write at once.
   Future<void>? _stopping;
 
+  bool _byUser = false;
+
+  /// Whether the scan running, or the last one, was started by the user's
+  /// Update Library (the firmware's Update Library screen, which reports
+  /// `Library updated` when it ends), not by the app itself.
+  bool get startedByUser => _byUser;
+
+  /// Whether the user cancelled the last scan.
+  bool get cancelledByUser => state?.error == scanCancelled;
+
   @override
   ScanProgress? build() {
     ref.onDispose(() {
       _generation++;
-      unawaited(_sub?.cancel());
+      final sub = _sub;
+      _sub = null;
+      // The database may close under the scan as the app goes: what the
+      // stopped scan throws then is of no use to anyone.
+      if (sub != null) unawaited(_stop(sub));
     });
     return null;
   }
@@ -51,9 +67,11 @@ class LibraryScanController extends Notifier<ScanProgress?> {
   /// Starts a scan. When one is running, does nothing, unless [restart]:
   /// then the running one is stopped and a new one started (the folders
   /// changed, so the running walk would miss or keep the wrong ones).
-  Future<void> start({bool restart = false}) async {
+  /// [byUser] marks a scan the user asked for with Update Library.
+  Future<void> start({bool restart = false, bool byUser = false}) async {
     if (running && !restart) return;
     final generation = ++_generation;
+    _byUser = byUser;
     final old = _sub;
     _sub = null;
     state = const ScanProgress();
@@ -98,8 +116,11 @@ class LibraryScanController extends Notifier<ScanProgress?> {
   /// Starts a scan when there is something to scan: any folder at all (on
   /// iOS the Documents folder is always one, so files copied in with Finder
   /// or the Files app appear without asking). Failing to list the folders
-  /// starts nothing.
-  Future<void> startIfSources() async {
+  /// starts nothing. On [resume] (the app back in front), a scan the user
+  /// cancelled is not started again: the next launch, Update Library or a
+  /// change of folders starts one.
+  Future<void> startIfSources({bool resume = false}) async {
+    if (resume && cancelledByUser) return;
     try {
       final folders = await ref.read(folderAccessProvider).folders();
       if (!ref.mounted || folders.isEmpty) return;
@@ -109,8 +130,8 @@ class LibraryScanController extends Notifier<ScanProgress?> {
     await start();
   }
 
-  /// Stops the running scan. What it wrote stays; the state is done with
-  /// [scanCancelled] as its error.
+  /// Stops the running scan (the user's Select). What it wrote stays; the
+  /// state is done with [scanCancelled] as its error.
   Future<void> cancel() async {
     if (!running) return;
     _generation++;
@@ -126,8 +147,10 @@ class LibraryScanController extends Notifier<ScanProgress?> {
     if (old != null) await _stop(old);
   }
 
+  /// Cancels [sub] and waits for its scan to stop. An error the scan
+  /// throws while it stops (it was cancelled; nobody listens) is dropped.
   Future<void> _stop(StreamSubscription<ScanProgress> sub) async {
-    final stopping = sub.cancel();
+    final stopping = sub.cancel().catchError((Object _) {});
     _stopping = stopping;
     try {
       await stopping;
@@ -135,4 +158,19 @@ class LibraryScanController extends Notifier<ScanProgress?> {
       if (identical(_stopping, stopping)) _stopping = null;
     }
   }
+}
+
+/// What a failed scan says: the firmware's `library_status_text()`
+/// (`app/runtime/library_service.c`) for the two failures a phone can have,
+/// with its "Card" made "Storage" (the phone has no card): `Card is full`
+/// becomes `Storage is full` (a full disk), `Card read error` becomes
+/// `Storage read error` (anything else).
+String scanFailureText(String error) {
+  final e = error.toLowerCase();
+  final full =
+      e.contains('sqlite_full') ||
+      e.contains('no space left') ||
+      e.contains('errno = 28') ||
+      e.contains('database or disk is full');
+  return full ? 'Storage is full' : 'Storage read error';
 }

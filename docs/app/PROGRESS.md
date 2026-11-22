@@ -61,6 +61,8 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] Compilations rule
 - [ ] Background scan with progress, cancel, and survival across app restarts
 - [ ] Incremental rescan; removing a folder
+- [ ] Android: the scan survives the app being closed. Today it stops with the app and starts again at the next launch (no foreground service); the spec wants it to survive (README "The library", owner decision 8). Follow-up from #141
+- [ ] Removing a folder deletes its tracks at the next scan, with no question asked (Settings > Library > a folder > Remove). Add a confirmation before the ratings and play counts item below lands, since those would go with the tracks. Follow-up from #141
 - [ ] Art cache and thumbnails
 - [ ] Ratings, play counts, last played, skip counts that survive a rescan and a move
 - [ ] Unplayable files listed greyed with a reason, and never stop the queue

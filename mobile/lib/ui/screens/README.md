@@ -64,11 +64,14 @@ Compilations, and a small Settings). Now Playing, the panel's content and Search
 - **Settings > Library** (`browse/library_screen.dart`): a row per folder (`On My iPhone` under the iOS Documents
   folder, whose Select explains how to fill it; a picked folder opens a screen with Remove), `Add Folder…` (the
   system picker; a refusal is a panel), and `Update Library`, which becomes `Building library` with `N found · N read
-  · Select: cancel` while a scan runs. A cancelled or failed scan shows the `Library update stopped` panel. Not
-  designed: the simplest wheel list, for the owner to judge.
+  · Select: cancel` while a scan runs. As on the firmware's Update Library: a cancel says nothing; an Update Library
+  that finishes while the screen is up ends on the `Library updated` panel (`n songs · n artists · n albums`, Done);
+  any failed scan shows the firmware's status text in a panel (`NeuPodApp`; `Card` reads `Storage`). Not designed:
+  the simplest wheel list, for the owner to judge.
 - **The scan** is one per app: `libraryScanProvider` (`app/library_scan_providers.dart`) owns it; any screen starts,
   watches or cancels it. `NeuPodApp` starts one at launch and on each return to the front when there is any folder
-  (always on iOS); adding or removing a folder restarts it. `libraryViewProvider` rebuilds when it finishes.
+  (always on iOS), except on return to the front after the user cancelled one; adding or removing a folder restarts
+  it. `libraryViewProvider` rebuilds when it finishes.
 - **An empty library**: Home's idle pane says `No songs yet` and `Settings > Library`; Songs shows one row saying the
   same, whose Select opens Library.
 
