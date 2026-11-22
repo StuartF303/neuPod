@@ -49,7 +49,9 @@ Status: specification, 21 November 2026. Nothing is built. The working instructi
     the [device view design](../design/2026-11-21-app-device-view/README.md), "Search, by the wheel".
 13. **Gate 2, first choices (owner, 22 November 2026)**, from the screenshots of the device view: **fit A** (the body
     fills the phone; device view design Open question 1), and the **body finish follows the mode** (silver in Light,
-    black in Dark) with no separate Silver/Black setting (Open question 5).
+    black in Dark) with no separate Silver/Black setting (Open question 5). Also: the phone's own status bar is
+    **shown** above the device; the **neuPod wordmark stays on** the body (Open question 8); **rating stars live on
+    Now Playing's page 2 only**, as a Rating row set with the wheel; Search keeps its **24-character cap**.
 
 Everything else in this document is the designer's proposal until the owner confirms it. Proposals that most need a
 decision are collected under [Open questions](#open-questions).
