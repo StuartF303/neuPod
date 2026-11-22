@@ -82,21 +82,37 @@ PKG=net.stuartfraser.neupod
 adb -s "$SERIAL" uninstall "$PKG" >/dev/null 2>&1 || true
 adb -s "$SERIAL" install -r "$APK" >/dev/null
 
+# What the system did with the app (start, focus, kill, package events), for a
+# launch that failed.
+system_log() {
+  echo "--- system log for $PKG" >&2
+  adb -s "$SERIAL" logcat -d -v time -b main -b system -b crash -b events 2>/dev/null \
+    | grep -E "$PKG|am_kill|am_proc_died|am_proc_start|am_focused|Force stopping|Killing" | tail -120 >&2 || true
+  adb -s "$SERIAL" shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp' >&2 || true
+}
+
 # Launches the test app and waits for its result in logcat; prints the
-# NEUPOD_STEP line it reached. Only this launch's process is read: lines from
-# the previous launch can outlive `logcat -c` (seen on an API 29 emulator).
+# NEUPOD_STEP line it reached. Only this launch's process is read (logcat
+# --pid): the log is not cleared, so lines from the previous launch are still
+# in it, and so are the system's install and launch events if it fails.
 launch() {
-  adb -s "$SERIAL" logcat -c
-  adb -s "$SERIAL" shell am start -W -n "$PKG/.MainActivity" >/dev/null
+  adb -s "$SERIAL" shell am start -W -n "$PKG/.MainActivity" >&2
   local deadline=$((SECONDS + 180)) log pid=""
   while [ -z "$pid" ] && [ $SECONDS -lt $deadline ]; do
     pid="$(adb -s "$SERIAL" shell pidof "$PKG" 2>/dev/null | tr -d '\r' || true)"
     [ -n "$pid" ] || sleep 1
   done
-  [ -n "$pid" ] || { echo "the app did not start" >&2; return 1; }
+  [ -n "$pid" ] || { echo "the app is not running" >&2; system_log; return 1; }
   while [ $SECONDS -lt $deadline ]; do
     log="$(adb -s "$SERIAL" logcat -d --pid="$pid" -s flutter:I 2>/dev/null)"
     if grep -q 'Some tests failed\|\[E\]' <<<"$log"; then echo "$log" | tail -60; return 1; fi
+    if ! grep -q 'All tests passed' <<<"$log" &&
+      [ "$(adb -s "$SERIAL" shell pidof "$PKG" 2>/dev/null | tr -d '\r' || true)" != "$pid" ]; then
+      echo "the app (pid $pid) went away before it reported a result" >&2
+      echo "$log" | tail -60
+      system_log
+      return 1
+    fi
     if grep -q 'All tests passed' <<<"$log"; then
       grep -o 'NEUPOD_\(SCAN\|PLAYED\) .*' <<<"$log" | tr -d '\r' >&2 || true
       grep -o 'NEUPOD_STEP .*' <<<"$log" | tr -d '\r'
@@ -105,8 +121,8 @@ launch() {
     sleep 2
   done
   echo "timed out" >&2
-  adb -s "$SERIAL" shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp' >&2 || true
   adb -s "$SERIAL" logcat -d --pid="$pid" -s flutter:I | tail -60
+  system_log
   return 1
 }
 
