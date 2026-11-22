@@ -85,6 +85,7 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
           pub-cache: true
+      - run: exit 1  # TEMPORARY deliberate failure
       - run: flutter pub get
       - name: Format
         run: dart format --output=none --set-exit-if-changed lib test integration_test
