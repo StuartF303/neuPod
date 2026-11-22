@@ -90,7 +90,7 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] Songs
 - [ ] Genres, a genre
 - [ ] Compilations
-- [ ] Cover Flow
+- [ ] Cover Flow: the Albums list's albums in its order, the device's caption `Artist · Year · n songs` in both styles (owner decision 14)
 - [ ] Fast-scroll letter index
 - [ ] Letter ring model: a port of the firmware's text entry in search mode (`app/include/wheel_input.h`, `app/ui/input/wheel_input.c`, `docs/ui-input.md`), not a reimplementation, with tests mirroring `tests/test_wheel_input.c`
 - [ ] Search, typed with the wheel (owner decision 12; device view design, "Search, by the wheel"): the field, the letter ring and the firmware's six mode chips (`abc`, `ABC`, `123`, `#!?`, `space`, `del`), the wheel turning the ring one glyph a detent, the centre typing the glyph (a space on `space`, a delete on `del`), Previous and Next moving along the chips, the live results (up to three, fewer at larger tiers; owner decision 13), the count in the status bar, Menu deleting one character, held 0.6 s clearing, on an empty field leaving, Play/Pause to the results list where the wheel scrolls and the centre opens a row, Menu back to typing with the text kept; never the phone's keyboard. The design's chip table shows five chips; it is superseded on that point by the owner's choice of six

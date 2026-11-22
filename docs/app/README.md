@@ -67,6 +67,13 @@ Status: specification, 21 November 2026. Nothing is built. The working instructi
     switch. **Direct touch** (device view Open question 2) and **drag-to-seek** are judged by feel on the owner's phones at
     gate 1: until then the build defaults to **candidate 2** (wheel plus screen, candidate 1 kept behind the gate
     switch) and the progress bar is **not draggable**.
+14. **Cover Flow matches the device (owner, 22 November 2026).** Cover Flow is a second view of the Albums list, as
+    on the device (`app/ui/ui_library.c`, LB-6 in the [UI review](../design/2026-11-12-ui-review/REPORT.md)): the
+    same albums in the same order (by title, the firmware's Albums list order), not by artist then year. Under the
+    centred album's title it shows the device's caption in **both styles**, `Artist · Year · n songs` as
+    `flow_texts` builds it: no artist for a compilation, no year when there is none, `1 song` or `n songs`, and no
+    count when there are none. This replaces "albums by artist then year" here and the UI styles mock-ups' song
+    count in Modern only.
 
 Everything else in this document is the designer's proposal until the owner confirms it. Proposals that most need a
 decision are collected under [Open questions](#open-questions).
@@ -158,7 +165,8 @@ The same structure as the device:
 - **An artist:** All Songs, then the albums with cover, year and song count.
 - **An album:** header with the cover, artist, year, song count and total time; numbered tracks, with disc headings.
 - **Songs:** two lines per row, title over artist and album.
-- **Cover Flow:** albums by artist then year; the centred album opens on tap.
+- **Cover Flow:** a second view of the Albums list, in its order (by title), with the device's caption `Artist ·
+  Year · n songs` under the centred album (owner decision 14); the centred album opens on tap.
 - **Fast scroll:** a letter index on long lists.
 - **Search**, typed with the wheel (owner decision 12): the field, the letter ring turned by the wheel with the mode
   chips under it, and the best matches live as the user types; Play/Pause goes to the full results, grouped as

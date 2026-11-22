@@ -157,8 +157,8 @@ void main() {
     ]);
   });
 
-  test('Cover Flow order: by artist, then year', () async {
-    final albums = await view.albumsForCoverFlow();
+  test('albums by artist: by artist, then year', () async {
+    final albums = await view.albumsByArtist();
     final i = albums.indexWhere((a) => a.title == 'Tidewater');
     expect(albums[i + 1].title, 'Undertow EP');
   });
