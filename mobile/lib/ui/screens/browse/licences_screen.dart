@@ -22,28 +22,35 @@ import 'package:neupod/ui/style/neupod_type.dart';
 /// The row for the packages Flutter's registry collects.
 const String packagesLicenceTitle = 'Dart and Flutter packages';
 
-/// The notices of every package in the registry, as one text: each package's
-/// name, then its licence paragraphs. Bundled assets are skipped (they have
-/// their own rows). Returns what could be read.
-Future<String> packageLicenceText() async {
+/// The notices of every package in the registry, as blocks (a package's
+/// name, then each licence paragraph), so the screen can build them lazily.
+/// Bundled assets are skipped (they have their own rows).
+Future<List<String>> packageLicenceBlocks() async {
   final bundled = {for (final l in bundledLicences) l.name};
-  final out = StringBuffer();
+  final out = <String>[];
   try {
     await for (final entry in LicenseRegistry.licenses) {
       if (entry.packages.every(bundled.contains)) continue;
-      out
-        ..writeln(entry.packages.join(', '))
-        ..writeln();
+      out.add(entry.packages.join(', '));
       for (final p in entry.paragraphs) {
-        out.writeln(p.text);
+        out.add(p.text);
       }
-      out.writeln();
     }
   } on Object catch (e) {
     debugPrint('licence registry: $e');
   }
-  final s = out.toString().trim();
-  return s.isEmpty ? 'No package notices were found.' : s;
+  return out.isEmpty ? const ['No package notices were found.'] : out;
+}
+
+/// A bundled asset's text as blocks: its details, then its paragraphs.
+Future<List<String>> bundledLicenceBlocks(BundledLicence l) async {
+  final text = await loadLicenceText(l);
+  return [
+    '${l.name} ${l.version}',
+    l.use,
+    for (final p in text.split(RegExp(r'\n\s*\n')))
+      if (p.trim().isNotEmpty) p.trim(),
+  ];
 }
 
 /// Licences.
@@ -71,8 +78,7 @@ class LicencesScreen extends ConsumerWidget {
                     l.name,
                     (_) => LicenceTextScreen(
                       title: l.name,
-                      intro: '${l.name} ${l.version}\n${l.use}',
-                      text: loadLicenceText(l),
+                      load: () => bundledLicenceBlocks(l),
                     ),
                   ),
                 ),
@@ -84,7 +90,7 @@ class LicencesScreen extends ConsumerWidget {
                   packagesLicenceTitle,
                   (_) => LicenceTextScreen(
                     title: packagesLicenceTitle,
-                    text: packageLicenceText(),
+                    load: packageLicenceBlocks,
                   ),
                 ),
               ),
@@ -96,19 +102,13 @@ class LicencesScreen extends ConsumerWidget {
   );
 }
 
-/// One licence's text, scrolled by the wheel.
+/// One licence's text, in blocks the wheel scrolls.
 class LicenceTextScreen extends StatefulWidget {
-  /// A text screen; [text] is loaded when the screen opens.
-  const LicenceTextScreen({
-    required this.title,
-    required this.text,
-    this.intro,
-    super.key,
-  });
+  /// A text screen; [load] is called once, when the screen opens.
+  const LicenceTextScreen({required this.title, required this.load, super.key});
 
   final String title;
-  final String? intro;
-  final Future<String> text;
+  final Future<List<String>> Function() load;
 
   @override
   State<LicenceTextScreen> createState() => _LicenceTextScreenState();
@@ -116,6 +116,7 @@ class LicenceTextScreen extends StatefulWidget {
 
 class _LicenceTextScreenState extends State<LicenceTextScreen> {
   final _scroll = ScrollController();
+  late final Future<List<String>> _blocks = widget.load();
   ScreenHandle? _handle;
   double _line = 29;
 
@@ -139,10 +140,9 @@ class _LicenceTextScreenState extends State<LicenceTextScreen> {
 
   bool _onWheel(WheelEvent e) {
     if (e is! WheelStep || !_scroll.hasClients) return false;
-    final line = _line;
     final pos = _scroll.position;
     _scroll.jumpTo(
-      (pos.pixels + e.steps * line * 2).clamp(0.0, pos.maxScrollExtent),
+      (pos.pixels + e.steps * _line * 2).clamp(0.0, pos.maxScrollExtent),
     );
     return true;
   }
@@ -155,22 +155,35 @@ class _LicenceTextScreenState extends State<LicenceTextScreen> {
         final theme = NeupodTheme.of(context);
         _line = 29 * theme.tier.k;
         final style = NeupodType(theme.tier).small(theme.style.tokens.ink);
-        return FutureBuilder<String>(
-          future: widget.text,
-          builder: (context, snap) {
-            final body = snap.hasError
-                ? 'The licence text could not be read.'
-                : snap.data ?? 'Loading...';
-            final intro = widget.intro;
-            return SingleChildScrollView(
-              controller: _scroll,
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                intro == null ? body : '$intro\n\n$body',
-                style: style,
-              ),
-            );
-          },
+        return Semantics(
+          container: true,
+          label: widget.title,
+          child: FutureBuilder<List<String>>(
+            future: _blocks,
+            builder: (context, snap) {
+              final blocks = snap.hasError
+                  ? const ['The licence text could not be read.']
+                  : snap.data;
+              if (blocks == null) {
+                return Semantics(
+                  liveRegion: true,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text('Loading...', style: style),
+                  ),
+                );
+              }
+              return ListView.builder(
+                controller: _scroll,
+                padding: const EdgeInsets.all(16),
+                itemCount: blocks.length,
+                itemBuilder: (_, i) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(blocks[i], style: style),
+                ),
+              );
+            },
+          ),
         );
       },
     ),
