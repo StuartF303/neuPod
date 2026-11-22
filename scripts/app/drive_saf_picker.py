@@ -57,6 +57,26 @@ def text_is(*words):
     return lambda n: (n.get("text") or "").strip().lower() in wanted
 
 
+_last_seen = None
+
+
+def describe(root):
+    """Prints the screen's labels when they change, so a run that gets stuck
+    shows what the picker looked like."""
+    global _last_seen
+    if root is None:
+        return
+    labels = []
+    for n in nodes(root):
+        label = (n.get("text") or "").strip() or (n.get("content-desc") or "").strip()
+        if label and label not in labels:
+            labels.append(label)
+    seen = " | ".join(labels)
+    if seen != _last_seen:
+        _last_seen = seen
+        print(f"drive_saf_picker: screen: {seen}", flush=True)
+
+
 def tap(serial, node, label):
     x, y = centre(node)
     print(f"drive_saf_picker: tap {label} at {x},{y}", flush=True)
@@ -86,6 +106,7 @@ def main():
         if root is None:
             time.sleep(1)
             continue
+        describe(root)
         # Confirmation dialog: "Allow <app> to access files in <folder>?"
         allow = find(root, text_is("allow"))
         if allow is not None and in_folder:
@@ -116,12 +137,13 @@ def main():
             if drawer is not None:
                 tap(s, drawer, "roots drawer")
                 root = dump(s)
-                storage = root is not None and find(
+                describe(root)
+                storage = None if root is None else find(
                     root,
                     lambda n: n.get("resource-id", "").endswith(":id/title")
                     and re.search(r"(sdk_gphone|sdk built for|internal|pixel|phone|storage)", (n.get("text") or ""), re.I),
                 )
-                if storage:
+                if storage is not None:
                     tap(s, storage, storage.get("text"))
                     continue
                 # Android 10 and earlier hide internal storage from the roots
@@ -129,12 +151,13 @@ def main():
                 adb(s, "shell", "input", "keyevent", "KEYCODE_BACK")
                 time.sleep(1)
                 root = dump(s)
-                more = root is not None and find(root, lambda n: (n.get("content-desc") or "").lower() == "more options")
-                if more:
+                more = None if root is None else find(root, lambda n: (n.get("content-desc") or "").lower() == "more options")
+                if more is not None:
                     tap(s, more, "More options")
                     root = dump(s)
-                    show = root is not None and find(root, text_is("show internal storage"))
-                    if show:
+                    describe(root)
+                    show = None if root is None else find(root, text_is("show internal storage"))
+                    if show is not None:
                         tap(s, show, "Show internal storage")
                     else:
                         adb(s, "shell", "input", "keyevent", "KEYCODE_BACK")
