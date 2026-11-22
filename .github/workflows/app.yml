@@ -161,10 +161,11 @@ jobs:
           cache: true
           pub-cache: true
       - run: xcodebuild -version
-      - run: flutter pub get
-      - run: flutter build ios --simulator --debug --no-codesign
-      - name: Boot an iPhone simulator
+      # Start booting the simulator now and wait for it only before the tests: a cold boot on the hosted runner has
+      # taken up to 7 minutes ("Waiting on Data Migration"), and it overlaps the builds below.
+      - name: Start an iPhone simulator
         id: sim
+        working-directory: .
         run: |
           udid=$(xcrun simctl list devices available --json \
             | jq -r '.devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"] // [] | map(select(.name == "iPhone 17")) | .[0].udid // empty')
@@ -174,14 +175,17 @@ jobs:
             exit 1
           fi
           xcrun simctl boot "$udid"
-          xcrun simctl bootstatus "$udid" -b
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
+      - run: flutter pub get
+      - run: flutter build ios --simulator --debug --no-codesign
       # One app build per test file: `flutter build ios --config-only <file>` makes that file the app's Dart entry
       # point, and xcodebuild builds Runner.app with it plus RunnerTests.xctest. Debug, simulator, ad-hoc signed by
       # Xcode (no team). No retry: a Dart test failure fails XCTest, which fails xcodebuild, which fails the job; a hang
       # is caught by XCTest's time allowance, then by the step timeout.
       - name: Integration tests
-        timeout-minutes: 20
+        timeout-minutes: 25
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
         run: |
           shopt -s nullglob
           files=(integration_test/*_test.dart)
@@ -195,11 +199,13 @@ jobs:
             flutter build ios --config-only --simulator --debug --no-codesign "$file"
             (cd ios && xcodebuild build-for-testing \
               -workspace Runner.xcworkspace -scheme Runner -configuration Debug \
-              -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath ../build/ios_integ \
+              -destination "id=$UDID" -derivedDataPath ../build/ios_integ \
               -quiet)
+            echo "Waiting for the simulator to finish booting"
+            xcrun simctl bootstatus "$UDID" -b
             (cd ios && xcodebuild test-without-building \
               -workspace Runner.xcworkspace -scheme Runner -configuration Debug \
-              -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath ../build/ios_integ \
+              -destination "id=$UDID" -derivedDataPath ../build/ios_integ \
               -parallel-testing-enabled NO \
               -test-timeouts-enabled YES -maximum-test-execution-time-allowance 300 \
               -resultBundlePath "../build/ios_integ/$name.xcresult")
