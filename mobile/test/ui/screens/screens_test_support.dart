@@ -43,7 +43,15 @@ Future<void> pumpScreenCanvas(
 /// A system volume that records steps and can be made to fail.
 class RecordingVolume implements SystemVolumePort {
   /// Starts at [current] of [steps].
-  RecordingVolume({this.current = 8, this.steps = 16, this.failWith});
+  RecordingVolume({
+    this.current = 8,
+    this.steps = 16,
+    this.failWith,
+    this.throwOnRead = false,
+  });
+
+  /// read() throws.
+  bool throwOnRead;
 
   /// The step now.
   int current;
@@ -58,11 +66,14 @@ class RecordingVolume implements SystemVolumePort {
   final List<int> asked = [];
 
   @override
-  Future<SystemVolume> read() async => SystemVolume(
-    step: current,
-    steps: steps,
-    status: failWith ?? SystemVolumeStatus.ok,
-  );
+  Future<SystemVolume> read() async {
+    if (throwOnRead) throw StateError('no volume plugin');
+    return SystemVolume(
+      step: current,
+      steps: steps,
+      status: failWith ?? SystemVolumeStatus.ok,
+    );
+  }
 
   @override
   Future<SystemVolume> step(int direction) async {

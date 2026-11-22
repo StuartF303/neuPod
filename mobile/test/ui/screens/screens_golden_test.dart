@@ -158,6 +158,8 @@ void main() {
       'volume_failed',
       () => const NowPlayingView(
         data: _track,
+        mode: NowPlayingMode.volume,
+        volume: 0.5,
         message: "Can't set volume: noSlider",
       ),
       tiers: const [TextTier.standard],

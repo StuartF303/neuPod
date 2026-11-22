@@ -90,7 +90,8 @@ class NowPlayingScreen extends ConsumerStatefulWidget {
   ConsumerState<NowPlayingScreen> createState() => _NowPlayingScreenState();
 }
 
-class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
+class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
+    with WidgetsBindingObserver {
   late final WheelBus _bus = ref.read(wheelBusProvider);
   late final int Function() _now = ref.read(wheelClockProvider);
   final NowPlayingControl _npc = NowPlayingControl();
@@ -100,6 +101,8 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
   Timer? _volumeTimer;
   Timer? _messageTimer;
   late final Map<WheelButton, int> _savedHolds;
+  Map<WheelButton, int> _ownHolds = const {};
+  int _describedAt = 0;
 
   Duration _position = Duration.zero;
   bool _page2 = false;
@@ -121,6 +124,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
       WheelButton.next,
       WheelButton.centre,
     });
+    WidgetsBinding.instance.addObserver(this);
     _bus.atRoot.value = false;
     _syncHolds();
     _events = _bus.events.listen(_onEvent);
@@ -129,7 +133,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
     _positions = player.positions().listen((p) {
       if (mounted) setState(() => _position = p);
     });
-    _ticker = Timer.periodic(_tickEvery, (_) => _tick());
     ref
         .read(systemVolumeProvider)
         .read()
@@ -137,20 +140,27 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
           if (mounted) setState(() => _volume = v);
           _describe();
         })
-        .catchError((Object _) {});
+        .catchError((Object e) {
+          if (mounted) _recordThrown('read', e);
+        });
     WidgetsBinding.instance.addPostFrameCallback((_) => _describe());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _events?.cancel();
     _positions?.cancel();
     _ticker?.cancel();
     _volumeTimer?.cancel();
     _messageTimer?.cancel();
-    _bus.holdMs
-      ..clear()
-      ..addAll(_savedHolds);
+    // Put the holds back only if they are still ours: another screen may
+    // have replaced them first (a route pushed over this one, then popped).
+    if (mapEquals(_bus.holdMs, _ownHolds)) {
+      _bus.holdMs
+        ..clear()
+        ..addAll(_savedHolds);
+    }
     _bus.screenGivesHoldHaptic.removeAll(const {
       WheelButton.previous,
       WheelButton.next,
@@ -189,15 +199,68 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
   /// on page 1 (the centre drops out in seek mode, where Select is "go").
   void _syncHolds() {
     _bus.holdMs.clear();
-    if (_page2) return;
-    _bus.holdMs.addAll(WheelInput.nowPlayingHoldMs);
-    if (_npc.mode == NowPlayingWheelMode.seek) {
-      _bus.holdMs.remove(WheelButton.centre);
+    if (!_page2) {
+      _bus.holdMs.addAll(WheelInput.nowPlayingHoldMs);
+      if (_npc.mode == NowPlayingWheelMode.seek) {
+        _bus.holdMs.remove(WheelButton.centre);
+      }
+    }
+    _ownHolds = Map.of(_bus.holdMs);
+  }
+
+  /// This screen is the one being shown and nothing is over it: a route
+  /// pushed on top (a list opened from page 2) or a panel covers it.
+  bool get _active =>
+      mounted &&
+      (ModalRoute.of(context)?.isCurrent ?? true) &&
+      ref.read(panelProvider) == null;
+
+  // ---- the tick ----------------------------------------------------------
+
+  /// `NowPlayingControl.tick` has something to do: a hold, a scan, seek mode
+  /// or a target not yet applied.
+  bool get _needsTick =>
+      _npc.selDown ||
+      _npc.holdDir != 0 ||
+      _npc.pending ||
+      _npc.mode == NowPlayingWheelMode.seek;
+
+  void _ensureTick() {
+    if (_ticker != null || !_needsTick) return;
+    _ticker = Timer.periodic(_tickEvery, (_) => _tick());
+  }
+
+  void _stopTick() {
+    _ticker?.cancel();
+    _ticker = null;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.paused) return;
+    // Backgrounded: nothing half-done survives. A hold or a scan is dropped,
+    // seek mode is left with nothing applied, and every timer stops.
+    _npc
+      ..cancelHold()
+      ..selectUp();
+    if (_npc.mode == NowPlayingWheelMode.seek) _npc.menu();
+    _npc.pending = false;
+    _holdingBefore = false;
+    _stopTick();
+    _volumeTimer?.cancel();
+    _messageTimer?.cancel();
+    if (mounted) {
+      setState(() {
+        _volumeShown = false;
+        _message = null;
+      });
+      _syncHolds();
+      _describe(force: true);
     }
   }
 
   void _onEvent(WheelEvent e) {
-    if (!mounted || ref.read(panelProvider) != null) return;
+    if (!_active) return;
     if (_page2) {
       _onEventPage2(e);
       return;
@@ -283,44 +346,45 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
     try {
       result = await ref.read(systemVolumeProvider).step(direction);
     } on Object catch (e) {
-      debugPrint('neupod: volume step threw: $e');
-      if (mounted) {
-        ref
-            .read(volumeFailureProvider.notifier)
-            .record(SystemVolumeStatus.noEffect);
-        _flashFailure(SystemVolumeStatus.noEffect);
-      }
+      if (mounted) _recordThrown('step', e);
       return;
     }
     if (!mounted) return;
     if (result.failed) {
-      // Owner decision 10: the fallback is the owner's. The progress bar
-      // stays, there is no detent, and the failure is made visible.
+      // Owner decision 10: the fallback is the owner's. The bar shows the
+      // level read back from the system, there is no detent, and the failure
+      // is made visible in debug and gate builds and the gate panel.
       ref.read(volumeFailureProvider.notifier).record(result.status);
-      _volume = result;
-      _flashFailure(result.status);
-      return;
-    }
-    if (ref.read(volumeFailureProvider) != null) {
-      ref.read(volumeFailureProvider.notifier).clear();
+      _flashFailure(result.status.name);
+    } else {
+      if (ref.read(volumeFailureProvider) != null) {
+        ref.read(volumeFailureProvider.notifier).clear();
+      }
+      if (before != result.step) ref.read(deviceFeedbackProvider).detent();
     }
     setState(() {
       _volume = result;
       _volumeShown = true;
     });
-    if (before != result.step) ref.read(deviceFeedbackProvider).detent();
     _volumeTimer?.cancel();
     _volumeTimer = Timer(volumeBarHold, () {
       if (mounted) setState(() => _volumeShown = false);
     });
-    _describe();
+    _describe(force: true);
+  }
+
+  /// The port threw: a different thing from a step that came back failed.
+  void _recordThrown(String what, Object error) {
+    debugPrint('neupod: volume $what threw: $error');
+    ref.read(volumeFailureProvider.notifier).record(null, error: error);
+    _flashFailure('error');
   }
 
   /// Debug and gate builds say so in the status bar; a store build, which has
-  /// no gate, stays quiet until the owner chooses the fallback.
-  void _flashFailure(SystemVolumeStatus status) {
+  /// no gate, stays quiet apart from the bar showing the read-back level.
+  void _flashFailure(String reason) {
     if (kDebugMode || gateSwitchesEnabled) {
-      _say("Can't set volume: ${status.name}");
+      _say("Can't set volume: $reason");
     }
   }
 
@@ -359,7 +423,10 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
   }
 
   void _tick() {
-    if (!mounted || _page2) return;
+    if (!mounted || _page2) {
+      _stopTick();
+      return;
+    }
     final ev = _npc.tick(_track, _now());
     if (ev != NpcEvent.none) _handle(ev);
     final holding = _npc.holding;
@@ -368,6 +435,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
     }
     _holdingBefore = holding;
     if (ev != NpcEvent.none || _npc.pending || holding) _refresh();
+    if (!_needsTick) _stopTick();
   }
 
   void _refresh() {
@@ -375,6 +443,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
     _syncHolds();
     setState(() {});
     _describe();
+    _ensureTick();
   }
 
   void _togglePlay() {
@@ -471,8 +540,14 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
 
   // ---- the wheel's screen-reader value -----------------------------------
 
-  void _describe() {
-    if (!mounted) return;
+  void _describe({bool force = false}) {
+    // A panel's text is the wheel's while it is up.
+    if (!mounted || ref.read(panelProvider) != null) return;
+    // While scanning, the position changes every tick: say it four times a
+    // second at most.
+    final now = _now();
+    if (!force && _npc.holding && now - _describedAt < 250) return;
+    _describedAt = now;
     final playing = _state.isPlaying;
     final duration = _state.duration ?? Duration.zero;
     if (_page2) {
@@ -582,8 +657,12 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
         ratingEditing: _ratingEditing,
         onArtTap: touch
             ? () {
-                setState(() => _openPage2(swallowPress: false));
+                setState(() {
+                  if (_npc.mode == NowPlayingWheelMode.seek) _npc.menu();
+                  _openPage2(swallowPress: false);
+                });
                 _syncHolds();
+                _describe(force: true);
               }
             : null,
         dragToSeek: scope.dragProgressToSeek,

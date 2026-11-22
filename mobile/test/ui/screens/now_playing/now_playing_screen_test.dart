@@ -21,6 +21,7 @@ import 'package:neupod/ui/device/wheel_bus.dart';
 import 'package:neupod/ui/screens/now_playing/now_playing_options.dart';
 import 'package:neupod/ui/screens/now_playing/now_playing_screen.dart';
 import 'package:neupod/ui/screens/now_playing/now_playing_view.dart';
+import 'package:neupod/ui/screens/panel/panel_layer.dart';
 
 import '../../../fakes/fake_player.dart';
 import '../../device/device_test_harness.dart';
@@ -94,12 +95,13 @@ Future<_Rig> _pump(
   WidgetTester tester, {
   PlayerState? state,
   SystemVolumeStatus? failWith,
+  bool throwOnRead = false,
 }) async {
   tester.view.physicalSize = const Size(600, 450);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final player = FakePlayer(state ?? _playing());
-  final volume = RecordingVolume(failWith: failWith);
+  final volume = RecordingVolume(failWith: failWith, throwOnRead: throwOnRead);
   final clock = TestClock();
   final haptics = RecordingHaptics();
   final rig = _Rig(tester, player, volume, clock, haptics);
@@ -170,13 +172,17 @@ void main() {
     expect(rig.volume.asked.last, -1);
   });
 
-  testWidgets('a volume step that did not move shows the progress bar '
-      'unchanged and makes the failure visible', (tester) async {
+  testWidgets('a volume step that did not move shows the read-back level, '
+      'no detent, and makes the failure visible', (tester) async {
     final rig = await _pump(tester, failWith: SystemVolumeStatus.noSlider);
     await rig.turn(1);
     await tester.pump();
-    expect(find.byType(NeupodVolumeBar), findsNothing);
-    expect(find.byType(NeupodProgressBar), findsOneWidget);
+    // The bar shows the level the system reports (8 of 16), as in a store
+    // build, where nothing else says the step failed.
+    expect(find.byType(NeupodVolumeBar), findsOneWidget);
+    expect(find.byType(NeupodProgressBar), findsNothing);
+    expect(rig.bus.semantics.value.label, 'Volume');
+    expect(rig.bus.semantics.value.value, '50 percent');
     final failure = rig.container.read(volumeFailureProvider);
     expect(failure?.status, SystemVolumeStatus.noSlider);
     expect(failure?.count, 1);
@@ -185,6 +191,90 @@ void main() {
     expect(rig.haptics.played, isEmpty, reason: 'no detent when nothing moved');
     await tester.pump(messageHold + const Duration(milliseconds: 10));
     expect(find.text("Can't set volume: noSlider"), findsNothing);
+    expect(find.byType(NeupodProgressBar), findsOneWidget);
+  });
+
+  testWidgets('a volume port that throws is recorded as an error, not as '
+      'a step that did not move', (tester) async {
+    final rig = await _pump(tester, throwOnRead: true);
+    final failure = rig.container.read(volumeFailureProvider);
+    expect(failure, isNotNull);
+    expect(failure?.status, isNull);
+    expect(failure?.error, isA<StateError>());
+    expect(failure.toString(), contains('error'));
+  });
+
+  testWidgets('a cancelled centre press does nothing; a cancelled Next '
+      'drops its scan', (tester) async {
+    final rig = await _pump(tester);
+    rig.bus.emit(const WheelButtonDown(WheelButton.centre));
+    await rig.advance(100);
+    rig.bus.emit(const WheelButtonCancelled(WheelButton.centre));
+    await rig.advance(600);
+    expect(_view(tester).mode, NowPlayingMode.rest, reason: 'no page 2');
+
+    rig.bus.emit(const WheelButtonDown(WheelButton.next));
+    await rig.advance(700); // scanning
+    await rig.advance(500);
+    rig.bus.emit(const WheelButtonCancelled(WheelButton.next));
+    await rig.advance(600);
+    expect(rig.player.calls, isEmpty, reason: 'nothing skipped or applied');
+    expect(_view(tester).data.position, const Duration(seconds: 90));
+  });
+
+  testWidgets('a panel on top stops the wheel reaching Now Playing', (
+    tester,
+  ) async {
+    final rig = await _pump(tester);
+    rig.container
+        .read(panelProvider.notifier)
+        .show(const PanelRequest(title: 'Lost', message: 'Gone'));
+    await rig.turn(2);
+    await rig.press(WheelButton.next);
+    await rig.press(WheelButton.playPause);
+    expect(rig.volume.asked, isEmpty);
+    expect(rig.player.calls, isEmpty);
+    rig.container.read(panelProvider.notifier).dismiss();
+    await rig.turn(1);
+    expect(rig.volume.asked, [1]);
+  });
+
+  testWidgets('the tick runs only while there is something to tick', (
+    tester,
+  ) async {
+    final rig = await _pump(tester);
+    // Idle: no timer pending beyond the volume's.
+    expect(tester.binding.transientCallbackCount, 0);
+    await rig.press(WheelButton.centre, holdMs: 520);
+    await rig.advance(60);
+    expect(_view(tester).mode, NowPlayingMode.seek);
+    await rig.press(WheelButton.menu); // leaves seek mode
+    await rig.advance(100);
+    // Nothing left to tick: advancing 10 s does not throw or change a thing.
+    await rig.advance(10000);
+    expect(_view(tester).mode, NowPlayingMode.rest);
+  });
+
+  testWidgets('going to the background leaves seek mode with nothing applied', (
+    tester,
+  ) async {
+    final rig = await _pump(tester);
+    await rig.press(WheelButton.centre, holdMs: 520);
+    await rig.advance(60);
+    await rig.turn(1);
+    expect(_view(tester).mode, NowPlayingMode.seek);
+    for (final st in [
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+      AppLifecycleState.paused,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(st);
+    }
+    // Frames stop while paused: come back to see what it left.
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(_view(tester).mode, NowPlayingMode.rest);
+    expect(rig.player.calls.where((c) => c.startsWith('seek')), isEmpty);
   });
 
   testWidgets('holding the centre 500 ms enters seek mode; the wheel moves '

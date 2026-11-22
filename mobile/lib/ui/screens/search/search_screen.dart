@@ -6,6 +6,7 @@ library;
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/app/providers.dart';
@@ -62,6 +63,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   StreamSubscription<WheelEvent>? _sub;
   bool _atEnd = false;
   late final Map<WheelButton, int> _savedHolds;
+  late final Map<WheelButton, int> _ownHolds;
 
   @override
   void initState() {
@@ -76,6 +78,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _savedHolds = Map.of(_bus.holdMs);
     // Menu held 600 ms clears the field (`CLEAR_HOLD_MS`).
     _bus.holdMs[WheelButton.menu] = entry.kClearHoldTime.inMilliseconds;
+    _ownHolds = Map.of(_bus.holdMs);
     _bus.atRoot.value = false;
     _sub = _bus.events.listen(_onEvent);
     WidgetsBinding.instance.addPostFrameCallback((_) => _describe());
@@ -84,9 +87,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   @override
   void dispose() {
     _sub?.cancel();
-    _bus.holdMs
-      ..clear()
-      ..addAll(_savedHolds);
+    // Only if they are still ours: another screen may have replaced them.
+    if (mapEquals(_bus.holdMs, _ownHolds)) {
+      _bus.holdMs
+        ..clear()
+        ..addAll(_savedHolds);
+    }
     super.dispose();
   }
 
@@ -96,19 +102,22 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   void _describe() {
-    if (!mounted) return;
+    if (!mounted || ref.read(panelProvider) != null) return;
     final typing = _session.phase == SearchPhase.typing;
     final player = ref.read(playerProvider).state;
     if (typing) {
       _bus.semantics.value = WheelSemantics(
         label: 'Letter ring',
-        value: _glyphWords(_session.currentGlyph),
+        value:
+            '${SearchSession.chipLabel(_session.chip)}, '
+            '${_glyphWords(_session.currentGlyph)}',
         playing: player.isPlaying,
       );
     } else {
       final all = _session.flatResults;
       final i = _session.selected;
       _bus.semantics.value = WheelSemantics(
+        label: 'Results',
         value: i < all.length
             ? '${all[i].title}, ${i + 1} of ${all.length}'
             : '',
@@ -124,7 +133,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   };
 
   void _onEvent(WheelEvent e) {
-    if (ref.read(panelProvider) != null) return;
+    // Not while a panel is up, or another screen is over this one.
+    if (!mounted ||
+        ref.read(panelProvider) != null ||
+        !(ModalRoute.of(context)?.isCurrent ?? true)) {
+      return;
+    }
     final feedback = ref.read(deviceFeedbackProvider);
     switch (e) {
       case WheelStep(:final steps):
@@ -153,7 +167,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final player = ref.read(playerProvider);
     switch (button) {
       case WheelButton.centre:
+        final before = _session.text;
         _session.centre();
+        // At the 24-character cap a typed glyph is refused: say so, as a list
+        // says it has hit its end.
+        if (_session.phase == SearchPhase.typing &&
+            _session.text == before &&
+            _session.atLimit &&
+            _session.chip != entry.TextChip.delete) {
+          ref.read(deviceFeedbackProvider).endReached();
+        }
       case WheelButton.previous:
         if (_session.phase == SearchPhase.typing) {
           _session.previous();
@@ -167,6 +190,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           player.skipToNext();
         }
       case WheelButton.menu:
+        // Menu on an empty field leaves Search; with nowhere to go (Search
+        // on its own) it does nothing rather than strand the screen.
+        if (_session.phase == SearchPhase.typing &&
+            _session.text.isEmpty &&
+            widget.onBack == null) {
+          return;
+        }
         _session.menu();
       case WheelButton.playPause:
         if (!_session.playPause()) {

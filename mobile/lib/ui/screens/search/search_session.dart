@@ -177,6 +177,9 @@ class SearchSession {
     ];
   }
 
+  /// The field is full: a typed glyph is refused ([maxLength]).
+  bool get atLimit => _entry.chars >= maxLength;
+
   /// The glyph the centre button would type.
   String get currentGlyph => _entry.stripKey(_entry.sel).$2;
 

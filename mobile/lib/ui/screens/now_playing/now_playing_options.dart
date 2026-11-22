@@ -102,16 +102,20 @@ final playbackChoicesProvider =
 @immutable
 class VolumeFailure {
   /// A failure of [status], the [count]th since the app started.
-  const VolumeFailure(this.status, this.count);
+  const VolumeFailure(this.status, this.count, {this.error});
 
-  /// Why it did not move.
-  final SystemVolumeStatus status;
+  /// Why it did not move; null when the port threw instead ([error]).
+  final SystemVolumeStatus? status;
+
+  /// What the port threw, if it did.
+  final Object? error;
 
   /// How many steps have failed.
   final int count;
 
   @override
-  String toString() => 'Volume step failed: ${status.name} (x$count)';
+  String toString() =>
+      'Volume step failed: ${status?.name ?? 'error: $error'} (x$count)';
 }
 
 /// Holds the latest [VolumeFailure], null while every step worked.
@@ -120,8 +124,8 @@ class VolumeFailureNotifier extends Notifier<VolumeFailure?> {
   VolumeFailure? build() => null;
 
   /// Records a failed step.
-  void record(SystemVolumeStatus status) {
-    state = VolumeFailure(status, (state?.count ?? 0) + 1);
+  void record(SystemVolumeStatus? status, {Object? error}) {
+    state = VolumeFailure(status, (state?.count ?? 0) + 1, error: error);
     debugPrint('neupod: $state');
   }
 

@@ -52,7 +52,8 @@ class NowPlayingGateSection extends ConsumerWidget {
           Text(
             failure == null
                 ? 'Every step worked.'
-                : 'FAILED: ${failure.status.name}, ${failure.count} step(s). '
+                : 'FAILED: ${failure.status?.name ?? 'error: ${failure.error}'}, '
+                      '${failure.count} step(s). '
                       'The fallback is the owner\'s to choose.',
             style: TextStyle(
               color: failure == null ? null : const Color(0xFFB00020),

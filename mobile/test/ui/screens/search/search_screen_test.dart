@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/app/providers.dart';
+import 'package:neupod/domain/wheel/feedback_ports.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/ui/components/search_entry.dart';
 import 'package:neupod/ui/device/device_feedback.dart';
@@ -70,6 +71,7 @@ class _Rig {
   final WidgetTester tester;
   final ProviderContainer container;
   final FakePlayer player;
+  late RecordingHaptics haptics;
   int backs = 0;
   final List<SearchHit> opened = [];
 
@@ -86,19 +88,24 @@ class _Rig {
   }
 }
 
-Future<_Rig> _pump(WidgetTester tester, {String initial = ''}) async {
+Future<_Rig> _pump(
+  WidgetTester tester, {
+  String initial = '',
+  bool withBack = true,
+}) async {
   tester.view.physicalSize = const Size(600, 450);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final player = FakePlayer();
+  final haptics = RecordingHaptics();
   final container = ProviderContainer.test(
     overrides: [
       playerProvider.overrideWithValue(player),
       searchFunctionProvider.overrideWithValue(_find),
-      hapticsPortProvider.overrideWithValue(RecordingHaptics()),
+      hapticsPortProvider.overrideWithValue(haptics),
     ],
   );
-  final rig = _Rig(tester, container, player);
+  final rig = _Rig(tester, container, player)..haptics = haptics;
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
@@ -108,7 +115,7 @@ Future<_Rig> _pump(WidgetTester tester, {String initial = ''}) async {
           data: const MediaQueryData(size: Size(600, 450)),
           child: SearchScreen(
             initialText: initial,
-            onBack: () => rig.backs++,
+            onBack: withBack ? () => rig.backs++ : null,
             onOpen: rig.opened.add,
           ),
         ),
@@ -215,5 +222,36 @@ void main() {
     final rig = await _pump(tester);
     await tester.pumpWidget(const SizedBox());
     expect(rig.bus.holdMs, isEmpty);
+  });
+
+  testWidgets('the wheel says which chip and glyph; the results say Results', (
+    tester,
+  ) async {
+    final rig = await _pump(tester, initial: 'ab');
+    expect(rig.bus.semantics.value.label, 'Letter ring');
+    expect(rig.bus.semantics.value.value, 'abc, a');
+    await rig.press(WheelButton.next);
+    expect(rig.bus.semantics.value.value, 'ABC, A');
+    await rig.press(WheelButton.playPause);
+    expect(rig.bus.semantics.value.label, 'Results');
+  });
+
+  testWidgets('at the 24-character cap a typed glyph is refused with the '
+      'end-of-list haptic', (tester) async {
+    final rig = await _pump(tester, initial: 'a' * maxLength);
+    await rig.press(WheelButton.centre);
+    expect(find.text('a' * maxLength), findsOneWidget);
+    expect(rig.haptics.played, isNotEmpty);
+    expect(rig.haptics.played.last, FeedbackKind.endReached);
+  });
+
+  testWidgets('Menu on an empty field with nowhere to go does nothing', (
+    tester,
+  ) async {
+    final rig = await _pump(tester, withBack: false);
+    await rig.press(WheelButton.menu);
+    expect(find.byType(LetterRing), findsOneWidget);
+    await rig.press(WheelButton.centre);
+    expect(find.text('a'), findsWidgets);
   });
 }
