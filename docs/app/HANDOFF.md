@@ -40,7 +40,7 @@ Once gate 2 closes: remove the candidates not chosen (fit B, manual finish code 
 ## Next work, in order
 
 1. Close gate 2 (above).
-2. Finish #127, #122, #128.
+2. Finish #127, #122, #128. Then the `app-gate` required check (see the working rules below).
 3. Swap the interim sort in `mobile/lib/domain/library_view/sort_name.dart` to `collateKey`, and the gate manifest adapter
    to the drift database (needs #117, now merged).
 4. **Phase 3, first item:** replace the drop-and-recreate `onUpgrade` in `mobile/lib/data/db/library_database.dart` with
@@ -57,8 +57,13 @@ Once gate 2 closes: remove the candidates not chosen (fit B, manual finish code 
 
 - Merge only after `gh pr checks <n> --watch` exits 0, then confirm `gh pr view <n> --json state`. Never pipe
   `gh pr merge` through `tail`/`grep`.
-- Agents share the owner's `gh` login and can merge: every brief says "do not run `gh pr merge`". Branch protection on
-  main was offered to the owner.
+- Agents share the owner's `gh` login and can merge: every brief says "do not run `gh pr merge`". (#125 and #126 were
+  merged by an agent before their reviews finished; the owner did not merge them.)
+- **Branch protection on main (owner, 2026-11-22):** changes only through a PR (no approvals required, since every agent
+  is the same account); the firmware jobs `host`, `rp2350`, `rp2350-amoled241`, `y2`, `esp32s3` must pass; it applies to
+  admins too; no force-push or deletion. App jobs are not required yet because `app.yml` is path-filtered (a required
+  check that never runs would block docs-only PRs). To do: add an always-running `app-gate` job that passes when
+  `mobile/` is untouched and otherwise needs check/android/android-integration/ios, then make it required.
 - Set the model on every subagent: Opus for native code, exact firmware ports, hard CI and reviews of native code;
   Sonnet for UI from exact specs, tests and doc reviews; Haiku for mechanical checks.
 - Reviewers read with `gh pr diff` / `git show <ref>:<path>`; they never check out in the shared tree.
