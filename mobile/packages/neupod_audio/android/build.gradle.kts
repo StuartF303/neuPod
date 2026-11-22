@@ -41,6 +41,9 @@ android {
         getByName("main") {
             java.srcDirs("src/main/kotlin")
         }
+        getByName("test") {
+            java.srcDirs("src/test/kotlin")
+        }
     }
 
     defaultConfig {
@@ -67,4 +70,7 @@ dependencies {
     // Pigeon's generated host API uses coroutines; the guava artefact awaits Media3's ListenableFutures.
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:$coroutinesVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:$coroutinesVersion")
+
+    // JVM unit tests (./gradlew :neupod_audio:testDebugUnitTest from mobile/android).
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.4.20")
 }
