@@ -117,111 +117,126 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
         options.leftEdgeSwipeIsMenu &&
         defaultTargetPlatform == TargetPlatform.iOS;
 
-    final device = Stack(
-      children: [
-        // The body, which also takes the long press for the gate switches.
-        Positioned.fill(
-          // The gate's long press is for sighted testers only: hidden from
-          // the screen reader, which would otherwise offer an unlabelled
-          // long-press action on the body.
-          child: ExcludeSemantics(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onLongPress: gateSwitchesEnabled
-                  ? () => setState(() => _gateOpen = true)
-                  : null,
-              child: fitA
-                  ? DecoratedBox(
-                      decoration: BoxDecoration(gradient: finish.bodyGradient),
-                    )
-                  : ColoredBox(
-                      color: deviceSurround,
-                      child: Stack(children: [_fixedBody(g, finish)]),
-                    ),
-            ),
-          ),
-        ),
-        Positioned.fromRect(
-          rect: g.frame,
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: deviceFrame,
-                borderRadius: BorderRadius.circular(g.frameRadius),
-                border: Border.all(color: deviceFrameEdge, width: 1),
-                boxShadow: const [
-                  BoxShadow(color: Color(0x59FFFFFF), offset: Offset(0, 1)),
-                ],
+    final device = !g.canLayOut
+        // Zero or too small a window (Android's first frame can be 0x0):
+        // only the empty, correctly coloured body, no screen host or wheel.
+        ? (fitA
+              ? DecoratedBox(
+                  decoration: BoxDecoration(gradient: finish.bodyGradient),
+                )
+              : const ColoredBox(color: deviceSurround))
+        : Stack(
+            children: [
+              // The body, which also takes the long press for the gate switches.
+              Positioned.fill(
+                // The gate's long press is for sighted testers only: hidden from
+                // the screen reader, which would otherwise offer an unlabelled
+                // long-press action on the body.
+                child: ExcludeSemantics(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onLongPress: gateSwitchesEnabled
+                        ? () => setState(() => _gateOpen = true)
+                        : null,
+                    child: fitA
+                        ? DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: finish.bodyGradient,
+                            ),
+                          )
+                        : ColoredBox(
+                            color: deviceSurround,
+                            child: Stack(children: [_fixedBody(g, finish)]),
+                          ),
+                  ),
+                ),
               ),
-            ),
-          ),
-        ),
-        Positioned.fromRect(
-          rect: g.screen,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(g.screenRadius),
-            child: DeviceScreenHost(
-              scale: g.scale,
-              directTouch: options.directTouch,
-              dragProgressToSeek: options.dragProgressToSeek,
-              child: widget.screen,
-            ),
-          ),
-        ),
-        if (options.showWordmark && g.showWordmark)
-          Positioned(
-            left: 0,
-            right: 0,
-            top: g.wordmarkCentreY - g.wordmarkSize,
-            height: g.wordmarkSize * 2,
-            child: IgnorePointer(
-              child: ExcludeSemantics(
-                child: Center(
-                  child: Text(
-                    'neuPod',
-                    textDirection: TextDirection.ltr,
-                    // Always 0.036 W: the wordmark is part of the body, and
-                    // the 44 pt gap rule assumes its size.
-                    textScaler: TextScaler.noScaling,
-                    style: TextStyle(
-                      fontFamily: 'Montserrat',
-                      fontWeight: FontWeight.w500,
-                      fontSize: g.wordmarkSize,
-                      letterSpacing: 0.04 * g.wordmarkSize,
-                      color: finish.wordmark,
-                      decoration: TextDecoration.none,
-                      height: 1,
+              Positioned.fromRect(
+                rect: g.frame,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: deviceFrame,
+                      borderRadius: BorderRadius.circular(g.frameRadius),
+                      border: Border.all(color: deviceFrameEdge, width: 1),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x59FFFFFF),
+                          offset: Offset(0, 1),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
-        Positioned(
-          left: g.wheelCentre.dx - extent / 2,
-          top: g.wheelCentre.dy - extent / 2,
-          width: extent,
-          height: extent,
-          child: ClickWheel(diameter: g.wheelDiameter, finish: finish),
-        ),
-        if (iosSwipe)
-          Positioned(
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: 20,
-            child: _EdgeSwipe(
-              onSwipe: () {
-                if (!bus.atRoot.value) bus.press(WheelButton.menu);
-              },
-            ),
-          ),
-        if (_gateOpen)
-          Positioned.fill(
-            child: GatePanel(onClose: () => setState(() => _gateOpen = false)),
-          ),
-      ],
-    );
+              Positioned.fromRect(
+                rect: g.screen,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(g.screenRadius),
+                  child: DeviceScreenHost(
+                    scale: g.scale,
+                    directTouch: options.directTouch,
+                    dragProgressToSeek: options.dragProgressToSeek,
+                    child: widget.screen,
+                  ),
+                ),
+              ),
+              if (options.showWordmark && g.showWordmark)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: g.wordmarkCentreY - g.wordmarkSize,
+                  height: g.wordmarkSize * 2,
+                  child: IgnorePointer(
+                    child: ExcludeSemantics(
+                      child: Center(
+                        child: Text(
+                          'neuPod',
+                          textDirection: TextDirection.ltr,
+                          // Always 0.036 W: the wordmark is part of the body, and
+                          // the 44 pt gap rule assumes its size.
+                          textScaler: TextScaler.noScaling,
+                          style: TextStyle(
+                            fontFamily: 'Montserrat',
+                            fontWeight: FontWeight.w500,
+                            fontSize: g.wordmarkSize,
+                            letterSpacing: 0.04 * g.wordmarkSize,
+                            color: finish.wordmark,
+                            decoration: TextDecoration.none,
+                            height: 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              Positioned(
+                left: g.wheelCentre.dx - extent / 2,
+                top: g.wheelCentre.dy - extent / 2,
+                width: extent,
+                height: extent,
+                child: ClickWheel(diameter: g.wheelDiameter, finish: finish),
+              ),
+              if (iosSwipe)
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: 20,
+                  child: _EdgeSwipe(
+                    onSwipe: () {
+                      if (!bus.atRoot.value) bus.press(WheelButton.menu);
+                    },
+                  ),
+                ),
+              if (_gateOpen)
+                Positioned.fill(
+                  child: GatePanel(
+                    onClose: () => setState(() => _gateOpen = false),
+                  ),
+                ),
+            ],
+          );
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: overlay,

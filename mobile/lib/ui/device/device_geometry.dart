@@ -31,6 +31,7 @@ class DeviceGeometry {
     required this.wordmarkCentreY,
     required this.wordmarkSize,
     required this.showWordmark,
+    required this.canLayOut,
   });
 
   /// Screen width as a ratio of W.
@@ -90,6 +91,9 @@ class DeviceGeometry {
       // Narrow phone: the screen stays 320 and the margin shrinks to 12.
       sw = math.min(minScreenWidth, w - 2 * minSideMargin);
     }
+    // A zero or tiny first frame (Android may lay the window out at 0x0):
+    // never a negative size.
+    sw = math.max(0, sw);
     final sh = sw * designHeight / designWidth;
     final bz = frameRatio * w;
     var d = wheelRatio * w;
@@ -120,6 +124,7 @@ class DeviceGeometry {
     if (used == DeviceFit.fillsPhone && space < d + 24) {
       d = math.max(minWheelRatio * w, space - 24);
     }
+    d = math.max(0, d);
     final cy = frameBottom + space / 2;
     final screen = Rect.fromLTWH((w - sw) / 2, scrTop, sw, sh);
     // As render.py: the gap measured from the screen's bottom edge, the mark
@@ -138,6 +143,10 @@ class DeviceGeometry {
       wordmarkCentreY: frameBottom + (cy - d / 2 - frameBottom) / 2,
       wordmarkSize: 0.036 * w,
       showWordmark: gap > minWordmarkGap,
+      canLayOut:
+          w >= minPhoneWidth &&
+          height > 0 &&
+          (used == DeviceFit.fixedProportions || space >= minWheelRatio * w),
     );
   }
 
@@ -177,6 +186,11 @@ class DeviceGeometry {
   /// The gap between the screen and the wheel is wide enough for the
   /// wordmark.
   final bool showWordmark;
+
+  /// The phone is wide enough (at least [minPhoneWidth]) and tall enough
+  /// (the wheel at its minimum fits below the screen) to draw the device.
+  /// When false the view draws only the empty body.
+  final bool canLayOut;
 
   /// The scale from the 600x450 design: s = screen width / 600.
   double get scale => screen.width / designWidth;

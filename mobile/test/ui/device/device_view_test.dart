@@ -38,6 +38,7 @@ class _Probe extends StatelessWidget {
 }
 
 void main() {
+  _zeroSizeTests();
   for (final phone in designPhones) {
     for (final fit in DeviceFit.values) {
       testWidgets('${phone.name} ${fit.name}: screen and wheel where the '
@@ -255,5 +256,62 @@ void main() {
       findsNothing,
     );
     handle.dispose();
+  });
+}
+
+void _useSize(WidgetTester tester, Size size) {
+  tester.view.physicalSize = size;
+  tester.view.padding = FakeViewPadding.zero;
+  tester.view.viewPadding = FakeViewPadding.zero;
+}
+
+void _zeroSizeTests() {
+  const tooSmall = <String, Size>{
+    'Size.zero': Size.zero,
+    '1x1': Size(1, 1),
+    '100x100': Size(100, 100),
+    'just below the minimum width': Size(343, 852),
+    'just below the minimum height': Size(393, 400),
+  };
+  for (final e in tooSmall.entries) {
+    testWidgets('${e.key}: builds an empty body, then lays out at 393x852', (
+      tester,
+    ) async {
+      await pumpDevice(tester);
+      _useSize(tester, e.value);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(DeviceScreenHost), findsNothing);
+      expect(find.byType(ClickWheel), findsNothing);
+
+      _useSize(tester, const Size(393, 852));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      final g = DeviceGeometry.compute(
+        width: 393,
+        height: 852,
+        safeTop: 0,
+        safeBottom: 0,
+      );
+      final host = tester.getRect(find.byType(DeviceScreenHost));
+      expect(host.left, closeTo(g.screen.left, 1e-6));
+      expect(host.width, closeTo(g.screen.width, 1e-6));
+      expect(find.byType(ClickWheel), findsOneWidget);
+    });
+  }
+
+  test('geometry never has negative sizes at tiny windows', () {
+    for (final s in const [Size.zero, Size(1, 1), Size(100, 100)]) {
+      final g = DeviceGeometry.compute(
+        width: s.width,
+        height: s.height,
+        safeTop: 0,
+        safeBottom: 0,
+      );
+      expect(g.canLayOut, isFalse);
+      expect(g.screen.width, greaterThanOrEqualTo(0));
+      expect(g.screen.height, greaterThanOrEqualTo(0));
+      expect(g.wheelDiameter, greaterThanOrEqualTo(0));
+    }
   });
 }
