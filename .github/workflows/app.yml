@@ -170,11 +170,25 @@ jobs:
           xcrun simctl boot "$udid"
           xcrun simctl bootstatus "$udid" -b
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
+      # A normal run takes about 7 minutes. On the hosted runner the install or launch on the simulator has been seen to
+      # hang once (simctl never returned), so the step is time-boxed and retried once. A real test failure fails both.
+      # Verbose, so the log shows where a hang happened.
       - name: Integration tests
-        timeout-minutes: 15
+        id: integration
+        timeout-minutes: 12
+        continue-on-error: true
         run: flutter test integration_test -v -d "${{ steps.sim.outputs.udid }}"
+      - name: Integration tests (retry)
+        if: steps.integration.outcome == 'failure'
+        timeout-minutes: 12
+        run: |
+          echo "::warning::iOS integration tests failed or timed out on the first attempt; retrying once"
+          xcrun simctl shutdown "${{ steps.sim.outputs.udid }}" || true
+          xcrun simctl boot "${{ steps.sim.outputs.udid }}"
+          xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b
+          flutter test integration_test -v -d "${{ steps.sim.outputs.udid }}"
       - name: Simulator state on failure
-        if: failure()
+        if: failure() || steps.integration.outcome == 'failure'
         run: |
           xcrun simctl list devices booted
           xcrun simctl spawn booted log show --last 10m --style compact --predicate 'process == "Runner"' | tail -200 || true
