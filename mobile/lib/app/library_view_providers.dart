@@ -34,6 +34,7 @@ const _gateLibraryDir = String.fromEnvironment('NEUPOD_GATE_LIBRARY');
 const gateManifestAsset = 'assets/gate_library/manifest.json';
 
 /// The library the browsing screens show.
+// GATE ONLY — remove when #117's drift adapter lands (the manifest fallback).
 final libraryViewProvider = FutureProvider<LibraryView>((ref) async {
   if (_gateLibraryDir.isNotEmpty) {
     final file = File('$_gateLibraryDir/manifest.json');
@@ -55,6 +56,8 @@ typedef QueueMapper = Future<List<QueueItem>> Function(List<Song> songs);
 /// Maps songs to queue items. A song with a real file opens it; a gate-sample
 /// song opens a bundled test tone (FLAC for `.flac`, MP3 otherwise) under its
 /// own title, artist and album.
+// GATE ONLY — remove when #117's drift adapter lands (the gate-sample: test-tone
+// mapping; real songs map straight to their files).
 final queueMapperProvider = Provider<QueueMapper>((ref) {
   final media = ref.watch(testMediaProvider);
   final tones = <String, QueueItem>{};

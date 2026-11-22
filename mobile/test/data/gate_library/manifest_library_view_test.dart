@@ -70,6 +70,14 @@ void main() {
     expect(letters['Émilie Côté'], 'E');
   });
 
+  test('a sort tag is used instead of the name (owner decision 11)', () async {
+    final artists = await view.artists();
+    final owl = artists.firstWhere((a) => a.name == 'Weird Owl');
+    expect(owl.sortLetter, 'O'); // ARTISTSORT is "Owl, Weird"
+    final names = artists.map((a) => a.name).toList();
+    expect(names.indexOf('Weird Owl'), lessThan(names.indexOf('Pale Harbour')));
+  });
+
   test('an artist\'s albums are in year order', () async {
     final artist = (await view.artists()).firstWhere(
       (a) => a.name == 'Pale Harbour',

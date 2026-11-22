@@ -104,9 +104,21 @@ class _LibraryLoaderState<T> extends ConsumerState<LibraryLoader<T>> {
   }
 
   Future<void> _load() async {
-    final library = await ref.read(libraryViewProvider.future);
-    final data = await widget.load(library);
-    if (mounted) setState(() => _data = data);
+    try {
+      final library = await ref.read(libraryViewProvider.future);
+      final data = await widget.load(library);
+      if (mounted) setState(() => _data = data);
+    } on Object {
+      if (!mounted) return;
+      unawaited(
+        ref
+            .read(shellProvider.notifier)
+            .showPanel(
+              title: "Can't open",
+              message: "The library couldn't be read.",
+            ),
+      );
+    }
   }
 
   @override
@@ -179,15 +191,16 @@ Future<void> playAll(WidgetRef ref, List<Song> songs) async {
 
 Future<void> _start(WidgetRef ref, List<Song> songs, int start) async {
   final shell = ref.read(shellProvider.notifier);
-  shell.open(ShellDestination.nowPlaying);
   try {
     final items = await ref.read(queueMapperProvider)(songs);
     final player = ref.read(playerProvider);
     await player.setQueue(items, startIndex: start);
+    // Now Playing opens only once there is something to show.
+    shell.open(ShellDestination.nowPlaying);
     await player.play();
-  } on Object catch (e) {
+  } on Object {
     unawaited(
-      shell.showPanel(title: "Can't play", message: '$e'.split('\n').first),
+      shell.showPanel(title: "Can't play", message: "Can't play this song."),
     );
   }
 }

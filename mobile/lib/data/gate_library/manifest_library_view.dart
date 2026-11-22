@@ -32,9 +32,15 @@ import 'package:neupod/domain/library_view/sort_name.dart';
 /// The artist shown for a compilation's album.
 const variousArtists = 'Various Artists';
 
+// GATE ONLY — remove when #117's drift adapter lands.
 /// A [LibraryView] built from the test library's manifest.
 final class ManifestLibraryView implements LibraryView {
-  ManifestLibraryView._(this._songs, this._albums, this._songsByAlbum);
+  ManifestLibraryView._(
+    this._songs,
+    this._albums,
+    this._songsByAlbum,
+    this._artistSort,
+  );
 
   /// Reads [manifestJson], the text of `manifest.json`. [libraryDir] is the
   /// folder that holds `manifest.json` and `library/` (null: no files).
@@ -84,6 +90,7 @@ final class ManifestLibraryView implements LibraryView {
           compilation: e['compilation'] as bool? ?? false,
           playable: e['playable'] as bool? ?? true,
           genre: _nonEmpty(tags?['genre'] as String?),
+          artistSort: _nonEmpty(tags?['artistSort'] as String?),
         ),
       );
     }
@@ -96,6 +103,7 @@ final class ManifestLibraryView implements LibraryView {
     }
 
     final albums = <String, Album>{};
+    final artistSort = <String, String>{};
     final songsByAlbum = <String, List<Song>>{};
     for (final MapEntry(:key, value: raws) in groups.entries) {
       final first = raws.first;
@@ -124,6 +132,7 @@ final class ManifestLibraryView implements LibraryView {
             uri: full(r.path) ?? 'gate-sample:${r.path}',
             track: r.track,
             disc: r.disc,
+            // GATE ONLY — made-up duration; the real adapter reads it.
             duration: Duration(seconds: 150 + _fnv(r.path) % 271),
             genre: r.genre,
             unplayableReason: r.playable ? null : 'Damaged file',
@@ -157,16 +166,24 @@ final class ManifestLibraryView implements LibraryView {
         ),
         sortLetter: sortLetterOf(first.album),
       );
+      if (!compilation && first.artistSort != null) {
+        artistSort[artist] = first.artistSort!;
+      }
     }
 
     final allSongs = [for (final l in songsByAlbum.values) ...l]
       ..sort((a, b) => _cmp(sortKey(a.title), sortKey(b.title), a.id, b.id));
-    return ManifestLibraryView._(allSongs, albums, songsByAlbum);
+    return ManifestLibraryView._(allSongs, albums, songsByAlbum, artistSort);
   }
 
   final List<Song> _songs;
   final Map<String, Album> _albums;
   final Map<String, List<Song>> _songsByAlbum;
+
+  /// Artist name to its sort tag, where the tags have one (owner decision 11).
+  final Map<String, String> _artistSort;
+
+  String _artistKey(String name) => sortKey(name, sort: _artistSort[name]);
 
   // Albums in the order an artist's list shows them: year, then title.
   static int _byYear(Album a, Album b) {
@@ -176,8 +193,8 @@ final class ManifestLibraryView implements LibraryView {
     return compareNames(a.title, b.title);
   }
 
-  static int _byArtistYear(Album a, Album b) {
-    final c = compareNames(a.artist, b.artist);
+  int _byArtistYear(Album a, Album b) {
+    final c = _artistKey(a.artist).compareTo(_artistKey(b.artist));
     return c != 0 ? c : _byYear(a, b);
   }
 
@@ -220,9 +237,12 @@ final class ManifestLibraryView implements LibraryView {
           name: value.first.artist,
           albumCount: value.length,
           songCount: value.fold(0, (n, a) => n + a.songCount),
-          sortLetter: sortLetterOf(value.first.artist),
+          sortLetter: sortLetterOf(
+            value.first.artist,
+            sort: _artistSort[value.first.artist],
+          ),
         ),
-    ]..sort((a, b) => compareNames(a.name, b.name));
+    ]..sort((a, b) => _artistKey(a.name).compareTo(_artistKey(b.name)));
     return out;
   }
 
@@ -246,7 +266,7 @@ final class ManifestLibraryView implements LibraryView {
   Future<List<Album>> albums() async => _all
     ..sort((a, b) {
       final c = compareNames(a.title, b.title);
-      return c != 0 ? c : compareNames(a.artist, b.artist);
+      return c != 0 ? c : _artistKey(a.artist).compareTo(_artistKey(b.artist));
     });
 
   @override
@@ -333,6 +353,7 @@ final class _Raw {
     required this.compilation,
     required this.playable,
     required this.genre,
+    required this.artistSort,
   });
 
   final String path;
@@ -346,6 +367,9 @@ final class _Raw {
   final bool compilation;
   final bool playable;
   final String? genre;
+
+  /// The sort tag (ARTISTSORT), which the sort uses instead of the name.
+  final String? artistSort;
 
   bool get isCompilation => compilation;
 

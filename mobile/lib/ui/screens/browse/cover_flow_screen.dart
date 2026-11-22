@@ -21,6 +21,7 @@ import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/app/library_view_providers.dart';
+import 'package:neupod/app/providers.dart';
 import 'package:neupod/domain/library_view/library_view.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/ui/components/art_frame.dart';
@@ -113,6 +114,7 @@ class _CoverFlowScreenState extends ConsumerState<CoverFlowScreen> {
         value: _say(i),
         increasedValue: i < albums.length - 1 ? _say(i + 1) : '',
         decreasedValue: i > 0 ? _say(i - 1) : '',
+        playing: ref.read(playerStateProvider).value?.playWhenReady ?? false,
       );
     });
   }
@@ -155,6 +157,7 @@ class _CoverFlowScreenState extends ConsumerState<CoverFlowScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(playerStateProvider, (_, _) => _describe());
     final albums = _albums;
     if (albums == null || albums.isEmpty) {
       return const ShellFrame(title: 'Cover Flow', body: SizedBox.shrink());

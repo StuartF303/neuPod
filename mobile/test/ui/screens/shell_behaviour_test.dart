@@ -13,6 +13,9 @@ import 'package:neupod/ui/components/list_row.dart';
 import 'package:neupod/ui/screens/browse/album_screen.dart';
 import 'package:neupod/ui/screens/browse/home_screen.dart';
 import 'package:neupod/ui/screens/browse/songs_screen.dart';
+import 'package:neupod/ui/screens/browse/browse_common.dart';
+import 'package:neupod/ui/screens/shell/neupod_list.dart';
+import 'package:neupod/ui/screens/shell/shell_frame.dart';
 import 'package:neupod/ui/screens/shell/shell_state.dart';
 
 import 'screens_harness.dart';
@@ -369,6 +372,105 @@ void main() {
       );
       await pumpShell(tester, home: (_) => AlbumScreen(albumId: a.id));
       expect(find.text('Damaged file'), findsWidgets);
+    });
+  });
+
+  group('lists', () {
+    testWidgets('an empty list shows a greyed None yet; Menu still pops and '
+        'the wheel says nothing', (tester) async {
+      final rig = await pumpShell(tester, home: (_) => const HomeScreen());
+      rig.container
+          .read(shellProvider.notifier)
+          .push(
+            ShellPage(
+              name: 'empty',
+              builder: (_) => ShellFrame(
+                title: 'Compilations',
+                body: BrowseListBody(child: NeupodList(items: const [])),
+              ),
+            ),
+          );
+      await settle(tester);
+      expect(find.text('None yet'), findsOneWidget);
+      expect(_wheelValue(rig), '');
+      rig.step(1);
+      rig.press(WheelButton.centre);
+      await settle(tester);
+      rig.press(WheelButton.menu);
+      await settle(tester);
+      expect(rig.container.read(shellProvider).pages, hasLength(1));
+    });
+
+    testWidgets('the bar slides for up to three rows and jumps for more', (
+      tester,
+    ) async {
+      final rig = await pumpShell(tester, home: (_) => const SongsScreen());
+      Duration barDuration() => tester
+          .widget<AnimatedPositioned>(find.byKey(const ValueKey('bar')))
+          .duration;
+      rig.step(1);
+      await tester.pump();
+      expect(barDuration(), const Duration(milliseconds: 80));
+      rig.step(3);
+      await tester.pump();
+      expect(barDuration(), const Duration(milliseconds: 80));
+      rig.step(4);
+      await tester.pump();
+      expect(barDuration(), Duration.zero);
+    });
+
+    testWidgets('the jump counts the rows crossed, disc headings included', (
+      tester,
+    ) async {
+      final two = (await gateLibrary.albums()).firstWhere(
+        (a) => a.title == 'Long Division',
+      );
+      final rig = await pumpShell(
+        tester,
+        home: (_) => AlbumScreen(albumId: two.id),
+      );
+      // Opening, Middle Distance | Disc 2 heading | Return: crossing the
+      // heading is two rows, still a slide.
+      rig.step(1);
+      await tester.pump();
+      rig.step(1);
+      await tester.pump();
+      expect(
+        tester
+            .widget<AnimatedPositioned>(find.byKey(const ValueKey('bar')))
+            .duration,
+        const Duration(milliseconds: 80),
+      );
+    });
+
+    testWidgets('a gap over 400 ms starts the fast-scroll count again', (
+      tester,
+    ) async {
+      final rig = await pumpShell(tester, home: (_) => const SongsScreen());
+      double tile() => tester
+          .widget<AnimatedOpacity>(find.byType(AnimatedOpacity).last)
+          .opacity;
+      rig.step(3);
+      await tester.pump(const Duration(milliseconds: 450));
+      rig.step(3); // only 3 since the gap
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(tile(), 0);
+      await tester.pump(const Duration(milliseconds: 100));
+      rig.step(3); // 6 within 400 ms
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(tile(), 1);
+    });
+
+    testWidgets('a row is one semantics element that opens it (touch '
+        'candidate 1 relies on this)', (tester) async {
+      final handle = tester.ensureSemantics();
+      final rig = await pumpShell(tester, home: (_) => const HomeScreen());
+      final row = find.semantics.byLabel('Music, 1 of 4');
+      expect(row, findsOneWidget);
+      tester.semantics.tap(row);
+      await settle(tester);
+      expect(rig.container.read(shellProvider).pages, hasLength(2));
+      handle.dispose();
     });
   });
 }

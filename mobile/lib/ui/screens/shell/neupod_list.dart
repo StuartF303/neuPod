@@ -240,6 +240,7 @@ class _NeupodListState extends ConsumerState<NeupodList>
   }
 
   int _firstSelectable(int from) {
+    if (_items.isEmpty) return -1;
     for (var i = from.clamp(0, _items.length); i < _items.length; i++) {
       if (_items[i].selectable) return i;
     }
@@ -314,7 +315,6 @@ class _NeupodListState extends ConsumerState<NeupodList>
   void _move(int steps) {
     if (_sel < 0 || steps == 0) return;
     var to = _sel;
-    var moved = 0;
     final dir = steps > 0 ? 1 : -1;
     var left = steps.abs();
     var i = _sel;
@@ -324,7 +324,6 @@ class _NeupodListState extends ConsumerState<NeupodList>
       if (_items[i].selectable) {
         to = i;
         left--;
-        moved++;
       }
     }
     final feedback = ref.read(deviceFeedbackProvider);
@@ -335,7 +334,8 @@ class _NeupodListState extends ConsumerState<NeupodList>
     }
     _atEnd = false;
     feedback.detent();
-    _select(to, animate: moved <= 3);
+    // The jump rule counts the rows the bar crosses, headings included.
+    _select(to, animate: (to - _sel).abs() <= 3);
 
     if (widget.indexed) {
       final now = ref.read(wheelClockProvider)();
@@ -478,7 +478,10 @@ class _NeupodListState extends ConsumerState<NeupodList>
 
   @override
   Widget build(BuildContext context) {
+    // Play/Pause on the wheel reads Play or Pause by the player's state.
+    ref.listen(playerStateProvider, (_, _) => _scheduleDescribe());
     final style = NeupodTheme.of(context).style;
+    if (_items.isEmpty) return _emptyRow(context);
     final reduce = _reduceMotion;
     final dur = _animate && !reduce ? _slide : Duration.zero;
     final n = _selectableCount;
@@ -589,6 +592,19 @@ class _NeupodListState extends ConsumerState<NeupodList>
       },
     );
   }
+
+  /// An empty list shows one greyed row, as the firmware does ("None yet").
+  Widget _emptyRow(BuildContext context) => Align(
+    alignment: Alignment.topCenter,
+    child: SizedBox(
+      height: NeupodTheme.of(context).tier.rowHeight,
+      child: const NeupodRow(
+        title: 'None yet',
+        disabledReason: '',
+        paintsBar: false,
+      ),
+    ),
+  );
 
   static const _fade = Duration(milliseconds: 150);
 
