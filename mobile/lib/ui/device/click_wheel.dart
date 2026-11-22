@@ -93,7 +93,8 @@ class _ClickWheelState extends ConsumerState<ClickWheel> {
           feedback.buttonDown();
         case WheelButtonUp():
           feedback.buttonUp();
-        case WheelHoldStart():
+        case WheelHoldStart(:final button)
+            when !_bus.screenGivesHoldHaptic.contains(button):
           feedback.holdTookEffect();
         case _:
           break;
@@ -232,10 +233,13 @@ class _ClickWheelState extends ConsumerState<ClickWheel> {
 /// and right arrows are Previous and Next.
 class WheelKeyboard extends ConsumerWidget {
   /// Routes keys pressed while [child] has focus to the wheel bus.
-  const WheelKeyboard({required this.child, super.key});
+  const WheelKeyboard({required this.child, this.enabled = true, super.key});
 
   /// The device view.
   final Widget child;
+
+  /// False while something else (the gate panel) must get the keys.
+  final bool enabled;
 
   /// The key map.
   static WheelButton? buttonFor(LogicalKeyboardKey key) => switch (key) {
@@ -255,7 +259,7 @@ class WheelKeyboard extends ConsumerWidget {
       autofocus: true,
       onKeyEvent: (node, event) {
         final bus = ref.read(wheelBusProvider);
-        if (!bus.enabled.value) return KeyEventResult.ignored;
+        if (!enabled || !bus.enabled.value) return KeyEventResult.ignored;
         final key = event.logicalKey;
         if (event is KeyDownEvent || event is KeyRepeatEvent) {
           if (key == LogicalKeyboardKey.arrowDown) {

@@ -13,6 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/domain/wheel/feedback_ports.dart';
 import 'package:neupod/domain/wheel/firmware_constants.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
+import 'package:neupod/domain/wheel/wheel_input.dart';
 import 'package:neupod/ui/device/click_wheel.dart';
 import 'package:neupod/ui/device/device_geometry.dart';
 import 'package:neupod/ui/device/wheel_bus.dart';
@@ -135,6 +136,7 @@ void main() {
     tester,
   ) async {
     final r = await _rig(tester);
+    r.bus.holdMs.addAll(WheelInput.nowPlayingHoldMs); // as Now Playing does
     final gesture = await tester.startGesture(r.at(90));
     await r.wait(uiHoldMs - 1);
     expect(r.events, [const WheelButtonDown(WheelButton.next)]);
@@ -253,5 +255,30 @@ void main() {
     await tester.pump();
     expect(handled, isTrue);
     expect(r.events.last, const WheelPress(WheelButton.menu));
+  });
+
+  testWidgets('away from Now Playing a held Next is a plain press', (
+    tester,
+  ) async {
+    final r = await _rig(tester);
+    final gesture = await tester.startGesture(r.at(90));
+    await r.wait(2000);
+    await gesture.up();
+    await tester.pump();
+    expect(r.events.last, const WheelPress(WheelButton.next));
+    expect(r.haptics.played, isNot(contains(FeedbackKind.holdTookEffect)));
+  });
+
+  testWidgets('a screen that gives its own hold haptic gets none from the '
+      'wheel', (tester) async {
+    final r = await _rig(tester);
+    r.bus.holdMs.addAll(WheelInput.nowPlayingHoldMs);
+    r.bus.screenGivesHoldHaptic.addAll(WheelInput.nowPlayingHoldMs.keys);
+    final gesture = await tester.startGesture(r.at(90));
+    await r.wait(uiHoldMs);
+    expect(r.events.last, const WheelHoldStart(WheelButton.next));
+    expect(r.haptics.played, isNot(contains(FeedbackKind.holdTookEffect)));
+    await gesture.up();
+    await tester.pump();
   });
 }

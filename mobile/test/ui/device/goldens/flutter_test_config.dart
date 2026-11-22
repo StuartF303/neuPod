@@ -2,12 +2,18 @@
 
 // Golden comparison for the device view, with a small tolerance.
 //
-// The goldens are made on macOS and checked on the Linux CI runner. Flutter's
-// test renderer draws text in the FlutterTest font on both, but anti-aliased
-// edges (the wheel's circles, gradients, the shadows) can differ by a few
-// pixels between the two hosts. A golden passes when at most
-// [_tolerance] of its pixels differ; a layout change moves far more than that
-// (shifting the wheel by 1 pt changes several percent of the image).
+// The goldens are made on macOS and checked on the Linux CI runner. The
+// device goldens host a text-free test pattern in the screen, but they still
+// draw text: MENU on the wheel (TextPainter) and the wordmark, in the
+// FlutterTest font. Small text and anti-aliased edges (the wheel's circles,
+// gradients, shadows) can differ by a few pixels between the two hosts.
+//
+// A golden passes when at most [_tolerance] (0.5 %) of its pixels differ.
+// That is acceptable because the goldens are not the guard on positions:
+// test/ui/device/device_geometry_test.dart pins every position to render.py
+// within 1e-9 pt, and device_view_test.dart checks the rendered screen and
+// wheel rects. The goldens catch drawing changes (colours, shapes, states),
+// which move far more than 0.5 % of the image.
 // Regenerate with `flutter test --update-goldens test/ui/device/goldens`.
 
 import 'dart:async';

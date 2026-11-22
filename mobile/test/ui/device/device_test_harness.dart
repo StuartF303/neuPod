@@ -70,8 +70,6 @@ Future<ProviderContainer> pumpDevice(
     retry: (_, _) => null,
     overrides: [
       if (clock != null) wheelClockProvider.overrideWithValue(() => clock.ms),
-      if (clock != null)
-        feedbackClockProvider.overrideWithValue(() => clock.ms * 1000),
       if (haptics != null) hapticsPortProvider.overrideWithValue(haptics),
       ...overrides,
     ],

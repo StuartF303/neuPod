@@ -6,6 +6,7 @@ import 'package:neupod/domain/wheel/feedback_ports.dart';
 import 'package:neupod/domain/wheel/system_volume_port.dart';
 import 'package:neupod/ui/device/device_feedback.dart';
 import 'package:neupod/ui/device/device_options.dart';
+import 'package:neupod/ui/device/wheel_bus.dart';
 
 import 'device_test_harness.dart';
 
@@ -19,25 +20,25 @@ class _Clicks implements ClickSoundPort {
 void main() {
   late RecordingHaptics haptics;
   late _Clicks clicks;
-  late int nowUs;
+  late int nowMs;
   late ProviderContainer c;
 
   setUp(() {
     haptics = RecordingHaptics();
     clicks = _Clicks();
-    nowUs = 0;
+    nowMs = 0;
     c = ProviderContainer.test(
       overrides: [
         hapticsPortProvider.overrideWithValue(haptics),
         clickSoundPortProvider.overrideWithValue(clicks),
-        feedbackClockProvider.overrideWithValue(() => nowUs),
+        wheelClockProvider.overrideWithValue(() => nowMs),
       ],
     );
   });
 
   test('detents: at most 30 a second, the rest dropped', () {
     final f = c.read(deviceFeedbackProvider);
-    for (nowUs = 0; nowUs < 1000000; nowUs += 1000) {
+    for (nowMs = 0; nowMs < 1000; nowMs++) {
       f.detent(); // 1,000 a second asked for
     }
     expect(haptics.played, hasLength(30));
@@ -78,7 +79,7 @@ void main() {
       c
           .read(deviceViewOptionsProvider.notifier)
           .update((o) => o.copyWith(clickSound: true));
-      nowUs = 100000;
+      nowMs = 100;
       f.detent();
       f.buttonDown();
       f.buttonUp(); // one click per press, on the way down

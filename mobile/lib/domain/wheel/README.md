@@ -22,13 +22,28 @@ changes.
 
 - `WheelStep(steps, multiplier)`: move `steps` rows (already accelerated; positive is clockwise, down a list).
 - `WheelPress(button)`: Select (`centre`), Menu, Previous, Next, Play/Pause, on release of a press that did not become a
-  turn.
-- `WheelHoldStart(button)` / `WheelHoldEnd(button)`: Previous and Next after 600 ms; the centre after 500 ms only where
-  the screen adds it to `WheelInput.holdMs` (Now Playing).
-- `WheelButtonDown` / `WheelButtonUp` / `WheelButtonCancelled`: the raw press, for Now Playing, which drives
-  `NowPlayingControl` exactly as the firmware's Now Playing drives `ui_npc_t`: Select down and up, Previous / Next as
-  `keyDown(-1 / +1)` and `keyUp`, a cancelled Previous / Next as `cancelHold()`, a cancelled Select as `selectUp()` with
-  its result ignored, and `tick()` every frame.
+  turn or a hold.
+- **Holds are per screen.** `WheelInput.holdMs` is empty by default, so every press is a plain press, as on the
+  firmware, where Previous and Next skip on every screen but Now Playing. Screens add what they act on:
+  - Now Playing: `WheelInput.nowPlayingHoldMs`, which holds Previous and Next at 600 ms (scan) and the centre at
+    500 ms (seek mode). Leave the centre out while in seek mode, where Select is "go" at once.
+  - Search (the letter ring): Menu at 600 ms clears the text (`CLEAR_HOLD_MS`, `app/ui/input/ui_input.c`).
+- `WheelHoldStart(button)` / `WheelHoldEnd(button)`: a hold took effect / ended with a release. A hold whose tick came
+  late is still reported as a hold on release, never as a press.
+- `WheelButtonDown` / `WheelButtonUp` / `WheelButtonCancelled`: the raw press. **A cancelled hold** (the system took
+  the touch, the screen changed, the wheel was disabled) gives `WheelButtonCancelled` and then `WheelHoldEnd`: nothing
+  the hold started may be applied.
+- **Now Playing** drives `NowPlayingControl` from the raw events, exactly as the firmware's Now Playing drives
+  `ui_npc_t`:
+  - centre down / up as `selectDown()` / `selectUp()`;
+  - Previous / Next down as `keyDown(-1 / +1)` and up as `keyUp()`;
+  - a cancelled Previous / Next as `cancelHold()`, which drops a scan in progress;
+  - a cancelled centre as `selectUp()` with its result ignored;
+  - `tick()` every frame.
+
+  Its hold haptic comes from `NowPlayingControl`: `NpcEvent.seekEnter`, and the scan starting (`holding` turning true
+  on a seekable track). It does not come from `WheelHoldStart`, which would also tick on a track that cannot seek, and
+  twice. `test/domain/wheel/wheel_input_test.dart` has the scan case end to end.
 - A detent haptic belongs to a step that actually moved something; at the end of a list give the end haptic once.
 
 ## The fast-scroll trigger (what the firmware does)
