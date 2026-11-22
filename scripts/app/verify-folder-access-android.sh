@@ -80,7 +80,7 @@ adb -s "$SERIAL" install -r "$APK" >/dev/null
 launch() {
   adb -s "$SERIAL" logcat -c
   adb -s "$SERIAL" shell am start -W -n "$PKG/.MainActivity" >/dev/null
-  local deadline=$((SECONDS + 600)) log pid=""
+  local deadline=$((SECONDS + 240)) log pid=""
   while [ -z "$pid" ] && [ $SECONDS -lt $deadline ]; do
     pid="$(adb -s "$SERIAL" shell pidof "$PKG" 2>/dev/null | tr -d '\r' || true)"
     [ -n "$pid" ] || sleep 1
@@ -97,11 +97,12 @@ launch() {
     sleep 2
   done
   echo "timed out" >&2
+  adb -s "$SERIAL" shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp' >&2 || true
   adb -s "$SERIAL" logcat -d --pid="$pid" -s flutter:I | tail -60
   return 1
 }
 
-python3 "$HERE/drive_saf_picker.py" -s "$SERIAL" --timeout 600 &
+python3 "$HERE/drive_saf_picker.py" -s "$SERIAL" --timeout 240 &
 DRIVER=$!
 STEP1="$(launch)"
 wait "$DRIVER"

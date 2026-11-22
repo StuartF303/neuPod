@@ -94,8 +94,23 @@ def main():
     deadline = time.time() + args.timeout
     in_music = False
     in_folder = False
+    last_focus = None
     while time.time() < deadline:
         f = focus(s)
+        if f != last_focus:
+            print(f"drive_saf_picker: focus: {f or '(none)'}", flush=True)
+            last_focus = f
+        # A slow emulator can show "<app> isn't responding" (often System UI,
+        # just after boot) over everything: keep waiting rather than close it.
+        if "Not Responding" in f:
+            root = dump(s)
+            describe(root)
+            wait = None if root is None else find(root, text_is("wait"))
+            if wait is not None:
+                tap(s, wait, "Wait")
+            else:
+                time.sleep(1)
+            continue
         if "documentsui" not in f and "permissioncontroller" not in f:
             if in_folder:
                 print("drive_saf_picker: picker closed", flush=True)
