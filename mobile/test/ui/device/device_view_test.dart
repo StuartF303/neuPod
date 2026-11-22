@@ -42,27 +42,25 @@ void main() {
   _oddSizeTests();
   _reparentTests();
   for (final phone in designPhones) {
-    {
-      testWidgets('${phone.name}: screen and wheel where the '
-          'geometry puts them', (tester) async {
-        await pumpDevice(tester, phone: phone);
-        final g = DeviceGeometry.compute(
-          width: phone.w,
-          height: phone.h,
-          safeTop: phone.top,
-          safeBottom: phone.bottom,
-        );
-        final host = tester.getRect(find.byType(DeviceScreenHost));
-        expect(host.left, closeTo(g.screen.left, 1e-6));
-        expect(host.top, closeTo(g.screen.top, 1e-6));
-        expect(host.width, closeTo(g.screen.width, 1e-6));
-        expect(host.height, closeTo(g.screen.height, 1e-6));
-        final wheel = tester.getRect(find.byType(ClickWheel));
-        expect(wheel.center.dx, closeTo(g.wheelCentre.dx, 1e-6));
-        expect(wheel.center.dy, closeTo(g.wheelCentre.dy, 1e-6));
-        expect(wheel.width, closeTo(g.wheelDiameter * 1.06, 1e-6));
-      });
-    }
+    testWidgets('${phone.name}: screen and wheel where the '
+        'geometry puts them', (tester) async {
+      await pumpDevice(tester, phone: phone);
+      final g = DeviceGeometry.compute(
+        width: phone.w,
+        height: phone.h,
+        safeTop: phone.top,
+        safeBottom: phone.bottom,
+      );
+      final host = tester.getRect(find.byType(DeviceScreenHost));
+      expect(host.left, closeTo(g.screen.left, 1e-6));
+      expect(host.top, closeTo(g.screen.top, 1e-6));
+      expect(host.width, closeTo(g.screen.width, 1e-6));
+      expect(host.height, closeTo(g.screen.height, 1e-6));
+      final wheel = tester.getRect(find.byType(ClickWheel));
+      expect(wheel.center.dx, closeTo(g.wheelCentre.dx, 1e-6));
+      expect(wheel.center.dy, closeTo(g.wheelCentre.dy, 1e-6));
+      expect(wheel.width, closeTo(g.wheelDiameter * 1.06, 1e-6));
+    });
   }
 
   testWidgets('the screen is laid out at 600x450 and scaled by s', (

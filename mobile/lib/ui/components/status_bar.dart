@@ -6,9 +6,9 @@
 ///
 /// No Wi-Fi icon: the app makes no network connection in R1 (device view
 /// design, section 10), so the right-hand group is, in the design's order,
-/// Bluetooth, output, lock and battery. The output icon follows the phone's route; what shows for AirPlay,
-/// the speaker and USB is owner decision 13 (the speaker shows none, USB and wired the
-/// jack plug, AirPlay and other wireless a generic speaker).
+/// Bluetooth, output, lock and battery. The output icon follows the phone's
+/// route (owner decision 13): the speaker shows none, USB and wired the jack
+/// plug, AirPlay and other wireless a generic speaker.
 library;
 
 import 'package:flutter/widgets.dart';

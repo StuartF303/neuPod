@@ -30,7 +30,9 @@ class DeviceViewOptions {
     this.clickSound = false,
   });
 
-  /// Direct touch candidate (Open question 2). Default 2 (wheel plus screen) until the owner judges it by feel at gate 1; candidate 1 stays behind the gate switch.
+  /// Direct touch candidate (Open question 2). Default 2 (wheel plus
+  /// screen) until the owner judges it by feel at gate 1; candidate 1 stays
+  /// behind the gate switch.
   final DirectTouch directTouch;
 
   /// The phone's status bar above the device (design section 10): shown, as

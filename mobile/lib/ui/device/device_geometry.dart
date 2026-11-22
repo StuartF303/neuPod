@@ -145,14 +145,15 @@ class DeviceGeometry {
     );
   }
 
-  /// How the device sits in a window [width] x [height] (the body fills the phone). A window that is tall and wide enough gets
-  /// the device at full width, scale 1. A short one is narrowed (laid out at
-  /// the largest width whose height fits, not below [minPhoneWidth]); one
-  /// narrower than that, or too short even then (split screen, landscape, a
-  /// tablet), is scaled down uniformly to fit and centred: the device is laid
-  /// out in a virtual window of [FitPlan.virtualWidth] x
-  /// [FitPlan.virtualHeight] and drawn at [FitPlan.scale]. A window under
-  /// 1 pt either way (or not finite) is [FitPlan.empty].
+  /// How the device sits in a window [width] x [height] (the body fills the
+  /// phone). A window that is tall and wide enough gets the device at full
+  /// width, scale 1. A short one is narrowed (laid out at the largest width
+  /// whose height fits, not below [minPhoneWidth]); one narrower than that,
+  /// or too short even then (split screen, landscape, a tablet), is scaled
+  /// down uniformly to fit and centred: the device is laid out in a virtual
+  /// window of [FitPlan.virtualWidth] x [FitPlan.virtualHeight] and drawn at
+  /// [FitPlan.scale]. A window under 1 pt either way (or not finite) is
+  /// [FitPlan.empty].
   static FitPlan plan({
     required double width,
     required double height,

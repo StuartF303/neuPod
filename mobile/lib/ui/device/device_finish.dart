@@ -90,8 +90,8 @@ enum DeviceFinish {
     stops: bodyStops,
   );
 
-  /// The finish for a brightness silver in Light, black in
-  /// Dark (the mode, not the style, decides; owner decision 13).
+  /// The finish for a brightness: silver in Light, black in Dark (the mode,
+  /// not the style, decides; owner decision 13).
   static DeviceFinish forBrightness(Brightness b) =>
       b == Brightness.dark ? black : silver;
 }

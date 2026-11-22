@@ -19,24 +19,22 @@ import '../device_test_harness.dart';
 
 void main() {
   for (final phone in designPhones) {
-    {
-      for (final finish in DeviceFinish.values) {
-        final name = 'device_${phone.name}_fit_a_${finish.name}';
-        testWidgets(name, (tester) async {
-          await pumpDevice(
-            tester,
-            phone: phone,
-            screen: const _TestPattern(),
-            brightness: finish == DeviceFinish.silver
-                ? Brightness.light
-                : Brightness.dark,
-          );
-          await expectLater(
-            find.byType(DeviceView),
-            matchesGoldenFile('$name.png'),
-          );
-        });
-      }
+    for (final finish in DeviceFinish.values) {
+      final name = 'device_${phone.name}_fit_a_${finish.name}';
+      testWidgets(name, (tester) async {
+        await pumpDevice(
+          tester,
+          phone: phone,
+          screen: const _TestPattern(),
+          brightness: finish == DeviceFinish.silver
+              ? Brightness.light
+              : Brightness.dark,
+        );
+        await expectLater(
+          find.byType(DeviceView),
+          matchesGoldenFile('$name.png'),
+        );
+      });
     }
   }
 

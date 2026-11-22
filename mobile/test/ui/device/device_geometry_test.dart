@@ -2,8 +2,9 @@
 
 // The device geometry against the design's reference implementation:
 // fixtures/render_py_geometry.json is render.py's geom() for the three phones
-// (fit A; fit B was dropped at gate 2) (docs/design/2026-11-21-app-device-view/render.py, run with
-// `python3 -I`; regenerate with the snippet in the PR that added it).
+// (fit A only; fit B was dropped at gate 2)
+// (docs/design/2026-11-21-app-device-view/render.py, run with `python3 -I`;
+// regenerate with the snippet in the PR that added it).
 
 import 'dart:convert';
 import 'dart:io';
@@ -19,35 +20,33 @@ void main() {
   ) as Map<String, dynamic>;
 
   for (final phone in designPhones) {
-    {
-      final key = '${phone.w.toInt()}A';
-      test('$key agrees with render.py', () {
-        final r = ref[key] as Map<String, dynamic>;
-        double v(String k) => (r[k] as num).toDouble();
-        final g = DeviceGeometry.compute(
-          width: phone.w,
-          height: phone.h,
-          safeTop: phone.top,
-          safeBottom: phone.bottom,
-        );
-        const e = 1e-9;
-        expect(g.screen.width, closeTo(v('sw'), e));
-        expect(g.screen.height, closeTo(v('sh'), e));
-        expect(g.screen.left, closeTo(v('scr_x'), e));
-        expect(g.screen.top, closeTo(v('scr_top'), e));
-        expect(g.screen.bottom, closeTo(v('scr_bot'), e));
-        expect(g.frameWidth, closeTo(v('bz'), e));
-        expect(g.wheelDiameter, closeTo(v('D'), e));
-        expect(g.wheelCentre.dy, closeTo(v('cy'), e));
-        expect(g.wheelCentre.dx, closeTo(phone.w / 2, e));
-        expect(g.body.top, closeTo(v('body_top'), e));
-        expect(g.body.bottom, closeTo(v('body_bot'), e));
-        expect(g.scale, closeTo(v('scale'), e));
-        expect(g.showWordmark, r['mark_shown']);
-        // render.py puts the text box's top 8 pt above the gap's middle.
-        expect(g.wordmarkCentreY, closeTo(v('mark_y') + 8, e));
-      });
-    }
+    final key = '${phone.w.toInt()}A';
+    test('$key agrees with render.py', () {
+      final r = ref[key] as Map<String, dynamic>;
+      double v(String k) => (r[k] as num).toDouble();
+      final g = DeviceGeometry.compute(
+        width: phone.w,
+        height: phone.h,
+        safeTop: phone.top,
+        safeBottom: phone.bottom,
+      );
+      const e = 1e-9;
+      expect(g.screen.width, closeTo(v('sw'), e));
+      expect(g.screen.height, closeTo(v('sh'), e));
+      expect(g.screen.left, closeTo(v('scr_x'), e));
+      expect(g.screen.top, closeTo(v('scr_top'), e));
+      expect(g.screen.bottom, closeTo(v('scr_bot'), e));
+      expect(g.frameWidth, closeTo(v('bz'), e));
+      expect(g.wheelDiameter, closeTo(v('D'), e));
+      expect(g.wheelCentre.dy, closeTo(v('cy'), e));
+      expect(g.wheelCentre.dx, closeTo(phone.w / 2, e));
+      expect(g.body.top, closeTo(v('body_top'), e));
+      expect(g.body.bottom, closeTo(v('body_bot'), e));
+      expect(g.scale, closeTo(v('scale'), e));
+      expect(g.showWordmark, r['mark_shown']);
+      // render.py puts the text box's top 8 pt above the gap's middle.
+      expect(g.wordmarkCentreY, closeTo(v('mark_y') + 8, e));
+    });
   }
 
   test('the scale table of section 1', () {
