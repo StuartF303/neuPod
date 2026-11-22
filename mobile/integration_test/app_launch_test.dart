@@ -31,6 +31,6 @@ void main() {
     // Home inside the device view (the title and the wordmark both read
     // neuPod, so look for a Home item and the idle right pane instead).
     expect(find.text('Music'), findsOneWidget);
-    expect(find.text('DELIBERATE FAILURE: not on screen'), findsOneWidget);
+    expect(find.text('Nothing playing'), findsOneWidget);
   });
 }
