@@ -622,6 +622,66 @@ static void expect_whole(uint32_t generation, uint32_t tracks) {
     lib_close(&g_rd);
 }
 
+/* Every stage after the walk must poll the progress callback (Cancel and the caller's yield point): the sorts and table passes are most of a
+ * big build's minutes. Count the polls after the last file, then cancel at several of them: each must stop the build cleanly. */
+static struct { uint32_t post, cancel_at; } g_pp;
+
+static bool count_poll(void *user, uint32_t done) {
+    (void)user;
+    if (done != 17) return true; /* the fixture tree has 17 tracks: after the last file every poll reports 17 */
+    g_pp.post++;
+    return g_pp.cancel_at == 0 || g_pp.post < g_pp.cancel_at;
+}
+
+TEST(progress_polled_in_every_stage_and_cancel_works_anywhere) {
+    ASSERT_TRUE(fx_volume(16u << 20, 0));
+    ASSERT_TRUE(make_tree(false));
+    ASSERT_EQ(LIB_OK, build(0, NULL));
+    lib_build_cfg_t cfg = {.progress = count_poll};
+    memset(&g_pp, 0, sizeof g_pp);
+    ASSERT_EQ(LIB_OK, lib_build(&cfg, g_scratch, sizeof g_scratch, NULL));
+    uint32_t total = g_pp.post;
+    ASSERT_TRUE(total >= 10); /* the last file's own poll, then the entity, track and order stages */
+    uint32_t step = total / 12 > 0 ? total / 12 : 1;
+    for (uint32_t n = 2; n <= total; n += step) { /* n = 2 is the first poll after the walk */
+        memset(&g_pp, 0, sizeof g_pp);
+        g_pp.cancel_at = n;
+        ASSERT_EQ(LIB_E_CANCELLED, lib_build(&cfg, g_scratch, sizeof g_scratch, NULL));
+        ASSERT_FALSE(lib_exists("/.neupod/lib.tmp"));
+        ASSERT_FALSE(lib_exists("/.neupod/work"));
+        expect_whole(2, 17); /* the live library is the one the first rebuild made */
+    }
+    /* a cancelled build leaves nothing behind that a later build trips over (sticky stop, arena, scratch): the next one succeeds */
+    ASSERT_EQ(LIB_OK, build(0, NULL));
+    expect_whole(3, 17);
+}
+
+// lib_rmtree is iterative (a hostile card must not grow the storage task's stack): nested folders with files at every level go in one call.
+TEST(recovery_removes_a_nested_leftover_folder) {
+    ASSERT_TRUE(fx_volume(16u << 20, 0));
+    ASSERT_TRUE(make_tree(false));
+    ASSERT_EQ(FR_OK, f_mkdir("/.neupod"));
+    ASSERT_EQ(FR_OK, f_mkdir("/.neupod/work"));
+    const char *dirs[] = {"/.neupod/work/a", "/.neupod/work/a/b", "/.neupod/work/a/b/c"};
+    for (unsigned i = 0; i < 3; i++) {
+        ASSERT_EQ(FR_OK, f_mkdir(dirs[i]));
+        char p[64];
+        snprintf(p, sizeof p, "%s/f.bin", dirs[i]);
+        FIL f;
+        ASSERT_EQ(FR_OK, f_open(&f, p, FA_CREATE_ALWAYS | FA_WRITE));
+        ASSERT_EQ(FR_OK, f_close(&f));
+    }
+    FIL f; /* siblings of the folders the removal climbs back out of: a file beside a/b, and a second folder with a file in it */
+    ASSERT_EQ(FR_OK, f_open(&f, "/.neupod/work/a/x.bin", FA_CREATE_ALWAYS | FA_WRITE));
+    ASSERT_EQ(FR_OK, f_close(&f));
+    ASSERT_EQ(FR_OK, f_mkdir("/.neupod/work/a/y"));
+    ASSERT_EQ(FR_OK, f_open(&f, "/.neupod/work/a/y/z.bin", FA_CREATE_ALWAYS | FA_WRITE));
+    ASSERT_EQ(FR_OK, f_close(&f));
+    ASSERT_EQ(FR_OK, f_mkdir("/.neupod/work/b"));
+    ASSERT_EQ(LIB_E_NONE, lib_recover(NULL)); /* no library: the unfinished work folder is of no use */
+    ASSERT_FALSE(lib_exists("/.neupod/work"));
+}
+
 TEST(swap_survives_power_cut_at_every_step) {
     /* generation 1 is on the card; then the card gets one more album and the rebuild is cut after step s */
     static const struct {

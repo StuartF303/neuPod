@@ -129,6 +129,13 @@ bool lib_path(char *out, size_t cap, const char *base, const char *leaf); /**< f
 
 /* ---- external sort ------------------------------------------------------------------------------------------------ */
 
+/**
+ * Called by the build's later stages (and lib_esort) at every record / sort step; every few calls it runs the build's progress callback.
+ * False = stop now (Cancel, or the caller gave way): return LIB_E_CANCELLED, close what is open, leave the old library alone. Always
+ * true outside a build.
+ */
+bool lib_tick(void);
+
 typedef int (*lib_cmp_fn)(const void *a, const void *b, void *ctx);
 
 typedef struct {

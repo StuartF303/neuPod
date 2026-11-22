@@ -26,13 +26,20 @@ static void sift(uint8_t *a, size_t rs, size_t n, size_t i, lib_cmp_fn cmp, void
     }
 }
 
-static void heapsort(uint8_t *a, size_t rs, size_t n, lib_cmp_fn cmp, void *ctx, uint8_t *tmp) {
-    if (n < 2) return;
-    for (size_t i = n / 2; i-- > 0;) sift(a, rs, n, i, cmp, ctx, tmp);
+// false = stopped by lib_tick() (Cancel); the buffer is then half sorted and the caller discards it. The comparisons can read the card
+// (the string pool), so a chunk of a hundred thousand records takes a long time: this is where the sort polls.
+static bool heapsort(uint8_t *a, size_t rs, size_t n, lib_cmp_fn cmp, void *ctx, uint8_t *tmp) {
+    if (n < 2) return true;
+    for (size_t i = n / 2; i-- > 0;) {
+        sift(a, rs, n, i, cmp, ctx, tmp);
+        if (!lib_tick()) return false;
+    }
     for (size_t end = n - 1; end > 0; end--) {
         swap_rec(a, a + end * rs, tmp, rs);
         sift(a, rs, end, 0, cmp, ctx, tmp);
+        if (!lib_tick()) return false;
     }
+    return true;
 }
 
 static void run_path(char *out, size_t cap, const char *dir, uint32_t id) { snprintf(out, cap, "%s/s%u", dir, (unsigned)id); }
@@ -83,7 +90,10 @@ lib_err_t lib_esort(lib_arena_t *ar, const char *work_dir, const char *src, cons
         }
         size_t n = got / rs;
         if (n == 0) break;
-        heapsort(buf, rs, n, cmp, ctx, tmp);
+        if (!heapsort(buf, rs, n, cmp, ctx, tmp)) {
+            res = LIB_E_CANCELLED;
+            break;
+        }
         run_path(path, sizeof path, work_dir, nruns);
         UINT wr = 0;
         res = lib_fopen(fout, path, FA_CREATE_ALWAYS | FA_WRITE);
@@ -147,6 +157,10 @@ lib_err_t lib_esort(lib_arena_t *ar, const char *work_dir, const char *src, cons
         if (res == LIB_OK) res = lib_fopen(fout, path2, FA_CREATE_ALWAYS | FA_WRITE);
         bool out_open = res == LIB_OK;
         while (res == LIB_OK && alive != 0) {
+            if (!lib_tick()) {
+                res = LIB_E_CANCELLED;
+                break;
+            }
             uint32_t m = 64;
             for (uint32_t i = 0; i < g; i++) {
                 if (!(alive & (1ull << i))) continue;

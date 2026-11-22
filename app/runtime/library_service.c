@@ -13,6 +13,7 @@
 #include "os.h"
 #include "play_queue.h"
 #include "player.h"
+#include "runtime_config.h"
 #include "storage_service.h"
 #include "track_stream.h"
 
@@ -337,8 +338,13 @@ static void build_where(void *user, const char *folder) {
 static bool build_progress(void *user, uint32_t done) {
     (void)user;
     g_prog_files = done;
-    if ((done & 3u) == 0) {
-        os_delay_ms(1); /* the storage task outranks the UI: a millisecond now and then lets the progress screen animate */
+    /* Called from every stage of the build (not just once per file), so yield by the clock, not by the file count. The task also runs below
+     * the UI for the whole build (do_build), which is what keeps the screen alive; this millisecond is a second line of defence. */
+    static uint32_t last_yield;
+    uint32_t now = os_tick_ms();
+    if (now - last_yield >= 20u) {
+        os_delay_ms(1);
+        last_yield = now;
     }
 #ifdef NEUPOD_LIB_POSIX /* simulator only: slow the scan down so a tour can look at the progress screen (NEUPOD_LIB_SLOW_MS per file) */
     static int slow = -1;
@@ -353,14 +359,14 @@ static bool build_progress(void *user, uint32_t done) {
     return !g_cancel && !storage_request_waiting(); /* Cancel, or a Play / another list wants the card */
 }
 
-static bool nothing_playing(void) {
+__attribute__((noinline)) static bool nothing_playing(void) {
     player_info_t pi;
     player_get(&pi);
     return pi.state == PLAYER_IDLE || pi.state == PLAYER_ENDED || pi.state == PLAYER_ERROR;
 }
 
 // The audio core must have let go of the codec arena before the scanner uses it as scratch: stop it, and wait (bounded) until it says so.
-static bool audio_released(void) {
+__attribute__((noinline)) static bool audio_released(void) {
     track_stream_stop();
     (void)audio_stop();
     for (int i = 0; i < 100; i++) {
@@ -415,12 +421,20 @@ static libsvc_status_t do_build(void) {
     g_prog_active = true;
     printf("library: build started\n");
     uint32_t t0 = os_tick_ms();
+    /* A build is minutes of CPU-bound parsing and sorting. At the storage priority (above the UI) it starves the UI, the input task's
+     * consumers and the monitor's heartbeat; so for the build's duration the task drops to the monitor's priority, below the UI. Nothing
+     * else needs the storage task meanwhile: its requests queue, and progress() stops the build when one arrives. Always restored (lib_build
+     * returns on every path, cancelled or failed). Nothing is playing (checked above), so the radio / audio deadlines do not apply. */
+    os_priority_set(RT_PRIO_MONITOR);
     lib_err_t e = lib_build(&cfg, scratch, scratch_n, &st);
+    os_priority_set(RT_PRIO_STORAGE);
     g_prog_active = false;
     g_prog_bg = false;
     printf("library: build %s in %u ms: %u tracks (%u playable), %u artists, %u albums, %u genres, %u sort runs, %u KB scratch\n",
            e == LIB_OK ? "finished" : lib_err_str(e), (unsigned)(os_tick_ms() - t0), (unsigned)st.tracks, (unsigned)st.playable,
            (unsigned)st.artists, (unsigned)st.albums, (unsigned)st.genres, (unsigned)st.sort_runs, (unsigned)(st.scratch_peak / 1024u));
+    /* This task's stack headroom after the deepest thing it does (docs/storage.md "Stack and responsiveness"); below ~2 KB, trim frames on the build path. */
+    printf("library: storage stack free min %u B of %u\n", (unsigned)os_stack_free_min(), (unsigned)RT_STACK_STORAGE);
     if (e == LIB_OK) {
         g_last[0] = st.tracks;
         g_last[1] = st.artists;

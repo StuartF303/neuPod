@@ -13,6 +13,7 @@
 #include "nfs.h"
 #include "../app/library/lib_internal.h" /* lib_exists */
 #include "os.h"
+#include "runtime_config.h"
 #include "player.h"
 #include "track_stream.h"
 #include "unit.h"
@@ -52,6 +53,12 @@ os_mutex_t *os_mutex_create(void) { return calloc(1, sizeof(struct os_mutex)); }
 bool os_mutex_lock(os_mutex_t *m, uint32_t t) { (void)m; (void)t; return true; }
 void os_mutex_unlock(os_mutex_t *m) { (void)m; }
 uint32_t os_tick_ms(void) { static uint32_t t; return t += 10; }
+static uint8_t g_prio_now = RT_PRIO_STORAGE, g_prio_min = RT_PRIO_STORAGE; /* the storage task's priority, as the service moves it */
+void os_priority_set(uint8_t prio) {
+    g_prio_now = prio;
+    if (prio < g_prio_min) g_prio_min = prio;
+}
+uint32_t os_stack_free_min(void) { return 0; }
 static int g_delays, g_cancel_after_delays;
 void os_delay_ms(uint32_t ms) {
     (void)ms;
@@ -136,6 +143,8 @@ TEST(no_library_says_so_and_a_build_makes_one) {
     ASSERT_EQ(2, p.artists);
     ASSERT_EQ(5, p.albums);
     ASSERT_TRUE(g_audio_stops > 0 && g_stream_stops > 0); /* the audio core was let go of before the arena was used */
+    ASSERT_TRUE(g_prio_min < RT_PRIO_UI);                 /* the build ran below the UI, so the screen and the heartbeat stay alive... */
+    ASSERT_EQ(RT_PRIO_STORAGE, g_prio_now);               /* ...and the task is back at its own priority afterwards */
     ASSERT_EQ(LIBSVC_OK, do_info((lvw_view_t){LVW_ARTISTS, 0}));
     ASSERT_TRUE(library_known_ready());
     lvw_info_t in;
@@ -281,6 +290,7 @@ TEST(cancel_stops_the_scan_and_the_old_library_survives) {
     g_cancel_after_delays = 2; /* Cancel is pressed during the scan */
     ASSERT_EQ(LIBSVC_CANCELLED, do_build());
     g_cancel_after_delays = 0;
+    ASSERT_EQ(RT_PRIO_STORAGE, g_prio_now); /* a cancelled build gives the priority back too */
     library_progress_t p;
     library_progress(&p);
     ASSERT_FALSE(p.active);

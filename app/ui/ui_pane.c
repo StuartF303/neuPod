@@ -63,12 +63,14 @@ ui_pane_t *ui_pane_create(lv_obj_t *parent) {
     lv_obj_set_size(p->track, UIM->st_bar_w, UIM->st_bar_h);
     lv_obj_set_scrollable(p->track, false);
     lv_obj_set_style_radius(p->track, UIM->st_bar_h / 2, 0);
-    lv_obj_set_style_clip_corner(p->track, true, 0);
+    /* No clip_corner here: a rounded clip makes LVGL render the bar through a temporary ARGB8888 layer (bar_w x 7, ~11 KB on the AMOLED) at every
+     * redraw, which the 72 KB pool cannot always spare (the library build panicked on it, 22 Nov 2026). The fill has its own radius instead. */
     ui_obj_bg(p->track, UI_C_LINE, 0);
     p->fill = lv_obj_create(p->track);
     lv_obj_remove_style_all(p->fill);
     lv_obj_set_size(p->fill, 1, UIM->st_bar_h);
     lv_obj_set_pos(p->fill, 0, 0);
+    lv_obj_set_style_radius(p->fill, UIM->st_bar_h / 2, 0);
     ui_obj_bg(p->fill, UI_C_ACCENT, 0);
     show(p->track, false);
 
