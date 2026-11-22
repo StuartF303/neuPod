@@ -101,6 +101,7 @@
 
 /* The CYW43 worker's stack is set by CYW43_TASK_STACK_SIZE (WORDS, platforms/rp2350/freertos/CMakeLists.txt); keep the two in step. */
 #ifdef CYW43_TASK_STACK_SIZE
+_Static_assert(RT_PRIO_MONITOR < RT_PRIO_UI, "the library build runs the storage task at RT_PRIO_MONITOR so the UI preempts it (library_service.c do_build)");
 _Static_assert(RT_STACK_RADIO == CYW43_TASK_STACK_SIZE * 4u, "RT_STACK_RADIO must equal CYW43_TASK_STACK_SIZE words in bytes");
 #endif
 

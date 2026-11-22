@@ -17,6 +17,10 @@
 #include "wav.h"
 
 #define MAX_DEPTH 12u
+/* The storage task's stack is 8 KB and the build is its deepest call chain: a function with a big frame that GCC inlines into its caller
+ * (or into a recursive walk) charges that frame for the whole call, so the heavy ones are kept as real calls and their frames live only
+ * while they run. -fstack-usage numbers in docs/storage.md. */
+#define LIB_NOINLINE __attribute__((noinline))
 #define TAG_SCRATCH 4096u /* FLAC comment blocks up to this size are read; larger ones are skipped (their tags are lost) */
 #define POOL_STR LIB_TEXT_MAX /* a pool string is at most 64 characters + NUL */
 #define PATH_MAX_ 256u
@@ -62,6 +66,8 @@ typedef struct {
     parse_t *parse;
     uint32_t n_dirs, names_len, str_len, en_len, n_tracks, n_playable, files_done;
     slot_t slot[PS_N];
+    char leaf[POOL_STR]; /* the folder name of the file being indexed (walk_dir): one copy here, not one per folder level on the stack */
+    char istr[5][POOL_STR]; /* index_file's title, artist, album artist, album, genre: 325 B that would otherwise sit on the stack under 12 folder levels */
     uint32_t jnext[LIB_LISTS], jrows[LIB_LISTS];
     lib_manifest_t m;
 } bctx_t;
@@ -109,7 +115,27 @@ static uint32_t dos_to_unix(WORD d, WORD t) {
     return (uint32_t)(days * 86400L + ((t >> 11) & 31) * 3600L + ((t >> 5) & 63) * 60L + (t & 31) * 2L);
 }
 
+/* Progress and Cancel after the walk. Every record the later stages read or write (wr / rd below) and every step of the sorts (lib_esort)
+ * passes through lib_tick(), which (armed once the walk is done: it polls per file itself) calls the progress callback now and then: that is how Cancel reaches the sort stages, and where the
+ * caller gets its chance to yield. One build at a time, from the storage task only (the lib_build contract), so plain statics will do. */
+#define TICK_EVERY 16u
+static struct {
+    bool (*cb)(void *, uint32_t);
+    void *user;
+    const uint32_t *done;
+    uint32_t n;
+    bool stop;
+} g_tick;
+
+bool lib_tick(void) {
+    if (g_tick.cb == NULL) return true;
+    if (g_tick.stop) return false;
+    if ((++g_tick.n % TICK_EVERY) == 0 && !g_tick.cb(g_tick.user, *g_tick.done)) g_tick.stop = true; // sticky: every later step fails too
+    return !g_tick.stop;
+}
+
 static lib_err_t wr(FIL *f, const void *p, uint32_t n) {
+    if (!lib_tick()) return LIB_E_CANCELLED;
     UINT w = 0;
     FRESULT fr = f_write(f, p, n, &w);
     if (fr != FR_OK) return lib_map_fr(fr);
@@ -117,6 +143,7 @@ static lib_err_t wr(FIL *f, const void *p, uint32_t n) {
 }
 
 static lib_err_t rd(FIL *f, void *p, uint32_t n, bool *eof) { // exactly n bytes, or *eof at a clean end
+    if (!lib_tick()) return LIB_E_CANCELLED;
     UINT g = 0;
     FRESULT fr = f_read(f, p, n, &g);
     if (fr != FR_OK) return LIB_E_IO;
@@ -305,7 +332,7 @@ static lib_err_t dir_add(bctx_t *c, uint32_t parent, const char *name, uint32_t 
 }
 
 // One audio file at c->path (name in c->fno): parse it, append its strings, its provisional record and its track record.
-static lib_err_t index_file(bctx_t *c, uint32_t dir_id, const char *leaf) {
+LIB_NOINLINE static lib_err_t index_file(bctx_t *c, uint32_t dir_id, const char *leaf) {
     const char *name = c->fno.fname;
     parse_t *pp = c->parse;
     const audio_tags_t *t = NULL;
@@ -355,12 +382,12 @@ static lib_err_t index_file(bctx_t *c, uint32_t dir_id, const char *leaf) {
     }
     if (t == NULL) t = &no_tags;
 
-    char title[POOL_STR], artist[POOL_STR], aa[POOL_STR], album[POOL_STR], genre[POOL_STR];
-    cut(title, sizeof title, t->title[0] ? t->title : name);
-    cut(artist, sizeof artist, t->artist[0] ? t->artist : "Unknown Artist");
-    cut(aa, sizeof aa, x->album_artist[0] ? x->album_artist : artist);
-    cut(album, sizeof album, t->album[0] ? t->album : leaf);
-    cut(genre, sizeof genre, x->genre);
+    char *title = c->istr[0], *artist = c->istr[1], *aa = c->istr[2], *album = c->istr[3], *genre = c->istr[4]; // (in bctx: off the stack)
+    cut(title, POOL_STR, t->title[0] ? t->title : name);
+    cut(artist, POOL_STR, t->artist[0] ? t->artist : "Unknown Artist");
+    cut(aa, POOL_STR, x->album_artist[0] ? x->album_artist : artist);
+    cut(album, POOL_STR, t->album[0] ? t->album : leaf);
+    cut(genre, POOL_STR, x->genre);
     const char *sort_aa = x->sort_album_artist[0] ? x->sort_album_artist : (!x->album_artist[0] ? x->sort_artist : "");
     bool comp = x->compilation || ieq_str(aa, "Various Artists"); // D4: compilations (flag or "Various Artists") are their own list
 
@@ -482,8 +509,8 @@ static lib_err_t walk_dir(bctx_t *c, uint32_t dir_id, unsigned depth) {
         } else if (is_audio_name(name)) {
             const char *leaf = strrchr(c->path, '/');
             leaf = leaf != NULL ? leaf + 1 : c->path;
-            char leafbuf[POOL_STR];
-            cut(leafbuf, sizeof leafbuf, leaf); // (the file name is appended to the path next: keep the folder's own name)
+            char *leafbuf = c->leaf;
+            cut(leafbuf, POOL_STR, leaf); // (the file name is appended to the path next: keep the folder's own name)
             c->path[dirlen] = '/';
             memcpy(c->path + dirlen + 1, name, nl + 1);
             res = index_file(c, dir_id, leafbuf);
@@ -500,7 +527,7 @@ static lib_err_t walk_dir(bctx_t *c, uint32_t dir_id, unsigned depth) {
     return res;
 }
 
-static lib_err_t stage_walk(bctx_t *c) {
+LIB_NOINLINE static lib_err_t stage_walk(bctx_t *c) {
     size_t mark = c->ar->used;
     lib_err_t e = LIB_OK;
     c->fdirs = lib_arena_alloc(c->ar, sizeof(FIL));
@@ -647,7 +674,7 @@ static void ent_fill(uint8_t *rec, uint32_t group, uint32_t name_off, uint32_t s
 }
 
 // One entity kind: occurrences (one per change of value along the walk) -> sorted -> table + (seq, id) map -> map sorted by seq.
-static lib_err_t stage_entity(bctx_t *c, ekind_t kind) {
+LIB_NOINLINE static lib_err_t stage_entity(bctx_t *c, ekind_t kind) {
     static const char *const names[] = {"artist", "album", "genre"};
     static const unsigned files[] = {LF_ARTISTS, LF_ALBUMS, LF_GENRES};
     size_t mark = c->ar->used;
@@ -852,7 +879,7 @@ static lib_err_t stage_entity(bctx_t *c, ekind_t kind) {
 
 /* ---- tracks (ids filled in), and the order files' sort records ------------------------------------------------------ */
 
-static lib_err_t stage_tracks(bctx_t *c) {
+LIB_NOINLINE static lib_err_t stage_tracks(bctx_t *c) {
     size_t mark = c->ar->used;
     char p_title[96], p_alb[96], p_pair[96];
     wpath(c, p_title, "title.rec");
@@ -968,7 +995,7 @@ static lib_err_t patch32(FIL *f, uint32_t file_off, uint32_t v) {
 }
 
 // Sorted KEY_REC file -> a u32 id file (by_title / by_album_name) plus the letter jumps of the list.
-static lib_err_t finish_idlist(bctx_t *c, const char *sorted_p, unsigned lf, lib_list_t list) {
+LIB_NOINLINE static lib_err_t finish_idlist(bctx_t *c, const char *sorted_p, unsigned lf, lib_list_t list) {
     size_t mark = c->ar->used;
     FIL *fin = lib_arena_alloc(c->ar, sizeof(FIL)), *fo = lib_arena_alloc(c->ar, sizeof(FIL));
     if (fo == NULL) return LIB_E_SCRATCH;
@@ -1005,7 +1032,7 @@ static lib_err_t finish_idlist(bctx_t *c, const char *sorted_p, unsigned lf, lib
     return e;
 }
 
-static lib_err_t stage_orders(bctx_t *c) {
+LIB_NOINLINE static lib_err_t stage_orders(bctx_t *c) {
     size_t mark = c->ar->used;
     pool_t *pool = lib_arena_alloc(c->ar, sizeof(pool_t));
     char p_title[96], p_alb[96], p_pair[96], s_title[96], s_alb[96], s_pair[96], s_an[96], an[96], p_gen[96], s_gen[96];
@@ -1222,7 +1249,7 @@ static lib_err_t stage_orders(bctx_t *c) {
 
 /* ---- headers, manifest ---------------------------------------------------------------------------------------------- */
 
-static lib_err_t finalize_file(bctx_t *c, unsigned idx) {
+LIB_NOINLINE static lib_err_t finalize_file(bctx_t *c, unsigned idx) {
     char p[96];
     size_t mark = c->ar->used;
     FIL *f = lib_arena_alloc(c->ar, sizeof(FIL));
@@ -1267,7 +1294,7 @@ static lib_err_t finalize_file(bctx_t *c, unsigned idx) {
     return e;
 }
 
-static lib_err_t write_manifest(bctx_t *c) {
+LIB_NOINLINE static lib_err_t write_manifest(bctx_t *c) {
     size_t mark = c->ar->used;
     size_t n = lib_manifest_bytes();
     uint8_t *buf = lib_arena_alloc(c->ar, n);
@@ -1289,8 +1316,12 @@ static lib_err_t write_manifest(bctx_t *c) {
 /* ---- entry ---------------------------------------------------------------------------------------------------------- */
 
 static lib_err_t build_inner(bctx_t *c, int *step) {
+    // The manifest reader's working memory (2.2 KB) comes from the arena, and goes back before the stages start.
+    size_t mark = c->ar->used;
+    lib_mfscratch_t *mfs = lib_arena_alloc(c->ar, sizeof *mfs);
+    if (mfs == NULL) return LIB_E_SCRATCH;
     // A swap cut by a power loss must be settled first: the swap deletes lib.old, which may still be the only valid library.
-    lib_err_t r = lib_recover_locked(c->base);
+    lib_err_t r = lib_recover_locked(c->base, mfs);
     if (r != LIB_OK && r != LIB_E_NONE) return r; // could not settle the last swap: building now could delete the only good library
     lib_err_t e = lib_rmtree(c->tmp);
     if (e == LIB_OK) e = lib_rmtree(c->work);
@@ -1302,10 +1333,17 @@ static lib_err_t build_inner(bctx_t *c, int *step) {
 
     char lib[64];
     lib_path(lib, sizeof lib, c->base, "lib");
-    lib_manifest_t old;
-    c->m.generation = lib_manifest_load(lib, false, &old) == LIB_OK ? old.generation + 1 : 1;
+    c->m.generation = lib_manifest_load_with(mfs, lib, false, NULL) == LIB_OK ? mfs->m.generation + 1 : 1;
+    c->ar->used = mark;
 
     e = stage_walk(c);
+    if (e == LIB_OK) { // the walk polls once per file itself; from here on every record does (see lib_tick)
+        g_tick.cb = c->cfg->progress;
+        g_tick.user = c->cfg->user;
+        g_tick.done = &c->files_done;
+        g_tick.n = 0;
+        g_tick.stop = false;
+    }
     if (e == LIB_OK) e = stage_entity(c, K_ARTIST);
     if (e == LIB_OK) e = stage_entity(c, K_ALBUM);
     if (e == LIB_OK) e = stage_entity(c, K_GENRE);
@@ -1351,6 +1389,7 @@ lib_err_t lib_build(const lib_build_cfg_t *cfg, void *scratch, size_t scratch_n,
     if (e != LIB_OK) return e;
     int step = 0;
     e = build_inner(c, &step);
+    g_tick.cb = NULL; // (cleanup below must not be cut short)
     // Failure stance: nothing but lib.tmp / work has been touched before the swap, so a failed or cancelled build only needs those
     // removed; a simulated power cut (tests) leaves everything as it was, for lib_recover().
     if (e != LIB_OK && !LIB_IS_STOP(e) && step < 3) {

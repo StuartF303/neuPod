@@ -95,6 +95,16 @@ The Music screens read an index of `/Music` that the firmware builds on the card
 - **What it costs.** Static RAM (RP2350 Release, measured): nothing for the reader and the row window (they share the Files screen's 20 KB listing buffer); **+760 B** for the service's bookkeeping and path cache, the queue and the
   resume path (free SRAM 14,504 B to 13,744 B). Flash: **+40.6 KB**: the library itself (about 28 KB of scanner, reader, sort and collation that L1 did not link yet) and about 13 KB for the lists, the service, the range queue and the screens.
   Reading: browsing keeps the audio ring topped up between rows; the reader holds 11 files open and a 4 x 2 KB page cache.
+- **Stack and responsiveness while it runs (22 Nov 2026 bench, RP2350-Touch-AMOLED-2.41).** A first build on a fresh card wedged the whole chip silently: the build is the storage task's deepest call chain, and on a 8 KB stack
+  `lib_manifest_load()` (3.2 KB of locals: a `FIL`, a `FILINFO`, a 713 B file image, a decoded manifest) overflowed it; with the stack at 16 KB the same build finished (2,945 tracks, 108 s) with a peak near 9 KB.
+  `configCHECK_FOR_STACK_OVERFLOW` only looks at context switches, so nothing caught it. `RT_STACK_STORAGE` stays 8 KB (the Pico 2 W has no RAM to spare); instead the build path's frames were cut: the manifest reader's working
+  memory comes from the build arena (`lib_mfscratch_t`, returned before the sort stages), `lib_rmtree` is iterative on one path buffer, the per-file strings and folder name live in the build context, and the heavy
+  frames (`index_file`, the stages, `storage_task`'s inlined helpers) are `noinline` so they exist only while they run. Static worst case from `-fstack-usage` plus the call graph, 12 folder levels deep with an MP3 and the disk
+  layer allowed 0.5 KB: about 4.9 KB (before: over 9 KB). The firmware measures it: after every build the log has `library: storage stack free min N B of 8192`, and the monitor prints each task's stack-free-min every 10 s.
+  Keep a 2 KB margin: a new local on the build path above ~100 B deserves a look at that line.
+  The UI, heartbeat and Cancel stay alive through a build: for its duration `do_build` drops the storage task to the monitor's priority (below the UI; restored on every exit), because the scan and the sorts are CPU-bound
+  and at priority 5 they starved everything at 1-2. Every stage after the walk (each record read or written, each sort step; `lib_tick()`) polls the progress callback, so Cancel and "another request is waiting" now stop a build in the sort stages too, not
+  only during the walk. The callback yields 1 ms every 20 ms as a second line of defence.
 - **How long a scan takes.** Host figure (POSIX files in the simulator, warm cache): 276 tracks in 131 ms, 1,016 tracks in 322 ms; L1's 100,000-file run on a FatFs disk image: 12 s. **On the card it is not measured yet**
   (the bench has not run it). Estimate from the ADR's costs (0.2-0.4 ms per directory entry, 10-20 ms to open and parse a file) plus about 60 small index and run files to create: **about 260 FLACs in
   5 to 8 seconds**, 5,000 tracks in about 1.5 minutes, 100,000 in half an hour. The progress screen counts files; the sort and write at the end add a second or two without a counter.
