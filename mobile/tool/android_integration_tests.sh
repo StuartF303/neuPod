@@ -24,6 +24,18 @@ if [ ${#files[@]} -eq 0 ]; then
   exit 1
 fi
 
+# For a failed file: what the system did (warnings and errors from every buffer, including native crashes and
+# ActivityManager/WindowManager events), the activity stack and the screen state.
+system_log() {
+  echo "::group::system log (warnings and errors, activity events)"
+  adb logcat -d -v time -b main -b system -b crash '*:W' | tail -300 || true
+  adb logcat -d -v time -b events | grep -E 'am_|wm_|screen_toggled|power_' | tail -150 || true
+  adb shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp|mShowingLockscreen|mScreenOnFully|mAwake' || true
+  adb shell dumpsys power | grep -E 'mWakefulness=|Display Power' || true
+  adb shell dumpsys activity activities | grep -E 'Hist #|mResumedActivity|state=' | head -40 || true
+  echo "::endgroup::"
+}
+
 per_file_timeout="${PER_FILE_TIMEOUT:-8m}"
 for file in "${files[@]}"; do
   if [ "$file" = integration_test/folder_access_test.dart ]; then
@@ -42,6 +54,7 @@ for file in "${files[@]}"; do
       echo "::group::logcat (flutter, crashes)"
       adb logcat -d -s flutter:V AndroidRuntime:E | tail -300 || true
       echo "::endgroup::"
+      system_log
       exit 1
     fi
     echo "$file: picked, then persisted and removed after a restart"
@@ -66,6 +79,7 @@ for file in "${files[@]}"; do
     echo "::group::logcat (flutter, test runner, crashes)"
     adb logcat -d -s flutter:V TestRunner:V FlutterTestRunner:V AndroidRuntime:E | tail -300 || true
     echo "::endgroup::"
+    system_log
     exit 1
   fi
   # Each Dart test is one JUnit test case. A run in which none ran (the Dart side never sent its results, or every

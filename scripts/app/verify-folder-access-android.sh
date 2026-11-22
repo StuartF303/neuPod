@@ -86,8 +86,9 @@ adb -s "$SERIAL" install -r "$APK" >/dev/null
 # launch that failed.
 system_log() {
   echo "--- system log for $PKG" >&2
-  adb -s "$SERIAL" logcat -d -v time -b main -b system -b crash -b events 2>/dev/null \
-    | grep -E "$PKG|am_kill|am_proc_died|am_proc_start|am_focused|Force stopping|Killing" | tail -120 >&2 || true
+  adb -s "$SERIAL" logcat -d -v time -b main -b system -b crash '*:W' 2>/dev/null | tail -200 >&2 || true
+  adb -s "$SERIAL" logcat -d -v time -b events 2>/dev/null \
+    | grep -E "$PKG|am_kill|am_proc_died|am_proc_start|am_focused|am_crash|am_anr|wm_|screen_toggled" | tail -120 >&2 || true
   adb -s "$SERIAL" shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp' >&2 || true
 }
 
