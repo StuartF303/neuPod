@@ -25,7 +25,11 @@ enum WheelButton {
 /// finger slid off the centre, or the system took the touch: do nothing), or
 /// [WheelButtonUp] followed by [WheelPress] (act), or, for a button with a
 /// hold time, [WheelHoldStart] once held long enough and [WheelButtonUp] then
-/// [WheelHoldEnd] on release (no [WheelPress]).
+/// [WheelHoldEnd] on release (no [WheelPress]). A hold that ends without a
+/// release (the system took the touch, the screen changed, the wheel was
+/// disabled) gives [WheelButtonCancelled] then [WheelHoldEnd]: whatever the
+/// hold started must not be applied (Now Playing calls
+/// `NowPlayingControl.cancelHold()`, as the firmware does).
 ///
 /// Most screens need only [WheelStep], [WheelPress], [WheelHoldStart] and
 /// [WheelHoldEnd]. Now Playing feeds the raw down / up / cancel events to

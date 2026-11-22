@@ -50,6 +50,7 @@ class LetterJump {
   /// `wi_letterjump_scroll()`: the list moved [steps] at [nowMs] and the row
   /// now selected starts with [initial]. Returns [active].
   bool scroll(int steps, int nowMs, String initial) {
+    steps = i32(steps);
     nowMs = u32(nowMs);
     if (u32(nowMs - lastMs) > wiLjWindowMs) {
       energy = 0;

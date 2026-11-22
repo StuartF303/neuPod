@@ -86,7 +86,7 @@ final class WheelPressing extends WheelVisual {
 ///
 /// - The first touch that lands on the wheel owns it until it lifts; others
 ///   are ignored. A touch starting in the dead band or outside 1.06 R is
-///   ignored (and does not own the wheel).
+///   ignored and does not own the wheel, so another finger may then take it.
 /// - A touch on the centre is a Select press while it stays within 0.44 R;
 ///   sliding out cancels it.
 /// - A touch on the ring is undecided. Its button (the 90 degree sector under
@@ -105,23 +105,35 @@ class WheelInput {
   WheelInput({Map<WheelButton, int>? holdMs})
     : holdMs = holdMs ?? Map.of(defaultHoldMs);
 
-  /// The design's holds: Previous / Next after `UI_HOLD_MS` (600 ms). The
-  /// centre's hold (`UI_SELHOLD_MS`, 500 ms) is added only by Now Playing;
-  /// Menu and Play/Pause hold nothing in R1.
-  static const Map<WheelButton, int> defaultHoldMs = {
+  /// No holds by default: every press is a plain press, as on the firmware,
+  /// where Previous and Next skip on every screen but Now Playing. Screens
+  /// add the holds they act on:
+  ///
+  /// - Now Playing: Previous and Next at [uiHoldMs] (600 ms, scan) and the
+  ///   centre at [uiSelHoldMs] (500 ms, seek mode), as [nowPlayingHoldMs];
+  ///   it leaves the centre out while in seek mode, where Select is "go";
+  /// - Search (the letter ring): Menu at 600 ms clears the text
+  ///   (`CLEAR_HOLD_MS` in `app/ui/input/ui_input.c`);
+  /// - Play/Pause holds nothing in R1 (the design's Open question 4).
+  static const Map<WheelButton, int> defaultHoldMs = {};
+
+  /// The holds of Now Playing (`UI_HOLD_MS`, `UI_SELHOLD_MS`).
+  static const Map<WheelButton, int> nowPlayingHoldMs = {
     WheelButton.previous: uiHoldMs,
     WheelButton.next: uiHoldMs,
+    WheelButton.centre: uiSelHoldMs,
   };
 
   /// The hold time of each button that has one, in ms. Screens change it
-  /// (Now Playing adds the centre at [uiSelHoldMs]).
+  /// (see [defaultHoldMs]).
   final Map<WheelButton, int> holdMs;
 
   /// The acceleration port the turn feeds.
   final WheelAccel accel = WheelAccel();
 
-  /// False while the wheel cannot act (Search with the keyboard up): touches
-  /// are ignored. Turning it off cancels a touch in progress (see
+  /// False for any moment the wheel cannot act (the design's Disabled state;
+  /// no R1 screen uses it, since Search is typed with the wheel, owner
+  /// decision 12): touches are ignored. Turning it off cancels a touch in progress (see
   /// [setEnabled]).
   bool get enabled => _enabled;
   bool _enabled = true;
@@ -250,8 +262,18 @@ class WheelInput {
     if (pointer != _pointer) return const [];
     final kind = _kind;
     final button = _button;
+    final hold = holdMs[button];
     _clear();
     switch (kind) {
+      case _Kind.pressing
+          when hold != null && u32(u32(nowMs) - _downMs) >= hold:
+        // Held long enough but the tick came late: still a hold, never a
+        // press.
+        return [
+          WheelHoldStart(button!),
+          WheelButtonUp(button),
+          WheelHoldEnd(button),
+        ];
       case _Kind.pressing:
         return [WheelButtonUp(button!), WheelPress(button)];
       case _Kind.holding:
@@ -262,7 +284,10 @@ class WheelInput {
   }
 
   /// The system took the owning touch (a system gesture, the app going to the
-  /// background): a press is cancelled without acting; a hold ends.
+  /// background): a press is cancelled without acting. A hold is cancelled
+  /// too ([WheelButtonCancelled], then [WheelHoldEnd]): it did not end with
+  /// a release, so nothing it started may be applied (the firmware's
+  /// `ui_npc_cancel_hold()`).
   List<WheelEvent> cancel(int pointer, int nowMs) {
     if (pointer != _pointer) return const [];
     return _abandon();
@@ -298,7 +323,7 @@ class WheelInput {
     _clear();
     return switch (kind) {
       _Kind.pressing => [WheelButtonCancelled(button!)],
-      _Kind.holding => [WheelHoldEnd(button!)],
+      _Kind.holding => [WheelButtonCancelled(button!), WheelHoldEnd(button)],
       _ => const [],
     };
   }

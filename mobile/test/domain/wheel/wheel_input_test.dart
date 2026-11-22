@@ -8,6 +8,7 @@ import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/domain/wheel/firmware_constants.dart';
+import 'package:neupod/domain/wheel/now_playing_control.dart';
 import 'package:neupod/domain/wheel/wheel_accel.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/domain/wheel/wheel_input.dart';
@@ -45,6 +46,9 @@ extension on WheelInput {
     return out;
   }
 }
+
+/// A wheel with Now Playing's holds.
+WheelInput np() => WheelInput(holdMs: Map.of(WheelInput.nowPlayingHoldMs));
 
 int stepsIn(List<WheelEvent> events) =>
     events.whereType<WheelStep>().fold(0, (s, e) => s + e.steps);
@@ -279,34 +283,48 @@ void main() {
   });
 
   group('holds', () {
-    test('Previous and Next hold after 600 ms and do not press', () {
-      for (final (deg, b) in [
-        (90.0, WheelButton.next),
-        (270.0, WheelButton.previous),
-      ]) {
+    test('by default no button holds: Previous and Next are plain presses, '
+        'as on every firmware screen but Now Playing', () {
+      for (final deg in [90.0, 270.0, 0.0]) {
         final w = WheelInput();
-        w.downAt(deg, 1000);
-        expect(w.nextDeadlineMs, 1000 + uiHoldMs);
-        expect(w.tick(1000 + uiHoldMs - 1), isEmpty);
-        expect(w.tick(1000 + uiHoldMs), [WheelHoldStart(b)]);
+        w.downAt(deg, 0);
         expect(w.nextDeadlineMs, isNull);
-        expect(w.tick(5000), isEmpty); // once
-        expect(w.moveTo(deg + 40, 5100), isEmpty); // a hold stays a hold
-        expect(w.up(1, 6000), [WheelButtonUp(b), WheelHoldEnd(b)]);
+        expect(w.tick(5000), isEmpty);
+        expect(w.up(1, 5000).last, isA<WheelPress>());
       }
     });
 
+    test(
+      'Now Playing: Previous and Next hold after 600 ms and do not press',
+      () {
+        for (final (deg, b) in [
+          (90.0, WheelButton.next),
+          (270.0, WheelButton.previous),
+        ]) {
+          final w = np();
+          w.downAt(deg, 1000);
+          expect(w.nextDeadlineMs, 1000 + uiHoldMs);
+          expect(w.tick(1000 + uiHoldMs - 1), isEmpty);
+          expect(w.tick(1000 + uiHoldMs), [WheelHoldStart(b)]);
+          expect(w.nextDeadlineMs, isNull);
+          expect(w.tick(5000), isEmpty); // once
+          expect(w.moveTo(deg + 40, 5100), isEmpty); // a hold stays a hold
+          expect(w.up(1, 6000), [WheelButtonUp(b), WheelHoldEnd(b)]);
+        }
+      },
+    );
+
     test('released before 600 ms: a press', () {
-      final w = WheelInput();
+      final w = np();
       w.downAt(90, 0);
       expect(w.tick(uiHoldMs - 1), isEmpty);
       expect(w.up(1, uiHoldMs - 1).last, const WheelPress(WheelButton.next));
     });
 
-    test('Menu and Play/Pause hold nothing in R1; held still they stay '
-        'undecided and press on release', () {
+    test('Menu and Play/Pause hold nothing on Now Playing; held still they '
+        'stay undecided and press on release', () {
       for (final deg in [0.0, 180.0]) {
-        final w = WheelInput();
+        final w = np();
         w.downAt(deg, 0);
         expect(w.nextDeadlineMs, isNull);
         expect(w.tick(10000), isEmpty);
@@ -330,17 +348,34 @@ void main() {
       expect(plain.tick(10000), isEmpty);
       expect(plain.up(1, 10000).last, const WheelPress(WheelButton.centre));
 
-      final np = WheelInput()..holdMs[WheelButton.centre] = uiSelHoldMs;
-      np.down(1, 0, 0, 0);
-      expect(np.tick(uiSelHoldMs), [const WheelHoldStart(WheelButton.centre)]);
-      expect(np.up(1, 900), [
+      final n = np();
+      n.down(1, 0, 0, 0);
+      expect(n.tick(uiSelHoldMs), [const WheelHoldStart(WheelButton.centre)]);
+      expect(n.up(1, 900), [
         const WheelButtonUp(WheelButton.centre),
         const WheelHoldEnd(WheelButton.centre),
       ]);
     });
 
+    test('a hold whose tick came late is still a hold on release, never a '
+        'press', () {
+      final w = np();
+      w.downAt(90, 0);
+      expect(w.up(1, uiHoldMs + 50), [
+        const WheelHoldStart(WheelButton.next),
+        const WheelButtonUp(WheelButton.next),
+        const WheelHoldEnd(WheelButton.next),
+      ]);
+    });
+
+    test('Search: Menu held 600 ms (the screen adds it) holds', () {
+      final w = WheelInput()..holdMs[WheelButton.menu] = 600;
+      w.downAt(0, 0);
+      expect(w.tick(600), [const WheelHoldStart(WheelButton.menu)]);
+    });
+
     test('the hold deadline survives the clock wrap', () {
-      final w = WheelInput();
+      final w = np();
       w.downAt(90, 0xFFFFFF00);
       expect(w.nextDeadlineMs, u32(0xFFFFFF00 + uiHoldMs));
       expect(w.tick(u32(0xFFFFFF00 + uiHoldMs - 1)), isEmpty);
@@ -360,17 +395,37 @@ void main() {
       expect(w.downAt(270, 50, p: 2), isNotEmpty); // free again
     });
 
-    test('a system cancel drops a press without acting and ends a hold', () {
-      final w = WheelInput();
+    test('a system cancel drops a press without acting and cancels a hold', () {
+      final w = np();
       w.downAt(0, 0);
       expect(w.cancel(1, 10), [const WheelButtonCancelled(WheelButton.menu)]);
       w.downAt(90, 100);
       w.tick(100 + uiHoldMs);
-      expect(w.cancel(1, 1000), [const WheelHoldEnd(WheelButton.next)]);
+      // Cancelled, then ended: what the hold started must not be applied.
+      expect(w.cancel(1, 1000), [
+        const WheelButtonCancelled(WheelButton.next),
+        const WheelHoldEnd(WheelButton.next),
+      ]);
       w.downAt(0, 2000);
       w.moveTo(40, 2100);
       expect(w.cancel(1, 2200), isEmpty);
       expect(w.owner, isNull);
+    });
+
+    test('reset and disabling cancel a held centre the same way', () {
+      final w = np();
+      w.down(1, 0, 0, 0);
+      w.tick(uiSelHoldMs);
+      expect(w.reset(), [
+        const WheelButtonCancelled(WheelButton.centre),
+        const WheelHoldEnd(WheelButton.centre),
+      ]);
+      w.down(1, 0, 0, 1000);
+      w.tick(1000 + uiSelHoldMs);
+      expect(w.setEnabled(false, 2000), [
+        const WheelButtonCancelled(WheelButton.centre),
+        const WheelHoldEnd(WheelButton.centre),
+      ]);
     });
 
     test('reset drops the touch', () {
@@ -391,5 +446,45 @@ void main() {
       expect(w.setEnabled(true, 20), isEmpty);
       expect(w.downAt(0, 30), isNotEmpty);
     });
+  });
+
+  test('a scan cancelled by the system is not applied (wheel events driving '
+      'NowPlayingControl as lib/domain/wheel/README.md says)', () {
+    const track = NpcTrack(
+      seekable: true,
+      posFrames: 44100 * 60,
+      totalFrames: 44100 * 240,
+      rate: 44100,
+    );
+    final w = np();
+    final c = NowPlayingControl();
+    var commits = 0;
+    void feed(List<WheelEvent> events, int ms) {
+      for (final e in events) {
+        switch (e) {
+          case WheelButtonDown(button: WheelButton.next):
+            c.keyDown(1, track, ms);
+          case WheelButtonUp(button: WheelButton.next):
+            if (c.keyUp(1, ms) & NpcEvent.commit != 0) commits++;
+          case WheelButtonCancelled(button: WheelButton.next):
+            c.cancelHold();
+          case _:
+            break;
+        }
+      }
+      if (c.tick(track, ms) & NpcEvent.commit != 0) commits++;
+    }
+
+    feed(w.downAt(90, 0), 0);
+    for (var ms = 100; ms <= 3000; ms += 100) {
+      feed(w.tick(ms), ms);
+    }
+    expect(c.pending, isTrue); // scanning
+    feed(w.cancel(1, 3100), 3100);
+    expect(c.pending, isFalse);
+    for (var ms = 3200; ms <= 40000; ms += 100) {
+      feed(const [], ms);
+    }
+    expect(commits, 0); // nothing applied, not at the end nor after 30 s
   });
 }
