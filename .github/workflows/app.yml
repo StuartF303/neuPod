@@ -171,4 +171,10 @@ jobs:
           xcrun simctl bootstatus "$udid" -b
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
       - name: Integration tests
-        run: flutter test integration_test -d "${{ steps.sim.outputs.udid }}"
+        timeout-minutes: 15
+        run: flutter test integration_test -v -d "${{ steps.sim.outputs.udid }}"
+      - name: Simulator state on failure
+        if: failure()
+        run: |
+          xcrun simctl list devices booted
+          xcrun simctl spawn booted log show --last 10m --style compact --predicate 'process == "Runner"' | tail -200 || true
