@@ -94,6 +94,19 @@ recorded fallback.
 6. If 1-5 fail or the port is over its time box, prototype `lofty` via FRB on both CI runners and record the binary
    size and build-time cost.
 
+## Implementation so far (phase 1, 2026-11-22)
+
+`mobile/lib/data/scan/tag_reader.dart` reads FLAC (STREAMINFO, Vorbis comments, an ID3v2 tag in front skipped) and
+MP3 (ID3v2.2 to 2.4 text frames with unsynchronisation and extended headers; first frame confirmed by the next;
+duration from Xing/Info minus the LAME delay and padding, or VBRI, else estimated and flagged) through a `ByteSource`
+(`readAt`, `length`), ported from `app/audio/meta.c`. Phase 1 keeps title, artist, album, track number, duration,
+sample rate and bit depth; text is not cut at the firmware's small buffer sizes (1,024 characters instead), and UTF-16
+surrogate pairs are kept. The scanner opens files on the root isolate (`neupod_storage.openHandle`: a detached fd on
+Android, a `file://` URI on iOS) and parses them in a background isolate with `Isolate.run`, 32 files per run.
+Failures become a reason on the track (`not a FLAC file`, `file is cut short`), never an exception that stops the
+scan; a 2,000-case mutation test checks that. The rest of this note (other containers and fields, art, the
+`audio_metadata_reader` oracle, timing at 5,000 files) is phase 3.
+
 ## Sources
 
 All checked 2026-11-21.

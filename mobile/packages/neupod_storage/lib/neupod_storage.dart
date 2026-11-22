@@ -87,6 +87,10 @@ class NeupodStorage {
     return FdReaderHandle(await _guard(() => _api.openFd(uri)));
   }
 
+  /// A private directory for the app's own data, such as the library
+  /// database (never the user-visible Documents folder).
+  Future<String> appSupportPath() => _guard(_api.appSupportPath);
+
   /// iOS debug builds only: adds the folder at [path] as if it had been
   /// picked. For integration tests; never called by the app.
   Future<StorageRoot> debugAddRoot(String path) =>

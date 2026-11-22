@@ -509,6 +509,12 @@ interface NeupodStorageApi {
    */
   fun openFd(uri: String): Long
   /**
+   * A private directory for the app's own data (the library database):
+   * Android `filesDir`; iOS Application Support, created if needed. Never
+   * the Documents folder, so it is not shown in Files or Finder.
+   */
+  fun appSupportPath(): String
+  /**
    * iOS debug builds only: stores a bookmark for the folder at [path] as if
    * it had been picked, so integration tests can exercise bookmark storage,
    * resolution and walking without driving the system picker UI. Throws
@@ -643,6 +649,21 @@ interface NeupodStorageApi {
             val uriArg = args[0] as String
             val wrapped: List<Any?> = try {
               listOf(api.openFd(uriArg))
+            } catch (exception: Throwable) {
+              MessagesPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.neupod_storage.NeupodStorageApi.appSupportPath$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.appSupportPath())
             } catch (exception: Throwable) {
               MessagesPigeonUtils.wrapError(exception)
             }

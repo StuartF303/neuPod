@@ -136,6 +136,11 @@ abstract class NeupodStorageApi {
   /// does). iOS throws `unsupported`: `file://` URIs are read directly.
   int openFd(String uri);
 
+  /// A private directory for the app's own data (the library database):
+  /// Android `filesDir`; iOS Application Support, created if needed. Never
+  /// the Documents folder, so it is not shown in Files or Finder.
+  String appSupportPath();
+
   /// iOS debug builds only: stores a bookmark for the folder at [path] as if
   /// it had been picked, so integration tests can exercise bookmark storage,
   /// resolution and walking without driving the system picker UI. Throws

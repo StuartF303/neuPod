@@ -270,6 +270,9 @@ class NeupodStoragePlugin :
         return pfd.detachFd().toLong()
     }
 
+    override fun appSupportPath(): String =
+        context?.filesDir?.absolutePath ?: throw FlutterError("detached", "plugin is detached")
+
     override fun debugAddRoot(path: String): StorageRoot =
         throw FlutterError("unsupported", "debugAddRoot is iOS only")
 

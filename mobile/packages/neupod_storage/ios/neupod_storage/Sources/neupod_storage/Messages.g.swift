@@ -459,6 +459,10 @@ protocol NeupodStorageApi {
   /// descriptor, which the caller owns and must close (`FdStorageReader`
   /// does). iOS throws `unsupported`: `file://` URIs are read directly.
   func openFd(uri: String) throws -> Int64
+  /// A private directory for the app's own data (the library database):
+  /// Android `filesDir`; iOS Application Support, created if needed. Never
+  /// the Documents folder, so it is not shown in Files or Finder.
+  func appSupportPath() throws -> String
   /// iOS debug builds only: stores a bookmark for the folder at [path] as if
   /// it had been picked, so integration tests can exercise bookmark storage,
   /// resolution and walking without driving the system picker UI. Throws
@@ -593,6 +597,22 @@ class NeupodStorageApiSetup {
       }
     } else {
       openFdChannel.setMessageHandler(nil)
+    }
+    /// A private directory for the app's own data (the library database):
+    /// Android `filesDir`; iOS Application Support, created if needed. Never
+    /// the Documents folder, so it is not shown in Files or Finder.
+    let appSupportPathChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.neupod_storage.NeupodStorageApi.appSupportPath\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      appSupportPathChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.appSupportPath()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      appSupportPathChannel.setMessageHandler(nil)
     }
     /// iOS debug builds only: stores a bookmark for the folder at [path] as if
     /// it had been picked, so integration tests can exercise bookmark storage,

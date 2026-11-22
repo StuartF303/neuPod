@@ -212,6 +212,16 @@ public class NeupodStoragePlugin: NSObject, FlutterPlugin, NeupodStorageApi, UID
     throw PigeonError(code: "unsupported", message: "iOS reads file:// URIs directly", details: nil)
   }
 
+  func appSupportPath() throws -> String {
+    do {
+      return try FileManager.default.url(
+        for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
+      ).path
+    } catch {
+      throw PigeonError(code: "no-directory", message: error.localizedDescription, details: nil)
+    }
+  }
+
   func debugAddRoot(path: String) throws -> StorageRoot {
     #if DEBUG
       let url = URL(fileURLWithPath: path, isDirectory: true)

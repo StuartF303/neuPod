@@ -518,6 +518,27 @@ class NeupodStorageApi {
     return pigeonVar_replyValue! as int;
   }
 
+  /// A private directory for the app's own data (the library database):
+  /// Android `filesDir`; iOS Application Support, created if needed. Never
+  /// the Documents folder, so it is not shown in Files or Finder.
+  Future<String> appSupportPath() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.neupod_storage.NeupodStorageApi.appSupportPath$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as String;
+  }
+
   /// iOS debug builds only: stores a bookmark for the folder at [path] as if
   /// it had been picked, so integration tests can exercise bookmark storage,
   /// resolution and walking without driving the system picker UI. Throws

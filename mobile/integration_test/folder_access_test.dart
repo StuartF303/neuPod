@@ -21,6 +21,10 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:neupod/data/db/drift_library_repository.dart';
+import 'package:neupod/data/db/open_library_database.dart';
+import 'package:neupod/data/platform/storage_folder_access.dart';
+import 'package:neupod/data/scan/local_library_scanner.dart';
 import 'package:neupod_storage/neupod_storage.dart';
 
 const folderName = 'neupod_it';
@@ -64,6 +68,36 @@ Future<void> walkAndRead(NeupodStorage storage, StorageRoot root) async {
     expect(String.fromCharCodes(head) == 'ID3' || head[0] == 0xff, isTrue);
   } finally {
     mp3.close();
+  }
+}
+
+/// The minimal scan on the device: the real plugin, tags read in a
+/// background isolate through the platform's byte source, the database file
+/// in the app's private directory, and the Songs order.
+Future<void> scanIntoDatabase(NeupodStorage storage) async {
+  final db = openLibraryDatabase(storage.appSupportPath);
+  try {
+    final progress = await LocalLibraryScanner(
+      folders: StorageFolderAccess(storage),
+      storage: storage,
+      db: db,
+    ).scan().last;
+    expect(progress.done, isTrue);
+    final songs = await DriftLibraryRepository(db).watchSongs().first;
+    final mine = songs.where((t) => t.source.id != 'documents').toList();
+    expect(mine.map((t) => t.displayTitle), ['a', 'b']);
+    if (Platform.isAndroid) {
+      // Real fixtures: read through the detached fd.
+      expect(mine.map((t) => t.unreadableReason), [null, null]);
+      expect(mine.map((t) => t.codec), ['flac', 'mp3']);
+      expect(mine.first.durationMs, 300);
+    }
+    final dir = await storage.appSupportPath();
+    expect(File('$dir/library.sqlite').existsSync(), isTrue);
+    // ignore: avoid_print
+    print('NEUPOD_SCAN ${mine.length} songs in $dir');
+  } finally {
+    await db.close();
   }
 }
 
@@ -134,6 +168,7 @@ void main() {
         expect(root.available, isTrue);
         expect(findTestRoot(await storage.roots())?.id, root.id);
         await walkAndRead(storage, root);
+        await scanIntoDatabase(storage);
         // ignore: avoid_print
         print('NEUPOD_STEP picked');
       } else {
