@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:neupod/ui/device/device_geometry.dart';
 import 'package:neupod/ui/device/device_options.dart';
+import 'package:neupod/ui/features/player_debug/player_debug_screen.dart';
 
 /// The design gate's switches, for the owner to compare the candidates on
 /// real screens: opened by a long press on the device's body. Temporary:
@@ -122,12 +124,24 @@ class GatePanel extends ConsumerWidget {
                         (v) => o.copyWith(haptics: v),
                       ),
                       const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: onClose,
-                          child: const Text('Done'),
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          // The player debug screen (debug builds only).
+                          if (kDebugMode)
+                            TextButton(
+                              onPressed: () {
+                                onClose();
+                                Navigator.of(context)
+                                    .pushNamed(PlayerDebugScreen.routeName);
+                              },
+                              child: const Text('Player (debug)'),
+                            ),
+                          TextButton(
+                            onPressed: onClose,
+                            child: const Text('Done'),
+                          ),
+                        ],
                       ),
                     ],
                   ),

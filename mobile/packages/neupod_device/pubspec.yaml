@@ -3,6 +3,7 @@ name: neupod_device
 description: "neuPod's device feel: click-wheel haptics and the system media volume (in-repo plugin)."
 version: 0.1.0
 publish_to: 'none'
+resolution: workspace
 
 environment:
   sdk: ^3.14.0
