@@ -13,6 +13,44 @@ enum DeviceFit {
   fixedProportions,
 }
 
+/// Where and how large the device is drawn in a window (see
+/// [DeviceGeometry.plan]).
+class FitPlan {
+  const FitPlan._({
+    required this.empty,
+    required this.scale,
+    required this.virtualWidth,
+    required this.virtualHeight,
+    required this.offsetX,
+    this.safeTop,
+    this.safeBottom,
+  });
+
+  /// The window is degenerate: draw only the body.
+  final bool empty;
+
+  /// Uniform scale of the laid-out device; 1 for a phone.
+  final double scale;
+
+  /// The width the device is laid out at, before [scale].
+  final double virtualWidth;
+
+  /// The height the device is laid out at, before [scale].
+  final double virtualHeight;
+
+  /// Left edge of the drawn device in the window.
+  final double offsetX;
+
+  /// Insets in virtual points when scaled; null: use the window's.
+  final double? safeTop;
+
+  /// See [safeTop].
+  final double? safeBottom;
+
+  /// Drawn exactly as a phone: full window, no scaling.
+  bool get isPlain => !empty && scale == 1 && offsetX == 0;
+}
+
 /// The device's layout on a phone, in points, from the ratios of the device
 /// view design (docs/design/2026-11-21-app-device-view, sections 1 and 2).
 /// Every value is a ratio of W, the phone's width; `render.py` in that folder
@@ -31,7 +69,6 @@ class DeviceGeometry {
     required this.wordmarkCentreY,
     required this.wordmarkSize,
     required this.showWordmark,
-    required this.canLayOut,
   });
 
   /// Screen width as a ratio of W.
@@ -143,10 +180,86 @@ class DeviceGeometry {
       wordmarkCentreY: frameBottom + (cy - d / 2 - frameBottom) / 2,
       wordmarkSize: 0.036 * w,
       showWordmark: gap > minWordmarkGap,
-      canLayOut:
-          w >= minPhoneWidth &&
-          height > 0 &&
-          (used == DeviceFit.fixedProportions || space >= minWheelRatio * w),
+    );
+  }
+
+  /// How the device sits in a window [width] x [height] (fit A's needs; fit B
+  /// falls back to A when short). A window that is tall and wide enough gets
+  /// the device at full width, scale 1. A short or narrow one (split screen,
+  /// landscape, a tablet) gets the whole device scaled down uniformly to fit,
+  /// centred: the device is laid out in a virtual window of [FitPlan.virtualWidth]
+  /// x [FitPlan.virtualHeight] and drawn at [FitPlan.scale]. A window under
+  /// 1 pt either way (or not finite) is [FitPlan.empty].
+  static FitPlan plan({
+    required double width,
+    required double height,
+    required double safeTop,
+    required double safeBottom,
+  }) {
+    if (!width.isFinite || !height.isFinite || width < 1 || height < 1) {
+      return const FitPlan._(
+        empty: true,
+        scale: 1,
+        virtualWidth: 0,
+        virtualHeight: 0,
+        offsetX: 0,
+      );
+    }
+    // The least height at which fit A shows the screen and a wheel of its
+    // minimum size, for a phone of width v.
+    double needed(double v, double top, double bottom) {
+      final g = DeviceGeometry.compute(
+        width: v,
+        height: 100000,
+        safeTop: top,
+        safeBottom: bottom,
+      );
+      return g.screen.bottom +
+          g.frameWidth +
+          minWheelRatio * v +
+          math.max(bottom, 0.03 * v);
+    }
+
+    if (width >= minPhoneWidth &&
+        height >= needed(width, safeTop, safeBottom)) {
+      // Full width when it fits; if the window is wide enough but short,
+      // the largest width that does.
+      return FitPlan._(
+        empty: false,
+        scale: 1,
+        virtualWidth: width,
+        virtualHeight: height,
+        offsetX: 0,
+      );
+    }
+    final hn = needed(minPhoneWidth, safeTop, safeBottom);
+    var v = minPhoneWidth;
+    var k = 1.0;
+    if (width >= minPhoneWidth && height >= hn) {
+      // Shrink the phone's width (insets as they are) until the height fits.
+      var lo = minPhoneWidth;
+      var hi = width;
+      for (var i = 0; i < 40; i++) {
+        final mid = (lo + hi) / 2;
+        if (height >= needed(mid, safeTop, safeBottom)) {
+          lo = mid;
+        } else {
+          hi = mid;
+        }
+      }
+      v = lo;
+    } else {
+      // Below the narrowest supported phone: lay out at 344 pt and scale.
+      k = math.min(1.0, math.min(width / minPhoneWidth, height / hn));
+    }
+    return FitPlan._(
+      empty: false,
+      scale: k,
+      virtualWidth: v,
+      virtualHeight: height / k,
+      offsetX: (width - v * k) / 2,
+      safeTop: safeTop / k,
+      safeBottom: safeBottom / k,
     );
   }
 
@@ -186,11 +299,6 @@ class DeviceGeometry {
   /// The gap between the screen and the wheel is wide enough for the
   /// wordmark.
   final bool showWordmark;
-
-  /// The phone is wide enough (at least [minPhoneWidth]) and tall enough
-  /// (the wheel at its minimum fits below the screen) to draw the device.
-  /// When false the view draws only the empty body.
-  final bool canLayOut;
 
   /// The scale from the 600x450 design: s = screen width / 600.
   double get scale => screen.width / designWidth;
