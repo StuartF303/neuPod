@@ -63,6 +63,13 @@ jobs:
         run: |
           out=$(mktemp -d)
           sh tool/library_entities/gen_library_entities.sh "$out"
+          for t in test/data/library_view/fixtures/*.tsv; do
+            e="${t%.tsv}.expected"
+            if [ ! -f "$e" ]; then
+              echo "::error file=mobile/$t::$t has no committed $(basename "$e")"
+              exit 1
+            fi
+          done
           for f in test/data/library_view/fixtures/*.expected; do
             diff -u "$f" "$out/$(basename "$f")"
           done

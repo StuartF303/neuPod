@@ -1,0 +1,30 @@
+# artists (name, albums)
+The Beatles	3
+Q	1
+R	1
+X	2
+# albums list (title, artist, songs)
+A1	X	1
+A2	The Beatles	1
+B	The Beatles	1
+C	The Beatles	1
+Live	X	2
+S	Q	1
+S	R	1
+# album table (title, artist)
+A2	The Beatles
+B	The Beatles
+C	The Beatles
+S	Q
+S	R
+A1	X
+Live	X
+# songs (title, artist, album)
+Same	R	S
+Same	Q	S
+T1	X	A1
+T2	Beatles	B
+T3	The Beatles	A2
+T4	BEATLES	C
+T5	X	Live
+T6	X	Live

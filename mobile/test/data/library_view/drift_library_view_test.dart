@@ -9,13 +9,16 @@
 //   "Unknown Artist"; its album is the tag or the leaf (the containing
 //   folder's name); the album artist is the album artist tag or the artist.
 //   ADR 0017 D5 rejects "Unknown Album".
-// - lib_build.c:185-226 (`key_tie`, `ent_cmp`, `key_cmp`, `alb_cmp`): songs
-//   with equal collation keys fall back to scan order (the id); an album's
-//   tracks sort by disc<<16|track (an untagged 0 first), then the key, then
-//   the id.
-// - lib_build.c:742-807 (`stage_entity`): artists and albums with equal
-//   whole keys are folded into one row named after the first in scan order;
-//   an album's group is its artist's entity id (709-720).
+// - lib_build.c (`key_tie`, `ent_cmp`, `key_cmp`, `alb_cmp`): songs with
+//   equal collation keys fall back to walk order (the track id is its place
+//   in the walk); an album's tracks sort by disc<<16|track (an untagged 0
+//   first), then the key, then walk order.
+// - lib_build.c (`stage_entity`): artists and albums with equal whole keys
+//   are folded into one row named after the first in walk order; an album's
+//   group is its artist's entity id, or LIB_NONE for a compilation ("Various
+//   Artists" in any ASCII case, `index_file`), which makes no artist.
+// - Walk order is the app's model (a lead decision): depth first, each
+//   folder's entries in byte order of their names.
 // - lib_build.c `cut()` / POOL_STR: a title is stored cut to 64 bytes, so
 //   the key is built from at most 63 bytes of it.
 
@@ -27,8 +30,10 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/data/db/library_database.dart';
 import 'package:neupod/data/library_view/drift_library_view.dart';
+import 'package:neupod/data/scan/tag_reader.dart';
 import 'package:neupod/domain/library/collation.dart';
 import 'package:neupod/domain/library/track.dart';
+import 'package:neupod/domain/library_view/library_view.dart';
 
 import 'seed.dart';
 
@@ -62,7 +67,9 @@ void main() {
     await addTrack(
       db,
       sourceId: src,
-      relPath: path ?? 'Dir/f$n.flac',
+      // Zero-padded, so walk order (byte order of the names) is the order
+      // they were added in.
+      relPath: path ?? 'Dir/f${'$n'.padLeft(4, '0')}.flac',
       title: title,
       titleSort: titleSort,
       artist: artist,
@@ -154,12 +161,12 @@ void main() {
     ]);
   });
 
-  test('equal keys: songs keep both in scan order, entities fold into one '
+  test('equal keys: songs keep both in walk order, entities fold into one '
       'named by the first', () async {
     // "Ångström" and "Angstrom" fold to the same key. Songs are rows of
-    // their own (`key_cmp`, lib_build.c:209-215: key, then the id); artists
-    // and albums are one row each, named after the run's first entry in scan
-    // order (`ent_cmp` 205-207, folded at 778, named at 781).
+    // their own (`key_cmp`: key, then the id, its place in the walk); artists
+    // and albums are one row each, named after the run's first entry in walk
+    // order (`ent_cmp`, `stage_entity`).
     expect(collateKey('Ångström'), collateKey('Angstrom'));
     await add('Ångström', artist: 'Ångström', album: 'Ångström');
     await add('Angstrom', artist: 'Angstrom', album: 'Angstrom');
@@ -190,7 +197,9 @@ void main() {
     expect((await v2.artists()).single.songCount, 2);
   });
 
-  // The firmware's own builder on the same tracks, walked in the same order:
+  // The firmware's own builder on the same tracks, walked in the same order
+  // (the C creates the files in the app's walk order, whatever the order of
+  // the lines; the test writes the rows in line order):
   // fixtures/<name>.tsv is given to scripts/app/library_entities.c (lib_build()
   // + lib_list_row() on a FatFs image) and fixtures/<name>.expected is what it
   // printed. Regenerate with mobile/tool/library_entities/gen_library_entities.sh
@@ -200,10 +209,21 @@ void main() {
   // Beatles" / "Beatles" / "BEATLES", "AC/DC" / "Ac/Dc", "Ångström" /
   // "Angstrom"); two artists that differ only after 63 bytes (meta.h `char
   // artist[64]`); "Greatest Hits" under four artists, two of them one.
-  // folders.tsv: untagged albums named after their folder (lib_build.c:362,
+  // folders.tsv: untagged albums named after their folder (`index_file`,
   // ADR 0017 D5), "Live" under three artists, "live" folding into "Live", a
   // file at the root of /Music, a tag equal to a folder's name.
-  for (final name in ['fold', 'folders']) {
+  // compilation.tsv: "various artists", "Various Artists" and "VARIOUS
+  // ARTISTS" are compilations (no artist; their albums last in the album
+  // table, so after Abba's and Zed's "Hits" in the Albums list, and "hits"
+  // folding into the compilation "Hits"); "Various Artist" is an artist.
+  // walk.tsv: lines out of walk order, so the first in the walk is not the
+  // first row written: "The Beatles" (a/2.flac) names the artist although
+  // "Beatles" (b/1.flac) and "BEATLES" ("a b/1.flac": the folder "a" comes
+  // before "a b", though ' ' < '/') were written first; "Live" (a/3.flac)
+  // names the album over "live" (b/2.flac); two songs called "Same" come in
+  // walk order. The C creates the files in walk order (`walk_cmp`), so its
+  // own walk is the app's model.
+  for (final name in ['fold', 'folders', 'compilation', 'walk']) {
     test(
       '$name: artists, albums and songs as the firmware builds them',
       () async {
@@ -223,13 +243,18 @@ void main() {
           for (final a in await view.artists())
             [_held(a.name), '${a.albumCount}'],
         ], fx.lists['artists']);
+        // A compilation's list row has no artist (`lib_list_row`); the app
+        // gives it "Various Artists" for its header (`album_header`).
+        String albumArtist(Album a) => a.artistId == null
+            ? (a.compilation && a.artist == 'Various Artists' ? '' : '?')
+            : _held(a.artist);
         expect([
           for (final a in await view.albums())
-            [a.title, _held(a.artist), '${a.songCount}'],
+            [a.title, albumArtist(a), '${a.songCount}'],
         ], fx.lists['albums list']);
         expect([
           for (final a in await view.albumsForCoverFlow())
-            [a.title, _held(a.artist)],
+            [a.title, albumArtist(a)],
         ], fx.lists['album table']);
         expect([
           for (final s in await view.songs())
@@ -322,7 +347,7 @@ void main() {
     final a = 'a' * 70;
     await add('${a}x');
     await add('${a}b');
-    // Same stored key, so scan order, although "b" < "x".
+    // Same stored key, so walk order, although "b" < "x".
     expect((await view.songs()).map((s) => s.title.substring(70)), ['x', 'b']);
   });
 
@@ -455,15 +480,164 @@ void main() {
     expect(await view.songs(), hasLength(2));
     expect((await view.albums()).single.songCount, 2);
   });
+
+  test('compilations are their own list and make no artist', () async {
+    final fx = _EntityFixture.read('compilation');
+    for (final t in fx.tracks) {
+      await add(
+        t.title,
+        path: t.path,
+        artist: t.artist,
+        album: t.album,
+        trackNo: t.track,
+      );
+    }
+    expect((await view.artists()).map((a) => a.name), [
+      'Abba',
+      'Various Artist',
+      'Zed',
+    ]);
+    final comps = await view.compilations();
+    expect(comps.map((a) => (a.title, a.songCount)), [('Hits', 2), ('Mix', 1)]);
+    for (final a in comps) {
+      expect(a.compilation, isTrue);
+      expect(a.artistId, isNull);
+      expect(a.artist, 'Various Artists');
+    }
+    final detail = (await view.album(comps.first.id))!;
+    // Each song keeps its own artist text.
+    expect(detail.songs.map((s) => s.artist), [
+      'various artists',
+      'Various Artists',
+    ]);
+    expect(detail.songs.every((s) => s.albumId == comps.first.id), isTrue);
+  });
+
+  test('walk order: depth first, names in byte order', () {
+    expect(walkCompare('a/2.flac', 'b/1.flac'), lessThan(0));
+    expect(walkCompare('a/x.flac', 'a b/x.flac'), lessThan(0));
+    expect(walkCompare('a b/x.flac', 'a/x.flac'), greaterThan(0));
+    expect(walkCompare('B/1.flac', 'a/1.flac'), lessThan(0)); // bytes
+    expect(walkCompare('Echo.flac', 'Q/Live/01.flac'), lessThan(0));
+    expect(walkCompare('Z/1.flac', 'a.flac'), lessThan(0));
+    expect(walkCompare('/a/1.flac', 'a/1.flac'), 0); // empty segments
+  });
+
+  test('artists and albums are keyed on the firmware\'s text: two emoji '
+      'artists are one', () async {
+    // ID3v2.3 UTF-16 "😀 Band" and "😃 Band": the firmware stores both as
+    // "? Band" (meta.c), so it has one artist and one album. The vectors are
+    // checked against the compiled C in tag_key_vectors_test.dart.
+    const dir = 'test/fixtures/tag_keys';
+    AudioTags read(String name) =>
+        readTags(BytesSource(File('$dir/$name').readAsBytesSync()), 'mp3');
+    // b is written first but walks second: the names come from a.
+    for (final (path, name) in [
+      ('b/1.mp3', 'utf16_band_b.mp3'),
+      ('a/1.mp3', 'utf16_band_a.mp3'),
+    ]) {
+      final t = read(name);
+      await addTrack(
+        db,
+        sourceId: src,
+        relPath: path,
+        title: t.title,
+        artist: t.artist,
+        album: t.album,
+        artistKeyText: t.artistKeyText,
+        albumKeyText: t.albumKeyText,
+      );
+    }
+    final artist = (await view.artists()).single;
+    expect(artist.name, '\u{1F600} Band');
+    expect(artist.songCount, 2);
+    final album = (await view.albums()).single;
+    expect(album.title, startsWith('\u{1F600} Hits'));
+    expect(album.songCount, 2);
+    expect((await view.songs()).map((s) => s.artist), [
+      '\u{1F603} Band', // "Grin"
+      '\u{1F600} Band', // "Smile"
+    ]);
+  });
+
+  test('a row from before schema version 2 is keyed on its displayed text '
+      'until a rescan', () async {
+    await addTrack(
+      db,
+      sourceId: src,
+      relPath: 'a/1.flac',
+      title: 'One',
+      artist: 'The Beatles',
+      album: 'Help!',
+      legacy: true,
+    );
+    await addTrack(
+      db,
+      sourceId: src,
+      relPath: 'b/1.flac',
+      title: 'Two',
+      artist: 'Beatles',
+      album: 'help!',
+    );
+    await addTrack(
+      db,
+      sourceId: src,
+      relPath: 'c/1.flac',
+      title: 'Three',
+      artist: 'VARIOUS ARTISTS',
+      album: 'Mix',
+      legacy: true,
+    );
+    expect((await view.artists()).single.name, 'The Beatles');
+    expect((await view.albums()).map((a) => (a.title, a.songCount)), [
+      ('Help!', 2),
+      ('Mix', 1),
+    ]);
+    expect((await view.compilations()).single.title, 'Mix');
+  });
+
+  test('the firmware\'s text decides: no artist or album there is Unknown '
+      'Artist and the folder', () async {
+    // A FLAC whose comment block is over the firmware's scratch: the app
+    // shows the tags, the firmware never read them.
+    await addTrack(
+      db,
+      sourceId: src,
+      relPath: 'Live/1.flac',
+      title: 'Big',
+      artist: 'Shown',
+      album: 'Shown Album',
+      artistKeyText: const [],
+      albumKeyText: const [],
+    );
+    await addTrack(
+      db,
+      sourceId: src,
+      relPath: 'Live/2.flac',
+      title: 'Plain',
+      artist: 'Unknown Artist',
+      album: 'Live',
+    );
+    final artist = (await view.artists()).single;
+    expect(artist.songCount, 2);
+    expect((await view.albums()).single.songCount, 2);
+  });
+
+  test('a leading slash in a path does not give an empty album', () async {
+    await addTrack(db, sourceId: src, relPath: '/Rooted.flac', title: 'R');
+    await addTrack(db, sourceId: src, relPath: '/Dir/In.flac', title: 'I');
+    final songs = {for (final s in await view.songs()) s.title: s.album};
+    expect(songs, {'I': 'Dir', 'R': 'Music'});
+  });
 }
 
 /// Text as the firmware holds a tag: at most 63 bytes (meta.h, `cut()`).
 String _held(String s) =>
     utf8.decode(firmwareCut(utf8.encode(s), 64), allowMalformed: true);
 
-/// `fixtures/<name>.tsv` (the tracks, in walk order) and
-/// `fixtures/<name>.expected`
-/// (what scripts/app/library_entities.c printed for them).
+/// `fixtures/<name>.tsv` (the tracks, in the order the test writes them) and
+/// `fixtures/<name>.expected` (what scripts/app/library_entities.c printed
+/// for them).
 final class _EntityFixture {
   _EntityFixture(this.tracks, this.lists);
 

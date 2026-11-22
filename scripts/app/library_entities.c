@@ -6,8 +6,14 @@
 // (mobile/test/data/library_view/drift_library_view_test.dart) seed the tracks of fixtures/<name>.tsv and expect what this
 // program printed for them, fixtures/<name>.expected.
 //
-// Input, one track per line, created (and so walked) in that order: path<TAB>title<TAB>artist<TAB>album<TAB>track
-// (an empty field is no tag). mobile/tool/library_entities/gen_library_entities.sh builds this program and regenerates
+// Input, one track per line, in any order: path<TAB>title<TAB>artist<TAB>album<TAB>track (an empty field is no tag).
+//
+// Walk order. lib_build() walks the card with f_readdir, which gives each folder's entries in the order of their directory
+// entries; on a fresh volume that is the order they were created in. A phone cannot see that order, so the app's model of
+// the walk (a lead decision) is depth first, each folder's entries (files and folders together) in byte order of their
+// UTF-8 names. This program creates the files in exactly that order (walk_cmp below, the same order as the app's
+// walkCompare in drift_library_view.dart): every folder is made when its first file is, and each folder's entries are
+// made in byte order, so the firmware's own walk over the image is the app's model, whatever the order of the lines. mobile/tool/library_entities/gen_library_entities.sh builds this program and regenerates
 // every fixture; CI runs it and fails if a fixture no longer matches the firmware. A scratch disk image is made in the
 // current folder and removed at the end.
 #include "library_fixture.h"
@@ -17,12 +23,49 @@
 static uint8_t g_file[16384];
 static uint8_t g_scratch[LIB_SCRATCH_MIN] __attribute__((aligned(8)));
 
+#define MAX_LINES 256
+
+// Depth-first walk order of two paths: compared folder by folder, a segment against its sibling by its bytes (a shorter
+// segment that is a prefix of the other comes first).
+static int walk_cmp(const void *pa, const void *pb) {
+    const unsigned char *a = *(const unsigned char *const *)pa, *b = *(const unsigned char *const *)pb;
+    for (;;) {
+        // the end of a segment ('/' or the end of the path) sorts before any byte of a name
+        unsigned x = (*a == '/' || *a == '\t' || *a == '\0') ? 0u : *a + 1u;
+        unsigned y = (*b == '/' || *b == '\t' || *b == '\0') ? 0u : *b + 1u;
+        if (x != y) return x < y ? -1 : 1;
+        if (x == 0) {
+            bool ea = *a != '/', eb = *b != '/'; // the path's end: a file, so the two are the same path
+            if (ea || eb) return ea == eb ? 0 : ea ? -1 : 1;
+        }
+        a++;
+        b++;
+    }
+}
+
 int main(void) {
     if (!fx_volume(16u << 20, 0)) return 1;
-    char line[1024];
-    while (fgets(line, sizeof line, stdin)) {
-        line[strcspn(line, "\r\n")] = '\0';
-        if (line[0] == '\0') continue;
+    static char *lines[MAX_LINES];
+    size_t count = 0;
+    char buf[1024];
+    while (fgets(buf, sizeof buf, stdin)) {
+        buf[strcspn(buf, "\r\n")] = '\0';
+        if (buf[0] == '\0') continue;
+        if (count == MAX_LINES || (lines[count] = strdup(buf)) == NULL) {
+            fprintf(stderr, "too many lines\n");
+            fx_cleanup();
+            return 1;
+        }
+        count++;
+    }
+    qsort(lines, count, sizeof lines[0], walk_cmp);
+    for (size_t i = 0; i < count; i++) {
+        if (i > 0 && walk_cmp(&lines[i - 1], &lines[i]) == 0) {
+            fprintf(stderr, "the same path twice: %s\n", lines[i]);
+            fx_cleanup();
+            return 1;
+        }
+        char *line = lines[i];
         char *f[5] = {0};
         char *p = line;
         for (int i = 0; i < 5; i++) {
