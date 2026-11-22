@@ -14,6 +14,9 @@ analyzer:
     - ios/**
     # Generated code (drift's part files); the sources they come from are analysed.
     - "**/*.g.dart"
+    # Pigeon's interface definitions need the pigeon dev dependency, which only
+    # the plugin's own `flutter pub get` fetches.
+    - packages/*/pigeons/**
 
 linter:
   rules:
