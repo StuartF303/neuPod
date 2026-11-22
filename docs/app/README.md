@@ -184,11 +184,13 @@ the same rule as the device: the dominant colour, clamped until white text on it
   centre is Select; Menu goes back; previous, next and play/pause work as on the device, including press-and-hold to
   scan. Each wheel detent is a light haptic tick, and each button press is a firmer haptic click. An optional click
   sound, like the original's clicker, can be turned on in Settings.
-- **To decide at the design gate, from real screens:** how the device sits on tall and short phones (the body
-  stretched or the space around it filled); the body finish and whether it follows the style and mode; whether the
-  screen also accepts direct taps on rows alongside the wheel; and how the largest text sizes fit the 4:3 screen
-  (proposal: fewer, larger rows).
-- Search, which needs typing, opens the phone's keyboard from a Search item.
+- **The layout and the wheel's numbers are in the [device view design](../design/2026-11-21-app-device-view/README.md)**: geometry as ratios of the
+  phone's width, the fit on tall and short phones, body finishes, hit zones, press-or-turn, detents and acceleration
+  (a port of the firmware's `ui_accel_feed()`), holds, haptics, direct touch, the three text tiers, accessibility and
+  the phone's status bar. Where it offers candidates (fit A or B, wheel only or wheel plus screen), both are built
+  for the design gate. Its Open questions are the owner's.
+- Search, which needs typing, opens the phone's keyboard from a Search item (in the Music menu for now; device view
+  design Open question 11).
 - Type is Montserrat (SIL OFL), icons are Lucide (ISC), as on the device. Every third-party asset and package is listed
   on an in-app Licences screen.
 - Feedback follows the device's three places where they translate: a row confirms with a brief flash and a tick; a
