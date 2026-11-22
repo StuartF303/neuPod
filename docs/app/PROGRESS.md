@@ -41,7 +41,7 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] Accessibility of the device view: rows as elements, the wheel as one adjustable element with five actions, keyboard and switch control (design section 9)
 - [ ] Direct touch candidates 1 (wheel only) and 2 (wheel plus taps and drags), switchable for the gate (design section 6)
 - [ ] Text tiers: 7, 6 and 5 rows by the phone's text size (design section 8)
-- [ ] Design-gate screens in the device view, Classic Light and Modern Dark, with real data: Home, Songs with the letter tile, an album with disc headings, Cover Flow, Now Playing at rest, with volume and in seek, a panel, Search with the keyboard; fit A and B; touch 1 and 2; both body finishes; phone status bar shown and hidden; three text tiers (design sections 2, 3, 6, 7, 8 and 10)
+- [ ] Design-gate screens in the device view, Classic Light and Modern Dark, with real data: Home, Songs with the letter tile, an album with disc headings, Cover Flow, Now Playing at rest, with volume and in seek, a panel, Search typing with the wheel and in the results; fit A and B; touch 1 and 2; both body finishes; phone status bar shown and hidden; three text tiers (design sections 2, 3, 6, 7, 8 and 10)
 - [ ] **Gate 2: stop and show the owner; record the choices here**
 
 ## Phase 3: library
@@ -89,7 +89,8 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] Compilations
 - [ ] Cover Flow
 - [ ] Fast-scroll letter index
-- [ ] Search
+- [ ] Letter ring model: a port of the firmware's text entry in search mode (`app/include/wheel_input.h`, `wheel_input.c`, `docs/ui-input.md`), not a reimplementation, with tests mirroring `tests/test_wheel_input.c`
+- [ ] Search, typed with the wheel (owner decision 12; device view design, "Search, by the wheel"): the field, the letter ring and mode chips, the live results (three as drawn; design Open question 13), the count in the status bar, Play/Pause to the results list, Menu back to typing with the text kept, Menu deletes and held clears and on an empty field leaves; never the phone's keyboard
 - [ ] Now Playing, with rating and the format line (`FLAC 16/44.1`)
 - [ ] Queue screen
 - [ ] Wheel behaviour matches the device on every screen, including fast scroll, and Now Playing seek and system volume with the device's volume bar (owner decision 10)
@@ -125,6 +126,8 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 ## Notes
 
 (One line per thing the next session must know. Newest first.)
+
+- 2026-11-22: Owner decision 12: Search is typed with the wheel (#107). Two differences to show the owner, not settle: the firmware's text entry has six mode chips (`abc`, `ABC`, `123`, `#!?`, `space`, `del`) where the design draws five (no `#!?`); the port follows the firmware. `docs/ui-input.md` gives the letter-jump tile as 6 steps within 400 ms, hidden 700 ms later, where the device view design says the 2x multiplier and a fade after 250 ms at rest; the code (`ui_list.c`, `ui_rail.c`) decides.
 
 - 2026-11-22: The device view design is in [`docs/design/2026-11-21-app-device-view/`](../design/2026-11-21-app-device-view/README.md) (#103). Its twelve Open questions are the owner's; none is settled by the team. Where its mock-ups and the specification differ, the build follows the specification and the README text, and the difference is shown at gate 2: the mock-ups' Home is the firmware's: it adds Podcasts (a spec Not goal), Photos and Extras and lacks Playlists; some show a Wi-Fi icon that the README says R1 omits; Now Playing has no rating stars (the spec requires them); the album header shows the disc count instead of the song count and total time; the spec's "seek by dragging the progress bar" conflicts with the design's "the progress bar is not draggable (seek mode is the way to seek)", so both are built switchable for the owner; Search's wheel is not drawn disabled.
 
