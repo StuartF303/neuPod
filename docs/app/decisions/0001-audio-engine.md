@@ -82,6 +82,35 @@ The phase-1 spike first runs the gapless join test on iOS with a plain AVQueuePl
 7. Check that the release Android manifest has no `INTERNET` permission, and that nothing in the plugin opens a socket. On iOS, record a network trace during playback (it should be empty).
 8. Build size delta of the Xiph decoders, and of the ALAC decoder option chosen.
 
+## Phase 1 implementation (2026-11-22)
+
+Built as decided, in `mobile/packages/neupod_audio` (Pigeon 30.0.4 contract in `pigeon/messages.dart`). Where it differs
+from or defers part of the text above:
+
+- **iOS schedules file segments, not hand-read buffers.** Each track goes to the node with
+  `AVAudioPlayerNode.scheduleSegment(_:startingFrame:frameCount:at:)`; AVAudioFile reads and converts it on the engine's
+  thread. Consecutive segments on one node join sample-accurately just as buffers do, with less code and no buffer
+  pool to size. Only the current and the next track are scheduled. `scheduleBuffer` stays the path for the bundled
+  Xiph decoders (Ogg, phase 4), which produce PCM themselves.
+- **Mixed formats at a join:** the next track is pre-scheduled only when its processing format (rate, channels) matches
+  the connected one. Otherwise the engine is reconnected when the current track ends, which can leave a short gap. The
+  join test in phase 4 measures both cases.
+- **The AVQueuePlayer comparison spike was not run.** Phase 1 needed one working path; AVAudioEngine is it. The measured
+  join test (spike item 1) is the phase 4 item "Gapless, with the measured join test"; if AVQueuePlayer then proves
+  gapless for every system format, switching the system formats to it is still open.
+- **No network on Android, enforced in code as well as by the manifest:** the player and the artwork loader use a
+  data source that opens only `content://` and `file://` (`LocalDataSource.kt`), so Media3's HTTP, UDP, RTMP and
+  `data:` sources are never reached.
+- **The skip-back rule is native** on both platforms (Media3's `maxSeekToPreviousPositionMs` = 3000; the same rule in
+  `AudioEngine.swift`), because the lock screen's previous button reaches the engine without Dart.
+- **Queue entries carry an id unique to each `setQueue`**, so an event about an earlier queue is never applied to the
+  new one (`mobile/lib/audio/neupod_player.dart`).
+- **An unplayable entry never stops the queue:** the engine reports the error with the entry, and the Dart player
+  skips to the next one once.
+- Not yet (later phases, seams left): Ogg on iOS, ALAC on Android, repeat-one gapless (repeat is a Dart rule, so the
+  engine will need the mode to pre-schedule the same track), output-route reporting, measured sample-rate passthrough.
+  The iOS session's preferred sample rate is already set to the file's rate as a hint.
+
 ## Sources
 
 All checked 2026-11-21.

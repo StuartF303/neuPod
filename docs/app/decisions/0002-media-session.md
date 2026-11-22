@@ -72,6 +72,28 @@ Why: one owner of player, session and focus per platform, no bridging layer, no 
 5. Route icon: speaker, wired, Bluetooth, USB DAC (Android) and AirPlay (iOS) each show correctly. Switching mid-track updates the icon within 1 s and, on iOS, playback continues after the engine restart.
 6. Confirm no `POST_NOTIFICATIONS` prompt is needed on API 33+ for the media notification.
 
+## Phase 1 implementation (2026-11-22)
+
+Built as decided, inside `mobile/packages/neupod_audio`. Where it differs from or defers part of the text above:
+
+- **Manifest entries live in the plugin's manifest** (merged into the app's): `FOREGROUND_SERVICE`,
+  `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, the exported `PlaybackService` with `foregroundServiceType="mediaPlayback"`,
+  and also **`WAKE_LOCK`**, a normal (no prompt) permission ExoPlayer's `WAKE_MODE_LOCAL` needs so playback does not
+  stall with the screen off. No `POST_NOTIFICATIONS`.
+- **The Flutter side is a MediaController** connected to the service, so the app, the notification and the buttons
+  drive one player. Items cross the session boundary without their URI, so the URI travels in
+  `RequestMetadata.mediaUri` and the session restores it. Only the app's own package may set the queue; the system UI,
+  Bluetooth and other controllers may only control playback.
+- **Playback resumption is deferred to phase 4** (the "Resume" item): the `MediaButtonReceiver` and
+  `onPlaybackResumption` need the persisted queue, which does not exist yet. Until then a Bluetooth play press after
+  the service has died does nothing.
+- **Interruptions, minimal now:** Android uses ExoPlayer's audio-focus handling and becoming-noisy pause. iOS pauses on
+  an interruption's start and on `oldDeviceUnavailable`, and restarts the engine from the current position on
+  `AVAudioEngineConfigurationChange`. Resuming after a transient interruption and the measured checks are phase 4.
+- **The lock screen's artwork** comes from the item's `artUri` (the art cache, later), else from art embedded in the
+  file: Media3 extracts it itself; on iOS the plugin reads `AVAsset`'s common artwork metadata.
+- **Route detection is not built yet** (phase 4, "Output route icon").
+
 ## Sources
 
 All checked 2026-11-21.

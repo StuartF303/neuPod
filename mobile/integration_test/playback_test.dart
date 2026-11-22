@@ -64,9 +64,10 @@ void main() {
   });
 
   testWidgets('a two-item queue plays FLAC then MP3 and ends', (tester) async {
-    final indexes = <int?>[];
+    final indexes = <int>[];
     final sub = player.states.listen((s) {
-      if (indexes.isEmpty || indexes.last != s.index) indexes.add(s.index);
+      final i = s.index;
+      if (i != null && (indexes.isEmpty || indexes.last != i)) indexes.add(i);
     });
     await player.setQueue([await media.flacItem(), await media.mp3Item()]);
     await player.play();
@@ -77,7 +78,7 @@ void main() {
 
     expect(ended.index, 1);
     expect(ended.error, isNull);
-    expect(indexes.where((i) => i != null), [0, 1]);
+    expect(indexes, [0, 1]);
   });
 
   testWidgets('seek while paused, play, pause and resume', (tester) async {
