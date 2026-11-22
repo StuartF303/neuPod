@@ -130,7 +130,7 @@ static void copy_name(char *dst, const char *src) {
 
 static bool g_ui_listed; /* the UI has asked for a listing: g_entries may be on screen, the boot resume must not reuse it */
 
-static void list_dir(const storage_req_t *rq, storage_result_t *res) {
+__attribute__((noinline)) static void list_dir(const storage_req_t *rq, storage_result_t *res) {
     res->kind = STORAGE_RES_LIST;
     res->seq = rq->seq;
     g_entries = library_service_take_listing(); /* closes the library reader if it had the buffer */
@@ -228,7 +228,7 @@ static void to_player_file(const track_info_t *i, player_file_t *pf) {
     pf->seekable = i->seekable;
 }
 
-static void ts_started(const char *path, const track_info_t *i) {
+__attribute__((noinline)) static void ts_started(const char *path, const track_info_t *i) {
     player_file_t pf;
     to_player_file(i, &pf);
     player_file_started(&pf);
@@ -240,7 +240,7 @@ static void ts_started(const char *path, const track_info_t *i) {
 // Gapless handoff: the new track's art (the per-album cache makes a same-album change free).
 static void ts_track_changed(const char *path, const track_info_t *i) { art_service_track(path, &i->tags); }
 
-static void ts_next_announced(const track_info_t *i) {
+__attribute__((noinline)) static void ts_next_announced(const track_info_t *i) {
     player_file_t pf;
     to_player_file(i, &pf);
     player_next_announced(&pf);
@@ -271,7 +271,7 @@ static const track_stream_ops_t k_stream_ops = {.open = ts_open, .close = ts_clo
 
 // Boot resume (resume.h): runs on this task right after the settings load. Lists the saved folder (into g_entries, so only while the UI has
 // not listed anything yet), checks the file against what was saved and hands the folder to the player, paused (or playing: setting "Resume playing on power-up" on and the record was playing).
-static void resume_boot(void) {
+__attribute__((noinline)) static void resume_boot(void) {
     resume_state_t r;
     char dir[NFS_PATH_MAX];
     const char *name;
@@ -333,7 +333,7 @@ static void resume_boot(void) {
 static bool g_wwp_off;       /* a write while playing was slow: not again this boot */
 static bool g_wwp_attempt;   /* the last quiet verdict relied on the exception */
 
-static bool settings_quiet_now(void) {
+__attribute__((noinline)) static bool settings_quiet_now(void) {
     player_info_t pi;
     player_get(&pi);
     g_wwp_attempt = false;
@@ -348,7 +348,7 @@ static bool settings_quiet_now(void) {
     return pi.state != PLAYER_PLAYING && pi.state != PLAYER_OPENING && pi.state != PLAYER_VERIFYING;
 }
 
-static void settings_poll(void) {
+__attribute__((noinline)) static void settings_poll(void) {
     static uint32_t last_ms;
     uint32_t now = os_tick_ms();
     if (now - last_ms < SETTINGS_POLL_MS / 2u) {
@@ -390,6 +390,8 @@ static bool art_yield(void *ctx) {
     return true;
 }
 
+/* Stack: storage_task's own frame stays small on purpose (the helpers above are noinline): the library build runs a few calls below it and
+ * needs every byte of RT_STACK_STORAGE (docs/storage.md "Stack and responsiveness"). */
 void storage_task(void *arg) {
     (void)arg;
     track_stream_init(&k_stream_ops);
