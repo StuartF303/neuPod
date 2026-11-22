@@ -197,6 +197,9 @@ void main() {
     await tester.tap(find.text('B: fixed'));
     await tester.pump();
     expect(c.read(deviceViewOptionsProvider).fit, DeviceFit.fixedProportions);
+    // The panel scrolls; Now Playing's section made it longer than the phone.
+    await tester.ensureVisible(find.text('Done'));
+    await tester.pump();
     await tester.tap(find.text('Done'));
     await tester.pump();
     expect(find.byType(GatePanel), findsNothing);
