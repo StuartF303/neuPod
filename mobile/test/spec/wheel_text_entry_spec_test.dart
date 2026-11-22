@@ -25,6 +25,7 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/domain/text_entry/wheel_text_entry.dart' as port;
+import 'package:neupod/ui/screens/search/search_session.dart' as screen;
 
 enum TextCharset { any, digits, hex }
 
@@ -143,7 +144,80 @@ typedef SearchScreenFactory = SearchScreen Function({
 final TextEntryFactory? wiredTextEntry = _portedTextEntry;
 // ignore: unnecessary_nullable_for_final_variable_declarations
 final TextEntryFromBytes? wiredTextEntryFromBytes = _portedTextEntryFromBytes;
-final SearchScreenFactory? wiredSearchScreen = null;
+// The Search screen is the session behind ui/screens/search (the widget draws
+// and feeds it; test/ui/screens/search tests the widget).
+// ignore: unnecessary_nullable_for_final_variable_declarations
+final SearchScreenFactory? wiredSearchScreen = _wiredSearchScreen;
+
+SearchScreen _wiredSearchScreen({
+  required List<String> Function(String query) search,
+  required void Function() onPlayPause,
+}) => _SessionSearchScreen(search, onPlayPause);
+
+/// The spec's Search screen over the app's [screen.SearchSession]. The
+/// spec's library search returns names; they are songs here, in the order
+/// given (the best first).
+final class _SessionSearchScreen implements SearchScreen {
+  _SessionSearchScreen(
+    List<String> Function(String query) search,
+    this._onPlayPause,
+  ) : _session = screen.SearchSession(
+        search: (q) => screen.SearchResults(
+          songs: [
+            for (final (i, name) in search(q).indexed)
+              screen.SearchHit(
+                kind: screen.SearchKind.song,
+                id: '$i',
+                title: name,
+              ),
+          ],
+        ),
+      );
+
+  final screen.SearchSession _session;
+  final void Function() _onPlayPause;
+
+  @override
+  SearchPhase get phase => switch (_session.phase) {
+    screen.SearchPhase.typing => SearchPhase.typing,
+    screen.SearchPhase.results => SearchPhase.results,
+    screen.SearchPhase.left => SearchPhase.left,
+  };
+
+  @override
+  String get text => _session.text;
+
+  @override
+  List<String> get liveResults => [
+    for (final h in _session.liveResults) h.title,
+  ];
+
+  @override
+  List<String> get results => [for (final h in _session.flatResults) h.title];
+
+  @override
+  void wheel(int steps) => _session.wheel(steps);
+
+  @override
+  void centre() => _session.centre();
+
+  @override
+  void previous() => _session.previous();
+
+  @override
+  void next() => _session.next();
+
+  @override
+  void menu() => _session.menu();
+
+  @override
+  void menuHeld() => _session.menuHeld();
+
+  @override
+  void playPause() {
+    if (!_session.playPause()) _onPlayPause();
+  }
+}
 
 TextEntry _portedTextEntry({
   String initial = '',

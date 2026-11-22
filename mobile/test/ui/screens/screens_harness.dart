@@ -8,6 +8,7 @@ import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/app/library_view_providers.dart';
 import 'package:neupod/app/providers.dart';
@@ -100,6 +101,7 @@ Future<ShellRig> pumpShell(
   PlayerState? playing,
   DeviceStatus? status,
   ShellRegistrySetup? registry,
+  List<Override> overrides = const [],
 }) async {
   tester.view.physicalSize = const Size(600, 450);
   tester.view.devicePixelRatio = 1;
@@ -132,6 +134,7 @@ Future<ShellRig> pumpShell(
         () => tester.binding.clock.now().millisecondsSinceEpoch,
       ),
       if (status != null) deviceStatusProvider.overrideWithValue(status),
+      ...overrides,
     ],
   );
   container

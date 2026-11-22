@@ -101,8 +101,11 @@ here resolves them and `flutter analyze` here covers them), under MPL-2.0 like t
   [0002](../docs/app/decisions/0002-media-session.md)), used by `audio/`. Its Dart/native contract is
   `pigeon/messages.dart`; after changing it run `dart run pigeon --input pigeon/messages.dart` and `dart format lib` in
   the package. Its own tests: `flutter test` in the package.
-- `packages/neupod_storage` (planned): folder access, SAF and security-scoped bookmarks
-  ([0004](../docs/app/decisions/0004-folder-access.md)), used by `data/`.
+- `packages/neupod_storage`: read-only folder access, Android SAF trees and iOS Documents plus security-scoped
+  bookmarks ([0004](../docs/app/decisions/0004-folder-access.md)), used by `data/`. Its platform API is
+  `pigeon/messages.dart`; after changing it run `dart run pigeon --input pigeon/messages.dart` and `dart format lib` in
+  the package. Its own tests: `flutter test` in the package; on an emulator and a simulator,
+  `scripts/app/verify-folder-access-android.sh` and `scripts/app/verify-folder-access-ios.sh`.
 
 A new plugin is added to the `workspace:` list in `pubspec.yaml` and declares `resolution: workspace`.
 

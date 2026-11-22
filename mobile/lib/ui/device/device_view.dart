@@ -91,11 +91,17 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
     // viewPadding, not padding: the device never moves (Search is typed with
     // the wheel, owner decision 12, so no phone keyboard comes up).
     final pad = media.viewPadding;
-    final g = DeviceGeometry.compute(
+    final plan = DeviceGeometry.plan(
       width: size.width,
       height: size.height,
       safeTop: pad.top,
       safeBottom: pad.bottom,
+    );
+    final g = DeviceGeometry.compute(
+      width: plan.empty ? 1 : plan.virtualWidth,
+      height: plan.empty ? 1 : plan.virtualHeight,
+      safeTop: plan.safeTop ?? pad.top,
+      safeBottom: plan.safeBottom ?? pad.bottom,
       fit: options.fit,
     );
     final fitA = g.fit == DeviceFit.fillsPhone;
@@ -117,7 +123,7 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
         options.leftEdgeSwipeIsMenu &&
         defaultTargetPlatform == TargetPlatform.iOS;
 
-    final device = Stack(
+    final deviceStack = Stack(
       children: [
         // The body, which also takes the long press for the gate switches.
         Positioned.fill(
@@ -222,6 +228,45 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
           ),
       ],
     );
+
+    final Widget device;
+    if (plan.empty) {
+      // A window under 1 pt (Android's first frame can be 0x0): only the
+      // empty, correctly coloured body, no screen host or wheel.
+      device = fitA
+          ? DecoratedBox(
+              decoration: BoxDecoration(gradient: finish.bodyGradient),
+            )
+          : const ColoredBox(color: deviceSurround);
+    } else if (plan.isPlain) {
+      device = deviceStack;
+    } else {
+      // Too short or narrow for the device at full width (split screen,
+      // landscape): the whole device scaled down uniformly and centred, the
+      // body finish or surround filling the rest.
+      device = Stack(
+        children: [
+          Positioned.fill(
+            child: fitA
+                ? DecoratedBox(
+                    decoration: BoxDecoration(gradient: finish.bodyGradient),
+                  )
+                : const ColoredBox(color: deviceSurround),
+          ),
+          Positioned(
+            left: plan.offsetX,
+            top: 0,
+            width: plan.virtualWidth,
+            height: plan.virtualHeight,
+            child: Transform.scale(
+              scale: plan.scale,
+              alignment: Alignment.topLeft,
+              child: deviceStack,
+            ),
+          ),
+        ],
+      );
+    }
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: overlay,

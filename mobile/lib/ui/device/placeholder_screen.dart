@@ -11,6 +11,11 @@ import 'package:neupod/ui/device/device_options.dart';
 import 'package:neupod/ui/device/screen_host.dart';
 import 'package:neupod/ui/device/wheel_bus.dart';
 
+/// Test-only: the app does not use it (the shell, `ShellRoot`, is the
+/// screen). The device view's tests keep it as the smallest screen that
+/// listens to the wheel bus directly, so the bus path is still tested without
+/// the shell.
+///
 /// A stand-in for the device's screens until the real ones land (UI
 /// engineer 1 builds them at 600x450 from the UI styles design). It shows
 /// the specification's Home items, moves a selection bar with the wheel,

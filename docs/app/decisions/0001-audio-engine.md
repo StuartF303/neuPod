@@ -115,6 +115,11 @@ from or defers part of the text above:
   playback is suppressed.
 - **An unplayable entry never stops the queue:** the engine reports the error with the entry, and the Dart player
   skips to the next one once.
+  - On Android the session also prepares the player again whenever it is idle with an error from a track other
+    than the current one (`ErrorRecovery.kt`). Without it, a play that retried the failed track, followed at once
+    by the skip, could leave the player idle on the next track. The plugin decides from a MediaController's
+    masked state, which cannot see the retry's error coming. This was a CI flake on PR #111, reproduced with a forced
+    ordering and now covered by an integration test.
 - Not yet (later phases, seams left): Ogg on iOS, ALAC on Android, repeat-one gapless (repeat is a Dart rule, so the
   engine will need the mode to pre-schedule the same track), output-route reporting, measured sample-rate passthrough.
   The iOS session's preferred sample rate is already set to the file's rate as a hint.

@@ -11,10 +11,18 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/audio/neupod_player.dart';
 import 'package:neupod/audio/test_media.dart';
+import 'package:neupod/data/db/drift_library_repository.dart';
+import 'package:neupod/data/db/library_database.dart';
+import 'package:neupod/data/db/open_library_database.dart';
+import 'package:neupod/data/platform/storage_folder_access.dart';
+import 'package:neupod/data/scan/local_library_scanner.dart';
+import 'package:neupod/domain/library/library_folder.dart';
+import 'package:neupod/domain/library/library_ports.dart';
 import 'package:neupod/domain/library/library_summary.dart';
 import 'package:neupod/domain/playback/player.dart';
 import 'package:neupod/domain/playback/player_state.dart';
 import 'package:neupod_audio/neupod_audio.dart';
+import 'package:neupod_storage/neupod_storage.dart';
 
 /// A summary of the music library.
 ///
@@ -39,3 +47,35 @@ final playerStateProvider = StreamProvider<PlayerState>(
 
 /// The bundled test tones, for the player debug screen.
 final testMediaProvider = Provider<TestMedia>((ref) => const TestMedia());
+
+/// The neupod_storage plugin (decision 0004): the only code that holds folder
+/// grants and security-scoped access.
+final neupodStorageProvider = Provider<NeupodStorage>((ref) => NeupodStorage());
+
+/// Read-only access to the library folders.
+final folderAccessProvider = Provider<FolderAccess>(
+  (ref) => StorageFolderAccess(ref.watch(neupodStorageProvider)),
+);
+
+/// The library database (decision 0005), opened on first use in a background
+/// isolate and closed with the container.
+final libraryDatabaseProvider = Provider<LibraryDatabase>((ref) {
+  final storage = ref.watch(neupodStorageProvider);
+  final db = openLibraryDatabase(storage.appSupportPath);
+  ref.onDispose(db.close);
+  return db;
+});
+
+/// The library as the UI reads it.
+final libraryRepositoryProvider = Provider<LibraryRepository>(
+  (ref) => DriftLibraryRepository(ref.watch(libraryDatabaseProvider)),
+);
+
+/// Builds the library from the folders.
+final libraryScannerProvider = Provider<LibraryScanner>(
+  (ref) => LocalLibraryScanner(
+    folders: ref.watch(folderAccessProvider),
+    storage: ref.watch(neupodStorageProvider),
+    db: ref.watch(libraryDatabaseProvider),
+  ),
+);
