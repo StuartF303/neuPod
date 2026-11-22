@@ -4,10 +4,13 @@ The layout framework for the phone app: how the neuPod's 4:3 screen and click wh
 behaves, in numbers. It answers the [design request](https://github.com/StuartF303/neuPod/blob/docs/app-phase0/docs/app/DESIGN-REQUEST-device-view.md)
 and follows the owner's decision that **the app is the device** (app specification, owner decisions 9 to 11).
 
+**Owner decision, 22 November 2026: Search is typed with the wheel**, as text is on the device, not with the phone's
+keyboard. This overrides the design request and the app specification, which both say Search opens the keyboard.
+
 This folder holds:
 
 - this README: decisions, rules and exact values;
-- `mockups/`: 41 drawings as PNG and as the standalone HTML they were rendered from;
+- `mockups/`: 43 drawings as PNG and as the standalone HTML they were rendered from;
 - `render.py`: the generator. Every position in the mock-ups is computed from the ratios below, so it doubles as a
   reference implementation of the layout.
 
@@ -130,7 +133,7 @@ body with a light screen. Both cross-combinations are drawn:
 | Finger on the ring | a 50 degree wedge of the ring under the finger, tinted `rgba(0,0,0,.07)` (silver) or `rgba(255,255,255,.08)` (black); it follows the finger |
 | Button pressed | that button's 90 degree sector tinted `rgba(0,0,0,.13)` or `rgba(255,255,255,.14)`, from touch-down until release |
 | Centre pressed | the centre button tinted the same |
-| Disabled | glyphs and `MENU` at 35 % opacity; ring and centre unchanged. Used only while the wheel cannot act (see Search) |
+| Disabled | glyphs and `MENU` at 35 % opacity; ring and centre unchanged. For any moment the wheel cannot act; no screen drawn here uses it |
 
 ### Hit zones
 
@@ -251,8 +254,7 @@ ringer switch and silent mode, never mixed into the music stream, and limited to
 - **Now Playing:** a tap on the art opens page 2. The progress bar is not draggable (seek mode is the way to seek).
 - The status bar, the right-hand pane and panels' backgrounds take no touches. A panel's `OK` can be tapped.
 
-Why 2: on a touch screen people tap what they see, and a row that ignores a tap feels broken. It is also what makes
-Search usable while the keyboard covers the wheel. The cost: one-line rows are 31 to 36 pt high at the default text
+Why 2: on a touch screen people tap what they see, and a row that ignores a tap feels broken. The cost: one-line rows are 31 to 36 pt high at the default text
 size, under the 44 pt guideline. The wheel with Select is the path that meets the guideline; taps are a convenience on
 top of it, and at the largest text tier the rows reach 44 pt.
 
@@ -270,7 +272,8 @@ All at 393x852, fit A. Classic Light on the silver body, Modern Dark on the blac
 | Now Playing, wheel setting the volume | ![](mockups/classic-now-playing-volume.png) | ![](mockups/modern-now-playing-volume.png) |
 | Now Playing, seek mode | ![](mockups/classic-now-playing-seek.png) | ![](mockups/modern-now-playing-seek.png) |
 | Centred panel, centre pressed | ![](mockups/classic-panel.png) | ![](mockups/modern-panel.png) |
-| Search, keyboard up | ![](mockups/classic-search.png) | ![](mockups/modern-search.png) |
+| Search, typing with the wheel | ![](mockups/classic-search.png) | ![](mockups/modern-search.png) |
+| Search, in the results | ![](mockups/classic-search-results.png) | ![](mockups/modern-search-results.png) |
 
 Notes on the screens the UI styles design had not drawn:
 
@@ -284,19 +287,38 @@ Notes on the screens the UI styles design had not drawn:
   with a 26 px knob on a soft amber track, the times, and the hint `Scroll: seek · Select: go · Menu: cancel`. The
   format line and the album line give way to it. Classic's amber on white is 3.1:1; it is used only at this large size, and
   is flagged in the UI styles design.
-- **Search:** a 44 px field (magnifier, text, caret) in a 60 px band, then results under 30 px headings `Artists`,
-  `Albums`, `Songs`. The first result is selected.
+- **Search:** see below.
 
-**Search and the keyboard.** Search is an item in the Music menu. Opening it raises the phone's keyboard.
+**Search, by the wheel.** Search is an item in the Music menu. It never raises the phone's keyboard, and tapping the
+field does nothing. It reuses the device's text entry (`docs/ui-input.md`: the letter ring and mode chips, in search
+mode, where every edit calls back so the list can filter live). The firmware has that widget but no Search screen yet,
+so the screen below is new for both.
 
-- The device does not move: the screen is at the top of the phone and stays visible above the keyboard on all three
-  sizes. The keyboard slides over the wheel. The wheel's visible part is drawn disabled.
-- Results update as the user types. With direct touch (candidate 2) a result is opened by tapping it.
-- The keyboard's `search` key, or dragging the keyboard down, dismisses it. The wheel is then live again and scrolls
-  the results; Menu leaves Search.
-- With candidate 1 the user must dismiss the keyboard before choosing a result.
-- If a phone is so short that the keyboard would cover part of the screen, move the whole device up until the frame's
-  bottom edge is 8 pt above the keyboard.
+*Typing* (first drawing). From the top of the 405 px content area:
+
+| Part | Size (design px) | Content |
+| --- | --- | --- |
+| Field | 44 high in a 60 band | magnifier, the text typed so far, a caret in the accent |
+| Live results | three rows of 50 | the best three matches, with what each is at the right in Small (`Artist`, `Album · 1991`) |
+| Letter ring | 64 band, hairline above | nine glyphs; the current one at 56 px in the accent, its neighbours at 30, 26, 22 and 18 px fading from ink to tertiary |
+| Mode chips | 36 high, radius 18, in a 40 band | `abc`, `ABC`, `123`, `space`, `del`; the active one filled (Classic `#d8e4f8` with `#1858c8` text; Modern the accent with white text), the others outlined |
+| Hint | Small, tertiary | `Select: type · Menu: delete · Play: results` |
+
+The count of matches follows the play glyph in the status bar (`4 found`).
+
+| Control | While typing |
+| --- | --- |
+| Wheel | turns the letter ring, one glyph a detent; the firmware's acceleration jumps three |
+| Centre | types the current glyph (on `space` a space, on `del` deletes one) |
+| Previous, Next | move along the mode chips |
+| Menu | deletes one character; held, clears the field; on an empty field, leaves Search |
+| Play/Pause | goes to the results |
+
+*In the results* (second drawing). The field stays at the top without its caret, and the full results follow under
+30 px headings `Artists`, `Albums`, `Songs`, as an ordinary list: the wheel scrolls it, the centre opens a row, and
+**Menu returns to typing** with the text kept. Play/Pause is play or pause again.
+
+With direct touch (candidate 2), a live result or a mode chip can also be tapped.
 
 ## 8. Largest text size
 
@@ -395,4 +417,5 @@ For the owner. Nothing here is settled by the drawings.
 | 9 | **Left-edge swipe as Menu on iOS** | Specified as Menu |
 | 10 | **Click sound.** Whether it plays through headphones or only the phone's speaker | System sound, follows the ringer switch |
 | 11 | **Search placement.** An item in the Music menu, or on Home | Music menu |
+| 13 | **Search, three live results.** Three rows fit above the letter ring. Fewer and larger, or none until Play/Pause? At the larger text tiers only two, then one, will fit | Three |
 | 12 | **Classic Dark and Modern Light screens** are still undrawn (UI styles Open question 1); only their bodies are covered here | Bodies only |

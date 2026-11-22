@@ -25,7 +25,7 @@ WHEEL_D = 0.64
 CENTRE_D = 0.36                      # of the wheel diameter
 BODY_ASPECT = 1.675                  # fit B: body height / width
 BODY_R = 0.08
-PHONES = {  # name: (w, h, safe top, safe bottom, island, keyboard height incl. safe bottom)
+PHONES = {  # name: (w, h, safe top, safe bottom, island, unused)
     "375": (375, 667, 20, 0, False, 260),
     "393": (393, 852, 59, 34, True, 336),
     "440": (440, 956, 62, 34, True, 346),
@@ -179,11 +179,39 @@ def np_seek(style):
             f'<div style="margin-top:14px;font-size:22px;line-height:24px;color:{s["ink2"]};text-align:center;white-space:nowrap">Scroll: seek · Select: go · Menu: cancel</div></div>')
     return screen(style, "Now Playing", body, left="3 of 12")
 
-def search(style):
+def _search_field(style, caret):
     s = ST[style]
     pad = s["rowpad"] + (6 if style == "modern" else 0)
-    field = (f'<div style="height:60px;flex:none;box-sizing:border-box;padding:8px {pad}px"><div style="height:44px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:0 12px;font-size:26px;{s["field"]}">'
-             f'{SEARCH.format(s=24, c=s["ink2"])}<span>orb</span><span style="width:2px;height:28px;margin-left:-6px;background:{"#1858c8" if style=="classic" else "#f2a586"}"></span></div></div>')
+    car = f'<span style="width:2px;height:28px;margin-left:-6px;background:{"#1858c8" if style=="classic" else "#f2a586"}"></span>' if caret else ""
+    return (f'<div style="height:60px;flex:none;box-sizing:border-box;padding:8px {pad}px"><div style="height:44px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:0 12px;font-size:26px;{s["field"]}">'
+            f'{SEARCH.format(s=24, c=s["ink2"])}<span>orb</span>{car}</div></div>')
+
+def search_typing(style):
+    """Search, typing with the wheel: the firmware's letter ring and mode chips (docs/ui-input.md), with live results above."""
+    s = ST[style]
+    acc = "#1858c8" if style == "classic" else "#f2a586"
+    lw = ST[style]["list"].replace("background:rgba(0,0,0,.42)", "")
+    res = "".join(f'<div style="height:50px;flex:none;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;padding:0 {s["rowpad"]}px;font-size:26px">'
+                  f'<span>{a}</span><span style="font-size:22px;color:{s["ink2"]}">{b}</span></div>' for a, b in (("Orbital", "Artist"), ("Orbital", "Album · 1991"), ("Orbital 2", "Album · 1993")))
+    ring = ""
+    for ch, size, col in (("e", 18, s["ink3"]), ("f", 22, s["ink2"]), ("g", 26, s["ink2"]), ("h", 30, "inherit"), ("i", 56, acc), ("j", 30, "inherit"), ("k", 26, s["ink2"]), ("l", 22, s["ink2"]), ("m", 18, s["ink3"])):
+        ring += f'<span style="font-size:{size}px;line-height:60px;color:{col}">{ch}</span>'
+    chip_on = ("background:#d8e4f8;color:#1858c8;border:1px solid #d8e4f8" if style == "classic" else "background:#b8502c;color:#ffffff;border:1px solid rgba(255,255,255,.22)")
+    chip_off = (f"color:{s['ink2']};border:1px solid #c9ccd1" if style == "classic" else "color:#c8c8c8;border:1px solid rgba(255,255,255,.22)")
+    chips = "".join(f'<span style="height:36px;box-sizing:border-box;display:flex;align-items:center;padding:0 14px;border-radius:18px;font-size:22px;{chip_on if i == 0 else chip_off}">{c}</span>' for i, c in enumerate(("abc", "ABC", "123", "space", "del")))
+    hair = "border-top:1px solid #d9dce1" if style == "classic" else "border-top:1px solid rgba(255,255,255,.1)"
+    body = (_search_field(style, True)
+            + f'<div style="display:flex;flex-direction:column;{lw}">{res}</div>'
+            + f'<div style="margin-top:4px;height:64px;flex:none;display:flex;align-items:center;justify-content:center;gap:22px;{hair}">{ring}</div>'
+            + f'<div style="height:40px;flex:none;display:flex;align-items:center;justify-content:center;gap:10px">{chips}</div>'
+            + f'<div style="margin-top:6px;font-size:22px;line-height:26px;color:{s["ink3"]};text-align:center;white-space:nowrap">Select: type · Menu: delete · Play: results</div>')
+    bg = "background:rgba(0,0,0,.42)" if style == "modern" else ""
+    return screen(style, "Search", f'<div style="flex:1;min-height:0;display:flex;flex-direction:column;{bg}">{body}</div>', left="4 found")
+
+def search_results(style):
+    """Search after Play/Pause: the wheel is in the results; Menu goes back to typing."""
+    s = ST[style]
+    pad = s["rowpad"] + (6 if style == "modern" else 0)
     def sect(t):
         return f'<div style="height:30px;flex:none;display:flex;align-items:center;padding:0 {pad}px;font-size:20px;{s["sect"]}">{t}</div>'
     def thumb(g):
@@ -191,13 +219,13 @@ def search(style):
     lw = ST[style]["list"].replace("background:rgba(0,0,0,.42)", "")
     def rows(inner):
         return f'<div style="display:flex;flex-direction:column;{lw}">{inner}</div>'
-    al = lambda t, y, g, sel=False: (f'<div style="height:56px;flex:none;box-sizing:border-box;display:flex;align-items:center;gap:14px;padding:0 {s["rowpad"]}px;font-size:26px;{s["sel"] if sel else ""}">{thumb(g)}'
-                                      f'<span style="flex:1;white-space:nowrap">{t}</span><span style="font-size:22px;color:{"inherit" if sel else s["ink2"]}">{y}</span></div>')
-    body = (field + sect("Artists") + rows(row(style, "Orbital", sel=True)) + sect("Albums")
+    al = lambda t, y, g: (f'<div style="height:56px;flex:none;box-sizing:border-box;display:flex;align-items:center;gap:14px;padding:0 {s["rowpad"]}px;font-size:26px">{thumb(g)}'
+                          f'<span style="flex:1;white-space:nowrap">{t}</span><span style="font-size:22px;color:{s["ink2"]}">{y}</span></div>')
+    body = (_search_field(style, False) + sect("Artists") + rows(row(style, "Orbital", sel=True)) + sect("Albums")
             + rows(al("Orbital", "1991", "linear-gradient(135deg,#2b2d42 50%,#8d99ae 50%)") + al("Orbital 2", "1993", "linear-gradient(135deg,#5a3e1b 50%,#e9c46a 50%)"))
             + sect("Songs") + rows(row2(style, "Ska'd For Life (Instrumental Mix)", "Orbital · Back to Mine", h=62, fs=24)))
     bg = "background:rgba(0,0,0,.42)" if style == "modern" else ""
-    return screen(style, "Search", f'<div style="flex:1;min-height:0;display:flex;flex-direction:column;{bg}">{body}</div>')
+    return screen(style, "Search", f'<div style="flex:1;min-height:0;display:flex;flex-direction:column;{bg}">{body}</div>', left="4 found")
 
 SCREENS = {
     "home": lambda st: ui_body(f"{st}-home"),
@@ -208,7 +236,8 @@ SCREENS = {
     "now-playing-volume": lambda st: ui_body(f"{st}-now-playing-volume"),
     "now-playing-seek": np_seek,
     "panel": lambda st: ui_body(f"{st}-feedback-panel"),
-    "search": search,
+    "search": search_typing,
+    "search-results": search_results,
 }
 
 # ---- the device ---------------------------------------------------------------------------------
@@ -243,20 +272,6 @@ def wheel_svg(D, fin, state="idle", angle=None):
 def finger(x, y, d=46):
     """Annotation only: where a finger is. Not part of the UI."""
     return f'<div aria-hidden="true" style="position:absolute;left:{x-d/2:.1f}px;top:{y-d/2:.1f}px;width:{d}px;height:{d}px;border-radius:50%;background:rgba(0,140,255,.28);border:2px solid rgba(0,140,255,.85);box-sizing:border-box"></div>'
-
-def keyboard(w, kh, sb, dark):
-    bg, key, ink = ("#1c1d20", "#3a3c42", "#f0f0f0") if dark else ("#d2d5db", "#ffffff", "#181818")
-    rows = ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
-    kw = (w - 6 * 11) / 10
-    out, y = "", 54
-    for r in rows:
-        x0 = (w - (len(r) * kw + (len(r) - 1) * 6)) / 2
-        for i, ch in enumerate(r):
-            out += f'<div style="position:absolute;left:{x0+i*(kw+6):.1f}px;top:{y}px;width:{kw:.1f}px;height:42px;border-radius:6px;background:{key};color:{ink};display:flex;align-items:center;justify-content:center;font-size:20px">{ch}</div>'
-        y += 54
-    out += f'<div style="position:absolute;left:{w*0.26:.0f}px;top:{y}px;width:{w*0.48:.0f}px;height:42px;border-radius:6px;background:{key}"></div>'
-    out += f'<div style="position:absolute;right:6px;top:{y}px;width:{w*0.22:.0f}px;height:42px;border-radius:6px;background:#1858c8;color:#ffffff;display:flex;align-items:center;justify-content:center;font-size:16px">search</div>'
-    return f'<div aria-hidden="true" style="position:absolute;left:0;bottom:0;width:{w}px;height:{kh}px;background:{bg};font-family:system-ui,sans-serif">{out}</div>'
 
 def geom(phone, fit):
     w, h, st, sb, island, kh = PHONES[phone]
@@ -310,7 +325,7 @@ def device(phone, style, inner, fit="A", wheel="idle", angle=None, extra="", kb=
         fg = finger(w / 2, g["cy"] - 0.70 * g["D"] / 2)
     if wheel == "centre":
         fg = finger(w / 2, g["cy"])
-    kbd = keyboard(w, g["kh"], g["sb"], fin == "black") if kb else ""
+    kbd = ""
     return (f'<div style="position:relative;width:{w}px;height:{h}px;overflow:hidden;background:{page_bg}">{body}{frame}{mark}{wl}{fg}{extra}{kbd}{isl}{statusbar}{home}</div>', w, h, g)
 
 # ---- pages --------------------------------------------------------------------------------------
@@ -333,7 +348,9 @@ def build():
             if key == "panel":
                 wheel = "centre"
             if key == "search":
-                kb = True
+                wheel, angle = "ring", 40
+            if key == "search-results":
+                wheel, angle = "ring", 150
             body, w, h, _ = device("393", st, fn(st), wheel=wheel, angle=angle, kb=kb)
             page(f"{st}-{key}", f"{st.title()} {key.replace('-', ' ')}, 393x852", body, w, h)
     # 2. fitting the phone: A (fills) and B (true proportions), three sizes
