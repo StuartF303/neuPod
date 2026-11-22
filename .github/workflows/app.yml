@@ -348,6 +348,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Gate
+        working-directory: .
         env:
           APP: ${{ needs.changes.outputs.app }}
           CHANGES: ${{ needs.changes.result }}
