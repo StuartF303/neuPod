@@ -56,13 +56,13 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] Android: the device's shared music collection offered alongside picked folders
 - [ ] iOS: files in iCloud Drive that are not downloaded are listed with a Download action (owner decision 7); the scan never hangs on them
 - [ ] Generated test library: the owner's folder convention, discs, compilations, awkward names
-- [ ] Read-only guarantee: a test shows no music file or folder is written, moved or deleted
+- [x] Read-only guarantee: a test shows no music file or folder is written, moved or deleted (#145, 2026-11-23)
 - [ ] Discs merged into one album with sections
 - [ ] Compilations rule
 - [ ] Background scan with progress, cancel, and survival across app restarts
 - [ ] Incremental rescan; removing a folder
 - [x] Android: the scan survives the app being closed: a `dataSync` foreground service with the firmware's notification and Cancel keeps the app's engine, and the scan, alive after a swipe-away (decision 0009, #146, 2026-11-23). Owner check on the Pixel 7 at the next device session. Follow-up from #141
-- [ ] Removing a folder deletes its tracks at the next scan, with no question asked (Settings > Library > a folder > Remove). Add a confirmation before the ratings and play counts item below lands, since those would go with the tracks. Follow-up from #141
+- [x] Removing a folder deletes its tracks at the next scan, with no question asked (Settings > Library > a folder > Remove). Add a confirmation before the ratings and play counts item below lands, since those would go with the tracks. Follow-up from #141 Done: the question is the firmware's own (#145, 2026-11-23)
 - [ ] Art cache and thumbnails
 - [ ] Ratings, play counts, last played, skip counts that survive a rescan and a move
 - [ ] Unplayable files listed greyed with a reason, and never stop the queue
