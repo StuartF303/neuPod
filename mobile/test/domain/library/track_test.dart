@@ -28,8 +28,9 @@ void main() {
     expect(track.location.fileName, '01 Song.flac');
   });
 
-  test('display title falls back to the file name without extension', () {
-    expect(t('a/b/01 Song.flac').displayTitle, '01 Song');
+  // Owner decision 15: as the device shows it, extension and all.
+  test('display title falls back to the whole file name', () {
+    expect(t('a/b/01 Song.flac').displayTitle, '01 Song.flac');
     expect(t('x.flac', title: 'Real').displayTitle, 'Real');
     expect(t('noext').displayTitle, 'noext');
     expect(t('.flac').displayTitle, '.flac');

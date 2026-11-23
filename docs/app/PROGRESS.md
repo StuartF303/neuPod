@@ -50,14 +50,13 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 ## Phase 3: library
 
 - [ ] Tags: title, artist, album artist, album, track, disc, year, genre, compilation, duration, format, embedded art
-- [ ] Folder-convention fallback (`Artist/Year Album/NN Title.ext`, `Folder.jpg`), `, The` handling
 - [ ] Sort and collation match the firmware's `lib_collate_key` (leading "The " ignored, accents folded, symbols, digits, letters). "The ", "A " and "An " skipped, as in the code (owner decision 11)
 - [ ] Source-neutral track model (a track has a source and a location), so R2 is an addition
 - [ ] Android: the device's shared music collection offered alongside picked folders
 - [ ] iOS: files in iCloud Drive that are not downloaded are listed with a Download action (owner decision 7); the scan never hangs on them
-- [ ] Generated test library: the owner's folder convention, discs, compilations, awkward names
+- [x] Generated test library: the owner's folder convention, discs, compilations, awkward names; its expectations are the device's (owner decision 15, #150)
 - [x] Read-only guarantee: a test shows no music file or folder is written, moved or deleted (#145, 2026-11-23)
-- [x] Discs merged into one album with sections: by disc number tags, as the firmware (#147). "(Disc n)" in folder or album names is not merged on the device; awaiting the owner (see Notes)
+- [x] Discs merged into one album with sections: by disc number tags, as the firmware (#147). "(Disc n)" in folder or album names is not merged, as on the device: settled by owner decision 15 (#150)
 - [x] Compilations rule: COMPILATION / TCMP flag or album artist "Various Artists", as `index_file` (#147)
 - [ ] Background scan with progress, cancel, and survival across app restarts
 - [ ] Incremental rescan; removing a folder
@@ -132,6 +131,7 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 
 (One line per thing the next session must know. Newest first.)
 
+- 2026-11-23: Owner decision 15 (#150, docs/app/README.md): untagged files match the device. The album is the folder's name, the artist "Unknown Artist", the title the file name (extension and all); there is no `Artist/Year Album/NN Title.ext` parsing and no `, The` handling. This replaces the folder-convention fallback item; `Folder.jpg` / `cover.jpg` art stays with the art cache item. Album names or folders that differ only by "(Disc n)" stay apart, as on the device. The generated test library's expectations and `test/spec/library_rules_spec_test.dart` follow it.
 - 2026-11-23: Disc headings (lead decision, #147; the firmware draws none): an album with no disc numbers is one disc with no heading; where some songs have disc numbers, the songs without keep their firmware place (first, `alb_cmp`) under no heading and each disc number gets "Disc n" (never "Disc 0"). A file whose parse fails part-way keeps the tags read before the failure, with its reason, as the device lists it.
 - 2026-11-23: Library tags and album artists (#147, schema version 3, scan version 3): FLAC and MP3 album artist, sort tags, genre, disc, year and compilation flag read as `meta.c` reads them (vectors from the compiled parser, `scripts/app/gen_tag_key_vectors.py`); the library view folds artists on the album artist, albums on (album artist, album), compilations on the flag or "Various Artists", genres, disc order, years, as `lib_build.c` does (fixtures from `lib_build()`, `scripts/app/library_entities.c`). Firmware findings for the owner: with COMPILATION=1 a "Back to Mine" is a **compilation** on the device (Compilations, no artist), not an album under its album artist; an artist's albums are in album-key order (the design drew year order, ui-styles Open question 6); the device's genre screen lists artists, the app's lists albums; the firmware has **no** `Artist/Year Album/NN Title` or `, The` folder fallback and no "(Disc n)" folder merging (untagged: title = file name, artist "Unknown Artist", album = folder), so the spec's folder-convention items and `test/spec/library_rules_spec_test.dart` wait for an owner decision. M4A tags and duration (`mp4.c`) and WAV durations (`wav.c`) follow in the stacked PR; AAC has no duration on the device (it cannot play it), the app takes the media header's.
 

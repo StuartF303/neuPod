@@ -124,7 +124,10 @@ Future<void> scanIntoDatabase(NeupodStorage storage) async {
     expect(progress.done, isTrue);
     final songs = await DriftLibraryRepository(db).watchSongs().first;
     final mine = songs.where((t) => t.source.id != 'documents').toList();
-    expect(mine.map((t) => t.displayTitle), ['a', 'b']);
+    expect(mine.map((t) => t.displayTitle), [
+      'a.flac',
+      'b.mp3',
+    ]); // untagged: the file name (owner decision 15)
     // Real fixtures, read through a detached fd (Android) or the file URL
     // under the bookmark (iOS).
     expect(mine.map((t) => t.unreadableReason), [null, null]);

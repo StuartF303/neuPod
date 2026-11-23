@@ -179,7 +179,7 @@ void main() {
     await add('Zebra', titleSort: 'Aardvark');
     await add('Beta');
     // No title: the key is the file name with its extension ("The " skipped),
-    // and the row shows the name without it.
+    // and the row shows it too (owner decision 15).
     await add('', path: 'Dir/The Wanderer.flac');
     await add('Wander');
     await add('Wanderlust');
@@ -188,7 +188,7 @@ void main() {
       'Zebra', // sorts as "Aardvark"
       'Beta',
       'Wander',
-      'The Wanderer', // "wanderer.flac" between "wander" and "wanderlust"
+      'The Wanderer.flac', // "wanderer.flac" between "wander" and "wanderlust"
       'Wanderlust',
     ]);
   });

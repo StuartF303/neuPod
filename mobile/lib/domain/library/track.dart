@@ -113,17 +113,16 @@ final class Track {
   /// Why the file's tags could not be read (shown greyed), or null.
   final UnreadableReason? unreadableReason;
 
-  /// The title, or the file name without its extension when untagged.
-  /// (The folder-convention fallback comes with the full scanner, phase 3.)
+  /// The title, or the file name when untagged (owner decision 15).
   String get displayTitle => displayTitleOf(title, location.relPath);
 
-  /// [title], or the file name of [relPath] without its extension.
+  /// [title], or the file name of [relPath], extension and all, as the
+  /// device shows an untagged file (`index_file` in lib_build.c: `t->title[0]
+  /// ? t->title : name`; owner decision 15).
   static String displayTitleOf(String title, String relPath) {
     if (title.isNotEmpty) return title;
     final slash = relPath.lastIndexOf('/');
-    final name = slash < 0 ? relPath : relPath.substring(slash + 1);
-    final dot = name.lastIndexOf('.');
-    return dot > 0 ? name.substring(0, dot) : name;
+    return slash < 0 ? relPath : relPath.substring(slash + 1);
   }
 
   /// The second line of a song row: "artist · album", skipping what is
