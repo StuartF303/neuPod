@@ -159,8 +159,10 @@ void main() {
           child: Row(
             children: [
               for (final a in albums)
+                // Small enough for two on the narrowest phone; decoded as
+                // Now Playing draws it (the full-size file).
                 SizedBox.square(
-                  dimension: 220,
+                  dimension: 120,
                   child: CoverArt(a.art, decodeWidth: 220),
                 ),
             ],
