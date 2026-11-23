@@ -131,8 +131,9 @@ and the engine alive.
     done with no error, progress after the activity went), and the service stops.
   - Second test: the app is launched again, and the new activity takes the kept engine. A new scan starts and the app
     is swiped away and launched again mid-scan; the scan's progress goes on in the same engine. Add Folder's picker
-    opens again (not "busy"). The notification's Cancel (the same intent as its action) cancels the scan, and the
-    service stops.
+    opens again (not "busy"). Swiped away again with the picker open, the pick ends as cancelled. The notification's
+    Cancel (the same intent as its action) then cancels the scan, and the service stops. The app is closed while the
+    scan runs: closed after it ended, the engine is rightly destroyed, and the Dart test in it could not report.
 - CI's manifest check also requires `FOREGROUND_SERVICE_DATA_SYNC` and the service's `dataSync` type. The scanner there is a stand-in: an emulator under
   instrumentation cannot grant a SAF folder. Debug builds only expose `debugFinishActivity`, `debugRelaunch`,
   `debugNotificationCancel`, `debugState` and `debugKeepEngineAfterScan`; the last keeps the engine after the scan so the test can report. Its limit: the system

@@ -12,8 +12,9 @@
 //      stops. A folder pick left open by the swipe-away ends as cancelled.
 //   4. (second test) the app is launched again mid-scan: the new activity
 //      takes the kept engine and the scan's progress goes on; Add Folder's
-//      picker opens again (not refused as busy); the notification's Cancel
-//      cancels the scan and the service stops.
+//      picker opens again (not refused as busy); swiped away again, the pick
+//      ends as cancelled; the notification's Cancel then cancels the scan
+//      and the service stops.
 //
 // The scanner is a stand-in that walks no folder (an emulator under
 // instrumentation cannot grant one: the system picker needs driving from
@@ -246,22 +247,28 @@ void main() {
       await Future<void>.delayed(const Duration(seconds: 2));
       expect(pickError, isNull, reason: 'the picker opened');
 
-      // The notification's Cancel.
+      // Swiped away again with the picker open, mid-scan: the pick ends as
+      // cancelled and the engine is kept. (Closed after the scan had ended,
+      // the engine would rightly be destroyed, and this test with it.)
+      await debug('debugFinishActivity');
+      s = await until((s) => s['activityAttached'] == false, 'activity gone');
+      expect(s['engineKept'], isTrue);
+      await pick.timeout(const Duration(seconds: 15));
+      expect(pickError, isNull);
+      expect(pickEnded, isTrue);
+
+      // The notification's Cancel, with the app closed.
       await debug('debugNotificationCancel');
       final end = await done.timeout(const Duration(seconds: 30));
       expect(end.error, scanCancelled);
       expect(end.filesFound, lessThan(scanner.steps));
       expect(marker.existsSync(), isFalse);
-      await until(
+      s = await until(
         (s) => s['serviceRunning'] == false && s['scanActive'] == false,
         'scan service stopped',
       );
-
-      // Closing the app with the picker open ends the pick as cancelled.
-      await debug('debugFinishActivity');
-      await pick.timeout(const Duration(seconds: 15));
-      expect(pickError, isNull);
-      expect(pickEnded, isTrue);
+      // ignore: avoid_print
+      print('NEUPOD_SCAN cancelled from the notification; $s');
     },
     skip: !Platform.isAndroid, // no service on iOS
   );

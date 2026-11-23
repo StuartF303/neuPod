@@ -39,7 +39,10 @@ internal class ScanSession(private val minIntervalMs: Long = UPDATE_INTERVAL_MS)
     var cancelLabel = ""
         private set
 
-    /** Bumped each time a scan starts the service: tells one scan from the next. */
+    /**
+     * Bumped by every start, a restart of a running scan included: tells one scan from the next, so a
+     * Cancel that went unanswered for one never stops a later one.
+     */
     var generation = 0
         private set
 
@@ -53,7 +56,7 @@ internal class ScanSession(private val minIntervalMs: Long = UPDATE_INTERVAL_MS)
     fun start(title: String, text: String, cancelLabel: String): Boolean {
         val wasActive = active
         active = true
-        if (!wasActive) generation++
+        generation++
         this.title = title
         this.text = text
         this.cancelLabel = cancelLabel

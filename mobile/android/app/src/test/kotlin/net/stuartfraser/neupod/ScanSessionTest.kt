@@ -80,11 +80,12 @@ class ScanSessionTest {
     }
 
     @Test
-    fun `a restart of a running scan keeps its generation`() {
+    fun `a restart of a running scan is a new scan for an unanswered Cancel`() {
         val s = started()
         val g = s.generation
-        s.start("Building library", "0 found · 0 read", "Cancel")
-        assertEquals(g, s.generation)
+        assertFalse(s.start("Building library", "0 found · 0 read", "Cancel"), "the service is already up")
+        assertTrue(s.generation > g)
+        assertFalse(s.cancelUnanswered(g), "the Cancel was for the scan before the restart")
     }
 
     private class Engine
