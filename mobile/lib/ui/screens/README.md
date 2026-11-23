@@ -71,7 +71,9 @@ Compilations, and a small Settings). Now Playing, the panel's content and Search
 - **The scan** is one per app: `libraryScanProvider` (`app/library_scan_providers.dart`) owns it; any screen starts,
   watches or cancels it. `NeuPodApp` starts one at launch and on each return to the front when there is any folder
   (always on iOS), except on return to the front after the user cancelled one; adding or removing a folder restarts
-  it. `libraryViewProvider` rebuilds when it finishes.
+  it. `libraryViewProvider` rebuilds when it finishes. On Android it survives the app being swiped away: a foreground
+  service keeps the engine (and the scan) alive, with a `Building library` / `N found · N read` notification and a
+  Cancel action (decision 0009).
 - **An empty library**: Home's idle pane says `No songs yet` and `Settings > Library`; Songs shows one row saying the
   same, whose Select opens Library.
 

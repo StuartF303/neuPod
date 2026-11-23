@@ -9,9 +9,17 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/app/providers.dart';
 import 'package:neupod/domain/library/library_ports.dart';
+import 'package:neupod/domain/library/scan_keep_alive.dart';
 
 /// The [ScanProgress.error] of a scan the user cancelled.
 const scanCancelled = 'cancelled';
+
+/// What keeps the scan going when the app is closed (decision 0009). Silent
+/// by default (iOS, tests); `main.dart` installs the Android scan service
+/// (`scanServiceOverrides`).
+final scanKeepAliveProvider = Provider<ScanKeepAlive>(
+  (ref) => const NoScanKeepAlive(),
+);
 
 /// The latest progress of the library scan, or null before the first one.
 /// Forwards to [LibraryScanner] (decision 0006); the scanner reads only new
@@ -22,6 +30,10 @@ final libraryScanProvider =
     );
 
 /// Owns the scan's subscription: at most one scan runs at a time.
+///
+/// Tells [scanKeepAliveProvider] when a scan starts, how it goes, and when it
+/// has stopped writing, and cancels when it is asked to from outside the app
+/// (the Android notification's Cancel).
 class LibraryScanController extends Notifier<ScanProgress?> {
   // Cancelled by _stop (restart, cancel, and on dispose).
   // ignore: cancel_subscriptions
@@ -45,15 +57,24 @@ class LibraryScanController extends Notifier<ScanProgress?> {
   /// Whether the user cancelled the last scan.
   bool get cancelledByUser => state?.error == scanCancelled;
 
+  ScanKeepAlive get _keepAlive => ref.read(scanKeepAliveProvider);
+
   @override
   ScanProgress? build() {
+    final keepAlive = _keepAlive;
+    final cancels = keepAlive.cancelRequests.listen((_) => unawaited(cancel()));
     ref.onDispose(() {
+      unawaited(cancels.cancel());
       _generation++;
       final sub = _sub;
       _sub = null;
       // The database may close under the scan as the app goes: what the
       // stopped scan throws then is of no use to anyone.
-      if (sub != null) unawaited(_stop(sub));
+      if (sub == null) {
+        keepAlive.stopped();
+      } else {
+        unawaited(_stop(sub).whenComplete(keepAlive.stopped));
+      }
     });
     return null;
   }
@@ -75,6 +96,9 @@ class LibraryScanController extends Notifier<ScanProgress?> {
     final old = _sub;
     _sub = null;
     state = const ScanProgress();
+    // Now, while the app is in front: Android starts a foreground service
+    // only for a visible app.
+    _keepAlive.started(state!, askNotifications: byUser || restart);
     if (old != null) await _stop(old);
     final stopping = _stopping;
     if (stopping != null) await stopping;
@@ -84,7 +108,9 @@ class LibraryScanController extends Notifier<ScanProgress?> {
         .scan()
         .listen(
           (p) {
-            if (generation == _generation) state = p;
+            if (generation != _generation) return;
+            state = p;
+            if (!p.done) _keepAlive.progress(p);
           },
           onError: (Object e) {
             if (generation != _generation) return;
@@ -95,6 +121,7 @@ class LibraryScanController extends Notifier<ScanProgress?> {
               done: true,
               error: '$e',
             );
+            _keepAlive.stopped();
           },
           onDone: () {
             if (generation != _generation) return;
@@ -108,6 +135,7 @@ class LibraryScanController extends Notifier<ScanProgress?> {
                 error: s.error,
               );
             }
+            _keepAlive.stopped();
           },
           cancelOnError: true,
         );
@@ -133,8 +161,12 @@ class LibraryScanController extends Notifier<ScanProgress?> {
   /// Stops the running scan (the user's Select). What it wrote stays; the
   /// state is done with [scanCancelled] as its error.
   Future<void> cancel() async {
-    if (!running) return;
-    _generation++;
+    if (!running) {
+      // Nothing runs here; make sure nothing is shown as running elsewhere.
+      _keepAlive.stopped();
+      return;
+    }
+    final generation = ++_generation;
     final old = _sub;
     _sub = null;
     final s = state!;
@@ -145,6 +177,8 @@ class LibraryScanController extends Notifier<ScanProgress?> {
       error: scanCancelled,
     );
     if (old != null) await _stop(old);
+    // Unless a new scan started meanwhile: it keeps the service.
+    if (generation == _generation && ref.mounted) _keepAlive.stopped();
   }
 
   /// Cancels [sub] and waits for its scan to stop. An error the scan
