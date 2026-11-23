@@ -128,10 +128,19 @@ class _ConfirmScreenState extends ConsumerState<ConfirmScreen> {
             child: Column(
               children: [
                 SizedBox(height: c.maxHeight * 0.22),
-                Text(
-                  widget.head,
-                  textAlign: TextAlign.center,
-                  style: type.large(tokens.ink),
+                // As ui_confirm_create: the sub-line sits a fixed two
+                // large-font lines plus a pad below the head's top, however
+                // many lines the head takes.
+                SizedBox(
+                  height: 2 * 41 * theme.tier.k,
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: Text(
+                      widget.head,
+                      textAlign: TextAlign.center,
+                      style: type.large(tokens.ink),
+                    ),
+                  ),
                 ),
                 SizedBox(height: pad),
                 Text(

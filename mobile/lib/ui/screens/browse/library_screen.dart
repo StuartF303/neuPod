@@ -17,6 +17,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/app/library_scan_providers.dart';
 import 'package:neupod/app/library_view_providers.dart';
+import 'package:neupod/app/providers.dart';
 import 'package:neupod/domain/library/library_folder.dart';
 import 'package:neupod/domain/library/library_ports.dart';
 import 'package:neupod/domain/library_view/library_view.dart';
@@ -38,9 +39,12 @@ const addMusicHint = 'Settings > Library';
 /// The ellipsis the firmware's labels use.
 const _ellipsis = '…';
 
-/// The small line of the Remove question, worded as the firmware's
-/// `"%u songs come off the list."` (Clear On-The-Go, `ui_playlists.c`).
-const removeFolderSub = 'Its songs come off the list.';
+/// The small line of the Remove question: the firmware's
+/// `"%u %s come off the list."` with `n == 1 ? "song" : "songs"`
+/// (Clear On-The-Go, `ui_playlists.c`), grammar as the C has it (`1 song come
+/// off the list.`).
+String removeFolderSub(int n) =>
+    '$n ${n == 1 ? 'song' : 'songs'} come off the list.';
 
 /// What the user needs to know about where music can come from. Owner
 /// decision 8: Android 11+ refuses the storage root and Download.
@@ -219,24 +223,31 @@ class FolderScreen extends ConsumerWidget {
             NeupodListItem.row(
               height: NeupodTheme.of(context).tier.rowHeight,
               title: 'Remove',
-              onActivate: () => pushScreen(
-                ref,
-                'Remove',
-                (_) => ConfirmScreen(
-                  title: 'Remove',
-                  head: 'Remove ${folder.name}?',
-                  sub: removeFolderSub,
-                  yesWord: 'Remove',
-                  noWord: 'Keep',
-                  onYes: () => _remove(ref),
-                ),
-              ),
+              onActivate: () => unawaited(_ask(ref)),
             ),
           ],
         ),
       ),
     ),
   );
+
+  /// The question, with the folder's song count from the library.
+  Future<void> _ask(WidgetRef ref) async {
+    final songs = await ref.read(libraryRepositoryProvider).watchSongs().first;
+    final n = songs.where((t) => t.source.id == folder.id).length;
+    pushScreen(
+      ref,
+      'Remove',
+      (_) => ConfirmScreen(
+        title: 'Remove',
+        head: 'Remove ${folder.name}?',
+        sub: removeFolderSub(n),
+        yesWord: 'Remove',
+        noWord: 'Keep',
+        onYes: () => _remove(ref),
+      ),
+    );
+  }
 
   Future<void> _remove(WidgetRef ref) async {
     final shell = ref.read(shellProvider.notifier);
