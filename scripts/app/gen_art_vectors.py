@@ -176,6 +176,21 @@ def apic(version, ptype, data, enc=0, mime=b"image/jpeg", desc=b"", flags=b"\0\0
     return b"APIC" + size + flags + payload
 
 
+def box(kind, payload):
+    return struct.pack(">I", 8 + len(payload)) + kind + payload
+
+
+def m4a(covr_boxes):
+    """The ALAC fixture with a top-level udta/meta/ilst holding one covr item made of [covr_boxes]."""
+    data = open(os.path.join(AUDIO, "alac16_48k_mono.m4a"), "rb").read()
+    ilst = box(b"ilst", box(b"covr", b"".join(covr_boxes)))
+    return data + box(b"udta", box(b"meta", bytes(4) + ilst))
+
+
+def covr_data(code, image):
+    return box(b"data", struct.pack(">II", code, 0) + image)
+
+
 def mp3(frames, version, tag_flags=0):
     body = b"".join(frames) + bytes(32)
     tag = b"ID3" + bytes([version, 0, tag_flags]) + syncsafe(len(body)) + body
@@ -234,6 +249,12 @@ def main():
             "apic_png_then_jpeg_other.mp3": mp3([apic(3, 3, red_png, mime=b"image/png"), apic(3, 0, blue)], 3),
             "apic_compressed.mp3": mp3([apic(3, 3, red, flags=b"\0\x80")], 3),
             "apic_unsync_tag.mp3": mp3([apic(3, 3, red)], 3, tag_flags=0x80),
+            # MP4 covr (covr_item): every 'data' box is a front cover (type 3); the bytes say what it is, not the type code.
+            "covr_jpeg.m4a": m4a([covr_data(13, red)]),
+            "covr_png_then_jpeg.m4a": m4a([covr_data(14, red_png), covr_data(13, blue)]),
+            "covr_two_jpegs.m4a": m4a([covr_data(13, red), covr_data(13, blue)]),
+            "covr_other_box_first.m4a": m4a([box(b"name", b"x"), covr_data(14, green)]),
+            "covr_empty_data.m4a": m4a([box(b"data", struct.pack(">II", 13, 0))]),
         }
         images = {
             # Cover files in a folder: decoded as a whole file.
@@ -299,6 +320,7 @@ def main():
                 "-o", exe,
                 os.path.join(HERE, "art_vectors.c"),
                 os.path.join(REPO, "app", "audio", "meta.c"),
+                os.path.join(REPO, "app", "audio", "mp4.c"),
                 os.path.join(REPO, "app", "audio", "art.c"),
                 os.path.join(REPO, "app", "third_party", "tjpgd", "tjpgd.c"),
                 os.path.join(REPO, "app", "os", "os_alloc_malloc.c"),

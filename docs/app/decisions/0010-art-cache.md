@@ -18,6 +18,8 @@ Status: Accepted (2026-11-23) · Owner: Library engineer
    else, a front cover (type 3) adds one, the first wins a tie. The kind comes from the first bytes, not the mime.
    ID3 frames that are compressed, encrypted or unsynchronised (frame or tag), and descriptions past the first 160
    bytes, are skipped.
+   MP4 `covr` items (`covr_item`, `app/audio/mp4.c`): every `data` box is offered as a front cover, whatever its
+   type code says.
 2. Sources in order: the embedded picture if it is a JPEG, then a cover file in the track's own folder. One that does
    not decode gives way to the next.
 3. Cover file names: `cover.jpg`, then `folder.jpg`, then `front.jpg`, ASCII case folded. No `.jpeg`, no PNG.

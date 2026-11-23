@@ -20,6 +20,11 @@ tags	apic_long_desc.mp3	0	0	none	0	-	folder
 tags	apic_png_then_jpeg_other.mp3	327	1188	jpeg	0	ok	embedded,folder
 tags	apic_compressed.mp3	0	0	none	0	-	folder
 tags	apic_unsync_tag.mp3	0	0	none	0	-	folder
+tags	covr_jpeg.m4a	16510	1192	jpeg	3	ok	embedded,folder
+tags	covr_png_then_jpeg.m4a	16796	1188	jpeg	3	ok	embedded,folder
+tags	covr_two_jpegs.m4a	16510	1192	jpeg	3	ok	embedded,folder
+tags	covr_other_box_first.m4a	16519	1036	jpeg	3	ok	embedded,folder
+tags	covr_empty_data.m4a	0	0	none	0	-	folder
 # image: name, decode, thumbnail size, colours at the centres of its quarters (TL, TR, BL, BR)
 image	cover.jpg	ok	48x48	ffd3bd,ce2829,ffdfce,ffd3bd
 image	folder_blue.jpg	ok	48x48	c6dfff,183c9c,cedbff,bddfff

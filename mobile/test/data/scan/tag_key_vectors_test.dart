@@ -25,7 +25,11 @@
 // space, 300), the year (DATE "2001-05-04", TDRC with a time, TYER after
 // TDRC, a DATE that is not a year after a YEAR), the compilation flag ("1",
 // "yes", "0"), a comment block over the scratch (none of them), ID3v2.2,
-// 2.3 and 2.4; then what `index_file` makes of them (the album artist, the
+// 2.3 and 2.4; MP4 items (texts, trkn, disk, ©day, cpil, ©gen, gnre, the
+// sort items, an item over the 96-byte buffer, an AAC sample entry) and the
+// ALAC duration (edit list, iTunSMPB, an edit list that does not fit); WAV
+// durations (an odd chunk, WAVE_FORMAT_EXTENSIBLE, a streaming size, rates
+// and depths the device does not play); then what `index_file` makes of them (the album artist, the
 // compilation test, the artist and album keys), through the library view.
 
 import 'dart:convert';
@@ -40,6 +44,7 @@ import 'package:neupod/data/library_view/drift_library_view.dart';
 import 'package:neupod/data/scan/local_library_scanner.dart' show scanVersion;
 import 'package:neupod/data/scan/tag_reader.dart';
 import 'package:neupod/domain/library/collation.dart';
+import 'package:neupod/domain/library/track.dart';
 
 /// The tags as the scanner stores them: a parse that fails part-way gives
 /// what it read (`TagReadException.partial`), as the firmware keeps it.
@@ -61,7 +66,7 @@ void main() {
       .where((l) => l.isNotEmpty && !l.startsWith('#'))
       .toList();
 
-  test('the vectors are there', () => expect(lines.length, 28));
+  test('the vectors are there', () => expect(lines.length, 47));
 
   for (final line in lines) {
     final f = line.split('\t');
@@ -93,9 +98,46 @@ void main() {
       expect('${tags.discNo}', f[12], reason: 'disc');
       expect('${tags.year}', f[13], reason: 'year');
       expect(tags.compilation ? '1' : '0', f[14], reason: 'flag');
-      expect('${tags.durationMs ~/ 1000}', f[20], reason: 'duration (s)');
+      // The duration from the same frames and rate (TR_DUR is their
+      // quotient in seconds). AAC: the device cannot play it and has none;
+      // the phone plays it and takes the media header's.
+      final [frames, rate] = f[20].split('/').map(int.parse).toList();
+      if (tags.codec != 'aac') {
+        expect(
+          tags.durationMs,
+          rate == 0 ? 0 : frames * 1000 ~/ rate,
+          reason: 'duration',
+        );
+      } else {
+        expect(rate, 0, reason: 'no duration for AAC on the device');
+        // aac_tags.m4a is alac16_48k_mono.m4a with its sample entry made AAC:
+        // the media header is the same, and m4a_tags.m4a (the same source as
+        // ALAC, untrimmed) gives its length: 9600 frames at 48 kHz.
+        expect(tags.durationMs, 200, reason: "the media header's length");
+      }
     });
   }
+
+  test('failed parses keep their tags, with the reason', () {
+    for (final (name, ext, reason) in [
+      ('truncated.flac', 'flac', UnreadableReason.damaged),
+      ('no_frames.mp3', 'mp3', UnreadableReason.damaged),
+      ('no_audio.m4a', 'm4a', UnreadableReason.damaged),
+    ]) {
+      final src = BytesSource(
+        Uint8List.fromList(File('$dir/$name').readAsBytesSync()),
+      );
+      expect(
+        () => readTags(src, ext),
+        throwsA(
+          isA<TagReadException>()
+              .having((e) => e.reason, 'reason', reason)
+              .having((e) => e.partial?.title, 'title', isNotEmpty),
+        ),
+        reason: name,
+      );
+    }
+  });
 
   // `index_file`'s album artist, compilation test and entity keys, through
   // the library view: each file is a track of its own in a folder named

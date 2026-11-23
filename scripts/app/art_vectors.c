@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 // What the firmware makes of album art, for the phone app's tests (owner: "firmware behaviour is the rule"). Runs the
 // firmware's own code compiled for the host: the tag parsers' choice of embedded picture (app/audio/meta.c:
-// flac_picture / id3_picture / meta_art_offer), the order of sources and the cover file names (app/audio/art.c:
+// flac_picture / id3_picture / meta_art_offer; app/audio/mp4.c: covr_item), the order of sources and the cover file names (app/audio/art.c:
 // art_sources, art_folder_rank, art_folder_pick) and whether its JPEG decoder takes a picture (art_decode, TJpgDec).
 // Built and run by scripts/app/gen_art_vectors.py. Modes, one line of output per argument:
 //   tags <file>...   <name>\t<offset>\t<length>\t<kind>\t<type>\t<decode>\t<sources>
@@ -78,6 +78,10 @@ static int tags(const char *path) {
         static flac_info_t fi;
         flac_parse(file_rd, f, size, &fi);
         t = fi.tags;
+    } else if (n > 4 && (strcmp(path + n - 4, ".m4a") == 0 || strcmp(path + n - 4, ".mp4") == 0)) {
+        static mp4_info_t pi;
+        mp4_parse(file_rd, f, size, &pi);
+        t = pi.tags;
     } else {
         static mp3_info_t mi;
         mp3_parse(file_rd, f, size, &mi);

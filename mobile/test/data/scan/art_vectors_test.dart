@@ -50,7 +50,7 @@ void main() {
   ];
 
   test('the vectors are there', () {
-    expect(of('tags'), hasLength(20));
+    expect(of('tags'), hasLength(25));
     expect(of('image'), hasLength(28));
     expect(of('rank'), hasLength(21));
     expect(of('pick'), hasLength(8));
