@@ -187,21 +187,54 @@ void main() {
     expect(await libraryUpdatedLine(_One()), '1 song · 1 artist · 1 album');
   });
 
-  testWidgets('Remove gives up the folder, goes back and rescans', (
-    tester,
-  ) async {
+  testWidgets('Remove asks first, as the firmware does; Select confirms, '
+      'then it gives up the folder, goes back and rescans', (tester) async {
     final access = FakeFolderAccess([music, drive]);
     final scanner = FakeLibraryScanner();
     final rig = await _openLibrary(tester, access, scanner);
     await _select(tester, rig); // Music
     expect(rig.container.read(shellProvider).top!.name, 'Music');
     expect(_row('Remove'), findsOneWidget);
-    await _select(tester, rig); // Remove
+    await _select(tester, rig); // Remove: the question, nothing done yet
+    expect(rig.container.read(shellProvider).top!.name, 'Remove');
+    expect(find.text('Remove Music?'), findsOneWidget);
+    expect(find.text(removeFolderSub), findsOneWidget);
+    expect(find.text('Select = Remove  ·  Menu = Keep'), findsOneWidget);
+    expect(_wheelValue(rig), contains('Remove Music?'));
+    expect(access.removed, isEmpty);
+    expect(scanner.started, 0);
+    await _step(tester, rig, 3); // a turn does nothing
+    expect(access.removed, isEmpty);
+    expect(rig.container.read(shellProvider).top!.name, 'Remove');
+    await _select(tester, rig); // Select = Remove
     expect(access.removed, ['content://tree/Music']);
     expect(rig.container.read(shellProvider).top!.name, 'Library');
     expect(_row('Music'), findsNothing);
     expect(_row('USB'), findsOneWidget);
     expect(scanner.started, 1);
+  });
+
+  testWidgets('Menu on the question keeps the folder and its place', (
+    tester,
+  ) async {
+    final access = FakeFolderAccess([music, drive]);
+    final scanner = FakeLibraryScanner();
+    final rig = await _openLibrary(tester, access, scanner);
+    await _select(tester, rig); // Music
+    await _select(tester, rig); // Remove: the question
+    expect(find.text('Remove Music?'), findsOneWidget);
+    rig.press(WheelButton.menu); // Menu = Keep
+    await settle(tester);
+    // Back on the folder's own screen, nothing given up, nothing scanned.
+    expect(rig.container.read(shellProvider).top!.name, 'Music');
+    expect(_row('Remove'), findsOneWidget);
+    expect(access.removed, isEmpty);
+    expect(scanner.started, 0);
+    rig.press(WheelButton.menu);
+    await settle(tester);
+    expect(rig.container.read(shellProvider).top!.name, 'Library');
+    expect(_row('Music'), findsOneWidget);
+    expect(access.removed, isEmpty);
   });
 
   testWidgets('Menu on a folder keeps it', (tester) async {

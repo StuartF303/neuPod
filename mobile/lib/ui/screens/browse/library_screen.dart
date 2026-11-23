@@ -22,6 +22,7 @@ import 'package:neupod/domain/library/library_ports.dart';
 import 'package:neupod/domain/library_view/library_view.dart';
 import 'package:neupod/ui/features/library_setup/library_setup_providers.dart';
 import 'package:neupod/ui/screens/browse/browse_common.dart';
+import 'package:neupod/ui/screens/browse/confirm_screen.dart';
 import 'package:neupod/ui/screens/shell/neupod_list.dart';
 import 'package:neupod/ui/screens/shell/shell_frame.dart';
 import 'package:neupod/ui/screens/shell/shell_state.dart';
@@ -36,6 +37,10 @@ const addMusicHint = 'Settings > Library';
 
 /// The ellipsis the firmware's labels use.
 const _ellipsis = '…';
+
+/// The small line of the Remove question, worded as the firmware's
+/// `"%u songs come off the list."` (Clear On-The-Go, `ui_playlists.c`).
+const removeFolderSub = 'Its songs come off the list.';
 
 /// What the user needs to know about where music can come from. Owner
 /// decision 8: Android 11+ refuses the storage root and Download.
@@ -194,7 +199,9 @@ class LibraryScreen extends ConsumerWidget {
   }
 }
 
-/// A picked folder: Remove (which goes back to Library). Menu keeps it.
+/// A picked folder: Remove, which asks first (the firmware's question, as for
+/// Forget: `Remove Music?`, `Select = Remove  ·  Menu = Keep`) and then goes
+/// back to Library. Menu keeps it.
 class FolderScreen extends ConsumerWidget {
   /// The screen of [folder].
   const FolderScreen({required this.folder, super.key});
@@ -212,7 +219,18 @@ class FolderScreen extends ConsumerWidget {
             NeupodListItem.row(
               height: NeupodTheme.of(context).tier.rowHeight,
               title: 'Remove',
-              onActivate: () => _remove(ref),
+              onActivate: () => pushScreen(
+                ref,
+                'Remove',
+                (_) => ConfirmScreen(
+                  title: 'Remove',
+                  head: 'Remove ${folder.name}?',
+                  sub: removeFolderSub,
+                  yesWord: 'Remove',
+                  noWord: 'Keep',
+                  onYes: () => _remove(ref),
+                ),
+              ),
             ),
           ],
         ),
