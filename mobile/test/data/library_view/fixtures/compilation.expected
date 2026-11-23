@@ -2,18 +2,30 @@
 Abba	1
 Various Artist	1
 Zed	1
-# albums list (title, artist, songs)
-Hits	Abba	1
-Hits	Zed	1
-Hits		2
-Mix	Various Artist	1
-Mix		1
+# albums list (title, artist, songs, year)
+Hits	Abba	1	0
+Hits	Zed	1	0
+Hits		2	0
+Mix	Various Artist	1	0
+Mix		1	0
 # album table (title, artist)
 Hits	Abba
 Mix	Various Artist
 Hits	Zed
 Hits	
 Mix	
+# album songs (album, title, disc, track)
+Hits	U	0	1
+Mix	X	0	1
+Hits	Y	0	1
+Hits	T	0	1
+Hits	V	0	2
+Mix	W	0	1
+# compilations (title)
+Hits
+Mix
+# genres (name, songs)
+# genre songs (genre, title)
 # songs (title, artist, album)
 T	various artists	Hits
 U	Abba	Hits

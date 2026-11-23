@@ -1,10 +1,18 @@
 // SPDX-License-Identifier: MPL-2.0
 
-/// Phase 1 tag reader (decision 0003): FLAC and MP3 title, artist, album,
-/// track number and duration, ported from the firmware's `app/audio/meta.c`
-/// (`flac_parse`, `vorbis_comments`, `id3v2_tags`, `id3_text_frame`,
-/// `mp3_parse`, `meta_text_to_utf8`), read through [ByteSource]. Phase 3
-/// adds the other fields and containers.
+/// Tag reader (decision 0003): FLAC and MP3 tags and duration, ported from
+/// the firmware's `app/audio/meta.c` (`flac_parse`, `vorbis_comments`,
+/// `vorbis_field`, `id3v2_tags`, `id3_text_frame`, `mp3_parse`,
+/// `meta_text_to_utf8`, `meta_genre_text`, `meta_year_text`), read through
+/// [ByteSource], with the library tags the firmware's scanner asks for
+/// (`audio_tags_ext_t`, set by `meta_set_tags_ext` in lib_build.c): album
+/// artist, genre, disc, year, compilation flag and the sort tags.
+///
+/// Texts come twice: as displayed (the whole tag, decoded) and as the
+/// firmware's parser stores them (`...KeyText`: its buffer sizes, its
+/// decoding), which is what the library's keys and grouping are built from
+/// (owner decision 11). Numbers and the flag are the firmware's only: what
+/// the device reads is what orders an album and groups it.
 ///
 /// Every length read from a file is bounded by the file size and a cap, and
 /// a damaged file gives partial tags or a [TagReadException], never a hang or
@@ -14,6 +22,7 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:neupod/domain/library/collation.dart';
 import 'package:neupod/domain/library/track.dart';
 
 /// Random-access bytes of one file (implemented over neupod_storage's
@@ -69,7 +78,17 @@ final class AudioTags {
     this.album = '',
     this.artistKeyText = const [],
     this.albumKeyText = const [],
+    this.albumArtist = '',
+    this.albumArtistKeyText = const [],
+    this.artistSortKeyText = const [],
+    this.albumSortKeyText = const [],
+    this.albumArtistSortKeyText = const [],
+    this.genre = '',
+    this.genreKeyText = const [],
     this.trackNo = 0,
+    this.discNo = 0,
+    this.year = 0,
+    this.compilation = false,
     this.durationMs = 0,
     this.durationEstimated = false,
     this.sampleRate = 0,
@@ -104,7 +123,41 @@ final class AudioTags {
   /// artist and album keys and the compilation test are built from.
   final List<int> artistKeyText;
   final List<int> albumKeyText;
+
+  /// The album artist (ALBUMARTIST / "ALBUM ARTIST", TPE2 / TP2) as
+  /// displayed, and as the firmware stores it (`char album_artist[64]`).
+  final String albumArtist;
+  final List<int> albumArtistKeyText;
+
+  /// The sort tags the library keys on, as the firmware stores them (`char
+  /// sort_artist[32]` and so on): ARTISTSORT / TSOP / TSP, ALBUMSORT / TSOA /
+  /// TSA, ALBUMARTISTSORT / TSO2 / TS2.
+  final List<int> artistSortKeyText;
+  final List<int> albumSortKeyText;
+  final List<int> albumArtistSortKeyText;
+
+  /// The genre (GENRE, TCON / TCO) with ID3v1 `(n)` references resolved as
+  /// `meta_genre_text` does: as displayed, and as the firmware stores it
+  /// (`char genre[32]`).
+  final String genre;
+  final List<int> genreKeyText;
+
+  /// The firmware's track number (`track_from`: the leading digits, so
+  /// "3/12" is 3; 0 when none).
   final int trackNo;
+
+  /// The firmware's disc number (DISCNUMBER / DISC, TPOS / TPA), as
+  /// [trackNo]; 0 when none.
+  final int discNo;
+
+  /// The firmware's year (`meta_year_text`: the first four characters when
+  /// they are digits, so "2019-05-04" is 2019; 0 otherwise): DATE / YEAR,
+  /// TDRC / TYER / TYE, the later one in the file standing.
+  final int year;
+
+  /// The firmware's compilation flag (`flag_from`: COMPILATION / TCMP / TCP
+  /// starting with `1`, `y`, `Y`, `t` or `T`).
+  final bool compilation;
   final int durationMs;
 
   /// MP3 without a Xing/Info or VBRI frame count: estimated from the bitrate,
@@ -130,11 +183,19 @@ const _maxCommentBlock = 256 * 1024;
 const _firmwareCommentScratch = 4096;
 
 /// The firmware's tag buffers: `title[64]`, `sort_title[32]`, `artist[64]`,
-/// `album[64]` (meta.h).
+/// `album[64]`, `album_artist[64]`, `genre[32]` (meta.h), the genre's
+/// decoding buffer `g[48]` and the number buffers of `id3_text_frame` and
+/// `vorbis_field` (meta.c).
 const _fwTitleCap = 64;
 const _fwSortCap = 32;
 const _fwArtistCap = 64;
 const _fwAlbumCap = 64;
+const _fwAlbumArtistCap = 64;
+const _fwGenreCap = 32;
+const _fwGenreRaw = 48;
+const _fwId3Number = 16;
+const _fwId3Flag = 8;
+const _fwVorbisNumber = 11;
 
 /// Reads the tags of [src], choosing the parser by [extension] (`flac`,
 /// `mp3`; any case).
@@ -216,16 +277,127 @@ String _cut(String t) {
   return t.substring(0, end);
 }
 
-/// `track_from`: the leading digits ("3/12" is 3), capped as the firmware
-/// caps it.
-int _number(String s) {
+/// `track_from` (meta.c): the leading digits ("3/12" is 3), capped as the
+/// firmware caps it.
+int firmwareNumber(List<int> s) {
   var v = 0;
-  for (final c in s.codeUnits) {
+  for (final c in s) {
     if (c < 0x30 || c > 0x39 || v >= 10000) break;
     v = v * 10 + (c - 0x30);
   }
   return v > 0xFFFF ? 0xFFFF : v;
 }
+
+/// `meta_year_text` (meta.c): the first four characters when they are all
+/// digits, else 0.
+int firmwareYear(List<int> s) {
+  if (s.length < 4) return 0;
+  var v = 0;
+  for (var i = 0; i < 4; i++) {
+    if (s[i] < 0x30 || s[i] > 0x39) return 0;
+    v = v * 10 + (s[i] - 0x30);
+  }
+  return v;
+}
+
+/// `flag_from` (meta.c): true when the text starts with `1`, `y`, `Y`, `t`
+/// or `T`.
+bool firmwareFlag(List<int> s) =>
+    s.isNotEmpty &&
+    (s[0] == 0x31 ||
+        s[0] == 0x79 ||
+        s[0] == 0x59 ||
+        s[0] == 0x74 ||
+        s[0] == 0x54);
+
+/// The ID3v1 genres, in number order (`k_genres` in meta.c: the 80 standard
+/// ones, then the Winamp extensions).
+const _genres = [
+  'Blues', 'Classic Rock', 'Country', 'Dance', 'Disco', 'Funk', 'Grunge', //
+  'Hip-Hop', 'Jazz', 'Metal', 'New Age', 'Oldies', 'Other', 'Pop', 'R&B',
+  'Rap', 'Reggae', 'Rock', 'Techno', 'Industrial', 'Alternative', 'Ska',
+  'Death Metal', 'Pranks', 'Soundtrack', 'Euro-Techno', 'Ambient',
+  'Trip-Hop', 'Vocal', 'Jazz+Funk', 'Fusion', 'Trance', 'Classical',
+  'Instrumental', 'Acid', 'House', 'Game', 'Sound Clip', 'Gospel', 'Noise',
+  'AlternRock', 'Bass', 'Soul', 'Punk', 'Space', 'Meditative',
+  'Instrumental Pop', 'Instrumental Rock', 'Ethnic', 'Gothic', 'Darkwave',
+  'Techno-Industrial', 'Electronic', 'Pop-Folk', 'Eurodance', 'Dream',
+  'Southern Rock', 'Comedy', 'Cult', 'Gangsta', 'Top 40', 'Christian Rap',
+  'Pop/Funk', 'Jungle', 'Native American', 'Cabaret', 'New Wave',
+  'Psychedelic', 'Rave', 'Showtunes', 'Trailer', 'Lo-Fi', 'Tribal',
+  'Acid Punk', 'Acid Jazz', 'Polka', 'Retro', 'Musical', 'Rock & Roll',
+  'Hard Rock',
+  // 80.. Winamp
+  'Folk', 'Folk-Rock', 'National Folk', 'Swing', 'Fast Fusion', 'Bebop',
+  'Latin', 'Revival', 'Celtic', 'Bluegrass', 'Avantgarde', 'Gothic Rock',
+  'Progressive Rock', 'Psychedelic Rock', 'Symphonic Rock', 'Slow Rock',
+  'Big Band', 'Chorus', 'Easy Listening', 'Acoustic', 'Humour', 'Speech',
+  'Chanson', 'Opera', 'Chamber Music', 'Sonata', 'Symphony', 'Booty Bass',
+  'Primus', 'Porn Groove', 'Satire', 'Slow Jam', 'Club', 'Tango', 'Samba',
+  'Folklore', 'Ballad', 'Power Ballad', 'Rhythmic Soul', 'Freestyle', 'Duet',
+  'Punk Rock', 'Drum Solo', 'A Cappella', 'Euro-House', 'Dance Hall', 'Goa',
+  'Drum & Bass', 'Club-House', 'Hardcore Techno', 'Terror', 'Indie',
+  'BritPop', 'Afro-Punk', 'Polsk Punk', 'Beat', 'Christian Gangsta Rap',
+  'Heavy Metal', 'Black Metal', 'Crossover', 'Contemporary Christian',
+  'Christian Rock', 'Merengue', 'Salsa', 'Thrash Metal', 'Anime', 'JPop',
+  'Synthpop',
+];
+
+/// Port of `meta_genre_text` (meta.c) over the bytes of a C string [src]:
+/// `((` is a literal `(`; `(n)` is ID3v1 genre n, unless text follows it
+/// (then the text stands; a second `(m)` after it does not count); `(RX)`
+/// and `(CR)` (remix, cover) are not genres; with [bareNumberOk] (ID3 TCON)
+/// a bare number is a genre too. The result is cut to [cap] - 1 bytes at a
+/// character boundary.
+List<int> firmwareGenre(List<int> src, int cap, {required bool bareNumberOk}) {
+  if (cap == 0) return const [];
+  final nul = src.indexOf(0);
+  final whole = nul < 0 ? src : src.sublist(0, nul);
+  int at(int i) => i < whole.length ? whole[i] : 0;
+  // `genre_ref`: digits from [from] (while under 1000): the name, or null
+  // for no digits or a number past the table, and where the digits end.
+  (List<int>?, int) ref(int from) {
+    var v = 0, p = from;
+    while (at(p) >= 0x30 && at(p) <= 0x39 && v < 1000) {
+      v = v * 10 + (at(p++) - 0x30);
+    }
+    if (p == from || v >= _genres.length) return (null, p);
+    return (ascii.encode(_genres[v]), p);
+  }
+
+  bool starts(String s) {
+    for (var i = 0; i < s.length; i++) {
+      if (at(i) != s.codeUnitAt(i)) return false;
+    }
+    return true;
+  }
+
+  var out = whole;
+  if (at(0) == 0x28 && at(1) == 0x28) {
+    out = whole.sublist(1);
+  } else if (at(0) == 0x28) {
+    var (g, e) = ref(1);
+    final rx = starts('(RX)') || starts('(CR)');
+    if (rx) e = 3;
+    if (rx || (e != 1 && at(e) == 0x29)) {
+      final rest = e + 1;
+      final more = at(rest) == 0x28 && at(rest + 1) != 0x28;
+      out = at(rest) != 0 && !more
+          ? whole.sublist(rest)
+          : (g != null && !rx ? g : const <int>[]);
+    }
+  } else if (bareNumberOk) {
+    final (g, e) = ref(0);
+    if (g != null && at(e) == 0) out = g;
+  }
+  return firmwareCut(out, cap);
+}
+
+/// The displayed genre: [firmwareGenre] over the whole decoded text.
+String _genreText(String text, {required bool bareNumberOk}) => utf8.decode(
+  firmwareGenre(utf8.encode(text), 1 << 30, bareNumberOk: bareNumberOk),
+  allowMalformed: true,
+);
 
 /// `id3v2_size`: the whole ID3v2 tag's size including header and footer, or
 /// 0 when there is none.
@@ -250,7 +422,7 @@ AudioTags _readFlac(ByteSource src) {
   pos += 4;
   var rate = 0, bits = 0, totalFrames = 0;
   var haveInfo = false;
-  final fields = _VorbisFields();
+  final fields = _Fields();
   for (var guard = 0; guard < 256; guard++) {
     final bh = _need(src, pos, 4);
     final last = (bh[0] & 0x80) != 0;
@@ -278,17 +450,8 @@ AudioTags _readFlac(ByteSource src) {
     }
   }
   if (!haveInfo) throw const TagReadException(_damaged, 'no STREAMINFO');
-  return AudioTags(
+  return fields.tags(
     codec: 'flac',
-    title: fields.title,
-    titleSort: fields.titleSort,
-    titleKeyText: fields.titleKey,
-    titleSortKeyText: fields.titleSortKey,
-    artist: fields.artist,
-    album: fields.album,
-    artistKeyText: fields.artistKey,
-    albumKeyText: fields.albumKey,
-    trackNo: fields.track,
     durationMs: rate == 0 ? 0 : totalFrames * 1000 ~/ rate,
     sampleRate: rate,
     bitDepth: bits,
@@ -297,15 +460,60 @@ AudioTags _readFlac(ByteSource src) {
 
 const _damaged = UnreadableReason.damaged;
 
-class _VorbisFields {
+/// What a tag parser fills: the fields of `audio_tags_t` and
+/// `audio_tags_ext_t`.
+class _Fields {
   String title = '', titleSort = '', artist = '', album = '';
+  String albumArtist = '', genre = '';
   List<int> titleKey = const [], titleSortKey = const [];
   List<int> artistKey = const [], albumKey = const [];
-  int track = 0;
+  List<int> albumArtistKey = const [], genreKey = const [];
+  List<int> artistSortKey = const [], albumSortKey = const [];
+  List<int> albumArtistSortKey = const [];
+  int track = 0, disc = 0, year = 0;
+  bool compilation = false;
+
+  AudioTags tags({
+    required String codec,
+    required int durationMs,
+    bool durationEstimated = false,
+    required int sampleRate,
+    int bitDepth = 0,
+  }) => AudioTags(
+    codec: codec,
+    title: title,
+    titleSort: titleSort,
+    titleKeyText: titleKey,
+    titleSortKeyText: titleSortKey,
+    artist: artist,
+    album: album,
+    artistKeyText: artistKey,
+    albumKeyText: albumKey,
+    albumArtist: albumArtist,
+    albumArtistKeyText: albumArtistKey,
+    artistSortKeyText: artistSortKey,
+    albumSortKeyText: albumSortKey,
+    albumArtistSortKeyText: albumArtistSortKey,
+    genre: genre,
+    genreKeyText: genreKey,
+    trackNo: track,
+    discNo: disc,
+    year: year,
+    compilation: compilation,
+    durationMs: durationMs,
+    durationEstimated: durationEstimated,
+    sampleRate: sampleRate,
+    bitDepth: bitDepth,
+  );
 }
 
-/// `vorbis_comments` and the phase 1 keys of `vorbis_field`.
-void _vorbisComments(Uint8List b, _VorbisFields t, {required bool forKey}) {
+/// `vorbis_comments` and `vorbis_field`. A later comment for the same field
+/// replaces an earlier one, as in the firmware (so "ALBUM ARTIST" and
+/// ALBUMARTIST, DISC and DISCNUMBER, YEAR and DATE: the last one stands,
+/// even when its number does not parse). [forKey] is false for a block the
+/// firmware skips (over its scratch): the displayed texts are still read,
+/// the firmware's texts, numbers and flag are not.
+void _vorbisComments(Uint8List b, _Fields t, {required bool forKey}) {
   final n = b.length;
   if (n < 8) return;
   final vendor = _le32(b, 0);
@@ -323,6 +531,16 @@ void _vorbisComments(Uint8List b, _VorbisFields t, {required bool forKey}) {
           .decode(Uint8List.sublistView(b, p, eq), allowInvalid: true)
           .toUpperCase();
       final value = Uint8List.sublistView(b, eq + 1, p + len);
+      // Numbers and flags: only the head matters (`tmp[12]`: the first 11
+      // bytes, as a C string).
+      List<int> head() {
+        final h = value.length < _fwVorbisNumber
+            ? value
+            : Uint8List.sublistView(value, 0, _fwVorbisNumber);
+        final nul = h.indexOf(0);
+        return nul < 0 ? h : h.sublist(0, nul);
+      }
+
       switch (key) {
         case 'TITLE':
           t.title = _text(value, 3);
@@ -337,7 +555,35 @@ void _vorbisComments(Uint8List b, _VorbisFields t, {required bool forKey}) {
           t.album = _text(value, 3);
           if (forKey) t.albumKey = firmwareText(value, 3, _fwAlbumCap);
         case 'TRACKNUMBER':
-          t.track = _number(_text(value, 3));
+          if (forKey) t.track = firmwareNumber(head());
+        case 'ALBUMARTIST' || 'ALBUM ARTIST':
+          t.albumArtist = _text(value, 3);
+          if (forKey) {
+            t.albumArtistKey = firmwareText(value, 3, _fwAlbumArtistCap);
+          }
+        case 'GENRE':
+          t.genre = _genreText(_text(value, 3), bareNumberOk: false);
+          if (forKey) {
+            t.genreKey = firmwareGenre(
+              firmwareText(value, 3, _fwGenreRaw),
+              _fwGenreCap,
+              bareNumberOk: false,
+            );
+          }
+        case 'DISCNUMBER' || 'DISC':
+          if (forKey) t.disc = firmwareNumber(head());
+        case 'DATE' || 'YEAR':
+          if (forKey) t.year = firmwareYear(head());
+        case 'COMPILATION':
+          if (forKey) t.compilation = firmwareFlag(head());
+        case 'ARTISTSORT':
+          if (forKey) t.artistSortKey = firmwareText(value, 3, _fwSortCap);
+        case 'ALBUMSORT':
+          if (forKey) t.albumSortKey = firmwareText(value, 3, _fwSortCap);
+        case 'ALBUMARTISTSORT':
+          if (forKey) {
+            t.albumArtistSortKey = firmwareText(value, 3, _fwSortCap);
+          }
       }
     }
     p += len;
@@ -401,15 +647,8 @@ _Mp3Header? _mp3Header(Uint8List h, int o) {
   );
 }
 
-class _Id3Fields {
-  String title = '', titleSort = '', artist = '', album = '';
-  List<int> titleKey = const [], titleSortKey = const [];
-  List<int> artistKey = const [], albumKey = const [];
-  int track = 0;
-}
-
-/// `id3v2_tags` restricted to the phase 1 text frames.
-void _id3v2Tags(ByteSource src, Uint8List h, int total, _Id3Fields t) {
+/// `id3v2_tags`: the text frames (pictures come with the art cache).
+void _id3v2Tags(ByteSource src, Uint8List h, int total, _Fields t) {
   final ver = h[3];
   if (ver < 2 || ver > 4) return;
   var pos = 10;
@@ -468,7 +707,9 @@ Uint8List _unsync(Uint8List d) {
   return out.takeBytes();
 }
 
-void _id3TextFrame(String id, Uint8List d, _Id3Fields t) {
+/// `id3_text_frame`: v2.3/2.4 four-letter ids and their v2.2 three-letter
+/// twins; a later frame for the same field replaces an earlier one.
+void _id3TextFrame(String id, Uint8List d, _Fields t) {
   if (d.length < 2) return;
   final enc = d[0] > 3 ? 0 : d[0];
   final s = Uint8List.sublistView(d, 1);
@@ -485,8 +726,30 @@ void _id3TextFrame(String id, Uint8List d, _Id3Fields t) {
     case 'TALB' || 'TAL':
       t.album = _text(s, enc);
       t.albumKey = firmwareText(s, enc, _fwAlbumCap);
+    case 'TPE2' || 'TP2':
+      t.albumArtist = _text(s, enc);
+      t.albumArtistKey = firmwareText(s, enc, _fwAlbumArtistCap);
+    case 'TSOP' || 'TSP':
+      t.artistSortKey = firmwareText(s, enc, _fwSortCap);
+    case 'TSOA' || 'TSA':
+      t.albumSortKey = firmwareText(s, enc, _fwSortCap);
+    case 'TSO2' || 'TS2':
+      t.albumArtistSortKey = firmwareText(s, enc, _fwSortCap);
+    case 'TCON' || 'TCO':
+      t.genre = _genreText(_text(s, enc), bareNumberOk: true);
+      t.genreKey = firmwareGenre(
+        firmwareText(s, enc, _fwGenreRaw),
+        _fwGenreCap,
+        bareNumberOk: true,
+      );
     case 'TRCK' || 'TRK':
-      t.track = _number(_text(s, enc));
+      t.track = firmwareNumber(firmwareText(s, enc, _fwId3Number));
+    case 'TPOS' || 'TPA':
+      t.disc = firmwareNumber(firmwareText(s, enc, _fwId3Number));
+    case 'TDRC' || 'TYER' || 'TYE':
+      t.year = firmwareYear(firmwareText(s, enc, _fwId3Number));
+    case 'TCMP' || 'TCP':
+      t.compilation = firmwareFlag(firmwareText(s, enc, _fwId3Flag));
   }
 }
 
@@ -497,7 +760,7 @@ AudioTags _readMp3(ByteSource src) {
   final size = src.length;
   final h10 = src.readAt(0, 10);
   final start = _id3v2Size(h10);
-  final tags = _Id3Fields();
+  final tags = _Fields();
   if (start != 0) _id3v2Tags(src, h10, start > size ? size : start, tags);
 
   _Mp3Header? h;
@@ -571,17 +834,8 @@ AudioTags _readMp3(ByteSource src) {
     totalSamples = h.kbps != 0 ? audioBytes * 8 * h.rate ~/ (h.kbps * 1000) : 0;
     estimated = true;
   }
-  return AudioTags(
+  return tags.tags(
     codec: 'mp3',
-    title: tags.title,
-    titleSort: tags.titleSort,
-    titleKeyText: tags.titleKey,
-    titleSortKeyText: tags.titleSortKey,
-    artist: tags.artist,
-    album: tags.album,
-    artistKeyText: tags.artistKey,
-    albumKeyText: tags.albumKey,
-    trackNo: tags.track,
     durationMs: totalSamples * 1000 ~/ h.rate,
     durationEstimated: estimated,
     sampleRate: h.rate,
