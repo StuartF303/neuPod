@@ -91,7 +91,19 @@ Future<List<int>> _asset(String name) async {
 }
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  // As in app_launch_test.dart: under `xcodebuild test` iOS turns
+  // accessibility on just after launch, and the SemanticsHandle the binding
+  // then opens must not land inside the test. Wait for it first (bounded).
+  setUpAll(() async {
+    if (!Platform.isIOS) return;
+    final deadline = DateTime.now().add(const Duration(seconds: 10));
+    while (!binding.platformDispatcher.semanticsEnabled &&
+        DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+  });
 
   testWidgets('a scanned album with Folder.jpg shows its art', (tester) async {
     final root = Directory('${Directory.systemTemp.path}/neupod_art_it');
