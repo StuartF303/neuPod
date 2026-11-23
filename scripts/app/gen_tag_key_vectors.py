@@ -42,6 +42,21 @@ def flac(comments_raw, last_pad=0):
     return bytes(out) + src[8 + si_len : 8 + si_len + 64]
 
 
+def flac_truncated(comments_raw):
+    """fLaC, STREAMINFO, a VORBIS_COMMENT, then a block that is not the last and runs past the end of the file: the
+    parse fails after the tags were read."""
+    src = open(os.path.join(AUDIO, "flac16_48k_mono.flac"), "rb").read()
+    si_len = int.from_bytes(src[5:8], "big")
+    si = src[8 : 8 + si_len]
+    out = bytearray(b"fLaC") + bytes([0x00]) + si_len.to_bytes(3, "big") + si
+    body = bytearray(struct.pack("<I", 6) + b"neuPod" + struct.pack("<I", len(comments_raw)))
+    for c in comments_raw:
+        body += struct.pack("<I", len(c)) + c
+    out += bytes([0x04]) + len(body).to_bytes(3, "big") + body
+    out += bytes([0x01]) + (1000).to_bytes(3, "big") + bytes(16)  # PADDING, said to be 1000 bytes
+    return bytes(out)
+
+
 def syncsafe(n):
     return bytes([(n >> 21) & 0x7F, (n >> 14) & 0x7F, (n >> 7) & 0x7F, n & 0x7F])
 
@@ -225,6 +240,20 @@ CASES = {
     # A genre past the 31-byte buffer, with a two-byte character across the cut; a genre number past the table.
     "genre_long.flac": flac([b"TITLE=Long Genre", b"GENRE=" + b"g" * 30 + "é".encode() + b"tail"]),
     "genre_unknown_ref.mp3": mp3([frame("TIT2", 0, b"Unknown Ref", 3), frame("TCON", 0, b"(200)", 3)], 3),
+    # A parse that fails part-way keeps what it read (index_file takes the tags whatever the parse returned): a FLAC
+    # whose blocks run past the end after its comments, and an MP3 whose tag is followed by no audio frame.
+    "truncated.flac": flac_truncated(
+        [b"TITLE=Cut Short", b"ARTIST=Kept", b"ALBUMARTIST=Kept Too", b"TRACKNUMBER=4", b"DATE=1990", b"GENRE=Blues"]
+    ),
+    "no_frames.mp3": (
+        b"ID3"
+        + bytes([3, 0, 0])
+        + syncsafe(len(frame("TIT2", 0, b"Tag Only", 3) + frame("TPE2", 0, b"Host", 3)) + 32)
+        + frame("TIT2", 0, b"Tag Only", 3)
+        + frame("TPE2", 0, b"Host", 3)
+        + bytes(32)
+        + b"not audio" * 40
+    ),
     # ID3v2.2: TP2, TPA, TYE, TCP, TCO, TS2.
     "id3v22_library.mp3": mp3_v22(
         [

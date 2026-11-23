@@ -53,7 +53,17 @@ final class BytesSource implements ByteSource {
 
 /// The file could not be read as the format its name says.
 final class TagReadException implements Exception {
-  const TagReadException(this.reason, this.detail);
+  const TagReadException(this.reason, this.detail, {this.partial});
+
+  /// The tags read before the failure, or null. The firmware keeps what its
+  /// parser had filled in when a parse fails part-way (`index_file` in
+  /// lib_build.c takes the tags whatever the parse returned), so the
+  /// library lists the file by them, with the reason.
+  final AudioTags? partial;
+
+  /// This failure, carrying [tags] as what was read.
+  TagReadException withPartial(AudioTags tags) =>
+      TagReadException(reason, detail, partial: tags);
 
   /// Stored on the track as a code; the UI words it.
   final UnreadableReason reason;
@@ -411,7 +421,6 @@ int _id3v2Size(Uint8List h) {
 // ---- FLAC -------------------------------------------------------------------
 
 AudioTags _readFlac(ByteSource src) {
-  final size = src.length;
   var pos = _id3v2Size(src.readAt(0, 10)); // some files carry ID3v2 in front
   if (!_startsWith(src.readAt(pos, 4), 0, 'fLaC')) {
     throw const TagReadException(
@@ -423,6 +432,37 @@ AudioTags _readFlac(ByteSource src) {
   var rate = 0, bits = 0, totalFrames = 0;
   var haveInfo = false;
   final fields = _Fields();
+  AudioTags tags() => fields.tags(
+    codec: 'flac',
+    durationMs: rate == 0 ? 0 : totalFrames * 1000 ~/ rate,
+    sampleRate: rate,
+    bitDepth: bits,
+  );
+  try {
+    _flacBlocks(src, pos, fields, (r, b, f) {
+      rate = r;
+      bits = b;
+      totalFrames = f;
+      haveInfo = true;
+    });
+  } on TagReadException catch (e) {
+    throw e.withPartial(tags());
+  }
+  if (!haveInfo) {
+    throw TagReadException(_damaged, 'no STREAMINFO', partial: tags());
+  }
+  return tags();
+}
+
+/// `flac_parse`'s walk of the metadata blocks from [pos]: STREAMINFO goes to
+/// [info], the Vorbis comments into [fields].
+void _flacBlocks(
+  ByteSource src,
+  int pos,
+  _Fields fields,
+  void Function(int rate, int bits, int totalFrames) info,
+) {
+  final size = src.length;
   for (var guard = 0; guard < 256; guard++) {
     final bh = _need(src, pos, 4);
     final last = (bh[0] & 0x80) != 0;
@@ -432,10 +472,11 @@ AudioTags _readFlac(ByteSource src) {
     if (type == 0) {
       if (len < 34) throw const TagReadException(_damaged, 'STREAMINFO short');
       final si = _need(src, body, 34);
-      rate = (si[10] << 12) | (si[11] << 4) | (si[12] >> 4);
-      bits = (((si[12] & 1) << 4) | (si[13] >> 4)) + 1;
-      totalFrames = ((si[13] & 0xF) << 32) | _be32(si, 14);
-      haveInfo = true;
+      info(
+        (si[10] << 12) | (si[11] << 4) | (si[12] >> 4),
+        (((si[12] & 1) << 4) | (si[13] >> 4)) + 1,
+        ((si[13] & 0xF) << 32) | _be32(si, 14),
+      );
     } else if (type == 4 && len <= _maxCommentBlock && body + len <= size) {
       _vorbisComments(
         src.readAt(body, len),
@@ -449,13 +490,6 @@ AudioTags _readFlac(ByteSource src) {
       throw const TagReadException(_damaged, 'blocks run past the end');
     }
   }
-  if (!haveInfo) throw const TagReadException(_damaged, 'no STREAMINFO');
-  return fields.tags(
-    codec: 'flac',
-    durationMs: rate == 0 ? 0 : totalFrames * 1000 ~/ rate,
-    sampleRate: rate,
-    bitDepth: bits,
-  );
 }
 
 const _damaged = UnreadableReason.damaged;
@@ -784,9 +818,11 @@ AudioTags _readMp3(ByteSource src) {
     pos += 256;
   }
   if (h == null) {
-    throw const TagReadException(
+    // The ID3 tag was read: the device lists the file by it.
+    throw TagReadException(
       UnreadableReason.wrongFormat,
       'no MPEG audio frame',
+      partial: tags.tags(codec: 'mp3', durationMs: 0, sampleRate: 0),
     );
   }
 

@@ -654,22 +654,33 @@ final class _Album extends _Entity {
     return c != 0 ? c : a.walk.compareTo(b.walk);
   });
 
-  /// Its songs in album order, one [Disc] per run of a disc number. An
-  /// album whose songs have no disc number is one disc, numbered 1.
+  /// Its songs in album order, one [Disc] per run of a disc number (the
+  /// firmware draws no headings; lead decision, see [Disc]): an album with
+  /// no disc numbers is one disc numbered 1; where some songs have one, the
+  /// songs without (first, as `alb_cmp` sorts them) are a disc with no
+  /// number, drawn under no heading.
   late final List<Disc> discs = () {
     final out = <Disc>[];
     var songs = <Song>[];
     int? at;
+    void close() {
+      if (at == null) return;
+      final n = at;
+      out.add(Disc(number: n != 0 ? n : null, songs: songs));
+    }
+
     for (final r in rows) {
       if (at != null && r.disc != at) {
-        out.add(Disc(number: at, songs: songs));
+        close();
         songs = <Song>[];
       }
       at = r.disc;
       songs.add(r.song);
     }
-    if (at != null) {
-      out.add(Disc(number: out.isEmpty && at == 0 ? 1 : at, songs: songs));
+    close();
+    // No disc numbers at all: one disc, numbered 1.
+    if (out.length == 1 && out.single.number == null) {
+      return [Disc(number: 1, songs: out.single.songs)];
     }
     return out;
   }();
