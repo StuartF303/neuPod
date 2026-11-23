@@ -210,7 +210,7 @@ void main() {
       put('A/Éclair.flac', fixture('flac16_48k_mono.flac')); // untagged
       put('A/Folder.jpg', [1, 2, 3]);
       put('notes.txt', [1]);
-      put('A/10 Track.m4a', [0, 0, 0]); // listed by name until phase 3
+      put('A/10 Track.m4a', [0, 0, 0]); // read, and damaged: listed by name
       put('A/clip.mp4', [0, 0, 0]); // the firmware accepts .mp4 too
 
       final (_, storage, scanner) = setUpScanner();
@@ -229,7 +229,13 @@ void main() {
       ]);
       expect(
         storage.opened,
-        unorderedEquals(['a.mp3', 'b.flac', 'Éclair.flac']),
+        unorderedEquals([
+          'a.mp3',
+          'b.flac',
+          'Éclair.flac',
+          '10 Track.m4a',
+          'clip.mp4',
+        ]),
       );
     },
   );

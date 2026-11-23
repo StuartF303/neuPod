@@ -27,9 +27,10 @@ const audioExtensions = {
   'opus',
 };
 
-/// Extensions whose tags phase 1 reads; the others are listed by file name
-/// until phase 3 adds their containers.
-const _tagged = {'flac', 'mp3'};
+/// Extensions the firmware's scanner parses (`index_file` in lib_build.c:
+/// `.wav`, `.flac`, `.mp3`, and the rest of what it accepts as MP4); the
+/// others are listed by file name.
+const _tagged = {'flac', 'mp3', 'm4a', 'mp4', 'wav'};
 
 /// The version of what a scan writes per row: the tag reader's fields and
 /// rules and the sort key. Bump it when either changes: a row written with
@@ -41,7 +42,8 @@ const _tagged = {'flac', 'mp3'};
 /// 3: the library tags (schema version 3): album artist, sort tags, genre,
 ///    disc, year, compilation flag; the track number as the firmware reads
 ///    it (none from a FLAC comment block over its scratch).
-const scanVersion = 3;
+/// 4: MP4 (ALAC, AAC) tags and duration, WAV duration.
+const scanVersion = 4;
 
 /// The lower-case extension of [path], or ''.
 String extensionOf(String path) {
