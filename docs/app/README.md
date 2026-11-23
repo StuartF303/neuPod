@@ -256,8 +256,8 @@ targets are at least 44 points.
 
 - R1 makes **no network connection at all**. No analytics, no crash reporting service, no accounts. iOS downloading an iCloud file
   after the user taps Download (owner decision 7), and AirPlay (decision 6), are the system's networking, not the app's.
-- The app requests only the permissions it needs to read the chosen folders, play in the background and show media
-  controls.
+- The app requests only the permissions it needs to read the chosen folders, play in the background, show media
+  controls and, on Android, show the background library scan's notification (decision 0009).
 - Signing keys, provisioning profiles and store credentials are never committed. The repository is public.
 
 ## How it is built
