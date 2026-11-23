@@ -65,12 +65,10 @@ final class ManifestLibraryView implements LibraryView {
           path: path,
           title: e['title'] as String,
           // A compilation has no artist of its own; for anything else a
-          // missing one falls back to the folder convention.
+          // missing one is "Unknown Artist" (owner decision 15).
           albumArtist:
               (e['artist'] as String?) ??
-              ((e['compilation'] as bool? ?? false)
-                  ? null
-                  : _artistFromFolder(path)),
+              ((e['compilation'] as bool? ?? false) ? null : 'Unknown Artist'),
           performer: (e['performer'] ?? e['artist']) as String?,
           album: e['album'] as String? ?? _albumFromFolder(path),
           year: e['year'] as int?,
@@ -375,26 +373,12 @@ String _dirOf(String path) {
   return i < 0 ? '' : path.substring(0, i);
 }
 
-/// `Artist/2016 Long Division (Disc 1)/01 x.flac` to `Long Division`: the
-/// folder name without its year and a trailing `(Disc n)`.
+/// The name of the folder holding [path], as the device names an untagged
+/// album (owner decision 15); `Music` for a file at the library root (the
+/// device: its music folder's name).
 String _albumFromFolder(String path) {
   final parts = path.split('/');
-  var name = parts.length >= 2 ? parts[parts.length - 2] : 'Unknown Album';
-  name = name.replaceFirst(RegExp(r'^\d{4}\s+'), '');
-  name = name.replaceFirst(RegExp(r'\s*\(Disc\s*\d+\)\s*$'), '');
-  return name.isEmpty ? 'Unknown Album' : name;
-}
-
-/// `Lanterns, The/2011 Night Market/01 x.mp3` to `The Lanterns`: the first
-/// folder, with a trailing `, The` shown as a leading `The` (the owner's
-/// convention). Null for a file at the library root.
-String? _artistFromFolder(String path) {
-  final parts = path.split('/');
-  if (parts.length < 3) return null;
-  final name = parts.first;
-  return name.endsWith(', The')
-      ? 'The ${name.substring(0, name.length - 5)}'
-      : name;
+  return parts.length >= 2 ? parts[parts.length - 2] : 'Music';
 }
 
 String? _nonEmpty(String? s) => s == null || s.isEmpty ? null : s;

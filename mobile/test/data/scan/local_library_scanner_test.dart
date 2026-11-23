@@ -222,10 +222,10 @@ void main() {
 
       // Digits first, then letters with accents folded and "The " skipped.
       expect(await songs(), [
-        ('10 Track', ''),
+        ('10 Track.m4a', ''),
         ('Apple', 'Artist'),
-        ('clip', ''),
-        ('Éclair', ''),
+        ('clip.mp4', ''),
+        ('Éclair.flac', ''),
         ('The Zebra', 'Band · One'),
       ]);
       expect(
@@ -485,9 +485,9 @@ void main() {
         for (final t in await tracks()) t.displayTitle: t.unreadableReason,
       };
       expect(reasons, {
-        'bad': UnreadableReason.wrongFormat,
-        'cut': UnreadableReason.damaged,
-        'x': UnreadableReason.notDownloaded,
+        'bad.flac': UnreadableReason.wrongFormat,
+        'cut.flac': UnreadableReason.damaged,
+        'x.mp3': UnreadableReason.notDownloaded,
       });
       expect(storage.opened, unorderedEquals(['bad.flac', 'cut.flac']));
       final codes = await db
