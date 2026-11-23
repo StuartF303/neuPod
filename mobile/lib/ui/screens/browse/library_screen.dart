@@ -17,11 +17,13 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/app/library_scan_providers.dart';
 import 'package:neupod/app/library_view_providers.dart';
+import 'package:neupod/app/providers.dart';
 import 'package:neupod/domain/library/library_folder.dart';
 import 'package:neupod/domain/library/library_ports.dart';
 import 'package:neupod/domain/library_view/library_view.dart';
 import 'package:neupod/ui/features/library_setup/library_setup_providers.dart';
 import 'package:neupod/ui/screens/browse/browse_common.dart';
+import 'package:neupod/ui/screens/browse/confirm_screen.dart';
 import 'package:neupod/ui/screens/shell/neupod_list.dart';
 import 'package:neupod/ui/screens/shell/shell_frame.dart';
 import 'package:neupod/ui/screens/shell/shell_state.dart';
@@ -36,6 +38,13 @@ const addMusicHint = 'Settings > Library';
 
 /// The ellipsis the firmware's labels use.
 const _ellipsis = '…';
+
+/// The small line of the Remove question: the firmware's
+/// `"%u %s come off the list."` with `n == 1 ? "song" : "songs"`
+/// (Clear On-The-Go, `ui_playlists.c`), grammar as the C has it (`1 song come
+/// off the list.`).
+String removeFolderSub(int n) =>
+    '$n ${n == 1 ? 'song' : 'songs'} come off the list.';
 
 /// What the user needs to know about where music can come from. Owner
 /// decision 8: Android 11+ refuses the storage root and Download.
@@ -194,7 +203,9 @@ class LibraryScreen extends ConsumerWidget {
   }
 }
 
-/// A picked folder: Remove (which goes back to Library). Menu keeps it.
+/// A picked folder: Remove, which asks first (the firmware's question, as for
+/// Forget: `Remove Music?`, `Select = Remove  ·  Menu = Keep`) and then goes
+/// back to Library. Menu keeps it.
 class FolderScreen extends ConsumerWidget {
   /// The screen of [folder].
   const FolderScreen({required this.folder, super.key});
@@ -212,13 +223,31 @@ class FolderScreen extends ConsumerWidget {
             NeupodListItem.row(
               height: NeupodTheme.of(context).tier.rowHeight,
               title: 'Remove',
-              onActivate: () => _remove(ref),
+              onActivate: () => unawaited(_ask(ref)),
             ),
           ],
         ),
       ),
     ),
   );
+
+  /// The question, with the folder's song count from the library.
+  Future<void> _ask(WidgetRef ref) async {
+    final songs = await ref.read(libraryRepositoryProvider).watchSongs().first;
+    final n = songs.where((t) => t.source.id == folder.id).length;
+    pushScreen(
+      ref,
+      'Remove',
+      (_) => ConfirmScreen(
+        title: 'Remove',
+        head: 'Remove ${folder.name}?',
+        sub: removeFolderSub(n),
+        yesWord: 'Remove',
+        noWord: 'Keep',
+        onYes: () => _remove(ref),
+      ),
+    );
+  }
 
   Future<void> _remove(WidgetRef ref) async {
     final shell = ref.read(shellProvider.notifier);
