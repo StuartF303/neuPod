@@ -76,9 +76,11 @@ Status: specification, 21 November 2026. Nothing is built. The working instructi
     count in Modern only.
 15. **Untagged files match the device (owner, 23 November 2026).** A file's missing tags fall back as the firmware's
     library builder does (`index_file` in `app/library/lib_build.c`, ADR 0017 D5): the album is the name of the folder
-    holding the file, the artist is `Unknown Artist`, and the title is the file name. Nothing else is read from the
-    path: there is no `Artist/Year Album/NN Title.ext` parsing (no artist, year or track number from folder or file
-    names) and no `, The` handling of folder names. This replaces the folder-convention fallback proposed here.
+    holding the file, the artist is `Unknown Artist`, and the title is the whole file name, extension included
+    (`01 Dust.flac`). Nothing else is read from the path: there is no `Artist/Year Album/NN Title.ext` parsing (no
+    artist, year or track number from folder or file names) and no `, The` handling of folder names. Album names or
+    folders that differ only by `(Disc n)` stay separate albums. This replaces the folder-convention fallback proposed
+    here.
 
 Everything else in this document is the designer's proposal until the owner confirms it. Proposals that most need a
 decision are collected under [Open questions](#open-questions).
@@ -143,7 +145,7 @@ exactly as the device does; it is never hidden and never stops the queue.
 - Built by scanning the chosen folders and reading tags: title, artist, album artist, album, track and disc number,
   year, genre, compilation flag, duration, sample rate and bit depth, embedded art.
 - **Where tags are missing, the device's fallback (owner decision 15):** the album is the folder's name, the artist
-  `Unknown Artist`, the title the file name; nothing else is taken from the path. `Folder.jpg` (or `cover.jpg`) is
+  `Unknown Artist`, the title the whole file name (extension included); nothing else is taken from the path. `Folder.jpg` (or `cover.jpg`) is
   the album art.
 - The discs of one album (one album tag, disc number tags) are one album with disc sections, as on the device; album
   names or folders that differ only by `(Disc n)` stay apart, as there.
