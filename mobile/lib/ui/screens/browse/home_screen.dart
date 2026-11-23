@@ -130,7 +130,7 @@ class _HomePane extends ConsumerWidget {
     final type = NeupodType(theme.tier);
     final player = ref.watch(playerStateProvider).value ?? PlayerState.empty;
     final current = player.current;
-    final album = ref.watch(playingAlbumProvider).value;
+    final playingArt = ref.watch(playingArtProvider).value;
     final count = ref.watch(songCountProvider).value;
     final art = switch (theme.tier) {
       _ when theme.tier.k <= 1 => 220.0,
@@ -139,8 +139,8 @@ class _HomePane extends ConsumerWidget {
     };
 
     Widget? cover;
-    if (album != null) {
-      cover = CoverArt(album.art, decodeWidth: art);
+    if (playingArt != null) {
+      cover = CoverArt(playingArt, decodeWidth: art);
     } else if (current?.artUri != null) {
       final uri = Uri.parse(current!.artUri!);
       if (uri.scheme == 'file') {

@@ -40,6 +40,12 @@ Future<int> addTrack(
   List<int>? artistKeyText,
   List<int>? albumKeyText,
   bool legacy = false,
+  int? artOffset,
+  int? artLength,
+  int? artKind,
+  String? folderArtUri,
+  int? folderArtSize,
+  int? folderArtMtime,
 }) {
   Value<Uint8List?> held(List<int>? given, String tag) => Value(
     legacy
@@ -73,6 +79,12 @@ Future<int> addTrack(
           sampleRate: 44100,
           bitDepth: 16,
           reasonCode: Value(reason),
+          artOffset: Value(artOffset),
+          artLength: Value(artLength),
+          artKind: Value(artKind),
+          folderArtUri: Value(folderArtUri),
+          folderArtSize: Value(folderArtSize),
+          folderArtMtime: Value(folderArtMtime),
           scanVersion: 1,
         ),
       );

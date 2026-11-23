@@ -36,10 +36,12 @@ workspace:
 # versions available, run `flutter pub outdated`.
 dependencies:
   # Library database (decision 0005): drift over the sqlite3 package's bundled SQLite.
+  crypto: ^3.0.8
   drift: ^2.35.4
   flutter:
     sdk: flutter
   flutter_riverpod: ^3.5.0
+  image: ^4.13.1
   material_ui: ^1.11.0
   # The audio engine and media session (decisions 0001 and 0002).
   neupod_audio:

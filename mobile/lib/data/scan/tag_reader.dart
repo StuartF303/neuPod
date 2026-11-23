@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 /// Phase 1 tag reader (decision 0003): FLAC and MP3 title, artist, album,
-/// track number and duration, ported from the firmware's `app/audio/meta.c`
-/// (`flac_parse`, `vorbis_comments`, `id3v2_tags`, `id3_text_frame`,
+/// track number, duration and where the embedded picture is, ported from the
+/// firmware's `app/audio/meta.c` (`flac_parse`, `vorbis_comments`,
+/// `flac_picture`, `id3v2_tags`, `id3_text_frame`, `id3_picture`,
 /// `mp3_parse`, `meta_text_to_utf8`), read through [ByteSource]. Phase 3
 /// adds the other fields and containers.
 ///
@@ -14,6 +15,7 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:neupod/domain/library/art_rules.dart';
 import 'package:neupod/domain/library/track.dart';
 
 /// Random-access bytes of one file (implemented over neupod_storage's
@@ -74,6 +76,7 @@ final class AudioTags {
     this.durationEstimated = false,
     this.sampleRate = 0,
     this.bitDepth = 0,
+    this.art,
   });
 
   /// `flac` or `mp3`.
@@ -114,6 +117,12 @@ final class AudioTags {
 
   /// 0 for lossy formats.
   final int bitDepth;
+
+  /// The best embedded picture (`audio_tags_t.art`: [offerArt] over every
+  /// FLAC PICTURE block or ID3v2 APIC/PIC frame), or null when there is none.
+  /// Only its place in the file: the bytes are not read here, apart from the
+  /// first four that say what it is.
+  final EmbeddedArt? art;
 }
 
 /// Longest text frame or comment the reader keeps; longer ones are cut at a
@@ -251,6 +260,7 @@ AudioTags _readFlac(ByteSource src) {
   var rate = 0, bits = 0, totalFrames = 0;
   var haveInfo = false;
   final fields = _VorbisFields();
+  EmbeddedArt? art;
   for (var guard = 0; guard < 256; guard++) {
     final bh = _need(src, pos, 4);
     final last = (bh[0] & 0x80) != 0;
@@ -264,6 +274,8 @@ AudioTags _readFlac(ByteSource src) {
       bits = (((si[12] & 1) << 4) | (si[13] >> 4)) + 1;
       totalFrames = ((si[13] & 0xF) << 32) | _be32(si, 14);
       haveInfo = true;
+    } else if (type == 6) {
+      art = _flacPicture(src, body, len, art);
     } else if (type == 4 && len <= _maxCommentBlock && body + len <= size) {
       _vorbisComments(
         src.readAt(body, len),
@@ -292,6 +304,42 @@ AudioTags _readFlac(ByteSource src) {
     durationMs: rate == 0 ? 0 : totalFrames * 1000 ~/ rate,
     sampleRate: rate,
     bitDepth: bits,
+    art: art,
+  );
+}
+
+/// `flac_picture`: a PICTURE block (type, mime, description, width, height,
+/// depth, colours, length, data; all 32-bit big-endian counts) offered to
+/// [best]. The mime string is skipped: the image's first bytes say what it is.
+EmbeddedArt? _flacPicture(
+  ByteSource src,
+  int body,
+  int len,
+  EmbeddedArt? best,
+) {
+  if (len < 32) return best;
+  final h = src.readAt(body, 8);
+  if (h.length != 8) return best;
+  final ptype = _be32(h, 0), mlen = _be32(h, 4);
+  var at = 8 + mlen;
+  if (at + 4 > len) return best;
+  final w = src.readAt(body + at, 4);
+  if (w.length != 4) return best;
+  at += 4 + _be32(w, 0); // description
+  if (at + 20 > len) return best;
+  final f = src.readAt(body + at, 20);
+  if (f.length != 20) return best;
+  final dlen = _be32(f, 16);
+  at += 20;
+  if (dlen > len - at) return best;
+  return offerArt(
+    best,
+    EmbeddedArt(
+      offset: body + at,
+      length: dlen,
+      kind: sniffArt(src.readAt(body + at, 4), dlen),
+      type: ptype > 255 ? 0 : ptype,
+    ),
   );
 }
 
@@ -406,9 +454,10 @@ class _Id3Fields {
   List<int> titleKey = const [], titleSortKey = const [];
   List<int> artistKey = const [], albumKey = const [];
   int track = 0;
+  EmbeddedArt? art;
 }
 
-/// `id3v2_tags` restricted to the phase 1 text frames.
+/// `id3v2_tags` restricted to the phase 1 text frames and the pictures.
 void _id3v2Tags(ByteSource src, Uint8List h, int total, _Id3Fields t) {
   final ver = h[3];
   if (ver < 2 || ver > 4) return;
@@ -441,6 +490,19 @@ void _id3v2Tags(ByteSource src, Uint8List h, int total, _Id3Fields t) {
               (fh[7] & 0x7F)
         : _be32(fh, 4);
     if (pos + hLen + sz > end) return;
+    if ((ver == 2 ? id == 'PIC' : id == 'APIC') && (h[5] & 0x80) == 0) {
+      var skip = 0;
+      var usable = true;
+      if (ver == 3) usable = (fh[9] & 0xE0) == 0; // compressed, encrypted
+      if (ver == 4) {
+        usable = (fh[9] & 0x4E) == 0; // grouping, compression, encryption,
+        // unsynchronisation
+        if ((fh[9] & 0x01) != 0) skip = 4; // data length indicator
+      }
+      if (usable && sz > skip) {
+        t.art = _id3Picture(src, pos + hLen + skip, sz - skip, ver, t.art);
+      }
+    }
     if (id.startsWith('T') && sz > 1 && sz <= 400) {
       final skip = ver == 4 && (fh[9] & 0x01) != 0
           ? 4
@@ -457,6 +519,59 @@ void _id3v2Tags(ByteSource src, Uint8List h, int total, _Id3Fields t) {
     }
     pos += hLen + sz;
   }
+}
+
+/// `id3_picture`: APIC (v2.3/2.4: encoding, mime NUL, type, description,
+/// data) or PIC (v2.2: encoding, 3-byte format, type, description, data),
+/// offered to [best]. Only the first 160 bytes are read for the mime and the
+/// description; a longer description makes the picture unusable. A frame
+/// that is compressed, encrypted or unsynchronised never gets here (it cannot
+/// be read in place).
+EmbeddedArt? _id3Picture(
+  ByteSource src,
+  int at,
+  int sz,
+  int ver,
+  EmbeddedArt? best,
+) {
+  final n = sz < 160 ? sz : 160;
+  if (n < 6) return best;
+  final b = src.readAt(at, n);
+  if (b.length != n) return best;
+  final enc = b[0];
+  var i = 1;
+  if (ver == 2) {
+    i = 4;
+  } else {
+    while (i < n && b[i] != 0) {
+      i++; // mime type
+    }
+    i++;
+  }
+  if (i >= n) return best;
+  final ptype = b[i++];
+  if (enc == 1 || enc == 2) {
+    // UTF-16 description: ends at an aligned 00 00.
+    while (i + 1 < n && (b[i] != 0 || b[i + 1] != 0)) {
+      i += 2;
+    }
+    i += 2;
+  } else {
+    while (i < n && b[i] != 0) {
+      i++;
+    }
+    i++;
+  }
+  if (i >= n || i >= sz) return best; // description longer than was read
+  return offerArt(
+    best,
+    EmbeddedArt(
+      offset: at + i,
+      length: sz - i,
+      kind: sniffArt(src.readAt(at + i, 4), sz - i),
+      type: ptype,
+    ),
+  );
 }
 
 Uint8List _unsync(Uint8List d) {
@@ -585,6 +700,7 @@ AudioTags _readMp3(ByteSource src) {
     durationMs: totalSamples * 1000 ~/ h.rate,
     durationEstimated: estimated,
     sampleRate: h.rate,
+    art: tags.art,
   );
 }
 

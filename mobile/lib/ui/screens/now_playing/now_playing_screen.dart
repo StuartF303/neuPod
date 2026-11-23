@@ -608,7 +608,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     final choices = ref.watch(playbackChoicesProvider);
     final placement = ref.watch(ratingPlacementProvider);
     final item = state.current;
-    final album = ref.watch(playingAlbumProvider).value;
+    final art = ref.watch(playingArtProvider).value;
     final scope = DeviceScreenScope.of(context);
     final touch = scope.directTouch == DirectTouch.wheelAndScreen;
 
@@ -632,7 +632,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
       // big amber time.
       position: _page2 || seek ? _position : _shownPosition,
       duration: duration,
-      art: album == null ? null : CoverArt(album.art, decodeWidth: 210),
+      art: art == null ? null : CoverArt(art, decodeWidth: 210),
       playState: item == null
           ? PlayState.stopped
           : (state.isPlaying ? PlayState.playing : PlayState.paused),

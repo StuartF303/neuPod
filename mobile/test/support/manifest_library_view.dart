@@ -109,6 +109,12 @@ final class ManifestLibraryView implements LibraryView {
         artRel ??= coverArt[_dirOf(r.path)];
       }
 
+      // The test library's songs show their album's art (the drift library
+      // gives each song its own).
+      final albumArt = ArtRef(
+        path: artRel == null ? null : full(artRel),
+        seed: _fnv(key),
+      );
       final out = <Song>[];
       for (final r in raws) {
         out.add(
@@ -125,6 +131,7 @@ final class ManifestLibraryView implements LibraryView {
             genre: r.genre,
             unplayableReason: r.playable ? null : 'Damaged file',
             sortLetter: sortLetterOf(r.title),
+            art: albumArt,
           ),
         );
       }
@@ -148,10 +155,7 @@ final class ManifestLibraryView implements LibraryView {
         ),
         discCount: discs.length,
         compilation: compilation,
-        art: ArtRef(
-          path: artRel == null ? null : full(artRel),
-          seed: _fnv(key),
-        ),
+        art: albumArt,
         sortLetter: sortLetterOf(first.album),
       );
       if (!compilation && first.artistSort != null) {

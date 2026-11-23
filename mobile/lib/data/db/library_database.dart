@@ -66,6 +66,24 @@ class Tracks extends Table {
   IntColumn get sampleRate => integer()();
   IntColumn get bitDepth => integer()();
 
+  /// The best embedded picture (`art_ref_t`, see `domain/library/art_rules.dart`):
+  /// where its bytes are in the file and what they are (`ArtKind.code`). The
+  /// bytes stay in the file; the art cache reads them. [artKind] is 0 when the
+  /// file has no picture, and all three are null in a row written before
+  /// schema version 3, until a rescan reads the file again (scan version 3).
+  IntColumn get artOffset => integer().nullable()();
+  IntColumn get artLength => integer().nullable()();
+  IntColumn get artKind => integer().nullable()();
+
+  /// The cover file in the track's folder that the firmware would take
+  /// (`cover.jpg`, `folder.jpg`, `front.jpg`; `art_folder_pick`), by the URI
+  /// the folder-access plugin opens, with its size and modification time (so
+  /// a changed file makes a new art cache entry). Null when the folder has
+  /// none. Set by every scan of the folder, whether or not the track changed.
+  TextColumn get folderArtUri => text().nullable()();
+  IntColumn get folderArtSize => integer().nullable()();
+  IntColumn get folderArtMtime => integer().nullable()();
+
   /// `UnreadableReason.code` when the tags could not be read, or null.
   IntColumn get reasonCode => integer().nullable()();
 
@@ -103,7 +121,7 @@ class LibraryDatabase extends _$LibraryDatabase {
   /// test helpers in test/drift/library/generated/), then add the step to
   /// [_upgrade] and run `dart run build_runner build`.
   @override
-  int get schemaVersion => _testVersion ?? 2;
+  int get schemaVersion => _testVersion ?? 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -146,10 +164,24 @@ class LibraryDatabase extends _$LibraryDatabase {
   ///   text of the artist and album tags. Existing rows keep every column
   ///   and get null in both; the scanner's version went to 2 with them, so
   ///   the next scan reads every file again and fills them.
+  /// - 2 to 3: the art columns ([Tracks.artOffset], [Tracks.artLength],
+  ///   [Tracks.artKind], [Tracks.folderArtUri], [Tracks.folderArtSize],
+  ///   [Tracks.folderArtMtime]). Existing rows keep every column and get null
+  ///   in all six; the scanner's version went to 3 with them, so the next scan
+  ///   reads every file again for its embedded picture and sets the cover file
+  ///   of every folder it lists.
   OnUpgrade get _upgrade => stepByStep(
     from1To2: (m, schema) async {
       await m.addColumn(schema.tracks, schema.tracks.artistKeyText);
       await m.addColumn(schema.tracks, schema.tracks.albumKeyText);
+    },
+    from2To3: (m, schema) async {
+      await m.addColumn(schema.tracks, schema.tracks.artOffset);
+      await m.addColumn(schema.tracks, schema.tracks.artLength);
+      await m.addColumn(schema.tracks, schema.tracks.artKind);
+      await m.addColumn(schema.tracks, schema.tracks.folderArtUri);
+      await m.addColumn(schema.tracks, schema.tracks.folderArtSize);
+      await m.addColumn(schema.tracks, schema.tracks.folderArtMtime);
     },
   );
 }

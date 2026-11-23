@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: MPL-2.0
 
-/// An album's cover as a picture to put in an `ArtFrame`: the cover file when
-/// there is one, otherwise a placeholder like the mock-ups' (two colours split
-/// on the diagonal, from the album's seed).
+/// An album's or a track's cover as a picture to put in an `ArtFrame`: its
+/// picture from the art cache when it has one that decodes (or a ready image
+/// file), otherwise a placeholder like the mock-ups' (two colours split on the
+/// diagonal, from the album's seed).
 library;
 
 import 'dart:io';
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neupod/app/art_providers.dart';
 import 'package:neupod/domain/library_view/library_view.dart';
 import 'package:neupod/ui/screens/shell/shell_style.dart';
 
@@ -23,16 +26,39 @@ class CoverArt extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final placeholder = _Placeholder(art.seed);
+    if (art.sources.isNotEmpty) {
+      return _CachedCover(art, decodeWidth, placeholder);
+    }
     final path = art.path;
     if (path == null) return placeholder;
-    return Image.file(
-      File(path),
-      fit: BoxFit.cover,
-      cacheWidth: (decodeWidth * 2).round(),
-      gaplessPlayback: true,
-      excludeFromSemantics: true,
-      errorBuilder: (_, _, _) => placeholder,
-    );
+    return _file(path, decodeWidth, placeholder);
+  }
+}
+
+Widget _file(String path, double decodeWidth, Widget placeholder) => Image.file(
+  File(path),
+  fit: BoxFit.cover,
+  cacheWidth: (decodeWidth * 2).round(),
+  gaplessPlayback: true,
+  excludeFromSemantics: true,
+  errorBuilder: (_, _, _) => placeholder,
+);
+
+/// A cover from the art cache: the placeholder until the cached file is
+/// there, and for good when no picture decodes.
+class _CachedCover extends ConsumerWidget {
+  const _CachedCover(this.art, this.decodeWidth, this.placeholder);
+
+  final ArtRef art;
+  final double decodeWidth;
+  final Widget placeholder;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final size = ArtSize.forPixels(decodeWidth * 2);
+    final path = ref.watch(artFileProvider((art, size))).value;
+    if (path == null) return placeholder;
+    return _file(path, decodeWidth, placeholder);
   }
 }
 

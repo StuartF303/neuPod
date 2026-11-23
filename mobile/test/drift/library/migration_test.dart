@@ -12,7 +12,7 @@
 //   with the same value in every column that is still there.
 // A step that drops a column on purpose lists it in [_droppedOnPurpose].
 
-import 'package:drift/drift.dart' hide isNull;
+import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:drift_dev/api/migrations_native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -95,6 +95,28 @@ void main() {
     expect(row.scanVersion, 1);
     await db.close();
   });
+
+  test(
+    '2 to 3: tracks keep their rows and get no art until a rescan',
+    () async {
+      final schema = await verifier.schemaAt(2);
+      final before = _fillEveryTable(schema.rawDatabase, 2);
+      final db = LibraryDatabase(schema.newConnection());
+      await verifier.migrateAndValidate(db, 3);
+      final row = (await db.select(db.tracks).get()).single;
+      expect(row.title, before['tracks']!['title']);
+      expect(row.artistKeyText, isNotNull);
+      // Null: the scanner (scan version 3) reads the file again for its
+      // picture, and notes the folder's cover file on its next walk.
+      expect(row.artOffset, isNull);
+      expect(row.artLength, isNull);
+      expect(row.artKind, isNull);
+      expect(row.folderArtUri, isNull);
+      expect(row.folderArtSize, isNull);
+      expect(row.folderArtMtime, isNull);
+      await db.close();
+    },
+  );
 
   test('a database from a newer build is refused, not dropped', () async {
     final schema = await verifier.schemaAt(_versions.last);

@@ -14,25 +14,101 @@
 /// album's tracks by disc then track number.
 library;
 
-/// How an album's art is found. The domain does not decode images: a file
-/// path when the album has a cover, and a seed so that an album without one
-/// still gets a stable placeholder.
-final class ArtRef {
-  const ArtRef({this.path, required this.seed});
+/// One place a picture can be read from: an embedded picture in a track
+/// ([offset] and [length] within the track's file) or a whole cover file
+/// ([length] null). [size] and [mtime] are the file's, so that a changed file
+/// is a different picture to the art cache.
+final class ArtFile {
+  const ArtFile({
+    required this.uri,
+    required this.size,
+    required this.mtime,
+    this.offset = 0,
+    this.length,
+  });
 
-  /// A cover image file (`Folder.jpg`, `cover.jpg`, or extracted from a tag),
-  /// or null.
+  /// What the folder-access plugin opens (`content://` or `file://`).
+  final String uri;
+  final int size;
+  final int mtime;
+  final int offset;
+
+  /// The picture's bytes, or null for the whole file.
+  final int? length;
+
+  /// Identifies this picture: changes when the file does.
+  String get id => '$uri|$size|$mtime|$offset|${length ?? '*'}';
+
+  @override
+  bool operator ==(Object other) => other is ArtFile && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
+
+  @override
+  String toString() => 'ArtFile($id)';
+}
+
+/// How an album's or a track's art is found. The domain does not decode
+/// images: the pictures to try, in the firmware's order (see
+/// `domain/library/art_rules.dart`: the embedded JPEG, then the folder's
+/// cover file; the first that decodes is the art), or a ready image file
+/// ([path], test libraries), and a seed so that something without art still
+/// gets a stable placeholder.
+final class ArtRef {
+  const ArtRef({this.path, required this.seed, this.sources = const []});
+
+  /// No art: the placeholder of seed 0.
+  static const none = ArtRef(seed: 0);
+
+  /// A ready image file to show as it is, or null.
   final String? path;
 
   /// A stable number for the placeholder cover's colours.
   final int seed;
 
-  @override
-  bool operator ==(Object other) =>
-      other is ArtRef && other.path == path && other.seed == seed;
+  /// The pictures to try, in order; empty when there is none.
+  final List<ArtFile> sources;
+
+  /// The art cache's key: every source's [ArtFile.id], in order (so a changed
+  /// file, or a cover file added or removed, is new art). Null with no
+  /// sources.
+  String? get cacheKey =>
+      sources.isEmpty ? null : sources.map((s) => s.id).join('\n');
+
+  /// Whether there is a picture to show (it may still fail to decode).
+  bool get hasPicture => path != null || sources.isNotEmpty;
 
   @override
-  int get hashCode => Object.hash(path, seed);
+  bool operator ==(Object other) =>
+      other is ArtRef &&
+      other.path == path &&
+      other.seed == seed &&
+      other.cacheKey == cacheKey;
+
+  @override
+  int get hashCode => Object.hash(path, seed, cacheKey);
+}
+
+/// The two sizes the art cache keeps per picture, as the longest side in
+/// pixels.
+enum ArtSize {
+  /// Rows, the album header and the Music menu (drawn at most 96 design px,
+  /// decoded at twice that by `CoverArt`).
+  thumb(192, 't'),
+
+  /// Home, Now Playing and Cover Flow (up to 220 design px) and the lock
+  /// screen and notification.
+  full(600, 'f');
+
+  const ArtSize(this.pixels, this.tag);
+
+  final int pixels;
+  final String tag;
+
+  /// The smallest size at least [pixels] wide, or [full].
+  static ArtSize forPixels(double pixels) =>
+      pixels <= thumb.pixels ? thumb : full;
 }
 
 /// One song.
@@ -50,6 +126,7 @@ final class Song {
     this.genre,
     this.unplayableReason,
     this.sortLetter = '#',
+    this.art = ArtRef.none,
   });
 
   /// Stable across rescans (the player's queue item id).
@@ -78,6 +155,10 @@ final class Song {
 
   /// The fast-scroll letter of the title: `A` to `Z`, or `#`.
   final String sortLetter;
+
+  /// The track's own art (Now Playing and the lock screen show it, as the
+  /// device does), with its album's placeholder seed.
+  final ArtRef art;
 
   bool get playable => unplayableReason == null;
 }
@@ -113,6 +194,9 @@ final class Album {
   final Duration? totalTime;
   final int discCount;
   final bool compilation;
+
+  /// The album's art: its first song's (the device asks for an album's art by
+  /// its first song in album order).
   final ArtRef art;
 
   /// The fast-scroll letter of the title.
