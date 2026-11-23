@@ -384,7 +384,8 @@ UnreadableReason storageReason(StorageException e, {required bool opening}) {
     reader = open();
     return (readTags(_ReaderSource(reader), ext), null);
   } on TagReadException catch (e) {
-    return (null, e.reason);
+    // What the parser read before it failed, as the firmware keeps it.
+    return (e.partial, e.reason);
   } on FileSystemException {
     // Open failed (not seekable, gone) or a read failed part-way: may pass.
     return (null, UnreadableReason.cannotRead);

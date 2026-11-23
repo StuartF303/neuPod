@@ -41,8 +41,19 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/data/db/library_database.dart';
 import 'package:neupod/data/library_view/drift_library_view.dart';
+import 'package:neupod/data/scan/local_library_scanner.dart' show scanVersion;
 import 'package:neupod/data/scan/tag_reader.dart';
 import 'package:neupod/domain/library/collation.dart';
+
+/// The tags as the scanner stores them: a parse that fails part-way gives
+/// what it read (`TagReadException.partial`), as the firmware keeps it.
+AudioTags _read(ByteSource src, String ext) {
+  try {
+    return readTags(src, ext);
+  } on TagReadException catch (e) {
+    return e.partial ?? (throw e);
+  }
+}
 
 String _hex(List<int> b) =>
     b.map((x) => x.toRadixString(16).padLeft(2, '0')).join();
@@ -54,7 +65,7 @@ void main() {
       .where((l) => l.isNotEmpty && !l.startsWith('#'))
       .toList();
 
-  test('the vectors are there', () => expect(lines.length, 38));
+  test('the vectors are there', () => expect(lines.length, 40));
 
   for (final line in lines) {
     final f = line.split('\t');
@@ -62,7 +73,7 @@ void main() {
     test(name, () {
       final bytes = File('$dir/$name').readAsBytesSync();
       final ext = name.substring(name.lastIndexOf('.') + 1);
-      final tags = readTags(BytesSource(Uint8List.fromList(bytes)), ext);
+      final tags = _read(BytesSource(Uint8List.fromList(bytes)), ext);
       expect(_hex(tags.titleKeyText), f[1], reason: 'title as stored');
       expect(_hex(tags.titleSortKeyText), f[2], reason: 'sort as stored');
       final key = songSortKey(
@@ -127,7 +138,7 @@ void main() {
     for (final line in lines) {
       final f = line.split('\t');
       final name = f[0];
-      final tags = readTags(
+      final tags = _read(
         BytesSource(Uint8List.fromList(File('$dir/$name').readAsBytesSync())),
         name.substring(name.lastIndexOf('.') + 1),
       );
@@ -164,7 +175,7 @@ void main() {
               durationMs: tags.durationMs,
               sampleRate: tags.sampleRate,
               bitDepth: tags.bitDepth,
-              scanVersion: 3,
+              scanVersion: scanVersion,
             ),
           );
     }

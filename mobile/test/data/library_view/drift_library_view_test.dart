@@ -685,6 +685,31 @@ void main() {
     expect((await view.albums()).single.songCount, 2);
   });
 
+  // Lead decision (2026-11-23; the firmware draws no disc headings, `Disc`
+  // in library_view.dart): songs with no disc number, first in album order,
+  // are a disc with no number (no heading); an album with no disc numbers is
+  // one disc numbered 1.
+  test('discs: songs without a number first and unnumbered; none at all is '
+      'disc 1', () async {
+    final fx = _EntityFixture.read('discs');
+    for (final t in fx.tracks) {
+      await addFixture(t);
+    }
+    final albums = {for (final a in await view.albums()) a.title: a};
+    final double = (await view.album(albums['Double']!.id))!;
+    expect(double.discs.map((d) => d.number), [null, 1, 2]);
+    expect(double.discs.first.songs.map((s) => s.title), ['Z0']);
+    expect(double.hasDiscHeadings, isTrue);
+    expect(double.album.discCount, 3);
+    final late = (await view.album(albums['Late']!.id))!;
+    expect(late.discs.map((d) => d.number), [1]);
+    expect(late.hasDiscHeadings, isFalse);
+    // Disc 300 is held as 255, so it shares a disc with the 255.
+    final huge = (await view.album(albums['Huge']!.id))!;
+    expect(huge.discs.map((d) => d.number), [254, 255]);
+    expect(huge.discs.last.songs.map((s) => s.title), ['H1', 'H2']);
+  });
+
   test('a leading slash in a path does not give an empty album', () async {
     await addTrack(db, sourceId: src, relPath: '/Rooted.flac', title: 'R');
     await addTrack(db, sourceId: src, relPath: '/Dir/In.flac', title: 'I');
