@@ -76,6 +76,18 @@ and the engine alive.
   activity, the kept engine is destroyed: its plugins detach (the audio plugin's controller releases the playback
   service), and the process is left with nothing running. When no scan runs, the engine lives and dies with the
   activity, exactly as before.
+- **Never a second engine while a scan runs.** On Android 10 and 11, Back finishes the root activity, and its
+  `onDestroy` can come after the user has launched the app again. A new activity therefore takes the scan's engine
+  whether it is kept or still attached to the finishing activity (`ScanRuntime.engineForNewActivity`). Flutter then
+  detaches the old activity, which must not destroy the engine, because `shouldDestroyEngineWithHost()` is false for
+  the scan's engine. So no second Dart app starts a second scan (a second writer on the database), and the first
+  scan's end cannot stop the service under another.
+- **Activity state in plugins.** A plugin that waits for an activity result must not keep waiting once the activity
+  is gone for good, since the engine may live on. neupod_storage now ends a pending folder pick as cancelled in
+  `onDetachedFromActivity` (not on a configuration change, whose new activity gets the result). Without that, a
+  swipe-away with the picker open would leave Dart's `pickFolder` hanging and every later Add Folder refused as
+  "busy" for the life of the process. neupod_device keeps only the activity, which it clears; the audio plugin is
+  not activity-aware.
 - **Notification.** Channel "Library scan", low importance (no sound). It shows the firmware's words: title
   "Building library", text "N found · N read" (`scanProgressLabel`, the same text as Settings > Library), an
   indeterminate bar (the total is unknown until the walk ends, as on the firmware's sweeping bar), and a **Cancel**
@@ -85,7 +97,8 @@ and the engine alive.
   a second) never shows one.
 - **Cancel.** The action starts the service with a cancel intent. The plugin asks Dart to cancel, and Dart runs the
   controller's own `cancel()` (the same path as the Select key in Settings > Library). Once the cancelled scan's last
-  write has finished, Dart stops the service.
+  write has finished, Dart stops the service. If the same scan is still running 10 seconds after Cancel (Dart did
+  not answer), the service stops anyway and a kept engine is released, with a log line.
 - **One scan at a time.** Unchanged: the controller still owns the scan. It tells the service (through
   `ScanKeepAlive`, a domain port; no-op on iOS and in tests): `started` when a scan starts, `progress` as it goes, and
   `stopped` only once the scan has stopped writing. A restart sends a second `started` (the service is already up) and
@@ -111,12 +124,18 @@ and the engine alive.
 - Dart (`test/app/scan_keep_alive_test.dart`): the controller's calls in order for done, failure, restart, cancel then
   start, the notification's Cancel, and app close. The service stops only after the cancelled scan's write has ended.
   Also covered: the channel messages and their firmware words, a failing channel, and Android-only installation.
-- Instrumentation on the CI emulator (`integration_test/scan_service_test.dart`): a scan starts through the controller
-  with the real service. The test calls `finishAndRemoveTask()` on the activity, as swiping it away does, and checks
-  that the engine was kept and the service is running. The scan then completes (its marker file, done with no error,
-  progress after the activity went), and the service stops. The scanner there is a stand-in: an emulator under
-  instrumentation cannot grant a SAF folder. Debug builds only expose `debugFinishActivity`, `debugState` and
-  `debugKeepEngineAfterScan`; the last keeps the engine after the scan so the test can report. Its limit: the system
+- Instrumentation on the CI emulator (`integration_test/scan_service_test.dart`):
+  - First test: a scan starts through the controller with the real service, and Add Folder's picker is opened. The
+    test calls `finishAndRemoveTask()` on the activity, as swiping it away does. It then checks that the engine was
+    kept, the service is running and the open pick ended as cancelled. The scan then completes (its marker file,
+    done with no error, progress after the activity went), and the service stops.
+  - Second test: the app is launched again, and the new activity takes the kept engine. A new scan starts and the app
+    is swiped away and launched again mid-scan; the scan's progress goes on in the same engine. Add Folder's picker
+    opens again (not "busy"). The notification's Cancel (the same intent as its action) cancels the scan, and the
+    service stops.
+- CI's manifest check also requires `FOREGROUND_SERVICE_DATA_SYNC` and the service's `dataSync` type. The scanner there is a stand-in: an emulator under
+  instrumentation cannot grant a SAF folder. Debug builds only expose `debugFinishActivity`, `debugRelaunch`,
+  `debugNotificationCancel`, `debugState` and `debugKeepEngineAfterScan`; the last keeps the engine after the scan so the test can report. Its limit: the system
   never kills an instrumented process, so it proves the engine and the scan outlive the activity, not that the
   foreground service keeps the process from being killed. That part is AOSP's documented behaviour, and it is checked
   on the owner's phone. If the engine were not kept, the test could not report, and the run would show up as the

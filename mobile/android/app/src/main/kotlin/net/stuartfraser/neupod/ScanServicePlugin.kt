@@ -4,9 +4,11 @@ package net.stuartfraser.neupod
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
+import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -19,8 +21,8 @@ import io.flutter.plugin.common.MethodChannel
  *
  * - Dart to here: `start` {title, text, cancel, askNotifications}, `update` {title, text}, `stop`.
  * - Here to Dart: `cancel` (the notification's Cancel).
- * - Debug builds only, for the instrumentation test: `debugFinishActivity`, `debugState`,
- *   `debugKeepEngineAfterScan`.
+ * - Debug builds only, for the instrumentation test: `debugFinishActivity`, `debugRelaunch`,
+ *   `debugNotificationCancel`, `debugState`, `debugKeepEngineAfterScan`.
  *
  * Registered by MainActivity on the app's engine, once per engine. It also follows the activity,
  * which MainActivity needs to know whether the engine is still shown.
@@ -28,9 +30,12 @@ import io.flutter.plugin.common.MethodChannel
 class ScanServicePlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCallHandler {
     private var context: Context? = null
     private var channel: MethodChannel? = null
+    private var engine: FlutterEngine? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
+        @Suppress("DEPRECATION") // the plugin is added by MainActivity to this very engine
+        engine = binding.flutterEngine
         channel = MethodChannel(binding.binaryMessenger, CHANNEL).also {
             it.setMethodCallHandler(this)
             ScanRuntime.channel = it
@@ -40,7 +45,9 @@ class ScanServicePlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCall
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel?.setMethodCallHandler(null)
         if (ScanRuntime.channel === channel) ScanRuntime.channel = null
+        if (ScanRuntime.scanEngine === engine) ScanRuntime.scanEngine = null
         channel = null
+        engine = null
         context = null
     }
 
@@ -62,6 +69,7 @@ class ScanServicePlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCall
         when (call.method) {
             "start" -> {
                 if (call.argument<Boolean>("askNotifications") == true) askForNotifications()
+                ScanRuntime.scanEngine = engine
                 ScanRuntime.start(
                     ctx,
                     call.argument<String>("title") ?: "",
@@ -89,6 +97,19 @@ class ScanServicePlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCall
                     "activityAttached" to (ScanRuntime.activity != null),
                     "engineKept" to ScanRuntime.keeper.holding,
                 )
+            }
+            "debugRelaunch" -> debugOnly(ctx, result) {
+                // As tapping the launcher icon: a new activity, which takes the kept engine.
+                ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.let {
+                    it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    ctx.startActivity(it)
+                }
+                null
+            }
+            "debugNotificationCancel" -> debugOnly(ctx, result) {
+                // What the notification's Cancel action's PendingIntent sends.
+                ctx.startService(Intent(ctx, ScanService::class.java).setAction(ScanService.ACTION_CANCEL))
+                null
             }
             "debugKeepEngineAfterScan" -> debugOnly(ctx, result) {
                 ScanRuntime.keeper.keepAfterScan = call.arguments as? Boolean ?: false

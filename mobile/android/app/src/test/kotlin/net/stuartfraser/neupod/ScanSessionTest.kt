@@ -67,6 +67,26 @@ class ScanSessionTest {
         assertEquals(ScanSession.Update.Now, s.update("Building library", "2 found · 0 read", nowMs = 1_200))
     }
 
+    @Test
+    fun `an unanswered Cancel stops the scan it was sent for, not a later one`() {
+        val s = started()
+        val first = s.generation
+        assertTrue(s.cancelUnanswered(first), "Dart did not stop it: the service stops anyway")
+        s.stop()
+        assertFalse(s.cancelUnanswered(first), "Dart stopped it in time")
+        s.start("Building library", "0 found · 0 read", "Cancel")
+        assertFalse(s.cancelUnanswered(first), "a new scan started since is left alone")
+        assertTrue(s.cancelUnanswered(s.generation))
+    }
+
+    @Test
+    fun `a restart of a running scan keeps its generation`() {
+        val s = started()
+        val g = s.generation
+        s.start("Building library", "0 found · 0 read", "Cancel")
+        assertEquals(g, s.generation)
+    }
+
     private class Engine
 
     @Test

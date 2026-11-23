@@ -39,6 +39,10 @@ internal class ScanSession(private val minIntervalMs: Long = UPDATE_INTERVAL_MS)
     var cancelLabel = ""
         private set
 
+    /** Bumped each time a scan starts the service: tells one scan from the next. */
+    var generation = 0
+        private set
+
     private var lastPostedAt: Long? = null
     private var postDue = false
 
@@ -49,6 +53,7 @@ internal class ScanSession(private val minIntervalMs: Long = UPDATE_INTERVAL_MS)
     fun start(title: String, text: String, cancelLabel: String): Boolean {
         val wasActive = active
         active = true
+        if (!wasActive) generation++
         this.title = title
         this.text = text
         this.cancelLabel = cancelLabel
@@ -86,8 +91,17 @@ internal class ScanSession(private val minIntervalMs: Long = UPDATE_INTERVAL_MS)
         return wasActive
     }
 
+    /**
+     * The notification's Cancel was sent to Dart [timeoutMs] ago, for the scan of [generation]:
+     * whether the service has to stop without Dart (Dart did not answer, or is gone).
+     */
+    fun cancelUnanswered(generation: Int): Boolean = active && this.generation == generation
+
     companion object {
         const val UPDATE_INTERVAL_MS = 500L
+
+        /** How long Dart has to answer the notification's Cancel before the service stops anyway. */
+        const val CANCEL_FALLBACK_MS = 10_000L
     }
 }
 

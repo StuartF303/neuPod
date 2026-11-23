@@ -37,6 +37,22 @@ internal object ScanRuntime {
     /** The channel to the Dart side, while an engine with the plugin exists. */
     var channel: MethodChannel? = null
 
+    /** The engine whose Dart side started the running scan. */
+    var scanEngine: FlutterEngine? = null
+
+    /**
+     * The engine a new activity must use while a scan runs, so that no second engine (and no
+     * second scan, a second writer on the database) is ever started: the kept one, or the one still
+     * attached to an activity that is finishing but not yet destroyed (Back on Android 10 and 11
+     * finishes the root activity, and its onDestroy can come after the next launch).
+     */
+    fun engineForNewActivity(): FlutterEngine? =
+        keeper.take() ?: scanEngine?.takeIf { session.active }
+
+    /** Whether [engine] runs the scan, so must outlive its activity. */
+    fun runsScan(engine: FlutterEngine?): Boolean =
+        engine != null && session.active && engine === scanEngine
+
     private val main = Handler(Looper.getMainLooper())
     private val postLater = Runnable { postNow() }
 
@@ -83,14 +99,25 @@ internal object ScanRuntime {
         main.post { if (!session.active) keeper.scanEnded() }
     }
 
-    /** The notification's Cancel: ask Dart to cancel, which then stops the service. */
+    /**
+     * The notification's Cancel: ask Dart to cancel, which then stops the service once the scan's
+     * last write is done. If the scan is still running [ScanSession.CANCEL_FALLBACK_MS] later (Dart
+     * did not answer), the service stops anyway and a kept engine is released.
+     */
     fun requestCancel() {
         val c = channel
-        if (c == null) {
-            stop() // no Dart side to ask
+        if (c == null || !session.active) {
+            stop() // no Dart side to ask, or nothing running
             return
         }
         c.invokeMethod("cancel", null)
+        val generation = session.generation
+        main.postDelayed({
+            if (session.cancelUnanswered(generation)) {
+                Log.w(TAG, "Dart did not stop the scan within ${ScanSession.CANCEL_FALLBACK_MS} ms of Cancel: stopping")
+                stop()
+            }
+        }, ScanSession.CANCEL_FALLBACK_MS)
     }
 
     /**

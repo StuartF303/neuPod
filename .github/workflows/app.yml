@@ -204,6 +204,25 @@ jobs:
             fi
           done
           echo "OK: no INTERNET or ACCESS_NETWORK_STATE permission in the release manifest"
+          # The library scan's foreground service (decision 0009): Android 14+ refuses to start it without its type
+          # and the type's permission.
+          if ! grep -q '"android.permission.FOREGROUND_SERVICE_DATA_SYNC"' "$manifest"; then
+            echo "::error::the release manifest lacks android.permission.FOREGROUND_SERVICE_DATA_SYNC (scan service)"
+            exit 1
+          fi
+          if ! python3 -I - "$manifest" <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          ns = '{http://schemas.android.com/apk/res/android}'
+          services = ET.parse(sys.argv[1]).getroot().iter('service')
+          ok = any(s.get(ns + 'name') == 'net.stuartfraser.neupod.ScanService'
+                   and s.get(ns + 'foregroundServiceType') == 'dataSync' for s in services)
+          sys.exit(0 if ok else 1)
+          PY
+          then
+            echo "::error::the release manifest's ScanService is not of foregroundServiceType dataSync"
+            exit 1
+          fi
+          echo "OK: the scan service is a dataSync foreground service with its permission"
 
   # Integration tests on an emulator at the minimum API level (29, Android 10).
   #
