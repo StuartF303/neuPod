@@ -91,8 +91,13 @@
 /// A track without an artist is "Unknown Artist" and a track without an
 /// album tag takes the name of its folder (the source's name for a file at
 /// the root), as `index_file` does (ADR 0017, D5). An album's total time is
-/// known only when every song has a duration. Art is a placeholder (seeded
-/// from the album).
+/// known only when every song has a duration.
+///
+/// **Art** follows the firmware (`domain/library/art_rules.dart`): a song's
+/// art is its own pictures (the embedded JPEG, then its folder's cover
+/// file); an album's is its first song's in album order, which is what the
+/// device's album header and Cover Flow ask for. Both carry the album's
+/// placeholder seed, for when no picture decodes.
 library;
 
 import 'dart:async';
@@ -101,6 +106,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:neupod/data/db/library_database.dart';
+import 'package:neupod/domain/library/art_rules.dart';
 import 'package:neupod/domain/library/collation.dart';
 import 'package:neupod/domain/library/track.dart';
 import 'package:neupod/domain/library_view/library_view.dart';
@@ -551,6 +557,38 @@ final class _Row {
   /// Its genre, or null.
   _Genre? inGenre;
 
+  /// The pictures to try for this track, in the firmware's order
+  /// (`art_sources`): the embedded JPEG, then the folder's cover file.
+  late final List<ArtFile> artFiles = () {
+    final kind = ArtKind.fromCode(t.artKind);
+    final embedded = kind == ArtKind.none
+        ? null
+        : EmbeddedArt(
+            offset: t.artOffset ?? 0,
+            length: t.artLength ?? 0,
+            kind: kind,
+            type: 0,
+          );
+    final folder = t.folderArtUri;
+    return [
+      for (final s in artSources(embedded, folderHas: folder != null))
+        switch (s) {
+          ArtSourceKind.embedded => ArtFile(
+            uri: t.uri,
+            size: t.size,
+            mtime: t.mtime,
+            offset: embedded!.offset,
+            length: embedded.length,
+          ),
+          ArtSourceKind.folder => ArtFile(
+            uri: folder!,
+            size: t.folderArtSize ?? 0,
+            mtime: t.folderArtMtime ?? 0,
+          ),
+        },
+    ];
+  }();
+
   late final Song song = () {
     final reason = UnreadableReason.fromCode(t.reasonCode);
     return Song(
@@ -568,6 +606,7 @@ final class _Row {
           ? null
           : unreadableReasonText(reason, t.codec),
       sortLetter: collateLetter(t.titleSortKey),
+      art: ArtRef(seed: group.seed, sources: artFiles),
     );
   }();
 }
@@ -637,6 +676,9 @@ final class _Album extends _Entity {
 
   String get id => 'album:${artist?.hex ?? 'comp'}|$hex';
 
+  /// The placeholder seed of the album and its songs.
+  int get seed => _fnv(id);
+
   @override
   void take(_Row r, String text) {
     rows.add(r);
@@ -699,7 +741,8 @@ final class _Album extends _Entity {
           : null,
       discCount: discs.length,
       compilation: artist == null,
-      art: ArtRef(seed: _fnv(id)),
+      // rows are in album order (sortRows): the first is the first song.
+      art: ArtRef(seed: seed, sources: rows.first.artFiles),
       sortLetter: collateLetter(key),
     );
   }

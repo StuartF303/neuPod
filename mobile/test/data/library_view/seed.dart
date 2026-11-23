@@ -50,6 +50,12 @@ Future<int> addTrack(
   int discNo = 0,
   int year = 0,
   bool compilation = false,
+  int? artOffset,
+  int? artLength,
+  int? artKind,
+  String? folderArtUri,
+  int? folderArtSize,
+  int? folderArtMtime,
 }) {
   Value<Uint8List?> fw(String tag, int cap) =>
       Value(legacy ? null : firmwareCut(utf8.encode(tag), cap));
@@ -95,6 +101,12 @@ Future<int> addTrack(
           sampleRate: 44100,
           bitDepth: 16,
           reasonCode: Value(reason),
+          artOffset: Value(artOffset),
+          artLength: Value(artLength),
+          artKind: Value(artKind),
+          folderArtUri: Value(folderArtUri),
+          folderArtSize: Value(folderArtSize),
+          folderArtMtime: Value(folderArtMtime),
           scanVersion: 1,
         ),
       );

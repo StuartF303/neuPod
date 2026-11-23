@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
@@ -7,6 +8,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:neupod/data/db/library_database.dart';
 import 'package:neupod/data/scan/tag_reader.dart';
+import 'package:neupod/domain/library/art_rules.dart';
 import 'package:neupod/domain/library/collation.dart';
 import 'package:neupod/domain/library/library_folder.dart';
 import 'package:neupod/domain/library/library_ports.dart';
@@ -43,7 +45,9 @@ const _tagged = {'flac', 'mp3', 'm4a', 'mp4', 'wav'};
 ///    disc, year, compilation flag; the track number as the firmware reads
 ///    it (none from a FLAC comment block over its scratch).
 /// 4: MP4 (ALAC, AAC) tags and duration, WAV duration.
-const scanVersion = 4;
+/// 5: where the embedded picture is (schema version 4), so rows from earlier
+///    versions are read again to find it.
+const scanVersion = 5;
 
 /// The lower-case extension of [path], or ''.
 String extensionOf(String path) {
@@ -62,6 +66,10 @@ String extensionOf(String path) {
 ///   complete (every folder listed); tracks of folders no longer held are
 ///   deleted; an unavailable folder keeps its tracks.
 /// - Music files are only ever read.
+/// - Each folder's cover file (`cover.jpg`, `folder.jpg`, `front.jpg`: the
+///   firmware's `art_folder_pick`) is noted on every track of the folder after
+///   the walk, whether or not the track changed, so adding, changing or
+///   removing a cover file needs no change to the music files.
 final class LocalLibraryScanner implements LibraryScanner {
   LocalLibraryScanner({
     required this._folders,
@@ -112,10 +120,17 @@ final class LocalLibraryScanner implements LibraryScanner {
       };
       final seen = <String>{};
       final pending = <StorageEntry>[];
+      // Cover file names by folder (the folder's relative path, '' for the
+      // root), from every file the walk lists.
+      final covers = <String, List<StorageEntry>>{};
       var complete = false;
       try {
         await for (final page in _storage.walk(folder.id)) {
           for (final e in page.entries) {
+            if (artFolderRank(_fileName(e.relPath)) != 0) {
+              (covers[_folderOf(e.relPath)] ??= []).add(e);
+              continue;
+            }
             if (!audioExtensions.contains(extensionOf(e.relPath))) continue;
             found++;
             seen.add(e.relPath);
@@ -137,6 +152,8 @@ final class LocalLibraryScanner implements LibraryScanner {
         read += await _readAndStore(sourceId, pending, known);
       }
 
+      await _storeCovers(sourceId, covers, complete: complete);
+
       if (complete) {
         final gone = known.keys.where((p) => !seen.contains(p)).toList();
         for (var i = 0; i < gone.length; i += 500) {
@@ -151,6 +168,61 @@ final class LocalLibraryScanner implements LibraryScanner {
       yield ScanProgress(filesFound: found, filesRead: read);
     }
     yield ScanProgress(filesFound: found, filesRead: read, done: true);
+  }
+
+  /// Notes each track's folder cover file (`art_folder_pick` over the
+  /// folder's cover files). The firmware picks the first of the best rank in
+  /// its folder listing; the app cannot see the card's listing order, so names
+  /// of the same rank (`Folder.jpg` and `folder.jpg` on a case-sensitive
+  /// file system) are taken in byte order of their UTF-8 names, as the walk
+  /// order is (see `walkCompare` in the library view). A cover file that is
+  /// not downloaded (iCloud) is not read (owner decision 7): the folder then
+  /// has none, which is what the device shows for a cover file it cannot
+  /// decode. After an incomplete walk a folder's cover is only set, never
+  /// cleared, since the folder may not have been listed.
+  Future<void> _storeCovers(
+    int sourceId,
+    Map<String, List<StorageEntry>> covers, {
+    required bool complete,
+  }) async {
+    final picked = <String, StorageEntry?>{};
+    for (final MapEntry(key: dir, value: entries) in covers.entries) {
+      entries.sort(
+        (a, b) => compareKeys(
+          utf8.encode(_fileName(a.relPath)),
+          utf8.encode(_fileName(b.relPath)),
+        ),
+      );
+      final best = artFolderPick(entries.map((e) => _fileName(e.relPath)));
+      final e = best == null
+          ? null
+          : entries.firstWhere((e) => _fileName(e.relPath) == best.$1);
+      picked[dir] = e == null || e.state == EntryState.notDownloaded ? null : e;
+    }
+    final rows = await (_db.select(
+      _db.tracks,
+    )..where((t) => t.sourceId.equals(sourceId))).get();
+    await _db.batch((b) {
+      for (final t in rows) {
+        final dir = _folderOf(t.relPath);
+        if (!complete && picked[dir] == null) continue;
+        final e = picked[dir];
+        if (t.folderArtUri == e?.uri &&
+            t.folderArtSize == e?.size &&
+            t.folderArtMtime == e?.modifiedMs) {
+          continue;
+        }
+        b.update(
+          _db.tracks,
+          TracksCompanion(
+            folderArtUri: Value(e?.uri),
+            folderArtSize: Value(e?.size),
+            folderArtMtime: Value(e?.modifiedMs),
+          ),
+          where: (r) => r.id.equals(t.id),
+        );
+      }
+    });
   }
 
   /// Same file as last time, read by this version, and its last read did not
@@ -272,6 +344,9 @@ final class LocalLibraryScanner implements LibraryScanner {
           year: Value(r.tags?.year ?? 0),
           compilation: Value(r.tags?.compilation ?? false),
           trackNo: r.tags?.trackNo ?? 0,
+          artOffset: Value(r.tags?.art?.offset),
+          artLength: Value(r.tags?.art?.length),
+          artKind: Value(r.tags?.art?.kind.code ?? ArtKind.none.code),
           durationMs: r.tags?.durationMs ?? 0,
           sampleRate: r.tags?.sampleRate ?? 0,
           bitDepth: r.tags?.bitDepth ?? 0,
@@ -303,6 +378,12 @@ final class LocalLibraryScanner implements LibraryScanner {
   static String _fileName(String relPath) {
     final slash = relPath.lastIndexOf('/');
     return slash < 0 ? relPath : relPath.substring(slash + 1);
+  }
+
+  /// The folder of [relPath]: its path without the file name, '' at the root.
+  static String _folderOf(String relPath) {
+    final slash = relPath.lastIndexOf('/');
+    return slash < 0 ? '' : relPath.substring(0, slash);
   }
 }
 

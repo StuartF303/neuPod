@@ -15,6 +15,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neupod/app/art_providers.dart';
 import 'package:neupod/app/library_view_providers.dart';
 import 'package:neupod/app/providers.dart';
 import 'package:neupod/domain/library_view/library_view.dart';
@@ -63,24 +64,24 @@ final styleChoiceProvider = NotifierProvider<StyleChoiceNotifier, StyleChoice>(
 StyleMode effectiveMode(StyleChoice choice, Brightness platform) =>
     choice.mode ?? StyleMode.fromBrightness(platform);
 
-/// The album of the song now loaded, or null.
-final playingAlbumProvider = FutureProvider<Album?>((ref) async {
+/// The art of the song now loaded: its own picture, as the device's Now
+/// Playing shows (with its album's placeholder), or null when nothing is
+/// loaded.
+final playingArtProvider = FutureProvider<ArtRef?>((ref) async {
   final id = ref.watch(playerStateProvider.select((s) => s.value?.current?.id));
   if (id == null) return null;
   final library = await ref.watch(libraryViewProvider.future);
-  final song = await library.song(id);
-  if (song == null) return null;
-  return (await library.album(song.albumId))?.album;
+  return (await library.song(id))?.art;
 });
 
 /// The colours Modern takes on screens that show no album of their own: the
-/// album of the song playing (UI styles Open question 5 asks whether that
+/// art of the song playing (UI styles Open question 5 asks whether that
 /// should be so everywhere; Cover Flow and an album follow the album on
 /// screen, as drawn). Null: the ground alone.
 final ambientPaletteProvider = Provider<ArtPalette?>((ref) {
-  final album = ref.watch(playingAlbumProvider).value;
-  if (album == null) return null;
-  return ref.watch(artPaletteProvider(album.art)).value;
+  final art = ref.watch(playingArtProvider).value;
+  if (art == null) return null;
+  return ref.watch(artPaletteProvider(art)).value;
 });
 
 /// What the device's status bar shows that the player does not say. The
@@ -123,12 +124,15 @@ const _placeholderPairs = <(Color, Color)>[
 ];
 
 /// The palette Modern takes from [art]: for a placeholder, its two colours;
-/// for a cover file, decoded once and cached by the provider.
+/// for a picture, its art cache thumbnail decoded once and cached by the
+/// provider.
 final artPaletteProvider = FutureProvider.family<ArtPalette?, ArtRef>((
   ref,
   art,
 ) async {
-  final path = art.path;
+  final path = art.sources.isEmpty
+      ? art.path
+      : await ref.watch(artFileProvider((art, ArtSize.thumb)).future);
   if (path != null) {
     try {
       final Uint8List bytes = await File(path).readAsBytes();

@@ -77,7 +77,7 @@ recorded fallback.
 - Two implementations of the same rules (C and Dart) can drift. Mitigation: a shared table of golden cases (file,
   expected fields) used by both test suites where practical.
 - Formats beyond the spec (AIFF, APE, DSF) are not read; they are listed greyed by the scanner as the device does.
-- Art: the scan records offset, length and MIME of the best picture (front cover first, as `meta_art_offer` does);
+- Art: the scan records offset, length and kind (from its first bytes, not the MIME) of the best picture, as `meta_art_offer` does (decision 0010);
   bytes are read later by the art cache, so the scan stays header-only.
 - Sync reads in an isolate are fine; the isolate must never be the UI isolate.
 

@@ -207,7 +207,7 @@ Future<void> playAll(WidgetRef ref, List<Song> songs) async {
 Future<void> _start(WidgetRef ref, List<Song> songs, int start) async {
   final shell = ref.read(shellProvider.notifier);
   try {
-    final items = await ref.read(queueMapperProvider)(songs);
+    final items = await ref.read(queueMapperProvider)(songs, start: start);
     final player = ref.read(playerProvider);
     await player.setQueue(items, startIndex: start);
     // Now Playing opens only once there is something to show.

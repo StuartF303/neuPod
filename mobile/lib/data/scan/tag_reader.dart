@@ -7,7 +7,8 @@
 /// `meta_text_to_utf8`, `meta_genre_text`, `meta_year_text`), read through
 /// [ByteSource], with the library tags the firmware's scanner asks for
 /// (`audio_tags_ext_t`, set by `meta_set_tags_ext` in lib_build.c): album
-/// artist, genre, disc, year, compilation flag and the sort tags.
+/// artist, genre, disc, year, compilation flag and the sort tags, and where
+/// the embedded picture is (`flac_picture`, `id3_picture`, `meta_art_offer`).
 ///
 /// Texts come twice: as displayed (the whole tag, decoded) and as the
 /// firmware's parser stores them (`...KeyText`: its buffer sizes, its
@@ -23,6 +24,7 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:neupod/domain/library/art_rules.dart';
 import 'package:neupod/domain/library/collation.dart';
 import 'package:neupod/domain/library/track.dart';
 
@@ -104,6 +106,7 @@ final class AudioTags {
     this.durationEstimated = false,
     this.sampleRate = 0,
     this.bitDepth = 0,
+    this.art,
   });
 
   /// `flac`, `mp3`, `alac`, `aac`, `mp4` (another codec in an MP4) or
@@ -179,6 +182,12 @@ final class AudioTags {
 
   /// 0 for lossy formats.
   final int bitDepth;
+
+  /// The best embedded picture (`audio_tags_t.art`: [offerArt] over every
+  /// FLAC PICTURE block or ID3v2 APIC/PIC frame), or null when there is none.
+  /// Only its place in the file: the bytes are not read here, apart from the
+  /// first four that say what it is.
+  final EmbeddedArt? art;
 }
 
 /// Longest text frame or comment the reader keeps; longer ones are cut at a
@@ -482,6 +491,8 @@ void _flacBlocks(
         (((si[12] & 1) << 4) | (si[13] >> 4)) + 1,
         ((si[13] & 0xF) << 32) | _be32(si, 14),
       );
+    } else if (type == 6) {
+      fields.art = _flacPicture(src, body, len, fields.art);
     } else if (type == 4 && len <= _maxCommentBlock && body + len <= size) {
       _vorbisComments(
         src.readAt(body, len),
@@ -499,6 +510,41 @@ void _flacBlocks(
 
 const _damaged = UnreadableReason.damaged;
 
+/// `flac_picture`: a PICTURE block (type, mime, description, width, height,
+/// depth, colours, length, data; all 32-bit big-endian counts) offered to
+/// [best]. The mime string is skipped: the image's first bytes say what it is.
+EmbeddedArt? _flacPicture(
+  ByteSource src,
+  int body,
+  int len,
+  EmbeddedArt? best,
+) {
+  if (len < 32) return best;
+  final h = src.readAt(body, 8);
+  if (h.length != 8) return best;
+  final ptype = _be32(h, 0), mlen = _be32(h, 4);
+  var at = 8 + mlen;
+  if (at + 4 > len) return best;
+  final w = src.readAt(body + at, 4);
+  if (w.length != 4) return best;
+  at += 4 + _be32(w, 0); // description
+  if (at + 20 > len) return best;
+  final f = src.readAt(body + at, 20);
+  if (f.length != 20) return best;
+  final dlen = _be32(f, 16);
+  at += 20;
+  if (dlen > len - at) return best;
+  return offerArt(
+    best,
+    EmbeddedArt(
+      offset: body + at,
+      length: dlen,
+      kind: sniffArt(src.readAt(body + at, 4), dlen),
+      type: ptype > 255 ? 0 : ptype,
+    ),
+  );
+}
+
 /// What a tag parser fills: the fields of `audio_tags_t` and
 /// `audio_tags_ext_t`.
 class _Fields {
@@ -511,6 +557,7 @@ class _Fields {
   List<int> albumArtistSortKey = const [];
   int track = 0, disc = 0, year = 0;
   bool compilation = false;
+  EmbeddedArt? art;
 
   AudioTags tags({
     required String codec,
@@ -543,6 +590,7 @@ class _Fields {
     durationEstimated: durationEstimated,
     sampleRate: sampleRate,
     bitDepth: bitDepth,
+    art: art,
   );
 }
 
@@ -719,6 +767,19 @@ void _id3v2Tags(ByteSource src, Uint8List h, int total, _Fields t) {
               (fh[7] & 0x7F)
         : _be32(fh, 4);
     if (pos + hLen + sz > end) return;
+    if ((ver == 2 ? id == 'PIC' : id == 'APIC') && (h[5] & 0x80) == 0) {
+      var skip = 0;
+      var usable = true;
+      if (ver == 3) usable = (fh[9] & 0xE0) == 0; // compressed, encrypted
+      if (ver == 4) {
+        // Grouping, compression, encryption, unsynchronisation.
+        usable = (fh[9] & 0x4E) == 0;
+        if ((fh[9] & 0x01) != 0) skip = 4; // data length indicator
+      }
+      if (usable && sz > skip) {
+        t.art = _id3Picture(src, pos + hLen + skip, sz - skip, ver, t.art);
+      }
+    }
     if (id.startsWith('T') && sz > 1 && sz <= 400) {
       final skip = ver == 4 && (fh[9] & 0x01) != 0
           ? 4
@@ -735,6 +796,59 @@ void _id3v2Tags(ByteSource src, Uint8List h, int total, _Fields t) {
     }
     pos += hLen + sz;
   }
+}
+
+/// `id3_picture`: APIC (v2.3/2.4: encoding, mime NUL, type, description,
+/// data) or PIC (v2.2: encoding, 3-byte format, type, description, data),
+/// offered to [best]. Only the first 160 bytes are read for the mime and the
+/// description; a longer description makes the picture unusable. A frame
+/// that is compressed, encrypted or unsynchronised never gets here (it cannot
+/// be read in place).
+EmbeddedArt? _id3Picture(
+  ByteSource src,
+  int at,
+  int sz,
+  int ver,
+  EmbeddedArt? best,
+) {
+  final n = sz < 160 ? sz : 160;
+  if (n < 6) return best;
+  final b = src.readAt(at, n);
+  if (b.length != n) return best;
+  final enc = b[0];
+  var i = 1;
+  if (ver == 2) {
+    i = 4;
+  } else {
+    while (i < n && b[i] != 0) {
+      i++; // mime type
+    }
+    i++;
+  }
+  if (i >= n) return best;
+  final ptype = b[i++];
+  if (enc == 1 || enc == 2) {
+    // UTF-16 description: ends at an aligned 00 00.
+    while (i + 1 < n && (b[i] != 0 || b[i + 1] != 0)) {
+      i += 2;
+    }
+    i += 2;
+  } else {
+    while (i < n && b[i] != 0) {
+      i++;
+    }
+    i++;
+  }
+  if (i >= n || i >= sz) return best; // description longer than was read
+  return offerArt(
+    best,
+    EmbeddedArt(
+      offset: at + i,
+      length: sz - i,
+      kind: sniffArt(src.readAt(at + i, 4), sz - i),
+      type: ptype,
+    ),
+  );
 }
 
 Uint8List _unsync(Uint8List d) {
@@ -1103,10 +1217,36 @@ void _freeformItem(_Mp4 p, _Box it) {
   }
 }
 
+/// `covr_item`: one or more `data` boxes, each an image (type code 13 JPEG,
+/// 14 PNG, not trusted: the bytes say what it is), each a front cover
+/// (type 3), offered in turn. Position only, never read.
+void _covrItem(_Mp4 p, _Box it) {
+  var pos = it.body;
+  for (var guard = 0; guard < 8; guard++) {
+    final d = _readBox(p, pos, it.end);
+    if (d == null) break;
+    pos = d.end;
+    final n = d.end - d.body - 8;
+    if (d.type != _fourcc('data') || n <= 0 || n > 0xFFFFFFFF) continue;
+    p.t.art = offerArt(
+      p.t.art,
+      EmbeddedArt(
+        offset: d.body + 8,
+        length: n,
+        kind: sniffArt(p.read(d.body + 8, 4), n),
+        type: 3,
+      ),
+    );
+  }
+}
+
 /// `ilst_item`: one iTunes tag item, its `data` box at most 96 bytes (a
 /// longer one is skipped by the firmware; its text is still displayed).
 void _ilstItem(_Mp4 p, _Box it) {
-  if (it.type == _fourcc('covr')) return; // pictures: the art cache
+  if (it.type == _fourcc('covr')) {
+    _covrItem(p, it);
+    return;
+  }
   if (it.type == _fourcc('----')) {
     _freeformItem(p, it);
     return;

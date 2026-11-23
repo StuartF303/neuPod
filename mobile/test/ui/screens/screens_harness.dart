@@ -117,7 +117,7 @@ Future<ShellRig> pumpShell(
       // The real mapper copies test tones out of the asset bundle; the
       // screens' tests only need the queue's order and metadata.
       queueMapperProvider.overrideWithValue(
-        (songs) async => [
+        (songs, {int start = 0}) async => [
           for (final s in songs)
             if (s.playable)
               QueueItem(

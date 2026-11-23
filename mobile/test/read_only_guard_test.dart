@@ -109,6 +109,31 @@ class _Allowed {
 /// The app's own database and cache directories. Nothing else.
 const _allowed = <_Allowed>[
   _Allowed(
+    'lib/data/art/art_cache.dart',
+    'await Directory(d).create(recursive: true);',
+    "the art cache's own directory under the app's support directory (decision 0010), never a music folder",
+  ),
+  _Allowed(
+    'lib/data/art/art_cache.dart',
+    'f.setLastModifiedSync(DateTime.now());',
+    'the art cache marks a hit on its own cached file (LRU order)',
+  ),
+  _Allowed(
+    'lib/data/art/art_cache.dart',
+    'f.deleteSync();',
+    'the art cache evicts its own cached files',
+  ),
+  _Allowed(
+    'lib/data/art/art_cache.dart',
+    'tmp.writeAsBytesSync(data, flush: true);',
+    'the art cache writes a cached thumbnail into its own directory',
+  ),
+  _Allowed(
+    'lib/data/art/art_cache.dart',
+    'tmp.renameSync(path);',
+    'the same cached thumbnail, moved into place within the cache directory',
+  ),
+  _Allowed(
     'lib/audio/test_media.dart',
     'await file.parent.create(recursive: true);',
     'test-tone fixtures copied into the temp/cache directory '

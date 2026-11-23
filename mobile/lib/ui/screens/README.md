@@ -29,7 +29,7 @@ Compilations, and a small Settings). Now Playing, the panel's content and Search
 3. **Build your screen with `ShellFrame(title: ..., context: ..., palette: ..., backdrop: ..., body: ...)`.** It is
    `NeupodScreen` plus the status bar (play state from the player, battery and output from `deviceStatusProvider`) in
    the style and mode the owner chose. Pass `palette` (an `ArtPalette`) when the screen shows an album of its own, as
-   Cover Flow and an album do; otherwise Modern uses `ambientPaletteProvider`, the album of the song playing.
+   Cover Flow and an album do; otherwise Modern uses `ambientPaletteProvider`, the art of the song playing.
    `BackdropLayout.nowPlaying` is yours.
 4. **Take the wheel.** In `didChangeDependencies`, `ScreenScope.maybeOf(context)` gives the screen's `ScreenHandle`:
    set `handle.wheel = (WheelEvent e) => ...` (return true when you used the event), clear it in `dispose` (only if it

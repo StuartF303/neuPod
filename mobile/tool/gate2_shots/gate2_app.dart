@@ -82,7 +82,7 @@ ProviderContainer gate2Container({
       // Playing a song is not what the shots are about; the queue's order and
       // metadata are enough.
       queueMapperProvider.overrideWithValue(
-        (songs) async => [
+        (songs, {int start = 0}) async => [
           for (final s in songs)
             if (s.playable)
               QueueItem(

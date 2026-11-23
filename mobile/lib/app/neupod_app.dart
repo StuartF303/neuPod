@@ -5,7 +5,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:neupod/app/art_providers.dart';
 import 'package:neupod/app/library_scan_providers.dart';
+import 'package:neupod/app/library_view_providers.dart';
+import 'package:neupod/app/providers.dart';
 import 'package:neupod/ui/device/device_view.dart';
 import 'package:neupod/ui/features/licences/licences_data.dart';
 import 'package:neupod/ui/screens/browse/browse_root.dart';
@@ -64,6 +67,19 @@ class _NeuPodAppState extends ConsumerState<NeuPodApp> {
 
   @override
   Widget build(BuildContext context) {
+    // The lock screen's art for the songs about to play.
+    ref.listen(playerStateProvider, (was, now) {
+      final state = now.value;
+      if (state == null) return;
+      unawaited(
+        warmLockScreenArt(
+          ref.read(artCacheProvider),
+          () => ref.read(libraryViewProvider.future),
+          was?.value,
+          state,
+        ),
+      );
+    });
     ref.listen(libraryScanProvider, (was, now) {
       final ended = was != null && !was.done && now != null && now.done;
       final error = now?.error;

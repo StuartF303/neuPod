@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_test/flutter_test.dart';
@@ -760,5 +761,115 @@ void main() {
     await add('4', 'tie', [0xC1]);
     final titles = (await tracks()).map((t) => t.title);
     expect(titles, ['short', 'tie', 'long', 'high']);
+  });
+
+  group('art', () {
+    List<int> art(String name) =>
+        File('test/fixtures/art/$name').readAsBytesSync();
+
+    Future<Map<String, TrackRow>> rows() async => {
+      for (final t in await db.select(db.tracks).get()) t.relPath: t,
+    };
+
+    test('records where the embedded picture is and each folder\'s cover '
+        'file, by the firmware\'s names and ranks', () async {
+      put('A/a.flac', art('front_jpeg.flac'));
+      put('A/Folder.jpg', art('folder_blue.jpg'));
+      put('A/cover.jpg', art('cover.jpg')); // rank 1 beats folder.jpg
+      put('B/b.flac', art('png_only.flac'));
+      put('B/FRONT.JPG', art('cover.jpg'));
+      put('B/cover.png', art('cover.jpg')); // not a cover file name
+      put('C/c.mp3', art('apic_v23_front.mp3'));
+      put('C/albumart.jpg', art('cover.jpg')); // nor this
+      put('d.flac', art('no_picture.flac'));
+
+      final (_, storage, scanner) = setUpScanner();
+      final last = (await scanner.scan().toList()).last;
+      expect(last.filesFound, 4, reason: 'cover files are not tracks');
+      expect(storage.opened, isNot(contains('cover.jpg')));
+
+      final r = await rows();
+      expect(r['A/a.flac']!.artKind, 1);
+      expect(r['A/a.flac']!.artOffset, 119);
+      expect(r['A/a.flac']!.artLength, 1192);
+      expect(r['A/a.flac']!.folderArtUri, endsWith('/music/A/cover.jpg'));
+      expect(r['A/a.flac']!.folderArtSize, art('cover.jpg').length);
+      expect(r['B/b.flac']!.artKind, 2); // a PNG: the device skips it
+      expect(r['B/b.flac']!.folderArtUri, endsWith('/music/B/FRONT.JPG'));
+      expect(r['C/c.mp3']!.artKind, 1);
+      expect(r['C/c.mp3']!.artOffset, 34);
+      expect(r['C/c.mp3']!.folderArtUri, isNull);
+      expect(r['d.flac']!.artKind, 0);
+      expect(r['d.flac']!.artOffset, isNull);
+      expect(r['d.flac']!.folderArtUri, isNull);
+    });
+
+    test('a cover file added, changed or removed is noted on the next scan '
+        'without reading the tracks again', () async {
+      put('A/a.flac', art('no_picture.flac'));
+      put('A/b.flac', art('no_picture.flac'));
+      final (_, storage, scanner) = setUpScanner();
+      await scanner.scan().toList();
+      expect((await rows())['A/a.flac']!.folderArtUri, isNull);
+      final opened = storage.opened.length;
+
+      put('A/folder.jpg', art('folder_blue.jpg'));
+      await scanner.scan().toList();
+      var r = await rows();
+      expect(r['A/a.flac']!.folderArtUri, endsWith('/A/folder.jpg'));
+      expect(r['A/b.flac']!.folderArtUri, endsWith('/A/folder.jpg'));
+
+      final f = put('A/folder.jpg', art('cover.jpg'));
+      f.setLastModifiedSync(DateTime(2030));
+      await scanner.scan().toList();
+      r = await rows();
+      expect(r['A/a.flac']!.folderArtSize, art('cover.jpg').length);
+      expect(
+        r['A/a.flac']!.folderArtMtime,
+        DateTime(2030).millisecondsSinceEpoch,
+      );
+
+      f.deleteSync();
+      await scanner.scan().toList();
+      expect((await rows())['A/a.flac']!.folderArtUri, isNull);
+      expect(storage.opened.length, opened, reason: 'no track read again');
+    });
+
+    test('an incomplete walk sets cover files but never clears them', () async {
+      put('A/a.flac', art('no_picture.flac'));
+      put('A/cover.jpg', art('cover.jpg'));
+      put('B/b.flac', art('no_picture.flac'));
+      final (api, _, scanner) = setUpScanner();
+      await scanner.scan().toList();
+      File('${tmp.path}/music/A/cover.jpg').deleteSync();
+      put('B/cover.jpg', art('cover.jpg'));
+      api.unreadablePrefix = 'X/'; // the walk is reported incomplete
+      await scanner.scan().toList();
+      final r = await rows();
+      expect(r['A/a.flac']!.folderArtUri, endsWith('/A/cover.jpg'));
+      expect(r['B/b.flac']!.folderArtUri, endsWith('/B/cover.jpg'));
+    });
+
+    test(
+      'a row from scan version 3 (before art) is read again for its picture',
+      () async {
+        put('a.flac', art('front_jpeg.flac'));
+        final (_, _, old) = setUpScanner(version: 3);
+        await old.scan().toList();
+        await db
+            .update(db.tracks)
+            .write(
+              const TracksCompanion(
+                artKind: Value(null),
+                artOffset: Value(null),
+                artLength: Value(null),
+              ),
+            );
+        final (_, storage, scanner) = setUpScanner();
+        await scanner.scan().toList();
+        expect(storage.opened, ['a.flac']);
+        expect((await rows())['a.flac']!.artKind, 1);
+      },
+    );
   });
 }

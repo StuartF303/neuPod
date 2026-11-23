@@ -627,6 +627,72 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _artOffsetMeta = const VerificationMeta(
+    'artOffset',
+  );
+  @override
+  late final GeneratedColumn<int> artOffset = GeneratedColumn<int>(
+    'art_offset',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _artLengthMeta = const VerificationMeta(
+    'artLength',
+  );
+  @override
+  late final GeneratedColumn<int> artLength = GeneratedColumn<int>(
+    'art_length',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _artKindMeta = const VerificationMeta(
+    'artKind',
+  );
+  @override
+  late final GeneratedColumn<int> artKind = GeneratedColumn<int>(
+    'art_kind',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _folderArtUriMeta = const VerificationMeta(
+    'folderArtUri',
+  );
+  @override
+  late final GeneratedColumn<String> folderArtUri = GeneratedColumn<String>(
+    'folder_art_uri',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _folderArtSizeMeta = const VerificationMeta(
+    'folderArtSize',
+  );
+  @override
+  late final GeneratedColumn<int> folderArtSize = GeneratedColumn<int>(
+    'folder_art_size',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _folderArtMtimeMeta = const VerificationMeta(
+    'folderArtMtime',
+  );
+  @override
+  late final GeneratedColumn<int> folderArtMtime = GeneratedColumn<int>(
+    'folder_art_mtime',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _reasonCodeMeta = const VerificationMeta(
     'reasonCode',
   );
@@ -679,6 +745,12 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     durationMs,
     sampleRate,
     bitDepth,
+    artOffset,
+    artLength,
+    artKind,
+    folderArtUri,
+    folderArtSize,
+    folderArtMtime,
     reasonCode,
     scanVersion,
   ];
@@ -919,6 +991,51 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     } else if (isInserting) {
       context.missing(_bitDepthMeta);
     }
+    if (data.containsKey('art_offset')) {
+      context.handle(
+        _artOffsetMeta,
+        artOffset.isAcceptableOrUnknown(data['art_offset']!, _artOffsetMeta),
+      );
+    }
+    if (data.containsKey('art_length')) {
+      context.handle(
+        _artLengthMeta,
+        artLength.isAcceptableOrUnknown(data['art_length']!, _artLengthMeta),
+      );
+    }
+    if (data.containsKey('art_kind')) {
+      context.handle(
+        _artKindMeta,
+        artKind.isAcceptableOrUnknown(data['art_kind']!, _artKindMeta),
+      );
+    }
+    if (data.containsKey('folder_art_uri')) {
+      context.handle(
+        _folderArtUriMeta,
+        folderArtUri.isAcceptableOrUnknown(
+          data['folder_art_uri']!,
+          _folderArtUriMeta,
+        ),
+      );
+    }
+    if (data.containsKey('folder_art_size')) {
+      context.handle(
+        _folderArtSizeMeta,
+        folderArtSize.isAcceptableOrUnknown(
+          data['folder_art_size']!,
+          _folderArtSizeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('folder_art_mtime')) {
+      context.handle(
+        _folderArtMtimeMeta,
+        folderArtMtime.isAcceptableOrUnknown(
+          data['folder_art_mtime']!,
+          _folderArtMtimeMeta,
+        ),
+      );
+    }
     if (data.containsKey('reason_code')) {
       context.handle(
         _reasonCodeMeta,
@@ -1061,6 +1178,30 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         DriftSqlType.int,
         data['${effectivePrefix}bit_depth'],
       )!,
+      artOffset: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}art_offset'],
+      ),
+      artLength: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}art_length'],
+      ),
+      artKind: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}art_kind'],
+      ),
+      folderArtUri: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}folder_art_uri'],
+      ),
+      folderArtSize: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}folder_art_size'],
+      ),
+      folderArtMtime: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}folder_art_mtime'],
+      ),
       reasonCode: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}reason_code'],
@@ -1150,6 +1291,24 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
   final int sampleRate;
   final int bitDepth;
 
+  /// The best embedded picture (`art_ref_t`, see `domain/library/art_rules.dart`):
+  /// where its bytes are in the file and what they are (`ArtKind.code`). The
+  /// bytes stay in the file; the art cache reads them. [artKind] is 0 when the
+  /// file has no picture, and all three are null in a row written before
+  /// schema version 4, until a rescan reads the file again (scan version 5).
+  final int? artOffset;
+  final int? artLength;
+  final int? artKind;
+
+  /// The cover file in the track's folder that the firmware would take
+  /// (`cover.jpg`, `folder.jpg`, `front.jpg`; `art_folder_pick`), by the URI
+  /// the folder-access plugin opens, with its size and modification time (so
+  /// a changed file makes a new art cache entry). Null when the folder has
+  /// none. Set by every scan of the folder, whether or not the track changed.
+  final String? folderArtUri;
+  final int? folderArtSize;
+  final int? folderArtMtime;
+
   /// `UnreadableReason.code` when the tags could not be read, or null.
   final int? reasonCode;
 
@@ -1185,6 +1344,12 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     required this.durationMs,
     required this.sampleRate,
     required this.bitDepth,
+    this.artOffset,
+    this.artLength,
+    this.artKind,
+    this.folderArtUri,
+    this.folderArtSize,
+    this.folderArtMtime,
     this.reasonCode,
     required this.scanVersion,
   });
@@ -1235,6 +1400,24 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     map['duration_ms'] = Variable<int>(durationMs);
     map['sample_rate'] = Variable<int>(sampleRate);
     map['bit_depth'] = Variable<int>(bitDepth);
+    if (!nullToAbsent || artOffset != null) {
+      map['art_offset'] = Variable<int>(artOffset);
+    }
+    if (!nullToAbsent || artLength != null) {
+      map['art_length'] = Variable<int>(artLength);
+    }
+    if (!nullToAbsent || artKind != null) {
+      map['art_kind'] = Variable<int>(artKind);
+    }
+    if (!nullToAbsent || folderArtUri != null) {
+      map['folder_art_uri'] = Variable<String>(folderArtUri);
+    }
+    if (!nullToAbsent || folderArtSize != null) {
+      map['folder_art_size'] = Variable<int>(folderArtSize);
+    }
+    if (!nullToAbsent || folderArtMtime != null) {
+      map['folder_art_mtime'] = Variable<int>(folderArtMtime);
+    }
     if (!nullToAbsent || reasonCode != null) {
       map['reason_code'] = Variable<int>(reasonCode);
     }
@@ -1286,6 +1469,24 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       durationMs: Value(durationMs),
       sampleRate: Value(sampleRate),
       bitDepth: Value(bitDepth),
+      artOffset: artOffset == null && nullToAbsent
+          ? const Value.absent()
+          : Value(artOffset),
+      artLength: artLength == null && nullToAbsent
+          ? const Value.absent()
+          : Value(artLength),
+      artKind: artKind == null && nullToAbsent
+          ? const Value.absent()
+          : Value(artKind),
+      folderArtUri: folderArtUri == null && nullToAbsent
+          ? const Value.absent()
+          : Value(folderArtUri),
+      folderArtSize: folderArtSize == null && nullToAbsent
+          ? const Value.absent()
+          : Value(folderArtSize),
+      folderArtMtime: folderArtMtime == null && nullToAbsent
+          ? const Value.absent()
+          : Value(folderArtMtime),
       reasonCode: reasonCode == null && nullToAbsent
           ? const Value.absent()
           : Value(reasonCode),
@@ -1335,6 +1536,12 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       durationMs: serializer.fromJson<int>(json['durationMs']),
       sampleRate: serializer.fromJson<int>(json['sampleRate']),
       bitDepth: serializer.fromJson<int>(json['bitDepth']),
+      artOffset: serializer.fromJson<int?>(json['artOffset']),
+      artLength: serializer.fromJson<int?>(json['artLength']),
+      artKind: serializer.fromJson<int?>(json['artKind']),
+      folderArtUri: serializer.fromJson<String?>(json['folderArtUri']),
+      folderArtSize: serializer.fromJson<int?>(json['folderArtSize']),
+      folderArtMtime: serializer.fromJson<int?>(json['folderArtMtime']),
       reasonCode: serializer.fromJson<int?>(json['reasonCode']),
       scanVersion: serializer.fromJson<int>(json['scanVersion']),
     );
@@ -1373,6 +1580,12 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       'durationMs': serializer.toJson<int>(durationMs),
       'sampleRate': serializer.toJson<int>(sampleRate),
       'bitDepth': serializer.toJson<int>(bitDepth),
+      'artOffset': serializer.toJson<int?>(artOffset),
+      'artLength': serializer.toJson<int?>(artLength),
+      'artKind': serializer.toJson<int?>(artKind),
+      'folderArtUri': serializer.toJson<String?>(folderArtUri),
+      'folderArtSize': serializer.toJson<int?>(folderArtSize),
+      'folderArtMtime': serializer.toJson<int?>(folderArtMtime),
       'reasonCode': serializer.toJson<int?>(reasonCode),
       'scanVersion': serializer.toJson<int>(scanVersion),
     };
@@ -1407,6 +1620,12 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     int? durationMs,
     int? sampleRate,
     int? bitDepth,
+    Value<int?> artOffset = const Value.absent(),
+    Value<int?> artLength = const Value.absent(),
+    Value<int?> artKind = const Value.absent(),
+    Value<String?> folderArtUri = const Value.absent(),
+    Value<int?> folderArtSize = const Value.absent(),
+    Value<int?> folderArtMtime = const Value.absent(),
     Value<int?> reasonCode = const Value.absent(),
     int? scanVersion,
   }) => TrackRow(
@@ -1448,6 +1667,16 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     durationMs: durationMs ?? this.durationMs,
     sampleRate: sampleRate ?? this.sampleRate,
     bitDepth: bitDepth ?? this.bitDepth,
+    artOffset: artOffset.present ? artOffset.value : this.artOffset,
+    artLength: artLength.present ? artLength.value : this.artLength,
+    artKind: artKind.present ? artKind.value : this.artKind,
+    folderArtUri: folderArtUri.present ? folderArtUri.value : this.folderArtUri,
+    folderArtSize: folderArtSize.present
+        ? folderArtSize.value
+        : this.folderArtSize,
+    folderArtMtime: folderArtMtime.present
+        ? folderArtMtime.value
+        : this.folderArtMtime,
     reasonCode: reasonCode.present ? reasonCode.value : this.reasonCode,
     scanVersion: scanVersion ?? this.scanVersion,
   );
@@ -1505,6 +1734,18 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ? data.sampleRate.value
           : this.sampleRate,
       bitDepth: data.bitDepth.present ? data.bitDepth.value : this.bitDepth,
+      artOffset: data.artOffset.present ? data.artOffset.value : this.artOffset,
+      artLength: data.artLength.present ? data.artLength.value : this.artLength,
+      artKind: data.artKind.present ? data.artKind.value : this.artKind,
+      folderArtUri: data.folderArtUri.present
+          ? data.folderArtUri.value
+          : this.folderArtUri,
+      folderArtSize: data.folderArtSize.present
+          ? data.folderArtSize.value
+          : this.folderArtSize,
+      folderArtMtime: data.folderArtMtime.present
+          ? data.folderArtMtime.value
+          : this.folderArtMtime,
       reasonCode: data.reasonCode.present
           ? data.reasonCode.value
           : this.reasonCode,
@@ -1545,6 +1786,12 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ..write('durationMs: $durationMs, ')
           ..write('sampleRate: $sampleRate, ')
           ..write('bitDepth: $bitDepth, ')
+          ..write('artOffset: $artOffset, ')
+          ..write('artLength: $artLength, ')
+          ..write('artKind: $artKind, ')
+          ..write('folderArtUri: $folderArtUri, ')
+          ..write('folderArtSize: $folderArtSize, ')
+          ..write('folderArtMtime: $folderArtMtime, ')
           ..write('reasonCode: $reasonCode, ')
           ..write('scanVersion: $scanVersion')
           ..write(')'))
@@ -1581,6 +1828,12 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     durationMs,
     sampleRate,
     bitDepth,
+    artOffset,
+    artLength,
+    artKind,
+    folderArtUri,
+    folderArtSize,
+    folderArtMtime,
     reasonCode,
     scanVersion,
   ]);
@@ -1628,6 +1881,12 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           other.durationMs == this.durationMs &&
           other.sampleRate == this.sampleRate &&
           other.bitDepth == this.bitDepth &&
+          other.artOffset == this.artOffset &&
+          other.artLength == this.artLength &&
+          other.artKind == this.artKind &&
+          other.folderArtUri == this.folderArtUri &&
+          other.folderArtSize == this.folderArtSize &&
+          other.folderArtMtime == this.folderArtMtime &&
           other.reasonCode == this.reasonCode &&
           other.scanVersion == this.scanVersion);
 }
@@ -1661,6 +1920,12 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
   final Value<int> durationMs;
   final Value<int> sampleRate;
   final Value<int> bitDepth;
+  final Value<int?> artOffset;
+  final Value<int?> artLength;
+  final Value<int?> artKind;
+  final Value<String?> folderArtUri;
+  final Value<int?> folderArtSize;
+  final Value<int?> folderArtMtime;
   final Value<int?> reasonCode;
   final Value<int> scanVersion;
   const TracksCompanion({
@@ -1692,6 +1957,12 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.durationMs = const Value.absent(),
     this.sampleRate = const Value.absent(),
     this.bitDepth = const Value.absent(),
+    this.artOffset = const Value.absent(),
+    this.artLength = const Value.absent(),
+    this.artKind = const Value.absent(),
+    this.folderArtUri = const Value.absent(),
+    this.folderArtSize = const Value.absent(),
+    this.folderArtMtime = const Value.absent(),
     this.reasonCode = const Value.absent(),
     this.scanVersion = const Value.absent(),
   });
@@ -1724,6 +1995,12 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     required int durationMs,
     required int sampleRate,
     required int bitDepth,
+    this.artOffset = const Value.absent(),
+    this.artLength = const Value.absent(),
+    this.artKind = const Value.absent(),
+    this.folderArtUri = const Value.absent(),
+    this.folderArtSize = const Value.absent(),
+    this.folderArtMtime = const Value.absent(),
     this.reasonCode = const Value.absent(),
     required int scanVersion,
   }) : sourceId = Value(sourceId),
@@ -1771,6 +2048,12 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Expression<int>? durationMs,
     Expression<int>? sampleRate,
     Expression<int>? bitDepth,
+    Expression<int>? artOffset,
+    Expression<int>? artLength,
+    Expression<int>? artKind,
+    Expression<String>? folderArtUri,
+    Expression<int>? folderArtSize,
+    Expression<int>? folderArtMtime,
     Expression<int>? reasonCode,
     Expression<int>? scanVersion,
   }) {
@@ -1805,6 +2088,12 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       if (durationMs != null) 'duration_ms': durationMs,
       if (sampleRate != null) 'sample_rate': sampleRate,
       if (bitDepth != null) 'bit_depth': bitDepth,
+      if (artOffset != null) 'art_offset': artOffset,
+      if (artLength != null) 'art_length': artLength,
+      if (artKind != null) 'art_kind': artKind,
+      if (folderArtUri != null) 'folder_art_uri': folderArtUri,
+      if (folderArtSize != null) 'folder_art_size': folderArtSize,
+      if (folderArtMtime != null) 'folder_art_mtime': folderArtMtime,
       if (reasonCode != null) 'reason_code': reasonCode,
       if (scanVersion != null) 'scan_version': scanVersion,
     });
@@ -1839,6 +2128,12 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Value<int>? durationMs,
     Value<int>? sampleRate,
     Value<int>? bitDepth,
+    Value<int?>? artOffset,
+    Value<int?>? artLength,
+    Value<int?>? artKind,
+    Value<String?>? folderArtUri,
+    Value<int?>? folderArtSize,
+    Value<int?>? folderArtMtime,
     Value<int?>? reasonCode,
     Value<int>? scanVersion,
   }) {
@@ -1872,6 +2167,12 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       durationMs: durationMs ?? this.durationMs,
       sampleRate: sampleRate ?? this.sampleRate,
       bitDepth: bitDepth ?? this.bitDepth,
+      artOffset: artOffset ?? this.artOffset,
+      artLength: artLength ?? this.artLength,
+      artKind: artKind ?? this.artKind,
+      folderArtUri: folderArtUri ?? this.folderArtUri,
+      folderArtSize: folderArtSize ?? this.folderArtSize,
+      folderArtMtime: folderArtMtime ?? this.folderArtMtime,
       reasonCode: reasonCode ?? this.reasonCode,
       scanVersion: scanVersion ?? this.scanVersion,
     );
@@ -1970,6 +2271,24 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     if (bitDepth.present) {
       map['bit_depth'] = Variable<int>(bitDepth.value);
     }
+    if (artOffset.present) {
+      map['art_offset'] = Variable<int>(artOffset.value);
+    }
+    if (artLength.present) {
+      map['art_length'] = Variable<int>(artLength.value);
+    }
+    if (artKind.present) {
+      map['art_kind'] = Variable<int>(artKind.value);
+    }
+    if (folderArtUri.present) {
+      map['folder_art_uri'] = Variable<String>(folderArtUri.value);
+    }
+    if (folderArtSize.present) {
+      map['folder_art_size'] = Variable<int>(folderArtSize.value);
+    }
+    if (folderArtMtime.present) {
+      map['folder_art_mtime'] = Variable<int>(folderArtMtime.value);
+    }
     if (reasonCode.present) {
       map['reason_code'] = Variable<int>(reasonCode.value);
     }
@@ -2010,6 +2329,12 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
           ..write('durationMs: $durationMs, ')
           ..write('sampleRate: $sampleRate, ')
           ..write('bitDepth: $bitDepth, ')
+          ..write('artOffset: $artOffset, ')
+          ..write('artLength: $artLength, ')
+          ..write('artKind: $artKind, ')
+          ..write('folderArtUri: $folderArtUri, ')
+          ..write('folderArtSize: $folderArtSize, ')
+          ..write('folderArtMtime: $folderArtMtime, ')
           ..write('reasonCode: $reasonCode, ')
           ..write('scanVersion: $scanVersion')
           ..write(')'))
@@ -2352,6 +2677,12 @@ typedef $$TracksTableCreateCompanionBuilder = TracksCompanion Function({
   required int durationMs,
   required int sampleRate,
   required int bitDepth,
+  Value<int?> artOffset,
+  Value<int?> artLength,
+  Value<int?> artKind,
+  Value<String?> folderArtUri,
+  Value<int?> folderArtSize,
+  Value<int?> folderArtMtime,
   Value<int?> reasonCode,
   required int scanVersion,
 });
@@ -2384,6 +2715,12 @@ typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
   Value<int> durationMs,
   Value<int> sampleRate,
   Value<int> bitDepth,
+  Value<int?> artOffset,
+  Value<int?> artLength,
+  Value<int?> artKind,
+  Value<String?> folderArtUri,
+  Value<int?> folderArtSize,
+  Value<int?> folderArtMtime,
   Value<int?> reasonCode,
   Value<int> scanVersion,
 });
@@ -2551,6 +2888,36 @@ class $$TracksTableFilterComposer
 
   ColumnFilters<int> get bitDepth => $composableBuilder(
     column: $table.bitDepth,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get artOffset => $composableBuilder(
+    column: $table.artOffset,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get artLength => $composableBuilder(
+    column: $table.artLength,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get artKind => $composableBuilder(
+    column: $table.artKind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get folderArtUri => $composableBuilder(
+    column: $table.folderArtUri,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get folderArtSize => $composableBuilder(
+    column: $table.folderArtSize,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get folderArtMtime => $composableBuilder(
+    column: $table.folderArtMtime,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2732,6 +3099,36 @@ class $$TracksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get artOffset => $composableBuilder(
+    column: $table.artOffset,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get artLength => $composableBuilder(
+    column: $table.artLength,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get artKind => $composableBuilder(
+    column: $table.artKind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get folderArtUri => $composableBuilder(
+    column: $table.folderArtUri,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get folderArtSize => $composableBuilder(
+    column: $table.folderArtSize,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get folderArtMtime => $composableBuilder(
+    column: $table.folderArtMtime,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get reasonCode => $composableBuilder(
     column: $table.reasonCode,
     builder: (column) => ColumnOrderings(column),
@@ -2880,6 +3277,30 @@ class $$TracksTableAnnotationComposer
   GeneratedColumn<int> get bitDepth =>
       $composableBuilder(column: $table.bitDepth, builder: (column) => column);
 
+  GeneratedColumn<int> get artOffset =>
+      $composableBuilder(column: $table.artOffset, builder: (column) => column);
+
+  GeneratedColumn<int> get artLength =>
+      $composableBuilder(column: $table.artLength, builder: (column) => column);
+
+  GeneratedColumn<int> get artKind =>
+      $composableBuilder(column: $table.artKind, builder: (column) => column);
+
+  GeneratedColumn<String> get folderArtUri => $composableBuilder(
+    column: $table.folderArtUri,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get folderArtSize => $composableBuilder(
+    column: $table.folderArtSize,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get folderArtMtime => $composableBuilder(
+    column: $table.folderArtMtime,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get reasonCode => $composableBuilder(
     column: $table.reasonCode,
     builder: (column) => column,
@@ -2970,6 +3391,12 @@ class $$TracksTableTableManager
                 Value<int> durationMs = const Value.absent(),
                 Value<int> sampleRate = const Value.absent(),
                 Value<int> bitDepth = const Value.absent(),
+                Value<int?> artOffset = const Value.absent(),
+                Value<int?> artLength = const Value.absent(),
+                Value<int?> artKind = const Value.absent(),
+                Value<String?> folderArtUri = const Value.absent(),
+                Value<int?> folderArtSize = const Value.absent(),
+                Value<int?> folderArtMtime = const Value.absent(),
                 Value<int?> reasonCode = const Value.absent(),
                 Value<int> scanVersion = const Value.absent(),
               }) => TracksCompanion(
@@ -3001,6 +3428,12 @@ class $$TracksTableTableManager
                 durationMs: durationMs,
                 sampleRate: sampleRate,
                 bitDepth: bitDepth,
+                artOffset: artOffset,
+                artLength: artLength,
+                artKind: artKind,
+                folderArtUri: folderArtUri,
+                folderArtSize: folderArtSize,
+                folderArtMtime: folderArtMtime,
                 reasonCode: reasonCode,
                 scanVersion: scanVersion,
               ),
@@ -3034,6 +3467,12 @@ class $$TracksTableTableManager
                 required int durationMs,
                 required int sampleRate,
                 required int bitDepth,
+                Value<int?> artOffset = const Value.absent(),
+                Value<int?> artLength = const Value.absent(),
+                Value<int?> artKind = const Value.absent(),
+                Value<String?> folderArtUri = const Value.absent(),
+                Value<int?> folderArtSize = const Value.absent(),
+                Value<int?> folderArtMtime = const Value.absent(),
                 Value<int?> reasonCode = const Value.absent(),
                 required int scanVersion,
               }) => TracksCompanion.insert(
@@ -3065,6 +3504,12 @@ class $$TracksTableTableManager
                 durationMs: durationMs,
                 sampleRate: sampleRate,
                 bitDepth: bitDepth,
+                artOffset: artOffset,
+                artLength: artLength,
+                artKind: artKind,
+                folderArtUri: folderArtUri,
+                folderArtSize: folderArtSize,
+                folderArtMtime: folderArtMtime,
                 reasonCode: reasonCode,
                 scanVersion: scanVersion,
               ),
