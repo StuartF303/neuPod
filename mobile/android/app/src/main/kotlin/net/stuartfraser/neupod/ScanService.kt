@@ -49,7 +49,7 @@ class ScanService : Service() {
                     // The app went to the background before the service came up, or the dataSync
                     // time is used up: the scan goes on in the app without the service.
                     android.util.Log.w(ScanRuntime.TAG, "could not start the scan service in front: $e")
-                    ScanRuntime.session.stop()
+                    ScanRuntime.stop() // also releases an engine kept meanwhile
                     stopSelf()
                     return START_NOT_STICKY
                 }
@@ -84,12 +84,16 @@ class ScanService : Service() {
         getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, build())
     }
 
-    /** Stops the service and removes its notification. */
+    /**
+     * Stops the service and removes its notification. Before the service is in the foreground it
+     * does nothing: a pending ACTION_START must still call startForeground (Android crashes an app
+     * whose service, started with startForegroundService, stops without it), and that branch
+     * finishes itself when the scan has already ended.
+     */
     internal fun finish() {
-        if (foreground) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            foreground = false
-        }
+        if (!foreground) return
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        foreground = false
         stopSelf()
     }
 
@@ -119,7 +123,7 @@ class ScanService : Service() {
                 ).build(),
             )
         packageManager.getLaunchIntentForPackage(packageName)?.let { launch ->
-            launch.flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+            launch.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
             builder.setContentIntent(
                 PendingIntent.getActivity(
                     this,

@@ -112,6 +112,62 @@ void main() {
     },
   );
 
+  test('a second Cancel waits for the first cancel\'s write too', () async {
+    final blocking = _BlockingScanner();
+    final log = FakeScanKeepAlive();
+    final c = ProviderContainer.test(
+      overrides: [
+        libraryScannerProvider.overrideWithValue(blocking),
+        scanKeepAliveProvider.overrideWithValue(log),
+      ],
+    );
+    final scan = c.read(libraryScanProvider.notifier);
+    await scan.start();
+    await pumpEventQueue();
+    final first = scan.cancel(); // in the app
+    log.requestCancel(); // then the notification's Cancel
+    await pumpEventQueue();
+    expect(log.log, ['start 0/0', 'progress 1/0'], reason: 'still writing');
+    blocking.write.complete();
+    await first;
+    await pumpEventQueue();
+    expect(log.log.last, 'stop');
+  });
+
+  test('a cancel while a restart waits for the old write waits too', () async {
+    final blocking = _BlockingScanner();
+    final log = FakeScanKeepAlive();
+    final c = ProviderContainer.test(
+      overrides: [
+        libraryScannerProvider.overrideWithValue(blocking),
+        scanKeepAliveProvider.overrideWithValue(log),
+      ],
+    );
+    final scan = c.read(libraryScanProvider.notifier);
+    await scan.start();
+    await pumpEventQueue();
+    final restarted = scan.start(restart: true); // waits for the write
+    final cancelled = scan.cancel();
+    await pumpEventQueue();
+    expect(log.log.contains('stop'), isFalse, reason: 'still writing');
+    blocking.write.complete();
+    await restarted;
+    await cancelled;
+    expect(log.log.last, 'stop');
+  });
+
+  test('a scanner that cannot start stops the service', () async {
+    final c = ProviderContainer.test(
+      overrides: [
+        libraryScannerProvider.overrideWithValue(_ThrowingScanner()),
+        scanKeepAliveProvider.overrideWithValue(keepAlive),
+      ],
+    );
+    await c.read(libraryScanProvider.notifier).start();
+    expect(keepAlive.log, ['start 0/0', 'stop']);
+    expect(c.read(libraryScanProvider)!.error, contains('no scanner'));
+  });
+
   test('a restart keeps the service: no stop between the two scans', () async {
     await controller().start();
     await controller().start(restart: true);
@@ -221,6 +277,12 @@ void main() {
       expect(const NoScanKeepAlive().cancelRequests, emitsDone);
     });
   });
+}
+
+/// A scanner that throws before its scan begins.
+class _ThrowingScanner implements LibraryScanner {
+  @override
+  Stream<ScanProgress> scan() => throw StateError('no scanner');
 }
 
 /// A scanner whose scan stops inside a write until [write] completes.

@@ -103,42 +103,54 @@ class LibraryScanController extends Notifier<ScanProgress?> {
     final stopping = _stopping;
     if (stopping != null) await stopping;
     if (generation != _generation || !ref.mounted) return;
-    _sub = ref
-        .read(libraryScannerProvider)
-        .scan()
-        .listen(
-          (p) {
-            if (generation != _generation) return;
-            state = p;
-            if (!p.done) _keepAlive.progress(p);
-          },
-          onError: (Object e) {
-            if (generation != _generation) return;
-            _sub = null;
-            state = ScanProgress(
-              filesFound: state?.filesFound ?? 0,
-              filesRead: state?.filesRead ?? 0,
-              done: true,
-              error: '$e',
-            );
-            _keepAlive.stopped();
-          },
-          onDone: () {
-            if (generation != _generation) return;
-            _sub = null;
-            final s = state ?? const ScanProgress();
-            if (!s.done) {
-              state = ScanProgress(
-                filesFound: s.filesFound,
-                filesRead: s.filesRead,
-                done: true,
-                error: s.error,
-              );
-            }
-            _keepAlive.stopped();
-          },
-          cancelOnError: true,
+    final Stream<ScanProgress> scan;
+    try {
+      scan = ref.read(libraryScannerProvider).scan();
+    } on Object catch (e) {
+      state = ScanProgress(done: true, error: '$e');
+      _keepAlive.stopped();
+      return;
+    }
+    _sub = scan.listen(
+      (p) {
+        if (generation != _generation) return;
+        state = p;
+        if (!p.done) _keepAlive.progress(p);
+      },
+      onError: (Object e) {
+        if (generation != _generation) return;
+        final failed = _sub;
+        _sub = null;
+        state = ScanProgress(
+          filesFound: state?.filesFound ?? 0,
+          filesRead: state?.filesRead ?? 0,
+          done: true,
+          error: '$e',
         );
+        // The scan cancels itself on an error (cancelOnError); the
+        // service stops once it has.
+        if (failed != null) {
+          unawaited(_stop(failed).then((_) => _release(generation)));
+        } else {
+          unawaited(_release(generation));
+        }
+      },
+      onDone: () {
+        if (generation != _generation) return;
+        _sub = null;
+        final s = state ?? const ScanProgress();
+        if (!s.done) {
+          state = ScanProgress(
+            filesFound: s.filesFound,
+            filesRead: s.filesRead,
+            done: true,
+            error: s.error,
+          );
+        }
+        _keepAlive.stopped();
+      },
+      cancelOnError: true,
+    );
   }
 
   /// Starts a scan when there is something to scan: any folder at all (on
@@ -162,8 +174,9 @@ class LibraryScanController extends Notifier<ScanProgress?> {
   /// state is done with [scanCancelled] as its error.
   Future<void> cancel() async {
     if (!running) {
-      // Nothing runs here; make sure nothing is shown as running elsewhere.
-      _keepAlive.stopped();
+      // Nothing runs here; make sure nothing is shown as running elsewhere
+      // (once an earlier cancel's last write is done).
+      await _release(_generation);
       return;
     }
     final generation = ++_generation;
@@ -177,7 +190,15 @@ class LibraryScanController extends Notifier<ScanProgress?> {
       error: scanCancelled,
     );
     if (old != null) await _stop(old);
-    // Unless a new scan started meanwhile: it keeps the service.
+    await _release(generation);
+  }
+
+  /// Stops the keep-alive (the Android service) once no scan is writing,
+  /// unless a scan started since [generation]: that one keeps it.
+  Future<void> _release(int generation) async {
+    for (var s = _stopping; s != null; s = _stopping) {
+      await s;
+    }
     if (generation == _generation && ref.mounted) _keepAlive.stopped();
   }
 

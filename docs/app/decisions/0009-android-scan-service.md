@@ -89,7 +89,8 @@ and the engine alive.
 - **One scan at a time.** Unchanged: the controller still owns the scan. It tells the service (through
   `ScanKeepAlive`, a domain port; no-op on iOS and in tests): `started` when a scan starts, `progress` as it goes, and
   `stopped` only once the scan has stopped writing. A restart sends a second `started` (the service is already up) and
-  no `stopped` in between. A cancel followed at once by a start leaves the service up for the new scan.
+  no `stopped` in between. A cancel followed at once by a start leaves the service up for the new scan. Every
+  `stopped` first waits for any scan still stopping (a cancel, a restart, a failure) to finish its last write.
 - **POST_NOTIFICATIONS.** Declared, and asked for on Android 13+ only when the user started the scan (Update Library or
   a folder added). It is never asked at launch or on return to the front. Android stops showing the prompt after two
   refusals. Without the permission the scan still survives; its notice is in the Task Manager only. This is the one
@@ -115,7 +116,11 @@ and the engine alive.
   that the engine was kept and the service is running. The scan then completes (its marker file, done with no error,
   progress after the activity went), and the service stops. The scanner there is a stand-in: an emulator under
   instrumentation cannot grant a SAF folder. Debug builds only expose `debugFinishActivity`, `debugState` and
-  `debugKeepEngineAfterScan`; the last keeps the engine after the scan so the test can report.
+  `debugKeepEngineAfterScan`; the last keeps the engine after the scan so the test can report. Its limit: the system
+  never kills an instrumented process, so it proves the engine and the scan outlive the activity, not that the
+  foreground service keeps the process from being killed. That part is AOSP's documented behaviour, and it is checked
+  on the owner's phone. If the engine were not kept, the test could not report, and the run would show up as the
+  script's per-file timeout, not as a failed assertion.
 
 ## Consequences and risks
 
