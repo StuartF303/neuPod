@@ -265,7 +265,7 @@ void main() {
     final mp3 = rows['no_frames.mp3']!;
     expect(mp3.title, 'Tag Only');
     expect(mp3.albumArtist, 'Host');
-    expect(mp3.reasonCode, UnreadableReason.wrongFormat.code);
+    expect(mp3.reasonCode, UnreadableReason.damaged.code);
   });
 
   test('title sort tags decide the order (owner decision 11)', () async {

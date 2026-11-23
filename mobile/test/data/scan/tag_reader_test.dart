@@ -163,7 +163,8 @@ void main() {
       reasonOf(fixture('flac16_44k_st.flac').sublist(0, 20), 'flac'),
       UnreadableReason.damaged,
     );
-    expect(reasonOf(Uint8List(5000), 'mp3'), UnreadableReason.wrongFormat);
+    // No MPEG frame: META_E_FORMAT, damaged on the device (play_from_meta).
+    expect(reasonOf(Uint8List(5000), 'mp3'), UnreadableReason.damaged);
   });
 
   test('VBRI needs its 62 fixed bytes and sane fields (vbri_parse)', () {

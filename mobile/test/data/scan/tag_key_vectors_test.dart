@@ -121,7 +121,7 @@ void main() {
   test('failed parses keep their tags, with the reason', () {
     for (final (name, ext, reason) in [
       ('truncated.flac', 'flac', UnreadableReason.damaged),
-      ('no_frames.mp3', 'mp3', UnreadableReason.wrongFormat),
+      ('no_frames.mp3', 'mp3', UnreadableReason.damaged),
       ('no_audio.m4a', 'm4a', UnreadableReason.damaged),
     ]) {
       final src = BytesSource(

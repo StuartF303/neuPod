@@ -823,9 +823,11 @@ AudioTags _readMp3(ByteSource src) {
     pos += 256;
   }
   if (h == null) {
-    // The ID3 tag was read: the device lists the file by it.
+    // The ID3 tag was read: the device lists the file by it, as damaged
+    // (`mp3_parse` returns META_E_FORMAT, which `play_from_meta` in
+    // lib_build.c maps to LIB_PLAY_DAMAGED).
     throw TagReadException(
-      UnreadableReason.wrongFormat,
+      _damaged,
       'no MPEG audio frame',
       partial: tags.tags(codec: 'mp3', durationMs: 0, sampleRate: 0),
     );
@@ -1366,8 +1368,8 @@ AudioTags _readMp4(ByteSource src) {
     );
   }
   if (p.aac) {
-    // The media header's length (unsigned), clamped to 2^40 ms as the
-    // firmware clamps its frame counts.
+    // The app's own rule (the device works out no AAC duration): the media
+    // header's length, read unsigned, capped at 2^40 ms.
     var ms = 0;
     if (p.timescale != 0) {
       final v =
