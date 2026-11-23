@@ -63,7 +63,7 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] Incremental rescan; removing a folder
 - [ ] Android: the scan survives the app being closed. Today it stops with the app and starts again at the next launch (no foreground service); the spec wants it to survive (README "The library", owner decision 8). Follow-up from #141
 - [ ] Removing a folder deletes its tracks at the next scan, with no question asked (Settings > Library > a folder > Remove). Add a confirmation before the ratings and play counts item below lands, since those would go with the tracks. Follow-up from #141
-- [ ] Art cache and thumbnails
+- [x] Art cache and thumbnails: embedded art (FLAC PICTURE, ID3v2 APIC/PIC) and the folder's cover file, in the firmware's order; 192 and 600 px JPEGs in the app's support directory, 64 MB, off the UI isolate; screens, Modern accent and backdrop, lock screen and notification (decision 0009, 2026-11-23)
 - [ ] Ratings, play counts, last played, skip counts that survive a rescan and a move
 - [ ] Unplayable files listed greyed with a reason, and never stop the queue
 - [ ] Scale test at 20,000 tracks; numbers recorded
@@ -132,6 +132,7 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 
 (One line per thing the next session must know. Newest first.)
 
+- 2026-11-23: Album art follows the firmware, not the spec's wording: cover files are `cover.jpg`, then `folder.jpg`, then `front.jpg` (any ASCII case; the spec says "`Folder.jpg` (or `cover.jpg`)"), only baseline JPEG is shown (no PNG or progressive JPEG, as on the device), and an embedded JPEG comes before the cover file (decision 0009).
 - 2026-11-22: Test devices: iPhone 15 Pro on iOS 27.2.1 (393x852 pt) and Pixel 7 (Android version to be read at gate 1).
 - 2026-11-22: Gate 1 needs Xcode 27 on the build Mac, which is now on macOS 27.2.1.
 - 2026-11-22: Design-gate screens, second half (UI engineer B, `feat/app-gate-np-search`): Now Playing (rest, volume, seek, page 2), the centred panel layer (`panelProvider`, `PanelLayer`) and Search typed with the wheel are built as standalone widgets under `mobile/lib/ui/screens/` with goldens; the navigation shell plugs them in (`NowPlayingScreen`, `SearchScreen`, `PanelLayer`; `searchFunctionProvider` is to be overridden with the library view). Choices left to the owner and what the screens still lack are listed in the PR. Gate switches added: rating stars placement (page 2 only, or also under the format line) and a line showing whether the system volume has ever failed (owner decision 10: the fallback is not chosen).
