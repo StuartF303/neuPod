@@ -219,7 +219,7 @@ void main() {
       );
     });
     testWidgets('album, greyed rows with reasons, $style', (tester) async {
-      final a = await _album('Damage');
+      final a = await _album('2020 Damage');
       await _golden(
         tester,
         'album_greyed',

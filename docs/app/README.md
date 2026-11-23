@@ -74,6 +74,11 @@ Status: specification, 21 November 2026. Nothing is built. The working instructi
     `flow_texts` builds it: no artist for a compilation, no year when there is none, `1 song` or `n songs`, and no
     count when there are none. This replaces "albums by artist then year" here and the UI styles mock-ups' song
     count in Modern only.
+15. **Untagged files match the device (owner, 23 November 2026).** A file's missing tags fall back as the firmware's
+    library builder does (`index_file` in `app/library/lib_build.c`, ADR 0017 D5): the album is the name of the folder
+    holding the file, the artist is `Unknown Artist`, and the title is the file name. Nothing else is read from the
+    path: there is no `Artist/Year Album/NN Title.ext` parsing (no artist, year or track number from folder or file
+    names) and no `, The` handling of folder names. This replaces the folder-convention fallback proposed here.
 
 Everything else in this document is the designer's proposal until the owner confirms it. Proposals that most need a
 decision are collected under [Open questions](#open-questions).
@@ -137,10 +142,11 @@ exactly as the device does; it is never hidden and never stops the queue.
 
 - Built by scanning the chosen folders and reading tags: title, artist, album artist, album, track and disc number,
   year, genre, compilation flag, duration, sample rate and bit depth, embedded art.
-- **Where tags are missing, fall back to the folder convention** the owner's library uses:
-  `Artist/Year Album/NN Title.ext`, with `Folder.jpg` (or `cover.jpg`) as the album art. A trailing `, The` on a
-  folder name is displayed as a leading `The` and sorted without it.
-- Discs of one album (`(Disc 1)`, `(Disc 2)` in tags or folder names) are one album with disc sections.
+- **Where tags are missing, the device's fallback (owner decision 15):** the album is the folder's name, the artist
+  `Unknown Artist`, the title the file name; nothing else is taken from the path. `Folder.jpg` (or `cover.jpg`) is
+  the album art.
+- The discs of one album (one album tag, disc number tags) are one album with disc sections, as on the device; album
+  names or folders that differ only by `(Disc n)` stay apart, as there.
 - A track whose album artist is `Various Artists`, or whose compilation flag is set, belongs to Compilations and is not
   listed under each contributing artist's albums.
 - The scan runs in the background, shows progress, can be cancelled, and survives the app being closed (on iOS it resumes at the next launch; owner decision 8). A rescan only
@@ -262,7 +268,7 @@ targets are at least 44 points.
   recorded in a short decision note with the alternatives considered. A package must be actively maintained, licensed
   compatibly with MPL-2.0 distribution on both stores, and checked against its current documentation, not chosen from
   memory.
-- The domain rules that the device also implements (sort order, `, The` handling, compilation rules, queue behaviour)
+- The domain rules that the device also implements (sort order, the untagged fallback, compilation rules, queue behaviour)
   follow the firmware's behaviour as documented in [UI](../ui.md) and the ADRs, so a library looks the same in both.
 
 ## How it is tested

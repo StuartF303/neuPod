@@ -423,7 +423,7 @@ void main() {
 
     testWidgets('greyed tracks show their reason at the right', (tester) async {
       final a = (await gateLibrary.albums()).firstWhere(
-        (a) => a.title == 'Damage',
+        (a) => a.title == '2020 Damage',
       );
       await pumpShell(tester, home: (_) => AlbumScreen(albumId: a.id));
       expect(find.text('Damaged file'), findsWidgets);
@@ -478,13 +478,13 @@ void main() {
       tester,
     ) async {
       final two = (await gateLibrary.albums()).firstWhere(
-        (a) => a.title == 'Long Division',
+        (a) => a.title == 'Greatest Hits' && a.artist == 'Zed Zone',
       );
       final rig = await pumpShell(
         tester,
         home: (_) => AlbumScreen(albumId: two.id),
       );
-      // Opening, Middle Distance | Disc 2 heading | Return: crossing the
+      // Zulu, Zebra | Disc 2 heading | Zinc: crossing the
       // heading is two rows, still a slide.
       rig.step(1);
       await tester.pump();

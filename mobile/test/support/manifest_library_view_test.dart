@@ -35,41 +35,50 @@ void main() {
     final titles = songs.map((s) => s.title).toList();
     expect(titles, contains('Low Light'));
     expect(titles, isNot(contains('Secret'))); // under a dot folder
-    // The WMA and the untagged root file have no expectation: not shown.
+    // The WMA has no expectation: not shown.
     expect(titles, isNot(contains('Old Format')));
-    expect(songs.length, 47);
+    // An untagged file is shown by its file name (owner decision 15).
+    expect(titles, contains('Untagged At Root.mp3'));
+    expect(songs.length, 48);
   });
 
   test('songs are in the firmware\'s order: symbols, digits, then letters '
       'without articles', () async {
     final titles = (await view.songs()).map((s) => s.title).toList();
-    expect(titles.indexOf('(Untitled)'), lessThan(titles.indexOf('1999')));
-    expect(titles.indexOf('#1 Fan'), lessThan(titles.indexOf('7 Seconds')));
-    expect(titles.indexOf('7 Seconds'), lessThan(titles.indexOf('Ash')));
+    expect(
+      titles.indexOf('(Untitled)'),
+      lessThan(titles.indexOf('01 1999.flac')),
+    );
+    expect(
+      titles.indexOf('#1 Fan'),
+      lessThan(titles.indexOf('01 7 Seconds.flac')),
+    );
+    expect(
+      titles.indexOf('01 7 Seconds.flac'),
+      lessThan(titles.indexOf('Breakwater')),
+    );
     // "The Apple" sorts under A.
     expect(titles.indexOf('The Apple'), lessThan(titles.indexOf('Breakwater')));
-    // "Þögn" folds to th: after "Thaw".
-    expect(titles.indexOf('Thaw'), lessThan(titles.indexOf('Þögn')));
+    // "Þögn" folds to th: after "Tag Title".
+    expect(titles.indexOf('Tag Title'), lessThan(titles.indexOf('Þögn')));
   });
 
-  test('artists: ", The" folders become "The X" sorted under X; '
-      'compilations are not artists', () async {
+  test('artists: "The X" sorted under X; untagged files are "Unknown '
+      'Artist"; compilations are not artists', () async {
     final names = (await view.artists()).map((a) => a.name).toList();
     expect(names, contains('The Lanterns'));
-    expect(names, contains('The Hollow Pines'));
+    // Owner decision 15: no ", The" folder handling, no artist from a folder.
+    expect(names, isNot(contains('The Hollow Pines')));
+    expect(names, contains('Unknown Artist'));
     expect(names, isNot(contains('Various Artists')));
-    expect(
-      names.indexOf('The Hollow Pines'),
-      lessThan(names.indexOf('The Lanterns')),
-    );
     expect(names.indexOf('The Lanterns'), lessThan(names.indexOf('Weird Owl')));
     final letters = {
       for (final a in await view.artists()) a.name: a.sortLetter,
     };
     expect(letters['The Lanterns'], 'L');
     expect(letters['!Aktion'], '#');
-    expect(letters['10 Tonne Truck'], '#');
-    expect(letters['Émilie Côté'], 'E');
+    expect(letters['+44 Minus'], '#');
+    expect(letters['Motörbike'], 'M');
   });
 
   test('a sort tag is used instead of the name (owner decision 11)', () async {
@@ -90,23 +99,22 @@ void main() {
     expect(albums.first.songCount, 3);
   });
 
-  test('discs: "(Disc n)" in the album name and disc tags merge into one '
-      'album with disc sections', () async {
+  test('discs: disc tags merge one album into disc sections; "(Disc n)" in '
+      'album names stays apart, as on the device', () async {
     final albums = await view.albums();
-    final long = albums.firstWhere((a) => a.title == 'Long Division');
-    final detail = (await view.album(long.id))!;
-    expect(detail.hasDiscHeadings, isTrue);
-    expect(detail.discs.map((d) => d.number), [1, 2]);
-    expect(detail.discs.first.songs.map((s) => s.title), [
-      'Opening',
-      'Middle Distance',
-    ]);
-
     final hits = albums.firstWhere(
       (a) => a.title == 'Greatest Hits' && a.artist == 'Zed Zone',
     );
     expect(hits.discCount, 2);
     expect(hits.songCount, 3);
+    final detail = (await view.album(hits.id))!;
+    expect(detail.hasDiscHeadings, isTrue);
+    expect(detail.discs.map((d) => d.number), [1, 2]);
+    expect(detail.discs.first.songs.map((s) => s.title), ['Zulu', 'Zebra']);
+    expect(
+      albums.map((a) => a.title),
+      containsAll(['Long Division (Disc 1)', 'Long Division (Disc 2)']),
+    );
     // The same album name by another artist is another album.
     expect(
       albums.where((a) => a.title == 'Greatest Hits').map((a) => a.artist),
@@ -136,7 +144,9 @@ void main() {
   );
 
   test('unplayable files are listed greyed with a reason', () async {
-    final damage = (await view.albums()).firstWhere((a) => a.title == 'Damage');
+    final damage = (await view.albums()).firstWhere(
+      (a) => a.title == '2020 Damage',
+    );
     final songs = (await view.album(damage.id))!.songs;
     expect(songs, hasLength(4));
     expect(songs.every((s) => !s.playable), isTrue);

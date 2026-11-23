@@ -184,15 +184,22 @@ class OtherFile {
 }
 
 const _va = 'Various Artists';
-const _ambPerField =
-    'per-field fallback: the spec says "where tags are missing" but not '
-    'whether one present tag (here the title) stops the folder fallback for '
-    'the other fields';
-const _ambLongDisc =
-    'disc merging: the folder names differ before "(Disc n)" ("[Disc 1 of 2]" '
-    'and "[Disc 2 of 2]"), so whether the two discs are one album is open';
-const _ambRoot =
-    'no folder convention to fall back on for a file at the library root';
+
+/// What the device shows for an untagged file (owner decision 15, `index_file`
+/// in app/library/lib_build.c): the file name as the title, "Unknown
+/// Artist", and the name of the folder holding it as the album (none for a
+/// file at the library root: that is the picked folder's name). Nothing
+/// else comes from the path.
+Expect _untagged(String path, {bool playable = true}) {
+  final parts = path.split('/');
+  return Expect(
+    title: parts.last,
+    artist: 'Unknown Artist',
+    album: parts.length >= 2 ? parts[parts.length - 2] : null,
+    playable: playable,
+  );
+}
+
 const _ambExt =
     'which file extensions are audio: a .wma is neither a required format '
     'nor obviously "not music"';
@@ -254,21 +261,16 @@ List<GenFile> get cases => [
         track: n,
       ),
     ),
-  // ", The" folder, no tags: the folder fallback shows "The Hollow Pines".
+  // ", The" folder, no tags: shown as the device shows it (owner decision 15).
   for (final (n, title) in [(1, 'First Frost'), (2, 'Thaw')])
     GenFile(
       'Hollow Pines, The/1999 Cedar/0$n $title.flac',
       Source.flac16,
       kase: 'the-folder-no-tags',
-      expect: Expect(
-        title: title,
-        artist: 'The Hollow Pines',
-        album: 'Cedar',
-        year: 1999,
-        track: n,
-      ),
+      expect: _untagged('Hollow Pines, The/1999 Cedar/0$n $title.flac'),
     ),
-  // "(Disc n)" in the album tag (and the folder), no disc number tag.
+  // "(Disc n)" in the album tag (and the folder), no disc number tag: two
+  // albums, as on the device.
   for (final (d, n, title) in [
     (1, 1, 'Opening'),
     (1, 2, 'Middle Distance'),
@@ -288,9 +290,9 @@ List<GenFile> get cases => [
       expect: Expect(
         title: title,
         artist: 'Kestrel Lane',
-        // album: no expectation; the merged album's name is not specified.
+        // Two albums, as on the device: the album tags differ.
+        album: 'Long Division (Disc $d)',
         year: 2016,
-        disc: d,
         track: n,
       ),
     ),
@@ -341,7 +343,7 @@ List<GenFile> get cases => [
       track: 1,
     ),
   ),
-  // "(Disc n)" in folder names only, no tags.
+  // "(Disc n)" in folder names only, no tags: two albums, named after them.
   for (final (d, n, title) in [
     (1, 1, 'Gear'),
     (1, 2, 'Piston'),
@@ -351,14 +353,7 @@ List<GenFile> get cases => [
       'Quiet Engine/2015 Machines (Disc $d)/0$n $title.flac',
       Source.flacMono,
       kase: 'disc-folder-no-tags',
-      expect: Expect(
-        title: title,
-        artist: 'Quiet Engine',
-        // album: no expectation; the merged album's name is not specified.
-        year: 2015,
-        disc: d,
-        track: n,
-      ),
+      expect: _untagged('Quiet Engine/2015 Machines (Disc $d)/0$n $title.flac'),
     ),
   // Compilation by album artist "Various Artists".
   for (final (n, title, performer) in [
@@ -436,14 +431,10 @@ List<GenFile> get cases => [
       '[Disc $d of 2] (Judge Jules) (Disc $d)/01 ${d == 1 ? 'Opening' : 'Closing'} Mix.flac',
       Source.flacMono,
       kase: 'long-names',
-      expect: Expect(
-        title: '${d == 1 ? 'Opening' : 'Closing'} Mix',
-        artist: 'Ministry of Sound',
-        year: 2000,
-        disc: d,
-        track: 1,
+      expect: _untagged(
+        'Ministry of Sound/2000 Ministry of Sound - the Annual IV - '
+        '[Disc $d of 2] (Judge Jules) (Disc $d)/01 ${d == 1 ? 'Opening' : 'Closing'} Mix.flac',
       ),
-      ambiguous: _ambLongDisc,
     ),
   // A title longer than a file name can be: the tag holds all of it.
   GenFile(
@@ -509,13 +500,7 @@ List<GenFile> get cases => [
     'Émilie Côté/2007 Été/01 Ça va.flac',
     Source.flacMono,
     kase: 'accents',
-    expect: const Expect(
-      title: 'Ça va',
-      artist: 'Émilie Côté',
-      album: 'Été',
-      year: 2007,
-      track: 1,
-    ),
+    expect: _untagged('Émilie Côté/2007 Été/01 Ça va.flac'),
   ),
   // Symbols and digits leading names.
   GenFile(
@@ -541,13 +526,7 @@ List<GenFile> get cases => [
     '10 Tonne Truck/1988 99 Problems/01 7 Seconds.flac',
     Source.flacMono,
     kase: 'symbols-digits',
-    expect: const Expect(
-      title: '7 Seconds',
-      artist: '10 Tonne Truck',
-      album: '99 Problems',
-      year: 1988,
-      track: 1,
-    ),
+    expect: _untagged('10 Tonne Truck/1988 99 Problems/01 7 Seconds.flac'),
   ),
   GenFile(
     '+44 Minus/2006 & More/01 (Untitled).mp3',
@@ -572,13 +551,7 @@ List<GenFile> get cases => [
     'Year Zero/1982 1999/01 1999.flac',
     Source.flac16,
     kase: 'symbols-digits',
-    expect: const Expect(
-      title: '1999',
-      artist: 'Year Zero',
-      album: '1999',
-      year: 1982,
-      track: 1,
-    ),
+    expect: _untagged('Year Zero/1982 1999/01 1999.flac'),
   ),
   // Articles and a sort tag.
   GenFile(
@@ -620,96 +593,60 @@ List<GenFile> get cases => [
       track: 1,
     ),
   ),
-  // Missing tags: the folder convention fills everything in.
+  // Missing tags: the device's fallback (owner decision 15): the file name, "Unknown
+  // Artist", the folder's name; nothing from the folder convention.
   GenFile(
     'Marrow/1977 Bone Dry/01 Dust.flac',
     Source.flac16,
     kase: 'missing-tags',
-    expect: const Expect(
-      title: 'Dust',
-      artist: 'Marrow',
-      album: 'Bone Dry',
-      year: 1977,
-      track: 1,
-    ),
+    expect: _untagged('Marrow/1977 Bone Dry/01 Dust.flac'),
   ),
   GenFile(
     'Marrow/1977 Bone Dry/02 Ash.mp3',
     Source.mp3,
     kase: 'missing-tags',
-    expect: const Expect(
-      title: 'Ash',
-      artist: 'Marrow',
-      album: 'Bone Dry',
-      year: 1977,
-      track: 2,
-    ),
+    expect: _untagged('Marrow/1977 Bone Dry/02 Ash.mp3'),
   ),
   GenFile(
     'Marrow/1977 Bone Dry/Song Without Number.flac',
     Source.flacMono,
     kase: 'missing-tags',
-    expect: const Expect(
-      title: 'Song Without Number',
-      artist: 'Marrow',
-      album: 'Bone Dry',
-      year: 1977,
-    ),
+    expect: _untagged('Marrow/1977 Bone Dry/Song Without Number.flac'),
   ),
   GenFile(
     'Marrow/1977 Bone Dry/04 Upper Case Extension.FLAC',
     Source.flac16,
     kase: 'missing-tags',
-    expect: const Expect(
-      title: 'Upper Case Extension',
-      artist: 'Marrow',
-      album: 'Bone Dry',
-      year: 1977,
-      track: 4,
-    ),
+    expect: _untagged('Marrow/1977 Bone Dry/04 Upper Case Extension.FLAC'),
   ),
   GenFile(
     'Marrow/1977 Bone Dry/05 Mr. Blue Dot.flac',
     Source.flac16,
     kase: 'missing-tags',
-    expect: const Expect(
-      title: 'Mr. Blue Dot',
-      artist: 'Marrow',
-      album: 'Bone Dry',
-      year: 1977,
-      track: 5,
-    ),
+    expect: _untagged('Marrow/1977 Bone Dry/05 Mr. Blue Dot.flac'),
   ),
   GenFile(
     'Marrow/1977 Bone Dry/06 Marrow Bones.m4a',
     Source.alac,
     kase: 'missing-tags',
-    expect: const Expect(
-      title: 'Marrow Bones',
-      artist: 'Marrow',
-      album: 'Bone Dry',
-      year: 1977,
-      track: 6,
-    ),
+    expect: _untagged('Marrow/1977 Bone Dry/06 Marrow Bones.m4a'),
   ),
   GenFile(
     'Marrow/Odds and Ends/03 Scrap.flac',
     Source.flac16,
     kase: 'missing-tags',
-    expect: const Expect(
-      title: 'Scrap',
-      artist: 'Marrow',
-      album: 'Odds and Ends',
-      track: 3,
-    ),
+    expect: _untagged('Marrow/Odds and Ends/03 Scrap.flac'),
   ),
   GenFile(
     'Marrow/1977 Bone Dry/07 Folder Title.flac',
     Source.flac16,
     kase: 'partial-tags',
     tags: const TagSet(title: 'Tag Title'),
-    expect: const Expect(title: 'Tag Title'),
-    ambiguous: _ambPerField,
+    expect: Expect(
+      title: 'Tag Title',
+      artist: 'Unknown Artist',
+      album: '1977 Bone Dry',
+    ),
   ),
   // Unplayable files: listed greyed, never hidden.
   for (final (n, title, ext, src) in [
@@ -722,12 +659,8 @@ List<GenFile> get cases => [
       'Broken Things/2020 Damage/0$n $title.$ext',
       src,
       kase: 'unplayable',
-      expect: Expect(
-        title: title,
-        artist: 'Broken Things',
-        album: 'Damage',
-        year: 2020,
-        track: n,
+      expect: _untagged(
+        'Broken Things/2020 Damage/0$n $title.$ext',
         playable: false,
       ),
     ),
@@ -779,7 +712,9 @@ List<GenFile> get cases => [
     'Untagged At Root.mp3',
     Source.mp3,
     kase: 'root-file',
-    ambiguous: _ambRoot,
+    // The album is the name of the folder the user picked (the device: its
+    // music folder's), which the generator does not know.
+    expect: _untagged('Untagged At Root.mp3'),
   ),
   // Hidden and AppleDouble files: not tracks. The firmware skips every name
   // starting with '.' (app/library/lib_build.c), and the app follows it.
@@ -1020,7 +955,7 @@ const _words = [
 ];
 
 /// [n] tracks: artists of 10 albums of 10 tracks, alternating FLAC and MP3,
-/// tags on all but every 50th track (folder fallback), every 9th artist (from the second) a
+/// tags on all but every 50th track (untagged: the device's fallback, owner decision 15), every 9th artist (from the second) a
 /// ", The" folder, every 7th album in two discs.
 List<GenFile> scaleCases(int n) {
   final out = <GenFile>[];
