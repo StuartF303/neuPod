@@ -52,6 +52,8 @@ flutter {
 }
 
 dependencies {
+    // JVM unit tests (./gradlew :app:testDebugUnitTest from mobile/android); the version the audio plugin uses.
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.4.20")
     // The versions the integration_test plugin itself depends on, so nothing new is downloaded.
     androidTestImplementation("androidx.test:runner:1.3.0")
     androidTestImplementation("androidx.test:rules:1.2.0")

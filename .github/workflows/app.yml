@@ -189,6 +189,9 @@ jobs:
           pub-cache: true
       - run: flutter pub get
       - run: flutter build apk --debug
+      # JVM unit tests of the app module's Kotlin (the scan service's session and engine keeper, decision 0009).
+      - name: Android unit tests
+        run: (cd android && ./gradlew --no-daemon :app:testDebugUnitTest)
       # The Flutter build above writes android/local.properties and the Gradle wrapper that this step needs.
       - name: Release manifest has no network permission
         run: |
@@ -208,6 +211,25 @@ jobs:
             fi
           done
           echo "OK: no INTERNET or ACCESS_NETWORK_STATE permission in the release manifest"
+          # The library scan's foreground service (decision 0009): Android 14+ refuses to start it without its type
+          # and the type's permission.
+          if ! grep -q '"android.permission.FOREGROUND_SERVICE_DATA_SYNC"' "$manifest"; then
+            echo "::error::the release manifest lacks android.permission.FOREGROUND_SERVICE_DATA_SYNC (scan service)"
+            exit 1
+          fi
+          if ! python3 -I - "$manifest" <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          ns = '{http://schemas.android.com/apk/res/android}'
+          services = ET.parse(sys.argv[1]).getroot().iter('service')
+          ok = any(s.get(ns + 'name') == 'net.stuartfraser.neupod.ScanService'
+                   and s.get(ns + 'foregroundServiceType') == 'dataSync' for s in services)
+          sys.exit(0 if ok else 1)
+          PY
+          then
+            echo "::error::the release manifest's ScanService is not of foregroundServiceType dataSync"
+            exit 1
+          fi
+          echo "OK: the scan service is a dataSync foreground service with its permission"
 
   # Integration tests on an emulator at the minimum API level (29, Android 10).
   #
@@ -221,7 +243,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -272,7 +294,7 @@ jobs:
       # One instrumentation run per test file (tool/android_integration_tests.sh). No retry: a Dart test failure fails
       # the instrumentation test, which fails Gradle, which fails the step; a hang is caught by the script's per-file
       # timeout, then by the step timeout. The script is one line because the action runs each script line on its own.
-      # The step timeout covers the emulator boot plus every file at the per-file limit (3 files x 8 min), so a hang
+      # The step timeout covers the emulator boot plus every file at the per-file limit (4 files x 8 min), so a hang
       # in any file is reported by the script's own message. Raise it when a file is added.
       #
       # -feature RefCountPipe: the API 29 emulator's graphics stack sometimes deadlocks on the first frame (RenderThread
@@ -280,7 +302,7 @@ jobs:
       # Run 45039175170 (25 cold launches per job): 75/75 ok with RefCountPipe across 3 jobs, against 7/75 hung on the
       # earlier baseline without it. Keep -gpu swiftshader_indirect; -gpu guest timed out.
       - name: Integration tests
-        timeout-minutes: 28
+        timeout-minutes: 36
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 29
