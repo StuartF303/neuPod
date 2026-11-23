@@ -86,6 +86,83 @@ def mp3_v22(frames):
     return tag + audio
 
 
+def box(kind, payload):
+    return struct.pack(">I", 8 + len(payload)) + kind + payload
+
+
+def ilst_item(kind, data, flags=1):
+    """An iTunes item: the item box holding one 'data' box (type flags, locale, value)."""
+    return box(kind, box(b"data", struct.pack(">II", flags, 0) + data))
+
+
+def m4a(source, items, patch=None):
+    """A fixture M4A with a top-level udta/meta/ilst appended (the firmware's walk finds it wherever it is), so no sample
+    offset moves. @p patch: (old, new) bytes replaced once (to make an AAC sample entry)."""
+    data = open(os.path.join(AUDIO, source), "rb").read()
+    if patch is not None:
+        assert data.count(patch[0]) >= 1
+        data = data.replace(patch[0], patch[1], 1)
+    if not items:
+        return data
+    ilst = box(b"ilst", b"".join(items))
+    meta = box(b"meta", bytes(4) + ilst)
+    return data + box(b"udta", meta)
+
+
+def full(kind, version, payload):
+    return box(kind, bytes([version, 0, 0, 0]) + payload)
+
+
+def synth_alac(duration, timescale=48000, rate=48000, samples=10, elst=None, smpb=None, audio=True, tags=()):
+    """A synthetic ALAC M4A with no audio data: what mp4_parse reads to get the duration. The media header is version 1
+    (a 64-bit duration). @p elst: (segment duration, media time) as one version 1 edit, the movie timescale 1000 or
+    @p elst[2]. @p smpb: an iTunSMPB string. @p audio: False leaves out the track (tags only)."""
+    movie_ts = elst[2] if elst is not None and len(elst) > 2 else 1000
+    mvhd = full(b"mvhd", 0, struct.pack(">III", 0, 0, movie_ts) + struct.pack(">I", 0) + bytes(80))
+    cookie = struct.pack(">IBBBBBBHIII", 4096, 0, 16, 40, 10, 14, 2, 255, 0, 0, rate)
+    alac = full(b"alac", 0, cookie)
+    entry = b"alac" + bytes(6) + struct.pack(">H", 1) + struct.pack(">HHIHHHHI", 0, 0, 0, 2, 16, 0, 0, rate << 16) + alac
+    stsd = full(b"stsd", 0, struct.pack(">I", 1) + struct.pack(">I", 4 + len(entry)) + entry)
+    stsz = full(b"stsz", 0, struct.pack(">II", 100, samples))
+    stsc = full(b"stsc", 0, struct.pack(">IIII", 1, 1, samples, 1))
+    stco = full(b"stco", 0, struct.pack(">II", 1, 0))
+    stbl = box(b"stbl", stsd + stsz + stsc + stco)
+    minf = box(b"minf", stbl)
+    hdlr = full(b"hdlr", 0, struct.pack(">I", 0) + b"soun" + bytes(12) + b"\0")
+    mdhd = full(b"mdhd", 1, struct.pack(">QQIQ", 0, 0, timescale, duration) + bytes(4))
+    mdia = box(b"mdia", mdhd + hdlr + minf)
+    trak_body = b""
+    if elst is not None:
+        trak_body += box(b"edts", full(b"elst", 1, struct.pack(">I", 1) + struct.pack(">QqI", elst[0], elst[1], 0x10000)))
+    trak = box(b"trak", trak_body + mdia)
+    items = list(tags)
+    if smpb is not None:
+        items.append(
+            box(
+                b"----",
+                full(b"mean", 0, b"com.apple.iTunes") + full(b"name", 0, b"iTunSMPB") + box(b"data", struct.pack(">II", 1, 0) + smpb),
+            )
+        )
+    udta = box(b"udta", box(b"meta", bytes(4) + box(b"ilst", b"".join(items)))) if items else b""
+    moov = box(b"moov", mvhd + (trak if audio else b"") + udta)
+    return box(b"ftyp", b"M4A " + bytes(4) + b"M4A ") + moov
+
+
+def wav(rate, channels, bits, frames, extensible=False, extra_chunk=False, data_size=None):
+    align = channels * bits // 8
+    if extensible:
+        fmt = struct.pack("<HHIIHHHHI", 0xFFFE, channels, rate, rate * align, align, bits, 22, bits, 3)
+        fmt += struct.pack("<H", 1) + bytes.fromhex("000000001000800000aa00389b71")
+    else:
+        fmt = struct.pack("<HHIIHH", 1, channels, rate, rate * align, align, bits)
+    body = b"WAVE" + b"fmt " + struct.pack("<I", len(fmt)) + fmt
+    if extra_chunk:
+        body += b"LIST" + struct.pack("<I", 3) + b"abc" + b"\0"  # odd size: padded to even
+    pcm = bytes(frames * align)
+    body += b"data" + struct.pack("<I", len(pcm) if data_size is None else data_size) + pcm
+    return b"RIFF" + struct.pack("<I", len(body)) + body
+
+
 def u16le(s):
     return b"\xff\xfe" + s.encode("utf-16-le")
 
@@ -268,13 +345,75 @@ CASES = {
             ("TS2", 0, b"Host, Old"),
         ]
     ),
+    # MP4: every iTunes item the firmware reads (texts, trkn / disk with totals, ©day with a date, cpil, ©gen, the
+    # sort items).
+    "m4a_tags.m4a": m4a(
+        "alac16_48k_mono.m4a",
+        [
+            ilst_item(b"\xa9nam", b"Night Train"),
+            ilst_item(b"\xa9ART", b"Guest Singer"),
+            ilst_item(b"aART", b"Host Band"),
+            ilst_item(b"\xa9alb", b"The Sessions"),
+            ilst_item(b"trkn", struct.pack(">HHHH", 0, 3, 12, 0), 0),
+            ilst_item(b"disk", struct.pack(">HHH", 0, 2, 2), 0),
+            ilst_item(b"\xa9day", b"2004-01-01T00:00:00Z"),
+            ilst_item(b"cpil", b"\x01", 21),
+            ilst_item(b"\xa9gen", b"(17)Trip-Hop"),
+            ilst_item(b"sonm", b"Train, Night"),
+            ilst_item(b"soar", b"Singer, Guest"),
+            ilst_item(b"soal", b"Sessions"),
+            ilst_item(b"soaa", b"Band, Host"),
+        ],
+    ),
+    # gnre (an ID3v1 number + 1), a short ©day (not a year), cpil 0, a ©nam over the firmware's 96-byte item buffer
+    # (dropped there; still displayed), "Various Artists" as aART.
+    "m4a_gnre.m4a": m4a(
+        "alac16_44k_st.m4a",
+        [
+            ilst_item(b"\xa9nam", b"n" * 100),
+            ilst_item(b"aART", b"VARIOUS artists"),
+            ilst_item(b"gnre", struct.pack(">H", 18), 0),
+            ilst_item(b"\xa9day", b"19"),
+            ilst_item(b"cpil", b"\x00", 21),
+        ],
+    ),
+    # gnre 0 (wraps: no genre); 24-bit ALAC.
+    "m4a_gnre0.m4a": m4a("alac24_48k_st.m4a", [ilst_item(b"gnre", struct.pack(">H", 0), 0)]),
+    # The duration: an edit list, iTunSMPB, and an edit list that does not fit (iTunSMPB used).
+    "alac_elst.m4a": m4a("alac16_48k_mono_elst.m4a", []),
+    "alac_smpb.m4a": m4a("alac16_48k_mono_smpb.m4a", []),
+    "alac_badelst_smpb.m4a": m4a("alac16_48k_mono_badelst_smpb.m4a", []),
+    # AAC: recognised, tags read; no duration on the device (it cannot play it).
+    "aac_tags.m4a": m4a(
+        "alac16_48k_mono.m4a",
+        [ilst_item(b"\xa9nam", b"Lossy"), ilst_item(b"\xa9ART", b"Encoder")],
+        patch=(b"alac\x00\x00\x00\x00\x00\x00", b"mp4a\x00\x00\x00\x00\x00\x00"),
+    ),
+    # Unsigned 64-bit fields (Dart's ints are signed): a version 1 media header of 2^63 + 1 s (clamped to 2^40 frames),
+    # an edit of 2^63 + 1 (scale_u64 overflows: not used), an edit between 2^63 / rate and 2^64 / rate (fits in the
+    # C's unsigned arithmetic: used), iTunSMPB with a padding or a length of 2^63 or more (not used).
+    "synth_mdhd_huge.m4a": synth_alac((1 << 63) + 48000),
+    "synth_elst_huge.m4a": synth_alac(48000, elst=((1 << 63) + 1, 0)),
+    "synth_elst_u64.m4a": synth_alac(48000 * 80000, samples=1000000, elst=(300000000000000, 0, 0xFFFFFFFF)),
+    "synth_smpb_huge_pad.m4a": synth_alac(48000, smpb=b" 00000000 00000840 FFFFFFFFFFFFFFFF 0000000000001000"),
+    "synth_smpb_huge_len.m4a": synth_alac(48000, smpb=b" 00000000 00000840 00000100 8000000000000000"),
+    "synth_smpb.m4a": synth_alac(48000 * 2, samples=40, smpb=b" 00000000 00000840 00000100 0000000000010000"),
+    # No audio track: the device keeps the tags it walked past.
+    "no_audio.m4a": synth_alac(48000, audio=False, tags=[ilst_item(b"\xa9nam", b"Tags Only"), ilst_item(b"aART", b"Host")]),
+    # WAV: the duration only (no tags), an odd-sized chunk before the data, WAVE_FORMAT_EXTENSIBLE, a streaming
+    # writer's data size, and rates and depths the device does not play (no duration there).
+    "pcm16.wav": wav(44100, 2, 16, 11025 + 3, extra_chunk=True),
+    "pcm24_ext.wav": wav(48000, 2, 24, 4800 + 1, extensible=True),
+    "pcm16_stream.wav": wav(96000, 1, 16, 9600 + 17, data_size=0xFFFFFFFF),
+    "pcm16_22k.wav": wav(22050, 1, 16, 2205),
+    "pcm8.wav": wav(44100, 1, 8, 4410),
 }
 
 
 def main():
     os.makedirs(OUT, exist_ok=True)
     for old in os.listdir(OUT):
-        if old.endswith((".flac", ".mp3", ".tsv")):
+        if old.endswith((".flac", ".mp3", ".m4a", ".wav", ".tsv")):
             os.remove(os.path.join(OUT, old))
     paths = []
     for name, data in CASES.items():
@@ -291,6 +430,8 @@ def main():
                 "-o", exe,
                 os.path.join(HERE, "tag_key_vectors.c"),
                 os.path.join(REPO, "app", "audio", "meta.c"),
+                os.path.join(REPO, "app", "audio", "mp4.c"),
+                os.path.join(REPO, "app", "audio", "wav.c"),
                 os.path.join(REPO, "app", "library", "lib_collate.c"),
             ],
             check=True,
@@ -300,7 +441,7 @@ def main():
         f.write("# Generated by scripts/app/gen_tag_key_vectors.py from app/audio/meta.c and app/library; do not edit.\n")
         f.write(
             "# file\ttitle\tsort_title\tsong key\tartist\talbum\talbum_artist\tsort_artist\tsort_album\tsort_album_artist\t"
-            "genre\ttrack\tdisc\tyear\tcompilation flag\taa\tsort_aa\tcomp\tartist key\talbum key\tduration s"
+            "genre\ttrack\tdisc\tyear\tcompilation flag\taa\tsort_aa\tcomp\tartist key\talbum key\tframes/rate"
             " (texts and keys in hex)\n"
         )
         f.write(out)
