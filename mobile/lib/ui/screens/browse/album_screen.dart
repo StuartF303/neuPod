@@ -77,7 +77,7 @@ class AlbumScreen extends ConsumerWidget {
     final songs = detail.songs;
     return [
       for (final disc in detail.discs) ...[
-        if (detail.hasDiscHeadings)
+        if (detail.hasDiscHeadings && disc.number != null)
           bandItem(
             height: 34 * tier.k,
             child: DiscHeading('Disc ${disc.number}'),

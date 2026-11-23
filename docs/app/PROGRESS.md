@@ -57,8 +57,8 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [ ] iOS: files in iCloud Drive that are not downloaded are listed with a Download action (owner decision 7); the scan never hangs on them
 - [ ] Generated test library: the owner's folder convention, discs, compilations, awkward names
 - [x] Read-only guarantee: a test shows no music file or folder is written, moved or deleted (#145, 2026-11-23)
-- [ ] Discs merged into one album with sections
-- [ ] Compilations rule
+- [x] Discs merged into one album with sections: by disc number tags, as the firmware (#147). "(Disc n)" in folder or album names is not merged on the device; awaiting the owner (see Notes)
+- [x] Compilations rule: COMPILATION / TCMP flag or album artist "Various Artists", as `index_file` (#147)
 - [ ] Background scan with progress, cancel, and survival across app restarts
 - [ ] Incremental rescan; removing a folder
 - [ ] Android: the scan survives the app being closed. Today it stops with the app and starts again at the next launch (no foreground service); the spec wants it to survive (README "The library", owner decision 8). Follow-up from #141
@@ -131,6 +131,9 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 ## Notes
 
 (One line per thing the next session must know. Newest first.)
+
+- 2026-11-23: Disc headings (lead decision, #147; the firmware draws none): an album with no disc numbers is one disc with no heading; where some songs have disc numbers, the songs without keep their firmware place (first, `alb_cmp`) under no heading and each disc number gets "Disc n" (never "Disc 0"). A file whose parse fails part-way keeps the tags read before the failure, with its reason, as the device lists it.
+- 2026-11-23: Library tags and album artists (#147, schema version 3, scan version 3): FLAC and MP3 album artist, sort tags, genre, disc, year and compilation flag read as `meta.c` reads them (vectors from the compiled parser, `scripts/app/gen_tag_key_vectors.py`); the library view folds artists on the album artist, albums on (album artist, album), compilations on the flag or "Various Artists", genres, disc order, years, as `lib_build.c` does (fixtures from `lib_build()`, `scripts/app/library_entities.c`). Firmware findings for the owner: with COMPILATION=1 a "Back to Mine" is a **compilation** on the device (Compilations, no artist), not an album under its album artist; an artist's albums are in album-key order (the design drew year order, ui-styles Open question 6); the device's genre screen lists artists, the app's lists albums; the firmware has **no** `Artist/Year Album/NN Title` or `, The` folder fallback and no "(Disc n)" folder merging (untagged: title = file name, artist "Unknown Artist", album = folder), so the spec's folder-convention items and `test/spec/library_rules_spec_test.dart` wait for an owner decision. M4A tags (`mp4.c`) and WAV durations are not read yet.
 
 - 2026-11-22: Test devices: iPhone 15 Pro on iOS 27.2.1 (393x852 pt) and Pixel 7 (Android version to be read at gate 1).
 - 2026-11-22: Gate 1 needs Xcode 27 on the build Mac, which is now on macOS 27.2.1.

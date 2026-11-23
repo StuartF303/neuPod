@@ -38,7 +38,10 @@ const _tagged = {'flac', 'mp3'};
 /// 1: phase 1 (FLAC and MP3 tags, title sort tags, the firmware's key).
 /// 2: the firmware's text of the artist and album tags (schema version 2),
 ///    so rows from version 1 are read again to fill it.
-const scanVersion = 2;
+/// 3: the library tags (schema version 3): album artist, sort tags, genre,
+///    disc, year, compilation flag; the track number as the firmware reads
+///    it (none from a FLAC comment block over its scratch).
+const scanVersion = 3;
 
 /// The lower-case extension of [path], or ''.
 String extensionOf(String path) {
@@ -256,6 +259,16 @@ final class LocalLibraryScanner implements LibraryScanner {
           albumKeyText: Value(
             Uint8List.fromList(r.tags?.albumKeyText ?? const []),
           ),
+          albumArtist: Value(r.tags?.albumArtist ?? ''),
+          albumArtistKeyText: Value(_blob(r.tags?.albumArtistKeyText)),
+          artistSortKeyText: Value(_blob(r.tags?.artistSortKeyText)),
+          albumSortKeyText: Value(_blob(r.tags?.albumSortKeyText)),
+          albumArtistSortKeyText: Value(_blob(r.tags?.albumArtistSortKeyText)),
+          genre: Value(r.tags?.genre ?? ''),
+          genreKeyText: Value(_blob(r.tags?.genreKeyText)),
+          discNo: Value(r.tags?.discNo ?? 0),
+          year: Value(r.tags?.year ?? 0),
+          compilation: Value(r.tags?.compilation ?? false),
           trackNo: r.tags?.trackNo ?? 0,
           durationMs: r.tags?.durationMs ?? 0,
           sampleRate: r.tags?.sampleRate ?? 0,
@@ -282,6 +295,8 @@ final class LocalLibraryScanner implements LibraryScanner {
       if (h != null && !h.isUsed) h.discard();
     }
   }
+
+  static Uint8List _blob(List<int>? b) => Uint8List.fromList(b ?? const []);
 
   static String _fileName(String relPath) {
     final slash = relPath.lastIndexOf('/');
@@ -367,7 +382,8 @@ UnreadableReason storageReason(StorageException e, {required bool opening}) {
     reader = open();
     return (readTags(_ReaderSource(reader), ext), null);
   } on TagReadException catch (e) {
-    return (null, e.reason);
+    // What the parser read before it failed, as the firmware keeps it.
+    return (e.partial, e.reason);
   } on FileSystemException {
     // Open failed (not seekable, gone) or a read failed part-way: may pass.
     return (null, UnreadableReason.cannotRead);

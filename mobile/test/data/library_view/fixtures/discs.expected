@@ -1,0 +1,35 @@
+# artists (name, albums)
+Band	3
+# albums list (title, artist, songs, year)
+Double	Band	5	0
+Huge	Band	3	0
+Late	Band	2	0
+# album table (title, artist)
+Double	Band
+Huge	Band
+Late	Band
+# album songs (album, title, disc, track)
+Double	Z0	0	5
+Double	A1	1	1
+Double	A2	1	2
+Double	B1	2	1
+Double	B2	2	2
+Huge	H3	254	2
+Huge	H1	255	1
+Huge	H2	255	1
+Late	L1	0	1
+Late	L2	0	2
+# compilations (title)
+# genres (name, songs)
+# genre songs (genre, title)
+# songs (title, artist, album)
+A1	Band	Double
+A2	Band	Double
+B1	Band	Double
+B2	Band	Double
+H1	Band	Huge
+H2	Band	Huge
+H3	Band	Huge
+L1	Band	Late
+L2	Band	Late
+Z0	Band	Double

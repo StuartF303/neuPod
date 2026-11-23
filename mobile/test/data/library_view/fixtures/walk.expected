@@ -3,14 +3,14 @@ The Beatles	3
 Q	1
 R	1
 X	2
-# albums list (title, artist, songs)
-A1	X	1
-A2	The Beatles	1
-B	The Beatles	1
-C	The Beatles	1
-Live	X	2
-S	Q	1
-S	R	1
+# albums list (title, artist, songs, year)
+A1	X	1	0
+A2	The Beatles	1	0
+B	The Beatles	1	0
+C	The Beatles	1	0
+Live	X	2	0
+S	Q	1	0
+S	R	1	0
 # album table (title, artist)
 A2	The Beatles
 B	The Beatles
@@ -19,6 +19,18 @@ S	Q
 S	R
 A1	X
 Live	X
+# album songs (album, title, disc, track)
+A2	T3	0	1
+B	T2	0	1
+C	T4	0	1
+S	Same	0	1
+S	Same	0	1
+A1	T1	0	1
+Live	T5	0	2
+Live	T6	0	3
+# compilations (title)
+# genres (name, songs)
+# genre songs (genre, title)
 # songs (title, artist, album)
 Same	R	S
 Same	Q	S

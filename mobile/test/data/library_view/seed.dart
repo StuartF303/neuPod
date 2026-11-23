@@ -24,7 +24,9 @@ Future<int> addSource(LibraryDatabase db, {String name = 'Music'}) => db
 /// `sort_title[32]`). The firmware's text of the artist and album is
 /// [artistKeyText] / [albumKeyText], or by default the tag's UTF-8 cut to 63
 /// bytes; [legacy] leaves both null, as in a row from before schema version
-/// 2.
+/// 2. The library tags (schema version 3) are stored the same way: the album
+/// artist and genre as the firmware holds them (UTF-8 cut to `char
+/// album_artist[64]` and `char genre[32]`), the sort tags cut to 31 bytes.
 Future<int> addTrack(
   LibraryDatabase db, {
   required int sourceId,
@@ -40,7 +42,17 @@ Future<int> addTrack(
   List<int>? artistKeyText,
   List<int>? albumKeyText,
   bool legacy = false,
+  String albumArtist = '',
+  String genre = '',
+  String artistSort = '',
+  String albumSort = '',
+  String albumArtistSort = '',
+  int discNo = 0,
+  int year = 0,
+  bool compilation = false,
 }) {
+  Value<Uint8List?> fw(String tag, int cap) =>
+      Value(legacy ? null : firmwareCut(utf8.encode(tag), cap));
   Value<Uint8List?> held(List<int>? given, String tag) => Value(
     legacy
         ? null
@@ -68,6 +80,16 @@ Future<int> addTrack(
           album: album,
           artistKeyText: held(artistKeyText, artist),
           albumKeyText: held(albumKeyText, album),
+          albumArtist: Value(albumArtist),
+          albumArtistKeyText: fw(albumArtist, 64),
+          artistSortKeyText: fw(artistSort, 32),
+          albumSortKeyText: fw(albumSort, 32),
+          albumArtistSortKeyText: fw(albumArtistSort, 32),
+          genre: Value(genre),
+          genreKeyText: fw(genre, 32),
+          discNo: Value(discNo),
+          year: Value(year),
+          compilation: Value(compilation),
           trackNo: trackNo,
           durationMs: durationMs,
           sampleRate: 44100,
