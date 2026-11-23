@@ -61,7 +61,7 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [x] Compilations rule: COMPILATION / TCMP flag or album artist "Various Artists", as `index_file` (#147)
 - [ ] Background scan with progress, cancel, and survival across app restarts
 - [ ] Incremental rescan; removing a folder
-- [ ] Android: the scan survives the app being closed. Today it stops with the app and starts again at the next launch (no foreground service); the spec wants it to survive (README "The library", owner decision 8). Follow-up from #141
+- [x] Android: the scan survives the app being closed: a `dataSync` foreground service with the firmware's notification and Cancel keeps the app's engine, and the scan, alive after a swipe-away (decision 0009, #146, 2026-11-23). Owner check on the Pixel 7 at the next device session. Follow-up from #141
 - [x] Removing a folder deletes its tracks at the next scan, with no question asked (Settings > Library > a folder > Remove). Add a confirmation before the ratings and play counts item below lands, since those would go with the tracks. Follow-up from #141 Done: the question is the firmware's own (#145, 2026-11-23)
 - [x] Art cache and thumbnails: embedded art (FLAC PICTURE, ID3v2 APIC/PIC) and the folder's cover file, in the firmware's order; 192 and 600 px JPEGs in the app's support directory, 64 MB, off the UI isolate; screens, Modern accent and backdrop, lock screen and notification (decision 0010, 2026-11-23)
 - [ ] Ratings, play counts, last played, skip counts that survive a rescan and a move

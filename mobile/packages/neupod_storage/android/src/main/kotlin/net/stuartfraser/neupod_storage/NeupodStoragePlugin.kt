@@ -113,12 +113,26 @@ class NeupodStoragePlugin :
         binding.addActivityResultListener(this)
     }
 
-    override fun onDetachedFromActivityForConfigChanges() = onDetachedFromActivity()
+    // A config change keeps a pending pick: the recreated activity gets its result.
+    override fun onDetachedFromActivityForConfigChanges() = detachActivity()
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) =
         onAttachedToActivity(binding)
 
+    /**
+     * The activity is gone for good (the app swiped away). The engine may live on (the library
+     * scan keeps it, decision 0009), but the picker's result can never arrive: end the pending pick
+     * as cancelled, so Dart's pickFolder completes and the next Add Folder is not refused as busy.
+     */
     override fun onDetachedFromActivity() {
+        detachActivity()
+        pendingPick?.let { callback ->
+            pendingPick = null
+            callback(Result.success(null))
+        }
+    }
+
+    private fun detachActivity() {
         activityBinding?.removeActivityResultListener(this)
         activityBinding = null
     }
