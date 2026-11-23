@@ -44,6 +44,7 @@ import 'package:neupod/data/library_view/drift_library_view.dart';
 import 'package:neupod/data/scan/local_library_scanner.dart' show scanVersion;
 import 'package:neupod/data/scan/tag_reader.dart';
 import 'package:neupod/domain/library/collation.dart';
+import 'package:neupod/domain/library/track.dart';
 
 /// The tags as the scanner stores them: a parse that fails part-way gives
 /// what it read (`TagReadException.partial`), as the firmware keeps it.
@@ -65,7 +66,7 @@ void main() {
       .where((l) => l.isNotEmpty && !l.startsWith('#'))
       .toList();
 
-  test('the vectors are there', () => expect(lines.length, 40));
+  test('the vectors are there', () => expect(lines.length, 47));
 
   for (final line in lines) {
     final f = line.split('\t');
@@ -109,10 +110,34 @@ void main() {
         );
       } else {
         expect(rate, 0, reason: 'no duration for AAC on the device');
-        expect(tags.durationMs, greaterThan(0));
+        // aac_tags.m4a is alac16_48k_mono.m4a with its sample entry made AAC:
+        // the media header is the same, and m4a_tags.m4a (the same source as
+        // ALAC, untrimmed) gives its length: 9600 frames at 48 kHz.
+        expect(tags.durationMs, 200, reason: "the media header's length");
       }
     });
   }
+
+  test('failed parses keep their tags, with the reason', () {
+    for (final (name, ext, reason) in [
+      ('truncated.flac', 'flac', UnreadableReason.damaged),
+      ('no_frames.mp3', 'mp3', UnreadableReason.wrongFormat),
+      ('no_audio.m4a', 'm4a', UnreadableReason.damaged),
+    ]) {
+      final src = BytesSource(
+        Uint8List.fromList(File('$dir/$name').readAsBytesSync()),
+      );
+      expect(
+        () => readTags(src, ext),
+        throwsA(
+          isA<TagReadException>()
+              .having((e) => e.reason, 'reason', reason)
+              .having((e) => e.partial?.title, 'title', isNotEmpty),
+        ),
+        reason: name,
+      );
+    }
+  });
 
   // `index_file`'s album artist, compilation test and entity keys, through
   // the library view: each file is a track of its own in a folder named

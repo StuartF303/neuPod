@@ -1083,7 +1083,13 @@ void _freeformItem(_Mp4 p, _Box it) {
       final pr = t0 == null ? null : token();
       final pd = pr == null ? null : token();
       final len = pd == null ? null : token();
-      if (len != null && pr! < 0x10000 && pd! < 0x100000) {
+      // Unsigned compares, as in the C: a token of 2^63 or more is negative
+      // here and huge there.
+      if (len != null &&
+          pr! >= 0 &&
+          pr < 0x10000 &&
+          pd! >= 0 &&
+          pd < 0x100000) {
         p.itunOk = true;
         p.itunSkip = pr;
         p.itunPad = pd;
@@ -1319,10 +1325,18 @@ void _mp4Walk(_Mp4 p, int pos, int end, int depth, int parent) {
   }
 }
 
-/// `scale_u64`: v * mul / div, or null on a zero divisor or overflow.
-int? _scale(int v, int mul, int div) {
-  if (div == 0 || (mul != 0 && v > 0x7FFFFFFFFFFFFFFF ~/ mul)) return null;
-  return v * mul ~/ div;
+final _u64Max = (BigInt.one << 64) - BigInt.one;
+
+/// [v] as the C's `uint64_t`: Dart's ints are signed, so a field of 2^63 or
+/// more reads as negative here.
+BigInt _u64(int v) => BigInt.from(v).toUnsigned(64);
+
+/// `scale_u64`: v * mul / div in unsigned 64-bit arithmetic, or null on a
+/// zero divisor or when v * mul would overflow 64 bits.
+BigInt? _scale(int v, int mul, int div) {
+  final u = _u64(v), m = BigInt.from(mul);
+  if (div == 0 || (mul != 0 && u > _u64Max ~/ m)) return null;
+  return u * m ~/ BigInt.from(div);
 }
 
 /// `mp4_parse`: the tags, and for ALAC the duration as the firmware works
@@ -1343,9 +1357,23 @@ AudioTags _readMp4(ByteSource src) {
     );
   }
   _mp4Walk(p, 0, src.length, 0, 0);
-  if (!p.gotAudio) throw const TagReadException(_damaged, 'no audio track');
+  if (!p.gotAudio) {
+    // The device keeps the tags it walked past (`META_E_NO_AUDIO`).
+    throw TagReadException(
+      _damaged,
+      'no audio track',
+      partial: p.t.tags(codec: 'mp4', durationMs: 0, sampleRate: 0),
+    );
+  }
   if (p.aac) {
-    final ms = p.timescale == 0 ? 0 : p.duration * 1000 ~/ p.timescale;
+    // The media header's length (unsigned), clamped to 2^40 ms as the
+    // firmware clamps its frame counts.
+    var ms = 0;
+    if (p.timescale != 0) {
+      final v =
+          _u64(p.duration) * BigInt.from(1000) ~/ BigInt.from(p.timescale);
+      ms = v > BigInt.one << 40 ? 1 << 40 : v.toInt();
+    }
     return p.t.tags(codec: 'aac', durationMs: ms, sampleRate: 0);
   }
   final cookie = p.cookie;
@@ -1374,34 +1402,41 @@ AudioTags _readMp4(ByteSource src) {
   }
   var total = 0;
   if (p.timescale != 0) {
-    final secs = p.duration ~/ p.timescale, rem = p.duration % p.timescale;
-    total = secs > (1 << 40) ~/ rate
+    // duration * rate without overflow, clamped to 2^40 frames; the
+    // duration is unsigned (a v1 media header's 64 bits).
+    final d = _u64(p.duration), ts = BigInt.from(p.timescale);
+    final secs = d ~/ ts, rem = d % ts, r = BigInt.from(rate);
+    total = secs > (BigInt.one << 40) ~/ r
         ? 1 << 40
-        : secs * rate + rem * rate ~/ p.timescale;
+        : (secs * r + rem * r ~/ ts).toInt();
   }
   final media = p.sampleCount * frameLength;
   var trimmed = false;
   if (p.elstOk && p.timescale != 0 && p.elstMediaTime >= 0) {
     final skip = _scale(p.elstMediaTime, rate, p.timescale);
-    final int? len;
+    final BigInt? len;
     if (p.elstSeg != 0 && p.movieTs != 0) {
       len = _scale(p.elstSeg, rate, p.movieTs);
     } else {
-      len = skip == null ? null : (total > skip ? total - skip : 0);
+      final t = BigInt.from(total);
+      len = skip == null ? null : (t > skip ? t - skip : BigInt.zero);
     }
+    final m = BigInt.from(media);
     if (skip != null &&
         len != null &&
-        len != 0 &&
-        skip < 0x10000 &&
-        skip <= media &&
-        len <= media - skip) {
-      total = len;
+        len != BigInt.zero &&
+        skip < BigInt.from(0x10000) &&
+        skip <= m &&
+        len <= m - skip) {
+      total = len.toInt();
       trimmed = true;
     }
   }
+  // iTunSMPB's length is unsigned: one of 2^63 or more (negative here) does
+  // not fit the media.
   if (!trimmed &&
       p.itunOk &&
-      p.itunLen != 0 &&
+      p.itunLen > 0 &&
       p.itunSkip <= media &&
       p.itunLen <= media - p.itunSkip) {
     total = p.itunLen;

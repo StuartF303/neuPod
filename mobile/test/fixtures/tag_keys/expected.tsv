@@ -35,6 +35,13 @@ alac_elst.m4a			c0cbc0c25fc4cbd2d32eccb4c0								0	0	0	0	556e6b6e6f776e20417274
 alac_smpb.m4a			c0cbc0c25fd2cccfc12eccb4c0								0	0	0	0	556e6b6e6f776e20417274697374		0	d4cdcacdced6cd20c0d1d3c8d2d3		6000/48000
 alac_badelst_smpb.m4a			c0cbc0c25fc1c0c3c4cbd2d35fd2cccfc12eccb4c0								0	0	0	0	556e6b6e6f776e20417274697374		0	d4cdcacdced6cd20c0d1d3c8d2d3		6000/48000
 aac_tags.m4a	4c6f737379		cbced2d2d8	456e636f646572							0	0	0	0	456e636f646572		0	c4cdc2cec3c4d1		0/0
+synth_mdhd_huge.m4a			d2d8cdd3c75fccc3c7c35fc7d4c6c42eccb4c0								0	0	0	0	556e6b6e6f776e20417274697374		0	d4cdcacdced6cd20c0d1d3c8d2d3		1099511627776/48000
+synth_elst_huge.m4a			d2d8cdd3c75fc4cbd2d35fc7d4c6c42eccb4c0								0	0	0	0	556e6b6e6f776e20417274697374		0	d4cdcacdced6cd20c0d1d3c8d2d3		48000/48000
+synth_elst_u64.m4a			d2d8cdd3c75fc4cbd2d35fd4b6b42eccb4c0								0	0	0	0	556e6b6e6f776e20417274697374		0	d4cdcacdced6cd20c0d1d3c8d2d3		3352761269/48000
+synth_smpb_huge_pad.m4a			d2d8cdd3c75fd2cccfc15fc7d4c6c45fcfc0c32eccb4c0								0	0	0	0	556e6b6e6f776e20417274697374		0	d4cdcacdced6cd20c0d1d3c8d2d3		48000/48000
+synth_smpb_huge_len.m4a			d2d8cdd3c75fd2cccfc15fc7d4c6c45fcbc4cd2eccb4c0								0	0	0	0	556e6b6e6f776e20417274697374		0	d4cdcacdced6cd20c0d1d3c8d2d3		48000/48000
+synth_smpb.m4a			d2d8cdd3c75fd2cccfc12eccb4c0								0	0	0	0	556e6b6e6f776e20417274697374		0	d4cdcacdced6cd20c0d1d3c8d2d3		65536/48000
+no_audio.m4a	54616773204f6e6c79		d3c0c6d220cecdcbd8			486f7374					0	0	0	0	486f7374		0	c7ced2d3		0/0
 pcm16.wav			cfc2ccb1b62ed6c0d5								0	0	0	0	556e6b6e6f776e20417274697374		0	d4cdcacdced6cd20c0d1d3c8d2d3		11028/44100
 pcm24_ext.wav			cfc2ccb2b45fc4d7d32ed6c0d5								0	0	0	0	556e6b6e6f776e20417274697374		0	d4cdcacdced6cd20c0d1d3c8d2d3		4801/48000
 pcm16_stream.wav			cfc2ccb1b65fd2d3d1c4c0cc2ed6c0d5								0	0	0	0	556e6b6e6f776e20417274697374		0	d4cdcacdced6cd20c0d1d3c8d2d3		9617/96000

@@ -109,6 +109,45 @@ def m4a(source, items, patch=None):
     return data + box(b"udta", meta)
 
 
+def full(kind, version, payload):
+    return box(kind, bytes([version, 0, 0, 0]) + payload)
+
+
+def synth_alac(duration, timescale=48000, rate=48000, samples=10, elst=None, smpb=None, audio=True, tags=()):
+    """A synthetic ALAC M4A with no audio data: what mp4_parse reads to get the duration. The media header is version 1
+    (a 64-bit duration). @p elst: (segment duration, media time) as one version 1 edit, the movie timescale 1000 or
+    @p elst[2]. @p smpb: an iTunSMPB string. @p audio: False leaves out the track (tags only)."""
+    movie_ts = elst[2] if elst is not None and len(elst) > 2 else 1000
+    mvhd = full(b"mvhd", 0, struct.pack(">III", 0, 0, movie_ts) + struct.pack(">I", 0) + bytes(80))
+    cookie = struct.pack(">IBBBBBBHIII", 4096, 0, 16, 40, 10, 14, 2, 255, 0, 0, rate)
+    alac = full(b"alac", 0, cookie)
+    entry = b"alac" + bytes(6) + struct.pack(">H", 1) + struct.pack(">HHIHHHHI", 0, 0, 0, 2, 16, 0, 0, rate << 16) + alac
+    stsd = full(b"stsd", 0, struct.pack(">I", 1) + struct.pack(">I", 4 + len(entry)) + entry)
+    stsz = full(b"stsz", 0, struct.pack(">II", 100, samples))
+    stsc = full(b"stsc", 0, struct.pack(">IIII", 1, 1, samples, 1))
+    stco = full(b"stco", 0, struct.pack(">II", 1, 0))
+    stbl = box(b"stbl", stsd + stsz + stsc + stco)
+    minf = box(b"minf", stbl)
+    hdlr = full(b"hdlr", 0, struct.pack(">I", 0) + b"soun" + bytes(12) + b"\0")
+    mdhd = full(b"mdhd", 1, struct.pack(">QQIQ", 0, 0, timescale, duration) + bytes(4))
+    mdia = box(b"mdia", mdhd + hdlr + minf)
+    trak_body = b""
+    if elst is not None:
+        trak_body += box(b"edts", full(b"elst", 1, struct.pack(">I", 1) + struct.pack(">QqI", elst[0], elst[1], 0x10000)))
+    trak = box(b"trak", trak_body + mdia)
+    items = list(tags)
+    if smpb is not None:
+        items.append(
+            box(
+                b"----",
+                full(b"mean", 0, b"com.apple.iTunes") + full(b"name", 0, b"iTunSMPB") + box(b"data", struct.pack(">II", 1, 0) + smpb),
+            )
+        )
+    udta = box(b"udta", box(b"meta", bytes(4) + box(b"ilst", b"".join(items)))) if items else b""
+    moov = box(b"moov", mvhd + (trak if audio else b"") + udta)
+    return box(b"ftyp", b"M4A " + bytes(4) + b"M4A ") + moov
+
+
 def wav(rate, channels, bits, frames, extensible=False, extra_chunk=False, data_size=None):
     align = channels * bits // 8
     if extensible:
@@ -350,6 +389,17 @@ CASES = {
         [ilst_item(b"\xa9nam", b"Lossy"), ilst_item(b"\xa9ART", b"Encoder")],
         patch=(b"alac\x00\x00\x00\x00\x00\x00", b"mp4a\x00\x00\x00\x00\x00\x00"),
     ),
+    # Unsigned 64-bit fields (Dart's ints are signed): a version 1 media header of 2^63 + 1 s (clamped to 2^40 frames),
+    # an edit of 2^63 + 1 (scale_u64 overflows: not used), an edit between 2^63 / rate and 2^64 / rate (fits in the
+    # C's unsigned arithmetic: used), iTunSMPB with a padding or a length of 2^63 or more (not used).
+    "synth_mdhd_huge.m4a": synth_alac((1 << 63) + 48000),
+    "synth_elst_huge.m4a": synth_alac(48000, elst=((1 << 63) + 1, 0)),
+    "synth_elst_u64.m4a": synth_alac(48000 * 80000, samples=1000000, elst=(300000000000000, 0, 0xFFFFFFFF)),
+    "synth_smpb_huge_pad.m4a": synth_alac(48000, smpb=b" 00000000 00000840 FFFFFFFFFFFFFFFF 0000000000001000"),
+    "synth_smpb_huge_len.m4a": synth_alac(48000, smpb=b" 00000000 00000840 00000100 8000000000000000"),
+    "synth_smpb.m4a": synth_alac(48000 * 2, samples=40, smpb=b" 00000000 00000840 00000100 0000000000010000"),
+    # No audio track: the device keeps the tags it walked past.
+    "no_audio.m4a": synth_alac(48000, audio=False, tags=[ilst_item(b"\xa9nam", b"Tags Only"), ilst_item(b"aART", b"Host")]),
     # WAV: the duration only (no tags), an odd-sized chunk before the data, WAVE_FORMAT_EXTENSIBLE, a streaming
     # writer's data size, and rates and depths the device does not play (no duration there).
     "pcm16.wav": wav(44100, 2, 16, 11025 + 3, extra_chunk=True),
