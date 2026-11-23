@@ -239,11 +239,20 @@ final class Genre {
 }
 
 /// One disc of an album, with its tracks in order.
+///
+/// The firmware draws no disc headings; its album order is disc, then track
+/// (`alb_cmp` in lib_build.c: `disc<<16|track`, so songs with no disc number
+/// come first). Lead decision (2026-11-23): an album with no disc numbers at
+/// all is one disc numbered 1, and gets no heading (one disc). In an album
+/// where some songs have disc numbers, the songs with none keep that place
+/// (first) as a disc with no [number], drawn under no heading; each disc
+/// number after them gets its heading.
 final class Disc {
   const Disc({required this.number, required this.songs});
 
-  /// The disc number (1 when the album has no disc numbers).
-  final int number;
+  /// The disc number: 1 when the album has no disc numbers; null for the
+  /// songs without one in an album where others have one (no heading).
+  final int? number;
   final List<Song> songs;
 }
 

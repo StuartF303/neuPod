@@ -78,7 +78,7 @@ Compilations, and a small Settings). Now Playing, the panel's content and Search
 ## Where the data comes from
 
 `app/library_view_providers.dart` provides `libraryViewProvider` (a `LibraryView`, `domain/library_view/`): the adapter
-over the scanned drift database, `data/library_view/drift_library_view.dart`, sorted by the firmware collation. What the
-database does not hold yet (album artist, year, disc, genre, compilation flag, art) shows as empty Genres and
-Compilations lists and placeholder covers until phase 3. The screens' tests and goldens and the gate-2 tool use
+over the scanned drift database, `data/library_view/drift_library_view.dart`, grouped and sorted as the firmware's
+library builder does (albums under their album artist, compilations, discs, years, genres). Art is still a placeholder
+cover until the art cache. The screens' tests and goldens and the gate-2 tool use
 `test/support/manifest_library_view.dart`, a test-only fake over the generated test library's manifest.

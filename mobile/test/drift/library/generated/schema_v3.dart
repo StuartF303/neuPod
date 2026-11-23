@@ -383,6 +383,96 @@ class Tracks extends Table with TableInfo<Tracks, TracksData> {
         requiredDuringInsert: false,
         $customConstraints: 'NULL',
       );
+  late final GeneratedColumn<String> albumArtist = GeneratedColumn<String>(
+    'album_artist',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    $customConstraints: 'NOT NULL DEFAULT \'\'',
+    defaultValue: const CustomExpression('\'\''),
+  );
+  late final GeneratedColumn<i2.Uint8List> albumArtistKeyText =
+      GeneratedColumn<i2.Uint8List>(
+        'album_artist_key_text',
+        aliasedName,
+        true,
+        type: DriftSqlType.blob,
+        requiredDuringInsert: false,
+        $customConstraints: 'NULL',
+      );
+  late final GeneratedColumn<i2.Uint8List> artistSortKeyText =
+      GeneratedColumn<i2.Uint8List>(
+        'artist_sort_key_text',
+        aliasedName,
+        true,
+        type: DriftSqlType.blob,
+        requiredDuringInsert: false,
+        $customConstraints: 'NULL',
+      );
+  late final GeneratedColumn<i2.Uint8List> albumSortKeyText =
+      GeneratedColumn<i2.Uint8List>(
+        'album_sort_key_text',
+        aliasedName,
+        true,
+        type: DriftSqlType.blob,
+        requiredDuringInsert: false,
+        $customConstraints: 'NULL',
+      );
+  late final GeneratedColumn<i2.Uint8List> albumArtistSortKeyText =
+      GeneratedColumn<i2.Uint8List>(
+        'album_artist_sort_key_text',
+        aliasedName,
+        true,
+        type: DriftSqlType.blob,
+        requiredDuringInsert: false,
+        $customConstraints: 'NULL',
+      );
+  late final GeneratedColumn<String> genre = GeneratedColumn<String>(
+    'genre',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    $customConstraints: 'NOT NULL DEFAULT \'\'',
+    defaultValue: const CustomExpression('\'\''),
+  );
+  late final GeneratedColumn<i2.Uint8List> genreKeyText =
+      GeneratedColumn<i2.Uint8List>(
+        'genre_key_text',
+        aliasedName,
+        true,
+        type: DriftSqlType.blob,
+        requiredDuringInsert: false,
+        $customConstraints: 'NULL',
+      );
+  late final GeneratedColumn<int> discNo = GeneratedColumn<int>(
+    'disc_no',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    $customConstraints: 'NOT NULL DEFAULT 0',
+    defaultValue: const CustomExpression('0'),
+  );
+  late final GeneratedColumn<int> year = GeneratedColumn<int>(
+    'year',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    $customConstraints: 'NOT NULL DEFAULT 0',
+    defaultValue: const CustomExpression('0'),
+  );
+  late final GeneratedColumn<int> compilation = GeneratedColumn<int>(
+    'compilation',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    $customConstraints: 'NOT NULL DEFAULT 0 CHECK (compilation IN (0, 1))',
+    defaultValue: const CustomExpression('0'),
+  );
   late final GeneratedColumn<int> trackNo = GeneratedColumn<int>(
     'track_no',
     aliasedName,
@@ -414,54 +504,6 @@ class Tracks extends Table with TableInfo<Tracks, TracksData> {
     type: DriftSqlType.int,
     requiredDuringInsert: true,
     $customConstraints: 'NOT NULL',
-  );
-  late final GeneratedColumn<int> artOffset = GeneratedColumn<int>(
-    'art_offset',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    $customConstraints: 'NULL',
-  );
-  late final GeneratedColumn<int> artLength = GeneratedColumn<int>(
-    'art_length',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    $customConstraints: 'NULL',
-  );
-  late final GeneratedColumn<int> artKind = GeneratedColumn<int>(
-    'art_kind',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    $customConstraints: 'NULL',
-  );
-  late final GeneratedColumn<String> folderArtUri = GeneratedColumn<String>(
-    'folder_art_uri',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    $customConstraints: 'NULL',
-  );
-  late final GeneratedColumn<int> folderArtSize = GeneratedColumn<int>(
-    'folder_art_size',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    $customConstraints: 'NULL',
-  );
-  late final GeneratedColumn<int> folderArtMtime = GeneratedColumn<int>(
-    'folder_art_mtime',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    $customConstraints: 'NULL',
   );
   late final GeneratedColumn<int> reasonCode = GeneratedColumn<int>(
     'reason_code',
@@ -495,16 +537,20 @@ class Tracks extends Table with TableInfo<Tracks, TracksData> {
     album,
     artistKeyText,
     albumKeyText,
+    albumArtist,
+    albumArtistKeyText,
+    artistSortKeyText,
+    albumSortKeyText,
+    albumArtistSortKeyText,
+    genre,
+    genreKeyText,
+    discNo,
+    year,
+    compilation,
     trackNo,
     durationMs,
     sampleRate,
     bitDepth,
-    artOffset,
-    artLength,
-    artKind,
-    folderArtUri,
-    folderArtSize,
-    folderArtMtime,
     reasonCode,
     scanVersion,
   ];
@@ -579,6 +625,46 @@ class Tracks extends Table with TableInfo<Tracks, TracksData> {
         DriftSqlType.blob,
         data['${effectivePrefix}album_key_text'],
       ),
+      albumArtist: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}album_artist'],
+      )!,
+      albumArtistKeyText: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}album_artist_key_text'],
+      ),
+      artistSortKeyText: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}artist_sort_key_text'],
+      ),
+      albumSortKeyText: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}album_sort_key_text'],
+      ),
+      albumArtistSortKeyText: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}album_artist_sort_key_text'],
+      ),
+      genre: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}genre'],
+      )!,
+      genreKeyText: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}genre_key_text'],
+      ),
+      discNo: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}disc_no'],
+      )!,
+      year: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}year'],
+      )!,
+      compilation: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}compilation'],
+      )!,
       trackNo: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}track_no'],
@@ -595,30 +681,6 @@ class Tracks extends Table with TableInfo<Tracks, TracksData> {
         DriftSqlType.int,
         data['${effectivePrefix}bit_depth'],
       )!,
-      artOffset: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}art_offset'],
-      ),
-      artLength: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}art_length'],
-      ),
-      artKind: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}art_kind'],
-      ),
-      folderArtUri: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}folder_art_uri'],
-      ),
-      folderArtSize: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}folder_art_size'],
-      ),
-      folderArtMtime: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}folder_art_mtime'],
-      ),
       reasonCode: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}reason_code'],
@@ -656,16 +718,20 @@ class TracksData extends DataClass implements Insertable<TracksData> {
   final String album;
   final i2.Uint8List? artistKeyText;
   final i2.Uint8List? albumKeyText;
+  final String albumArtist;
+  final i2.Uint8List? albumArtistKeyText;
+  final i2.Uint8List? artistSortKeyText;
+  final i2.Uint8List? albumSortKeyText;
+  final i2.Uint8List? albumArtistSortKeyText;
+  final String genre;
+  final i2.Uint8List? genreKeyText;
+  final int discNo;
+  final int year;
+  final int compilation;
   final int trackNo;
   final int durationMs;
   final int sampleRate;
   final int bitDepth;
-  final int? artOffset;
-  final int? artLength;
-  final int? artKind;
-  final String? folderArtUri;
-  final int? folderArtSize;
-  final int? folderArtMtime;
   final int? reasonCode;
   final int scanVersion;
   const TracksData({
@@ -683,16 +749,20 @@ class TracksData extends DataClass implements Insertable<TracksData> {
     required this.album,
     this.artistKeyText,
     this.albumKeyText,
+    required this.albumArtist,
+    this.albumArtistKeyText,
+    this.artistSortKeyText,
+    this.albumSortKeyText,
+    this.albumArtistSortKeyText,
+    required this.genre,
+    this.genreKeyText,
+    required this.discNo,
+    required this.year,
+    required this.compilation,
     required this.trackNo,
     required this.durationMs,
     required this.sampleRate,
     required this.bitDepth,
-    this.artOffset,
-    this.artLength,
-    this.artKind,
-    this.folderArtUri,
-    this.folderArtSize,
-    this.folderArtMtime,
     this.reasonCode,
     required this.scanVersion,
   });
@@ -717,28 +787,32 @@ class TracksData extends DataClass implements Insertable<TracksData> {
     if (!nullToAbsent || albumKeyText != null) {
       map['album_key_text'] = Variable<i2.Uint8List>(albumKeyText);
     }
+    map['album_artist'] = Variable<String>(albumArtist);
+    if (!nullToAbsent || albumArtistKeyText != null) {
+      map['album_artist_key_text'] = Variable<i2.Uint8List>(albumArtistKeyText);
+    }
+    if (!nullToAbsent || artistSortKeyText != null) {
+      map['artist_sort_key_text'] = Variable<i2.Uint8List>(artistSortKeyText);
+    }
+    if (!nullToAbsent || albumSortKeyText != null) {
+      map['album_sort_key_text'] = Variable<i2.Uint8List>(albumSortKeyText);
+    }
+    if (!nullToAbsent || albumArtistSortKeyText != null) {
+      map['album_artist_sort_key_text'] = Variable<i2.Uint8List>(
+        albumArtistSortKeyText,
+      );
+    }
+    map['genre'] = Variable<String>(genre);
+    if (!nullToAbsent || genreKeyText != null) {
+      map['genre_key_text'] = Variable<i2.Uint8List>(genreKeyText);
+    }
+    map['disc_no'] = Variable<int>(discNo);
+    map['year'] = Variable<int>(year);
+    map['compilation'] = Variable<int>(compilation);
     map['track_no'] = Variable<int>(trackNo);
     map['duration_ms'] = Variable<int>(durationMs);
     map['sample_rate'] = Variable<int>(sampleRate);
     map['bit_depth'] = Variable<int>(bitDepth);
-    if (!nullToAbsent || artOffset != null) {
-      map['art_offset'] = Variable<int>(artOffset);
-    }
-    if (!nullToAbsent || artLength != null) {
-      map['art_length'] = Variable<int>(artLength);
-    }
-    if (!nullToAbsent || artKind != null) {
-      map['art_kind'] = Variable<int>(artKind);
-    }
-    if (!nullToAbsent || folderArtUri != null) {
-      map['folder_art_uri'] = Variable<String>(folderArtUri);
-    }
-    if (!nullToAbsent || folderArtSize != null) {
-      map['folder_art_size'] = Variable<int>(folderArtSize);
-    }
-    if (!nullToAbsent || folderArtMtime != null) {
-      map['folder_art_mtime'] = Variable<int>(folderArtMtime);
-    }
     if (!nullToAbsent || reasonCode != null) {
       map['reason_code'] = Variable<int>(reasonCode);
     }
@@ -766,28 +840,30 @@ class TracksData extends DataClass implements Insertable<TracksData> {
       albumKeyText: albumKeyText == null && nullToAbsent
           ? const Value.absent()
           : Value(albumKeyText),
+      albumArtist: Value(albumArtist),
+      albumArtistKeyText: albumArtistKeyText == null && nullToAbsent
+          ? const Value.absent()
+          : Value(albumArtistKeyText),
+      artistSortKeyText: artistSortKeyText == null && nullToAbsent
+          ? const Value.absent()
+          : Value(artistSortKeyText),
+      albumSortKeyText: albumSortKeyText == null && nullToAbsent
+          ? const Value.absent()
+          : Value(albumSortKeyText),
+      albumArtistSortKeyText: albumArtistSortKeyText == null && nullToAbsent
+          ? const Value.absent()
+          : Value(albumArtistSortKeyText),
+      genre: Value(genre),
+      genreKeyText: genreKeyText == null && nullToAbsent
+          ? const Value.absent()
+          : Value(genreKeyText),
+      discNo: Value(discNo),
+      year: Value(year),
+      compilation: Value(compilation),
       trackNo: Value(trackNo),
       durationMs: Value(durationMs),
       sampleRate: Value(sampleRate),
       bitDepth: Value(bitDepth),
-      artOffset: artOffset == null && nullToAbsent
-          ? const Value.absent()
-          : Value(artOffset),
-      artLength: artLength == null && nullToAbsent
-          ? const Value.absent()
-          : Value(artLength),
-      artKind: artKind == null && nullToAbsent
-          ? const Value.absent()
-          : Value(artKind),
-      folderArtUri: folderArtUri == null && nullToAbsent
-          ? const Value.absent()
-          : Value(folderArtUri),
-      folderArtSize: folderArtSize == null && nullToAbsent
-          ? const Value.absent()
-          : Value(folderArtSize),
-      folderArtMtime: folderArtMtime == null && nullToAbsent
-          ? const Value.absent()
-          : Value(folderArtMtime),
       reasonCode: reasonCode == null && nullToAbsent
           ? const Value.absent()
           : Value(reasonCode),
@@ -815,16 +891,28 @@ class TracksData extends DataClass implements Insertable<TracksData> {
       album: serializer.fromJson<String>(json['album']),
       artistKeyText: serializer.fromJson<i2.Uint8List?>(json['artistKeyText']),
       albumKeyText: serializer.fromJson<i2.Uint8List?>(json['albumKeyText']),
+      albumArtist: serializer.fromJson<String>(json['albumArtist']),
+      albumArtistKeyText: serializer.fromJson<i2.Uint8List?>(
+        json['albumArtistKeyText'],
+      ),
+      artistSortKeyText: serializer.fromJson<i2.Uint8List?>(
+        json['artistSortKeyText'],
+      ),
+      albumSortKeyText: serializer.fromJson<i2.Uint8List?>(
+        json['albumSortKeyText'],
+      ),
+      albumArtistSortKeyText: serializer.fromJson<i2.Uint8List?>(
+        json['albumArtistSortKeyText'],
+      ),
+      genre: serializer.fromJson<String>(json['genre']),
+      genreKeyText: serializer.fromJson<i2.Uint8List?>(json['genreKeyText']),
+      discNo: serializer.fromJson<int>(json['discNo']),
+      year: serializer.fromJson<int>(json['year']),
+      compilation: serializer.fromJson<int>(json['compilation']),
       trackNo: serializer.fromJson<int>(json['trackNo']),
       durationMs: serializer.fromJson<int>(json['durationMs']),
       sampleRate: serializer.fromJson<int>(json['sampleRate']),
       bitDepth: serializer.fromJson<int>(json['bitDepth']),
-      artOffset: serializer.fromJson<int?>(json['artOffset']),
-      artLength: serializer.fromJson<int?>(json['artLength']),
-      artKind: serializer.fromJson<int?>(json['artKind']),
-      folderArtUri: serializer.fromJson<String?>(json['folderArtUri']),
-      folderArtSize: serializer.fromJson<int?>(json['folderArtSize']),
-      folderArtMtime: serializer.fromJson<int?>(json['folderArtMtime']),
       reasonCode: serializer.fromJson<int?>(json['reasonCode']),
       scanVersion: serializer.fromJson<int>(json['scanVersion']),
     );
@@ -847,16 +935,24 @@ class TracksData extends DataClass implements Insertable<TracksData> {
       'album': serializer.toJson<String>(album),
       'artistKeyText': serializer.toJson<i2.Uint8List?>(artistKeyText),
       'albumKeyText': serializer.toJson<i2.Uint8List?>(albumKeyText),
+      'albumArtist': serializer.toJson<String>(albumArtist),
+      'albumArtistKeyText': serializer.toJson<i2.Uint8List?>(
+        albumArtistKeyText,
+      ),
+      'artistSortKeyText': serializer.toJson<i2.Uint8List?>(artistSortKeyText),
+      'albumSortKeyText': serializer.toJson<i2.Uint8List?>(albumSortKeyText),
+      'albumArtistSortKeyText': serializer.toJson<i2.Uint8List?>(
+        albumArtistSortKeyText,
+      ),
+      'genre': serializer.toJson<String>(genre),
+      'genreKeyText': serializer.toJson<i2.Uint8List?>(genreKeyText),
+      'discNo': serializer.toJson<int>(discNo),
+      'year': serializer.toJson<int>(year),
+      'compilation': serializer.toJson<int>(compilation),
       'trackNo': serializer.toJson<int>(trackNo),
       'durationMs': serializer.toJson<int>(durationMs),
       'sampleRate': serializer.toJson<int>(sampleRate),
       'bitDepth': serializer.toJson<int>(bitDepth),
-      'artOffset': serializer.toJson<int?>(artOffset),
-      'artLength': serializer.toJson<int?>(artLength),
-      'artKind': serializer.toJson<int?>(artKind),
-      'folderArtUri': serializer.toJson<String?>(folderArtUri),
-      'folderArtSize': serializer.toJson<int?>(folderArtSize),
-      'folderArtMtime': serializer.toJson<int?>(folderArtMtime),
       'reasonCode': serializer.toJson<int?>(reasonCode),
       'scanVersion': serializer.toJson<int>(scanVersion),
     };
@@ -877,16 +973,20 @@ class TracksData extends DataClass implements Insertable<TracksData> {
     String? album,
     Value<i2.Uint8List?> artistKeyText = const Value.absent(),
     Value<i2.Uint8List?> albumKeyText = const Value.absent(),
+    String? albumArtist,
+    Value<i2.Uint8List?> albumArtistKeyText = const Value.absent(),
+    Value<i2.Uint8List?> artistSortKeyText = const Value.absent(),
+    Value<i2.Uint8List?> albumSortKeyText = const Value.absent(),
+    Value<i2.Uint8List?> albumArtistSortKeyText = const Value.absent(),
+    String? genre,
+    Value<i2.Uint8List?> genreKeyText = const Value.absent(),
+    int? discNo,
+    int? year,
+    int? compilation,
     int? trackNo,
     int? durationMs,
     int? sampleRate,
     int? bitDepth,
-    Value<int?> artOffset = const Value.absent(),
-    Value<int?> artLength = const Value.absent(),
-    Value<int?> artKind = const Value.absent(),
-    Value<String?> folderArtUri = const Value.absent(),
-    Value<int?> folderArtSize = const Value.absent(),
-    Value<int?> folderArtMtime = const Value.absent(),
     Value<int?> reasonCode = const Value.absent(),
     int? scanVersion,
   }) => TracksData(
@@ -906,20 +1006,28 @@ class TracksData extends DataClass implements Insertable<TracksData> {
         ? artistKeyText.value
         : this.artistKeyText,
     albumKeyText: albumKeyText.present ? albumKeyText.value : this.albumKeyText,
+    albumArtist: albumArtist ?? this.albumArtist,
+    albumArtistKeyText: albumArtistKeyText.present
+        ? albumArtistKeyText.value
+        : this.albumArtistKeyText,
+    artistSortKeyText: artistSortKeyText.present
+        ? artistSortKeyText.value
+        : this.artistSortKeyText,
+    albumSortKeyText: albumSortKeyText.present
+        ? albumSortKeyText.value
+        : this.albumSortKeyText,
+    albumArtistSortKeyText: albumArtistSortKeyText.present
+        ? albumArtistSortKeyText.value
+        : this.albumArtistSortKeyText,
+    genre: genre ?? this.genre,
+    genreKeyText: genreKeyText.present ? genreKeyText.value : this.genreKeyText,
+    discNo: discNo ?? this.discNo,
+    year: year ?? this.year,
+    compilation: compilation ?? this.compilation,
     trackNo: trackNo ?? this.trackNo,
     durationMs: durationMs ?? this.durationMs,
     sampleRate: sampleRate ?? this.sampleRate,
     bitDepth: bitDepth ?? this.bitDepth,
-    artOffset: artOffset.present ? artOffset.value : this.artOffset,
-    artLength: artLength.present ? artLength.value : this.artLength,
-    artKind: artKind.present ? artKind.value : this.artKind,
-    folderArtUri: folderArtUri.present ? folderArtUri.value : this.folderArtUri,
-    folderArtSize: folderArtSize.present
-        ? folderArtSize.value
-        : this.folderArtSize,
-    folderArtMtime: folderArtMtime.present
-        ? folderArtMtime.value
-        : this.folderArtMtime,
     reasonCode: reasonCode.present ? reasonCode.value : this.reasonCode,
     scanVersion: scanVersion ?? this.scanVersion,
   );
@@ -945,6 +1053,30 @@ class TracksData extends DataClass implements Insertable<TracksData> {
       albumKeyText: data.albumKeyText.present
           ? data.albumKeyText.value
           : this.albumKeyText,
+      albumArtist: data.albumArtist.present
+          ? data.albumArtist.value
+          : this.albumArtist,
+      albumArtistKeyText: data.albumArtistKeyText.present
+          ? data.albumArtistKeyText.value
+          : this.albumArtistKeyText,
+      artistSortKeyText: data.artistSortKeyText.present
+          ? data.artistSortKeyText.value
+          : this.artistSortKeyText,
+      albumSortKeyText: data.albumSortKeyText.present
+          ? data.albumSortKeyText.value
+          : this.albumSortKeyText,
+      albumArtistSortKeyText: data.albumArtistSortKeyText.present
+          ? data.albumArtistSortKeyText.value
+          : this.albumArtistSortKeyText,
+      genre: data.genre.present ? data.genre.value : this.genre,
+      genreKeyText: data.genreKeyText.present
+          ? data.genreKeyText.value
+          : this.genreKeyText,
+      discNo: data.discNo.present ? data.discNo.value : this.discNo,
+      year: data.year.present ? data.year.value : this.year,
+      compilation: data.compilation.present
+          ? data.compilation.value
+          : this.compilation,
       trackNo: data.trackNo.present ? data.trackNo.value : this.trackNo,
       durationMs: data.durationMs.present
           ? data.durationMs.value
@@ -953,18 +1085,6 @@ class TracksData extends DataClass implements Insertable<TracksData> {
           ? data.sampleRate.value
           : this.sampleRate,
       bitDepth: data.bitDepth.present ? data.bitDepth.value : this.bitDepth,
-      artOffset: data.artOffset.present ? data.artOffset.value : this.artOffset,
-      artLength: data.artLength.present ? data.artLength.value : this.artLength,
-      artKind: data.artKind.present ? data.artKind.value : this.artKind,
-      folderArtUri: data.folderArtUri.present
-          ? data.folderArtUri.value
-          : this.folderArtUri,
-      folderArtSize: data.folderArtSize.present
-          ? data.folderArtSize.value
-          : this.folderArtSize,
-      folderArtMtime: data.folderArtMtime.present
-          ? data.folderArtMtime.value
-          : this.folderArtMtime,
       reasonCode: data.reasonCode.present
           ? data.reasonCode.value
           : this.reasonCode,
@@ -991,16 +1111,20 @@ class TracksData extends DataClass implements Insertable<TracksData> {
           ..write('album: $album, ')
           ..write('artistKeyText: $artistKeyText, ')
           ..write('albumKeyText: $albumKeyText, ')
+          ..write('albumArtist: $albumArtist, ')
+          ..write('albumArtistKeyText: $albumArtistKeyText, ')
+          ..write('artistSortKeyText: $artistSortKeyText, ')
+          ..write('albumSortKeyText: $albumSortKeyText, ')
+          ..write('albumArtistSortKeyText: $albumArtistSortKeyText, ')
+          ..write('genre: $genre, ')
+          ..write('genreKeyText: $genreKeyText, ')
+          ..write('discNo: $discNo, ')
+          ..write('year: $year, ')
+          ..write('compilation: $compilation, ')
           ..write('trackNo: $trackNo, ')
           ..write('durationMs: $durationMs, ')
           ..write('sampleRate: $sampleRate, ')
           ..write('bitDepth: $bitDepth, ')
-          ..write('artOffset: $artOffset, ')
-          ..write('artLength: $artLength, ')
-          ..write('artKind: $artKind, ')
-          ..write('folderArtUri: $folderArtUri, ')
-          ..write('folderArtSize: $folderArtSize, ')
-          ..write('folderArtMtime: $folderArtMtime, ')
           ..write('reasonCode: $reasonCode, ')
           ..write('scanVersion: $scanVersion')
           ..write(')'))
@@ -1023,16 +1147,20 @@ class TracksData extends DataClass implements Insertable<TracksData> {
     album,
     $driftBlobEquality.hash(artistKeyText),
     $driftBlobEquality.hash(albumKeyText),
+    albumArtist,
+    $driftBlobEquality.hash(albumArtistKeyText),
+    $driftBlobEquality.hash(artistSortKeyText),
+    $driftBlobEquality.hash(albumSortKeyText),
+    $driftBlobEquality.hash(albumArtistSortKeyText),
+    genre,
+    $driftBlobEquality.hash(genreKeyText),
+    discNo,
+    year,
+    compilation,
     trackNo,
     durationMs,
     sampleRate,
     bitDepth,
-    artOffset,
-    artLength,
-    artKind,
-    folderArtUri,
-    folderArtSize,
-    folderArtMtime,
     reasonCode,
     scanVersion,
   ]);
@@ -1054,16 +1182,32 @@ class TracksData extends DataClass implements Insertable<TracksData> {
           other.album == this.album &&
           $driftBlobEquality.equals(other.artistKeyText, this.artistKeyText) &&
           $driftBlobEquality.equals(other.albumKeyText, this.albumKeyText) &&
+          other.albumArtist == this.albumArtist &&
+          $driftBlobEquality.equals(
+            other.albumArtistKeyText,
+            this.albumArtistKeyText,
+          ) &&
+          $driftBlobEquality.equals(
+            other.artistSortKeyText,
+            this.artistSortKeyText,
+          ) &&
+          $driftBlobEquality.equals(
+            other.albumSortKeyText,
+            this.albumSortKeyText,
+          ) &&
+          $driftBlobEquality.equals(
+            other.albumArtistSortKeyText,
+            this.albumArtistSortKeyText,
+          ) &&
+          other.genre == this.genre &&
+          $driftBlobEquality.equals(other.genreKeyText, this.genreKeyText) &&
+          other.discNo == this.discNo &&
+          other.year == this.year &&
+          other.compilation == this.compilation &&
           other.trackNo == this.trackNo &&
           other.durationMs == this.durationMs &&
           other.sampleRate == this.sampleRate &&
           other.bitDepth == this.bitDepth &&
-          other.artOffset == this.artOffset &&
-          other.artLength == this.artLength &&
-          other.artKind == this.artKind &&
-          other.folderArtUri == this.folderArtUri &&
-          other.folderArtSize == this.folderArtSize &&
-          other.folderArtMtime == this.folderArtMtime &&
           other.reasonCode == this.reasonCode &&
           other.scanVersion == this.scanVersion);
 }
@@ -1083,16 +1227,20 @@ class TracksCompanion extends UpdateCompanion<TracksData> {
   final Value<String> album;
   final Value<i2.Uint8List?> artistKeyText;
   final Value<i2.Uint8List?> albumKeyText;
+  final Value<String> albumArtist;
+  final Value<i2.Uint8List?> albumArtistKeyText;
+  final Value<i2.Uint8List?> artistSortKeyText;
+  final Value<i2.Uint8List?> albumSortKeyText;
+  final Value<i2.Uint8List?> albumArtistSortKeyText;
+  final Value<String> genre;
+  final Value<i2.Uint8List?> genreKeyText;
+  final Value<int> discNo;
+  final Value<int> year;
+  final Value<int> compilation;
   final Value<int> trackNo;
   final Value<int> durationMs;
   final Value<int> sampleRate;
   final Value<int> bitDepth;
-  final Value<int?> artOffset;
-  final Value<int?> artLength;
-  final Value<int?> artKind;
-  final Value<String?> folderArtUri;
-  final Value<int?> folderArtSize;
-  final Value<int?> folderArtMtime;
   final Value<int?> reasonCode;
   final Value<int> scanVersion;
   const TracksCompanion({
@@ -1110,16 +1258,20 @@ class TracksCompanion extends UpdateCompanion<TracksData> {
     this.album = const Value.absent(),
     this.artistKeyText = const Value.absent(),
     this.albumKeyText = const Value.absent(),
+    this.albumArtist = const Value.absent(),
+    this.albumArtistKeyText = const Value.absent(),
+    this.artistSortKeyText = const Value.absent(),
+    this.albumSortKeyText = const Value.absent(),
+    this.albumArtistSortKeyText = const Value.absent(),
+    this.genre = const Value.absent(),
+    this.genreKeyText = const Value.absent(),
+    this.discNo = const Value.absent(),
+    this.year = const Value.absent(),
+    this.compilation = const Value.absent(),
     this.trackNo = const Value.absent(),
     this.durationMs = const Value.absent(),
     this.sampleRate = const Value.absent(),
     this.bitDepth = const Value.absent(),
-    this.artOffset = const Value.absent(),
-    this.artLength = const Value.absent(),
-    this.artKind = const Value.absent(),
-    this.folderArtUri = const Value.absent(),
-    this.folderArtSize = const Value.absent(),
-    this.folderArtMtime = const Value.absent(),
     this.reasonCode = const Value.absent(),
     this.scanVersion = const Value.absent(),
   });
@@ -1138,16 +1290,20 @@ class TracksCompanion extends UpdateCompanion<TracksData> {
     required String album,
     this.artistKeyText = const Value.absent(),
     this.albumKeyText = const Value.absent(),
+    this.albumArtist = const Value.absent(),
+    this.albumArtistKeyText = const Value.absent(),
+    this.artistSortKeyText = const Value.absent(),
+    this.albumSortKeyText = const Value.absent(),
+    this.albumArtistSortKeyText = const Value.absent(),
+    this.genre = const Value.absent(),
+    this.genreKeyText = const Value.absent(),
+    this.discNo = const Value.absent(),
+    this.year = const Value.absent(),
+    this.compilation = const Value.absent(),
     required int trackNo,
     required int durationMs,
     required int sampleRate,
     required int bitDepth,
-    this.artOffset = const Value.absent(),
-    this.artLength = const Value.absent(),
-    this.artKind = const Value.absent(),
-    this.folderArtUri = const Value.absent(),
-    this.folderArtSize = const Value.absent(),
-    this.folderArtMtime = const Value.absent(),
     this.reasonCode = const Value.absent(),
     required int scanVersion,
   }) : sourceId = Value(sourceId),
@@ -1181,16 +1337,20 @@ class TracksCompanion extends UpdateCompanion<TracksData> {
     Expression<String>? album,
     Expression<i2.Uint8List>? artistKeyText,
     Expression<i2.Uint8List>? albumKeyText,
+    Expression<String>? albumArtist,
+    Expression<i2.Uint8List>? albumArtistKeyText,
+    Expression<i2.Uint8List>? artistSortKeyText,
+    Expression<i2.Uint8List>? albumSortKeyText,
+    Expression<i2.Uint8List>? albumArtistSortKeyText,
+    Expression<String>? genre,
+    Expression<i2.Uint8List>? genreKeyText,
+    Expression<int>? discNo,
+    Expression<int>? year,
+    Expression<int>? compilation,
     Expression<int>? trackNo,
     Expression<int>? durationMs,
     Expression<int>? sampleRate,
     Expression<int>? bitDepth,
-    Expression<int>? artOffset,
-    Expression<int>? artLength,
-    Expression<int>? artKind,
-    Expression<String>? folderArtUri,
-    Expression<int>? folderArtSize,
-    Expression<int>? folderArtMtime,
     Expression<int>? reasonCode,
     Expression<int>? scanVersion,
   }) {
@@ -1209,16 +1369,22 @@ class TracksCompanion extends UpdateCompanion<TracksData> {
       if (album != null) 'album': album,
       if (artistKeyText != null) 'artist_key_text': artistKeyText,
       if (albumKeyText != null) 'album_key_text': albumKeyText,
+      if (albumArtist != null) 'album_artist': albumArtist,
+      if (albumArtistKeyText != null)
+        'album_artist_key_text': albumArtistKeyText,
+      if (artistSortKeyText != null) 'artist_sort_key_text': artistSortKeyText,
+      if (albumSortKeyText != null) 'album_sort_key_text': albumSortKeyText,
+      if (albumArtistSortKeyText != null)
+        'album_artist_sort_key_text': albumArtistSortKeyText,
+      if (genre != null) 'genre': genre,
+      if (genreKeyText != null) 'genre_key_text': genreKeyText,
+      if (discNo != null) 'disc_no': discNo,
+      if (year != null) 'year': year,
+      if (compilation != null) 'compilation': compilation,
       if (trackNo != null) 'track_no': trackNo,
       if (durationMs != null) 'duration_ms': durationMs,
       if (sampleRate != null) 'sample_rate': sampleRate,
       if (bitDepth != null) 'bit_depth': bitDepth,
-      if (artOffset != null) 'art_offset': artOffset,
-      if (artLength != null) 'art_length': artLength,
-      if (artKind != null) 'art_kind': artKind,
-      if (folderArtUri != null) 'folder_art_uri': folderArtUri,
-      if (folderArtSize != null) 'folder_art_size': folderArtSize,
-      if (folderArtMtime != null) 'folder_art_mtime': folderArtMtime,
       if (reasonCode != null) 'reason_code': reasonCode,
       if (scanVersion != null) 'scan_version': scanVersion,
     });
@@ -1239,16 +1405,20 @@ class TracksCompanion extends UpdateCompanion<TracksData> {
     Value<String>? album,
     Value<i2.Uint8List?>? artistKeyText,
     Value<i2.Uint8List?>? albumKeyText,
+    Value<String>? albumArtist,
+    Value<i2.Uint8List?>? albumArtistKeyText,
+    Value<i2.Uint8List?>? artistSortKeyText,
+    Value<i2.Uint8List?>? albumSortKeyText,
+    Value<i2.Uint8List?>? albumArtistSortKeyText,
+    Value<String>? genre,
+    Value<i2.Uint8List?>? genreKeyText,
+    Value<int>? discNo,
+    Value<int>? year,
+    Value<int>? compilation,
     Value<int>? trackNo,
     Value<int>? durationMs,
     Value<int>? sampleRate,
     Value<int>? bitDepth,
-    Value<int?>? artOffset,
-    Value<int?>? artLength,
-    Value<int?>? artKind,
-    Value<String?>? folderArtUri,
-    Value<int?>? folderArtSize,
-    Value<int?>? folderArtMtime,
     Value<int?>? reasonCode,
     Value<int>? scanVersion,
   }) {
@@ -1267,16 +1437,21 @@ class TracksCompanion extends UpdateCompanion<TracksData> {
       album: album ?? this.album,
       artistKeyText: artistKeyText ?? this.artistKeyText,
       albumKeyText: albumKeyText ?? this.albumKeyText,
+      albumArtist: albumArtist ?? this.albumArtist,
+      albumArtistKeyText: albumArtistKeyText ?? this.albumArtistKeyText,
+      artistSortKeyText: artistSortKeyText ?? this.artistSortKeyText,
+      albumSortKeyText: albumSortKeyText ?? this.albumSortKeyText,
+      albumArtistSortKeyText:
+          albumArtistSortKeyText ?? this.albumArtistSortKeyText,
+      genre: genre ?? this.genre,
+      genreKeyText: genreKeyText ?? this.genreKeyText,
+      discNo: discNo ?? this.discNo,
+      year: year ?? this.year,
+      compilation: compilation ?? this.compilation,
       trackNo: trackNo ?? this.trackNo,
       durationMs: durationMs ?? this.durationMs,
       sampleRate: sampleRate ?? this.sampleRate,
       bitDepth: bitDepth ?? this.bitDepth,
-      artOffset: artOffset ?? this.artOffset,
-      artLength: artLength ?? this.artLength,
-      artKind: artKind ?? this.artKind,
-      folderArtUri: folderArtUri ?? this.folderArtUri,
-      folderArtSize: folderArtSize ?? this.folderArtSize,
-      folderArtMtime: folderArtMtime ?? this.folderArtMtime,
       reasonCode: reasonCode ?? this.reasonCode,
       scanVersion: scanVersion ?? this.scanVersion,
     );
@@ -1327,6 +1502,44 @@ class TracksCompanion extends UpdateCompanion<TracksData> {
     if (albumKeyText.present) {
       map['album_key_text'] = Variable<i2.Uint8List>(albumKeyText.value);
     }
+    if (albumArtist.present) {
+      map['album_artist'] = Variable<String>(albumArtist.value);
+    }
+    if (albumArtistKeyText.present) {
+      map['album_artist_key_text'] = Variable<i2.Uint8List>(
+        albumArtistKeyText.value,
+      );
+    }
+    if (artistSortKeyText.present) {
+      map['artist_sort_key_text'] = Variable<i2.Uint8List>(
+        artistSortKeyText.value,
+      );
+    }
+    if (albumSortKeyText.present) {
+      map['album_sort_key_text'] = Variable<i2.Uint8List>(
+        albumSortKeyText.value,
+      );
+    }
+    if (albumArtistSortKeyText.present) {
+      map['album_artist_sort_key_text'] = Variable<i2.Uint8List>(
+        albumArtistSortKeyText.value,
+      );
+    }
+    if (genre.present) {
+      map['genre'] = Variable<String>(genre.value);
+    }
+    if (genreKeyText.present) {
+      map['genre_key_text'] = Variable<i2.Uint8List>(genreKeyText.value);
+    }
+    if (discNo.present) {
+      map['disc_no'] = Variable<int>(discNo.value);
+    }
+    if (year.present) {
+      map['year'] = Variable<int>(year.value);
+    }
+    if (compilation.present) {
+      map['compilation'] = Variable<int>(compilation.value);
+    }
     if (trackNo.present) {
       map['track_no'] = Variable<int>(trackNo.value);
     }
@@ -1338,24 +1551,6 @@ class TracksCompanion extends UpdateCompanion<TracksData> {
     }
     if (bitDepth.present) {
       map['bit_depth'] = Variable<int>(bitDepth.value);
-    }
-    if (artOffset.present) {
-      map['art_offset'] = Variable<int>(artOffset.value);
-    }
-    if (artLength.present) {
-      map['art_length'] = Variable<int>(artLength.value);
-    }
-    if (artKind.present) {
-      map['art_kind'] = Variable<int>(artKind.value);
-    }
-    if (folderArtUri.present) {
-      map['folder_art_uri'] = Variable<String>(folderArtUri.value);
-    }
-    if (folderArtSize.present) {
-      map['folder_art_size'] = Variable<int>(folderArtSize.value);
-    }
-    if (folderArtMtime.present) {
-      map['folder_art_mtime'] = Variable<int>(folderArtMtime.value);
     }
     if (reasonCode.present) {
       map['reason_code'] = Variable<int>(reasonCode.value);
@@ -1383,16 +1578,20 @@ class TracksCompanion extends UpdateCompanion<TracksData> {
           ..write('album: $album, ')
           ..write('artistKeyText: $artistKeyText, ')
           ..write('albumKeyText: $albumKeyText, ')
+          ..write('albumArtist: $albumArtist, ')
+          ..write('albumArtistKeyText: $albumArtistKeyText, ')
+          ..write('artistSortKeyText: $artistSortKeyText, ')
+          ..write('albumSortKeyText: $albumSortKeyText, ')
+          ..write('albumArtistSortKeyText: $albumArtistSortKeyText, ')
+          ..write('genre: $genre, ')
+          ..write('genreKeyText: $genreKeyText, ')
+          ..write('discNo: $discNo, ')
+          ..write('year: $year, ')
+          ..write('compilation: $compilation, ')
           ..write('trackNo: $trackNo, ')
           ..write('durationMs: $durationMs, ')
           ..write('sampleRate: $sampleRate, ')
           ..write('bitDepth: $bitDepth, ')
-          ..write('artOffset: $artOffset, ')
-          ..write('artLength: $artLength, ')
-          ..write('artKind: $artKind, ')
-          ..write('folderArtUri: $folderArtUri, ')
-          ..write('folderArtSize: $folderArtSize, ')
-          ..write('folderArtMtime: $folderArtMtime, ')
           ..write('reasonCode: $reasonCode, ')
           ..write('scanVersion: $scanVersion')
           ..write(')'))

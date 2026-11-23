@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-/// Wires the art cache (decision 0009) to the screens and the player.
+/// Wires the art cache (decision 0010) to the screens and the player.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';

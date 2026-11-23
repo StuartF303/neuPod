@@ -62,6 +62,14 @@ void main() {
     int trackNo = 0,
     int durationMs = 0,
     int? reason,
+    String albumArtist = '',
+    int discNo = 0,
+    int year = 0,
+    String genre = '',
+    bool compilation = false,
+    String artistSort = '',
+    String albumSort = '',
+    String albumArtistSort = '',
   }) async {
     n++;
     await addTrack(
@@ -77,8 +85,32 @@ void main() {
       trackNo: trackNo,
       durationMs: durationMs,
       reason: reason,
+      albumArtist: albumArtist,
+      discNo: discNo,
+      year: year,
+      genre: genre,
+      compilation: compilation,
+      artistSort: artistSort,
+      albumSort: albumSort,
+      albumArtistSort: albumArtistSort,
     );
   }
+
+  Future<void> addFixture(_FixtureTrack t) => add(
+    t.title,
+    path: t.path,
+    artist: t.artist,
+    album: t.album,
+    trackNo: t.track,
+    albumArtist: t.albumArtist,
+    discNo: t.disc,
+    year: t.year,
+    genre: t.genre,
+    compilation: t.compilation,
+    artistSort: t.artistSort,
+    albumSort: t.albumSort,
+    albumArtistSort: t.albumArtistSort,
+  );
 
   test('an empty database gives empty lists and no detail', () async {
     expect(await view.songs(), isEmpty);
@@ -216,6 +248,22 @@ void main() {
   // ARTISTS" are compilations (no artist; their albums last in the album
   // table, so after Abba's and Zed's "Hits" in the Albums list, and "hits"
   // folding into the compilation "Hits"); "Various Artist" is an artist.
+  // albumartist.tsv: the owner's "Back to Mine" (each track's ARTIST the
+  // performer, ALBUMARTIST Morcheeba, COMPILATION=1: one album, a
+  // compilation, and no Morcheeba artist), another "Back to Mine" with an
+  // album artist and no flag (one album under Groove Armada; its performer
+  // Pepper is an artist only through his own album), Discovery and Faithless
+  // with the album artist equal to the artist.
+  // discs.tsv: one album over two "(Disc n)" folders and a third folder,
+  // disc then track order, an untagged disc first; a disc of 300 held as
+  // 255; an album row's year from its first song (0 when that has none).
+  // genres.tsv: "Rock" / "rock" / "ROCK" one genre, compilation tracks in
+  // their genres, a Vorbis "17" kept as text, "Ångström" / "Angstrom", a
+  // track with no genre.
+  // sorts.tsv: ALBUMARTISTSORT folds "The Who" and "Who"; ARTISTSORT keys an
+  // artist with no album artist tag (Zed and Yan fold) and is ignored when
+  // there is one; ALBUMSORT folds two album titles and orders the Albums
+  // list.
   // walk.tsv: lines out of walk order, so the first in the walk is not the
   // first row written: "The Beatles" (a/2.flac) names the artist although
   // "Beatles" (b/1.flac) and "BEATLES" ("a b/1.flac": the folder "a" comes
@@ -223,19 +271,22 @@ void main() {
   // names the album over "live" (b/2.flac); two songs called "Same" come in
   // walk order. The C creates the files in walk order (`walk_cmp`), so its
   // own walk is the app's model.
-  for (final name in ['fold', 'folders', 'compilation', 'walk']) {
+  for (final name in [
+    'fold',
+    'folders',
+    'compilation',
+    'walk',
+    'albumartist',
+    'discs',
+    'genres',
+    'sorts',
+  ]) {
     test(
-      '$name: artists, albums and songs as the firmware builds them',
+      '$name: artists, albums, genres and songs as the firmware builds them',
       () async {
         final fx = _EntityFixture.read(name);
         for (final t in fx.tracks) {
-          await add(
-            t.title,
-            path: t.path,
-            artist: t.artist,
-            album: t.album,
-            trackNo: t.track,
-          );
+          await addFixture(t);
         }
         // The firmware holds an artist's text in 63 bytes and shows it so; the
         // app shows the whole text (only the keys follow the device).
@@ -250,12 +301,29 @@ void main() {
             : _held(a.artist);
         expect([
           for (final a in await view.albums())
-            [a.title, albumArtist(a), '${a.songCount}'],
+            [a.title, albumArtist(a), '${a.songCount}', '${a.year ?? 0}'],
         ], fx.lists['albums list']);
+        final table = await view.albumsByArtist();
         expect([
-          for (final a in await view.albumsByArtist())
-            [a.title, albumArtist(a)],
+          for (final a in table) [a.title, albumArtist(a)],
         ], fx.lists['album table']);
+        expect([
+          for (final a in table)
+            for (final d in (await view.album(a.id))!.discs)
+              for (final s in d.songs)
+                [a.title, s.title, '${s.disc ?? 0}', '${s.track ?? 0}'],
+        ], fx.lists['album songs']);
+        expect([
+          for (final a in await view.compilations()) [a.title],
+        ], fx.lists['compilations']);
+        final genres = await view.genres();
+        expect([
+          for (final g in genres) [g.name, '${g.songCount}'],
+        ], fx.lists['genres']);
+        expect([
+          for (final g in genres)
+            for (final s in await view.songsOfGenre(g.id)) [g.name, s.title],
+        ], fx.lists['genre songs']);
         expect([
           for (final s in await view.songs())
             [s.title, _held(s.artist), s.album],
@@ -267,13 +335,7 @@ void main() {
   test('a folded artist and album hold every song of the run', () async {
     final fx = _EntityFixture.read('fold');
     for (final t in fx.tracks) {
-      await add(
-        t.title,
-        path: t.path,
-        artist: t.artist,
-        album: t.album,
-        trackNo: t.track,
-      );
+      await addFixture(t);
     }
     final artists = await view.artists();
     final beatles = artists.firstWhere((a) => a.name == 'The Beatles');
@@ -623,6 +685,31 @@ void main() {
     expect((await view.albums()).single.songCount, 2);
   });
 
+  // Lead decision (2026-11-23; the firmware draws no disc headings, `Disc`
+  // in library_view.dart): songs with no disc number, first in album order,
+  // are a disc with no number (no heading); an album with no disc numbers is
+  // one disc numbered 1.
+  test('discs: songs without a number first and unnumbered; none at all is '
+      'disc 1', () async {
+    final fx = _EntityFixture.read('discs');
+    for (final t in fx.tracks) {
+      await addFixture(t);
+    }
+    final albums = {for (final a in await view.albums()) a.title: a};
+    final double = (await view.album(albums['Double']!.id))!;
+    expect(double.discs.map((d) => d.number), [null, 1, 2]);
+    expect(double.discs.first.songs.map((s) => s.title), ['Z0']);
+    expect(double.hasDiscHeadings, isTrue);
+    expect(double.album.discCount, 3);
+    final late = (await view.album(albums['Late']!.id))!;
+    expect(late.discs.map((d) => d.number), [1]);
+    expect(late.hasDiscHeadings, isFalse);
+    // Disc 300 is held as 255, so it shares a disc with the 255.
+    final huge = (await view.album(albums['Huge']!.id))!;
+    expect(huge.discs.map((d) => d.number), [254, 255]);
+    expect(huge.discs.last.songs.map((s) => s.title), ['H1', 'H2']);
+  });
+
   test('a leading slash in a path does not give an empty album', () async {
     await addTrack(db, sourceId: src, relPath: '/Rooted.flac', title: 'R');
     await addTrack(db, sourceId: src, relPath: '/Dir/In.flac', title: 'I');
@@ -651,12 +738,23 @@ final class _EntityFixture {
       if (!f[0].startsWith(root)) {
         throw FormatException('not under /Music', line);
       }
+      // The C reads a missing or non-numeric number as 0 (atoi).
+      String at(int i) => i < f.length ? f[i] : '';
+      int number(int i) => int.tryParse(at(i).trim()) ?? 0;
       tracks.add((
         path: f[0].substring(root.length),
         title: f[1],
         artist: f[2],
         album: f[3],
-        track: int.parse(f[4]),
+        track: number(4),
+        albumArtist: at(5),
+        disc: number(6),
+        year: number(7),
+        genre: at(8),
+        compilation: at(9) == '1',
+        artistSort: at(10),
+        albumSort: at(11),
+        albumArtistSort: at(12),
       ));
     }
     final lists = <String, List<List<String>>>{};
@@ -682,4 +780,12 @@ typedef _FixtureTrack = ({
   String artist,
   String album,
   int track,
+  String albumArtist,
+  int disc,
+  int year,
+  String genre,
+  bool compilation,
+  String artistSort,
+  String albumSort,
+  String albumArtistSort,
 });

@@ -235,6 +235,34 @@ void main() {
     },
   );
 
+  // The firmware keeps what its parser read when the parse fails part-way
+  // (`index_file` takes the tags whatever the parse returned): the
+  // vectors in test/fixtures/tag_keys show it lists these by their tags.
+  test('a file whose parse fails part-way keeps the tags read, with its '
+      'reason', () async {
+    List<int> vector(String name) =>
+        File('test/fixtures/tag_keys/$name').readAsBytesSync();
+    put('truncated.flac', vector('truncated.flac'));
+    put('no_frames.mp3', vector('no_frames.mp3'));
+    final (_, _, scanner) = setUpScanner();
+    await scanner.scan().toList();
+    final rows = {
+      for (final r in await db.select(db.tracks).get()) r.relPath: r,
+    };
+    final flac = rows['truncated.flac']!;
+    expect(flac.title, 'Cut Short');
+    expect(flac.artist, 'Kept');
+    expect(flac.albumArtist, 'Kept Too');
+    expect(flac.trackNo, 4);
+    expect(flac.year, 1990);
+    expect(flac.genre, 'Blues');
+    expect(flac.reasonCode, UnreadableReason.damaged.code);
+    final mp3 = rows['no_frames.mp3']!;
+    expect(mp3.title, 'Tag Only');
+    expect(mp3.albumArtist, 'Host');
+    expect(mp3.reasonCode, UnreadableReason.wrongFormat.code);
+  });
+
   test('title sort tags decide the order (owner decision 11)', () async {
     put('a.flac', flac(['TITLE=Aardvark', 'TITLESORT=Zzz']));
     put('b.mp3', [
@@ -816,23 +844,26 @@ void main() {
       expect(r['B/b.flac']!.folderArtUri, endsWith('/B/cover.jpg'));
     });
 
-    test('a row from scan version 2 is read again for its picture', () async {
-      put('a.flac', art('front_jpeg.flac'));
-      final (_, _, old) = setUpScanner(version: 2);
-      await old.scan().toList();
-      await db
-          .update(db.tracks)
-          .write(
-            const TracksCompanion(
-              artKind: Value(null),
-              artOffset: Value(null),
-              artLength: Value(null),
-            ),
-          );
-      final (_, storage, scanner) = setUpScanner();
-      await scanner.scan().toList();
-      expect(storage.opened, ['a.flac']);
-      expect((await rows())['a.flac']!.artKind, 1);
-    });
+    test(
+      'a row from scan version 3 (before art) is read again for its picture',
+      () async {
+        put('a.flac', art('front_jpeg.flac'));
+        final (_, _, old) = setUpScanner(version: 3);
+        await old.scan().toList();
+        await db
+            .update(db.tracks)
+            .write(
+              const TracksCompanion(
+                artKind: Value(null),
+                artOffset: Value(null),
+                artLength: Value(null),
+              ),
+            );
+        final (_, storage, scanner) = setUpScanner();
+        await scanner.scan().toList();
+        expect(storage.opened, ['a.flac']);
+        expect((await rows())['a.flac']!.artKind, 1);
+      },
+    );
   });
 }

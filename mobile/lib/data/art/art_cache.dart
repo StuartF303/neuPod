@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 /// The art cache (specification, "How it is built": data layer; decision
-/// 0009): turns an [ArtRef]'s pictures into small JPEG files in the app's
+/// 0010): turns an [ArtRef]'s pictures into small JPEG files in the app's
 /// private support directory, which the screens draw and the lock screen
 /// shows.
 ///

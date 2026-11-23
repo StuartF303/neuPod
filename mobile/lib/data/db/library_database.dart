@@ -61,6 +61,39 @@ class Tracks extends Table {
   /// The album tag as the firmware stores it (`char album[64]`), as
   /// [artistKeyText].
   BlobColumn get albumKeyText => blob().nullable()();
+
+  /// The album artist tag as displayed (ALBUMARTIST, TPE2), or ''. Rows
+  /// written before schema version 3 have '' and are read again by scan
+  /// version 3, as are the columns below.
+  TextColumn get albumArtist => text().withDefault(const Constant(''))();
+
+  /// The album artist tag as the firmware stores it (`char
+  /// album_artist[64]`), as [artistKeyText]: what the library folds artists
+  /// on and tests for "Various Artists". Null before schema version 3.
+  BlobColumn get albumArtistKeyText => blob().nullable()();
+
+  /// The artist, album and album artist sort tags as the firmware stores
+  /// them (`char sort_artist[32]` and so on, meta.h): the artist and album
+  /// entities are keyed on them when present (`index_file`, `ent_fill` in
+  /// lib_build.c). Null before schema version 3.
+  BlobColumn get artistSortKeyText => blob().nullable()();
+  BlobColumn get albumSortKeyText => blob().nullable()();
+  BlobColumn get albumArtistSortKeyText => blob().nullable()();
+
+  /// The genre as displayed, ID3v1 references resolved (`meta_genre_text`),
+  /// or ''.
+  TextColumn get genre => text().withDefault(const Constant(''))();
+
+  /// The genre as the firmware stores it (`char genre[32]`): what the
+  /// Genres list folds on. Null before schema version 3.
+  BlobColumn get genreKeyText => blob().nullable()();
+
+  /// The firmware's disc number (0 when none) and year (0 when none).
+  IntColumn get discNo => integer().withDefault(const Constant(0))();
+  IntColumn get year => integer().withDefault(const Constant(0))();
+
+  /// The compilation flag (COMPILATION, TCMP) as the firmware reads it.
+  BoolColumn get compilation => boolean().withDefault(const Constant(false))();
   IntColumn get trackNo => integer()();
   IntColumn get durationMs => integer()();
   IntColumn get sampleRate => integer()();
@@ -70,7 +103,7 @@ class Tracks extends Table {
   /// where its bytes are in the file and what they are (`ArtKind.code`). The
   /// bytes stay in the file; the art cache reads them. [artKind] is 0 when the
   /// file has no picture, and all three are null in a row written before
-  /// schema version 3, until a rescan reads the file again (scan version 3).
+  /// schema version 4, until a rescan reads the file again (scan version 5).
   IntColumn get artOffset => integer().nullable()();
   IntColumn get artLength => integer().nullable()();
   IntColumn get artKind => integer().nullable()();
@@ -121,7 +154,7 @@ class LibraryDatabase extends _$LibraryDatabase {
   /// test helpers in test/drift/library/generated/), then add the step to
   /// [_upgrade] and run `dart run build_runner build`.
   @override
-  int get schemaVersion => _testVersion ?? 3;
+  int get schemaVersion => _testVersion ?? 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -164,10 +197,15 @@ class LibraryDatabase extends _$LibraryDatabase {
   ///   text of the artist and album tags. Existing rows keep every column
   ///   and get null in both; the scanner's version went to 2 with them, so
   ///   the next scan reads every file again and fills them.
-  /// - 2 to 3: the art columns ([Tracks.artOffset], [Tracks.artLength],
+  /// - 2 to 3: the library tags of `tracks` (album artist, the sort tags,
+  ///   genre, disc, year, compilation flag; phase 3). Existing rows keep
+  ///   every column and get the defaults ('' / 0 / false, null for the
+  ///   firmware texts), which read as untagged; the scanner's version went to
+  ///   3 with them, so the next scan reads every file again and fills them.
+  /// - 3 to 4: the art columns ([Tracks.artOffset], [Tracks.artLength],
   ///   [Tracks.artKind], [Tracks.folderArtUri], [Tracks.folderArtSize],
   ///   [Tracks.folderArtMtime]). Existing rows keep every column and get null
-  ///   in all six; the scanner's version went to 3 with them, so the next scan
+  ///   in all six; the scanner's version went to 5 with them, so the next scan
   ///   reads every file again for its embedded picture and sets the cover file
   ///   of every folder it lists.
   OnUpgrade get _upgrade => stepByStep(
@@ -176,12 +214,26 @@ class LibraryDatabase extends _$LibraryDatabase {
       await m.addColumn(schema.tracks, schema.tracks.albumKeyText);
     },
     from2To3: (m, schema) async {
-      await m.addColumn(schema.tracks, schema.tracks.artOffset);
-      await m.addColumn(schema.tracks, schema.tracks.artLength);
-      await m.addColumn(schema.tracks, schema.tracks.artKind);
-      await m.addColumn(schema.tracks, schema.tracks.folderArtUri);
-      await m.addColumn(schema.tracks, schema.tracks.folderArtSize);
-      await m.addColumn(schema.tracks, schema.tracks.folderArtMtime);
+      final t = schema.tracks;
+      await m.addColumn(t, t.albumArtist);
+      await m.addColumn(t, t.albumArtistKeyText);
+      await m.addColumn(t, t.artistSortKeyText);
+      await m.addColumn(t, t.albumSortKeyText);
+      await m.addColumn(t, t.albumArtistSortKeyText);
+      await m.addColumn(t, t.genre);
+      await m.addColumn(t, t.genreKeyText);
+      await m.addColumn(t, t.discNo);
+      await m.addColumn(t, t.year);
+      await m.addColumn(t, t.compilation);
+    },
+    from3To4: (m, schema) async {
+      final t = schema.tracks;
+      await m.addColumn(t, t.artOffset);
+      await m.addColumn(t, t.artLength);
+      await m.addColumn(t, t.artKind);
+      await m.addColumn(t, t.folderArtUri);
+      await m.addColumn(t, t.folderArtSize);
+      await m.addColumn(t, t.folderArtMtime);
     },
   );
 }

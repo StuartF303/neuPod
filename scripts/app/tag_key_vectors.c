@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: MPL-2.0
 // For each file named on the command line, runs the firmware's own tag parser (app/audio/meta.c: flac_parse or
 // mp3_parse, with the library scanner's 4096-byte comment scratch and the library tags enabled, as lib_build.c sets
-// them up) and the song key that index_file() in app/library/lib_build.c builds from it: lib_collate_key() of the
-// title, or of the file name when untagged, with the title sort tag. Also the artist and album tags as the parser stored them
-// and the entity keys index_file() / stage_entity() fold artists and albums on: lib_collate_key() of the artist (or
-// "Unknown Artist") and of the album tag, with no sort tag (the app does not store sort tags for them yet). An untagged
-// album's key is its folder's name, which a lone file does not have: that column is then empty. Prints one line per file:
-//   <file name>\t<title hex>\t<sort_title hex>\t<key hex>\t<artist hex>\t<album hex>\t<artist key hex>\t<album key hex>
+// them up) and what index_file() in app/library/lib_build.c makes of the tags: the song key (lib_collate_key() of the
+// title, or of the file name when untagged, with the title sort tag), the album artist it folds artists on (the album
+// artist tag, else the artist, else "Unknown Artist"), the compilation test, and the entity keys stage_entity() folds
+// artists and albums on (lib_collate_key() of the album artist's sort text, else the album artist; of the album sort
+// tag, else the album tag). An untagged album's key is its folder's name, which a lone file does not have: that column
+// is then empty. Prints one line per file, the texts as hex of the bytes the parser stored:
+//   file, title, sort_title, song key, artist, album, album_artist, sort_artist, sort_album, sort_album_artist, genre,
+//   track, disc, year, the COMPILATION / TCMP flag, aa (index_file's album artist), sort_aa, comp (index_file's),
+//   artist entity key, album entity key, duration (s, as TR_DUR)
 // Built and run by scripts/app/gen_tag_key_vectors.py; the app's tests compare its Dart port with these lines.
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -31,6 +35,16 @@ static void cut(char *dst, size_t cap, const char *s) { // lib_build.c
     }
     memcpy(dst, s, n);
     dst[n] = '\0';
+}
+
+static bool ieq_str(const char *a, const char *b) { // lib_build.c
+    for (; *a != '\0' && *b != '\0'; a++, b++) {
+        char x = *a, y = *b;
+        if (x >= 'A' && x <= 'Z') x = (char)(x + 32);
+        if (y >= 'A' && y <= 'Z') y = (char)(y + 32);
+        if (x != y) return false;
+    }
+    return *a == *b;
 }
 
 static void hex(const char *s) {
@@ -60,38 +74,55 @@ int main(int argc, char **argv) {
         meta_set_tags_ext(&ext);
         audio_tags_t tags;
         memset(&tags, 0, sizeof tags);
+        uint32_t rate = 0;
+        uint64_t frames = 0;
         size_t n = strlen(name);
         if (n > 5 && strcmp(name + n - 5, ".flac") == 0) {
             static flac_info_t fi;
             flac_parse(file_rd, f, size, &fi);
             tags = fi.tags;
+            rate = fi.rate;
+            frames = fi.total_frames;
         } else {
             static mp3_info_t mi;
             mp3_parse(file_rd, f, size, &mi);
             tags = mi.tags;
+            rate = mi.rate;
+            frames = mi.total_frames;
         }
         meta_set_tags_ext(NULL);
         meta_set_scratch(NULL, 0);
         fclose(f);
-        char title[POOL_STR];
+        char title[POOL_STR], artist[POOL_STR], aa[POOL_STR];
         cut(title, sizeof title, tags.title[0] ? tags.title : name);
         uint8_t key[LIB_KEY_MAX];
         size_t kn = lib_collate_key(title, ext.sort_title, key, sizeof key);
+        // index_file() (lib_build.c)
+        cut(artist, sizeof artist, tags.artist[0] ? tags.artist : "Unknown Artist");
+        cut(aa, sizeof aa, ext.album_artist[0] ? ext.album_artist : artist);
+        const char *sort_aa = ext.sort_album_artist[0] ? ext.sort_album_artist : (!ext.album_artist[0] ? ext.sort_artist : "");
+        bool comp = ext.compilation || ieq_str(aa, "Various Artists");
         printf("%s\t", name);
         hex(tags.title);
         printf("\t");
         hex(ext.sort_title);
         printf("\t");
         for (size_t k = 0; k < kn; k++) printf("%02x", key[k]);
+        const char *texts[] = {tags.artist, tags.album, ext.album_artist, ext.sort_artist, ext.sort_album, ext.sort_album_artist, ext.genre};
+        for (size_t k = 0; k < sizeof texts / sizeof texts[0]; k++) {
+            printf("\t");
+            hex(texts[k]);
+        }
+        printf("\t%u\t%u\t%u\t%u\t", (unsigned)tags.track, (unsigned)ext.disc, (unsigned)ext.year, ext.compilation ? 1u : 0u);
+        hex(aa);
         printf("\t");
-        hex(tags.artist);
+        hex(sort_aa);
+        printf("\t%u\t", comp ? 1u : 0u);
+        key_hex(sort_aa[0] ? sort_aa : aa); // ent_fill(): the sort text when there is one, else the name
         printf("\t");
-        hex(tags.album);
-        printf("\t");
-        key_hex(tags.artist[0] ? tags.artist : "Unknown Artist");
-        printf("\t");
-        if (tags.album[0]) key_hex(tags.album);
-        printf("\n");
+        if (ext.sort_album[0]) key_hex(ext.sort_album);
+        else if (tags.album[0]) key_hex(tags.album);
+        printf("\t%u\n", (unsigned)(rate != 0 ? frames / rate : 0));
     }
     return 0;
 }

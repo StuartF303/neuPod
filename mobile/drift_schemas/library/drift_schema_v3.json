@@ -246,6 +246,110 @@
             "dsl_features": []
           },
           {
+            "name": "album_artist",
+            "getter_name": "albumArtist",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'\\'')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "album_artist_key_text",
+            "getter_name": "albumArtistKeyText",
+            "moor_type": "blob",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "artist_sort_key_text",
+            "getter_name": "artistSortKeyText",
+            "moor_type": "blob",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "album_sort_key_text",
+            "getter_name": "albumSortKeyText",
+            "moor_type": "blob",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "album_artist_sort_key_text",
+            "getter_name": "albumArtistSortKeyText",
+            "moor_type": "blob",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "genre",
+            "getter_name": "genre",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'\\'')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "genre_key_text",
+            "getter_name": "genreKeyText",
+            "moor_type": "blob",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "disc_no",
+            "getter_name": "discNo",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "year",
+            "getter_name": "year",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "compilation",
+            "getter_name": "compilation",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"compilation\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"compilation\" IN (0, 1))"
+            },
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
             "name": "track_no",
             "getter_name": "trackNo",
             "moor_type": "int",
@@ -280,66 +384,6 @@
             "getter_name": "bitDepth",
             "moor_type": "int",
             "nullable": false,
-            "customConstraints": null,
-            "default_dart": null,
-            "default_client_dart": null,
-            "dsl_features": []
-          },
-          {
-            "name": "art_offset",
-            "getter_name": "artOffset",
-            "moor_type": "int",
-            "nullable": true,
-            "customConstraints": null,
-            "default_dart": null,
-            "default_client_dart": null,
-            "dsl_features": []
-          },
-          {
-            "name": "art_length",
-            "getter_name": "artLength",
-            "moor_type": "int",
-            "nullable": true,
-            "customConstraints": null,
-            "default_dart": null,
-            "default_client_dart": null,
-            "dsl_features": []
-          },
-          {
-            "name": "art_kind",
-            "getter_name": "artKind",
-            "moor_type": "int",
-            "nullable": true,
-            "customConstraints": null,
-            "default_dart": null,
-            "default_client_dart": null,
-            "dsl_features": []
-          },
-          {
-            "name": "folder_art_uri",
-            "getter_name": "folderArtUri",
-            "moor_type": "string",
-            "nullable": true,
-            "customConstraints": null,
-            "default_dart": null,
-            "default_client_dart": null,
-            "dsl_features": []
-          },
-          {
-            "name": "folder_art_size",
-            "getter_name": "folderArtSize",
-            "moor_type": "int",
-            "nullable": true,
-            "customConstraints": null,
-            "default_dart": null,
-            "default_client_dart": null,
-            "dsl_features": []
-          },
-          {
-            "name": "folder_art_mtime",
-            "getter_name": "folderArtMtime",
-            "moor_type": "int",
-            "nullable": true,
             "customConstraints": null,
             "default_dart": null,
             "default_client_dart": null,
@@ -416,7 +460,7 @@
       "sql": [
         {
           "dialect": "sqlite",
-          "sql": "CREATE TABLE IF NOT EXISTS \"tracks\" (\"id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, \"source_id\" INTEGER NOT NULL REFERENCES sources (id) ON DELETE CASCADE, \"rel_path\" TEXT NOT NULL, \"uri\" TEXT NOT NULL, \"size\" INTEGER NOT NULL, \"mtime\" INTEGER NOT NULL, \"codec\" TEXT NOT NULL, \"title\" TEXT NOT NULL, \"title_sort\" TEXT NOT NULL, \"title_sort_key\" BLOB NOT NULL, \"artist\" TEXT NOT NULL, \"album\" TEXT NOT NULL, \"artist_key_text\" BLOB NULL, \"album_key_text\" BLOB NULL, \"track_no\" INTEGER NOT NULL, \"duration_ms\" INTEGER NOT NULL, \"sample_rate\" INTEGER NOT NULL, \"bit_depth\" INTEGER NOT NULL, \"art_offset\" INTEGER NULL, \"art_length\" INTEGER NULL, \"art_kind\" INTEGER NULL, \"folder_art_uri\" TEXT NULL, \"folder_art_size\" INTEGER NULL, \"folder_art_mtime\" INTEGER NULL, \"reason_code\" INTEGER NULL, \"scan_version\" INTEGER NOT NULL, UNIQUE (\"source_id\", \"rel_path\"));"
+          "sql": "CREATE TABLE IF NOT EXISTS \"tracks\" (\"id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, \"source_id\" INTEGER NOT NULL REFERENCES sources (id) ON DELETE CASCADE, \"rel_path\" TEXT NOT NULL, \"uri\" TEXT NOT NULL, \"size\" INTEGER NOT NULL, \"mtime\" INTEGER NOT NULL, \"codec\" TEXT NOT NULL, \"title\" TEXT NOT NULL, \"title_sort\" TEXT NOT NULL, \"title_sort_key\" BLOB NOT NULL, \"artist\" TEXT NOT NULL, \"album\" TEXT NOT NULL, \"artist_key_text\" BLOB NULL, \"album_key_text\" BLOB NULL, \"album_artist\" TEXT NOT NULL DEFAULT '', \"album_artist_key_text\" BLOB NULL, \"artist_sort_key_text\" BLOB NULL, \"album_sort_key_text\" BLOB NULL, \"album_artist_sort_key_text\" BLOB NULL, \"genre\" TEXT NOT NULL DEFAULT '', \"genre_key_text\" BLOB NULL, \"disc_no\" INTEGER NOT NULL DEFAULT 0, \"year\" INTEGER NOT NULL DEFAULT 0, \"compilation\" INTEGER NOT NULL DEFAULT 0 CHECK (\"compilation\" IN (0, 1)), \"track_no\" INTEGER NOT NULL, \"duration_ms\" INTEGER NOT NULL, \"sample_rate\" INTEGER NOT NULL, \"bit_depth\" INTEGER NOT NULL, \"reason_code\" INTEGER NULL, \"scan_version\" INTEGER NOT NULL, UNIQUE (\"source_id\", \"rel_path\"));"
         }
       ]
     },

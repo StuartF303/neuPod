@@ -125,6 +125,13 @@ jobs:
           for f in test/data/library_view/fixtures/*.expected; do
             diff -u "$f" "$out/$(basename "$f")"
           done
+      # The tag reader (mobile/lib/data/scan/tag_reader.dart) is checked against what the firmware's own parser
+      # (app/audio/meta.c) and index_file() make of test/fixtures/tag_keys. Regenerate and fail if anything changed.
+      - name: Tag vectors match the firmware
+        run: |
+          python3 ../scripts/app/gen_tag_key_vectors.py
+          git status --porcelain -- test/fixtures/tag_keys
+          test -z "$(git status --porcelain -- test/fixtures/tag_keys)"
       # The in-repo plugin's own Dart side (its Pigeon messages against a fake host).
       - name: neupod_device plugin
         working-directory: mobile/packages/neupod_device

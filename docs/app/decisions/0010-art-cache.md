@@ -1,4 +1,4 @@
-# 0009: Album art and the art cache
+# 0010: Album art and the art cache
 
 Status: Accepted (2026-11-23) · Owner: Library engineer
 
@@ -79,7 +79,7 @@ pure-Dart decoder's speed is acceptable for a one-off per album.
 
 ## Schema
 
-Schema version 3 adds six nullable columns to `tracks` (no new table: art is rebuilt by a rescan, so the guard test
+Schema version 4 (step `from3To4`, after #147's library tags in 3) adds six nullable columns to `tracks` (no new table: art is rebuilt by a rescan, so the guard test
 stays at `sources` and `tracks`): `art_offset`, `art_length`, `art_kind`, `folder_art_uri`, `folder_art_size`,
-`folder_art_mtime`. Scan version 3 reads every file again for its picture; every scan notes each folder's cover file
+`folder_art_mtime`. Scan version 5 (4 is #149's M4A and WAV tags) reads every file again for its picture; every scan notes each folder's cover file
 on its tracks without reading them.

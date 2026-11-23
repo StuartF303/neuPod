@@ -111,7 +111,7 @@ const _allowed = <_Allowed>[
   _Allowed(
     'lib/data/art/art_cache.dart',
     'await Directory(d).create(recursive: true);',
-    "the art cache's own directory under the app's support directory (decision 0009), never a music folder",
+    "the art cache's own directory under the app's support directory (decision 0010), never a music folder",
   ),
   _Allowed(
     'lib/data/art/art_cache.dart',

@@ -1,0 +1,51 @@
+# artists (name, albums)
+Alpha	2
+Beta	2
+# albums list (title, artist, songs, year)
+Four	Beta	1	0
+Mix		2	0
+One	Alpha	2	0
+Three	Alpha	2	0
+Two	Beta	2	0
+# album table (title, artist)
+One	Alpha
+Three	Alpha
+Four	Beta
+Two	Beta
+Mix	
+# album songs (album, title, disc, track)
+One	R1	0	1
+One	R2	0	2
+Three	N1	0	1
+Three	A1	0	2
+Four	A2	0	1
+Two	R3	0	1
+Two	J1	0	2
+Mix	C1	0	1
+Mix	C2	0	2
+# compilations (title)
+Mix
+# genres (name, songs)
+17	1
+Ångström	2
+Jazz	1
+Rock	4
+# genre songs (genre, title)
+17	C2
+Ångström	A1
+Ångström	A2
+Jazz	J1
+Rock	R1
+Rock	R2
+Rock	R3
+Rock	C1
+# songs (title, artist, album)
+A1	Alpha	Three
+A2	Beta	Four
+C1	Gamma	Mix
+C2	Delta	Mix
+J1	Beta	Two
+N1	Alpha	Three
+R1	Alpha	One
+R2	Alpha	One
+R3	Beta	Two

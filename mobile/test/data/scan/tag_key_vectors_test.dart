@@ -15,14 +15,41 @@
 // artists and albums that differ only in an emoji ('?' in the firmware, so
 // one artist and one album there), a lone surrogate in an album, malformed
 // UTF-8 and an album past 63 bytes, UTF-16BE and Latin-1.
+//
+// The library tags (phase 3), against the same parser: the album artist
+// (ALBUMARTIST, "ALBUM ARTIST", TPE2, TP2; the later one standing), the sort
+// tags (ARTISTSORT, ALBUMSORT, ALBUMARTISTSORT, TSOP, TSOA, TSO2, TS2), the
+// genre with its ID3v1 references ("(17)", a bare "18" in ID3 but not in
+// Vorbis, "(RX)", "((", "(17)(18)", "(17)Custom", a number past the table,
+// a genre past 31 bytes), the track and disc ("3/18", "2/3", a leading
+// space, 300), the year (DATE "2001-05-04", TDRC with a time, TYER after
+// TDRC, a DATE that is not a year after a YEAR), the compilation flag ("1",
+// "yes", "0"), a comment block over the scratch (none of them), ID3v2.2,
+// 2.3 and 2.4; then what `index_file` makes of them (the album artist, the
+// compilation test, the artist and album keys), through the library view.
 
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:drift/drift.dart' show Value;
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neupod/data/db/library_database.dart';
+import 'package:neupod/data/library_view/drift_library_view.dart';
+import 'package:neupod/data/scan/local_library_scanner.dart' show scanVersion;
 import 'package:neupod/data/scan/tag_reader.dart';
 import 'package:neupod/domain/library/collation.dart';
+
+/// The tags as the scanner stores them: a parse that fails part-way gives
+/// what it read (`TagReadException.partial`), as the firmware keeps it.
+AudioTags _read(ByteSource src, String ext) {
+  try {
+    return readTags(src, ext);
+  } on TagReadException catch (e) {
+    return e.partial ?? (throw e);
+  }
+}
 
 String _hex(List<int> b) =>
     b.map((x) => x.toRadixString(16).padLeft(2, '0')).join();
@@ -34,58 +61,124 @@ void main() {
       .where((l) => l.isNotEmpty && !l.startsWith('#'))
       .toList();
 
-  test('the vectors are there', () => expect(lines.length, 13));
+  test('the vectors are there', () => expect(lines.length, 28));
 
   for (final line in lines) {
-    final [
-      name,
-      titleHex,
-      sortHex,
-      keyHex,
-      artistHex,
-      albumHex,
-      artistKeyHex,
-      albumKeyHex,
-    ] = line.split(
-      '\t',
-    );
+    final f = line.split('\t');
+    final name = f[0];
     test(name, () {
       final bytes = File('$dir/$name').readAsBytesSync();
       final ext = name.substring(name.lastIndexOf('.') + 1);
-      final tags = readTags(BytesSource(Uint8List.fromList(bytes)), ext);
-      expect(_hex(tags.titleKeyText), titleHex, reason: 'title as stored');
-      expect(_hex(tags.titleSortKeyText), sortHex, reason: 'sort as stored');
+      final tags = _read(BytesSource(Uint8List.fromList(bytes)), ext);
+      expect(_hex(tags.titleKeyText), f[1], reason: 'title as stored');
+      expect(_hex(tags.titleSortKeyText), f[2], reason: 'sort as stored');
       final key = songSortKey(
         titleText: tags.titleKeyText,
         titleSortText: tags.titleSortKeyText,
         fileName: name,
       );
-      expect(_hex(key), keyHex, reason: 'song key');
-      expect(_hex(tags.artistKeyText), artistHex, reason: 'artist as stored');
-      expect(_hex(tags.albumKeyText), albumHex, reason: 'album as stored');
-      // The keys `index_file` / `stage_entity` fold on, from that text, as
-      // the library view builds them.
-      final artist = tags.artistKeyText.isNotEmpty
-          ? tags.artistKeyText
-          : utf8.encode('Unknown Artist');
+      expect(_hex(key), f[3], reason: 'song key');
+      expect(_hex(tags.artistKeyText), f[4], reason: 'artist as stored');
+      expect(_hex(tags.albumKeyText), f[5], reason: 'album as stored');
+      expect(_hex(tags.albumArtistKeyText), f[6], reason: 'album artist');
+      expect(_hex(tags.artistSortKeyText), f[7], reason: 'sort artist');
+      expect(_hex(tags.albumSortKeyText), f[8], reason: 'sort album');
       expect(
-        _hex(collateKeyBytes(firmwareCut(artist, firmwarePoolCap))),
-        artistKeyHex,
-        reason: 'artist key',
+        _hex(tags.albumArtistSortKeyText),
+        f[9],
+        reason: 'sort album artist',
       );
-      expect(
-        tags.albumKeyText.isEmpty
-            ? ''
-            : _hex(
-                collateKeyBytes(
-                  firmwareCut(tags.albumKeyText, firmwarePoolCap),
-                ),
-              ),
-        albumKeyHex,
-        reason: 'album key',
-      );
+      expect(_hex(tags.genreKeyText), f[10], reason: 'genre as stored');
+      expect('${tags.trackNo}', f[11], reason: 'track');
+      expect('${tags.discNo}', f[12], reason: 'disc');
+      expect('${tags.year}', f[13], reason: 'year');
+      expect(tags.compilation ? '1' : '0', f[14], reason: 'flag');
+      expect('${tags.durationMs ~/ 1000}', f[20], reason: 'duration (s)');
     });
   }
+
+  // `index_file`'s album artist, compilation test and entity keys, through
+  // the library view: each file is a track of its own in a folder named
+  // after it, stored as the scanner stores its tags; the view's ids hold the
+  // keys' hex.
+  test('index_file: compilation and the artist and album keys, through the '
+      'library view', () async {
+    final db = LibraryDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final view = DriftLibraryView(db);
+    addTearDown(view.dispose);
+    final src = await db
+        .into(db.sources)
+        .insert(
+          SourcesCompanion.insert(
+            kind: 'local_folder',
+            uriOrBookmark: 'x',
+            displayName: 'Music',
+          ),
+        );
+    Value<Uint8List> blob(List<int> b) => Value(Uint8List.fromList(b));
+    final byPath = <String, List<String>>{};
+    for (final line in lines) {
+      final f = line.split('\t');
+      final name = f[0];
+      final tags = _read(
+        BytesSource(Uint8List.fromList(File('$dir/$name').readAsBytesSync())),
+        name.substring(name.lastIndexOf('.') + 1),
+      );
+      final path = '$name/$name';
+      byPath[path] = f;
+      await db
+          .into(db.tracks)
+          .insert(
+            TracksCompanion.insert(
+              sourceId: src,
+              relPath: path,
+              uri: 'file:///$path',
+              size: 1,
+              mtime: 1,
+              codec: tags.codec,
+              title: tags.title,
+              titleSort: tags.titleSort,
+              titleSortKey: Uint8List(0),
+              artist: tags.artist,
+              album: tags.album,
+              artistKeyText: blob(tags.artistKeyText),
+              albumKeyText: blob(tags.albumKeyText),
+              albumArtist: Value(tags.albumArtist),
+              albumArtistKeyText: blob(tags.albumArtistKeyText),
+              artistSortKeyText: blob(tags.artistSortKeyText),
+              albumSortKeyText: blob(tags.albumSortKeyText),
+              albumArtistSortKeyText: blob(tags.albumArtistSortKeyText),
+              genre: Value(tags.genre),
+              genreKeyText: blob(tags.genreKeyText),
+              discNo: Value(tags.discNo),
+              year: Value(tags.year),
+              compilation: Value(tags.compilation),
+              trackNo: tags.trackNo,
+              durationMs: tags.durationMs,
+              sampleRate: tags.sampleRate,
+              bitDepth: tags.bitDepth,
+              scanVersion: scanVersion,
+            ),
+          );
+    }
+    final artistIds = {for (final a in await view.artists()) a.id};
+    final albums = await view.albumsByArtist();
+    final songs = await view.songs();
+    for (final MapEntry(key: path, value: f) in byPath.entries) {
+      final comp = f[17] == '1';
+      final song = songs.firstWhere((s) => s.uri == 'file:///$path');
+      final album = albums.firstWhere((a) => a.id == song.albumId);
+      expect(album.compilation, comp, reason: '$path: comp');
+      if (!comp) {
+        expect(artistIds, contains('artist:${f[18]}'), reason: '$path: aa');
+        expect(album.artistId, 'artist:${f[18]}', reason: '$path: group');
+      }
+      if (f[19].isNotEmpty) {
+        expect(album.id, endsWith('|${f[19]}'), reason: '$path: album key');
+      }
+    }
+  });
 
   test('the displayed title stays whole while the key is the device\'s', () {
     final bytes = File('$dir/Big Comments.flac').readAsBytesSync();
