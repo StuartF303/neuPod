@@ -7,7 +7,9 @@
 //   tags <file>...   <name>\t<offset>\t<length>\t<kind>\t<type>\t<decode>\t<sources>
 //                    kind: none jpeg png other; decode: art_decode() of the chosen picture ("-" when there is none);
 //                    sources: art_sources(embedded, folder_has = true), e.g. "embedded,folder" or "folder"
-//   image <file>...  <name>\t<decode>   (art_decode() of the whole file, as a cover file in the folder is decoded)
+//   image <file>...  <name>\t<decode>\t<w>x<h>\t<pixels>   (art_decode() of the whole file, as a cover file in the folder
+//                    is decoded; the thumbnail's size and its colour at the centres of its four quarters, top left, top right,
+//                    bottom left, bottom right, as rrggbb; "-" for both when it does not decode)
 //   rank <name>...   <name>\t<art_folder_rank()>
 //   pick <a|b|c>...  <listing>\t<rank>\t<name picked>   (art_folder_pick() over the names in that order)
 #include <stdio.h>
@@ -52,9 +54,16 @@ static const char *err_name(art_err_t e) {
 
 static uint16_t px[ART_PIXELS];
 
+static art_info_t last;
+
 static art_err_t decode(FILE *f, uint64_t off, uint32_t len) {
-    art_info_t info;
-    return art_decode(file_rd, f, off, len, px, &info, NULL, NULL);
+    return art_decode(file_rd, f, off, len, px, &last, NULL, NULL);
+}
+
+static void colour(uint32_t x, uint32_t y) {
+    uint16_t p = px[y * last.w + x];
+    unsigned r = (p >> 11) & 31u, g = (p >> 5) & 63u, b = p & 31u;
+    printf("%02x%02x%02x", (r << 3) | (r >> 2), (g << 2) | (g >> 4), (b << 3) | (b >> 2));
 }
 
 static int tags(const char *path) {
@@ -90,7 +99,22 @@ static int image(const char *path) {
     if (f == NULL) return 1;
     fseek(f, 0, SEEK_END);
     uint32_t size = (uint32_t)ftell(f);
-    printf("%s\t%s\n", base(path), err_name(decode(f, 0, size)));
+    art_err_t e = decode(f, 0, size);
+    printf("%s\t%s\t", base(path), err_name(e));
+    if (e != ART_OK) {
+        printf("-\t-\n");
+    } else {
+        uint32_t w = last.w, h = last.h;
+        printf("%ux%u\t", w, h);
+        colour(w / 4, h / 4);
+        printf(",");
+        colour(3 * w / 4, h / 4);
+        printf(",");
+        colour(w / 4, 3 * h / 4);
+        printf(",");
+        colour(3 * w / 4, 3 * h / 4);
+        printf("\n");
+    }
     fclose(f);
     return 0;
 }

@@ -23,6 +23,7 @@ import 'package:neupod/data/art/art_cache.dart';
 import 'package:neupod/data/art/firmware_jpeg.dart';
 import 'package:neupod/data/scan/tag_reader.dart';
 import 'package:neupod/domain/library/art_rules.dart';
+import 'package:neupod/domain/library_view/library_view.dart';
 
 const _dir = 'test/fixtures/art';
 
@@ -50,7 +51,7 @@ void main() {
 
   test('the vectors are there', () {
     expect(of('tags'), hasLength(20));
-    expect(of('image'), hasLength(6));
+    expect(of('image'), hasLength(28));
     expect(of('rank'), hasLength(21));
     expect(of('pick'), hasLength(8));
   });
@@ -90,9 +91,37 @@ void main() {
   });
 
   group('cover file', () {
-    for (final [name, decode] in of('image')) {
+    for (final [name, decode, size, colours] in of('image')) {
       test(name, () {
-        expect(_decode(File('$_dir/$name').readAsBytesSync()), decode);
+        final bytes = File('$_dir/$name').readAsBytesSync();
+        expect(_decode(bytes), decode);
+        if (decode != 'ok') return;
+        // The same picture: the same way up and the same colours (the
+        // firmware ignores EXIF orientation and the Adobe transform) and the
+        // same shape, at the centres of its quarters.
+        final [tw, th] = size.split('x').map(int.parse).toList();
+        final p = shrinkToFit(decodeArt(bytes)!, ArtSize.full.pixels);
+        // One thumbnail pixel of rounding either way.
+        expect(
+          (p.height - p.width * th / tw).abs(),
+          lessThanOrEqualTo(p.width / tw + 1),
+          reason: 'shape',
+        );
+        final want = colours.split(',');
+        final at = [(1, 1), (3, 1), (1, 3), (3, 3)];
+        for (final (i, (fx, fy)) in at.indexed) {
+          final px = p.getPixel(fx * p.width ~/ 4, fy * p.height ~/ 4);
+          final c = int.parse(want[i], radix: 16);
+          final rgb = [px.r.toInt(), px.g.toInt(), px.b.toInt()];
+          final exp = [c >> 16, (c >> 8) & 0xFF, c & 0xFF];
+          for (var k = 0; k < 3; k++) {
+            expect(
+              (rgb[k] - exp[k]).abs(),
+              lessThan(48),
+              reason: 'quarter $i channel $k: $rgb vs $exp',
+            );
+          }
+        }
       });
     }
   });

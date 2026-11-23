@@ -87,16 +87,43 @@ void main() {
     },
   );
 
-  test('the next songs are made as the queue plays', () async {
-    final items = await container.read(queueMapperProvider)([
-      song('1', cover('a')),
-      song('2', cover('b')),
-    ]);
-    final second = File.fromUri(Uri.parse(items[1].artUri!));
-    expect(second.existsSync(), isFalse);
-    final state = PlayerState.empty.copyWith(queue: items, index: () => 0);
-    warmLockScreenArt(cache, null, state);
-    await Future<void>.delayed(const Duration(milliseconds: 500));
-    expect(second.existsSync(), isTrue);
-  });
+  test(
+    'the next songs are made as the queue plays, and after a restart',
+    () async {
+      final songs = [song('1', cover('a')), song('2', cover('b'))];
+      final items = await container.read(queueMapperProvider)(songs);
+      final second = File.fromUri(Uri.parse(items[1].artUri!));
+      expect(second.existsSync(), isFalse);
+      final library = _Songs(songs);
+      final state = PlayerState.empty.copyWith(queue: items, index: () => 0);
+      await warmLockScreenArt(cache, () async => library, null, state);
+      expect(second.existsSync(), isTrue);
+
+      // A new cache over the same directory, as after a restart, with the
+      // queue restored: its items' art is found through the library.
+      Directory('${tmp.path}/art').deleteSync(recursive: true);
+      final restarted = ArtCache(
+        directory: () async => '${tmp.path}/art',
+        open: (f) async => FileReaderHandle(f.uri),
+        run: _inline,
+      );
+      await warmLockScreenArt(restarted, () async => library, null, state);
+      expect(second.existsSync(), isTrue);
+      expect(File.fromUri(Uri.parse(items[0].artUri!)).existsSync(), isTrue);
+    },
+  );
+}
+
+/// Only [LibraryView.song].
+class _Songs implements LibraryView {
+  _Songs(this.list);
+
+  final List<Song> list;
+
+  @override
+  Future<Song?> song(String songId) async =>
+      list.where((s) => s.id == songId).firstOrNull;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

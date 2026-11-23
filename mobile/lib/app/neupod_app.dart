@@ -71,7 +71,14 @@ class _NeuPodAppState extends ConsumerState<NeuPodApp> {
     ref.listen(playerStateProvider, (was, now) {
       final state = now.value;
       if (state == null) return;
-      warmLockScreenArt(ref.read(artCacheProvider), was?.value, state);
+      unawaited(
+        warmLockScreenArt(
+          ref.read(artCacheProvider),
+          () => ref.read(libraryViewProvider.future),
+          was?.value,
+          state,
+        ),
+      );
     });
     ref.listen(libraryScanProvider, (was, now) {
       final ended = was != null && !was.done && now != null && now.done;

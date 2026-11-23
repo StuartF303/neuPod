@@ -4,6 +4,7 @@
 // cover file; one that does not decode gives way), the two sizes, keys that
 // change with the file, the bound on disk, and that the music is only read.
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -220,15 +221,93 @@ void main() {
     },
   );
 
-  test('warm makes a path pathFor gave, once', () async {
+  test('warm makes the full-size files, once each', () async {
     final cover = music('cover.jpg');
     final art = ArtRef(seed: 1, sources: [whole(cover)]);
     final c = cache();
     final p = await c.pathFor(art, ArtSize.full);
     expect(File(p!).existsSync(), isFalse);
-    await c.warm([p, p, '/elsewhere.jpg']);
+    await c.warm([art, art]);
     expect(File(p).existsSync(), isTrue);
     expect(runner.runs, 1);
+  });
+
+  test('the lock screen goes first, then the newest request; a render '
+      'nobody waits for any more is dropped', () async {
+    final gate = Completer<void>();
+    final order = <String>[];
+    final c = ArtCache(
+      directory: () async => '${tmp.path}/cache',
+      open: (f) async {
+        order.add(f.uri.split('/').reversed.skip(1).first);
+        if (order.length == 1) await gate.future; // hold the first render
+        return FileReaderHandle(f.uri);
+      },
+      run: runner.call,
+    );
+    ArtRef art(String dir) =>
+        ArtRef(seed: 1, sources: [whole(music('cover.jpg', '$dir/cover.jpg'))]);
+    final first = c.file(art('busy'), ArtSize.thumb);
+    while (order.isEmpty) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    final gone = ArtTicket();
+    final rowA = c.file(art('rowA'), ArtSize.thumb);
+    final rowB = c.file(art('rowB'), ArtSize.thumb, ticket: gone);
+    final rowC = c.file(art('rowC'), ArtSize.thumb);
+    final lock = c.warm([art('lock')]);
+    gone.cancel(); // rowB scrolled away before its turn
+    expect(await rowB, isNull);
+    // Let every request reach the queue before the first render ends.
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    gate.complete();
+    await Future.wait([first, rowA, rowC, lock]);
+    expect(order, ['busy', 'lock', 'rowC', 'rowA']);
+    expect(await rowA, isNotNull);
+  });
+
+  test(
+    'a cancelled asker does not drop a render someone else waits for',
+    () async {
+      final c = cache();
+      final art = ArtRef(seed: 1, sources: [whole(music('cover.jpg'))]);
+      final t = ArtTicket();
+      final a = c.file(art, ArtSize.full, ticket: t);
+      final b = c.file(art, ArtSize.thumb);
+      t.cancel();
+      expect(await b, isNotNull);
+      await a;
+      expect(runner.runs, 1);
+    },
+  );
+
+  test('pinned files survive eviction', () async {
+    final c = cache(maxBytes: 1);
+    final pinned = ArtRef(
+      seed: 1,
+      sources: [whole(music('cover.jpg', 'p/cover.jpg'))],
+    );
+    final other = ArtRef(
+      seed: 2,
+      sources: [whole(music('cover.jpg', 'o/cover.jpg'))],
+    );
+    c.pin([pinned]);
+    final p = await c.file(pinned, ArtSize.full);
+    await c.file(other, ArtSize.full);
+    await c.evictNow();
+    expect(File(p!).existsSync(), isTrue);
+    final o = await c.pathFor(other, ArtSize.full);
+    expect(File(o!).existsSync(), isFalse);
+  });
+
+  test('a large picture is decoded at a reduced scale', () {
+    final big = img.Image(width: 2600, height: 1950);
+    img.fill(big, color: img.ColorRgb8(200, 40, 40));
+    final jpeg = img.encodeJpg(big, quality: 70);
+    final p = decodeArt(jpeg)!;
+    // 2600 >> 2 = 650 is the last halving at or above 600 px: 1/4 scale.
+    expect(p.width, 650);
+    expect(shrinkToFit(p, ArtSize.full.pixels).width, 600);
   });
 
   test('the music is only read', () async {

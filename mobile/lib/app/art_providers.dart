@@ -20,7 +20,16 @@ final artCacheProvider = Provider<ArtCache>((ref) {
 
 /// The cached image file of an [ArtRef] at an [ArtSize], made on first ask;
 /// null when none of its pictures decodes. A ready [ArtRef.path] passes
-/// through.
-final artFileProvider = FutureProvider.family<String?, (ArtRef, ArtSize)>(
-  (ref, a) => ref.watch(artCacheProvider).file(a.$1, a.$2),
-);
+/// through. A cover that leaves the screen before its render starts
+/// withdraws it (the render is dropped if nobody else waits); one that got
+/// its file keeps it.
+final artFileProvider = FutureProvider.autoDispose
+    .family<String?, (ArtRef, ArtSize)>((ref, a) async {
+      final ticket = ArtTicket();
+      ref.onDispose(ticket.cancel);
+      final path = await ref
+          .watch(artCacheProvider)
+          .file(a.$1, a.$2, ticket: ticket);
+      if (path != null) ref.keepAlive();
+      return path;
+    });

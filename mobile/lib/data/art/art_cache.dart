@@ -60,8 +60,9 @@ ArtHandleOpener storageArtOpener(NeupodStorage storage) =>
     );
 
 /// Largest picture read (an embedded picture or a cover file); bigger ones
-/// are skipped as damaged. The firmware has no byte limit, only its
-/// 5120-pixel one, which a picture this large would almost surely exceed.
+/// are skipped as damaged. A known difference: the firmware has no byte
+/// limit, only its 5120-pixel one (a baseline JPEG within that is very
+/// unlikely to be larger).
 const maxArtBytes = 32 * 1024 * 1024;
 
 /// JPEG quality of the cached files.
@@ -88,14 +89,18 @@ final class ArtCache {
   static StorageReader _openHandle(ReaderHandle h) => h.open();
 
   Future<String>? _dir;
-  final _inFlight = <String, Future<bool>>{};
+
+  /// Renders asked for and not finished, by key.
+  final _jobs = <String, _Job>{};
+  int _seq = 0;
+  bool _working = false;
+
+  /// File names [evictNow] keeps: the lock screen's current and next items.
+  final _pinned = HashSet<String>();
 
   /// Keys none of whose pictures decode, until the app restarts (a picture
   /// that could not be opened is not remembered: access may come back).
   final _none = HashSet<String>();
-
-  /// One picture at a time.
-  Future<void> _queue = Future.value();
 
   Future<String> _directoryPath() => _dir ??= () async {
     final d = await _directory();
@@ -116,23 +121,27 @@ final class ArtCache {
   Future<String?> pathFor(ArtRef art, ArtSize size) async {
     final name = fileName(art, size);
     if (name == null) return null;
-    final path = '${await _directoryPath()}/$name';
-    _byPath[path] = art;
-    return path;
+    return '${await _directoryPath()}/$name';
   }
 
-  /// The art each path [pathFor] gave stands for, so [warm] can make it.
-  final _byPath = <String, ArtRef>{};
+  /// Keeps the files of [arts] (both sizes) out of [evictNow]'s reach, in
+  /// place of the ones pinned before: the lock screen's song and the next.
+  void pin(Iterable<ArtRef> arts) {
+    _pinned
+      ..clear()
+      ..addAll([
+        for (final a in arts)
+          for (final size in ArtSize.values) ?fileName(a, size),
+      ]);
+  }
 
-  /// Makes the files at [paths] (given by [pathFor]) that are not there yet,
-  /// in order, one at a time. For the lock screen, which reads a queue item's
-  /// art file when the item starts. Never throws.
-  Future<void> warm(Iterable<String> paths) async {
-    for (final p in paths) {
-      final art = _byPath[p];
-      if (art == null || File(p).existsSync()) continue;
+  /// Makes the full-size files of [arts] that are not there yet, ahead of
+  /// every screen's request (the lock screen reads a song's file when the
+  /// song starts). Never throws.
+  Future<void> warm(Iterable<ArtRef> arts) async {
+    for (final art in arts) {
       try {
-        await file(art, ArtSize.full);
+        await file(art, ArtSize.full, priority: ArtPriority.lockScreen);
       } on Object {
         // The placeholder (iOS: the file's own embedded art) stands.
       }
@@ -140,9 +149,18 @@ final class ArtCache {
   }
 
   /// The cached image of [art] at [size], made if need be; null when no
-  /// picture of it decodes (or it has none). A ready [ArtRef.path] is
-  /// returned as it is.
-  Future<String?> file(ArtRef art, ArtSize size) async {
+  /// picture of it decodes (or it has none), or when [ticket] is cancelled
+  /// before the render starts. A ready [ArtRef.path] is returned as it is.
+  ///
+  /// Renders run one at a time: the lock screen's first, then the newest
+  /// request (what is on screen now). A render whose every asker has
+  /// cancelled (a row scrolled away) is dropped before it starts.
+  Future<String?> file(
+    ArtRef art,
+    ArtSize size, {
+    ArtPriority priority = ArtPriority.screen,
+    ArtTicket? ticket,
+  }) async {
     if (art.sources.isEmpty) return art.path;
     final key = art.cacheKey!;
     if (_none.contains(key)) return null;
@@ -152,24 +170,48 @@ final class ArtCache {
       _touch(f);
       return path;
     }
-    // The callback must not return the removed future: whenComplete would
-    // wait on it, which is itself.
-    final made = await (_inFlight[key] ??= _make(art).whenComplete(() {
-      _inFlight.remove(key);
-    }));
+    if (ticket != null && ticket.cancelled) return null;
+    final job = _jobs[key] ??= _Job(art);
+    job.seq = ++_seq;
+    if (priority.index > job.priority.index) job.priority = priority;
+    job.askers++;
+    ticket?._onCancel = () {
+      if (job.started || job.askers == 0) return;
+      if (--job.askers == 0) {
+        _jobs.remove(key);
+        job.done.complete(false);
+      }
+    };
+    _pump();
+    final made = await job.done.future;
     return made && f.existsSync() ? path : null;
   }
 
-  Future<bool> _make(ArtRef art) {
-    final c = Completer<bool>();
-    _queue = _queue.then((_) async {
-      try {
-        c.complete(await _render(art));
-      } catch (e, s) {
-        c.completeError(e, s);
+  void _pump() {
+    if (_working) return;
+    _Job? next;
+    for (final j in _jobs.values) {
+      if (j.started) continue;
+      if (next == null ||
+          j.priority.index > next.priority.index ||
+          (j.priority == next.priority && j.seq > next.seq)) {
+        next = j;
       }
-    });
-    return c.future;
+    }
+    if (next == null) return;
+    final job = next..started = true;
+    _working = true;
+    () async {
+      try {
+        job.done.complete(await _render(job.art));
+      } catch (e, s) {
+        job.done.completeError(e, s);
+      } finally {
+        _jobs.remove(job.art.cacheKey);
+        _working = false;
+        _pump();
+      }
+    }();
   }
 
   Future<bool> _render(ArtRef art) async {
@@ -250,6 +292,7 @@ final class ArtCache {
     files.sort((a, b) => a.$3.compareTo(b.$3));
     for (final (f, size, _) in files) {
       if (total <= maxBytes) break;
+      if (_pinned.contains(f.uri.pathSegments.last)) continue;
       try {
         f.deleteSync();
         total -= size;
@@ -258,6 +301,34 @@ final class ArtCache {
       }
     }
   }
+}
+
+/// Who is waiting for a render: the lock screen goes before the screens.
+enum ArtPriority { screen, lockScreen }
+
+/// Lets the asker of [ArtCache.file] say it no longer needs the answer.
+final class ArtTicket {
+  bool _cancelled = false;
+  void Function()? _onCancel;
+
+  bool get cancelled => _cancelled;
+
+  void cancel() {
+    if (_cancelled) return;
+    _cancelled = true;
+    _onCancel?.call();
+  }
+}
+
+final class _Job {
+  _Job(this.art);
+
+  final ArtRef art;
+  final done = Completer<bool>();
+  ArtPriority priority = ArtPriority.screen;
+  int seq = 0;
+  int askers = 0;
+  bool started = false;
 }
 
 /// Top level, so the isolate's closure captures only its arguments (not the
@@ -334,10 +405,23 @@ ArtOutcome renderArt(
 
 /// The picture in [bytes] if the firmware's decoder would take it and it
 /// decodes; otherwise null.
+///
+/// Decoded at the largest reduced scale (1/2, 1/4, 1/8) that keeps the long
+/// side at [ArtSize.full] or more, as `art_decode` picks its own, so a
+/// 5120 px cover never needs its full size in memory. The EXIF and Adobe
+/// segments are left out first, since the firmware reads neither
+/// ([withoutAppMarkersTJpgDecIgnores]).
 img.Image? decodeArt(Uint8List bytes) {
-  if (firmwareJpegCheck(bytes) != FirmwareJpeg.ok) return null;
+  final (check, w, h) = firmwareJpegInspect(bytes);
+  if (check != FirmwareJpeg.ok) return null;
+  final m = w > h ? w : h;
+  var scale = 0;
+  while (scale < 3 && (m >> (scale + 1)) >= ArtSize.full.pixels) {
+    scale++;
+  }
   try {
-    return img.JpegDecoder().decode(bytes);
+    return img.JpegDecoder(scale: 1 << scale)
+        .decode(withoutAppMarkersTJpgDecIgnores(bytes));
   } on Object {
     return null; // damaged data: ART_E_FORMAT
   }

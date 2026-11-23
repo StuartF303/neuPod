@@ -20,13 +20,35 @@ tags	apic_long_desc.mp3	0	0	none	0	-	folder
 tags	apic_png_then_jpeg_other.mp3	327	1188	jpeg	0	ok	embedded,folder
 tags	apic_compressed.mp3	0	0	none	0	-	folder
 tags	apic_unsync_tag.mp3	0	0	none	0	-	folder
-# image: name, decode
-image	cover.jpg	ok
-image	folder_blue.jpg	ok
-image	progressive.jpg	unsupported
-image	too_big.jpg	too_big
-image	png_named.jpg	format
-image	truncated.jpg	format
+# image: name, decode, thumbnail size, colours at the centres of its quarters (TL, TR, BL, BR)
+image	cover.jpg	ok	48x48	ffd3bd,ce2829,ffdfce,ffd3bd
+image	folder_blue.jpg	ok	48x48	c6dfff,183c9c,cedbff,bddfff
+image	progressive.jpg	unsupported	-	-
+image	too_big.jpg	too_big	-	-
+image	png_named.jpg	format	-	-
+image	truncated.jpg	format	-	-
+image	q420.jpg	ok	64x48	de2021,18c729,2930d6,f7f7f7
+image	q444.jpg	ok	64x48	de2021,18c729,2930d6,f7f7f7
+image	q422.jpg	ok	64x48	de2021,18c729,2930d6,f7f7f7
+image	sampling_1x2.jpg	unsupported	-	-
+image	grayscale.jpg	ok	64x48	5a595a,848284,424142,f7f7f7
+image	cjpeg_progressive.jpg	unsupported	-	-
+image	dqt_16bit.jpg	format	-	-
+image	sof1.jpg	unsupported	-	-
+image	four_components.jpg	unsupported	-	-
+image	pool_overflow.jpg	unsupported	-	-
+image	pool_two_extra.jpg	unsupported	-	-
+image	exif_orientation_6.jpg	ok	64x48	de2021,18c729,2930d6,f7f7f7
+image	adobe_transform_0.jpg	ok	64x48	de2021,18c729,2930d6,f7f7f7
+image	noisy.jpg	ok	128x96	2996de,a53c7b,94415a,a5e3de
+image	cut_scan_10.jpg	format	-	-
+image	cut_scan_50.jpg	format	-	-
+image	cut_scan_90.jpg	format	-	-
+image	cut_scan_end_8.jpg	format	-	-
+image	cut_no_eoi.jpg	format	-	-
+image	cut_half_eoi.jpg	format	-	-
+image	wide_thin.jpg	format	-	-
+image	wide_short.jpg	ok	160x1	de2021,18c729,de2021,18c729
 # rank: name, rank
 rank	cover.jpg	1
 rank	COVER.JPG	1

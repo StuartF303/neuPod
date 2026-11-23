@@ -8,11 +8,15 @@ scripts/app/art_vectors.c). The app's test test/data/scan/art_vectors_test.dart
 checks its Dart port against it.
 
 The pictures are made here: PNGs written directly, JPEGs converted from them
-with macOS `sips` (baseline, 4:2:0), a progressive and an oversized one made by
-editing a baseline JPEG's frame header (the firmware refuses both from the
-header alone).
+with macOS `sips` (baseline, 4:2:0) or encoded by libjpeg-turbo's `cjpeg`
+(4:4:4, 4:2:2, 1x2 sampling, grayscale, progressive, 16-bit tables), and a few
+made by editing a baseline JPEG: another frame type, an oversized frame, four
+components, extra Huffman tables that overflow the decoder's pool, an EXIF
+orientation, an Adobe colour transform, and cuts inside the compressed data.
+The firmware is built as the hosted and PSRAM builds are (NEUPOD_ART_HIRES:
+160 px thumbnails), which the app follows.
 
-Usage: scripts/app/gen_art_vectors.py   (macOS: needs cc, sips and python3)
+Usage: scripts/app/gen_art_vectors.py   (macOS: needs cc, sips, cjpeg and python3)
 """
 
 import os
@@ -50,6 +54,64 @@ def jpeg(png_bytes, tmp, name):
     subprocess.run(["sips", "-s", "format", "jpeg", "-s", "formatOptions", "80", src, "--out", dst],
                    check=True, capture_output=True)
     return open(dst, "rb").read()
+
+
+def ppm(w, h, colour):
+    return b"P6\n%d %d\n255\n" % (w, h) + b"".join(bytes(colour(x, y)) for y in range(h) for x in range(w))
+
+
+def quadrants(x, y, w=64, h=48):
+    """Red, green / blue, white quarters: a rotation or a colour transform shows."""
+    left, top = x < w // 2, y < h // 2
+    return (220, 30, 30) if left and top else (30, 200, 40) if top else (40, 50, 210) if left else (245, 245, 245)
+
+
+def halves(w):
+    """Red on the left, green on the right: the same at any height."""
+    return lambda x, y: (220, 30, 30) if x < w // 2 else (30, 200, 40)
+
+
+def noise(x, y):
+    v = (x * 7919 + y * 104729 + x * y * 31) & 0xFFFF
+    return (v & 0xFF, (v >> 8) & 0xFF, (v * 13) & 0xFF)
+
+
+def cjpeg(ppm_bytes, tmp, name, *args):
+    src = os.path.join(tmp, name + ".ppm")
+    open(src, "wb").write(ppm_bytes)
+    return subprocess.run(["cjpeg", *args, src], check=True, capture_output=True).stdout
+
+
+def insert_after_soi(j, marker, content):
+    return j[:2] + bytes([0xFF, marker]) + (len(content) + 2).to_bytes(2, "big") + content + j[2:]
+
+
+def exif_orientation(n):
+    ifd = (1).to_bytes(2, "big") + (0x0112).to_bytes(2, "big") + (3).to_bytes(2, "big") + (1).to_bytes(4, "big")
+    ifd += n.to_bytes(2, "big") + b"\0\0" + (0).to_bytes(4, "big")
+    return b"Exif\0\0" + b"MM\0*" + (8).to_bytes(4, "big") + ifd
+
+
+def with_extra_dht(j, copies):
+    """The JPEG with its largest Huffman table defined [copies] more times before the scan (each definition takes pool)."""
+    dht = max((s for s in segments(j) if s[1] == 0xC4), key=lambda s: s[2])
+    seg = j[dht[0]:dht[0] + 2 + dht[2]]
+    sos = [s for s in segments(j) if s[1] == 0xDA][0][0]
+    return j[:sos] + seg * copies + j[sos:]
+
+
+def with_ncomp(j, n):
+    b = bytearray(j)
+    for at, m, _ in segments(j):
+        if m == 0xC0:
+            b[at + 9] = n
+            return bytes(b)
+    raise SystemExit("no SOF0")
+
+
+def scan_start(j):
+    at, _, n = [s for s in segments(j) if s[1] == 0xDA][0]
+    return at + 2 + n
 
 
 def segments(j):
@@ -136,6 +198,17 @@ def main():
         progressive = with_sof(blue, marker=0xC2)
         too_big = with_sof(red, size=(6000, 48))
         gif = b"GIF89a" + bytes(32)
+        quad = ppm(64, 48, quadrants)
+        q420 = cjpeg(quad, tmp, "q420", "-quality", "90", "-baseline", "-sample", "2x2")
+        q444 = cjpeg(quad, tmp, "q444", "-quality", "90", "-baseline", "-sample", "1x1")
+        q422 = cjpeg(quad, tmp, "q422", "-quality", "90", "-baseline", "-sample", "2x1")
+        q12 = cjpeg(quad, tmp, "q12", "-quality", "90", "-baseline", "-sample", "1x2")
+        gray = cjpeg(quad, tmp, "gray", "-quality", "90", "-baseline", "-grayscale")
+        prog = cjpeg(quad, tmp, "prog", "-quality", "90", "-progressive")
+        q16 = cjpeg(quad, tmp, "q16", "-quality", "1")  # tables over 255: 16-bit DQT, and SOF1
+        noisy = cjpeg(ppm(128, 96, noise), tmp, "noisy", "-quality", "92", "-baseline", "-sample", "2x2")
+        body = scan_start(noisy)
+        scan = len(noisy) - 2 - body
 
         files = {
             # FLAC PICTURE blocks: meta_art_offer keeps the best (JPEG 4, PNG 2, other 1; +1 for a front cover), the first
@@ -169,7 +242,30 @@ def main():
             "progressive.jpg": progressive,
             "too_big.jpg": too_big,
             "png_named.jpg": red_png,
-            "truncated.jpg": red[: len(red) // 2],
+            "truncated.jpg": red[: len(red) // 2],  # inside the Huffman tables
+            "q420.jpg": q420,
+            "q444.jpg": q444,
+            "q422.jpg": q422,
+            "sampling_1x2.jpg": q12,
+            "grayscale.jpg": gray,
+            "cjpeg_progressive.jpg": prog,
+            "dqt_16bit.jpg": q16,
+            "sof1.jpg": with_sof(q420, marker=0xC1),
+            "four_components.jpg": with_ncomp(q444, 4),
+            "pool_overflow.jpg": with_extra_dht(q420, 6),
+            "pool_two_extra.jpg": with_extra_dht(q420, 2),
+            "exif_orientation_6.jpg": insert_after_soi(q444, 0xE1, exif_orientation(6)),
+            "adobe_transform_0.jpg": insert_after_soi(q444, 0xEE, b"Adobe\x00\x64\x00\x00\x00\x00\x00"),
+            "noisy.jpg": noisy,
+            "cut_scan_10.jpg": noisy[: body + scan // 10],
+            "cut_scan_50.jpg": noisy[: body + scan // 2],
+            "cut_scan_90.jpg": noisy[: body + scan * 9 // 10],
+            "cut_scan_end_8.jpg": noisy[: len(noisy) - 10],
+            "cut_no_eoi.jpg": noisy[:-2],
+            "cut_half_eoi.jpg": noisy[:-1],
+            # Long and thin: at the decoder's 1/8 or 1/4 scale a side can scale to nothing (art_decode: ART_E_FORMAT).
+            "wide_thin.jpg": cjpeg(ppm(2000, 3, halves(2000)), tmp, "thin", "-quality", "90", "-baseline", "-sample", "2x2"),
+            "wide_short.jpg": cjpeg(ppm(1200, 8, halves(1200)), tmp, "short", "-quality", "90", "-baseline", "-sample", "1x1"),
         }
         names = [
             "cover.jpg", "COVER.JPG", "Cover.Jpg", "folder.jpg", "Folder.jpg", "FOLDER.JPG", "front.jpg", "Front.JPG",
@@ -199,6 +295,7 @@ def main():
                 "-I" + os.path.join(REPO, "app", "include"),
                 "-I" + os.path.join(REPO, "app", "third_party", "tjpgd"),
                 "-I" + os.path.join(REPO, "app", "os"),
+                "-DNEUPOD_ART_HIRES",
                 "-o", exe,
                 os.path.join(HERE, "art_vectors.c"),
                 os.path.join(REPO, "app", "audio", "meta.c"),
@@ -222,7 +319,7 @@ def main():
         f.write("# tags: name, offset, length, kind, type, decode, sources\n")
         for line in tags.splitlines():
             f.write("tags\t" + line + "\n")
-        f.write("# image: name, decode\n")
+        f.write("# image: name, decode, thumbnail size, colours at the centres of its quarters (TL, TR, BL, BR)\n")
         for line in imgs.splitlines():
             f.write("image\t" + line + "\n")
         f.write("# rank: name, rank\n")

@@ -9,9 +9,18 @@
 /// same things before it decodes, or it would show a different picture from
 /// the device's.
 ///
-/// Only the header is checked here, as `jd_prepare` does. Damage in the
-/// compressed data is found by the app's own decoder, which fails on it
-/// as the firmware's does.
+/// Checked here: the header, as `jd_prepare` reads it; the scaled size
+/// `art_decode` works out from it (a side that scales to nothing is
+/// `ART_E_FORMAT`); and that the compressed data runs to a marker before the
+/// picture ends. TJpgDec (`JD_FASTDECODE` 1) always reads up to 16 bits
+/// ahead and stops reading only once it meets a marker, so a picture cut
+/// anywhere inside its compressed data, even with only the end marker
+/// missing, fails there with `JDR_INP` (`ART_E_FORMAT`), while the app's
+/// decoder would show what it has. Other damage inside the compressed data
+/// is left to the app's decoder, which refuses it.
+///
+/// The scale is the one the hosted and PSRAM builds use (160 px thumbnails,
+/// `NEUPOD_ART_HIRES`); the Pico 2 W's 64 px build is frozen.
 library;
 
 import 'dart:typed_data';
@@ -41,11 +50,42 @@ const _szBuf = 512;
 /// `ART_MAX_SRC_DIM` (art.h).
 const firmwareMaxSourceDim = 5120;
 
+/// `ART_MAX_DIM` of the builds with `NEUPOD_ART_HIRES` (art.h).
+const _thumbBox = 160;
+
 /// `jd_prepare` + `art_decode`'s size check over [jpeg], the picture's bytes
 /// (the whole of them: the decoder reads no further).
-FirmwareJpeg firmwareJpegCheck(Uint8List jpeg) {
-  final r = _Prepare(jpeg).run();
-  return r;
+FirmwareJpeg firmwareJpegCheck(Uint8List jpeg) => firmwareJpegInspect(jpeg).$1;
+
+/// [firmwareJpegCheck], with the picture's width and height as its frame
+/// header gives them (0 when it got no further).
+(FirmwareJpeg, int, int) firmwareJpegInspect(Uint8List jpeg) {
+  final p = _Prepare(jpeg);
+  final r = p.run();
+  return (r, p.width, p.height);
+}
+
+/// A copy of [jpeg] in which the APP1 (EXIF) and APP14 (Adobe) segments
+/// before the scan are turned into comments. TJpgDec reads neither: it never
+/// turns a picture by its EXIF orientation, and always takes three
+/// components as YCbCr, whatever an Adobe segment says. The app's decoder
+/// would honour both, so it is given the picture without them.
+Uint8List withoutAppMarkersTJpgDecIgnores(Uint8List jpeg) {
+  final out = Uint8List.fromList(jpeg);
+  var i = 0;
+  var marker = 0;
+  for (; i < out.length; i++) {
+    marker = ((marker << 8) | out[i]) & 0xFFFF;
+    if (marker == 0xFFD8) break;
+  }
+  i++;
+  while (i + 4 <= out.length && out[i] == 0xFF) {
+    final m = out[i + 1];
+    if (m == 0xDA || m == 0xD9) break;
+    if (m == 0xE1 || m == 0xEE) out[i + 1] = 0xFE; // COM
+    i += 2 + ((out[i + 2] << 8) | out[i + 3]);
+  }
+  return out;
 }
 
 final class _Prepare {
@@ -167,6 +207,21 @@ final class _Prepare {
           if (width > firmwareMaxSourceDim || height > firmwareMaxSourceDim) {
             return FirmwareJpeg.tooBig;
           }
+          // The largest decoder shrink that keeps the long side at the
+          // thumbnail's size or more; a side that scales to nothing is
+          // ART_E_FORMAT (art.c).
+          final m = width > height ? width : height;
+          var scale = 0;
+          while (scale < 3 && (m >> (scale + 1)) >= _thumbBox) {
+            scale++;
+          }
+          final mx = msx * 8, my = msy * 8;
+          final sw = ((width ~/ mx * mx) >> scale) + ((width % mx) >> scale);
+          final sh = ((height ~/ my * my) >> scale) + ((height % my) >> scale);
+          if (sw == 0 || sh == 0) return FirmwareJpeg.format;
+          // The compressed data must reach a marker (FF then a byte that is
+          // neither a stuffed 00 nor a restart marker) inside the picture.
+          if (!_endsWithMarker(pos)) return _inp;
           return FirmwareJpeg.ok;
         case 0xC1 || 0xC2 || 0xC3 || 0xC5 || 0xC6 || 0xC7 || 0xC9 || 0xCA:
         case 0xCB || 0xCD || 0xCE || 0xCF || 0xD9:
@@ -176,6 +231,20 @@ final class _Prepare {
           pos += len;
       }
     }
+  }
+
+  /// Whether a marker other than a restart marker follows the compressed data
+  /// that starts at [from].
+  bool _endsWithMarker(int from) {
+    for (var i = from; i + 1 < d.length; i++) {
+      if (d[i] != 0xFF) continue;
+      final b = d[i + 1];
+      // TJpgDec takes any other byte after FF as a marker and reads no
+      // further (a restart marker is followed by more data it then reads).
+      if (b == 0x00 || (b >= 0xD0 && b <= 0xD7)) continue;
+      return true;
+    }
+    return false;
   }
 
   /// `create_huffman_tbl`.

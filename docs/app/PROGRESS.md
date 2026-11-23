@@ -132,6 +132,7 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 
 (One line per thing the next session must know. Newest first.)
 
+- 2026-11-23: Album art, known differences from the device: a `Folder.jpg` with the FAT hidden or system attribute (as Windows Media Player writes it) is skipped by the device (`art_service.c` line 380) but used by the app, which cannot see FAT attributes; the app reads at most 32 MB of a picture (decision 0009).
 - 2026-11-23: Album art follows the firmware, not the spec's wording: cover files are `cover.jpg`, then `folder.jpg`, then `front.jpg` (any ASCII case; the spec says "`Folder.jpg` (or `cover.jpg`)"), only baseline JPEG is shown (no PNG or progressive JPEG, as on the device), and an embedded JPEG comes before the cover file (decision 0009).
 - 2026-11-22: Test devices: iPhone 15 Pro on iOS 27.2.1 (393x852 pt) and Pixel 7 (Android version to be read at gate 1).
 - 2026-11-22: Gate 1 needs Xcode 27 on the build Mac, which is now on macOS 27.2.1.

@@ -53,7 +53,7 @@ final queueMapperProvider = Provider<QueueMapper>((ref) {
   return (songs, {int start = 0}) async {
     final cache = ref.read(artCacheProvider);
     final items = <QueueItem>[];
-    String? first;
+    ArtRef? first;
     for (final (i, s) in songs.indexed) {
       if (!s.playable) continue;
       String? art;
@@ -61,7 +61,7 @@ final queueMapperProvider = Provider<QueueMapper>((ref) {
         final path = await cache.pathFor(s.art, ArtSize.full);
         if (path != null) {
           art = Uri.file(path).toString();
-          if (i == start) first = path;
+          if (i == start) first = s.art;
         }
       } else if (s.art.path != null) {
         art = Uri.file(s.art.path!).toString();
@@ -79,6 +79,7 @@ final queueMapperProvider = Provider<QueueMapper>((ref) {
       );
     }
     if (first != null) {
+      cache.pin([first]);
       await cache.warm([first]).timeout(lockScreenArtWait, onTimeout: () {});
     }
     return items;
@@ -87,17 +88,29 @@ final queueMapperProvider = Provider<QueueMapper>((ref) {
 
 /// Makes the lock-screen art of the song playing and the next
 /// [lockScreenArtAhead] (the player reads a song's art file when the song
-/// starts). Called on every player state change; cheap when nothing moved.
-void warmLockScreenArt(ArtCache cache, PlayerState? was, PlayerState now) {
+/// starts), ahead of the screens' renders, and keeps those files from being
+/// evicted. The songs are looked up in [library] by the queue items' ids, so
+/// a queue restored after a restart is served too. Called on every player
+/// state change; cheap when nothing moved.
+Future<void> warmLockScreenArt(
+  ArtCache cache,
+  Future<LibraryView> Function() library,
+  PlayerState? was,
+  PlayerState now,
+) async {
   final i = now.index;
   if (i == null) return;
   if (was != null && was.index == i && identical(was.queue, now.queue)) return;
-  final paths = <String>[];
-  for (var k = i; k < now.queue.length && k <= i + lockScreenArtAhead; k++) {
-    final u = now.queue[k].artUri;
-    if (u == null) continue;
-    final uri = Uri.tryParse(u);
-    if (uri != null && uri.isScheme('file')) paths.add(uri.toFilePath());
+  final arts = <ArtRef>[];
+  try {
+    final view = await library();
+    for (var k = i; k < now.queue.length && k <= i + lockScreenArtAhead; k++) {
+      final art = (await view.song(now.queue[k].id))?.art;
+      if (art != null && art.sources.isNotEmpty) arts.add(art);
+    }
+  } on Object {
+    return; // no library: nothing to warm
   }
-  if (paths.isNotEmpty) unawaited(cache.warm(paths));
+  cache.pin(arts);
+  await cache.warm(arts);
 }
