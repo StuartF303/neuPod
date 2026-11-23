@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
-// For each file named on the command line, runs the firmware's own tag parser (app/audio/meta.c: flac_parse or
-// mp3_parse, with the library scanner's 4096-byte comment scratch and the library tags enabled, as lib_build.c sets
+// For each file named on the command line, runs the firmware's own tag parser (app/audio/meta.c: flac_parse,
+// mp3_parse, mp4_parse (app/audio/mp4.c) or wav_parse (app/audio/wav.c), with the library scanner's 4096-byte comment scratch and the library tags enabled, as lib_build.c sets
 // them up) and what index_file() in app/library/lib_build.c makes of the tags: the song key (lib_collate_key() of the
 // title, or of the file name when untagged, with the title sort tag), the album artist it folds artists on (the album
 // artist tag, else the artist, else "Unknown Artist"), the compilation test, and the entity keys stage_entity() folds
@@ -9,7 +9,7 @@
 // is then empty. Prints one line per file, the texts as hex of the bytes the parser stored:
 //   file, title, sort_title, song key, artist, album, album_artist, sort_artist, sort_album, sort_album_artist, genre,
 //   track, disc, year, the COMPILATION / TCMP flag, aa (index_file's album artist), sort_aa, comp (index_file's),
-//   artist entity key, album entity key, duration (s, as TR_DUR)
+//   artist entity key, album entity key, frames/rate (TR_DUR is their quotient in seconds)
 // Built and run by scripts/app/gen_tag_key_vectors.py; the app's tests compare its Dart port with these lines.
 #include <stdbool.h>
 #include <stdio.h>
@@ -17,6 +17,7 @@
 
 #include "library.h"
 #include "meta.h"
+#include "wav.h"
 
 #define TAG_SCRATCH 4096u /* lib_build.c */
 #define POOL_STR 65u      /* lib_build.c: LIB_TEXT_MAX */
@@ -83,6 +84,19 @@ int main(int argc, char **argv) {
             tags = fi.tags;
             rate = fi.rate;
             frames = fi.total_frames;
+        } else if (n > 4 && (strcmp(name + n - 4, ".m4a") == 0 || strcmp(name + n - 4, ".mp4") == 0)) {
+            static mp4_info_t pi;
+            mp4_parse(file_rd, f, size, &pi);
+            tags = pi.tags;
+            rate = pi.rate;
+            frames = pi.total_frames;
+        } else if (n > 4 && strcmp(name + n - 4, ".wav") == 0) {
+            static wav_info_t wi; // no tags (index_file: t = &no_tags)
+            memset(&wi, 0, sizeof wi);
+            if (wav_parse(file_rd, f, size, &wi) == WAV_OK) {
+                rate = wi.rate;
+                frames = wi.frames;
+            }
         } else {
             static mp3_info_t mi;
             mp3_parse(file_rd, f, size, &mi);
@@ -122,7 +136,7 @@ int main(int argc, char **argv) {
         printf("\t");
         if (ext.sort_album[0]) key_hex(ext.sort_album);
         else if (tags.album[0]) key_hex(tags.album);
-        printf("\t%u\n", (unsigned)(rate != 0 ? frames / rate : 0));
+        printf("\t%llu/%u\n", (unsigned long long)(rate != 0 ? frames : 0), (unsigned)rate); // TR_DUR is frames / rate
     }
     return 0;
 }

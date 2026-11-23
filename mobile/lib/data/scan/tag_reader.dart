@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
-/// Tag reader (decision 0003): FLAC and MP3 tags and duration, ported from
-/// the firmware's `app/audio/meta.c` (`flac_parse`, `vorbis_comments`,
+/// Tag reader (decision 0003): FLAC, MP3 and MP4 tags and duration, and WAV
+/// duration, ported from the firmware's `app/audio/meta.c`, `mp4.c` and
+/// `wav.c` (`flac_parse`, `vorbis_comments`, `mp4_parse`, `wav_parse`,
 /// `vorbis_field`, `id3v2_tags`, `id3_text_frame`, `mp3_parse`,
 /// `meta_text_to_utf8`, `meta_genre_text`, `meta_year_text`), read through
 /// [ByteSource], with the library tags the firmware's scanner asks for
@@ -105,7 +106,8 @@ final class AudioTags {
     this.bitDepth = 0,
   });
 
-  /// `flac` or `mp3`.
+  /// `flac`, `mp3`, `alac`, `aac`, `mp4` (another codec in an MP4) or
+  /// `wav`.
   final String codec;
 
   /// The title as displayed: the whole tag, decoded.
@@ -208,11 +210,14 @@ const _fwId3Flag = 8;
 const _fwVorbisNumber = 11;
 
 /// Reads the tags of [src], choosing the parser by [extension] (`flac`,
-/// `mp3`; any case).
+/// `mp3`, `m4a`, `mp4`, `wav`; any case), as the firmware's scanner does
+/// (`index_file` in lib_build.c).
 AudioTags readTags(ByteSource src, String extension) =>
     switch (extension.toLowerCase()) {
       'flac' => _readFlac(src),
       'mp3' => _readMp3(src),
+      'm4a' || 'mp4' => _readMp4(src),
+      'wav' => _readWav(src),
       _ => throw TagReadException(
         UnreadableReason.wrongFormat,
         '$extension tags are not read yet',
@@ -818,9 +823,11 @@ AudioTags _readMp3(ByteSource src) {
     pos += 256;
   }
   if (h == null) {
-    // The ID3 tag was read: the device lists the file by it.
+    // The ID3 tag was read: the device lists the file by it, as damaged
+    // (`mp3_parse` returns META_E_FORMAT, which `play_from_meta` in
+    // lib_build.c maps to LIB_PLAY_DAMAGED).
     throw TagReadException(
-      UnreadableReason.wrongFormat,
+      _damaged,
       'no MPEG audio frame',
       partial: tags.tags(codec: 'mp3', durationMs: 0, sampleRate: 0),
     );
@@ -970,4 +977,555 @@ List<int> firmwareText(Uint8List src, int enc, int cap) {
   }
   final nul = out.indexOf(0);
   return nul < 0 ? out : out.sublist(0, nul);
+}
+
+// ---- MP4 / M4A ----------------------------------------------------------------
+
+int _be16(Uint8List b, int o) => (b[o] << 8) | b[o + 1];
+int _be64(Uint8List b, int o) => (_be32(b, o) << 32) | _be32(b, o + 4);
+
+int _fourcc(String s) =>
+    (s.codeUnitAt(0) << 24) |
+    (s.codeUnitAt(1) << 16) |
+    (s.codeUnitAt(2) << 8) |
+    s.codeUnitAt(3);
+
+final _cNam = (0xA9 << 24) | (0x6E << 16) | (0x61 << 8) | 0x6D; // ©nam
+final _cArt = (0xA9 << 24) | (0x41 << 16) | (0x52 << 8) | 0x54; // ©ART
+final _cAlb = (0xA9 << 24) | (0x61 << 16) | (0x6C << 8) | 0x62; // ©alb
+final _cGen = (0xA9 << 24) | (0x67 << 16) | (0x65 << 8) | 0x6E; // ©gen
+final _cDay = (0xA9 << 24) | (0x64 << 16) | (0x61 << 8) | 0x79; // ©day
+
+/// A box: its type and payload range (`box_t` in mp4.c).
+typedef _Box = ({int type, int body, int end});
+
+/// `pctx_t`: what the walk of the boxes gathers.
+final class _Mp4 {
+  _Mp4(this.src);
+
+  final ByteSource src;
+  final t = _Fields();
+  int boxes = 0;
+  bool inAudioTrak = false, gotAudio = false, aac = false, other = false;
+  int timescale = 0, duration = 0, movieTs = 0;
+  bool elstOk = false;
+  int elstMediaTime = 0, elstSeg = 0;
+  bool itunOk = false;
+  int itunSkip = 0, itunPad = 0, itunLen = 0;
+  // From the ALAC sample entry and the sample tables.
+  Uint8List? cookie;
+  int sampleCount = 0;
+  bool haveStsz = false, haveStsc = false, haveStco = false;
+  int stscCount = 0, stcoCount = 0;
+
+  Uint8List read(int at, int n) => src.readAt(at, n);
+}
+
+/// `read_box`: the box at [pos] within [limit], or null.
+_Box? _readBox(_Mp4 p, int pos, int limit) {
+  if (pos + 8 > limit) return null;
+  final h = p.read(pos, 8);
+  if (h.length != 8) return null;
+  var size = _be32(h, 0);
+  final type = _be32(h, 4);
+  var hl = 8;
+  if (size == 1) {
+    final x = p.read(pos + 8, 8);
+    if (x.length != 8) return null;
+    size = _be64(x, 0);
+    hl = 16;
+  } else if (size == 0) {
+    size = limit - pos;
+  }
+  if (size < hl || size > limit - pos) return null;
+  return (type: type, body: pos + hl, end: pos + size);
+}
+
+int _hexVal(int c) => c >= 0x30 && c <= 0x39
+    ? c - 0x30
+    : c >= 0x61 && c <= 0x66
+    ? c - 0x61 + 10
+    : c >= 0x41 && c <= 0x46
+    ? c - 0x41 + 10
+    : -1;
+
+/// `freeform_item`: a `----` item; only com.apple.iTunes iTunSMPB is read.
+void _freeformItem(_Mp4 p, _Box it) {
+  var pos = it.body;
+  var isSmpb = false;
+  for (var i = 0; i < 4; i++) {
+    final c = _readBox(p, pos, it.end);
+    if (c == null) break;
+    if (c.type == _fourcc('name') && c.end - c.body == 4 + 8) {
+      isSmpb =
+          ascii.decode(p.read(c.body + 4, 8), allowInvalid: true) == 'iTunSMPB';
+    } else if (c.type == _fourcc('data') && isSmpb && c.end - c.body > 8) {
+      var n = c.end - c.body - 8;
+      if (n > 71) n = 71;
+      final v = p.read(c.body + 8, n);
+      if (v.isEmpty) return;
+      var s = 0;
+      final e = v.length;
+      // `smpb_token`: the next hexadecimal token, or null.
+      int? token() {
+        while (s < e && v[s] == 0x20) {
+          s++;
+        }
+        var digits = 0, x = 0;
+        while (s < e && _hexVal(v[s]) >= 0 && digits < 16) {
+          x = (x << 4) | _hexVal(v[s]);
+          s++;
+          digits++;
+        }
+        if (digits == 0 || (s < e && v[s] != 0x20 && v[s] != 0)) return null;
+        return x;
+      }
+
+      final t0 = token();
+      final pr = t0 == null ? null : token();
+      final pd = pr == null ? null : token();
+      final len = pd == null ? null : token();
+      // Unsigned compares, as in the C: a token of 2^63 or more is negative
+      // here and huge there.
+      if (len != null &&
+          pr! >= 0 &&
+          pr < 0x10000 &&
+          pd! >= 0 &&
+          pd < 0x100000) {
+        p.itunOk = true;
+        p.itunSkip = pr;
+        p.itunPad = pd;
+        p.itunLen = len;
+      }
+      return;
+    }
+    pos = c.end;
+  }
+}
+
+/// `ilst_item`: one iTunes tag item, its `data` box at most 96 bytes (a
+/// longer one is skipped by the firmware; its text is still displayed).
+void _ilstItem(_Mp4 p, _Box it) {
+  if (it.type == _fourcc('covr')) return; // pictures: the art cache
+  if (it.type == _fourcc('----')) {
+    _freeformItem(p, it);
+    return;
+  }
+  final d = _readBox(p, it.body, it.end);
+  if (d == null || d.type != _fourcc('data') || d.end - d.body < 8) return;
+  final n = d.end - d.body - 8;
+  final type = it.type;
+  final t = p.t;
+  final isText =
+      type == _cNam ||
+      type == _cArt ||
+      type == _cAlb ||
+      type == _fourcc('aART') ||
+      type == _cGen;
+  if (n > 96) {
+    // The firmware skips it; the whole text is still shown.
+    if (isText && n <= _maxText * 4) {
+      final v = p.read(d.body + 8, n);
+      if (v.length != n) return;
+      final text = _text(v, 3);
+      if (type == _cNam) t.title = text;
+      if (type == _cArt) t.artist = text;
+      if (type == _cAlb) t.album = text;
+      if (type == _fourcc('aART')) t.albumArtist = text;
+      if (type == _cGen) t.genre = _genreText(text, bareNumberOk: false);
+    }
+    return;
+  }
+  if (p.read(d.body, 4).length != 4) return;
+  final v = p.read(d.body + 8, n);
+  if (v.length != n) return;
+  if (type == _cNam) {
+    t.title = _text(v, 3);
+    t.titleKey = firmwareText(v, 3, _fwTitleCap);
+  } else if (type == _cArt) {
+    t.artist = _text(v, 3);
+    t.artistKey = firmwareText(v, 3, _fwArtistCap);
+  } else if (type == _cAlb) {
+    t.album = _text(v, 3);
+    t.albumKey = firmwareText(v, 3, _fwAlbumCap);
+  } else if (type == _fourcc('trkn') && n >= 4) {
+    t.track = _be16(v, 2);
+  } else if (type == _fourcc('aART')) {
+    t.albumArtist = _text(v, 3);
+    t.albumArtistKey = firmwareText(v, 3, _fwAlbumArtistCap);
+  } else if (type == _fourcc('sonm')) {
+    t.titleSort = _text(v, 3);
+    t.titleSortKey = firmwareText(v, 3, _fwSortCap);
+  } else if (type == _fourcc('soar')) {
+    t.artistSortKey = firmwareText(v, 3, _fwSortCap);
+  } else if (type == _fourcc('soal')) {
+    t.albumSortKey = firmwareText(v, 3, _fwSortCap);
+  } else if (type == _fourcc('soaa')) {
+    t.albumArtistSortKey = firmwareText(v, 3, _fwSortCap);
+  } else if (type == _cGen) {
+    t.genre = _genreText(_text(v, 3), bareNumberOk: false);
+    t.genreKey = firmwareGenre(
+      firmwareText(v, 3, _fwGenreRaw),
+      _fwGenreCap,
+      bareNumberOk: false,
+    );
+  } else if (type == _fourcc('gnre') && n >= 2) {
+    // ID3v1 genre number + 1 (0 wraps to a number past the table: none).
+    final i = _be16(v, 0) - 1;
+    if (i >= 0 && i < _genres.length) {
+      final g = ascii.encode(_genres[i]);
+      t.genre = _genres[i];
+      t.genreKey = firmwareGenre(g, _fwGenreCap, bareNumberOk: false);
+    }
+  } else if (type == _cDay) {
+    // `char y[8] = {0}; memcpy(y, v, n < 4 ? n : 4)`
+    final y = v.sublist(0, n < 4 ? n : 4);
+    final nul = y.indexOf(0);
+    t.year = firmwareYear(nul < 0 ? y : y.sublist(0, nul));
+  } else if (type == _fourcc('disk') && n >= 4) {
+    t.disc = _be16(v, 2);
+  } else if (type == _fourcc('cpil') && n >= 1) {
+    t.compilation = v[0] != 0;
+  }
+}
+
+/// `leaf`: a box that is not a container.
+void _mp4Leaf(_Mp4 p, _Box b, int parent) {
+  final len = b.end - b.body;
+  if (parent == _fourcc('ilst')) {
+    _ilstItem(p, b);
+    return;
+  }
+  if (b.type == _fourcc('mvhd') && len >= 20) {
+    final h = p.read(b.body, 24);
+    final got = h.length;
+    p.movieTs = got >= 24 && h[0] == 1
+        ? _be32(h, 20)
+        : got >= 20 && h[0] == 0
+        ? _be32(h, 12)
+        : 0;
+    return;
+  }
+  if (b.type == _fourcc('elst') && !p.gotAudio && len >= 8) {
+    final h = p.read(b.body, 8);
+    if (h.length != 8) return;
+    final ver = h[0], n = _be32(h, 4), esz = ver == 1 ? 20 : 12;
+    p.elstOk = false;
+    var found = 0;
+    for (var i = 0; i < n && i < 8 && 8 + (i + 1) * esz <= len; i++) {
+      final e = p.read(b.body + 8 + i * esz, esz);
+      if (e.length != esz) break;
+      final mt = ver == 1 ? _be64(e, 8) : _be32(e, 4).toSigned(32);
+      if (mt < 0) continue; // an empty edit (a delay)
+      found++;
+      p.elstMediaTime = mt;
+      p.elstSeg = ver == 1 ? _be64(e, 0) : _be32(e, 0);
+    }
+    p.elstOk = found == 1;
+    return;
+  }
+  if (b.type == _fourcc('mdhd') && !p.gotAudio) {
+    if (len >= 24) {
+      final h = p.read(b.body, 32);
+      if (h.length >= 24) {
+        if (h[0] == 1 && len >= 32 && h.length >= 32) {
+          p.timescale = _be32(h, 20);
+          p.duration = _be64(h, 24);
+        } else {
+          p.timescale = _be32(h, 12);
+          p.duration = _be32(h, 16);
+        }
+      }
+    }
+    return;
+  }
+  if (!p.inAudioTrak) return;
+  if (b.type == _fourcc('stsd')) {
+    if (len < 8 + 36) return;
+    final e = p.read(b.body + 8, 36);
+    if (e.length != 36) return;
+    final fmt = _be32(e, 4), esize = _be32(e, 0), ver = _be16(e, 16);
+    final child = b.body + 8 + 36 + (ver == 1 ? 16 : 0);
+    if (fmt == _fourcc('mp4a')) {
+      p.aac = true;
+      return;
+    }
+    if (fmt != _fourcc('alac')) {
+      p.other = true;
+      return;
+    }
+    final eend = b.body + 8 + esize;
+    final c = _readBox(p, child, eend < b.end ? eend : b.end);
+    if (c != null && c.type == _fourcc('alac')) {
+      final cl = c.end - c.body;
+      if (cl >= 4 + 24) {
+        final n = cl - 4 < 64 ? cl - 4 : 64; // MP4_COOKIE_MAX
+        final k = p.read(c.body + 4, n);
+        if (k.length == n) p.cookie = k;
+      }
+    }
+  } else if (b.type == _fourcc('stsz')) {
+    final h = p.read(b.body, 12);
+    if (len >= 12 && h.length == 12) {
+      final fixed = _be32(h, 4);
+      p.sampleCount = _be32(h, 8);
+      p.haveStsz = true;
+      if (fixed == 0 && p.sampleCount * 4 > len - 12) p.sampleCount = 0;
+    }
+  } else if (b.type == _fourcc('stsc')) {
+    final h = p.read(b.body, 8);
+    if (len >= 8 && h.length == 8) {
+      p.stscCount = _be32(h, 4);
+      p.haveStsc = true;
+      if (p.stscCount * 12 > len - 8) p.stscCount = 0;
+    }
+  } else if (b.type == _fourcc('stco') || b.type == _fourcc('co64')) {
+    final h = p.read(b.body, 8);
+    if (len >= 8 && h.length == 8) {
+      p.stcoCount = _be32(h, 4);
+      p.haveStco = true;
+      final w = b.type == _fourcc('co64') ? 8 : 4;
+      if (p.stcoCount * w > len - 8) p.stcoCount = 0;
+    }
+  }
+}
+
+final _mp4Containers = {
+  for (final s in ['moov', 'mdia', 'minf', 'stbl', 'udta', 'ilst', 'edts'])
+    _fourcc(s),
+};
+
+/// `walk`: the boxes from [pos] to [end], at most 20000 in all.
+void _mp4Walk(_Mp4 p, int pos, int end, int depth, int parent) {
+  while (p.boxes < 20000) {
+    final b = _readBox(p, pos, end);
+    if (b == null) break;
+    p.boxes++;
+    if (_mp4Containers.contains(b.type)) {
+      if (depth < 8) _mp4Walk(p, b.body, b.end, depth + 1, b.type);
+    } else if (b.type == _fourcc('meta')) {
+      if (depth < 8) _mp4Walk(p, b.body + 4, b.end, depth + 1, b.type);
+    } else if (b.type == _fourcc('trak')) {
+      if (!p.gotAudio) {
+        p.inAudioTrak = false;
+        p.elstOk = false;
+        _mp4Walk(p, b.body, b.end, depth + 1, b.type);
+        if (p.inAudioTrak) p.gotAudio = true;
+        p.inAudioTrak = false;
+      }
+    } else if (b.type == _fourcc('hdlr')) {
+      final h = p.read(b.body, 12);
+      if (b.end - b.body >= 12 &&
+          h.length == 12 &&
+          _be32(h, 8) == _fourcc('soun')) {
+        p.inAudioTrak = true;
+      }
+    } else {
+      _mp4Leaf(p, b, parent);
+    }
+    pos = b.end;
+  }
+}
+
+final _u64Max = (BigInt.one << 64) - BigInt.one;
+
+/// [v] as the C's `uint64_t`: Dart's ints are signed, so a field of 2^63 or
+/// more reads as negative here.
+BigInt _u64(int v) => BigInt.from(v).toUnsigned(64);
+
+/// `scale_u64`: v * mul / div in unsigned 64-bit arithmetic, or null on a
+/// zero divisor or when v * mul would overflow 64 bits.
+BigInt? _scale(int v, int mul, int div) {
+  final u = _u64(v), m = BigInt.from(mul);
+  if (div == 0 || (mul != 0 && u > _u64Max ~/ m)) return null;
+  return u * m ~/ BigInt.from(div);
+}
+
+/// `mp4_parse`: the tags, and for ALAC the duration as the firmware works
+/// it out (the media header's length at the cookie's rate, trimmed by a
+/// single-edit edit list, else by iTunSMPB). AAC: the firmware recognises
+/// it but cannot play it, so it has no duration on the device; the phone
+/// plays it, so its duration is the media header's.
+AudioTags _readMp4(ByteSource src) {
+  final p = _Mp4(src);
+  final h = src.readAt(0, 8);
+  if (h.length != 8) {
+    throw const TagReadException(_damaged, 'file is cut short');
+  }
+  if (!_startsWith(h, 4, 'ftyp')) {
+    throw const TagReadException(
+      UnreadableReason.wrongFormat,
+      'not an MP4 file',
+    );
+  }
+  _mp4Walk(p, 0, src.length, 0, 0);
+  if (!p.gotAudio) {
+    // The device keeps the tags it walked past (`META_E_NO_AUDIO`).
+    throw TagReadException(
+      _damaged,
+      'no audio track',
+      partial: p.t.tags(codec: 'mp4', durationMs: 0, sampleRate: 0),
+    );
+  }
+  if (p.aac) {
+    // The app's own rule (the device works out no AAC duration): the media
+    // header's length, read unsigned, capped at 2^40 ms.
+    var ms = 0;
+    if (p.timescale != 0) {
+      final v =
+          _u64(p.duration) * BigInt.from(1000) ~/ BigInt.from(p.timescale);
+      ms = v > BigInt.one << 40 ? 1 << 40 : v.toInt();
+    }
+    return p.t.tags(codec: 'aac', durationMs: ms, sampleRate: 0);
+  }
+  final cookie = p.cookie;
+  if (p.other || cookie == null || cookie.length < 24) {
+    return p.t.tags(codec: 'mp4', durationMs: 0, sampleRate: 0);
+  }
+  // The cookie is authoritative for the stream format. A file the device
+  // refuses (`mp4_parse`'s checks before the duration) has none there.
+  final frameLength = _be32(cookie, 0);
+  final bits = cookie[5], channels = cookie[9];
+  final rate = _be32(cookie, 20);
+  final none = p.t.tags(codec: 'alac', durationMs: 0, sampleRate: rate);
+  if (!p.haveStsz ||
+      !p.haveStsc ||
+      !p.haveStco ||
+      p.sampleCount == 0 ||
+      p.stscCount == 0 ||
+      p.stcoCount == 0 ||
+      channels < 1 ||
+      channels > 2 ||
+      (rate != 44100 && rate != 48000 && rate != 88200 && rate != 96000) ||
+      (bits != 16 && bits != 20 && bits != 24) ||
+      frameLength == 0 ||
+      frameLength > 16384) {
+    return none;
+  }
+  var total = 0;
+  if (p.timescale != 0) {
+    // duration * rate without overflow, clamped to 2^40 frames; the
+    // duration is unsigned (a v1 media header's 64 bits).
+    final d = _u64(p.duration), ts = BigInt.from(p.timescale);
+    final secs = d ~/ ts, rem = d % ts, r = BigInt.from(rate);
+    total = secs > (BigInt.one << 40) ~/ r
+        ? 1 << 40
+        : (secs * r + rem * r ~/ ts).toInt();
+  }
+  final media = p.sampleCount * frameLength;
+  var trimmed = false;
+  if (p.elstOk && p.timescale != 0 && p.elstMediaTime >= 0) {
+    final skip = _scale(p.elstMediaTime, rate, p.timescale);
+    final BigInt? len;
+    if (p.elstSeg != 0 && p.movieTs != 0) {
+      len = _scale(p.elstSeg, rate, p.movieTs);
+    } else {
+      final t = BigInt.from(total);
+      len = skip == null ? null : (t > skip ? t - skip : BigInt.zero);
+    }
+    final m = BigInt.from(media);
+    if (skip != null &&
+        len != null &&
+        len != BigInt.zero &&
+        skip < BigInt.from(0x10000) &&
+        skip <= m &&
+        len <= m - skip) {
+      total = len.toInt();
+      trimmed = true;
+    }
+  }
+  // iTunSMPB's length is unsigned: one of 2^63 or more (negative here) does
+  // not fit the media.
+  if (!trimmed &&
+      p.itunOk &&
+      p.itunLen > 0 &&
+      p.itunSkip <= media &&
+      p.itunLen <= media - p.itunSkip) {
+    total = p.itunLen;
+  }
+  return p.t.tags(
+    codec: 'alac',
+    durationMs: total * 1000 ~/ rate,
+    sampleRate: rate,
+    bitDepth: bits,
+  );
+}
+
+// ---- WAV --------------------------------------------------------------------
+
+/// `wav_parse` (app/audio/wav.c): no tags; the duration when the firmware
+/// can play the file (integer PCM, mono or stereo, 16, 24 or 32 bits,
+/// 44.1 to 96 kHz). A file it cannot play keeps no duration, as on the
+/// device; one that is not a WAV, or is damaged, is an error.
+AudioTags _readWav(ByteSource src) {
+  final size = src.length;
+  final h = src.readAt(0, 12);
+  if (h.length != 12) {
+    throw const TagReadException(_damaged, 'file is cut short');
+  }
+  if (!_startsWith(h, 0, 'RIFF') || !_startsWith(h, 8, 'WAVE')) {
+    throw const TagReadException(
+      UnreadableReason.wrongFormat,
+      'not a WAV file',
+    );
+  }
+  int le16(Uint8List b, int o) => b[o] | (b[o + 1] << 8);
+  var haveFmt = false;
+  var tag = 0, rate = 0, align = 0, bits = 0, ch = 0;
+  var pos = 12;
+  for (var guard = 0; guard < 64; guard++) {
+    final ck = src.readAt(pos, 8);
+    if (pos + 8 > size || ck.length != 8) {
+      throw TagReadException(
+        _damaged,
+        haveFmt ? 'no audio data' : 'no format chunk',
+      );
+    }
+    var chunk = _le32(ck, 4);
+    final body = pos + 8;
+    if (_startsWith(ck, 0, 'fmt ')) {
+      if (chunk < 16) throw const TagReadException(_damaged, 'bad format');
+      final n = chunk < 40 ? chunk : 40;
+      final f = src.readAt(body, n);
+      if (f.length != n) throw const TagReadException(_damaged, 'bad format');
+      tag = le16(f, 0);
+      ch = le16(f, 2);
+      rate = _le32(f, 4);
+      align = le16(f, 12);
+      bits = le16(f, 14);
+      if (tag == 0xFFFE) {
+        if (chunk < 40 || n < 40) {
+          throw const TagReadException(_damaged, 'bad format');
+        }
+        tag = le16(f, 24);
+      }
+      haveFmt = true;
+    } else if (_startsWith(ck, 0, 'data')) {
+      if (!haveFmt) throw const TagReadException(_damaged, 'no format chunk');
+      const none = AudioTags(codec: 'wav');
+      if (tag != 1 ||
+          ch < 1 ||
+          ch > 2 ||
+          (bits != 16 && bits != 24 && bits != 32) ||
+          (rate != 44100 && rate != 48000 && rate != 88200 && rate != 96000)) {
+        return none; // the device cannot play it: no duration there
+      }
+      if (align != ch * bits ~/ 8) {
+        throw const TagReadException(_damaged, 'bad format');
+      }
+      final avail = size > body ? size - body : 0;
+      if (chunk == 0 || chunk > avail) chunk = avail;
+      chunk -= chunk % align;
+      if (chunk == 0) throw const TagReadException(_damaged, 'no audio data');
+      final frames = chunk ~/ align;
+      return AudioTags(
+        codec: 'wav',
+        durationMs: frames * 1000 ~/ rate,
+        sampleRate: rate,
+        bitDepth: bits,
+      );
+    }
+    pos = body + chunk + (chunk & 1);
+  }
+  throw const TagReadException(_damaged, 'no audio data');
 }
