@@ -76,3 +76,4 @@ nav:
       - ADR-0019 Bluetooth audio boundary: adr/0019-bluetooth-audio-sink-boundary.md
       - ADR-0020 Hold: adr/0020-hold.md
       - ADR-0021 Power and sleep: adr/0021-power-sleep.md
+      - ADR-0022 One player UI: adr/0022-one-player-ui.md

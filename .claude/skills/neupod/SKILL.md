@@ -25,6 +25,8 @@ quirks): [reference/boards.md](reference/boards.md).
 
 ## Rules (all targets)
 
+- **One player UI** (ADR-0022): every device and app shares the firmware's player UI. Differences only for hardware or
+  platform reasons, as settings or build options. A UI change lands on every target or is logged in the backlog.
 - **Ask the owner** before anything irreversible (overwriting firmware that isn't ours to overwrite, repartitioning, dropping
   data, force-push), anything that changes security posture, or an architectural call. Routine calls: make them and say which.
 - Code changes go implement → verify → review (subagents). Tooling, docs and bench work don't.
