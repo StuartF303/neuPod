@@ -526,12 +526,25 @@ static pls_status_t do_catalog(void) {
 
 /* ---- opening a list ------------------------------------------------------------------------------------------------------------------------------ */
 
+static void cat_cut(char *out, size_t cap, size_t *n, const char *s) { /* append s at out[*n], keeping the NUL within cap */
+    if (cap == 0) {
+        return;
+    }
+    while (*s != '\0' && *n + 1u < cap) {
+        out[(*n)++] = *s++;
+    }
+    out[*n] = '\0';
+}
+
 static void sub_with(char *out, size_t cap, const char *artist, const char *tail) {
     char a[PLAYS_ARTIST_MAX];
     copy_cut(a, 22u < sizeof a ? 22u : sizeof a, artist); /* leave room for the tail in the 47 characters of a row's second line */
-    if (snprintf(out, cap, "%s%s%s", a, a[0] != '\0' ? " \xC2\xB7 " : "", tail) >= (int)cap) {
-        /* cut to the row, as intended; the result is used so GCC's -Wformat-truncation (an error in the ESP-IDF build) accepts it */
-    }
+    /* artist, " · ", tail, cut to the row exactly as snprintf would cut it (written out because GCC's -Wformat-truncation, an error in the
+       ESP-IDF build, rejects the intended cut) */
+    size_t n = 0;
+    cat_cut(out, cap, &n, a);
+    cat_cut(out, cap, &n, a[0] != '\0' ? " \xC2\xB7 " : "");
+    cat_cut(out, cap, &n, tail);
 }
 
 static pls_status_t open_plays(uint8_t kind) {

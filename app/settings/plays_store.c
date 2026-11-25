@@ -391,7 +391,7 @@ static void merge(const plays_entry_t *b) {
 }
 
 static void do_load(void) {
-    static plays_entry_t before[PLAYS_MAX]; /* storage task only: off its stack */
+    static plays_entry_t before[PLAYS_MAX] NEUPOD_PSRAM_BSS; /* storage task only: off its stack (23 KB: PSRAM on the RP2350 AMOLED board) */
     memcpy(before, g_t, sizeof before);
     uint32_t serial = g_serial;
     bool had = g_dirty;
