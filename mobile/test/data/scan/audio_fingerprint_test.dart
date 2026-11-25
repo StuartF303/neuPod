@@ -176,4 +176,115 @@ void main() {
       isNotNull,
     );
   });
+
+  // Damaged input: every case ends, quickly, with no fingerprint or the one
+  // of the audio that is there. A hang here would time the test out.
+  group('damaged input', () {
+    final frames = fixture('mp3_44k_st.mp3');
+    final plain = fp(frames, 'mp3');
+
+    List<int> lyrics3(String size) => [
+      ...frames,
+      ...ascii.encode('LYRICSBEGIN'),
+      ...ascii.encode(size),
+      ...ascii.encode('LYRICS200'),
+    ];
+
+    test('Lyrics3v2: a negative size is not a size (it used to loop)', () {
+      expect(fp(lyrics3('-00015'), 'mp3'), isNotNull);
+      expect(fp(lyrics3('-00015'), 'mp3'), isNot(plain)); // nothing taken off
+      expect(fp(lyrics3('+00011'), 'mp3'), isNot(plain)); // nor a plus sign
+    });
+
+    test('Lyrics3v2: a size that is not six digits is not a size', () {
+      for (final s in ['00 011', '0x0011', '00001a', '      ']) {
+        expect(fp(lyrics3(s), 'mp3'), isNotNull, reason: s);
+        expect(fp(lyrics3(s), 'mp3'), isNot(plain), reason: s);
+      }
+    });
+
+    test('Lyrics3v2: a size past the first frame stops the walk', () {
+      expect(fp(lyrics3('999999'), 'mp3'), isNotNull);
+      expect(fp(lyrics3('000000'), 'mp3'), isNotNull); // only the 15 bytes
+    });
+
+    test('APEv2: a size bigger than the file, or one that does not move the '
+        'end, stops the walk', () {
+      List<int> apeOf(int size, {bool header = false}) => [
+        ...frames,
+        ...ascii.encode('APETAGEX'),
+        ..._le32(2000),
+        ..._le32(size),
+        ..._le32(0),
+        ..._le32(header ? 0x80000000 : 0),
+        ...List.filled(8, 0),
+      ];
+      expect(fp(apeOf(0xFFFFFFFF), 'mp3'), isNotNull);
+      expect(fp(apeOf(0xFFFFFFFF, header: true), 'mp3'), isNotNull);
+      expect(fp(apeOf(31), 'mp3'), isNotNull);
+      // A right size is taken off.
+      expect(fp(apeOf(32), 'mp3'), plain);
+    });
+
+    test('MP4: a 64-bit size at or above 2^63, or past the end of the '
+        'file, gives no fingerprint', () {
+      List<int> big(int hi, int lo, String type) => [
+        ..._be32(1),
+        ...ascii.encode(type),
+        ..._be32(hi),
+        ..._be32(lo),
+        ...List.filled(64, 0),
+      ];
+      expect(fp(big(0x80000000, 0, 'free'), 'm4a'), isNull);
+      expect(fp(big(0xFFFFFFFF, 0xFFFFFFFF, 'free'), 'm4a'), isNull);
+      expect(fp(big(0x7FFFFFFF, 0xFFFFFFFF, 'free'), 'm4a'), isNull);
+      // An mdat that claims more than the file: its body to the end.
+      expect(fp(big(0x7FFFFFFF, 0xFFFFFFFF, 'mdat'), 'm4a'), isNotNull);
+      expect(fp(big(0x80000000, 0, 'mdat'), 'm4a'), isNull);
+      // A 32-bit box past the end, before any mdat.
+      expect(
+        fp([..._be32(0xFFFFFFF0), ...ascii.encode('moov'), 1, 2, 3], 'm4a'),
+        isNull,
+      );
+    });
+
+    test('FLAC: a block past the end, or no last block, gives no '
+        'fingerprint, and a file of zeros is not walked for ever', () {
+      final head = [...ascii.encode('fLaC')];
+      expect(fp([...head, 0x80, 0xFF, 0xFF, 0xFF, 1, 2, 3], 'flac'), isNull);
+      expect(fp([...head, 0x00, 0x00, 0x00, 0x04, 1, 2, 3, 4], 'flac'), isNull);
+      final zeros = [...head, ...List.filled(8 * 1024 * 1024, 0)];
+      final watch = Stopwatch()..start();
+      expect(fp(zeros, 'flac'), isNull);
+      expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
+      expect(maxFlacBlocks, 1024);
+    });
+
+    test('WAV: chunks are stepped over (odd sizes padded), and one past the '
+        'end before the data gives no fingerprint', () {
+      expect(
+        fp(wav(audio, extra: chunk('odd!', [1, 2, 3])), 'wav'),
+        fp(wav(audio), 'wav'),
+      );
+      final pastEnd = [
+        ...ascii.encode('RIFF'),
+        ..._le32(100),
+        ...ascii.encode('WAVE'),
+        ...ascii.encode('LIST'),
+        ..._le32(0xFFFFFFF0),
+        ...List.filled(20, 0),
+      ];
+      expect(fp(pastEnd, 'wav'), isNull);
+      // A streaming size (0xFFFFFFFF) on the data chunk: to the end.
+      final streaming = [
+        ...ascii.encode('RIFF'),
+        ..._le32(0xFFFFFFFF),
+        ...ascii.encode('WAVE'),
+        ...ascii.encode('data'),
+        ..._le32(0xFFFFFFFF),
+        ...audio,
+      ];
+      expect(fp(streaming, 'wav'), isNotNull);
+    });
+  });
 }

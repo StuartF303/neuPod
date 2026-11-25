@@ -464,6 +464,30 @@ void main() {
       expect((await of('A')).stars, 2);
     });
 
+    test('no carry when the old key is still in the library: the key is '
+        'shared across folders', () async {
+      final bytes = flac(['TITLE=A']);
+      put('x.flac', bytes);
+      final other = Directory('${tmp.path}/other')..createSync();
+      File('${other.path}/x.flac').writeAsBytesSync(bytes); // same path, size
+      final api = DirApi({'m': Directory('${tmp.path}/music'), 'o': other});
+      final access = FakeFolderAccess([folder('m'), folder('o')]);
+      final (_, _, scanner) = scannerWithStats(access: access, api: api);
+      await scanner.scan().drain<void>();
+      await stats.rateAt('/x.flac', bytes.length, 4);
+
+      // One copy moves; the other still has '/x.flac' and that size.
+      File('${tmp.path}/music/x.flac').renameSync(
+        '${(Directory('${tmp.path}/music/Moved')..createSync()).path}/x.flac',
+      );
+      await scanner.scan().drain<void>();
+      expect((await stats.statsAt('/x.flac', bytes.length)).stars, 4);
+      expect(
+        await stats.statsAt('/Moved/x.flac', bytes.length),
+        PlayStats.none,
+      );
+    });
+
     test('copies of the same audio are not a move, and numbers already at '
         'the new key are kept', () async {
       final bytes = flac(['TITLE=A']);

@@ -4,7 +4,7 @@
 // leave the library database out (owner decision 20).
 //
 // - iOS: `isExcludedFromBackup` read from the file system: true for
-//   Application Support/library (and the library database in it), false for
+//   Application Support/library (which covers the files in it), false for
 //   Application Support/stats and the stats database file itself.
 // - Android: the library is in noBackupFilesDir, which Android never backs
 //   up; the stats database is in filesDir/stats, the one path the app's
@@ -12,7 +12,7 @@
 
 import 'dart:io';
 
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:neupod/data/db/open_library_database.dart';
@@ -46,16 +46,28 @@ void main() {
       final lib = openLibraryDatabase(() async => library);
       await lib.customSelect('SELECT 1').get();
       await lib.close();
+      // A row is written and deleted again, so the check leaves the owner's
+      // ratings exactly as they were.
       final st = openStatsDatabase(() async => stats);
+      const probe = '/neupod-backup-check';
       await st
           .into(st.trackStats)
           .insertOnConflictUpdate(
             TrackStatsCompanion.insert(
-              path: '/backup-check.flac',
+              path: probe,
               size: 1,
               rating: const Value(1),
             ),
           );
+      await (st.delete(
+        st.trackStats,
+      )..where((r) => r.path.equals(probe) & r.size.equals(1))).go();
+      expect(
+        await (st.select(
+          st.trackStats,
+        )..where((r) => r.path.equals(probe))).get(),
+        isEmpty,
+      );
       await st.close();
     });
     expect(File('$library/library.sqlite').existsSync(), isTrue);

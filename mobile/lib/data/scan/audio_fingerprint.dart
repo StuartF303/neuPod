@@ -20,10 +20,18 @@
 ///   `moov`/`udta` and may move `mdat`, never its body.
 /// - WAV: the body of the `data` chunk (`LIST`/`id3 ` chunks are tags).
 ///
-/// One read of 64 KiB per new or changed file, in the scan's isolate, while
-/// the file is open for its tags anyway. The payload's length makes two
-/// different recordings with the same first 64 KiB (a shared silent intro)
-/// still differ unless they are also exactly as long.
+/// Done only for new or changed files, in the scan's isolate, on the handle
+/// already open for their tags. It reads the payload's first 64 KiB plus the
+/// container's headers (FLAC block headers, MP4 box headers, WAV chunk
+/// headers, at most a few hundred bytes); an MP3 also reads up to 64 KiB to
+/// find its first frame header, so up to about 128 KiB in all. The payload's
+/// length makes two different recordings with the same first 64 KiB (a
+/// shared silent intro) still differ unless they are also exactly as long.
+///
+/// Damaged input never hangs or reads without bound: every walk stops at the
+/// end of the file, steps strictly forward, and FLAC stops after
+/// [maxFlacBlocks] metadata blocks; anything that does not add up gives no
+/// fingerprint.
 library;
 
 import 'dart:typed_data';
@@ -88,17 +96,24 @@ int _id3v2At(ByteSource src, int at) {
   return 10 + size + ((h[5] & 0x10) != 0 ? 10 : 0);
 }
 
+/// The most FLAC metadata blocks walked before the file is taken as not a
+/// FLAC (a real file has a handful; a file of zeros after `fLaC` would
+/// otherwise be walked 4 bytes at a time).
+const maxFlacBlocks = 1024;
+
 (int, int)? _flac(ByteSource src) {
   var at = _id3v2At(src, 0);
   if (!_is(src.readAt(at, 4), 0, 'fLaC')) return null;
   at += 4;
-  while (true) {
+  for (var n = 0; n < maxFlacBlocks; n++) {
     final h = src.readAt(at, 4);
     if (h.length < 4) return null;
-    at += 4 + ((h[1] << 16) | (h[2] << 8) | h[3]);
-    if (at > src.length) return null;
+    final size = (h[1] << 16) | (h[2] << 8) | h[3];
+    if (size > src.length - at - 4) return null; // the block runs past the end
+    at += 4 + size;
     if (h[0] & 0x80 != 0) return (at, src.length);
   }
+  return null;
 }
 
 bool _mp3Header(Uint8List b, int i) {
@@ -110,11 +125,24 @@ bool _mp3Header(Uint8List b, int i) {
   return version != 1 && layer != 0 && bitrate != 15 && rate != 3;
 }
 
+/// The six ASCII digits of a Lyrics3v2 size, or null (no sign, no spaces).
+int? _sixDigits(Uint8List b) {
+  if (b.length < 6) return null;
+  var v = 0;
+  for (var i = 0; i < 6; i++) {
+    final c = b[i];
+    if (c < 0x30 || c > 0x39) return null;
+    v = v * 10 + (c - 0x30);
+  }
+  return v;
+}
+
 (int, int)? _mp3(ByteSource src) {
   var at = 0;
   for (var n = _id3v2At(src, at); n > 0; n = _id3v2At(src, at)) {
     at += n;
   }
+  if (at >= src.length) return null;
   // The first frame header within 64 KiB (padding after a tag is skipped).
   final scan = src.readAt(at, fingerprintBytes);
   var first = -1;
@@ -127,37 +155,39 @@ bool _mp3Header(Uint8List b, int i) {
   if (first < 0) return null;
   var end = src.length;
   // Trailing tags, in the order they are written: APEv2 or Lyrics3v2 before
-  // an ID3v1.
+  // an ID3v1. Each one taken off must move the end strictly back and leave
+  // it after the first frame; anything else stops the walk where it is.
   if (end - 128 >= first && _is(src.readAt(end - 128, 3), 0, 'TAG')) {
     end -= 128;
   }
-  for (var again = true; again;) {
-    again = false;
-    final ape = src.readAt(end - 32, 32);
-    if (end - 32 >= first && _is(ape, 0, 'APETAGEX')) {
-      final size = ByteData.sublistView(ape).getUint32(12, Endian.little);
-      final header = ByteData.sublistView(ape).getUint32(20, Endian.little);
-      if (size < 32) break; // the size counts the footer: a damaged tag
-      end -= size + ((header & 0x80000000) != 0 ? 32 : 0);
-      again = true;
-      continue;
-    }
-    final ly = src.readAt(end - 15, 15);
-    if (end - 15 >= first && _is(ly, 6, 'LYRICS200')) {
-      final digits = String.fromCharCodes(ly.sublist(0, 6));
-      final size = int.tryParse(digits);
-      if (size != null) {
-        end -= size + 15;
-        again = true;
+  while (true) {
+    var next = end;
+    if (end - 32 >= first) {
+      final ape = src.readAt(end - 32, 32);
+      if (_is(ape, 0, 'APETAGEX')) {
+        final d = ByteData.sublistView(ape);
+        final size = d.getUint32(12, Endian.little);
+        final header = (d.getUint32(20, Endian.little) & 0x80000000) != 0;
+        // The size counts the items and the footer, not the header.
+        if (size >= 32) next = end - size - (header ? 32 : 0);
       }
     }
+    if (next == end && end - 15 >= first) {
+      final ly = src.readAt(end - 15, 15);
+      if (_is(ly, 6, 'LYRICS200')) {
+        final size = _sixDigits(ly);
+        if (size != null) next = end - 15 - size;
+      }
+    }
+    if (next >= end || next <= first) break;
+    end = next;
   }
-  return end > first ? (first, end) : null;
+  return (first, end);
 }
 
 (int, int)? _mp4(ByteSource src) {
   var at = 0;
-  while (at + 8 <= src.length) {
+  while (at <= src.length - 8) {
     final h = src.readAt(at, 16);
     if (h.length < 8) return null;
     final d = ByteData.sublistView(h);
@@ -165,16 +195,19 @@ bool _mp3Header(Uint8List b, int i) {
     var header = 8;
     if (size == 1) {
       if (h.length < 16) return null;
+      // A 64-bit size; the VM reads 2^63 and up as negative, which the
+      // checks below refuse.
       size = d.getUint64(8);
       header = 16;
     } else if (size == 0) {
-      size = src.length - at;
+      size = src.length - at; // to the end of the file
     }
     if (size < header) return null;
+    final last = size > src.length - at; // runs past the end
     if (_is(h, 4, 'mdat')) {
-      final end = at + size > src.length ? src.length : at + size;
-      return (at + header, end);
+      return (at + header, last ? src.length : at + size);
     }
+    if (last) return null;
     at += size;
   }
   return null;
@@ -184,16 +217,19 @@ bool _mp3Header(Uint8List b, int i) {
   final h = src.readAt(0, 12);
   if (!_is(h, 0, 'RIFF') || !_is(h, 8, 'WAVE')) return null;
   var at = 12;
-  while (at + 8 <= src.length) {
+  while (at <= src.length - 8) {
     final c = src.readAt(at, 8);
     if (c.length < 8) return null;
     final size = ByteData.sublistView(c).getUint32(4, Endian.little);
+    final room = src.length - at - 8;
     if (_is(c, 0, 'data')) {
-      final end = size == 0xFFFFFFFF || at + 8 + size > src.length
-          ? src.length
-          : at + 8 + size;
-      return (at + 8, end);
+      // A streaming writer leaves the size at 0xFFFFFFFF: to the end.
+      return (
+        at + 8,
+        size == 0xFFFFFFFF || size > room ? src.length : at + 8 + size,
+      );
     }
+    if (size > room) return null; // the chunk runs past the end
     at += 8 + size + (size & 1);
   }
   return null;

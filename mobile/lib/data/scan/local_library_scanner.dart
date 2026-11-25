@@ -199,7 +199,13 @@ final class LocalLibraryScanner implements LibraryScanner {
       yield ScanProgress(filesFound: found, filesRead: read);
     }
     final carry = onMoves;
-    final moved = moves.resolve();
+    // The key is shared across library folders: a file at the same relative
+    // path and size in another folder still has the old key, so its numbers
+    // stay where they are.
+    final moved = [
+      for (final m in moves.resolve())
+        if (!await _keyInLibrary(m.fromPath, m.fromSize)) m,
+    ];
     if (carry != null && moved.isNotEmpty) {
       try {
         await carry(moved);
@@ -264,6 +270,20 @@ final class LocalLibraryScanner implements LibraryScanner {
         );
       }
     });
+  }
+
+  /// Some track in the library still has the key [path] (`'/' + rel_path`)
+  /// and [size].
+  Future<bool> _keyInLibrary(String path, int size) async {
+    final row =
+        await (_db.select(_db.tracks)
+              ..where(
+                (t) =>
+                    t.relPath.equals(path.substring(1)) & t.size.equals(size),
+              )
+              ..limit(1))
+            .getSingleOrNull();
+    return row != null;
   }
 
   /// Same file as last time, read by this version, and its last read did not

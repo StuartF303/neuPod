@@ -90,8 +90,10 @@ All in `mobile/lib/domain/library/play_stats.dart`, checked against the compiled
   - MP4/M4A: the body of the first top-level `mdat` box. Taggers rewrite `moov`/`udta` and may move `mdat`, never its
     body.
   - WAV: the body of the `data` chunk (`LIST` and `id3 ` chunks are tags).
-- **Why this one.** Cheap: one 64 KiB read per new or changed file, from the handle already open for its tags, in the
-  scan's isolate; unchanged files are never opened. Robust: no tag byte is hashed, so a retag, a rename and a move
+- **Why this one.** Cheap: only new or changed files, from the handle already open for their tags, in the scan's
+  isolate; unchanged files are never opened. It reads the payload's first 64 KiB plus the container's headers (a few
+  hundred bytes); an MP3 also reads up to 64 KiB to find its first frame header, so up to about 128 KiB in all.
+  Robust: no tag byte is hashed, so a retag, a rename and a move
   leave it unchanged. The payload length stands in for the owner's "plus the duration": it is exact and needs no
   parse, while a duration can be an estimate (an MP3 with no Xing header) and comes out the same for different
   encodings; two recordings that share their first 64 KiB (a silent intro) still differ unless they are also exactly
@@ -105,9 +107,18 @@ All in `mobile/lib/domain/library/play_stats.dart`, checked against the compiled
   (`TrackStatsStore.carry`), in one transaction. Copies of the same audio on either side are not a move (which one
   would it be?). A new key that already has numbers keeps them; the old ones stay under the old key. A scan cancelled
   before the end carries nothing; the numbers stay under the old key, not lost.
-- Tests: `test/data/scan/audio_fingerprint_test.dart` (each container, retagged and not, other audio, damaged input)
-  and the "ratings and play counts" group of `test/data/scan/local_library_scanner_test.dart` (a move in a folder, a
-  move to another library folder, a size-changing retag, copies, no overwrite).
+- **The key is shared across library folders.** It is the path relative to the folder, as on a card, so two folders
+  holding the same relative path at the same size share one row (as the device has one card). A move whose old key
+  is still held by a file in another folder is therefore not carried: the numbers stay with the file still there.
+- **Damaged files never hang the scan.** Every walk stops at the end of the file and steps strictly forward; a size
+  that runs past the end, a 64-bit MP4 size at or above 2^63, an APEv2 or Lyrics3v2 size that does not move the end
+  back (a Lyrics3v2 size must be six ASCII digits), and more than 1,024 FLAC metadata blocks all give no fingerprint,
+  or stop taking trailing tags off.
+- Tests: `test/data/scan/audio_fingerprint_test.dart` (each container, retagged and not, other audio, and damaged
+  input: negative and non-digit Lyrics3v2 sizes, huge APEv2 sizes, 64-bit MP4 sizes, boxes and chunks past the end, a
+  FLAC block overrun, 8 MB of zeros after `fLaC`, WAV chunk stepping) and the "ratings and play counts" group of
+  `test/data/scan/local_library_scanner_test.dart` (a move in a folder, a move to another library folder, a
+  size-changing retag, copies, no overwrite, an old key still held in another folder).
 
 ## Known gaps (logged in PROGRESS)
 

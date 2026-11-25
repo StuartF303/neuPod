@@ -176,9 +176,11 @@ class LibraryDatabase extends _$LibraryDatabase {
     onUpgrade: (m, from, to) async {
       // One step per version, each against its snapshot, so a database at any
       // earlier version reaches this one with its rows kept. Never drop and
-      // recreate: the database will hold data a rescan cannot rebuild
-      // (ratings, play counts, playlists). A downgrade (a database from a
-      // newer build) throws a StateError instead of being changed.
+      // recreate: a drop costs the owner a full rescan, and data a rescan
+      // cannot rebuild must never be lost this way (ratings and play counts
+      // are in the stats database, owner decision 20; playlists, phase 6,
+      // must decide where they go). A downgrade (a database from a newer
+      // build) throws a StateError instead of being changed.
       //
       // drift does not wrap onUpgrade in a transaction, and writes
       // user_version only after beforeOpen succeeds. So every step and the
