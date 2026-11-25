@@ -66,8 +66,7 @@ first feature is through.
 - **iOS CI timeout.** On #150 a slow macOS runner took 17 minutes to build and the 40-minute job was cancelled
   mid-tests. The `ios` job is now 60 minutes (the Integration tests step keeps its own 25). If it still cancels, read the
   step times before raising anything.
-- Check that "green" means tests ran: confirm counts are real, not all skipped (146 skipped on the host are goldens,
-  compared on the macOS job).
+- Check that "green" means tests ran: confirm counts are real, not all skipped.
 
 ## How the lead works
 
