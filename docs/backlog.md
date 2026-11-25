@@ -38,6 +38,10 @@ the Pico 2 W build is frozen as a compile check; items may assume the RP2350B wi
 
 A Flutter music player for iOS and Android in the neuPod styles, later a companion to the device: [specification](app/README.md). Release R1 (files on the phone) is tracked in its own [progress list](app/PROGRESS.md), not here. R3 (companion) depends on the device HTTP API, step W2 in [Wi-Fi](wifi.md).
 
+| ID | Item | Source | Needs | Notes |
+| --- | --- | --- | --- | --- |
+| AP-1 | **Custom mode for the device view**: Mode becomes Light, Dark, Auto, Custom. Custom sets the colour and transparency of the body, the wheel and the centre button with a colour wheel, carries its own screen choice, and shows a neuPod board picture through a see-through part. Up to six saved looks; three starters ship. | req 25 Nov 2026 | [design](design/2026-11-25-app-custom-mode/README.md) written, awaiting the owner on its Open questions; **real board pictures** (KiCad renders or photos of neuPod's own boards; `boards/` is empty); settings storage in the app (app progress list, phase 6) | Build from the design's [brief](design/2026-11-25-app-custom-mode/IMPLEMENTATION-BRIEF.md), tracked in its [progress list](design/2026-11-25-app-custom-mode/PROGRESS.md). Paint only: no geometry or hit zone changes. |
+
 ## Device and phone together 2026-11-24
 
 The phone has no card slot, so the device is the full offline library and the phone carries part of it. Three ways to play: the device plays, the phone plays from the device's card, or either plays to Bluetooth or network speakers. Owner: all of it is wanted eventually; the order is open. Working split: Bluetooth for control, Wi-Fi (or the cable) for the music itself, because no Bluetooth mode in today's radios carries CD-quality FLAC (about 1 Mbit/s, peaks to 1.4) to a phone with margin: see CN-7.
