@@ -75,7 +75,7 @@ planning stage 2a ([Bluetooth](../bluetooth.md)).
 
 The decision above names the 8 MB APS6404L PSRAM as where album art goes on the final board. The Waveshare RP2350-Touch-AMOLED-2.41
 has that part (and the ESP32-S3-Touch-AMOLED-2.41 has 8 MB of octal PSRAM), so the big-RAM player now runs there. Design and evidence:
-[specs/001-amoled-full-art](../../specs/001-amoled-full-art/plan.md) (research R1 to R11). The lead confirmed the scope and the failure
+[specs/001-amoled-full-art](https://github.com/StuartF303/neuPod/blob/main/specs/001-amoled-full-art/plan.md) (research R1 to R11). The lead confirmed the scope and the failure
 policy on 25 Nov 2026.
 
 - **What goes to PSRAM:** the 24-album art cache (1,230,144 B), the playlist buffers, the play counts and the play queue: the cold,

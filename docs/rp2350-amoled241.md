@@ -88,7 +88,7 @@ counted.
 The board's 8 MB PSRAM (APS6404L class, QMI CS1 = GPIO47) holds the big buffers of the **big-RAM player**, which this build has
 by default (`NEUPOD_ART_HIRES`, as the simulator and the Y2): 160 x 160 album art with the 24-album cache, art in the album
 header, Cover Flow, Playlists, play counts and 128 ratings. `-DNEUPOD_ART_HIRES=OFF` (new build directory or `--clean`) gives
-the small player of the Pico 2 W for comparison. Design and budget: [specs/001-amoled-full-art](../specs/001-amoled-full-art/plan.md).
+the small player of the Pico 2 W for comparison. Design and budget: [specs/001-amoled-full-art](https://github.com/StuartF303/neuPod/blob/main/specs/001-amoled-full-art/plan.md).
 
 - **Bring-up.** The Pico SDK's `hardware_psram` (board header `PICO_PSRAM_CS_PIN 47`, `PICO_AUTO_DETECT_PSRAM_SIZE 1`: the chip's
   ID is read, nothing is assumed) in `runtime_init`, preceded by our warm-start reset (quad-mode off, reset; a picotool reboot
