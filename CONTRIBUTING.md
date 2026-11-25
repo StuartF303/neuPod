@@ -6,6 +6,17 @@ Read the [constitution](docs/constitution.md) first: one player UI everywhere, t
 music and devices are safe, fit the hardware, lossless sound, open and private, verified and reviewed before merge,
 decisions written down. Every spec, plan and review is checked against it.
 
+## Specs (Spec Kit, pilot)
+
+New features can follow [GitHub Spec Kit](https://github.github.com/spec-kit/): `/speckit-specify` (what and why), then
+`/speckit-clarify` (open questions go to the owner), `/speckit-plan` (how, with the RAM budget), `/speckit-tasks`,
+`/speckit-analyze` (checks the spec, plan and tasks against the constitution), then `/speckit-implement`. The specs
+are kept in `specs/NNN-name/`. The constitution lives in `docs/constitution.md`, and `.specify/memory/constitution.md` is
+a copy that CI keeps identical. Edit both, or run `/speckit-constitution` and copy its result back.
+
+This is a pilot on one feature (backlog UI-25). The phone app keeps its own spec and checklist under `docs/app/`.
+Branch names still follow the table below.
+
 ## Branches
 
 Work on short-lived branches off `main`:

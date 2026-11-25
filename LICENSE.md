@@ -18,6 +18,7 @@ Where a file carries its own SPDX header, that header takes precedence. Third-pa
 
 | Component | Path | Licence | Notes |
 |-----------|------|---------|-------|
+| GitHub Spec Kit 1.4.5.dev0 (`github/spec-kit`: templates, scripts and Claude skills written by `specify init`) | `.specify/`, `.claude/skills/speckit-*/` | MIT | Development tooling only; nothing from it is built into the firmware or the app. |
 | FreeRTOS-Kernel (Raspberry Pi fork, pinned commit `4f7299d`, kernel V11.1.0+) | `lib/FreeRTOS-Kernel` (submodule) | MIT | The RP2350 port files carry Raspberry Pi's BSD-3-Clause notice (`freertos_sdk_config.h`). The POSIX port (host and Y2 builds) is MIT. The ESP32-S3 build uses ESP-IDF's own FreeRTOS (MIT, with Espressif's changes) instead. |
 | LVGL v9.6.0 | `lib/lvgl` (submodule) | MIT | Only `src/` is compiled; configuration in `app/ui/lv_conf.h`. |
 | Montserrat (the UI's own Latin-1 builds at 12, 14, 16, 20, 22, 26, 28, 38 and 48 px, from LVGL's copy of the font) | `app/ui/fonts` (licence text: `OFL-Montserrat.txt`) | SIL OFL 1.1 | Embedded as glyph bitmaps in the firmware. |
