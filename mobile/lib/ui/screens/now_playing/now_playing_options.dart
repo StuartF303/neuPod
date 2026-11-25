@@ -37,18 +37,15 @@ final ratingPlacementProvider =
       RatingPlacementNotifier.new,
     );
 
-/// Shuffle, repeat and ratings as Now Playing's page 2 sets them.
+/// Shuffle and repeat as Now Playing's page 2 sets them.
 ///
-/// Kept in memory here: the queue rules (phase 4) and the library's ratings
-/// (phase 3) own the real ones and replace this provider's state.
+/// Kept in memory here: the queue rules (phase 4) own the real ones and
+/// replace this provider's state. Ratings are the library's (decision 0011,
+/// `trackStatsProvider`).
 @immutable
 class PlaybackChoices {
   /// The choices.
-  const PlaybackChoices({
-    this.shuffle = false,
-    this.repeat = RepeatState.off,
-    this.ratings = const {},
-  });
+  const PlaybackChoices({this.shuffle = false, this.repeat = RepeatState.off});
 
   /// Shuffle is on.
   final bool shuffle;
@@ -56,19 +53,12 @@ class PlaybackChoices {
   /// Repeat off, all or one.
   final RepeatState repeat;
 
-  /// Stars by track id.
-  final Map<String, int> ratings;
-
   /// A copy with other values.
-  PlaybackChoices copyWith({
-    bool? shuffle,
-    RepeatState? repeat,
-    Map<String, int>? ratings,
-  }) => PlaybackChoices(
-    shuffle: shuffle ?? this.shuffle,
-    repeat: repeat ?? this.repeat,
-    ratings: ratings ?? this.ratings,
-  );
+  PlaybackChoices copyWith({bool? shuffle, RepeatState? repeat}) =>
+      PlaybackChoices(
+        shuffle: shuffle ?? this.shuffle,
+        repeat: repeat ?? this.repeat,
+      );
 }
 
 /// Holds the [PlaybackChoices].
@@ -83,14 +73,9 @@ class PlaybackChoicesNotifier extends Notifier<PlaybackChoices> {
   void cycleRepeat() => state = state.copyWith(
     repeat: RepeatState.values[(state.repeat.index + 1) % 3],
   );
-
-  /// Sets the stars (0 to 5) of a track.
-  void rate(String trackId, int stars) => state = state.copyWith(
-    ratings: {...state.ratings, trackId: stars.clamp(0, 5)},
-  );
 }
 
-/// Shuffle, repeat and ratings.
+/// Shuffle and repeat.
 final playbackChoicesProvider =
     NotifierProvider<PlaybackChoicesNotifier, PlaybackChoices>(
       PlaybackChoicesNotifier.new,

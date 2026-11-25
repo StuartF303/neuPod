@@ -9,9 +9,11 @@ import 'package:drift/native.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/data/db/drift_library_repository.dart';
+import 'package:neupod/data/db/drift_track_stats_store.dart';
 import 'package:neupod/data/db/library_database.dart';
 import 'package:neupod/data/scan/local_library_scanner.dart';
 import 'package:neupod/domain/library/library_folder.dart';
+import 'package:neupod/domain/library/play_stats.dart';
 import 'package:neupod/domain/library/track.dart';
 import 'package:neupod_storage/neupod_storage.dart';
 // ignore: implementation_imports
@@ -326,6 +328,91 @@ void main() {
       expect(t.first.id, idA); // the row (and its id) survives
     },
   );
+
+  // Ratings and play counts (decision 0011) live in track_stats, keyed by
+  // the device's path and size, not by the tracks row: no scan ever deletes
+  // or changes them.
+  group('ratings and play counts', () {
+    late DriftTrackStatsStore stats;
+    setUp(() => stats = DriftTrackStatsStore(db));
+
+    Future<String> idOf(String title) async =>
+        (await tracks()).firstWhere((t) => t.title == title).id.toString();
+
+    Future<PlayStats> of(String title) async =>
+        stats.watch(await idOf(title)).first;
+
+    test('survive a rescan, a re-read of the file, a new scan version and '
+        'a folder removed and added back', () async {
+      put('Album/a.flac', flac(['TITLE=A']));
+      put('Album/b.flac', flac(['TITLE=B']));
+      final access = FakeFolderAccess([folder('m')]);
+      final (_, storage, scanner) = setUpScanner(access: access, version: 1);
+      await scanner.scan().drain<void>();
+      await stats.rate(await idOf('A'), 5);
+      await stats.countPlay(await idOf('A'));
+      await stats.countPlay(await idOf('B'));
+      final a = await of('A');
+      final b = await of('B');
+      expect(a, const PlayStats(stars: 5, plays: 1, lastPlayed: 2, stamp: 2));
+      expect(b, const PlayStats(plays: 1, lastPlayed: 3, stamp: 3));
+
+      // Nothing changed: nothing read.
+      await scanner.scan().drain<void>();
+      expect(await of('A'), a);
+
+      // Same size, newer mtime: the file is read again and its row
+      // rewritten.
+      final file = File('${tmp.path}/music/Album/a.flac');
+      file.setLastModifiedSync(DateTime(2030));
+      storage.opened.clear();
+      await scanner.scan().drain<void>();
+      expect(storage.opened, ['a.flac']);
+      expect(await of('A'), a);
+
+      // Every file read again by a new scanner version.
+      final (_, _, newer) = setUpScanner(access: access, version: 2);
+      await newer.scan().drain<void>();
+      expect(await of('A'), a);
+      expect(await of('B'), b);
+
+      // The folder removed: its tracks go, their numbers stay.
+      access.held.clear();
+      await newer.scan().drain<void>();
+      expect(await tracks(), isEmpty);
+      expect(await stats.statsAt('/Album/a.flac', file.lengthSync()), a);
+
+      // Added back: the new rows find them again.
+      access.held.add(folder('m'));
+      await newer.scan().drain<void>();
+      expect(await of('A'), a);
+      expect(await of('B'), b);
+    });
+
+    test('a retag that changes the size, or a move, starts again: the '
+        "firmware's key is the path and the size (decision 0011, open for "
+        'the owner)', () async {
+      put('Album/a.flac', flac(['TITLE=A']));
+      final (_, _, scanner) = setUpScanner();
+      await scanner.scan().drain<void>();
+      await stats.rate(await idOf('A'), 3);
+
+      File('${tmp.path}/music/Album/a.flac').renameSync(
+        '${(Directory('${tmp.path}/music/Moved')..createSync()).path}/a.flac',
+      );
+      await scanner.scan().drain<void>();
+      expect(await of('A'), PlayStats.none);
+
+      put('Moved/a.flac', flac(['TITLE=A', 'ARTIST=Retagged']));
+      await scanner.scan().drain<void>();
+      expect(await of('A'), PlayStats.none);
+      // The old numbers are still kept, under the old key.
+      expect(
+        (await stats.statsAt('/Album/a.flac', flac(['TITLE=A']).length)).stars,
+        3,
+      );
+    });
+  });
 
   test('an incomplete walk deletes nothing it did not see', () async {
     put('keep/a.flac', flac(['TITLE=A']));

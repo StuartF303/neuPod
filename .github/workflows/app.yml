@@ -132,6 +132,13 @@ jobs:
           python3 ../scripts/app/gen_tag_key_vectors.py
           git status --porcelain -- test/fixtures/tag_keys
           test -z "$(git status --porcelain -- test/fixtures/tag_keys)"
+      # Play counting, ratings and last played (mobile/lib/domain/library/play_stats.dart) are checked against vectors
+      # printed by the firmware's own play_tracker.c, ratings_store.c and plays_store.c. Regenerate and diff.
+      - name: Play count vectors match the firmware
+        run: |
+          out=$(mktemp)
+          sh ../scripts/app/gen-plays-vectors.sh "$out"
+          diff -q "$out" test/fixtures/plays/firmware_vectors.json
       # The in-repo plugin's own Dart side (its Pigeon messages against a fake host).
       - name: neupod_device plugin
         working-directory: mobile/packages/neupod_device

@@ -58,7 +58,7 @@ Status: Accepted (2026-11-22) · Owner: Library engineer
     `LibraryDatabase.withStepsForTesting`, leaves the schema, the rows and `user_version` exactly as they were.
 - **Guard** (`mobile/test/data/db/library_tables_guard_test.dart`): fails if any table other than `sources` and
   `tracks` exists. It is updated in the same PR that adds the first user-owned table, and that PR must bring its
-  migration step.
+  migration step. Schema version 5 added the first, `track_stats` (decision 0011), with step `from4To5` and its test.
 
 ## Adding version 2
 

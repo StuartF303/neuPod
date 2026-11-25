@@ -13,7 +13,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neupod/app/play_stats_providers.dart';
 import 'package:neupod/app/providers.dart';
+import 'package:neupod/domain/library/play_stats.dart';
 import 'package:neupod/domain/playback/player_state.dart';
 import 'package:neupod/domain/wheel/now_playing_control.dart';
 import 'package:neupod/domain/wheel/system_volume_port.dart';
@@ -78,6 +80,9 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   bool _swallowPress = false;
   Page2Row _focus = Page2Row.rating;
   bool _ratingEditing = false;
+  (String, int)? _pendingStars;
+  int _ratingWrites = 0;
+  Future<void> _ratingChain = Future.value();
   SystemVolume? _volume;
   bool _volumeShown = false;
   String? _message;
@@ -481,12 +486,14 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     switch (e) {
       case WheelStep(:final steps):
         if (_ratingEditing) {
+          // p2_scroll: one star per turn whatever its size, 0 to 5, saved
+          // at once; a step only when the stars changed.
           final id = _state.current?.id;
           if (id != null) {
-            final now = ref.read(playbackChoicesProvider).ratings[id] ?? 0;
-            final to = (now + steps).clamp(0, 5);
+            final now = _rating();
+            final to = starsAfterTurn(now, steps);
             if (to != now) {
-              ref.read(playbackChoicesProvider.notifier).rate(id, to);
+              _rate(id, to);
               feedback.detent();
             }
           }
@@ -591,11 +598,33 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     }
   }
 
+  /// The stars of the track playing: the one the wheel last set while its
+  /// writes are still going to the store (so quick turns build on each
+  /// other, as the firmware's `p->stars` does), else the store's.
   int _rating() {
     final id = _state.current?.id;
-    return id == null
-        ? 0
-        : (ref.read(playbackChoicesProvider).ratings[id] ?? 0);
+    if (id == null) return 0;
+    final pending = _pendingStars;
+    if (pending != null && pending.$1 == id) return pending.$2;
+    return ref.read(trackStatsProvider(id)).value?.stars ?? 0;
+  }
+
+  /// Saves [stars] for track [id], one write after another.
+  void _rate(String id, int stars) {
+    final store = ref.read(trackStatsStoreProvider);
+    _pendingStars = (id, stars);
+    _ratingWrites++;
+    _ratingChain = _ratingChain
+        .then((_) => store.rate(id, stars))
+        .catchError((Object e) {
+          debugPrint('neupod: rating of $id not saved: $e');
+        })
+        .whenComplete(() {
+          if (--_ratingWrites == 0) {
+            _pendingStars = null;
+            if (mounted) setState(() {});
+          }
+        });
   }
 
   // ---- build -------------------------------------------------------------
@@ -606,6 +635,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     final choices = ref.watch(playbackChoicesProvider);
     final placement = ref.watch(ratingPlacementProvider);
     final item = state.current;
+    if (item != null) ref.watch(trackStatsProvider(item.id));
     final art = ref.watch(playingArtProvider).value;
 
     final seek = _npc.mode == NowPlayingWheelMode.seek;
@@ -634,7 +664,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
           : (state.isPlaying ? PlayState.playing : PlayState.paused),
       shuffle: choices.shuffle,
       repeat: choices.repeat,
-      rating: item == null ? 0 : (choices.ratings[item.id] ?? 0),
+      rating: _rating(),
       queueLabel: queueLabel,
       contextLabel: queueLabel == null
           ? null

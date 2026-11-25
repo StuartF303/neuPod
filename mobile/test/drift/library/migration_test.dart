@@ -148,6 +148,35 @@ void main() {
     },
   );
 
+  test('4 to 5: tracks and sources keep their rows; track_stats is new, '
+      'empty, and refuses values the firmware cannot hold', () async {
+    final schema = await verifier.schemaAt(4);
+    final before = _fillEveryTable(schema.rawDatabase, 4);
+    final db = LibraryDatabase(schema.newConnection());
+    await verifier.migrateAndValidate(db, 5);
+    final row = (await db.select(db.tracks).get()).single;
+    expect(row.relPath, before['tracks']!['rel_path']);
+    expect(row.artKind, before['tracks']!['art_kind']);
+    expect(await db.select(db.trackStats).get(), isEmpty);
+
+    await db
+        .into(db.trackStats)
+        .insert(TrackStatsCompanion.insert(path: '/a.flac', size: 1));
+    final stats = (await db.select(db.trackStats).get()).single;
+    expect(
+      (stats.rating, stats.plays, stats.lastPlayed, stats.stamp),
+      (0, 0, 0, 0),
+    );
+    for (final bad in [
+      'UPDATE track_stats SET rating = 6',
+      'UPDATE track_stats SET rating = -1',
+      'UPDATE track_stats SET plays = 65536',
+    ]) {
+      await expectLater(db.customStatement(bad), throwsA(anything));
+    }
+    await db.close();
+  });
+
   test('a database from a newer build is refused, not dropped', () async {
     final schema = await verifier.schemaAt(_versions.last);
     final rows = _fillEveryTable(schema.rawDatabase, _versions.last);

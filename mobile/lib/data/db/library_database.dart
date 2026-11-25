@@ -130,7 +130,58 @@ class Tracks extends Table {
   ];
 }
 
-@DriftDatabase(tables: [Sources, Tracks])
+/// Ratings, play counts and "last played" (decision 0011), in the app's own
+/// database: never in a music folder or on a card.
+///
+/// Keyed as the firmware keys them (`ratings_key(path, size)` in
+/// `app/settings/ratings_store.c`): by the track's path and its size in
+/// bytes. The path is the device's form: `/` and the path relative to the
+/// library folder (`'/' || tracks.rel_path`), as a card's root gives it. The
+/// firmware keeps a 32-bit hash of the two; the app keeps the two
+/// themselves, so no two tracks share a row by a hash collision.
+///
+/// Not tied to `tracks` by a foreign key, so a rescan, a removed folder or a
+/// file that has gone never deletes a row: a folder added back gets its
+/// numbers back, as a card does on the device. Whether a moved file keeps
+/// them is the owner's open question (decision 0011).
+///
+/// One row holds what the firmware keeps in two stores: the rating
+/// (`ratings_store`) and the plays entry (`plays_store`: [plays],
+/// [lastPlayed], [stamp]). A row with no rating and [stamp] 0 is not kept.
+@DataClassName('TrackStatRow')
+class TrackStats extends Table {
+  TextColumn get path => text()();
+  IntColumn get size => integer()();
+
+  // A column's CHECK names the column itself, as drift documents it.
+
+  /// 0 to 5 stars; 0 is not rated.
+  IntColumn get rating => integer()
+      .withDefault(const Constant(0))
+      // ignore: recursive_getters
+      .check(rating.isBetweenValues(0, 5))();
+
+  /// Counted plays; stops at 65535, as the firmware's `uint16_t` does.
+  IntColumn get plays => integer()
+      .withDefault(const Constant(0))
+      // ignore: recursive_getters
+      .check(plays.isBetweenValues(0, 65535))();
+
+  /// The serial of the last counted play, 0 = never played. The serial
+  /// counts up with every play or note, across every row, so it is the
+  /// largest [stamp] (the firmware has no clock on every board:
+  /// `plays_store.h`).
+  IntColumn get lastPlayed => integer().withDefault(const Constant(0))();
+
+  /// The serial of the last touch (a play, a rating of four stars or more);
+  /// 0 = the firmware's plays store would have no entry.
+  IntColumn get stamp => integer().withDefault(const Constant(0))();
+
+  @override
+  Set<Column> get primaryKey => {path, size};
+}
+
+@DriftDatabase(tables: [Sources, Tracks, TrackStats])
 class LibraryDatabase extends _$LibraryDatabase {
   LibraryDatabase(super.e) : _testVersion = null, _testSteps = null;
 
@@ -152,9 +203,12 @@ class LibraryDatabase extends _$LibraryDatabase {
   /// `dart run drift_dev make-migrations` (it writes the snapshot in
   /// drift_schemas/library/, regenerates library_database.steps.dart and the
   /// test helpers in test/drift/library/generated/), then add the step to
-  /// [_upgrade] and run `dart run build_runner build`.
+  /// [_upgrade] and run `dart run build_runner build`. `make-migrations`
+  /// reads this getter's value without running it, and cannot read
+  /// `_testVersion ?? n`: write the bare number while it runs, then put the
+  /// `_testVersion ??` back.
   @override
-  int get schemaVersion => _testVersion ?? 4;
+  int get schemaVersion => _testVersion ?? 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -208,6 +262,8 @@ class LibraryDatabase extends _$LibraryDatabase {
   ///   in all six; the scanner's version went to 5 with them, so the next scan
   ///   reads every file again for its embedded picture and sets the cover file
   ///   of every folder it lists.
+  /// - 4 to 5: the `track_stats` table ([TrackStats]: ratings, play counts,
+  ///   last played; decision 0011), created empty. Nothing else changes.
   OnUpgrade get _upgrade => stepByStep(
     from1To2: (m, schema) async {
       await m.addColumn(schema.tracks, schema.tracks.artistKeyText);
@@ -234,6 +290,9 @@ class LibraryDatabase extends _$LibraryDatabase {
       await m.addColumn(t, t.folderArtUri);
       await m.addColumn(t, t.folderArtSize);
       await m.addColumn(t, t.folderArtMtime);
+    },
+    from4To5: (m, schema) async {
+      await m.createTable(schema.trackStats);
     },
   );
 }

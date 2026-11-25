@@ -154,6 +154,12 @@ const _allowed = <_Allowed>[
     'await (_db.delete(_db.tracks)..where(',
     'drift: deletes track rows of the app database, not files',
   ),
+  _Allowed(
+    'lib/data/db/drift_track_stats_store.dart',
+    'await (_db.delete(',
+    'drift: deletes an emptied track_stats row (no rating, never noted) of '
+        'the app database, not a file (decision 0011)',
+  ),
   // The wheel text entry's `delete` key (backspace): an enum value, no file.
   _Allowed(
     'lib/ui/screens/search/search_session.dart',

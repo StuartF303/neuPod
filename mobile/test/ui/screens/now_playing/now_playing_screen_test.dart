@@ -9,8 +9,10 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neupod/domain/library/play_stats.dart';
 import 'package:neupod/domain/playback/player_state.dart';
 import 'package:neupod/domain/playback/queue_item.dart';
+import 'package:neupod/domain/wheel/feedback_ports.dart';
 import 'package:neupod/domain/wheel/system_volume_port.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/ui/components/bars.dart';
@@ -23,6 +25,7 @@ import 'package:neupod/ui/screens/now_playing/now_playing_view.dart';
 import 'package:neupod/ui/screens/shell/shell_state.dart';
 
 import '../../../fakes/fake_player.dart';
+import '../../../fakes/fake_track_stats_store.dart';
 import '../screens_harness.dart';
 import '../screens_test_support.dart';
 
@@ -95,6 +98,7 @@ Future<_Rig> _pump(
   PlayerState? state,
   SystemVolumeStatus? failWith,
   bool throwOnRead = false,
+  TrackStatsStore? trackStats,
 }) async {
   final volume = RecordingVolume(failWith: failWith, throwOnRead: throwOnRead);
   late final _Rig holder;
@@ -102,6 +106,7 @@ Future<_Rig> _pump(
     tester,
     home: (_) => const SizedBox(),
     playing: state ?? _playing(),
+    trackStats: trackStats,
     overrides: [systemVolumeProvider.overrideWithValue(volume)],
   );
   holder = _Rig(tester, shell, shell.player, volume, shell.haptics);
@@ -383,12 +388,96 @@ void main() {
     await rig.press(WheelButton.centre);
     await rig.press(WheelButton.centre); // edit
     expect(_view(tester).ratingEditing, isTrue);
-    await rig.turn(3);
-    expect(rig.container.read(playbackChoicesProvider).ratings['t1'], 3);
+    await rig.turn(1);
+    await rig.turn(1);
+    await rig.turn(1);
+    expect((rig.rig.trackStats as FakeTrackStatsStore).stats['t1']!.stars, 3);
     expect(_view(tester).data.rating, 3);
     await rig.press(WheelButton.menu); // done, still on page 2
     expect(_view(tester).ratingEditing, isFalse);
     expect(_view(tester).mode, NowPlayingMode.page2);
+  });
+
+  group('page 2: the rating, as the firmware sets it (p2_scroll)', () {
+    Future<_Rig> editing(WidgetTester tester, {TrackStatsStore? stats}) async {
+      final rig = await _pump(tester, trackStats: stats);
+      await rig.press(WheelButton.centre); // page 2, Rating focused
+      await rig.press(WheelButton.centre); // the wheel sets the stars
+      return rig;
+    }
+
+    int detents(_Rig rig) =>
+        rig.haptics.played.where((k) => k == FeedbackKind.detent).length;
+
+    testWidgets('one star per turn, whatever its size; a detent only when '
+        'the stars change; 0 to 5', (tester) async {
+      final rig = await editing(tester);
+      final store = rig.rig.trackStats as FakeTrackStatsStore;
+      final before = detents(rig);
+      await rig.turn(4); // an accelerated turn is still one star
+      expect(_view(tester).data.rating, 1);
+      expect(store.calls, ['rate(t1, 1)']);
+      for (var i = 0; i < 6; i++) {
+        await rig.advance(200); // past the detent rate limit
+        await rig.turn(1);
+      }
+      expect(_view(tester).data.rating, 5);
+      expect(detents(rig) - before, 5); // the sixth turn changed nothing
+      expect(store.calls.last, 'rate(t1, 5)');
+      expect(store.calls, hasLength(5));
+      await rig.turn(-8);
+      expect(_view(tester).data.rating, 4);
+      for (var i = 0; i < 5; i++) {
+        await rig.turn(-1);
+      }
+      expect(_view(tester).data.rating, 0);
+      expect(store.stats['t1']!.stars, 0);
+    });
+
+    testWidgets('four stars or more notes the track, as the firmware does '
+        'for Top rated', (tester) async {
+      final rig = await editing(tester);
+      final store = rig.rig.trackStats as FakeTrackStatsStore;
+      for (var i = 0; i < 3; i++) {
+        await rig.turn(1);
+      }
+      expect(store.stats['t1']!.stamp, 0);
+      await rig.turn(1);
+      expect(store.stats['t1']!.stars, 4);
+      expect(store.stats['t1']!.stamp, greaterThan(0));
+      expect(store.stats['t1']!.plays, 0);
+    });
+
+    testWidgets('the stars shown are the stored ones, and follow a change '
+        'in the store', (tester) async {
+      final store = FakeTrackStatsStore()
+        ..stats['t1'] = const PlayStats(stars: 2);
+      final rig = await _pump(tester, trackStats: store);
+      expect(_view(tester).data.rating, 2);
+      await store.rate('t1', 5);
+      await tester.pump();
+      expect(_view(tester).data.rating, 5);
+      await rig.press(WheelButton.centre);
+      expect(_view(tester).mode, NowPlayingMode.page2);
+      expect(_view(tester).data.rating, 5);
+    });
+
+    testWidgets('quick turns build on each other while the writes are '
+        'still going to the store', (tester) async {
+      final store = _SlowStore();
+      final rig = await editing(tester, stats: store);
+      await rig.turn(1);
+      await rig.turn(1);
+      await rig.turn(1);
+      expect(_view(tester).data.rating, 3);
+      expect(store.started, ['rate(t1, 1)']); // one write at a time
+      while (store.pending.isNotEmpty) {
+        store.pending.removeAt(0).complete();
+        await tester.pump();
+      }
+      expect(store.started, ['rate(t1, 1)', 'rate(t1, 2)', 'rate(t1, 3)']);
+      expect(_view(tester).data.rating, 3);
+    });
   });
 
   testWidgets('Play/Pause is the shell\'s: it pauses the player', (
@@ -487,4 +576,20 @@ void main() {
     expect(_view(tester).mode, NowPlayingMode.rest);
     expect(rig.volume.asked, isEmpty);
   });
+}
+
+/// A store whose ratings are saved only when the test lets each write
+/// finish.
+class _SlowStore extends FakeTrackStatsStore {
+  final started = <String>[];
+  final pending = <Completer<void>>[];
+
+  @override
+  Future<void> rate(String trackId, int stars) async {
+    started.add('rate($trackId, $stars)');
+    final done = Completer<void>();
+    pending.add(done);
+    await done.future;
+    await super.rate(trackId, stars);
+  }
 }
