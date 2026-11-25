@@ -81,6 +81,16 @@ Status: specification, 21 November 2026. Nothing is built. The working instructi
     artist, year or track number from folder or file names) and no `, The` handling of folder names. Album names or
     folders that differ only by `(Disc n)` stay separate albums. This replaces the folder-convention fallback proposed
     here.
+16. **Custom mode (owner, 25 November 2026).** The mode setting becomes Light, Dark, Auto, Custom. Light, Dark and
+    Auto are unchanged. Custom sets the colour and the transparency of the body, the wheel and the centre button
+    separately, with a colour wheel as the picker; a custom look carries its own screen choice (Light, Dark or Auto);
+    where a part is see-through a picture of a neuPod board shows from underneath, chosen from a small built-in set
+    (only neuPod's own boards, never Apple's). Style stays a separate setting and works with all four modes. Three
+    starter looks ship: Harbour, Sea glass and Clear case. The design is
+    [Custom mode](../design/2026-11-25-app-custom-mode/README.md) (backlog AP-1); its other recommendations are
+    proposals until the owner confirms them.
+17. **Nothing scrolls (owner, 25 November 2026).** The app always fits the phone's screen and never shows a scroll
+    bar, vertical or horizontal. Inside the device's 4:3 screen, new screens avoid scrolling too where they can.
 
 Everything else in this document is the designer's proposal until the owner confirms it. Proposals that most need a
 decision are collected under [Open questions](#open-questions).
@@ -220,6 +230,10 @@ the same rule as the device: the dominant colour, clamped until white text on it
 - Two styles, **Classic** and **Modern**, each in Light and Dark, with the colours and skins in the
   [UI styles design](../design/2026-11-21-ui-styles/README.md). Mode follows the phone's setting by default; style is
   chosen in Settings.
+- **Custom mode (owner decision 16).** A fourth mode in which the user sets the colour and transparency of the body,
+  the wheel and the centre button, with a board picture showing through a see-through part. The editor, the rule that
+  keeps the legends at 4.5:1 on any colour, the board pictures and the data model are in the
+  [Custom mode design](../design/2026-11-25-app-custom-mode/README.md).
 - **The device view (owner decision 9).** The phone shows the device's front: the 4:3 screen, running the device's
   screens with the UI styles design's values (drawn at 600x450, so they carry over), above the click wheel. The wheel
   behaves as on the device: turning scrolls, with acceleration and the fast-scroll letter tile on long lists; the
@@ -241,7 +255,8 @@ the same rule as the device: the dominant colour, clamped until white text on it
 
 ### Settings
 
-Style and mode; library folders (add, remove, rescan); gapless on or off; skip-back behaviour; click sound (off by
+Style; mode (Light, Dark, Auto, Custom; owner decision 16); Custom look, the list of up to six custom looks and
+their editor ([Custom mode design](../design/2026-11-25-app-custom-mode/README.md)); library folders (add, remove, rescan); gapless on or off; skip-back behaviour; click sound (off by
 default, as the device view design says); haptics (the design's rule: off whenever the phone's own setting is off); reset ratings and play counts
 (with a panel to confirm); About; Licences (owner decision 13).
 

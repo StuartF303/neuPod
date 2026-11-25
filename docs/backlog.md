@@ -38,6 +38,10 @@ the Pico 2 W build is frozen as a compile check; items may assume the RP2350B wi
 
 A Flutter music player for iOS and Android in the neuPod styles, later a companion to the device: [specification](app/README.md). Release R1 (files on the phone) is tracked in its own [progress list](app/PROGRESS.md), not here. R3 (companion) depends on the device HTTP API, step W2 in [Wi-Fi](wifi.md).
 
+| ID | Item | Source | Needs | Notes |
+| --- | --- | --- | --- | --- |
+| AP-1 | **Custom mode for the device view**: Mode becomes Light, Dark, Auto, Custom. Custom sets the colour and transparency of the body, the wheel and the centre button with a colour wheel, carries its own screen choice, and shows a neuPod board picture through a see-through part. Up to six saved looks; three starters ship. | req 25 Nov 2026 | [design](design/2026-11-25-app-custom-mode/README.md) written, awaiting the owner on its Open questions; **real board pictures** (KiCad renders or photos of neuPod's own boards; `boards/` is empty); settings storage in the app (app progress list, phase 6) | Build from the design's [brief](design/2026-11-25-app-custom-mode/IMPLEMENTATION-BRIEF.md), tracked in its [progress list](design/2026-11-25-app-custom-mode/PROGRESS.md). Paint only: no geometry or hit zone changes. |
+
 ## UI styles 2026-11-21
 
 Classic and Modern styles, the status bar, the three feedback places and the Music screens: [design](design/2026-11-21-ui-styles/README.md). The work is tracked item by item in its own [progress list](design/2026-11-21-ui-styles/PROGRESS.md), not here. It overrides parts of the 12 November review (the toast strip, the volume HUD, the Now Playing pills and volume strip, the status-bar clock); the design's README lists them.
