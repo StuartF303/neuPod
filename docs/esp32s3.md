@@ -80,7 +80,9 @@ in `main/linker.lf` (no attributes in `app/`):
 | album-art cache (24 x 50 KB = 1.2 MB) and its state (`art_service`) | the big-RAM player (`NEUPOD_ART_HIRES`, on by default here since UI-25; `-DNEUPOD_ART_HIRES=OFF` for the small one) |
 | playlist buffers, play counts, play queue (`playlist_service`, `plays_store`, `player`) | the rest of the big-RAM player; cold |
 
-FIGURES_ESP32
+Linked (CI 25 Nov 2026; before = `main` at 2f99ded): internal `.dram0.bss` 115,432 to 106,640 B (-8,792), `.dram0.data` 13,148 to 13,164 B
+(+16); PSRAM `.ext_ram.bss` 404,052 to 1,722,444 B (+1,318,392; with the 527 KB display shadow about 2.2 MB of 8 MB in use); app image
+1,127,360 to 1,150,624 B (+23,264) of the 4 MB app partition.
 
 The boot log prints `psram: 8192 KB at 80000 kHz, neupod section N KB` (all of `extram_bss`). Without PSRAM the IDF stops the boot itself (as before).
 

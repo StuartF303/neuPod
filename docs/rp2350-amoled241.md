@@ -103,7 +103,17 @@ the small player of the Pico 2 W for comparison. Design and budget: [specs/001-a
   every 2 s on the console and a red screen (the text would need the UI, which needs the services). `-DNEUPOD_PSRAM_FORCE_FAIL=ON`
   exercises that path on a healthy board (debug aid).
 
-FIGURES_RP2350
+**Memory (linked, CI 25 Nov 2026, Release; before = `main` at 2d95476):**
+
+| | Before | After | Change |
+|---|---|---|---|
+| Internal RAM, static (`.data` + `.bss`) | 510,376 B | 436,656 B | -73,720 B |
+| Internal RAM free above the heap | 11,452 B | 85,172 B | +73,720 B |
+| PSRAM (`.psram_noload`) | 0 | 1,507,488 B (of 8 MB) | art cache 1,230,144; LVGL pool 196,608; plays table and snapshot 48,160; play queue 8,992; playlists about 23 KB |
+| Flash (`.text` + `.rodata`) | 1,055,916 B | 1,086,248 B | +30,332 B |
+
+The LVGL pool moved to PSRAM at 192 KB (as on the ESP32-S3): the host build with this board's UI options ran out of LVGL memory in
+the library tour at the old size. That move is most of the internal RAM freed.
 
 Not checked on the board yet (no board attached when it was built): the boot line, the art and Cover Flow, the frame time
 of a Cover Flow step, the LVGL pool peak at 600x450, warm restarts. See the bench checklist in the PR.
