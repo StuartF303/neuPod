@@ -156,9 +156,9 @@ const _allowed = <_Allowed>[
   ),
   _Allowed(
     'lib/data/db/drift_track_stats_store.dart',
-    'await (_db.delete(',
+    'await (_stats.delete(',
     'drift: deletes an emptied track_stats row (no rating, never noted) of '
-        'the app database, not a file (decision 0011)',
+        'the stats database, not a file (decision 0011)',
   ),
   // The wheel text entry's `delete` key (backspace): an enum value, no file.
   _Allowed(
@@ -192,6 +192,22 @@ const _allowed = <_Allowed>[
     'try FileManager.default.createDirectory(at: dir, '
         'withIntermediateDirectories: true)',
     'Application Support/library, the app database folder (decision 0005)',
+  ),
+  _Allowed(
+    'packages/neupod_storage/ios/neupod_storage/Sources/neupod_storage/'
+        'NeupodStoragePlugin.swift',
+    'try FileManager.default.createDirectory(at: dir, '
+        'withIntermediateDirectories: true)',
+    'Application Support/stats, the ratings and play counts database folder '
+        '(owner decision 20), never a music folder',
+  ),
+  _Allowed(
+    'packages/neupod_storage/android/src/main/kotlin/net/stuartfraser/'
+        'neupod_storage/NeupodStoragePlugin.kt',
+    'if (!dir.isDirectory && !dir.mkdirs()) throw FlutterError("no-directory", '
+        '"cannot create \${dir.path}")',
+    'filesDir/stats, the ratings and play counts database folder (owner '
+        'decision 20), never a music folder',
   ),
   _Allowed(
     'packages/neupod_storage/android/src/main/kotlin/net/stuartfraser/'

@@ -176,8 +176,9 @@ Built in `mobile/lib/data/db/` (database), `mobile/lib/data/scan/` (scanner, tag
 - **Tag reading (decision 0003), phase 1 subset:** FLAC (STREAMINFO, Vorbis comments) and MP3 (ID3v2.2 to 2.4 text
   frames, Xing/Info with the LAME delay and padding, VBRI, else an estimate), title, artist, album, track number and
   duration, ported from `app/audio/meta.c`. Other formats are listed by file name until phase 3.
-- **`track_stats` (phase 3, decision 0011)** is keyed by the firmware's path and size, not by `track_key`, until the
-  owner answers decision 0011's question 1 (its option C would add the fingerprint as a carry-over on a move).
+- **`track_stats` (phase 3, decision 0011, owner decision 20)** is keyed by the firmware's path and size, not by
+  `track_key`; a tag-free audio fingerprint (`tracks.audio_fingerprint`) carries it over a move or a retag. It is in
+  its own database, `stats.sqlite`, which phone backups keep; the library database stays excluded from backups.
 
 ## Sources
 

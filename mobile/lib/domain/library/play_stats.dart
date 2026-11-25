@@ -11,8 +11,8 @@
 ///   `app/settings/plays_store.c`.
 /// - How the wheel sets the stars: `p2_scroll()` in `app/ui/ui_nowplaying.c`.
 ///
-/// What a track's numbers are keyed by, and what the app does where the
-/// firmware is silent (skip counts), is decision note 0011.
+/// What a track's numbers are keyed by, the carry-over on a move, and where
+/// they are kept: decision note 0011 and owner decision 20.
 library;
 
 /// Heard time that counts a track whose length is not known
@@ -205,4 +205,35 @@ abstract interface class TrackStatsStore {
 
   /// Counts a play of the track (`plays_record(..., played: true)`).
   Future<void> countPlay(String trackId);
+
+  /// Carries numbers from old keys to new ones: files a rescan saw moved or
+  /// retagged (owner decision 20). Numbers already at a new key are kept.
+  Future<void> carry(List<TrackMove> moves);
+}
+
+/// A file a rescan saw at a new key: its path (the device's form, `/` and the
+/// path relative to the library folder) or its size changed, and its audio
+/// did not.
+final class TrackMove {
+  /// A move from [fromPath] of [fromSize] bytes to [toPath] of [toSize].
+  const TrackMove(this.fromPath, this.fromSize, this.toPath, this.toSize);
+
+  final String fromPath;
+  final int fromSize;
+  final String toPath;
+  final int toSize;
+
+  @override
+  bool operator ==(Object other) =>
+      other is TrackMove &&
+      other.fromPath == fromPath &&
+      other.fromSize == fromSize &&
+      other.toPath == toPath &&
+      other.toSize == toSize;
+
+  @override
+  int get hashCode => Object.hash(fromPath, fromSize, toPath, toSize);
+
+  @override
+  String toString() => 'TrackMove($fromPath $fromSize -> $toPath $toSize)';
 }

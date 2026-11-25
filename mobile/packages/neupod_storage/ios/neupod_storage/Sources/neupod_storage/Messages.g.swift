@@ -478,6 +478,17 @@ protocol NeupodStorageApi {
   /// `Application Support/library`, created if needed and marked excluded
   /// from backup. Never the Documents folder, so not shown in Files or Finder.
   func appSupportPath() throws -> String
+  /// A private directory for the app's data that the phone's own backup
+  /// keeps (owner decision 20: ratings and play counts survive a restore):
+  /// Android `filesDir/stats`, which the app's backup rules include (and
+  /// nothing else); iOS `Application Support/stats`, created if needed and
+  /// marked as included in backups (`isExcludedFromBackup` false, read
+  /// back). Never the Documents folder.
+  func backedUpDataPath() throws -> String
+  /// iOS only: whether the file or folder at [path] is excluded from iCloud
+  /// and device backups (`URLResourceValues.isExcludedFromBackup`), for
+  /// tests. Throws `unsupported` on Android, where the backup rules decide.
+  func isExcludedFromBackup(path: String) throws -> Bool
   /// iOS debug builds only: stores a bookmark for the folder at [path] as if
   /// it had been picked, so integration tests can exercise bookmark storage,
   /// resolution and walking without driving the system picker UI. Throws
@@ -639,6 +650,43 @@ class NeupodStorageApiSetup {
       }
     } else {
       appSupportPathChannel.setMessageHandler(nil)
+    }
+    /// A private directory for the app's data that the phone's own backup
+    /// keeps (owner decision 20: ratings and play counts survive a restore):
+    /// Android `filesDir/stats`, which the app's backup rules include (and
+    /// nothing else); iOS `Application Support/stats`, created if needed and
+    /// marked as included in backups (`isExcludedFromBackup` false, read
+    /// back). Never the Documents folder.
+    let backedUpDataPathChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.neupod_storage.NeupodStorageApi.backedUpDataPath\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      backedUpDataPathChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.backedUpDataPath()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      backedUpDataPathChannel.setMessageHandler(nil)
+    }
+    /// iOS only: whether the file or folder at [path] is excluded from iCloud
+    /// and device backups (`URLResourceValues.isExcludedFromBackup`), for
+    /// tests. Throws `unsupported` on Android, where the backup rules decide.
+    let isExcludedFromBackupChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.neupod_storage.NeupodStorageApi.isExcludedFromBackup\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      isExcludedFromBackupChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let pathArg = args[0] as! String
+        do {
+          let result = try api.isExcludedFromBackup(path: pathArg)
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      isExcludedFromBackupChannel.setMessageHandler(nil)
     }
     /// iOS debug builds only: stores a bookmark for the folder at [path] as if
     /// it had been picked, so integration tests can exercise bookmark storage,

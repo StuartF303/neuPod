@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/data/db/drift_library_repository.dart';
 import 'package:neupod/data/db/drift_track_stats_store.dart';
 import 'package:neupod/data/db/library_database.dart';
+import 'package:neupod/data/db/stats_database.dart';
 import 'package:neupod/data/scan/local_library_scanner.dart';
 import 'package:neupod/domain/library/library_folder.dart';
 import 'package:neupod/domain/library/play_stats.dart';
@@ -188,6 +189,7 @@ void main() {
     int version = scanVersion,
     DirApi? api,
     ReaderOpener? openReader,
+    Future<void> Function(List<TrackMove>)? onMoves,
   }) {
     api ??= DirApi({'m': Directory('${tmp.path}/music')});
     final storage = CountingStorage(api);
@@ -198,6 +200,7 @@ void main() {
       runIsolate: runIsolate,
       version: version,
       openReader: openReader,
+      onMoves: onMoves,
     );
     return (api, storage, scanner);
   }
@@ -329,12 +332,29 @@ void main() {
     },
   );
 
-  // Ratings and play counts (decision 0011) live in track_stats, keyed by
-  // the device's path and size, not by the tracks row: no scan ever deletes
-  // or changes them.
+  // Ratings and play counts (decision 0011) live in their own database,
+  // keyed by the device's path and size, not by the tracks row: no scan ever
+  // deletes them, and a scan that sees a file moved or retagged carries them
+  // to its new key (owner decision 20).
   group('ratings and play counts', () {
+    late StatsDatabase statsDb;
     late DriftTrackStatsStore stats;
-    setUp(() => stats = DriftTrackStatsStore(db));
+    setUp(() {
+      statsDb = StatsDatabase(NativeDatabase.memory());
+      stats = DriftTrackStatsStore(db, statsDb);
+    });
+    tearDown(() => statsDb.close());
+
+    (DirApi, CountingStorage, LocalLibraryScanner) scannerWithStats({
+      FakeFolderAccess? access,
+      int version = scanVersion,
+      DirApi? api,
+    }) => setUpScanner(
+      access: access,
+      version: version,
+      api: api,
+      onMoves: stats.carry,
+    );
 
     Future<String> idOf(String title) async =>
         (await tracks()).firstWhere((t) => t.title == title).id.toString();
@@ -347,7 +367,10 @@ void main() {
       put('Album/a.flac', flac(['TITLE=A']));
       put('Album/b.flac', flac(['TITLE=B']));
       final access = FakeFolderAccess([folder('m')]);
-      final (_, storage, scanner) = setUpScanner(access: access, version: 1);
+      final (_, storage, scanner) = scannerWithStats(
+        access: access,
+        version: 1,
+      );
       await scanner.scan().drain<void>();
       await stats.rate(await idOf('A'), 5);
       await stats.countPlay(await idOf('A'));
@@ -371,7 +394,7 @@ void main() {
       expect(await of('A'), a);
 
       // Every file read again by a new scanner version.
-      final (_, _, newer) = setUpScanner(access: access, version: 2);
+      final (_, _, newer) = scannerWithStats(access: access, version: 2);
       await newer.scan().drain<void>();
       expect(await of('A'), a);
       expect(await of('B'), b);
@@ -389,28 +412,82 @@ void main() {
       expect(await of('B'), b);
     });
 
-    test('a retag that changes the size, or a move, starts again: the '
-        "firmware's key is the path and the size (decision 0011, open for "
-        'the owner)', () async {
+    test('a moved file carries its numbers to its new path', () async {
       put('Album/a.flac', flac(['TITLE=A']));
-      final (_, _, scanner) = setUpScanner();
+      put('Album/b.flac', flac(['TITLE=B']));
+      final (_, _, scanner) = scannerWithStats();
       await scanner.scan().drain<void>();
       await stats.rate(await idOf('A'), 3);
+      await stats.countPlay(await idOf('A'));
+      final a = await of('A');
 
+      final size = File('${tmp.path}/music/Album/a.flac').lengthSync();
       File('${tmp.path}/music/Album/a.flac').renameSync(
         '${(Directory('${tmp.path}/music/Moved')..createSync()).path}/a.flac',
       );
       await scanner.scan().drain<void>();
-      expect(await of('A'), PlayStats.none);
+      expect(await of('A'), a);
+      expect(await stats.statsAt('/Moved/a.flac', size), a);
+      expect(await stats.statsAt('/Album/a.flac', size), PlayStats.none);
+      expect(await of('B'), PlayStats.none);
+    });
 
-      put('Moved/a.flac', flac(['TITLE=A', 'ARTIST=Retagged']));
+    test('a retag that changes the size carries them too: the fingerprint '
+        'has no tag bytes', () async {
+      put('Album/a.flac', flac(['TITLE=A']));
+      final (_, _, scanner) = scannerWithStats();
       await scanner.scan().drain<void>();
-      expect(await of('A'), PlayStats.none);
-      // The old numbers are still kept, under the old key.
-      expect(
-        (await stats.statsAt('/Album/a.flac', flac(['TITLE=A']).length)).stars,
-        3,
-      );
+      await stats.rate(await idOf('A'), 4);
+      final a = await of('A');
+      final before = File('${tmp.path}/music/Album/a.flac').lengthSync();
+
+      put('Album/a.flac', flac(['TITLE=A', 'ARTIST=Retagged', 'GENRE=Jazz']));
+      final after = File('${tmp.path}/music/Album/a.flac').lengthSync();
+      expect(after, isNot(before));
+      await scanner.scan().drain<void>();
+      expect(await of('A'), a);
+      expect(await stats.statsAt('/Album/a.flac', after), a);
+      expect(await stats.statsAt('/Album/a.flac', before), PlayStats.none);
+    });
+
+    test('a move to another library folder carries them', () async {
+      put('Album/a.flac', flac(['TITLE=A']));
+      final other = Directory('${tmp.path}/other')..createSync();
+      final api = DirApi({'m': Directory('${tmp.path}/music'), 'o': other});
+      final access = FakeFolderAccess([folder('m'), folder('o')]);
+      final (_, _, scanner) = scannerWithStats(access: access, api: api);
+      await scanner.scan().drain<void>();
+      await stats.rate(await idOf('A'), 2);
+
+      File('${tmp.path}/music/Album/a.flac').renameSync('${other.path}/a.flac');
+      await scanner.scan().drain<void>();
+      expect((await of('A')).stars, 2);
+    });
+
+    test('copies of the same audio are not a move, and numbers already at '
+        'the new key are kept', () async {
+      final bytes = flac(['TITLE=A']);
+      put('Album/a.flac', bytes);
+      final (_, _, scanner) = scannerWithStats();
+      await scanner.scan().drain<void>();
+      await stats.rate(await idOf('A'), 5);
+
+      // Gone, and two new copies: which one is it? Neither gets them.
+      File('${tmp.path}/music/Album/a.flac').deleteSync();
+      put('X/a.flac', bytes);
+      put('Y/a.flac', bytes);
+      await scanner.scan().drain<void>();
+      expect(await stats.statsAt('/X/a.flac', bytes.length), PlayStats.none);
+      expect(await stats.statsAt('/Y/a.flac', bytes.length), PlayStats.none);
+      expect((await stats.statsAt('/Album/a.flac', bytes.length)).stars, 5);
+
+      // A carry never overwrites numbers already at the new key.
+      await stats.rateAt('/Z/a.flac', bytes.length, 1);
+      await stats.carry([
+        TrackMove('/Album/a.flac', bytes.length, '/Z/a.flac', bytes.length),
+      ]);
+      expect((await stats.statsAt('/Z/a.flac', bytes.length)).stars, 1);
+      expect((await stats.statsAt('/Album/a.flac', bytes.length)).stars, 5);
     });
   });
 

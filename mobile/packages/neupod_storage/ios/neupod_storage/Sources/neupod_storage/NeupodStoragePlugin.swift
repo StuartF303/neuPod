@@ -256,6 +256,42 @@ public class NeupodStoragePlugin: NSObject, FlutterPlugin, NeupodStorageApi, UID
     }
   }
 
+  func backedUpDataPath() throws -> String {
+    // Application Support/stats, kept by iCloud and device backups (owner decision 20: ratings and play counts
+    // survive a restore). The flag is set explicitly and read back, so a folder that was once excluded is fixed.
+    // Excluding or including a folder applies to everything in it.
+    var dir: URL
+    do {
+      dir = try FileManager.default.url(
+        for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
+      ).appendingPathComponent("stats", isDirectory: true)
+      try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+      var values = URLResourceValues()
+      values.isExcludedFromBackup = false
+      try dir.setResourceValues(values)
+    } catch {
+      throw PigeonError(code: "no-directory", message: error.localizedDescription, details: nil)
+    }
+    if try excluded(dir) {
+      throw PigeonError(code: "no-directory", message: "\(dir.path) is still excluded from backup", details: nil)
+    }
+    return dir.path
+  }
+
+  func isExcludedFromBackup(path: String) throws -> Bool {
+    try excluded(URL(fileURLWithPath: path))
+  }
+
+  private func excluded(_ url: URL) throws -> Bool {
+    do {
+      var u = url
+      u.removeAllCachedResourceValues()
+      return try u.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup ?? false
+    } catch {
+      throw PigeonError(code: "no-file", message: error.localizedDescription, details: nil)
+    }
+  }
+
   func debugAddRoot(path: String) throws -> StorageRoot {
     #if DEBUG
       let url = URL(fileURLWithPath: path, isDirectory: true)

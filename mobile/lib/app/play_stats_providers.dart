@@ -9,14 +9,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/app/providers.dart';
-import 'package:neupod/data/db/drift_track_stats_store.dart';
 import 'package:neupod/domain/library/play_counter.dart';
 import 'package:neupod/domain/library/play_stats.dart';
 
-/// The track statistics, in the library database.
-final trackStatsStoreProvider = Provider<TrackStatsStore>(
-  (ref) => DriftTrackStatsStore(ref.watch(libraryDatabaseProvider)),
-);
+export 'package:neupod/app/providers.dart'
+    show statsDatabaseProvider, trackStatsStoreProvider;
 
 /// One track's numbers by its library id, kept current while watched.
 final trackStatsProvider = StreamProvider.autoDispose.family<PlayStats, String>(

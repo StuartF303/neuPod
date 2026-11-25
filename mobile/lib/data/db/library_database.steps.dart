@@ -735,7 +735,6 @@ final class Schema5 extends i0.VersionedSchema {
   late final List<i1.DatabaseSchemaEntity> entities = [
     sources,
     tracks,
-    trackStats,
     tracksTitleSort,
   ];
   late final Shape0 sources = Shape0(
@@ -749,7 +748,7 @@ final class Schema5 extends i0.VersionedSchema {
     ),
     alias: null,
   );
-  late final Shape3 tracks = Shape3(
+  late final Shape4 tracks = Shape4(
     source: i0.VersionedTable(
       entityName: 'tracks',
       withoutRowId: false,
@@ -790,26 +789,9 @@ final class Schema5 extends i0.VersionedSchema {
         _column_36,
         _column_37,
         _column_38,
+        _column_39,
         _column_21,
         _column_22,
-      ],
-      attachedDatabase: database,
-    ),
-    alias: null,
-  );
-  late final Shape4 trackStats = Shape4(
-    source: i0.VersionedTable(
-      entityName: 'track_stats',
-      withoutRowId: false,
-      isStrict: false,
-      tableConstraints: ['PRIMARY KEY(path, size)'],
-      columns: [
-        _column_39,
-        _column_7,
-        _column_40,
-        _column_41,
-        _column_42,
-        _column_43,
       ],
       attachedDatabase: database,
     ),
@@ -823,64 +805,92 @@ final class Schema5 extends i0.VersionedSchema {
 
 class Shape4 extends i0.VersionedTable {
   Shape4({required super.source, required super.alias}) : super.aliased();
-  i1.GeneratedColumn<String> get path =>
-      columnsByName['path']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get sourceId =>
+      columnsByName['source_id']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get relPath =>
+      columnsByName['rel_path']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get uri =>
+      columnsByName['uri']! as i1.GeneratedColumn<String>;
   i1.GeneratedColumn<int> get size =>
       columnsByName['size']! as i1.GeneratedColumn<int>;
-  i1.GeneratedColumn<int> get rating =>
-      columnsByName['rating']! as i1.GeneratedColumn<int>;
-  i1.GeneratedColumn<int> get plays =>
-      columnsByName['plays']! as i1.GeneratedColumn<int>;
-  i1.GeneratedColumn<int> get lastPlayed =>
-      columnsByName['last_played']! as i1.GeneratedColumn<int>;
-  i1.GeneratedColumn<int> get stamp =>
-      columnsByName['stamp']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get mtime =>
+      columnsByName['mtime']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get codec =>
+      columnsByName['codec']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get title =>
+      columnsByName['title']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get titleSort =>
+      columnsByName['title_sort']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<i2.Uint8List> get titleSortKey =>
+      columnsByName['title_sort_key']! as i1.GeneratedColumn<i2.Uint8List>;
+  i1.GeneratedColumn<String> get artist =>
+      columnsByName['artist']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get album =>
+      columnsByName['album']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<i2.Uint8List> get artistKeyText =>
+      columnsByName['artist_key_text']! as i1.GeneratedColumn<i2.Uint8List>;
+  i1.GeneratedColumn<i2.Uint8List> get albumKeyText =>
+      columnsByName['album_key_text']! as i1.GeneratedColumn<i2.Uint8List>;
+  i1.GeneratedColumn<String> get albumArtist =>
+      columnsByName['album_artist']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<i2.Uint8List> get albumArtistKeyText =>
+      columnsByName['album_artist_key_text']!
+          as i1.GeneratedColumn<i2.Uint8List>;
+  i1.GeneratedColumn<i2.Uint8List> get artistSortKeyText =>
+      columnsByName['artist_sort_key_text']!
+          as i1.GeneratedColumn<i2.Uint8List>;
+  i1.GeneratedColumn<i2.Uint8List> get albumSortKeyText =>
+      columnsByName['album_sort_key_text']! as i1.GeneratedColumn<i2.Uint8List>;
+  i1.GeneratedColumn<i2.Uint8List> get albumArtistSortKeyText =>
+      columnsByName['album_artist_sort_key_text']!
+          as i1.GeneratedColumn<i2.Uint8List>;
+  i1.GeneratedColumn<String> get genre =>
+      columnsByName['genre']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<i2.Uint8List> get genreKeyText =>
+      columnsByName['genre_key_text']! as i1.GeneratedColumn<i2.Uint8List>;
+  i1.GeneratedColumn<int> get discNo =>
+      columnsByName['disc_no']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get year =>
+      columnsByName['year']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get compilation =>
+      columnsByName['compilation']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get trackNo =>
+      columnsByName['track_no']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get durationMs =>
+      columnsByName['duration_ms']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get sampleRate =>
+      columnsByName['sample_rate']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get bitDepth =>
+      columnsByName['bit_depth']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get artOffset =>
+      columnsByName['art_offset']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get artLength =>
+      columnsByName['art_length']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get artKind =>
+      columnsByName['art_kind']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get folderArtUri =>
+      columnsByName['folder_art_uri']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get folderArtSize =>
+      columnsByName['folder_art_size']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get folderArtMtime =>
+      columnsByName['folder_art_mtime']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get audioFingerprint =>
+      columnsByName['audio_fingerprint']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get reasonCode =>
+      columnsByName['reason_code']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get scanVersion =>
+      columnsByName['scan_version']! as i1.GeneratedColumn<int>;
 }
 
 i1.GeneratedColumn<String> _column_39(String aliasedName) =>
     i1.GeneratedColumn<String>(
-      'path',
+      'audio_fingerprint',
       aliasedName,
-      false,
+      true,
       type: i1.DriftSqlType.string,
-      $customConstraints: 'NOT NULL',
-    );
-i1.GeneratedColumn<int> _column_40(String aliasedName) =>
-    i1.GeneratedColumn<int>(
-      'rating',
-      aliasedName,
-      false,
-      type: i1.DriftSqlType.int,
-      $customConstraints: 'NOT NULL DEFAULT 0 CHECK (rating BETWEEN 0 AND 5)',
-      defaultValue: const i1.CustomExpression('0'),
-    );
-i1.GeneratedColumn<int> _column_41(String aliasedName) =>
-    i1.GeneratedColumn<int>(
-      'plays',
-      aliasedName,
-      false,
-      type: i1.DriftSqlType.int,
-      $customConstraints:
-          'NOT NULL DEFAULT 0 CHECK (plays BETWEEN 0 AND 65535)',
-      defaultValue: const i1.CustomExpression('0'),
-    );
-i1.GeneratedColumn<int> _column_42(String aliasedName) =>
-    i1.GeneratedColumn<int>(
-      'last_played',
-      aliasedName,
-      false,
-      type: i1.DriftSqlType.int,
-      $customConstraints: 'NOT NULL DEFAULT 0',
-      defaultValue: const i1.CustomExpression('0'),
-    );
-i1.GeneratedColumn<int> _column_43(String aliasedName) =>
-    i1.GeneratedColumn<int>(
-      'stamp',
-      aliasedName,
-      false,
-      type: i1.DriftSqlType.int,
-      $customConstraints: 'NOT NULL DEFAULT 0',
-      defaultValue: const i1.CustomExpression('0'),
+      $customConstraints: 'NULL',
     );
 i0.MigrationStepWithVersion migrationSteps({
   required Future<void> Function(i1.Migrator m, Schema2 schema) from1To2,

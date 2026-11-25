@@ -7,11 +7,13 @@ import 'dart:isolate';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:neupod/data/db/library_database.dart';
+import 'package:neupod/data/scan/audio_fingerprint.dart';
 import 'package:neupod/data/scan/tag_reader.dart';
 import 'package:neupod/domain/library/art_rules.dart';
 import 'package:neupod/domain/library/collation.dart';
 import 'package:neupod/domain/library/library_folder.dart';
 import 'package:neupod/domain/library/library_ports.dart';
+import 'package:neupod/domain/library/play_stats.dart';
 import 'package:neupod/domain/library/track.dart';
 import 'package:neupod_storage/neupod_storage.dart';
 
@@ -47,7 +49,9 @@ const _tagged = {'flac', 'mp3', 'm4a', 'mp4', 'wav'};
 /// 4: MP4 (ALAC, AAC) tags and duration, WAV duration.
 /// 5: where the embedded picture is (schema version 4), so rows from earlier
 ///    versions are read again to find it.
-const scanVersion = 5;
+/// 6: the audio fingerprint (schema version 5), for carrying ratings and
+///    play counts over a move or a retag (decision 0011).
+const scanVersion = 6;
 
 /// The lower-case extension of [path], or ''.
 String extensionOf(String path) {
@@ -70,6 +74,11 @@ String extensionOf(String path) {
 ///   firmware's `art_folder_pick`) is noted on every track of the folder after
 ///   the walk, whether or not the track changed, so adding, changing or
 ///   removing a cover file needs no change to the music files.
+/// - A file that has gone, or whose size changed, and exactly one new or
+///   resized file with the same audio fingerprint, across every folder of
+///   the scan, is a move: [onMoves] gets it at the end of the scan, to carry
+///   the ratings and play counts (owner decision 20). A fingerprint shared by
+///   more than one file on either side is not a move.
 final class LocalLibraryScanner implements LibraryScanner {
   LocalLibraryScanner({
     required this._folders,
@@ -77,10 +86,14 @@ final class LocalLibraryScanner implements LibraryScanner {
     required this._db,
     this.chunk = 32,
     this.version = scanVersion,
+    this.onMoves,
     IsolateRunner? runIsolate,
     @visibleForTesting ReaderOpener? openReader,
   }) : _run = runIsolate ?? Isolate.run,
        _openReader = openReader ?? _openHandle;
+
+  /// Called once at the end of a scan that saw files moved or retagged.
+  final Future<void> Function(List<TrackMove> moves)? onMoves;
 
   /// The [scanVersion] rows are written with (other values in tests only).
   final int version;
@@ -102,9 +115,24 @@ final class LocalLibraryScanner implements LibraryScanner {
   Stream<ScanProgress> scan() async* {
     var found = 0, read = 0;
     final folders = await _folders.folders();
+    final moves = _Moves();
 
     // Removing a folder removes its tracks, and nothing else.
     final held = folders.map((f) => f.id).toList();
+    final dropped =
+        await (_db.select(_db.tracks).join([
+              innerJoin(
+                _db.sources,
+                _db.sources.id.equalsExp(_db.tracks.sourceId),
+              ),
+            ])..where(
+              _db.sources.kind.equals(_kind) &
+                  _db.sources.uriOrBookmark.isNotIn(held),
+            ))
+            .get();
+    for (final r in dropped) {
+      moves.gone(r.readTable(_db.tracks));
+    }
     await (_db.delete(
       _db.sources,
     )..where((s) => s.kind.equals(_kind) & s.uriOrBookmark.isNotIn(held))).go();
@@ -138,7 +166,7 @@ final class LocalLibraryScanner implements LibraryScanner {
             if (k != null && _unchanged(k, e)) continue;
             pending.add(e);
             if (pending.length >= chunk) {
-              read += await _readAndStore(sourceId, pending, known);
+              read += await _readAndStore(sourceId, pending, known, moves);
               pending.clear();
             }
           }
@@ -149,13 +177,16 @@ final class LocalLibraryScanner implements LibraryScanner {
         complete = false; // access went away mid-walk: keep what the folder had
       }
       if (pending.isNotEmpty) {
-        read += await _readAndStore(sourceId, pending, known);
+        read += await _readAndStore(sourceId, pending, known, moves);
       }
 
       await _storeCovers(sourceId, covers, complete: complete);
 
       if (complete) {
         final gone = known.keys.where((p) => !seen.contains(p)).toList();
+        for (final p in gone) {
+          moves.gone(known[p]!);
+        }
         for (var i = 0; i < gone.length; i += 500) {
           final end = i + 500 > gone.length ? gone.length : i + 500;
           final part = gone.sublist(i, end);
@@ -166,6 +197,16 @@ final class LocalLibraryScanner implements LibraryScanner {
         }
       }
       yield ScanProgress(filesFound: found, filesRead: read);
+    }
+    final carry = onMoves;
+    final moved = moves.resolve();
+    if (carry != null && moved.isNotEmpty) {
+      try {
+        await carry(moved);
+      } on Object {
+        // The numbers stay under the old key: nothing is lost, and the scan
+        // itself worked.
+      }
     }
     yield ScanProgress(filesFound: found, filesRead: read, done: true);
   }
@@ -263,6 +304,7 @@ final class LocalLibraryScanner implements LibraryScanner {
     int sourceId,
     List<StorageEntry> entries,
     Map<String, TrackRow> known,
+    _Moves moves,
   ) async {
     final jobs = <_Job>[];
     try {
@@ -293,7 +335,8 @@ final class LocalLibraryScanner implements LibraryScanner {
       // The isolate did not run (spawn failed): it never took the handles.
       _discardAll(jobs);
       results = [
-        for (final _ in jobs) const _Result(null, UnreadableReason.cannotRead),
+        for (final _ in jobs)
+          const _Result(null, UnreadableReason.cannotRead, null),
       ];
     }
     await _db.batch((b) {
@@ -308,6 +351,12 @@ final class LocalLibraryScanner implements LibraryScanner {
             where: (t) => t.id.equals(previous.id),
           );
           continue;
+        }
+        if (previous == null) {
+          moves.arrived('/${e.relPath}', e.size, r.fingerprint);
+        } else if (previous.size != e.size) {
+          moves.gone(previous); // retagged: the same path, another size
+          moves.arrived('/${e.relPath}', e.size, r.fingerprint);
         }
         final title = r.tags?.title ?? '';
         final titleSort = r.tags?.titleSort ?? '';
@@ -350,6 +399,7 @@ final class LocalLibraryScanner implements LibraryScanner {
           durationMs: r.tags?.durationMs ?? 0,
           sampleRate: r.tags?.sampleRate ?? 0,
           bitDepth: r.tags?.bitDepth ?? 0,
+          audioFingerprint: Value(r.fingerprint),
           reasonCode: Value(r.reason?.code),
           scanVersion: version,
         );
@@ -398,10 +448,39 @@ final class _Job {
 }
 
 final class _Result {
-  const _Result(this.tags, this.reason);
+  const _Result(this.tags, this.reason, this.fingerprint);
 
   final AudioTags? tags;
   final UnreadableReason? reason;
+  final String? fingerprint;
+}
+
+/// What a scan saw leave and arrive, by audio fingerprint, to find moves.
+final class _Moves {
+  final _left = <String, List<(String, int)>>{};
+  final _came = <String, List<(String, int)>>{};
+
+  /// [t]'s key is no longer in the library (its file has gone, its folder
+  /// was removed, or its size changed).
+  void gone(TrackRow t) {
+    final fp = t.audioFingerprint;
+    if (fp != null) (_left[fp] ??= []).add(('/${t.relPath}', t.size));
+  }
+
+  /// A new key, [path] of [size] bytes, with the audio [fingerprint].
+  void arrived(String path, int size, String? fingerprint) {
+    if (fingerprint != null) (_came[fingerprint] ??= []).add((path, size));
+  }
+
+  /// One key gone and one arrived with the same fingerprint: a move. More
+  /// than one on either side (copies of the same audio) is not.
+  List<TrackMove> resolve() => [
+    for (final MapEntry(key: fp, value: from) in _left.entries)
+      if (from.length == 1 &&
+          _came[fp]?.length == 1 &&
+          _came[fp]![0] != from[0])
+        TrackMove(from[0].$1, from[0].$2, _came[fp]![0].$1, _came[fp]![0].$2),
+  ];
 }
 
 /// Runs a computation in a new isolate: [Isolate.run], or a stand-in in
@@ -427,9 +506,9 @@ List<_Result> _parseAll(List<_Job> jobs, ReaderOpener open) => [
 
 _Result _parse(_Job j, ReaderOpener open) {
   final handle = j.handle;
-  if (handle == null) return _Result(null, j.reason);
-  final (tags, reason) = readWithReader(() => open(handle), j.ext);
-  return _Result(tags, reason);
+  if (handle == null) return _Result(null, j.reason, null);
+  final (tags, reason, fingerprint) = _readAll(() => open(handle), j.ext);
+  return _Result(tags, reason, fingerprint);
 }
 
 /// neupod_storage error codes after which the provider can never serve the
@@ -460,22 +539,41 @@ UnreadableReason storageReason(StorageException e, {required bool opening}) {
   StorageReader Function() open,
   String ext,
 ) {
+  final (tags, reason, _) = _readAll(open, ext);
+  return (tags, reason);
+}
+
+/// [readWithReader], and the audio fingerprint (`audio_fingerprint.dart`)
+/// from the same open file, or null when it cannot be had.
+(AudioTags?, UnreadableReason?, String?) _readAll(
+  StorageReader Function() open,
+  String ext,
+) {
   StorageReader? reader;
   try {
     reader = open();
-    return (readTags(_ReaderSource(reader), ext), null);
-  } on TagReadException catch (e) {
-    // What the parser read before it failed, as the firmware keeps it.
-    return (e.partial, e.reason);
+    final src = _ReaderSource(reader);
+    String? fingerprint;
+    try {
+      fingerprint = audioFingerprint(src, ext);
+    } on Object {
+      fingerprint = null; // no carry-over for this file; its tags still count
+    }
+    try {
+      return (readTags(src, ext), null, fingerprint);
+    } on TagReadException catch (e) {
+      // What the parser read before it failed, as the firmware keeps it.
+      return (e.partial, e.reason, fingerprint);
+    }
   } on FileSystemException {
     // Open failed (not seekable, gone) or a read failed part-way: may pass.
-    return (null, UnreadableReason.cannotRead);
+    return (null, UnreadableReason.cannotRead, null);
   } on StorageException catch (e) {
     // The storage layer failed: transient unless its code says it is not.
-    return (null, storageReason(e, opening: false));
+    return (null, storageReason(e, opening: false), null);
   } catch (_) {
     // Anything else is the reader meeting bytes it cannot handle.
-    return (null, UnreadableReason.damaged);
+    return (null, UnreadableReason.damaged, null);
   } finally {
     reader?.close();
   }

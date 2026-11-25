@@ -9,5 +9,6 @@ targets:
         options:
           databases:
             library: lib/data/db/library_database.dart
+            stats: lib/data/db/stats_database.dart
           schema_dir: drift_schemas/
           test_dir: test/drift/

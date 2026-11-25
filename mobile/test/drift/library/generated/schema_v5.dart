@@ -553,6 +553,14 @@ class Tracks extends Table with TableInfo<Tracks, TracksData> {
     requiredDuringInsert: false,
     $customConstraints: 'NULL',
   );
+  late final GeneratedColumn<String> audioFingerprint = GeneratedColumn<String>(
+    'audio_fingerprint',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    $customConstraints: 'NULL',
+  );
   late final GeneratedColumn<int> reasonCode = GeneratedColumn<int>(
     'reason_code',
     aliasedName,
@@ -605,6 +613,7 @@ class Tracks extends Table with TableInfo<Tracks, TracksData> {
     folderArtUri,
     folderArtSize,
     folderArtMtime,
+    audioFingerprint,
     reasonCode,
     scanVersion,
   ];
@@ -759,6 +768,10 @@ class Tracks extends Table with TableInfo<Tracks, TracksData> {
         DriftSqlType.int,
         data['${effectivePrefix}folder_art_mtime'],
       ),
+      audioFingerprint: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}audio_fingerprint'],
+      ),
       reasonCode: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}reason_code'],
@@ -816,6 +829,7 @@ class TracksData extends DataClass implements Insertable<TracksData> {
   final String? folderArtUri;
   final int? folderArtSize;
   final int? folderArtMtime;
+  final String? audioFingerprint;
   final int? reasonCode;
   final int scanVersion;
   const TracksData({
@@ -853,6 +867,7 @@ class TracksData extends DataClass implements Insertable<TracksData> {
     this.folderArtUri,
     this.folderArtSize,
     this.folderArtMtime,
+    this.audioFingerprint,
     this.reasonCode,
     required this.scanVersion,
   });
@@ -920,6 +935,9 @@ class TracksData extends DataClass implements Insertable<TracksData> {
     }
     if (!nullToAbsent || folderArtMtime != null) {
       map['folder_art_mtime'] = Variable<int>(folderArtMtime);
+    }
+    if (!nullToAbsent || audioFingerprint != null) {
+      map['audio_fingerprint'] = Variable<String>(audioFingerprint);
     }
     if (!nullToAbsent || reasonCode != null) {
       map['reason_code'] = Variable<int>(reasonCode);
@@ -990,6 +1008,9 @@ class TracksData extends DataClass implements Insertable<TracksData> {
       folderArtMtime: folderArtMtime == null && nullToAbsent
           ? const Value.absent()
           : Value(folderArtMtime),
+      audioFingerprint: audioFingerprint == null && nullToAbsent
+          ? const Value.absent()
+          : Value(audioFingerprint),
       reasonCode: reasonCode == null && nullToAbsent
           ? const Value.absent()
           : Value(reasonCode),
@@ -1045,6 +1066,7 @@ class TracksData extends DataClass implements Insertable<TracksData> {
       folderArtUri: serializer.fromJson<String?>(json['folderArtUri']),
       folderArtSize: serializer.fromJson<int?>(json['folderArtSize']),
       folderArtMtime: serializer.fromJson<int?>(json['folderArtMtime']),
+      audioFingerprint: serializer.fromJson<String?>(json['audioFingerprint']),
       reasonCode: serializer.fromJson<int?>(json['reasonCode']),
       scanVersion: serializer.fromJson<int>(json['scanVersion']),
     );
@@ -1091,6 +1113,7 @@ class TracksData extends DataClass implements Insertable<TracksData> {
       'folderArtUri': serializer.toJson<String?>(folderArtUri),
       'folderArtSize': serializer.toJson<int?>(folderArtSize),
       'folderArtMtime': serializer.toJson<int?>(folderArtMtime),
+      'audioFingerprint': serializer.toJson<String?>(audioFingerprint),
       'reasonCode': serializer.toJson<int?>(reasonCode),
       'scanVersion': serializer.toJson<int>(scanVersion),
     };
@@ -1131,6 +1154,7 @@ class TracksData extends DataClass implements Insertable<TracksData> {
     Value<String?> folderArtUri = const Value.absent(),
     Value<int?> folderArtSize = const Value.absent(),
     Value<int?> folderArtMtime = const Value.absent(),
+    Value<String?> audioFingerprint = const Value.absent(),
     Value<int?> reasonCode = const Value.absent(),
     int? scanVersion,
   }) => TracksData(
@@ -1182,6 +1206,9 @@ class TracksData extends DataClass implements Insertable<TracksData> {
     folderArtMtime: folderArtMtime.present
         ? folderArtMtime.value
         : this.folderArtMtime,
+    audioFingerprint: audioFingerprint.present
+        ? audioFingerprint.value
+        : this.audioFingerprint,
     reasonCode: reasonCode.present ? reasonCode.value : this.reasonCode,
     scanVersion: scanVersion ?? this.scanVersion,
   );
@@ -1251,6 +1278,9 @@ class TracksData extends DataClass implements Insertable<TracksData> {
       folderArtMtime: data.folderArtMtime.present
           ? data.folderArtMtime.value
           : this.folderArtMtime,
+      audioFingerprint: data.audioFingerprint.present
+          ? data.audioFingerprint.value
+          : this.audioFingerprint,
       reasonCode: data.reasonCode.present
           ? data.reasonCode.value
           : this.reasonCode,
@@ -1297,6 +1327,7 @@ class TracksData extends DataClass implements Insertable<TracksData> {
           ..write('folderArtUri: $folderArtUri, ')
           ..write('folderArtSize: $folderArtSize, ')
           ..write('folderArtMtime: $folderArtMtime, ')
+          ..write('audioFingerprint: $audioFingerprint, ')
           ..write('reasonCode: $reasonCode, ')
           ..write('scanVersion: $scanVersion')
           ..write(')'))
@@ -1339,6 +1370,7 @@ class TracksData extends DataClass implements Insertable<TracksData> {
     folderArtUri,
     folderArtSize,
     folderArtMtime,
+    audioFingerprint,
     reasonCode,
     scanVersion,
   ]);
@@ -1392,6 +1424,7 @@ class TracksData extends DataClass implements Insertable<TracksData> {
           other.folderArtUri == this.folderArtUri &&
           other.folderArtSize == this.folderArtSize &&
           other.folderArtMtime == this.folderArtMtime &&
+          other.audioFingerprint == this.audioFingerprint &&
           other.reasonCode == this.reasonCode &&
           other.scanVersion == this.scanVersion);
 }
@@ -1431,6 +1464,7 @@ class TracksCompanion extends UpdateCompanion<TracksData> {
   final Value<String?> folderArtUri;
   final Value<int?> folderArtSize;
   final Value<int?> folderArtMtime;
+  final Value<String?> audioFingerprint;
   final Value<int?> reasonCode;
   final Value<int> scanVersion;
   const TracksCompanion({
@@ -1468,6 +1502,7 @@ class TracksCompanion extends UpdateCompanion<TracksData> {
     this.folderArtUri = const Value.absent(),
     this.folderArtSize = const Value.absent(),
     this.folderArtMtime = const Value.absent(),
+    this.audioFingerprint = const Value.absent(),
     this.reasonCode = const Value.absent(),
     this.scanVersion = const Value.absent(),
   });
@@ -1506,6 +1541,7 @@ class TracksCompanion extends UpdateCompanion<TracksData> {
     this.folderArtUri = const Value.absent(),
     this.folderArtSize = const Value.absent(),
     this.folderArtMtime = const Value.absent(),
+    this.audioFingerprint = const Value.absent(),
     this.reasonCode = const Value.absent(),
     required int scanVersion,
   }) : sourceId = Value(sourceId),
@@ -1559,6 +1595,7 @@ class TracksCompanion extends UpdateCompanion<TracksData> {
     Expression<String>? folderArtUri,
     Expression<int>? folderArtSize,
     Expression<int>? folderArtMtime,
+    Expression<String>? audioFingerprint,
     Expression<int>? reasonCode,
     Expression<int>? scanVersion,
   }) {
@@ -1599,6 +1636,7 @@ class TracksCompanion extends UpdateCompanion<TracksData> {
       if (folderArtUri != null) 'folder_art_uri': folderArtUri,
       if (folderArtSize != null) 'folder_art_size': folderArtSize,
       if (folderArtMtime != null) 'folder_art_mtime': folderArtMtime,
+      if (audioFingerprint != null) 'audio_fingerprint': audioFingerprint,
       if (reasonCode != null) 'reason_code': reasonCode,
       if (scanVersion != null) 'scan_version': scanVersion,
     });
@@ -1639,6 +1677,7 @@ class TracksCompanion extends UpdateCompanion<TracksData> {
     Value<String?>? folderArtUri,
     Value<int?>? folderArtSize,
     Value<int?>? folderArtMtime,
+    Value<String?>? audioFingerprint,
     Value<int?>? reasonCode,
     Value<int>? scanVersion,
   }) {
@@ -1678,6 +1717,7 @@ class TracksCompanion extends UpdateCompanion<TracksData> {
       folderArtUri: folderArtUri ?? this.folderArtUri,
       folderArtSize: folderArtSize ?? this.folderArtSize,
       folderArtMtime: folderArtMtime ?? this.folderArtMtime,
+      audioFingerprint: audioFingerprint ?? this.audioFingerprint,
       reasonCode: reasonCode ?? this.reasonCode,
       scanVersion: scanVersion ?? this.scanVersion,
     );
@@ -1796,6 +1836,9 @@ class TracksCompanion extends UpdateCompanion<TracksData> {
     if (folderArtMtime.present) {
       map['folder_art_mtime'] = Variable<int>(folderArtMtime.value);
     }
+    if (audioFingerprint.present) {
+      map['audio_fingerprint'] = Variable<String>(audioFingerprint.value);
+    }
     if (reasonCode.present) {
       map['reason_code'] = Variable<int>(reasonCode.value);
     }
@@ -1842,352 +1885,9 @@ class TracksCompanion extends UpdateCompanion<TracksData> {
           ..write('folderArtUri: $folderArtUri, ')
           ..write('folderArtSize: $folderArtSize, ')
           ..write('folderArtMtime: $folderArtMtime, ')
+          ..write('audioFingerprint: $audioFingerprint, ')
           ..write('reasonCode: $reasonCode, ')
           ..write('scanVersion: $scanVersion')
-          ..write(')'))
-        .toString();
-  }
-}
-
-class TrackStats extends Table with TableInfo<TrackStats, TrackStatsData> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  TrackStats(this.attachedDatabase, [this._alias]);
-  late final GeneratedColumn<String> path = GeneratedColumn<String>(
-    'path',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-    $customConstraints: 'NOT NULL',
-  );
-  late final GeneratedColumn<int> size = GeneratedColumn<int>(
-    'size',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-    $customConstraints: 'NOT NULL',
-  );
-  late final GeneratedColumn<int> rating = GeneratedColumn<int>(
-    'rating',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    $customConstraints: 'NOT NULL DEFAULT 0 CHECK (rating BETWEEN 0 AND 5)',
-    defaultValue: const CustomExpression('0'),
-  );
-  late final GeneratedColumn<int> plays = GeneratedColumn<int>(
-    'plays',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    $customConstraints: 'NOT NULL DEFAULT 0 CHECK (plays BETWEEN 0 AND 65535)',
-    defaultValue: const CustomExpression('0'),
-  );
-  late final GeneratedColumn<int> lastPlayed = GeneratedColumn<int>(
-    'last_played',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    $customConstraints: 'NOT NULL DEFAULT 0',
-    defaultValue: const CustomExpression('0'),
-  );
-  late final GeneratedColumn<int> stamp = GeneratedColumn<int>(
-    'stamp',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    $customConstraints: 'NOT NULL DEFAULT 0',
-    defaultValue: const CustomExpression('0'),
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    path,
-    size,
-    rating,
-    plays,
-    lastPlayed,
-    stamp,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'track_stats';
-  @override
-  Set<GeneratedColumn> get $primaryKey => {path, size};
-  @override
-  TrackStatsData map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return TrackStatsData(
-      path: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}path'],
-      )!,
-      size: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}size'],
-      )!,
-      rating: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}rating'],
-      )!,
-      plays: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}plays'],
-      )!,
-      lastPlayed: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}last_played'],
-      )!,
-      stamp: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}stamp'],
-      )!,
-    );
-  }
-
-  @override
-  TrackStats createAlias(String alias) {
-    return TrackStats(attachedDatabase, alias);
-  }
-
-  @override
-  List<String> get customConstraints => const ['PRIMARY KEY(path, size)'];
-  @override
-  bool get dontWriteConstraints => true;
-}
-
-class TrackStatsData extends DataClass implements Insertable<TrackStatsData> {
-  final String path;
-  final int size;
-  final int rating;
-  final int plays;
-  final int lastPlayed;
-  final int stamp;
-  const TrackStatsData({
-    required this.path,
-    required this.size,
-    required this.rating,
-    required this.plays,
-    required this.lastPlayed,
-    required this.stamp,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['path'] = Variable<String>(path);
-    map['size'] = Variable<int>(size);
-    map['rating'] = Variable<int>(rating);
-    map['plays'] = Variable<int>(plays);
-    map['last_played'] = Variable<int>(lastPlayed);
-    map['stamp'] = Variable<int>(stamp);
-    return map;
-  }
-
-  TrackStatsCompanion toCompanion(bool nullToAbsent) {
-    return TrackStatsCompanion(
-      path: Value(path),
-      size: Value(size),
-      rating: Value(rating),
-      plays: Value(plays),
-      lastPlayed: Value(lastPlayed),
-      stamp: Value(stamp),
-    );
-  }
-
-  factory TrackStatsData.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return TrackStatsData(
-      path: serializer.fromJson<String>(json['path']),
-      size: serializer.fromJson<int>(json['size']),
-      rating: serializer.fromJson<int>(json['rating']),
-      plays: serializer.fromJson<int>(json['plays']),
-      lastPlayed: serializer.fromJson<int>(json['lastPlayed']),
-      stamp: serializer.fromJson<int>(json['stamp']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'path': serializer.toJson<String>(path),
-      'size': serializer.toJson<int>(size),
-      'rating': serializer.toJson<int>(rating),
-      'plays': serializer.toJson<int>(plays),
-      'lastPlayed': serializer.toJson<int>(lastPlayed),
-      'stamp': serializer.toJson<int>(stamp),
-    };
-  }
-
-  TrackStatsData copyWith({
-    String? path,
-    int? size,
-    int? rating,
-    int? plays,
-    int? lastPlayed,
-    int? stamp,
-  }) => TrackStatsData(
-    path: path ?? this.path,
-    size: size ?? this.size,
-    rating: rating ?? this.rating,
-    plays: plays ?? this.plays,
-    lastPlayed: lastPlayed ?? this.lastPlayed,
-    stamp: stamp ?? this.stamp,
-  );
-  TrackStatsData copyWithCompanion(TrackStatsCompanion data) {
-    return TrackStatsData(
-      path: data.path.present ? data.path.value : this.path,
-      size: data.size.present ? data.size.value : this.size,
-      rating: data.rating.present ? data.rating.value : this.rating,
-      plays: data.plays.present ? data.plays.value : this.plays,
-      lastPlayed: data.lastPlayed.present
-          ? data.lastPlayed.value
-          : this.lastPlayed,
-      stamp: data.stamp.present ? data.stamp.value : this.stamp,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('TrackStatsData(')
-          ..write('path: $path, ')
-          ..write('size: $size, ')
-          ..write('rating: $rating, ')
-          ..write('plays: $plays, ')
-          ..write('lastPlayed: $lastPlayed, ')
-          ..write('stamp: $stamp')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hash(path, size, rating, plays, lastPlayed, stamp);
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is TrackStatsData &&
-          other.path == this.path &&
-          other.size == this.size &&
-          other.rating == this.rating &&
-          other.plays == this.plays &&
-          other.lastPlayed == this.lastPlayed &&
-          other.stamp == this.stamp);
-}
-
-class TrackStatsCompanion extends UpdateCompanion<TrackStatsData> {
-  final Value<String> path;
-  final Value<int> size;
-  final Value<int> rating;
-  final Value<int> plays;
-  final Value<int> lastPlayed;
-  final Value<int> stamp;
-  final Value<int> rowid;
-  const TrackStatsCompanion({
-    this.path = const Value.absent(),
-    this.size = const Value.absent(),
-    this.rating = const Value.absent(),
-    this.plays = const Value.absent(),
-    this.lastPlayed = const Value.absent(),
-    this.stamp = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  TrackStatsCompanion.insert({
-    required String path,
-    required int size,
-    this.rating = const Value.absent(),
-    this.plays = const Value.absent(),
-    this.lastPlayed = const Value.absent(),
-    this.stamp = const Value.absent(),
-    this.rowid = const Value.absent(),
-  }) : path = Value(path),
-       size = Value(size);
-  static Insertable<TrackStatsData> custom({
-    Expression<String>? path,
-    Expression<int>? size,
-    Expression<int>? rating,
-    Expression<int>? plays,
-    Expression<int>? lastPlayed,
-    Expression<int>? stamp,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (path != null) 'path': path,
-      if (size != null) 'size': size,
-      if (rating != null) 'rating': rating,
-      if (plays != null) 'plays': plays,
-      if (lastPlayed != null) 'last_played': lastPlayed,
-      if (stamp != null) 'stamp': stamp,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  TrackStatsCompanion copyWith({
-    Value<String>? path,
-    Value<int>? size,
-    Value<int>? rating,
-    Value<int>? plays,
-    Value<int>? lastPlayed,
-    Value<int>? stamp,
-    Value<int>? rowid,
-  }) {
-    return TrackStatsCompanion(
-      path: path ?? this.path,
-      size: size ?? this.size,
-      rating: rating ?? this.rating,
-      plays: plays ?? this.plays,
-      lastPlayed: lastPlayed ?? this.lastPlayed,
-      stamp: stamp ?? this.stamp,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (path.present) {
-      map['path'] = Variable<String>(path.value);
-    }
-    if (size.present) {
-      map['size'] = Variable<int>(size.value);
-    }
-    if (rating.present) {
-      map['rating'] = Variable<int>(rating.value);
-    }
-    if (plays.present) {
-      map['plays'] = Variable<int>(plays.value);
-    }
-    if (lastPlayed.present) {
-      map['last_played'] = Variable<int>(lastPlayed.value);
-    }
-    if (stamp.present) {
-      map['stamp'] = Variable<int>(stamp.value);
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('TrackStatsCompanion(')
-          ..write('path: $path, ')
-          ..write('size: $size, ')
-          ..write('rating: $rating, ')
-          ..write('plays: $plays, ')
-          ..write('lastPlayed: $lastPlayed, ')
-          ..write('stamp: $stamp, ')
-          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -2197,7 +1897,6 @@ class DatabaseAtV5 extends GeneratedDatabase {
   DatabaseAtV5(QueryExecutor e) : super(e);
   late final Sources sources = Sources(this);
   late final Tracks tracks = Tracks(this);
-  late final TrackStats trackStats = TrackStats(this);
   late final Index tracksTitleSort = Index(
     'tracks_title_sort',
     'CREATE INDEX tracks_title_sort ON tracks (title_sort_key, id)',
@@ -2209,7 +1908,6 @@ class DatabaseAtV5 extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     sources,
     tracks,
-    trackStats,
     tracksTitleSort,
   ];
   @override

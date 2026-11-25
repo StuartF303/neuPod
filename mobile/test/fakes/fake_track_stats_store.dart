@@ -40,4 +40,8 @@ class FakeTrackStatsStore implements TrackStatsStore {
     );
     _changes.add(null);
   }
+
+  @override
+  Future<void> carry(List<TrackMove> moves) async =>
+      calls.add('carry(${moves.length})');
 }

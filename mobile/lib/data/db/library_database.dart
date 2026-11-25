@@ -117,6 +117,17 @@ class Tracks extends Table {
   IntColumn get folderArtSize => integer().nullable()();
   IntColumn get folderArtMtime => integer().nullable()();
 
+  /// The audio's fingerprint (`audioFingerprint` in
+  /// `data/scan/audio_fingerprint.dart`): a hash of the first 64 KiB of the
+  /// audio payload and its length, with no tag bytes in it. A rescan that
+  /// sees a file gone and one new file with the same fingerprint carries its
+  /// ratings and play counts to the new path and size (decision 0011). Null
+  /// for a file the scanner does not open (Ogg, Opus, raw AAC, not
+  /// downloaded), one whose audio could not be found, and every row written
+  /// before schema version 5, until a rescan reads the file again (scan
+  /// version 6).
+  TextColumn get audioFingerprint => text().nullable()();
+
   /// `UnreadableReason.code` when the tags could not be read, or null.
   IntColumn get reasonCode => integer().nullable()();
 
@@ -130,58 +141,7 @@ class Tracks extends Table {
   ];
 }
 
-/// Ratings, play counts and "last played" (decision 0011), in the app's own
-/// database: never in a music folder or on a card.
-///
-/// Keyed as the firmware keys them (`ratings_key(path, size)` in
-/// `app/settings/ratings_store.c`): by the track's path and its size in
-/// bytes. The path is the device's form: `/` and the path relative to the
-/// library folder (`'/' || tracks.rel_path`), as a card's root gives it. The
-/// firmware keeps a 32-bit hash of the two; the app keeps the two
-/// themselves, so no two tracks share a row by a hash collision.
-///
-/// Not tied to `tracks` by a foreign key, so a rescan, a removed folder or a
-/// file that has gone never deletes a row: a folder added back gets its
-/// numbers back, as a card does on the device. Whether a moved file keeps
-/// them is the owner's open question (decision 0011).
-///
-/// One row holds what the firmware keeps in two stores: the rating
-/// (`ratings_store`) and the plays entry (`plays_store`: [plays],
-/// [lastPlayed], [stamp]). A row with no rating and [stamp] 0 is not kept.
-@DataClassName('TrackStatRow')
-class TrackStats extends Table {
-  TextColumn get path => text()();
-  IntColumn get size => integer()();
-
-  // A column's CHECK names the column itself, as drift documents it.
-
-  /// 0 to 5 stars; 0 is not rated.
-  IntColumn get rating => integer()
-      .withDefault(const Constant(0))
-      // ignore: recursive_getters
-      .check(rating.isBetweenValues(0, 5))();
-
-  /// Counted plays; stops at 65535, as the firmware's `uint16_t` does.
-  IntColumn get plays => integer()
-      .withDefault(const Constant(0))
-      // ignore: recursive_getters
-      .check(plays.isBetweenValues(0, 65535))();
-
-  /// The serial of the last counted play, 0 = never played. The serial
-  /// counts up with every play or note, across every row, so it is the
-  /// largest [stamp] (the firmware has no clock on every board:
-  /// `plays_store.h`).
-  IntColumn get lastPlayed => integer().withDefault(const Constant(0))();
-
-  /// The serial of the last touch (a play, a rating of four stars or more);
-  /// 0 = the firmware's plays store would have no entry.
-  IntColumn get stamp => integer().withDefault(const Constant(0))();
-
-  @override
-  Set<Column> get primaryKey => {path, size};
-}
-
-@DriftDatabase(tables: [Sources, Tracks, TrackStats])
+@DriftDatabase(tables: [Sources, Tracks])
 class LibraryDatabase extends _$LibraryDatabase {
   LibraryDatabase(super.e) : _testVersion = null, _testSteps = null;
 
@@ -262,8 +222,11 @@ class LibraryDatabase extends _$LibraryDatabase {
   ///   in all six; the scanner's version went to 5 with them, so the next scan
   ///   reads every file again for its embedded picture and sets the cover file
   ///   of every folder it lists.
-  /// - 4 to 5: the `track_stats` table ([TrackStats]: ratings, play counts,
-  ///   last played; decision 0011), created empty. Nothing else changes.
+  /// - 4 to 5: [Tracks.audioFingerprint] (decision 0011). Existing rows keep
+  ///   every column and get null; the scanner's version went to 6 with it,
+  ///   so the next scan reads every file again for it. Ratings and play
+  ///   counts are not here: they are in their own database, which phone
+  ///   backups keep (owner decision 20, `stats_database.dart`).
   OnUpgrade get _upgrade => stepByStep(
     from1To2: (m, schema) async {
       await m.addColumn(schema.tracks, schema.tracks.artistKeyText);
@@ -292,7 +255,7 @@ class LibraryDatabase extends _$LibraryDatabase {
       await m.addColumn(t, t.folderArtMtime);
     },
     from4To5: (m, schema) async {
-      await m.createTable(schema.trackStats);
+      await m.addColumn(schema.tracks, schema.tracks.audioFingerprint);
     },
   );
 }

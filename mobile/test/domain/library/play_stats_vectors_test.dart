@@ -21,6 +21,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/data/db/drift_track_stats_store.dart';
 import 'package:neupod/data/db/library_database.dart';
+import 'package:neupod/data/db/stats_database.dart';
 import 'package:neupod/domain/library/play_stats.dart';
 
 final Map<String, Object?> _vectors = jsonDecode(
@@ -56,13 +57,18 @@ void main() {
   });
 
   group('what ratings and records leave (ratings_set, plays_record)', () {
-    late LibraryDatabase db;
+    late LibraryDatabase library;
+    late StatsDatabase db;
     late DriftTrackStatsStore store;
     setUp(() {
-      db = LibraryDatabase(NativeDatabase.memory());
-      store = DriftTrackStatsStore(db);
+      library = LibraryDatabase(NativeDatabase.memory());
+      db = StatsDatabase(NativeDatabase.memory());
+      store = DriftTrackStatsStore(library, db);
     });
-    tearDown(() => db.close());
+    tearDown(() async {
+      await db.close();
+      await library.close();
+    });
 
     for (final run
         in (_vectors['store']! as List).cast<Map<String, Object?>>()) {
@@ -109,9 +115,11 @@ void main() {
   });
 
   test('the drift store stops at 65535 too', () async {
-    final db = LibraryDatabase(NativeDatabase.memory());
+    final library = LibraryDatabase(NativeDatabase.memory());
+    final db = StatsDatabase(NativeDatabase.memory());
     addTearDown(db.close);
-    final store = DriftTrackStatsStore(db);
+    addTearDown(library.close);
+    final store = DriftTrackStatsStore(library, db);
     await store.touchAt('/a.flac', 1, played: true);
     await db.customStatement(
       "UPDATE track_stats SET plays = 65534 WHERE path = '/a.flac'",

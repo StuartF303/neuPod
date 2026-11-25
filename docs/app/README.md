@@ -94,6 +94,15 @@ Status: specification, 21 November 2026. Nothing is built. The working instructi
     Direct touch is **candidate 2**: the wheel plus taps and drags on the screen. Candidate 1 (wheel only) is removed.
     Seeking is by the wheel's **seek mode only**: the progress bar is not draggable. The iPhone survives a restart, the
     wheel feel and haptics are right, and the wheel sets the volume on Now Playing.
+20. **Ratings and play counts (owner, 25 November 2026)**, from PR #160 (decision 0011). (19 is PR #159's.)
+    - **Identity:** a track's ratings and play counts are keyed as on the device, by the file's path and size, and
+      a rescan that sees a file move (the old path gone and one new file with the same audio fingerprint) carries
+      them to the new key. The fingerprint has no tag bytes in it, so a retag that changes the size carries them
+      too (FLAC, MP3, MP4/M4A, WAV; Ogg, Opus and raw AAC files are not opened by the scanner, as on the device,
+      and get no carry-over).
+    - **Skip counts are dropped for now**, on the app and the device (the firmware has none).
+    - **Backups:** ratings and play counts are kept in their own small database, which iCloud and Google backups
+      include; the library database, which a rescan rebuilds, stays out of backups.
 
 Everything else in this document is the designer's proposal until the owner confirms it. Proposals that most need a
 decision are collected under [Open questions](#open-questions).
@@ -174,8 +183,9 @@ exactly as the device does; it is never hidden and never stops the queue.
   case and with accents folded. Order: symbols first, then digits, then letters. The fast-scroll letter is the
   first letter of the key, `#` for a digit or symbol. `docs/ui.md` still says "A "/"An " are not skipped; the code
   is the reference until the owner changes both.
-- Ratings (0 to 5), play counts, last played and skip counts are kept per track in the app's own database, keyed so
-  that they survive a rescan and a file move within the library.
+- Ratings (0 to 5), play counts and last played are kept per track in the app's own database, keyed as on the
+  device (path and size), and survive a rescan, a file move within the library and a retag; that database is in phone
+  backups (owner decision 20). Skip counts were dropped (owner decision 20: the device has none).
 
 ### Browsing
 

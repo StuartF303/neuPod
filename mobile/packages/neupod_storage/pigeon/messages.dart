@@ -156,6 +156,19 @@ abstract class NeupodStorageApi {
   /// from backup. Never the Documents folder, so not shown in Files or Finder.
   String appSupportPath();
 
+  /// A private directory for the app's data that the phone's own backup
+  /// keeps (owner decision 20: ratings and play counts survive a restore):
+  /// Android `filesDir/stats`, which the app's backup rules include (and
+  /// nothing else); iOS `Application Support/stats`, created if needed and
+  /// marked as included in backups (`isExcludedFromBackup` false, read
+  /// back). Never the Documents folder.
+  String backedUpDataPath();
+
+  /// iOS only: whether the file or folder at [path] is excluded from iCloud
+  /// and device backups (`URLResourceValues.isExcludedFromBackup`), for
+  /// tests. Throws `unsupported` on Android, where the backup rules decide.
+  bool isExcludedFromBackup(String path);
+
   /// iOS debug builds only: stores a bookmark for the folder at [path] as if
   /// it had been picked, so integration tests can exercise bookmark storage,
   /// resolution and walking without driving the system picker UI. Throws

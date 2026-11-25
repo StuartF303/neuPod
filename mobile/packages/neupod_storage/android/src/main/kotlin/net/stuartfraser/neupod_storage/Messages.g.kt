@@ -531,6 +531,21 @@ interface NeupodStorageApi {
    */
   fun appSupportPath(): String
   /**
+   * A private directory for the app's data that the phone's own backup
+   * keeps (owner decision 20: ratings and play counts survive a restore):
+   * Android `filesDir/stats`, which the app's backup rules include (and
+   * nothing else); iOS `Application Support/stats`, created if needed and
+   * marked as included in backups (`isExcludedFromBackup` false, read
+   * back). Never the Documents folder.
+   */
+  fun backedUpDataPath(): String
+  /**
+   * iOS only: whether the file or folder at [path] is excluded from iCloud
+   * and device backups (`URLResourceValues.isExcludedFromBackup`), for
+   * tests. Throws `unsupported` on Android, where the backup rules decide.
+   */
+  fun isExcludedFromBackup(path: String): Boolean
+  /**
    * iOS debug builds only: stores a bookmark for the folder at [path] as if
    * it had been picked, so integration tests can exercise bookmark storage,
    * resolution and walking without driving the system picker UI. Throws
@@ -687,6 +702,38 @@ interface NeupodStorageApi {
           channel.setMessageHandler { _, reply ->
             val wrapped: List<Any?> = try {
               listOf(api.appSupportPath())
+            } catch (exception: Throwable) {
+              MessagesPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.neupod_storage.NeupodStorageApi.backedUpDataPath$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.backedUpDataPath())
+            } catch (exception: Throwable) {
+              MessagesPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.neupod_storage.NeupodStorageApi.isExcludedFromBackup$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val pathArg = args[0] as String
+            val wrapped: List<Any?> = try {
+              listOf(api.isExcludedFromBackup(pathArg))
             } catch (exception: Throwable) {
               MessagesPigeonUtils.wrapError(exception)
             }
