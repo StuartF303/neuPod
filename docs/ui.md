@@ -297,9 +297,9 @@ when many counts arrive within 150 ms; the constants `UI_COUNTS_PER_STEP`, `UI_A
 
 The 112 x 112 box (168 at 480x360) at the top left of Now Playing shows the album art of the track that is playing; page 2 and the album header show it at 64 / 96 px.
 
-**Thumbnails and cache (NP-5).** Hosted builds (the simulator and the Y2; `NEUPOD_ART_HIRES`, on by default there) decode to a **160 x 160 RGB565 thumbnail** (50 KB) and keep the last **24** albums (1.2 MB static: 24 slots, least recently used replaced first, the slots on screen are never replaced);
+**Thumbnails and cache (NP-5).** Hosted builds (the simulator and the Y2) and the PSRAM boards (the RP2350 and ESP32-S3 AMOLED boards, cache in PSRAM, UI-25) (`NEUPOD_ART_HIRES`, on by default there) decode to a **160 x 160 RGB565 thumbnail** (50 KB) and keep the last **24** albums (1.2 MB static: 24 slots, least recently used replaced first, the slots on screen are never replaced);
 nothing is scaled up: LVGL draws the thumbnail smaller into the box (160 to 112, 96, 64), except Now Playing at 480x360 where the 168 px box shows it 5 % larger. The cache key is the one that already identified an album (folder, album tag, embedded picture size), so a track of an album played or browsed before shows its art at once. The **Pico 2 W** build (frozen, ADR-0001 amendment) keeps the 64 x 64 thumbnail (8 KB), no cache and no browse art
-(`ART_CACHE_N` 1, `art.h`); an RP2350B with PSRAM turns the large thumbnails on with `-DNEUPOD_ART_HIRES=ON`. Measured RAM: 24 x 51,200 B = 1,228,800 B of BSS on the host and the Y2 (the Y2 has plenty); RP2350 unchanged.
+(`ART_CACHE_N` 1, `art.h`). Measured RAM: 24 x 51,200 B = 1,228,800 B of BSS on the host and the Y2 (the Y2 has plenty), in PSRAM on the AMOLED boards ([RP2350 AMOLED](rp2350-amoled241.md#psram-and-the-big-ram-player-ui-25), [ESP32-S3](esp32s3.md)); Pico 2 W unchanged.
 The album header asks the art service for the album's picture by the library handle of its first song (`art_browse_want()`): the storage task resolves it, reads the file's header for an embedded picture, and decodes it into the cache when it is idle (the playing track's art always goes first).
 
 (The table and text below describe the decoder, written for the 64 px thumbnail.)

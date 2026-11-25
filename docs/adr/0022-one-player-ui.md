@@ -42,3 +42,5 @@ makes it the rule for the whole project.
 * Known gap today: the ESP32-S3 and RP2350 AMOLED dev-board builds use the Pico's small art thumbnail and have no
   Cover Flow, because `NEUPOD_ART_HIRES` is on only for hosted builds. Where a board has the memory (PSRAM), this is a
   gap to close, not a hardware difference.
+  **Closed in the firmware 25 Nov 2026 (UI-25)**: both AMOLED boards build the big-RAM player with its buffers in PSRAM
+  ([specs/001-amoled-full-art](https://github.com/StuartF303/neuPod/blob/main/specs/001-amoled-full-art/spec.md)); bench confirmation pending.

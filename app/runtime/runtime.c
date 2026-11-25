@@ -377,12 +377,55 @@ static void must_create(const char *name, os_task_fn fn, uint32_t stack, uint8_t
     }
 }
 
+#ifdef NEUPOD_PSRAM_SECTION
+// The big buffers of this build live in PSRAM (psram_bss.h), the LVGL pool among them. Without it no service may start: the first
+// access would bus-fault. Stop here, saying why: on the console every 2 s (a USB terminal may be opened late) and as a dim red screen
+// (text would need LVGL, whose pool is in PSRAM). Spec FR-007 (specs/001-amoled-full-art). A board on battery can still be switched
+// off: a press of the Power key, held 1 s, cuts the battery latch (the key that switched the board on must be let go first).
+#define PSRAM_HALT_TICK_MS 50u
+static void psram_failed_halt(void) {
+    if (hal_display_init() == HAL_OK) {
+        hal_display_fill_rect(0, 0, hal_display_width(), hal_display_height(), HAL_RGB565(255, 0, 0));
+        hal_display_backlight(24); // low: the board may be on battery
+    }
+    bool released = false; // the press that switched the board on does not count
+    uint32_t held_ms = 0, since_msg_ms = 2000u;
+    for (;;) {
+        if (since_msg_ms >= 2000u) {
+            printf("boot: psram FAILED: %s\n", hal_psram_reason());
+            since_msg_ms = 0;
+        }
+        bool down = hal_input_power_key();
+        if (!down) {
+            released = true;
+            held_ms = 0;
+        } else if (released) {
+            held_ms += PSRAM_HALT_TICK_MS;
+            if (held_ms >= 1000u) {
+                printf("boot: psram FAILED: switching off (Power key)\n");
+                hal_psram_cut_power(); // the board goes off when the key is let go (on USB power it stays on)
+                released = false;
+                held_ms = 0;
+            }
+        }
+        hal_delay_ms(PSRAM_HALT_TICK_MS);
+        since_msg_ms += PSRAM_HALT_TICK_MS;
+    }
+}
+#endif
+
 void neupod_runtime_run(const neupod_runtime_config_t *cfg) {
     memset(&g_cfg, 0, sizeof g_cfg);
     if (cfg != NULL) {
         g_cfg = *cfg;
     }
     printf("neuPod %s (%s) starting on %s\n", NEUPOD_VERSION, NEUPOD_GIT_HASH, hal_platform_name());
+#ifdef NEUPOD_PSRAM_SECTION
+    hal_psram_print();
+    if (!hal_psram_ok()) {
+        psram_failed_halt();
+    }
+#endif
 
     caps_init();
     battery_store_init();

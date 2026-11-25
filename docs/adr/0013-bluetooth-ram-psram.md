@@ -70,3 +70,23 @@ planning stage 2a ([Bluetooth](../bluetooth.md)).
 - **Consequences.** (1) The LVGL render-buffer release while the display sleeps is **no longer needed** for funding; it stays a possible later saving, not a dependency of stage 2. (2) Changing the output path at run time needs a quiet ring
   (stopped or paused, as the audio engine already does to change sink or rate). (3) A Bluetooth link that drops mid-track must pause or switch the output back to I2S before the ring is handed over.
   (4) The closure check has to cover the new ring state when 2b adds it.
+
+## Amendment 25 Nov 2026: PSRAM in use on the AMOLED dev boards (UI-25)
+
+The decision above names the 8 MB APS6404L PSRAM as where album art goes on the final board. The Waveshare RP2350-Touch-AMOLED-2.41
+has that part (and the ESP32-S3-Touch-AMOLED-2.41 has 8 MB of octal PSRAM), so the big-RAM player now runs there. Design and evidence:
+[specs/001-amoled-full-art](https://github.com/StuartF303/neuPod/blob/main/specs/001-amoled-full-art/plan.md) (research R1 to R11). The lead confirmed the scope and the failure
+policy on 25 Nov 2026.
+
+- **What goes to PSRAM:** the 24-album art cache (1,230,144 B), the playlist buffers, the play counts and the play queue: the cold,
+  big buffers of `NEUPOD_ART_HIRES`. Hot buffers (PCM ring, library pages, display DMA strips) stay internal; core 1 touches none of
+  the moved buffers.
+- **How:** ESP32-S3 by object file (`main/linker.lf`, `extram_bss`, zeroed by the IDF); RP2350 by section name, the macro
+  `NEUPOD_PSRAM_BSS` (`app/include/psram_bss.h`, empty on every other build) into the Pico SDK's `.psram_noload`, zeroed by the HAL.
+  The SDK's `hardware_psram` brings the chip up; we add a warm-start reset before it and compute the timing again after the
+  clock drops from 150 to 125 MHz (otherwise CS stays low 9.2 us, over the 8 us limit).
+- **Failure policy:** no fallback. A board whose PSRAM is missing or fails its check does not start the runtime and says why
+  (console every 2 s; red screen on the RP2350 board). The ESP32-S3's IDF already stops the boot without PSRAM.
+- **RAM budget:** internal RAM does not grow on either board; PSRAM use and the linked figures are in
+  [docs/rp2350-amoled241.md](../rp2350-amoled241.md#psram-and-the-big-ram-player-ui-25) and [docs/esp32s3.md](../esp32s3.md).
+  The Pico 2 W image is unchanged.

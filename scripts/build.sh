@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Configure and build one platform into build/<platform>/.
-# Usage: scripts/build.sh [rp2350|rp2350-amoled241|esp32s3|host|y2] [--clean] [-- extra cmake/idf.py args]
+# Usage: scripts/build.sh [rp2350|rp2350-amoled241|esp32s3|host|host-amoled|y2] [--clean] [-- extra cmake/idf.py args]
 # rp2350-amoled241 is the RP2350 platform for the Waveshare RP2350-Touch-AMOLED-2.41 board (docs/rp2350-amoled241.md), in build/rp2350-amoled241.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -13,6 +13,13 @@ BOARD_ARGS=()
 if [[ "$PLATFORM" == "rp2350-amoled241" ]]; then
     PLATFORM=rp2350
     BOARD_ARGS=(-DNEUPOD_BOARD=amoled241)
+fi
+# host-amoled: the host simulator built with exactly the AMOLED boards' UI options (one compiled 600x450 profile and the big-RAM
+# player), in build/host-amoled, so the tours check that combination without a board (UI-25, specs/001-amoled-full-art research R9).
+if [[ "$PLATFORM" == "host-amoled" ]]; then
+    PLATFORM=host
+    # The LVGL pool as on the boards (192 KB, in PSRAM there); this 64-bit host needs about 1.6 times more for the same screens, so it is the stricter test.
+    BOARD_ARGS=(-DNEUPOD_UI_HIRES=OFF -DNEUPOD_ART_HIRES=ON -DNEUPOD_UI_PROFILE=600x450 "-DCMAKE_C_FLAGS=-DNEUPOD_LVGL_POOL_BYTES=196608u")
 fi
 
 (( CLEAN )) && rm -rf "$BUILD"
@@ -31,7 +38,7 @@ case "$PLATFORM" in
         idf.py -C "$ROOT/platforms/esp32s3" -B "$BUILD" build "$@"
         ;;
     *)
-        echo "Unknown platform '$PLATFORM' (rp2350, rp2350-amoled241, esp32s3, host, y2)" >&2
+        echo "Unknown platform '$PLATFORM' (rp2350, rp2350-amoled241, esp32s3, host, host-amoled, y2)" >&2
         exit 2
         ;;
 esac

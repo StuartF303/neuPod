@@ -27,11 +27,11 @@ foundational (Phase 2). The story phases verify and tune each story on the two b
 
 **Purpose**: baselines and the host configuration that finds layout bugs before any bench time
 
-- [ ] T001 Record the baseline: `llvm-size -A` and `llvm-nm -S --size-sort` of `neupod.elf` for `rp2350` and `rp2350-amoled241` from the merge base's CI artifacts, and the ESP32-S3 `idf.py size` summary from a local build (`~/bin/neupod-buildlock`); keep them in the PR description draft (research R10, plan section 5)
-- [ ] T002 [P] Check the ESP32-S3 app partition headroom against `platforms/esp32s3/partitions.csv` and the baseline `neupod.bin` size (plan "Flash"); stop and ask the owner if the estimate (+100 KB) does not fit (constitution III: no repartitioning without the owner)
-- [ ] T003 [P] Read Pico SDK 2.3.1 in the CI image: does `set_sys_clock_khz()` re-time PSRAM; where `sections_psram.incl` sits relative to `.bss` in `memmap_default.incl`; how `runtime_init_setup_psram` orders against a custom `runtime_init` function. Write the answers into research.md R4/R5
-- [ ] T004 Add a host configuration with the boards' UI options (`-DNEUPOD_UI_HIRES=OFF -DNEUPOD_ART_HIRES=ON -DNEUPOD_UI_PROFILE=600x450`) as `host-amoled` in `scripts/build.sh`; fix whatever stops the host from building or running without `NEUPOD_UI_HIRES` (research R9)
-- [ ] T005 Run the art tests and the library tours (incl. `lib-coverflow*`) in `build/host-amoled`; fix layout or compile issues in `app/ui/ui_library.c`, `app/ui/ui_coverflow.c`, `app/ui/ui_frame.c` that only show with one compiled profile; then add the `host-amoled` configuration to `.github/workflows/firmware.yml` with test counts checked (constitution VII)
+- [X] T001 Record the baseline: `llvm-size -A` and `llvm-nm -S --size-sort` of `neupod.elf` for `rp2350` and `rp2350-amoled241` from the merge base's CI artifacts, and the ESP32-S3 `idf.py size` summary from a local build (`~/bin/neupod-buildlock`); keep them in the PR description draft (research R10, plan section 5)
+- [X] T002 [P] Check the ESP32-S3 app partition headroom against `platforms/esp32s3/partitions.csv` and the baseline `neupod.bin` size (plan "Flash"); stop and ask the owner if the estimate (+100 KB) does not fit (constitution III: no repartitioning without the owner)
+- [X] T003 [P] Read Pico SDK 2.3.1 in the CI image: does `set_sys_clock_khz()` re-time PSRAM; where `sections_psram.incl` sits relative to `.bss` in `memmap_default.incl`; how `runtime_init_setup_psram` orders against a custom `runtime_init` function. Write the answers into research.md R4/R5
+- [X] T004 Add a host configuration with the boards' UI options (`-DNEUPOD_UI_HIRES=OFF -DNEUPOD_ART_HIRES=ON -DNEUPOD_UI_PROFILE=600x450`) as `host-amoled` in `scripts/build.sh`; fix whatever stops the host from building or running without `NEUPOD_UI_HIRES` (research R9)
+- [X] T005 Run the art tests and the library tours (incl. `lib-coverflow*`) in `build/host-amoled`; fix layout or compile issues in `app/ui/ui_library.c`, `app/ui/ui_coverflow.c`, `app/ui/ui_frame.c` that only show with one compiled profile; then add the `host-amoled` configuration to `.github/workflows/firmware.yml` with test counts checked (constitution VII)
 
 ---
 
@@ -43,40 +43,40 @@ foundational (Phase 2). The story phases verify and tune each story on the two b
 
 ### Build option
 
-- [ ] T006 Default `NEUPOD_ART_HIRES` ON for `NEUPOD_BOARD=amoled241` in `CMakeLists.txt`, and rewrite its comment (AMOLED boards, PSRAM) (spec FR-001, FR-002, FR-010; contracts section 1)
-- [ ] T007 [P] Add the `NEUPOD_ART_HIRES` cache option (default ON) to `platforms/esp32s3/CMakeLists.txt` and pass `NEUPOD_ART_HIRES=1` to the component in `platforms/esp32s3/main/CMakeLists.txt` (spec FR-001, FR-010; contracts section 1)
+- [X] T006 Default `NEUPOD_ART_HIRES` ON for `NEUPOD_BOARD=amoled241` in `CMakeLists.txt`, and rewrite its comment (AMOLED boards, PSRAM) (spec FR-001, FR-002, FR-010; contracts section 1)
+- [X] T007 [P] Add the `NEUPOD_ART_HIRES` cache option (default ON) to `platforms/esp32s3/CMakeLists.txt` and pass `NEUPOD_ART_HIRES=1` to the component in `platforms/esp32s3/main/CMakeLists.txt` (spec FR-001, FR-010; contracts section 1)
 
 ### ESP32-S3 placement
 
-- [ ] T008 [P] Add `art_service`, `playlist_service`, `plays_store`, `play_queue` as `extram_bss` entries in `platforms/esp32s3/main/linker.lf`, update its header comment (and note that the RP2350 AMOLED build uses `NEUPOD_PSRAM_BSS` instead, research R3/R4) (spec FR-004)
+- [X] T008 [P] Add `art_service`, `playlist_service`, `plays_store`, `play_queue` as `extram_bss` entries in `platforms/esp32s3/main/linker.lf`, update its header comment (and note that the RP2350 AMOLED build uses `NEUPOD_PSRAM_BSS` instead, research R3/R4) (spec FR-004)
 
 ### RP2350 AMOLED PSRAM bring-up
 
-- [ ] T009 Define `PICO_PSRAM_CS_PIN 47`, `PICO_PSRAM_SIZE_BYTES (8 * 1024 * 1024)` with its `pico_cmake_set_default` line, and `PICO_AUTO_DETECT_PSRAM_SIZE 1` in `platforms/rp2350/boards/amoled241/waveshare_rp2350_touch_amoled_2.41.h` (spec FR-006, research R4)
-- [ ] T010 In `platforms/rp2350/CMakeLists.txt`, for amoled241 only: link `hardware_psram`, define `NEUPOD_PSRAM_SECTION=1` for the app and HAL targets, add `boards/amoled241/psram_amoled.c` to `hal_rp2350_core` (contracts section 1)
-- [ ] T011 Write `platforms/rp2350/boards/amoled241/psram_amoled.c`: the warm-start reset (`runtime_init` function before the SDK's PSRAM init: quad-off, reset-enable, reset on CS1, taken from `testbed/amoled241/bringup/src/psram.c`), `psram_amoled_after_clock()` (re-time with `psram_configure_params()` + `psram_reinitialize()` with interrupts off; skip if T003 found the SDK does it), the check (`psram_is_available()`, `psram_check_address(__psram_end__ - 1)`), the zeroing of `__psram_start__`..`__psram_end__`, `hal_psram_ok()` / `hal_psram_reason()`, and the `psram:` console line (spec FR-006, FR-008; data-model.md "PSRAM state"; contracts sections 2 and 3). The `runtime_init` function must live in this same object as `hal_psram_ok()`: the file is linked from a static library, and an object with no referenced symbol is dropped, which would silently drop the reset step
-- [ ] T012 Call `psram_amoled_after_clock()` from `hal_system_init()` right after `set_sys_clock_khz()` in `platforms/rp2350/hal/hal_system.c`, inside `#ifdef NEUPOD_BOARD_AMOLED241` (research R5)
-- [ ] T013 Declare `hal_psram_ok()` and `hal_psram_reason()` in `hal/include/hal_system.h` under `#ifdef NEUPOD_PSRAM_SECTION` (contracts section 2)
+- [X] T009 Define `PICO_PSRAM_CS_PIN 47`, `PICO_PSRAM_SIZE_BYTES (8 * 1024 * 1024)` with its `pico_cmake_set_default` line, and `PICO_AUTO_DETECT_PSRAM_SIZE 1` in `platforms/rp2350/boards/amoled241/waveshare_rp2350_touch_amoled_2.41.h` (spec FR-006, research R4)
+- [X] T010 In `platforms/rp2350/CMakeLists.txt`, for amoled241 only: link `hardware_psram`, define `NEUPOD_PSRAM_SECTION=1` for the app and HAL targets, add `boards/amoled241/psram_amoled.c` to `hal_rp2350_core` (contracts section 1)
+- [X] T011 Write `platforms/rp2350/boards/amoled241/psram_amoled.c`: the warm-start reset (`runtime_init` function before the SDK's PSRAM init: quad-off, reset-enable, reset on CS1, taken from `testbed/amoled241/bringup/src/psram.c`), `psram_amoled_after_clock()` (re-time with `psram_configure_params()` + `psram_reinitialize()` with interrupts off; skip if T003 found the SDK does it), the check (`psram_is_available()`, `psram_check_address(__psram_end__ - 1)`), the zeroing of `__psram_start__`..`__psram_end__`, `hal_psram_ok()` / `hal_psram_reason()`, and the `psram:` console line (spec FR-006, FR-008; data-model.md "PSRAM state"; contracts sections 2 and 3). The `runtime_init` function must live in this same object as `hal_psram_ok()`: the file is linked from a static library, and an object with no referenced symbol is dropped, which would silently drop the reset step
+- [X] T012 Call `psram_amoled_after_clock()` from `hal_system_init()` right after `set_sys_clock_khz()` in `platforms/rp2350/hal/hal_system.c`, inside `#ifdef NEUPOD_BOARD_AMOLED241` (research R5)
+- [X] T013 Declare `hal_psram_ok()` and `hal_psram_reason()` in `hal/include/hal_system.h` under `#ifdef NEUPOD_PSRAM_SECTION` (contracts section 2)
 
 ### Placement macro and marked buffers
 
-- [ ] T014 Add `NEUPOD_PSRAM_BSS` to `app/os/memory_budget.h`: `__attribute__((section(".psram_uninitialised.neupod")))` when `NEUPOD_PSRAM_SECTION` is defined, empty otherwise, with a comment pointing at research R4 (spec FR-004)
-- [ ] T015 [P] Mark `g_slot` with `NEUPOD_PSRAM_BSS` in `app/runtime/art_service.c` (data-model.md "Album-art cache slot")
-- [ ] T016 [P] Mark the playlist pool, path, name, row, offset and state arrays in `app/runtime/playlist_service.c` (data-model.md "Other moved buffers")
-- [ ] T017 [P] Mark the plays table and inbox in `app/settings/plays_store.c` (data-model.md "Other moved buffers")
-- [ ] T018 [P] Mark the play-queue name pool in `app/runtime/play_queue.c` (data-model.md "Other moved buffers")
+- [X] T014 Add `NEUPOD_PSRAM_BSS` to `app/os/memory_budget.h`: `__attribute__((section(".psram_uninitialised.neupod")))` when `NEUPOD_PSRAM_SECTION` is defined, empty otherwise, with a comment pointing at research R4 (spec FR-004)
+- [X] T015 [P] Mark `g_slot` with `NEUPOD_PSRAM_BSS` in `app/runtime/art_service.c` (data-model.md "Album-art cache slot")
+- [X] T016 [P] Mark the playlist pool, path, name, row, offset and state arrays in `app/runtime/playlist_service.c` (data-model.md "Other moved buffers")
+- [X] T017 [P] Mark the plays table and inbox in `app/settings/plays_store.c` (data-model.md "Other moved buffers")
+- [X] T018 [P] Mark the play-queue name pool in `app/runtime/play_queue.c` (data-model.md "Other moved buffers")
 
 ### Failure path
 
-- [ ] T019 In the runtime boot (`app/runtime/boot.c` or `app/runtime/runtime.c`, wherever services are first started), under `#ifdef NEUPOD_PSRAM_SECTION`: if `!hal_psram_ok()`, print `boot: psram FAILED: <reason>` every 2 s and show it in the boot splash's text line, and start no service (spec FR-007, research R6). Confirm no marked variable is touched earlier (grep the init order)
-- [ ] T020 Add a debug-only `NEUPOD_PSRAM_FORCE_FAIL` CMake option (amoled241) that makes the check report "forced", for the failure-path test in quickstart section 4, in `platforms/rp2350/CMakeLists.txt` and `psram_amoled.c`
-- [ ] T021 [P] ESP32-S3: print the same `psram:` summary line from `esp_psram_get_size()` and the `extram_bss` bounds in `platforms/esp32s3/main/hal/board.c` (contracts section 3, FR-008)
+- [X] T019 In the runtime boot (`app/runtime/boot.c` or `app/runtime/runtime.c`, wherever services are first started), under `#ifdef NEUPOD_PSRAM_SECTION`: if `!hal_psram_ok()`, print `boot: psram FAILED: <reason>` every 2 s and show it in the boot splash's text line, and start no service (spec FR-007, research R6). Confirm no marked variable is touched earlier (grep the init order)
+- [X] T020 Add a debug-only `NEUPOD_PSRAM_FORCE_FAIL` CMake option (amoled241) that makes the check report "forced", for the failure-path test in quickstart section 4, in `platforms/rp2350/CMakeLists.txt` and `psram_amoled.c`
+- [X] T021 [P] ESP32-S3: print the same `psram:` summary line from `esp_psram_get_size()` and the `extram_bss` bounds in `platforms/esp32s3/main/hal/board.c` (contracts section 3, FR-008)
 
 ### Build and size gate
 
-- [ ] T022 Build all five targets (`host`, `host-amoled`, `rp2350`, `rp2350-amoled241`, `esp32s3`) through `~/bin/neupod-buildlock`; run the full host `ctest` in both host configurations with counts checked; the core-1 closure and app-heap checks must pass on both RP2350 images
-- [ ] T023 Compare the Pico 2 W `neupod.elf` section sizes with T001: every allocated section identical, or stop and fix (spec FR-005, SC-004)
-- [ ] T024 Record the amoled241 and ESP32-S3 linked figures (internal static, `.psram_noload` / `.ext_ram.bss`, flash) against the plan's budget tables; any internal growth beyond the gates blocks the bench work (spec FR-011)
+- [X] T022 Build all five targets (`host`, `host-amoled`, `rp2350`, `rp2350-amoled241`, `esp32s3`) through `~/bin/neupod-buildlock`; run the full host `ctest` in both host configurations with counts checked; the core-1 closure and app-heap checks must pass on both RP2350 images
+- [X] T023 Compare the Pico 2 W `neupod.elf` section sizes with T001: every allocated section identical, or stop and fix (spec FR-005, SC-004)
+- [X] T024 Record the amoled241 and ESP32-S3 linked figures (internal static, `.psram_noload` / `.ext_ram.bss`, flash) against the plan's budget tables; any internal growth beyond the gates blocks the bench work (spec FR-011)
 
 **Checkpoint**: both boards build with the big-RAM player, all buffers placed, Pico 2 W unchanged.
 
@@ -128,10 +128,10 @@ foundational (Phase 2). The story phases verify and tune each story on the two b
 
 ## Phase 6: Polish & cross-cutting
 
-- [ ] T036 [P] Amend `docs/adr/0013-bluetooth-ram-psram.md` with "PSRAM in use (UI-25)": placement per board, the failure policy, the budget with linked figures (research R11, constitution VIII)
-- [ ] T037 [P] Update `docs/rp2350-amoled241.md` (PSRAM section with pin, size, clock, placement, failure behaviour, bench results with the date; remove it from "What is not done"; say `NEUPOD_ART_HIRES` is on by default and how to turn it off, FR-010) and `docs/esp32s3.md` (memory table rows for the new PSRAM buffers, the option and its override, bench results with the date)
-- [ ] T038 [P] Update `docs/ui.md` "Thumbnails and cache (NP-5)" and the Cover Flow note (which builds have it), and the comments in `app/include/art.h`, `app/include/playlist_service.h`, `app/include/plays_store.h`, `app/include/ratings_store.h` that say "hosted, Y2, PSRAM boards"
-- [ ] T039 [P] Mark the gap closed in `docs/adr/0022-one-player-ui.md` ("Known gap"), move UI-25 to done and update the NP-5 row in `docs/backlog.md`, add the entry to `CHANGELOG.md`
+- [X] T036 [P] Amend `docs/adr/0013-bluetooth-ram-psram.md` with "PSRAM in use (UI-25)": placement per board, the failure policy, the budget with linked figures (research R11, constitution VIII)
+- [X] T037 [P] Update `docs/rp2350-amoled241.md` (PSRAM section with pin, size, clock, placement, failure behaviour, bench results with the date; remove it from "What is not done"; say `NEUPOD_ART_HIRES` is on by default and how to turn it off, FR-010) and `docs/esp32s3.md` (memory table rows for the new PSRAM buffers, the option and its override, bench results with the date)
+- [X] T038 [P] Update `docs/ui.md` "Thumbnails and cache (NP-5)" and the Cover Flow note (which builds have it), and the comments in `app/include/art.h`, `app/include/playlist_service.h`, `app/include/plays_store.h`, `app/include/ratings_store.h` that say "hosted, Y2, PSRAM boards"
+- [X] T039 [P] Mark the gap closed in `docs/adr/0022-one-player-ui.md` ("Known gap"), move UI-25 to done and update the NP-5 row in `docs/backlog.md`, add the entry to `CHANGELOG.md`
 - [ ] T040 Bench results to the project memory `bench-status.md` (verified on hardware, open issues)
 - [ ] T041 Run quickstart.md end to end; the PR description carries the size table (Pico 2 W zero deltas, both boards' budgets with linked figures) and names the reviewer's checklist: constitution I, IV, VII
 - [ ] T042 Independent review (a subagent that did not write the code) against spec.md, plan.md and the constitution; reviewers read via `gh pr diff` only; no `gh pr merge` by agents
@@ -183,3 +183,44 @@ built and host-tested by then). Follow-up PRs only if US2 tuning (R7 uncached al
 - Heavy builds only through `~/bin/neupod-buildlock`; one at a time.
 - Never force-push or rebase; merge main into the branch.
 - Kill only processes you started, by PID.
+
+## Implementation notes (25 Nov 2026, `/speckit-implement`)
+
+Done: T001 to T024 and T036 to T039. Open: the bench tasks T025 to T035 (no board attached; owner checklist in the PR), T040
+(bench results), T041 (the bench half of the quickstart), and T042 (the review: an independent subagent review was run; the lead
+reviews the PR).
+
+Where the plan turned out wrong, or changed while building:
+
+1. **LVGL pool (research R8)**: the contingency was taken at once. `host-amoled` (a 64-bit host, 128 KB pool) ran out of LVGL memory in
+   the library tour, so the RP2350 AMOLED pool moved to PSRAM at 192 KB through `LV_ATTRIBUTE_LARGE_RAM_ARRAY`, as on the ESP32-S3. This
+   frees 72 KB of internal RAM. Internal free above the heap is now 85,172 B (the plan said about 18 KB).
+2. **The macro's home**: it is in `app/include/psram_bss.h`, not `app/os/memory_budget.h`. Not every target that compiles the marked files
+   has `app/os` on its include path.
+3. **The play queue is in `player.c`** (`g_q`, 8,992 B), not `play_queue.c`. The ESP32-S3 linker fragment maps `player`, and the
+   RP2350 build marks `g_q`.
+4. **A buffer the estimate missed**: `plays_store.c` has a 23,552 B merge snapshot (`before[]`), found in the linked image and marked.
+5. **Failure screen (FR-007)**: the screen is red, with no text, dimmed (the board may be on battery). The text would need LVGL, whose
+   pool is in PSRAM. The reason is on the console every 2 s. The Power key, held 1 s after the power-on press is let go, cuts the battery
+   latch directly (storage is not up, so there is no power-off sequence). FR-007 amended accordingly (lead decision N1, 2026-11-25).
+11. **Review fixes (#156)**: CS-low limit 7,500 ns instead of the SDK's 8,000 (14 units of 512 ns at 125 MHz, about 7.65 us with the
+    tail of an access; N2); a write and read-back check of every address line and the last word before the zeroing, reason `readback`
+    on a mismatch (N3).
+6. **T003 answers**: SDK 2.3.1's `runtime_init_setup_psram` detects the size and sets the timing at the boot clock;
+   `set_sys_clock_khz()` does not set the PSRAM timing again (`clocks.c` has no PSRAM code). So the re-timing in `hal_system_init()`
+   stays. The section-order question did not arise, because placement is by section name.
+7. **`host-amoled`**: nine tests pin the 320x240 profile's pixels or audit lines (`art_snapshot`, `seek_snapshot`, `ui_metrics`, and
+   the power, power_charger, power_battery, hold, licences and design tours). They are disabled in that configuration only. The regular
+   host build still runs all of them. Their twins at other sizes there: the hold, design and licences tours at 480x360 (`hires_*`) and
+   600x450 (`hires600_*`); `art_snapshot` and `seek_snapshot` at 480x360 only (`hires_*`); `ui_metrics` checks every profile in one test;
+   the three power tours have no twin (320x240 only).
+8. **ESP-IDF**: `playlist_service.c` compiled for the first time under `-Werror=format-truncation`. One intended snprintf cut is now an
+   explicit byte cut that gives the same result.
+9. **Builds ran in CI, not locally (T022)**: the toolchain image could not be built on this Mac (the network was down and the disk was full),
+   so every build and the host `ctest` ran in GitHub Actions on the branch.
+10. **Core 1 and ISRs**: none of the moved buffers is reachable from either.
+    - `plays_record()` is called from the monitor task (`runtime.c` monitor loop, then `player_service()`, `count_plays()`) and from
+      the UI task (`ui_nowplaying.c`).
+    - `g_q` is used only by `player.c` on core 0.
+    - Nothing in `app/audio` or in the HAL audio and display ISRs includes the player, plays, art or playlist headers.
+    - The ESP32-S3 makes no SPI-flash writes at run time, so there is no cache-off window.

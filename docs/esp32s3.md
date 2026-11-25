@@ -77,6 +77,14 @@ in `main/linker.lf` (no attributes in `app/`):
 | UI render buffers (72 KB at 600x450) | too big for internal RAM next to the stacks |
 | LVGL's pool (192 KB, `NEUPOD_LVGL_POOL_BYTES`) | widgets, styles, layers; sized like the hosted builds: 72 KB ran out on the Music screens |
 | display shadow (527 KB, allocated at run time) | see below |
+| album-art cache (24 x 50 KB = 1.2 MB) and its state (`art_service`) | the big-RAM player (`NEUPOD_ART_HIRES`, on by default here since UI-25; `-DNEUPOD_ART_HIRES=OFF` for the small one) |
+| playlist buffers, play counts, play queue (`playlist_service`, `plays_store`, `player`) | the rest of the big-RAM player; cold |
+
+Linked (CI 25 Nov 2026, Release; before = `main` at 2f99ded, the same base as the RP2350 AMOLED figures): internal `.dram0.bss` 115,432 to 106,640 B (-8,792), `.dram0.data` 13,148 to 13,164 B
+(+16); PSRAM `.ext_ram.bss` 404,052 to 1,722,444 B (+1,318,392; with the 527 KB display shadow about 2.2 MB of 8 MB in use); app image
+1,127,360 to 1,150,624 B (+23,264) of the 4 MB app partition.
+
+The boot log prints `psram: 8192 KB at 80000 kHz, neupod section N KB` (all of `extram_bss`). Without PSRAM the IDF stops the boot itself (as before).
 
 Internal: the PCM ring (32 KB), the library buffers, a 2 KB SD staging buffer (PSRAM or unaligned buffers are copied through it, so no read or write depends on a bounce-buffer allocation), the display's two DMA strips (19 KB each), task stacks. After boot about 76 KB of
 internal heap is free (32 KB at the lowest, while the boot-check tasks run together): enough now, but the Wi-Fi/BLE stacks will need to

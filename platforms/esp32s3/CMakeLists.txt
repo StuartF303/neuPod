@@ -13,6 +13,8 @@ set(EXCLUDE_COMPONENTS fatfs)
 
 # UI profile (docs/ui.md): this board's panel is 600x450. Override with -DNEUPOD_UI_PROFILE=320x240 (idf.py build -D...).
 set(NEUPOD_UI_PROFILE "600x450" CACHE STRING "UI profile: 320x240 or 600x450")
+# The big-RAM player (UI-25): 160 px art with the 24-album cache, Cover Flow, playlists. Its big buffers go to PSRAM (main/linker.lf).
+option(NEUPOD_ART_HIRES "160x160 album art, 24-album cache, Cover Flow, playlists (buffers in PSRAM)" ON)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(neupod)

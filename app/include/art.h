@@ -23,9 +23,10 @@ extern "C" {
 #endif
 
 /*
- * Thumbnail size and cache (NP-5, docs/ui.md "Album art"): hosted builds (the simulator, the Y2) and the RP2350B with PSRAM decode to a
- * 160 x 160 RGB565 thumbnail (50 KB) and keep the last 24 albums (1.2 MB); nothing is ever scaled up, the UI draws it smaller. The Pico 2 W
- * (ADR-0001 amendment: frozen) keeps one 64 x 64 thumbnail (8 KB) and no cache. A build with PSRAM defines NEUPOD_ART_HIRES.
+ * Thumbnail size and cache (NP-5, docs/ui.md "Album art"): hosted builds (the simulator, the Y2) and the PSRAM boards (the RP2350 and
+ * ESP32-S3 AMOLED boards, UI-25, the cache in PSRAM) decode to a 160 x 160 RGB565 thumbnail (50 KB) and keep the last 24 albums (1.2 MB);
+ * nothing is ever scaled up, the UI draws it smaller. The Pico 2 W (ADR-0001 amendment: frozen) keeps one 64 x 64 thumbnail (8 KB) and no
+ * cache. Those builds define NEUPOD_ART_HIRES.
  */
 #ifdef NEUPOD_ART_HIRES
 #define ART_MAX_DIM 160u                         /**< the thumbnail fits a 160 x 160 box */

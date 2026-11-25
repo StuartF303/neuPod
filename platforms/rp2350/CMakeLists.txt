@@ -34,7 +34,7 @@ message(STATUS "neuPod audio unmute level on GP22: ${NEUPOD_AUDIO_UNMUTE_LEVEL}"
 if(NEUPOD_BOARD STREQUAL "amoled241")
   set(NEUPOD_DISPLAY_SRC ${NEUPOD_BOARD_DIR}/hal_display_rm690b0.c)
   set(NEUPOD_INPUT_SRC ${NEUPOD_BOARD_DIR}/hal_input_amoled.c)
-  set(NEUPOD_TOUCH_SRC ${NEUPOD_BOARD_DIR}/hal_touch_ft6336.c)
+  set(NEUPOD_TOUCH_SRC ${NEUPOD_BOARD_DIR}/hal_touch_ft6336.c ${NEUPOD_BOARD_DIR}/psram_amoled.c) # + the PSRAM bring-up (UI-25)
 else()
   set(NEUPOD_DISPLAY_SRC hal/hal_display.c)
   set(NEUPOD_INPUT_SRC hal/hal_input.c)
@@ -73,7 +73,8 @@ set_source_files_properties(hal/hal_core.c hal/hal_i2c.c i2c_test_main.c ${CMAKE
   display_test_main.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
 if(NEUPOD_BOARD STREQUAL "amoled241")
   pico_generate_pio_header(hal_rp2350_core ${NEUPOD_BOARD_DIR}/rm690b0_qspi.pio)
-  set_source_files_properties(${NEUPOD_BOARD_DIR}/hal_display_rm690b0.c ${NEUPOD_BOARD_DIR}/hal_input_amoled.c
+  target_link_libraries(hal_rp2350_core PUBLIC hardware_psram) # the SDK's PSRAM bring-up (psram_amoled.c, board header PICO_PSRAM_*)
+  set_source_files_properties(${NEUPOD_BOARD_DIR}/psram_amoled.c ${NEUPOD_BOARD_DIR}/hal_display_rm690b0.c ${NEUPOD_BOARD_DIR}/hal_input_amoled.c
     ${NEUPOD_BOARD_DIR}/hal_touch_ft6336.c ${NEUPOD_BOARD_DIR}/hal_radio_none.c ${NEUPOD_BOARD_DIR}/hal_storage_spi.c
     ${NEUPOD_BOARD_DIR}/hw_config.c PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
   # Landscape direction of the panel and the touch mapping (board.h); touch points on the console while bringing the board up.

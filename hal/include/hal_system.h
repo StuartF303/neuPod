@@ -82,6 +82,18 @@ bool hal_system_poweroff(void);
 /** Short platform name for logs, e.g. "rp2350", "esp32s3", "host". */
 const char *hal_platform_name(void);
 
+#ifdef NEUPOD_PSRAM_SECTION
+/*
+ * PSRAM that holds the NEUPOD_PSRAM_BSS buffers (psram_bss.h): only the builds that define NEUPOD_PSRAM_SECTION have these (the
+ * RP2350 AMOLED board). hal_system_init() brings the PSRAM up, checks it and zeroes the section; the runtime calls
+ * hal_psram_ok() before it starts any service and stops there if it is false (UI-25, docs/rp2350-amoled241.md "PSRAM").
+ */
+bool hal_psram_ok(void);           /**< the PSRAM passed its start-up check and its section is zeroed */
+const char *hal_psram_reason(void); /**< "" when OK, else why not: "no chip", "timing", "too small", "forced" */
+void hal_psram_print(void);         /**< one console line: size, clock and how much the firmware uses */
+void hal_psram_cut_power(void);     /**< failure path only: drop the battery latch directly (storage is not up: no power-off sequence) */
+#endif
+
 #ifdef __cplusplus
 }
 #endif

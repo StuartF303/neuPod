@@ -12,6 +12,7 @@
 #include "pico/multicore.h"
 #ifdef NEUPOD_BOARD_AMOLED241
 #include "board.h" // Waveshare RP2350-Touch-AMOLED-2.41: no radio chip; the soft power latch instead of the CYW43 LED
+void psram_amoled_after_clock(void); // boards/amoled241/psram_amoled.c
 #else
 #include "pico/cyw43_arch.h"
 #endif
@@ -75,6 +76,11 @@ hal_status_t hal_system_init(void) {
     // SPI run from 125 MHz.
     clock_configure_undivided(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
                               NEUPOD_SYS_CLOCK_KHZ * 1000u);
+#ifdef NEUPOD_PSRAM_SECTION
+    // The SDK set the PSRAM's timing up for its 150 MHz boot clock: compute it again for 125 MHz, check the chip, zero the
+    // NEUPOD_PSRAM_BSS section (boards/amoled241/psram_amoled.c). Before stdio and before core 1: nothing else is on the XIP.
+    psram_amoled_after_clock();
+#endif
     stdio_init_all();
     hal_audio_force_mute(); // the Audio Pack's amp is muted from the first moments, before core 1 exists
 #if !NEUPOD_RTOS

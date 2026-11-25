@@ -5,7 +5,12 @@
 #   audio_shared   the compressed-data ring (32 KB): SD reads (core 0) to the decoder (core 1)
 #   lv_mem_core_builtin   LVGL's allocator pool (192 KB): widgets, styles, layers
 #   ui             the UI's two partial-render buffers (2 x 36 KB at 600x450): LVGL draws into them, hal_display_blit() copies out
+#   art_service    the album-art cache (24 x 50 KB = 1.2 MB, NEUPOD_ART_HIRES, UI-25) and the browse state
+#   playlist_service, plays_store   the playlist pool and tables, the play counts (about 48 KB)
+#   player         the play queue and its 8 KB name pool
 # The PCM ring (audio_core, 32 KB), and the library buffers stay internal: they are the hot ones.
+# (The RP2350 AMOLED board marks the same buffers with NEUPOD_PSRAM_BSS instead, app/include/psram_bss.h: the Pico SDK places
+# PSRAM data by section name, research R4 of specs/001-amoled-full-art.)
 [mapping:neupod_psram_bss]
 archive: libmain.a
 entries:
@@ -14,3 +19,7 @@ entries:
         audio_shared (extram_bss)
         lv_mem_core_builtin (extram_bss)
         ui (extram_bss)
+        art_service (extram_bss)
+        playlist_service (extram_bss)
+        plays_store (extram_bss)
+        player (extram_bss)

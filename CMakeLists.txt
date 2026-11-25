@@ -42,9 +42,16 @@ option(NEUPOD_UI_DEBUG "Debug lines on the UI (Home card summary, debug splash)"
 if(NEUPOD_UI_DEBUG)
   add_compile_definitions(NEUPOD_UI_DEBUG=1)
 endif()
-# Album art (docs/ui.md "Album art"): 160 x 160 thumbnails and a 24-album cache (1.2 MB) need RAM the Pico 2 W does not have (ADR-0001 amendment:
-# frozen). ON for the hosted builds; an RP2350B board with PSRAM turns it on with -DNEUPOD_ART_HIRES=ON.
-option(NEUPOD_ART_HIRES "160x160 album-art thumbnails with a 24-album cache (hosted builds, RP2350B with PSRAM)" ${NEUPOD_UI_HIRES_DEFAULT})
+# The big-RAM player (docs/ui.md "Album art", UI-25): 160 x 160 art thumbnails with a 24-album cache (1.2 MB), browse art and Cover Flow, and
+# the playlists, play counts and 128 ratings that share the option. The Pico 2 W does not have the RAM (ADR-0001 amendment: frozen). ON for the
+# hosted builds and for the boards with PSRAM: the RP2350 AMOLED board here (its big buffers go to PSRAM, app/include/psram_bss.h) and the
+# ESP32-S3 in platforms/esp32s3/CMakeLists.txt. -DNEUPOD_ART_HIRES=OFF gives the small player for comparison.
+if(NEUPOD_UI_HIRES_DEFAULT OR NEUPOD_BOARD STREQUAL "amoled241")
+  set(NEUPOD_ART_HIRES_DEFAULT ON)
+else()
+  set(NEUPOD_ART_HIRES_DEFAULT OFF)
+endif()
+option(NEUPOD_ART_HIRES "160x160 album-art thumbnails with a 24-album cache, Cover Flow, playlists (hosted builds, PSRAM boards)" ${NEUPOD_ART_HIRES_DEFAULT})
 if(NEUPOD_ART_HIRES)
   add_compile_definitions(NEUPOD_ART_HIRES=1)
 endif()
@@ -59,6 +66,12 @@ if(NEUPOD_PLATFORM STREQUAL "rp2350")
   add_compile_definitions(NEUPOD_RP2350=1)
   if(NEUPOD_BOARD STREQUAL "amoled241")
     add_compile_definitions(NEUPOD_BOARD_AMOLED241=1) # Waveshare RP2350-Touch-AMOLED-2.41: no radio, no wheel, touch + 600x450 panel
+    # Its 8 MB PSRAM holds the big buffers (app/include/psram_bss.h, platforms/rp2350/boards/amoled241/psram_amoled.c).
+    add_compile_definitions(NEUPOD_PSRAM_SECTION=1)
+    option(NEUPOD_PSRAM_FORCE_FAIL "amoled241 debug aid: report the PSRAM as failed, to test the boot's failure path" OFF)
+    if(NEUPOD_PSRAM_FORCE_FAIL)
+      add_compile_definitions(NEUPOD_PSRAM_FORCE_FAIL=1)
+    endif()
   else()
     # The Pico 2 W bench rig is frozen with about 100 B of static RAM spare and can neither sleep nor switch itself off: power management
     # (the sleep setting, the idle policy, the sleep sequence) is compiled out (docs/adr/0021-power-sleep.md).

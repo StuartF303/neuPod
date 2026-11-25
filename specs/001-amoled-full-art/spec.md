@@ -94,8 +94,7 @@ smart playlists, a played track shows up in Recently Played, and an On-The-Go li
 ### Edge Cases
 
 - **PSRAM missing or failing at start-up** (a fault, or a board variant without it): the board must not silently run with
-  memory it does not have. It stops at start-up with a clear message naming the PSRAM, on the screen where the display is up
-  and on the console (see FR-007).
+  memory it does not have. It stops at start-up: the reason on the console, a red screen (see FR-007).
 - **A warm restart** (reset button, a firmware load that reboots a running image, a watchdog reset) must find the PSRAM again,
   not only a cold power-on.
 - **Very large or unusual pictures**: pictures above the existing size limit, progressive JPEGs and PNGs show the placeholder,
@@ -121,9 +120,11 @@ smart playlists, a played track shows up in Recently Played, and an On-The-Go li
   the pull request.
 - **FR-006**: The RP2350 AMOLED build MUST bring up its PSRAM before any code that uses it runs, at the clock the firmware
   actually runs at, after both cold and warm starts.
-- **FR-007**: If the PSRAM is missing or fails its start-up check on an AMOLED board, the firmware MUST stop at start-up with
-  a message naming the PSRAM (console, and screen when available), and MUST NOT run with the big-RAM player on memory it does
-  not have.
+- **FR-007**: If the PSRAM is missing or fails its start-up check on an AMOLED board, the firmware MUST stop at start-up and
+  MUST NOT run with the big-RAM player on memory it does not have. The reason, naming the PSRAM, goes to the console every 2 s;
+  the screen turns red, with no text, because the LVGL pool that text would need lives in PSRAM itself. A board on battery can
+  still be switched off with the Power key. (Amended 2026-11-25, lead decision N1 in the review of #156; the first version asked
+  for the message on the screen too.)
 - **FR-008**: The start-up log of each AMOLED board MUST report the PSRAM found (size) and how much of it the firmware uses.
 - **FR-009**: Art decoding and Cover Flow MUST NOT cause audio under-runs or freeze the UI on the AMOLED boards (measured on
   the bench: the null sink's under-run counter stays at 0 and the UI stays responsive during a Cover Flow run).
@@ -152,7 +153,7 @@ smart playlists, a played track shows up in Recently Played, and an On-The-Go li
 - **SC-005**: Each AMOLED board's internal RAM left free after start-up is no less than the budget in the plan, and its PSRAM
   use matches the plan within 5%.
 - **SC-006**: 0 audio under-runs during a 5-minute Cover Flow and Now Playing session on each board.
-- **SC-007**: A board whose PSRAM does not answer stops at start-up with a message naming the PSRAM within 2 seconds, and a
+- **SC-007**: A board whose PSRAM does not answer stops at start-up, prints a message naming the PSRAM and shows a red screen within 2 seconds, and a
   warm restart of a healthy board finds its PSRAM 10 times out of 10.
 
 ## Clarifications
