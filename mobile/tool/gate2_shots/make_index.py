@@ -71,10 +71,9 @@ p.append("<h1>neuPod app: gate 2</h1><p>Candidates side by side for the owner to
          "Library names come from the bundled gate manifest; covers are placeholders. Mock-ups in "
          "<code>docs/design/2026-11-21-app-device-view/mockups</code> are design intent, not app output.</p>")
 p.append("<h2>Behaviours, not pictures (felt at gate 1 on the phone)</h2><ul>"
-         "<li><b>Touch candidate 1 (wheel only):</b> the screen is display only; every action goes through the wheel, as on the device.</li>"
-         "<li><b>Touch candidate 2 (wheel plus screen, recommended):</b> you can also tap a row to open it (it flashes a pressed tint) and drag on the screen; one-line rows are under 44 pt at the default text size (OQ2).</li>"
-         "<li><b>Drag-to-seek:</b> off, you can only seek by holding the centre (seek mode); on, you can also drag the Now Playing progress bar. The spec says draggable, the design says not; both are built behind a gate switch.</li>"
-         "<li><b>Gate switches:</b> long-press the device body to open the panel with fit, body, touch, status bar, wordmark, drag-to-seek and rating placement.</li></ul>")
+         "<li><b>Touch:</b> settled at gate 1 (owner decision 18): the wheel plus taps and drags on the screen; one-line rows are under 44 pt at the default text size.</li>"
+         "<li><b>Seeking:</b> by holding the centre (seek mode) only; the progress bar is not draggable (owner decision 18).</li>"
+         "<li><b>Gate switches:</b> long-press the device body to open the panel with status bar, wordmark, rating placement, left-edge swipe and haptics.</li></ul>")
 
 p.append("<h2>A. iOS simulator: fit, body, status bar, wordmark</h2>")
 for slug, pname in PHONES:

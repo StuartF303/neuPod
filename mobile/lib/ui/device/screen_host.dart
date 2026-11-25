@@ -2,20 +2,18 @@
 
 import 'package:flutter/widgets.dart';
 import 'package:neupod/ui/device/device_geometry.dart';
-import 'package:neupod/ui/device/hit_gate.dart';
 
 /// Hosts a screen inside the device: the child is laid out at 600x450
 /// design pixels and scaled uniformly by s = screen width / 600 (design
 /// section 1), never re-laid out per phone.
 ///
-/// The hit-routing contract for screens (direct touch, design section 6):
-///
-/// Direct touch is the wheel plus taps and drags on the screen (owner
-/// decision 18): pointer events reach the screen in its own 600x450 coordinates (the scale is undone by the
-///   framework's hit test). The screen decides what takes touches: rows (tap
-///   = move the selection there, then Select; pressed tint from touch-down),
-///   list drags, Cover Flow drags, Now Playing's art, a panel's OK. The
-///   status bar, the right-hand pane and panel backgrounds take none.
+/// The hit-routing contract for screens (direct touch, design section 6,
+/// owner decision 18): pointer events reach the screen in its own 600x450
+/// coordinates (the framework's hit test undoes the scale). The screen
+/// decides what takes touches: rows (tap = move the selection there, then
+/// Select; pressed tint from touch-down), list drags, Cover Flow drags, Now
+/// Playing's art, a panel's OK. The status bar, the right-hand pane and
+/// panel backgrounds take none.
 class DeviceScreenHost extends StatelessWidget {
   /// Hosts [child] at [scale].
   const DeviceScreenHost({required this.scale, required this.child, super.key});
@@ -31,16 +29,13 @@ class DeviceScreenHost extends StatelessWidget {
     return SizedBox(
       width: DeviceGeometry.designWidth * scale,
       height: DeviceGeometry.designHeight * scale,
-      child: HitGate(
-        accepts: (_, _) => true,
-        child: FittedBox(
-          fit: BoxFit.fill,
-          alignment: Alignment.topLeft,
-          child: SizedBox(
-            width: DeviceGeometry.designWidth,
-            height: DeviceGeometry.designHeight,
-            child: DeviceScreenScope(scale: scale, child: child),
-          ),
+      child: FittedBox(
+        fit: BoxFit.fill,
+        alignment: Alignment.topLeft,
+        child: SizedBox(
+          width: DeviceGeometry.designWidth,
+          height: DeviceGeometry.designHeight,
+          child: DeviceScreenScope(scale: scale, child: child),
         ),
       ),
     );

@@ -6,7 +6,7 @@ import 'package:flutter/widgets.dart';
 /// Takes pointer hits only where [accepts] says so, without touching the
 /// semantics of its child (unlike IgnorePointer, which also blocks the
 /// screen reader's actions): the screen's rows stay activatable by the
-/// screen reader whatever the direct-touch candidate.
+/// screen reader.
 class HitGate extends SingleChildRenderObjectWidget {
   /// A gate that takes hits at local positions where [accepts] is true.
   const HitGate({required this.accepts, super.key, super.child});
