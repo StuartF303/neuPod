@@ -39,6 +39,8 @@ The test engineer writes the tests for an item from the specification, not from 
 
 ## Rules
 
+- The app shares one player UI with every neuPod device ([ADR-0022](../adr/0022-one-player-ui.md)): the firmware is
+  the reference, and the app differs only where the phone's hardware or OS requires it.
 - Work only in `mobile/`, `docs/app/`, `scripts/app/`, the app's CI workflow, and the `LICENSE.md` rows the app needs. **Do not change
   the firmware, the hardware files or their CI.**
 - Branches, commits and PRs follow `CONTRIBUTING.md`, with scope `app`. Small PRs. Squash-merge when CI is green.

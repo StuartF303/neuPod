@@ -1,5 +1,11 @@
 # Contributing to neuPod
 
+## Project principles
+
+Read the [constitution](docs/constitution.md) first: one player UI everywhere, the firmware is the reference, the owner's
+music and devices are safe, fit the hardware, lossless sound, open and private, verified and reviewed before merge,
+decisions written down. Every spec, plan and review is checked against it.
+
 ## Branches
 
 Work on short-lived branches off `main`:
