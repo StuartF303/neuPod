@@ -5,12 +5,14 @@ on:
     branches: [main]
     paths:
       - "docs/**"
+      - ".specify/memory/constitution.md"
       - "mkdocs.yml"
       - "requirements-docs.txt"
       - ".github/workflows/docs.yml"
   pull_request:
     paths:
       - "docs/**"
+      - ".specify/memory/constitution.md"
       - "mkdocs.yml"
       - "requirements-docs.txt"
       - ".github/workflows/docs.yml"
@@ -35,6 +37,8 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: requirements-docs.txt
+      - name: Spec Kit's copy of the constitution matches docs/constitution.md
+        run: cmp docs/constitution.md .specify/memory/constitution.md
       - run: pip install -r requirements-docs.txt
       - name: Build (strict)
         run: mkdocs build --strict
