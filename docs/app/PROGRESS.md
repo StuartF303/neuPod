@@ -24,9 +24,9 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [x] Play a FLAC and an MP3 (#113, #124, 2026-11-22)
 - [x] Background playback with lock-screen and notification controls, artwork and scrubbing (#113, 2026-11-22)
 - [x] Device check: the slice on the owner's iPhone and Pixel, recorded with the date (owner ran it 2026-11-22/23 on an iPhone 15 Pro, iOS 27.2.1, and a Pixel 7, Android 17; see Gate 1)
-- [x] **Gate 1: stop and show the owner** (closed 2026-11-25, #PR)
+- [x] **Gate 1: stop and show the owner** (closed 2026-11-25, #157)
   - 2026-11-22/23: the owner ran gate 1 on an iPhone 15 Pro (iOS 27.2.1) and a Pixel 7 (Android 17). Choices (spec owner decision 18): touch is **candidate 2** (the wheel plus taps and drags); seek is by the wheel's seek mode only, the progress bar is **not draggable**. On the iPhone: the slice survives a restart, wheel feel and haptics are OK, the wheel changes the volume. Cover Flow matches the device (decision 14). Apple team for device builds: the owner's personal team (set locally, never in the repo).
-  - 2026-11-25: candidate 1 and the draggable bar are removed from the code, with their tests and gate switches (#PR).
+  - 2026-11-25: candidate 1 and the draggable bar are removed from the code, with their tests and gate switches (#157).
 
 ## Phase 2: look and feel
 
@@ -41,7 +41,7 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [x] Fast-scroll letter tile and rail, trigger and timings confirmed against `app/ui/ui_list.c` and `ui_rail.c` (design section 5) (#106, #121, 2026-11-22)
 - [x] Haptics on both platforms with the design's event table, API names confirmed against current platform docs, 30 a second cap, obeying the system setting; optional click sound (design section 5) (#111, #112, #130, 2026-11-22)
 - [x] Accessibility of the device view: rows as elements, the wheel as one adjustable element with five actions, keyboard and switch control (design section 9) (#111, 2026-11-22)
-- [x] Direct touch candidates 1 (wheel only) and 2 (wheel plus taps and drags), switchable for the gate (design section 6) (#111, #121, 2026-11-22). Gate 1 chose candidate 2; candidate 1 is removed (#PR, 2026-11-25)
+- [x] Direct touch candidates 1 (wheel only) and 2 (wheel plus taps and drags), switchable for the gate (design section 6) (#111, #121, 2026-11-22). Gate 1 chose candidate 2; candidate 1 is removed (#157, 2026-11-25)
 - [x] Text tiers: 7, 6 and 5 rows by the phone's text size (design section 8) (#118, 2026-11-22)
 - [x] Design-gate screens in the device view, Classic Light and Modern Dark, with real data: Home, Songs with the letter tile, an album with disc headings, Cover Flow, Now Playing at rest, with volume and in seek, a panel, Search typing with the wheel and in the results; fit A and B; touch 1 and 2; both body finishes; phone status bar shown and hidden; three text tiers (design sections 2, 3, 6, 7, 8 and 10) (#120, #121, #123, #126, 2026-11-22)
 - [x] **Gate 2: stop and show the owner; record the choices here** (closed 2026-11-22; touch and drag-to-seek move to gate 1)
