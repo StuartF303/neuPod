@@ -70,6 +70,8 @@ static int scan_cb(void *env, const cyw43_ev_scan_result_t *r) {
     return 0;
 }
 
+bool hal_wifi_present(void) { return true; }
+
 hal_status_t hal_wifi_start(void) {
     if (g_on) {
         return HAL_OK;

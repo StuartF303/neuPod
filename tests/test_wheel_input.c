@@ -5,13 +5,20 @@
 #include "unit.h"
 #include "wheel_input.h"
 
-static void pick_key(wi_text_t *t, const char *label) { // scroll to the key with @p label
-    for (uint32_t i = 0; i < wi_text_strip_len(t); i++) {
-        char k[8];
-        wi_text_strip_key(t, i, k);
-        if (strcmp(k, label) == 0) {
-            t->sel = i;
-            return;
+static void pick_key(wi_text_t *t, const char *label) { // turn the ring to the key with @p label (in whichever chip has it)
+    for (int c = 0; c < WI_CHIP_COUNT; c++) {
+        wi_chip_t chips[WI_CHIP_COUNT];
+        uint32_t n = wi_text_chips(t, chips);
+        for (uint32_t k = 0; k < n; k++) {
+            t->chip = chips[(k + (uint32_t)c) % n];
+            for (uint32_t i = 0; i < wi_text_strip_len(t); i++) {
+                char key[8];
+                wi_text_strip_key(t, i, key);
+                if (strcmp(key, label) == 0) {
+                    t->sel = i;
+                    return;
+                }
+            }
         }
     }
     ASSERT_TRUE(0);
@@ -24,76 +31,82 @@ static void type(wi_text_t *t, const char *s) {
     }
 }
 
-TEST(test_text_typing_and_pages) {
+TEST(test_text_typing_and_chips) {
     wi_text_t t;
     wi_text_init(&t, "", 20, WI_CS_ANY, false, false);
+    ASSERT_EQ(WI_CHIP_LOWER, t.chip);
     type(&t, "ab");
     ASSERT_EQ(0, strcmp(t.text, "ab"));
-    pick_key(&t, "ABC");
-    wi_text_event(&t, WI_EV_SELECT, 0);
-    ASSERT_EQ(WI_PAGE_UPPER, t.page);
+    ASSERT_TRUE(t.typed);
+    // Right / Left walk the chips: abc, ABC, 123, #!?, space, del, then round again
+    wi_chip_t chips[WI_CHIP_COUNT];
+    ASSERT_EQ(6, wi_text_chips(&t, chips));
+    wi_text_event(&t, WI_EV_RIGHT, 0);
+    ASSERT_EQ(WI_CHIP_UPPER, t.chip);
+    ASSERT_EQ(0, t.sel);
+    ASSERT_FALSE(t.typed);
     type(&t, "Z");
-    pick_key(&t, "123");
-    wi_text_event(&t, WI_EV_SELECT, 0);
     type(&t, "7");
-    pick_key(&t, "#+=");
-    wi_text_event(&t, WI_EV_SELECT, 0);
     type(&t, "!");
     ASSERT_EQ(0, strcmp(t.text, "abZ7!"));
+    wi_text_event(&t, WI_EV_LEFT, 0);
+    wi_text_event(&t, WI_EV_RIGHT, 0);
     pick_key(&t, "space");
+    ASSERT_EQ(WI_CHIP_SPACE, t.chip);
     wi_text_event(&t, WI_EV_SELECT, 0);
     ASSERT_EQ(0, strcmp(t.text, "abZ7! "));
-    // scroll wraps both ways
+    pick_key(&t, "del"); // the delete chip: Select removes the last character
+    wi_text_event(&t, WI_EV_SELECT, 0);
+    ASSERT_EQ(0, strcmp(t.text, "abZ7!"));
+    ASSERT_FALSE(t.typed);
+    wi_text_event(&t, WI_EV_RIGHT, 0);
+    ASSERT_EQ(WI_CHIP_LOWER, t.chip); // wraps round
+    wi_text_event(&t, WI_EV_LEFT, 0);
+    ASSERT_EQ(WI_CHIP_DELETE, t.chip);
+    // the ring wraps both ways
+    wi_text_event(&t, WI_EV_RIGHT, 0);
     t.sel = 0;
     wi_text_event(&t, WI_EV_SCROLL, -1);
     ASSERT_EQ(wi_text_strip_len(&t) - 1, t.sel);
     wi_text_event(&t, WI_EV_SCROLL, 1);
     ASSERT_EQ(0, t.sel);
+    // a long press of Menu clears
+    wi_text_clear(&t);
+    ASSERT_EQ(0, t.len);
+    ASSERT_TRUE(t.changed);
 }
 
-TEST(test_text_cursor_backspace_cancel_confirm) {
+TEST(test_text_backspace_cancel_confirm) {
     wi_text_t t;
     wi_text_init(&t, "abc", 10, WI_CS_ANY, false, false);
     ASSERT_EQ(3, t.cursor);
-    wi_text_event(&t, WI_EV_LEFT, 0);
-    wi_text_event(&t, WI_EV_MENU, 0); // deletes 'b'
-    ASSERT_EQ(0, strcmp(t.text, "ac"));
-    ASSERT_EQ(1, t.cursor);
-    wi_text_insert(&t, 'X');
-    ASSERT_EQ(0, strcmp(t.text, "aXc"));
-    wi_text_event(&t, WI_EV_RIGHT, 0);
-    wi_text_event(&t, WI_EV_RIGHT, 0); // clamps at the end
-    ASSERT_EQ(3, t.cursor);
+    wi_text_event(&t, WI_EV_MENU, 0); // deletes 'c'
+    ASSERT_EQ(0, strcmp(t.text, "ab"));
+    ASSERT_EQ(2, t.cursor);
     wi_text_init(&t, "", 10, WI_CS_ANY, false, false);
     ASSERT_EQ(WI_CANCELLED, wi_text_event(&t, WI_EV_MENU, 0)); // empty: Menu cancels
     wi_text_insert(&t, 'q');
     ASSERT_EQ(WI_RUNNING, wi_text_event(&t, WI_EV_MENU, 0));   // non-empty: backspace
-    ASSERT_EQ(WI_OK, wi_text_event(&t, WI_EV_PLAY, 0));
-    pick_key(&t, "done");
-    ASSERT_EQ(WI_OK, wi_text_event(&t, WI_EV_SELECT, 0));
+    ASSERT_EQ(WI_OK, wi_text_event(&t, WI_EV_PLAY, 0));        // Play is done
+    ASSERT_EQ(WI_RUNNING, wi_text_event(&t, WI_EV_SELECT, 0)); // Select only types
 }
 
 TEST(test_text_limits_charset_masking_utf8) {
     wi_text_t t;
+    wi_chip_t chips[WI_CHIP_COUNT];
     wi_text_init(&t, "", 3, WI_CS_ANY, true, false);
     type(&t, "abcd"); // 4th rejected
     ASSERT_EQ(3, wi_text_chars(&t));
-    ASSERT_TRUE(t.masked && !t.show);
-    pick_key(&t, "show");
-    wi_text_event(&t, WI_EV_SELECT, 0);
-    ASSERT_TRUE(t.show);
+    ASSERT_TRUE(t.masked);
     char k[8];
-    pick_key(&t, "hide"); // label flips
-    ASSERT_EQ(WI_KEY_SHOW, wi_text_strip_key(&t, t.sel, k));
 
     wi_text_init(&t, "", 8, WI_CS_DIGITS, false, false);
-    ASSERT_EQ(WI_PAGE_DIGITS, t.page);
+    ASSERT_EQ(WI_CHIP_DIGITS, t.chip);
     ASSERT_FALSE(wi_text_insert(&t, 'a'));
     ASSERT_TRUE(wi_text_insert(&t, '5'));
-    for (uint32_t i = 0; i < wi_text_strip_len(&t); i++) { // digits only: no page key, no space
-        wi_text_strip_key(&t, i, k);
-        ASSERT_TRUE(strcmp(k, "ABC") != 0 && strcmp(k, "space") != 0);
-    }
+    ASSERT_EQ(2, wi_text_chips(&t, chips)); // digits only: the 123 chip and delete, no letters, no space
+    ASSERT_EQ(WI_CHIP_DIGITS, chips[0]);
+    ASSERT_EQ(WI_CHIP_DELETE, chips[1]);
     wi_text_init(&t, "", 8, WI_CS_HEX, false, false);
     ASSERT_TRUE(wi_text_insert(&t, 'f'));
     ASSERT_FALSE(wi_text_insert(&t, 'g'));
@@ -104,13 +117,11 @@ TEST(test_text_limits_charset_masking_utf8) {
     ASSERT_TRUE(wi_text_insert(&t, 'x'));
     ASSERT_EQ(3, t.len);
     ASSERT_EQ(2, wi_text_chars(&t));
-    wi_text_event(&t, WI_EV_LEFT, 0);
-    wi_text_event(&t, WI_EV_LEFT, 0);
-    ASSERT_EQ(0, t.cursor);
-    wi_text_event(&t, WI_EV_RIGHT, 0);
-    ASSERT_EQ(2, t.cursor);
     wi_text_event(&t, WI_EV_MENU, 0);
-    ASSERT_EQ(0, strcmp(t.text, "x"));
+    wi_text_event(&t, WI_EV_MENU, 0); // the accented one goes whole
+    ASSERT_EQ(0, t.len);
+    wi_text_insert(&t, 0xE9);
+    ASSERT_EQ(2, t.len);
     // initial text is not cut mid-character
     wi_text_init(&t, "caf\xC3\xA9", 10, WI_CS_ANY, false, false);
     ASSERT_EQ(5, t.len);
@@ -148,7 +159,7 @@ TEST(test_text_search_changed) {
     ASSERT_TRUE(t.changed);
     t.changed = false;
     wi_text_event(&t, WI_EV_LEFT, 0);
-    ASSERT_FALSE(t.changed); // moving the cursor is not an edit
+    ASSERT_FALSE(t.changed); // changing the chip is not an edit
     wi_text_event(&t, WI_EV_RIGHT, 0);
     wi_text_event(&t, WI_EV_MENU, 0);
     ASSERT_TRUE(t.changed);
@@ -262,9 +273,9 @@ TEST(test_letter_jump) {
     ASSERT_FALSE(wi_letterjump_scroll(&j, 1, 1100, 'a'));
     ASSERT_TRUE(wi_letterjump_scroll(&j, 5, 1200, 'm')); // fast
     ASSERT_EQ('M', j.letter);
-    wi_letterjump_tick(&j, 1500);
-    ASSERT_TRUE(j.active);
-    wi_letterjump_tick(&j, 2000);
+    wi_letterjump_tick(&j, 1200 + WI_LJ_HIDE_MS);
+    ASSERT_TRUE(j.active); // still within the rest delay
+    wi_letterjump_tick(&j, 1200 + WI_LJ_HIDE_MS + 1);
     ASSERT_FALSE(j.active);
     ASSERT_FALSE(wi_letterjump_scroll(&j, 1, 5000, '7')); // energy decayed
     wi_letterjump_scroll(&j, 8, 5050, '7');
@@ -280,8 +291,8 @@ TEST(test_letter_jump) {
 }
 
 int main(void) {
-    RUN(test_text_typing_and_pages);
-    RUN(test_text_cursor_backspace_cancel_confirm);
+    RUN(test_text_typing_and_chips);
+    RUN(test_text_backspace_cancel_confirm);
     RUN(test_text_limits_charset_masking_utf8);
     RUN(test_text_byte_limit_and_validation);
     RUN(test_text_search_changed);

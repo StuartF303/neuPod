@@ -13,6 +13,7 @@
 #include <unistd.h>
 
 #include "../app/audio/audio_core.c" /* white box: the test reads core 1's state */
+#include "bt_pcm.h"
 #include "hal_core.h"
 #include "hal_system.h"
 #include "os.h"
@@ -93,6 +94,7 @@ static void *clock_thread(void *arg) {
     }
     return NULL;
 }
+void hal_audio_set_virtual(bool v) { (void)v; }
 hal_status_t hal_audio_open(const hal_audio_format *fmt) {
     g_sink_rate = fmt->sample_rate;
     g_sink_opens++;
@@ -470,12 +472,48 @@ static void pair_case(const char *a, const char *b) {
 }
 // (Tracks in these vectors are a fraction of a second; one handoff must play out before the next can be announced, so chains of
 // very short tracks are tested pair by pair. Real tracks are minutes long.)
+// Regression (fix/gapless-wav-flac-crash): a WAV start never set up the codec byte source (g_sio), so a successor that needs a
+// codec read through a NULL ring on the first handoff after boot. Here the source is blanked as it is on a freshly booted core 1
+// (no codec stream played yet), then each codec follows a WAV; the tests before this one would otherwise leave a valid g_sio behind.
+TEST(a_codec_track_after_a_wav_works_with_no_codec_stream_played_before) {
+    const char *succ[] = {P[0], P[1], P[2]}; // flac, mp3, alac
+    for (int i = 0; i < 3; i++) {
+        wait_idle();
+        memset(&g_sio, 0, sizeof g_sio); // as at boot
+        pair_case(P[5], succ[i]);
+    }
+}
 TEST(every_codec_hands_over_to_every_other_codec) {
     pair_case(P[5], P[0]); // wav -> flac
     pair_case(P[0], P[1]); // flac -> mp3
     pair_case(P[1], P[2]); // mp3 -> alac
     pair_case(P[2], P[5]); // alac -> wav
     pair_case(P[0], P[0]); // the same file twice
+    pair_case(P[1], P[0]); // mp3 -> flac
+    pair_case(P[0], P[2]); // flac -> alac
+    pair_case(P[0], P[5]); // flac -> wav
+    pair_case(P[2], P[0]); // alac -> flac
+    pair_case(P[5], P[1]); // wav -> mp3
+    pair_case(P[5], P[2]); // wav -> alac
+}
+TEST(a_wav_followed_by_a_track_at_another_rate_is_started_normally_not_handed_over) {
+    wait_idle();
+    memset(&g_sio, 0, sizeof g_sio); // as at boot
+    const char *l[] = {P[5], P[6]}; // 44.1k wav, then 48k flac
+    set_list(2, l);
+    ASSERT_TRUE(play_list(8000));
+    ASSERT_EQ(0, g_ev.handoffs);
+    ASSERT_EQ(2, g_ev.final_ends);
+    ASSERT_EQ(0, g_announced);
+    ASSERT_EQ(0, g_ev.cmd_errors);
+    ASSERT_EQ(0, g_failed);
+    ASSERT_EQ(48000, g_sink_rate);
+    wait_idle();
+    // back to 44.1k for the tests that follow
+    const char *l2[] = {P[0]};
+    set_list(1, l2);
+    ASSERT_TRUE(play_list(8000));
+    wait_idle();
 }
 TEST(trimmed_alac_joins_a_mono_flac_exactly_both_ways) {
     pair_case(P[3], P[4]); // flac 48k mono -> alac 48k mono, edit list (6000 of 9600 frames)
@@ -698,6 +736,39 @@ static bool tail_exact(const char *path, uint32_t start) {
     return ok;
 }
 
+// Everything captured beyond the @p want frames of a stream must be silence, and not a lot of it: the sink plays the end out in whole blocks
+// and the volume ramp-down follows the end event, so how many silent frames trail depends on when the block interrupt thread is scheduled
+// (NEUPOD_TEST_JITTER delays it by up to 12 ms, a few blocks). A fixed slack (tail_exact's 1100) is too tight for that; audio there is a bug.
+// Lock held.
+static bool trailing_silence(uint32_t want) {
+    if (g_cap_frames < want || g_cap_frames > want + 8192u) {
+        printf("  length: captured %u frames, expected %u (+ silence)\n", g_cap_frames, want);
+        return false;
+    }
+    for (uint32_t k = want; k < g_cap_frames; k++) {
+        if (g_cap[2u * k] != 0 || g_cap[2u * k + 1u] != 0) {
+            printf("  audio beyond the end of the stream at output frame %u (want %u)\n", k, want);
+            return false;
+        }
+    }
+    return true;
+}
+// tail_exact() with the trailing silence judged by trailing_silence().
+static bool tail_exact_pad(const char *path, uint32_t start) {
+    const ref_t *r = ref_of(path);
+    uint32_t want = r->frames - start;
+    pthread_mutex_lock(&g_cap_mu);
+    bool ok = trailing_silence(want);
+    for (uint32_t k = 256; ok && k < g_cap_frames && k < want; k++) {
+        if (g_cap[2u * k] != r->pcm[2u * (start + k)] || g_cap[2u * k + 1u] != r->pcm[2u * (start + k) + 1u]) {
+            printf("  mismatch at output frame %u (track frame %u)\n", k, start + k);
+            ok = false;
+        }
+    }
+    pthread_mutex_unlock(&g_cap_mu);
+    return ok;
+}
+
 TEST(resume_wav_starts_on_the_exact_frame) {
     ASSERT_TRUE(play_from(P[7], 50000));
     ASSERT_EQ(50000, g_started_frame);
@@ -767,6 +838,275 @@ TEST(resume_past_the_end_starts_at_the_beginning) {
     ASSERT_EQ(0, g_failed);
 }
 
+// ---- seek while playing (UI-7): the player restarts the same file at a frame (a hard start; the resume path) -------------------
+
+// Which codecs the player may offer Seek on: those whose track_feed_seek() lands on (WAV, ALAC, FLAC with a table) or near (MP3) the requested frame.
+static bool seekable_of(const char *path) {
+    meta_read_fn rd;
+    void *rctx;
+    uint64_t size;
+    char msg[80];
+    if (ops_open(path, &rd, &rctx, &size, msg, sizeof msg) != NULL) return false;
+    static track_feed_t t;
+    track_info_t info;
+    meta_set_scratch(g_scratch, sizeof g_scratch);
+    bool ok = track_feed_open(&t, path, size, rd, rctx, false, &info) == NULL && info.seekable;
+    ops_close(rctx);
+    return ok;
+}
+TEST(wav_alac_mp3_and_flac_with_a_seek_table_are_seekable) {
+    char mp3[600];
+    snprintf(mp3, sizeof mp3, "%s/mp3_44k_st.mp3", ASSETS);
+    ASSERT_TRUE(seekable_of(P[7]));   // WAV
+    ASSERT_TRUE(seekable_of(P[8]));   // FLAC with a seek table
+    ASSERT_FALSE(seekable_of(P[0]));  // FLAC without one: reaching a frame would mean decoding from the start
+    ASSERT_TRUE(seekable_of(P[2]));   // ALAC: any packet, the decoder drops the frames before the target (UI-7)
+    ASSERT_TRUE(seekable_of(mp3));    // MP3: a frame header found from the byte proportion / Xing table (UI-7)
+}
+
+// Play @p path for a moment, then seek to @p frame the way player_seek() does; the output after the restart must be the reference from
+// that frame on, to the end. Frame-exact: every captured sample is compared.
+static bool seek_while_playing(const char *path, uint64_t frame, bool *exact_start) {
+    wait_idle();
+    const char *l[] = {path};
+    set_list(1, l);
+    memset(&g_ev, 0, sizeof g_ev);
+    g_failed = 0;
+    reset_capture();
+    track_stream_start(path, false);
+    for (uint64_t t0 = hal_micros(); hal_micros() - t0 < 120000u;) { track_stream_pump(); usleep(150); } // some audio is playing
+    g_started_reset_cap = true;
+    track_stream_start_at(path, false, frame);
+    g_started_reset_cap = false;
+    *exact_start = g_started_frame == frame;
+    uint32_t e0 = audio_pcm_ended_count();
+    for (uint64_t t0 = hal_micros(); hal_micros() - t0 < 8000000u && audio_pcm_ended_count() == e0;) {
+        track_stream_pump();
+        poll_events();
+        usleep(150);
+    }
+    usleep(20000);
+    poll_events();
+    return audio_pcm_ended_count() != e0;
+}
+
+TEST(seek_in_a_playing_wav_lands_on_the_exact_frame) {
+    bool exact;
+    ASSERT_TRUE(seek_while_playing(P[7], 80000, &exact));
+    ASSERT_TRUE(exact);
+    ASSERT_TRUE(tail_exact_pad(P[7], 80000));
+    ASSERT_EQ(0, g_failed);
+    ASSERT_EQ(0, g_ev.cmd_errors);
+    ASSERT_TRUE(seek_while_playing(P[7], 3, &exact)); // backwards (the first part is played again), and the first frames of the file
+    ASSERT_TRUE(exact);
+    ASSERT_TRUE(tail_exact_pad(P[7], 3));
+}
+TEST(seek_in_a_playing_flac_with_a_seek_table_lands_on_the_exact_frame) {
+    bool exact;
+    ASSERT_TRUE(seek_while_playing(P[8], 9000, &exact)); // nearest earlier point 8192: the decoder drops 808 frames
+    ASSERT_TRUE(exact);
+    ASSERT_TRUE(tail_exact_pad(P[8], 9000));
+    ASSERT_TRUE(seek_while_playing(P[8], 4097, &exact)); // one past a point
+    ASSERT_TRUE(exact);
+    ASSERT_TRUE(tail_exact_pad(P[8], 4097));
+    ASSERT_EQ(0, g_failed);
+    ASSERT_EQ(0, g_ev.cmd_errors);
+}
+TEST(seek_in_a_playing_alac_lands_on_the_exact_frame) {
+    bool exact;
+    ASSERT_TRUE(seek_while_playing(P[2], 10000, &exact)); // packet 2 of 4096 frames: the decoder drops the 1808 before the target
+    ASSERT_TRUE(exact);
+    ASSERT_TRUE(tail_exact_pad(P[2], 10000));
+    ASSERT_TRUE(seek_while_playing(P[2], 4096, &exact)); // exactly on a packet
+    ASSERT_TRUE(exact);
+    ASSERT_TRUE(tail_exact_pad(P[2], 4096));
+    ASSERT_TRUE(seek_while_playing(P[2], 7, &exact)); // backwards, near the start
+    ASSERT_TRUE(exact);
+    ASSERT_TRUE(tail_exact_pad(P[2], 7));
+    ASSERT_EQ(0, g_failed);
+    ASSERT_EQ(0, g_ev.cmd_errors);
+}
+TEST(seek_in_a_playing_mp3_lands_within_a_frame_and_plays_to_the_end) {
+    char mp3[600];
+    snprintf(mp3, sizeof mp3, "%s/mp3_44k_st.mp3", ASSETS);
+    bool exact;
+    ASSERT_TRUE(seek_while_playing(mp3, 30000, &exact)); // CBR: the landed frame is within a frame of the request
+    ASSERT_TRUE(g_started_frame > 30000 - 1200 && g_started_frame < 30000 + 1200);
+    ASSERT_EQ(0, g_failed);
+    ASSERT_EQ(0, g_ev.cmd_errors);
+    pthread_mutex_lock(&g_cap_mu);
+    uint32_t got = g_cap_frames;
+    pthread_mutex_unlock(&g_cap_mu);
+    ASSERT_TRUE(got > 14100u - 4600u && got < 14100u + 4600u); // what remains of the 44100-frame vector
+    ASSERT_TRUE(seek_while_playing(mp3, 5, &exact)); // near the start: the first frame after the Xing / Info frame
+    ASSERT_TRUE(g_started_frame < 1200);
+    ASSERT_EQ(0, g_ev.cmd_errors);
+}
+TEST(seek_to_the_last_frame_plays_that_frame_and_ends) {
+    bool exact;
+    ASSERT_TRUE(seek_while_playing(P[5], 4999, &exact)); // the 5000-frame WAV: end of track follows at once (the player never asks for the end itself)
+    ASSERT_TRUE(exact);
+    ASSERT_TRUE(tail_exact_pad(P[5], 4999));
+    ASSERT_EQ(1, g_ev.final_ends);
+    ASSERT_EQ(0, g_failed);
+}
+
+// Captured output == first[from_a ...] followed by all of second.
+static bool compare_tail_then(const char *first, uint32_t from_a, const char *second) {
+    const ref_t *a = ref_of(first), *b = ref_of(second);
+    uint32_t want = a->frames - from_a + b->frames;
+    bool ok = true;
+    pthread_mutex_lock(&g_cap_mu);
+    ok = trailing_silence(want);
+    for (uint32_t k = 256; ok && k < want && k < g_cap_frames; k++) {
+        const int32_t *r = k < a->frames - from_a ? a->pcm + 2u * (from_a + k) : b->pcm + 2u * (k - (a->frames - from_a));
+        if (g_cap[2u * k] != r[0] || g_cap[2u * k + 1u] != r[1]) {
+            printf("  mismatch at output frame %u\n", k);
+            ok = false;
+        }
+    }
+    pthread_mutex_unlock(&g_cap_mu);
+    return ok;
+}
+
+// The successor is announced to the audio core while the track plays; the seek withdraws it (hard start), and it is announced again for the
+// restarted stream: the handoff must still be sample-exact, with the seek target as the start of the first part.
+static bool seek_during_prefetch(const char *first, uint64_t frame, const char *second) {
+    const char *l[] = {first, second};
+    wait_idle();
+    set_list(2, l);
+    memset(&g_ev, 0, sizeof g_ev);
+    g_announced = g_failed = 0;
+    reset_capture();
+    track_stream_start(first, false);
+    for (int i = 0; i < 8000 && !audio_stream_next_pending(); i++) { track_stream_pump(); usleep(200); }
+    if (!audio_stream_next_pending()) return false; // the successor is prepared and announced: the state under test
+    g_list_pos = 0;
+    g_seen_changes = audio_track_change_count(); // the player re-bases its handoff count at a hard start
+    uint32_t changes0 = audio_track_change_count();
+    g_started_reset_cap = true;
+    track_stream_start_at(first, false, frame);
+    g_started_reset_cap = false;
+    if (g_started_frame != frame) return false;
+    g_announced = 0;
+    uint32_t e0 = audio_pcm_ended_count();
+    for (uint64_t t0 = hal_micros(); hal_micros() - t0 < 10000000u && audio_pcm_ended_count() == e0;) {
+        sync_queue();
+        track_stream_pump();
+        poll_events();
+        usleep(150);
+    }
+    usleep(20000);
+    poll_events();
+    return audio_pcm_ended_count() != e0 && audio_track_change_count() == changes0 + 1u;
+}
+
+TEST(seek_during_gapless_prefetch_keeps_the_handoff_sample_exact_wav) {
+    ASSERT_TRUE(seek_during_prefetch(P[7], 132300 - 30000, P[0])); // 30000 frames of the WAV, then the FLAC
+    ASSERT_TRUE(compare_tail_then(P[7], 132300 - 30000, P[0]));
+    ASSERT_EQ(1, g_announced);        // announced again after the restart
+    ASSERT_EQ(1, g_ev.handoffs);
+    ASSERT_EQ(1, g_ev.final_ends);
+    ASSERT_EQ(0, g_ev.cmd_errors);
+    ASSERT_EQ(0, g_ev.underruns);
+    ASSERT_EQ(0, g_failed);
+}
+TEST(seek_during_gapless_prefetch_keeps_the_handoff_sample_exact_across_codecs) {
+    // (the seekable FLAC vector is too short to be caught mid-prefetch: the WAV is the track being sought, an ALAC track follows)
+    ASSERT_TRUE(seek_during_prefetch(P[7], 100000, P[2]));
+    ASSERT_TRUE(compare_tail_then(P[7], 100000, P[2]));
+    ASSERT_EQ(1, g_announced);
+    ASSERT_EQ(1, g_ev.handoffs);
+    ASSERT_EQ(0, g_ev.cmd_errors);
+    ASSERT_EQ(0, g_ev.underruns);
+    ASSERT_EQ(0, g_failed);
+}
+TEST(repeated_seeks_in_a_row_leave_only_the_last_one_playing) {
+    // A scrub that is applied several times in quick succession: each is a hard start, the last one wins and nothing of the others leaks.
+    wait_idle();
+    const char *l[] = {P[7]};
+    set_list(1, l);
+    reset_capture();
+    track_stream_start(P[7], false);
+    for (uint64_t t0 = hal_micros(); hal_micros() - t0 < 60000u;) { track_stream_pump(); usleep(150); }
+    const uint64_t at[] = {20000, 100000, 50000, 90000};
+    for (int i = 0; i < 4; i++) {
+        g_started_reset_cap = true;
+        track_stream_start_at(P[7], false, at[i]);
+        g_started_reset_cap = false;
+        for (uint64_t t0 = hal_micros(); hal_micros() - t0 < 25000u;) { track_stream_pump(); usleep(150); }
+    }
+    g_started_reset_cap = true;
+    track_stream_start_at(P[7], false, 90000);
+    g_started_reset_cap = false;
+    uint32_t e0 = audio_pcm_ended_count();
+    for (uint64_t t0 = hal_micros(); hal_micros() - t0 < 8000000u && audio_pcm_ended_count() == e0;) { track_stream_pump(); poll_events(); usleep(150); }
+    usleep(20000);
+    poll_events();
+    ASSERT_TRUE(audio_pcm_ended_count() != e0);
+    ASSERT_TRUE(tail_exact_pad(P[7], 90000));
+    ASSERT_EQ(0, g_ev.cmd_errors);
+    ASSERT_EQ(0, g_ev.storms);
+}
+
+// ---- Bluetooth output (the same core-1 code, a fake consumer standing in for the encoder) ----
+
+static bool wait_stream_open(bool want) {
+    for (int i = 0; i < 1000 && g_stream_open != want; i++) usleep(1000);
+    return g_stream_open == want;
+}
+
+TEST(bluetooth_output_is_paced_by_the_ring_and_refuses_other_rates) {
+    ASSERT_TRUE(audio_stop());
+    ASSERT_TRUE(audio_close());
+    ASSERT_TRUE(wait_stream_open(false));
+    ASSERT_TRUE(audio_set_output(AUDIO_OUT_BT, 44100));
+    ASSERT_TRUE(audio_open(44100, 2, 16));
+    ASSERT_TRUE(wait_stream_open(true));
+    ASSERT_EQ(1, (int)g_out_bt);
+    ASSERT_EQ(PCM_FRAMES / 2u, g_pcm_ring.mask + 1u); // the decoder ring took the first half of the store
+    ASSERT_TRUE(audio_set_volume(0));
+    const hal_bt_pcm_source_t *src = bt_pcm_source();
+    ASSERT_EQ(PCM_FRAMES, src->capacity(src->ctx));
+    ASSERT_TRUE(audio_tone(TONE_1K));
+    usleep(400000); // nobody drains the ring: it fills, then the interrupt waits (the link is the pace)
+    audio_stats_t a, b;
+    ASSERT_TRUE(audio_stats_get(&a));
+    ASSERT_EQ(1, (int)a.output);
+    ASSERT_TRUE(a.bt_fill_frames >= PCM_FRAMES - HAL_AUDIO_BLOCK_FRAMES);
+    ASSERT_TRUE(a.bt_stall_blocks > 0);
+    usleep(200000);
+    ASSERT_TRUE(audio_stats_get(&b));
+    ASSERT_EQ(a.bt_fill_frames, b.bt_fill_frames); // nothing was lost or overrun while it waited
+    ASSERT_EQ(0, (int)b.underruns);
+    int16_t buf[1024 * 2];
+    ASSERT_EQ(1024, (int)src->read(src->ctx, buf, 1024)); // the encoder takes some audio: the interrupt goes on
+    bool nonzero = false;
+    for (int i = 0; i < 1024 * 2; i++) nonzero |= buf[i] != 0;
+    ASSERT_TRUE(nonzero);
+    usleep(100000);
+    ASSERT_TRUE(audio_stats_get(&b));
+    ASSERT_TRUE(b.bt_fill_frames >= PCM_FRAMES - HAL_AUDIO_BLOCK_FRAMES); // refilled to the brim by the next blocks
+    // another sample rate is refused (no resampling), with the reason in codec_error
+    ASSERT_TRUE(audio_stop());
+    usleep(50000);
+    uint32_t started = audio_pcm_started_count();
+    ASSERT_TRUE(audio_pcm_start(48000, 2, 16));
+    for (int i = 0; i < 500 && audio_pcm_started_count() == started; i++) usleep(1000);
+    ASSERT_EQ((int)AUDIO_ERR_RATE_NOT_ON_BT, (int)g_codec_err);
+    // back to the wired output
+    ASSERT_TRUE(audio_stop());
+    ASSERT_TRUE(audio_close());
+    ASSERT_TRUE(wait_stream_open(false));
+    ASSERT_TRUE(audio_set_output(AUDIO_OUT_WIRED, 0));
+    ASSERT_TRUE(audio_open(44100, 2, 32));
+    ASSERT_TRUE(wait_stream_open(true));
+    ASSERT_EQ(0, (int)g_out_bt);
+    ASSERT_EQ(PCM_FRAMES, g_pcm_ring.mask + 1u);
+    ASSERT_EQ(0, (int)src->available(src->ctx)); // detached
+    ASSERT_TRUE(audio_set_volume(0));
+}
+
 int main(void) {
     g_cap = malloc((size_t)CAP_MAX_FRAMES * 8u);
     g_jitter = getenv("NEUPOD_TEST_JITTER") != NULL;
@@ -810,9 +1150,11 @@ int main(void) {
     for (int i = 0; i < 500 && !g_stream_open; i++) usleep(1000);
     ASSERT_TRUE(g_stream_open);
 
+    RUN(a_codec_track_after_a_wav_works_with_no_codec_stream_played_before);
     RUN(same_format_tracks_are_concatenated_sample_exactly);
     RUN(track_change_event_fires_when_the_last_sample_has_played);
     RUN(every_codec_hands_over_to_every_other_codec);
+    RUN(a_wav_followed_by_a_track_at_another_rate_is_started_normally_not_handed_over);
     RUN(trimmed_alac_joins_a_mono_flac_exactly_both_ways);
     RUN(rate_change_falls_back_to_a_reclock);
     RUN(second_track_after_a_reclock_is_exact);
@@ -828,6 +1170,16 @@ int main(void) {
     RUN(resume_alac_starts_on_the_exact_frame_trimmed_or_not);
     RUN(resume_mp3_starts_near_the_frame_and_plays_to_the_end);
     RUN(resume_past_the_end_starts_at_the_beginning);
+    RUN(wav_alac_mp3_and_flac_with_a_seek_table_are_seekable);
+    RUN(seek_in_a_playing_wav_lands_on_the_exact_frame);
+    RUN(seek_in_a_playing_flac_with_a_seek_table_lands_on_the_exact_frame);
+    RUN(seek_in_a_playing_alac_lands_on_the_exact_frame);
+    RUN(seek_in_a_playing_mp3_lands_within_a_frame_and_plays_to_the_end);
+    RUN(seek_to_the_last_frame_plays_that_frame_and_ends);
+    RUN(seek_during_gapless_prefetch_keeps_the_handoff_sample_exact_wav);
+    RUN(seek_during_gapless_prefetch_keeps_the_handoff_sample_exact_across_codecs);
+    RUN(repeated_seeks_in_a_row_leave_only_the_last_one_playing);
+    RUN(bluetooth_output_is_paced_by_the_ring_and_refuses_other_rates);
     if (unit_failures) for (int i = 0; i < g_trace_n; i++) printf("  trace %d: changes=%u consumed=%u written=%u bound=%u have=%d\n", i, g_trace[i].changes, g_trace[i].consumed, g_trace[i].written, g_trace[i].bound, g_trace[i].have);
     unlink(P[1]);
     unlink(P[5]);

@@ -1,0 +1,7 @@
+# y2-rescue: /init has already brought everything up and then exec'd busybox init, which
+# is here only to keep PID 1 alive (zombie reaping, reboot/poweroff) and to keep a
+# shell on /dev/console.
+::sysinit:/bin/true
+::respawn:/bin/console-shell
+::ctrlaltdel:/sbin/reboot
+::shutdown:/bin/umount -a -r

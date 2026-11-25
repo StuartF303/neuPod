@@ -117,7 +117,9 @@ void host_pump_events(void) {
             }
             bool down = e.type == SDL_KEYDOWN;
             uint8_t btn = key_to_button(e.key.keysym.sym);
-            if (btn) {
+            if (e.key.keysym.sym == SDLK_F1) {
+                host_input_power(down); // the Power key: hold it for the Hold gesture (2 s) or the power-off countdown (10 s)
+            } else if (btn) {
                 host_input_button(btn, down);
             } else if (down && e.key.keysym.sym == SDLK_UP) {
                 host_input_scroll(-1); // Up = counter-clockwise
@@ -131,6 +133,17 @@ void host_pump_events(void) {
                 // Wheel up = Up key = counter-clockwise (negative), honouring natural-scroll inversion.
                 host_input_scroll(e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? e.wheel.y
                                                                               : -e.wheel.y);
+            }
+            break;
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP:
+            if (e.button.button == SDL_BUTTON_LEFT) {
+                host_touch_mouse(e.button.x, e.button.y, e.type == SDL_MOUSEBUTTONDOWN); // logical (panel) pixels: SDL_RenderSetLogicalSize
+            }
+            break;
+        case SDL_MOUSEMOTION:
+            if ((e.motion.state & SDL_BUTTON_LMASK) != 0) {
+                host_touch_mouse(e.motion.x, e.motion.y, true);
             }
             break;
         default:

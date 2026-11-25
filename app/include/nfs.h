@@ -35,6 +35,7 @@ typedef enum {
     NFS_ERR_NOT_MOUNTED, /**< No volume mounted. */
     NFS_ERR_UNSUPPORTED, /**< Not available on this backend. */
     NFS_ERR_NO_MEMORY,   /**< A fixed-size internal table is too small (e.g. fast-seek map). */
+    NFS_ERR_BUSY,        /**< A write scope is already open (another task is writing): try again later. */
 } nfs_err_t;
 
 /** Short name of an error, e.g. "NOT_FOUND". Never NULL. */
@@ -144,7 +145,11 @@ nfs_err_t nfs_space(uint64_t *total, uint64_t *free_bytes);
  * then unlocks the card (hal_storage_set_write_enabled) for the duration and restores the lock afterwards.
  * The scope does not stop FatFs updating the FAT and the directory entries that belong to the files inside it
  * (those sectors are shared), and it does not cover raw hal_storage_write(); nothing else in the firmware calls that.
- * Not recursive; one scope at a time; the storage task is the only caller (no locking here).
+ * Not recursive; one scope at a time. Two tasks do enter scopes (the settings service and the library scanner on the storage task):
+ * enter is an atomic claim, so exactly one wins and the other gets NFS_ERR_BUSY (a retry-later outcome, not a failure). The scope
+ * directory is published only after the claim, and leave() withdraws it before releasing the claim. Calls that merely read the scope
+ * (nfs_write_scope_allows / _active) are safe from any task. A write by a task that holds no scope while another task's scope is open
+ * is refused like any write outside the scope.
  */
 nfs_err_t nfs_write_scope_enter(const char *dir);
 void nfs_write_scope_leave(void);

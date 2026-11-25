@@ -32,6 +32,7 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Constitution: constitution.md
   - Requirements: requirements.md
   - Design: design.md
   - Reference: reference.md
@@ -42,11 +43,15 @@ nav:
       - Bluetooth (BTstack, settings store): bluetooth.md
       - Wi-Fi (lwIP, clock, secrets): wifi.md
       - Wheel input widgets: ui-input.md
+      - Touch input (600x450 boards): touch.md
+      - Innioasis Y2 platform: y2.md
+      - ESP32-S3 platform (dev board): esp32s3.md
   - Hardware:
       - Phase 1 wiring: wiring-phase1.md
       - Click-wheel protocol: click-wheel-protocol.md
       - Display bring-up tests: display-tests.md
       - microSD storage and tests: storage.md
+      - Waveshare RP2350 AMOLED dev board: rp2350-amoled241.md
       - I2C peripherals (fuel gauge, haptics): i2c-peripherals.md
       - Bench practice and test order: bench.md
       - Donor teardown (photos, findings): teardown.md
@@ -69,4 +74,9 @@ nav:
       - ADR-0015 Clock plan: adr/0015-clock-plan.md
       - ADR-0016 Gapless playback and the play queue: adr/0016-gapless-playback-and-play-queue.md
       - ADR-0017 Music library index: adr/0017-music-library-index.md
-      - ADR-0018 Headphone jack reuse: adr/0018-headphone-jack-reuse.md
+      - ADR-0018 UI resolution profiles: adr/0018-ui-resolution-profiles.md
+      - ADR-0019 Bluetooth audio boundary: adr/0019-bluetooth-audio-sink-boundary.md
+      - ADR-0020 Hold: adr/0020-hold.md
+      - ADR-0021 Power and sleep: adr/0021-power-sleep.md
+      - ADR-0022 One player UI: adr/0022-one-player-ui.md
+      - ADR-0023 Headphone jack reuse: adr/0023-headphone-jack-reuse.md

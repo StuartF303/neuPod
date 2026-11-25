@@ -42,6 +42,8 @@ bool audio_close(void) {
     return send(AUDIO_CMD_CLOSE, 0, 0);
 }
 
+bool audio_set_output(audio_output_t out, uint32_t bt_rate) { return send(AUDIO_CMD_OUTPUT, out == AUDIO_OUT_BT ? 1u : 0u, bt_rate); }
+
 bool audio_stats_new_window(void) { return send(AUDIO_CMD_NEW_WINDOW, 0, 0); }
 
 bool audio_set_volume(uint32_t att_db) { return send(AUDIO_CMD_VOLUME, att_db, 0); }

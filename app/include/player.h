@@ -54,10 +54,14 @@ typedef struct {
     uint32_t rate;
     uint64_t total_frames; /**< 0 for tones */
     uint32_t elapsed_s;    /**< from the audio core's own frame count */
+    uint64_t pos_frames;   /**< the same position in frames of the track (a seek in progress shows its target) */
+    uint64_t file_size;    /**< bytes of the file playing (0 unknown): with its path the key of its rating (ratings_store.h) */
+    uint32_t track_id;     /**< changes when another track plays (a start, a gapless handoff), not on a seek within the track */
+    bool seekable;         /**< playing or paused on a track player_seek() can move within (WAV, ALAC, MP3, FLAC with a seek table) */
     uint32_t vol_att_db;
     bool muted;            /**< output stage mute line asserted */
-    uint16_t queue_pos;    /**< file playback through a folder queue: 1-based position ("n of N"); 0 when there is no queue */
-    uint16_t queue_len;
+    uint32_t queue_pos;    /**< file playback through a queue: 1-based position ("n of N"); 0 when there is no queue */
+    uint32_t queue_len;
     uint8_t shuffle;       /**< pq_shuffle_t of the queue being played; 0 when there is no queue */
     uint8_t repeat;        /**< pq_repeat_t of the queue being played; 0 when there is no queue */
 } player_info_t;
@@ -67,6 +71,13 @@ void player_init(void);
 
 /** Latest state (cheap; also folds in end-of-file and stream faults reported by the audio core). */
 void player_get(player_info_t *out);
+/** Tracks the queue skipped because they cannot be played (LB-5): a counter that moves on every skip, and the reason of the last one ("Can't play: unsupported
+ *  codec (AAC)"). The UI shows a toast when the counter moves. Any task. */
+uint32_t player_skip_notice(char *reason, size_t n);
+/** Real path of the file that plays now (a library queue entry is resolved: false until the storage task has done it) and, for a library queue, the
+ *  entry's handle ("@lib/<order>/<pos>"). Both false when no queue file plays. */
+bool player_now_path(char *out, size_t n);
+bool player_now_handle(char *out, size_t n);
 
 /** Start @p mode, or stop it if it is already the active test signal. TONE_OFF stops. */
 void player_tone_toggle(tone_mode_t mode);
@@ -77,6 +88,25 @@ void player_play_file(const char *path, const char *name);
  * listing order (play_queue.h); the files before it stay queued for Previous. The queue then plays through by itself.
  */
 void player_play_folder(const char *dir, const file_entry_t *entries, uint32_t count, uint32_t index);
+/**
+ * Play a playlist (Music > Playlists): the files at @p paths (absolute, @p count of them) form the queue, in that order, and entry @p start plays first. The
+ * paths are copied. The queue works like a folder's (Shuffle and Repeat apply); what does not fit the queue pool (play_queue.h) is dropped from the far end,
+ * keeping a window around @p start. Nothing is started for an empty list or a start outside it.
+ */
+void player_play_paths(const char *const *paths, uint32_t count, uint32_t start);
+/**
+ * Play song @p start (an index into @p range) of a library range (play_queue.h, pq_range_t) and queue the whole range: an album in track
+ * order, an artist's songs, all songs, a genre. @p start PLAY_QUEUE_NO_ENTRY picks a random song. @p shuffle_all forces a shuffled queue
+ * (Shuffle Songs); otherwise the Shuffle setting applies, as for a folder. The queue holds only the range; the storage task finds each track
+ * ("@lib/..." handles, see storage_service.h). Nothing is started (and nothing changes) for an empty range.
+ */
+void player_play_library(const pq_range_t *range, uint32_t start, bool shuffle_all);
+/**
+ * How the player turns a library handle into the real path of the file that was opened for it (for the resume record). Set once by the storage
+ * service; false = not known yet. Called with the player lock held, so it must not call back into the player.
+ */
+typedef bool (*player_path_resolver_fn)(const char *handle, char *out, size_t n);
+void player_set_path_resolver(player_path_resolver_fn fn);
 /** Next queued track (hard start). On the last track: stop, and Now Playing goes idle. No-op without a queue. */
 void player_next(void);
 /** Previous queued track; more than 3 s into a track (or on the first one) it restarts the current track instead. No-op without a queue. */
@@ -96,12 +126,39 @@ pq_shuffle_t player_shuffle(void);
 pq_repeat_t player_repeat(void);
 void player_set_shuffle(pq_shuffle_t mode);
 void player_set_repeat(pq_repeat_t mode);
+/**
+ * Move playback to PCM frame @p frame of the current track (exact for WAV, ALAC and FLAC with a seek table, near it for MP3: player_info_t.seekable). Done as a hard start of
+ * the same file at that frame (the resume path: a short mute, the announced gapless successor is withdrawn and offered again), so the audio
+ * core and its rings see an ordinary new stream. Paused stays paused. @p frame at or past the end of the track is the end of the track: the
+ * queue moves on as it does when a track ends by itself (repeat-one restarts it, the last track stops). False (nothing done) when the track
+ * is not seekable or nothing is playing.
+ */
+bool player_seek(uint64_t frame);
 /** Pause <-> resume. On a finished track (or a completed MD5 check) it plays the same file again from the start. Otherwise no-op. */
 void player_pause_toggle(void);
+/** Pause if playing (the headset went away: audio_route.h); position kept. No-op in any other state. */
+void player_pause(void);
 void player_stop(void);
 
 /** Volume steps: positive = louder, 2 dB each, clamped to [hard cap, off]. Returns the new attenuation in dB. */
 uint32_t player_volume_step(int32_t steps);
+/** The attenuation shown to the user in dB (0 = unity; what player_info_t.vol_att_db says) without the rest of player_get(): cheap, for the volume HUD. */
+uint32_t player_volume_att(void);
+
+/**
+ * Line out (Settings > Line out, audio_route.h): while locked the software volume sits at 0 dB (no boost: the audio core's unity) and
+ * player_volume_step() ignores the wheel and keys, counting them; the volume the user chose is kept for when it is unlocked.
+ */
+void player_volume_set_locked(bool locked);
+bool player_volume_locked(void);
+/** How many volume steps were ignored while locked so far (the UI shows "Line out: fixed level" when it moves). */
+uint32_t player_volume_blocked(void);
+
+/**
+ * Hold the software volume at 0 dB (true) while the headset's absolute volume is the volume (bt_control.h), or give the user's software volume back
+ * (false). The software volume the user chose is kept, and its steps and restores change it without applying it while held.
+ */
+void player_volume_hold_unity(bool hold);
 
 /**
  * Apply a volume saved in the settings store (attenuation in dB) at boot, by player_volume_restore_att() with the output path saved beside
@@ -162,9 +219,18 @@ typedef struct {
     uint8_t md5[16];
     uint64_t file_size;
     uint64_t start_frame; /**< the stream starts at this frame of the track (resume), 0 normally */
+    bool seekable;        /**< track_info_t.seekable */
 } player_file_t;
 void player_file_started(const player_file_t *f);
 void player_file_failed(const char *msg);
+/**
+ * The stream that was playing broke (card read error mid-track). It is not the answer to a start request, so it never touches the count of
+ * outstanding starts: with a start outstanding (a seek, Next) the restart replaces the broken stream and the error is dropped; otherwise it is
+ * shown like any playback error.
+ */
+void player_stream_error(const char *msg);
+/** Start requests posted and not answered yet (player_file_started / player_file_failed). 0 when everything asked for has been answered. For tests. */
+uint32_t player_starts_outstanding(void);
 /**
  * Gapless: the path of the track after the one playing, if the audio core may be told about it ahead of time (setting on, queue
  * has a next track, a file is playing). False otherwise.

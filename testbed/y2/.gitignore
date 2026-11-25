@@ -1,0 +1,16 @@
+# Device images and dumps never go in git (backups live in ~/y2-backup and on the NAS)
+*.img
+*.bin
+*.zip
+dump/
+recon/**/raw/
+.venv/
+
+# mtkclient session artefacts (device IDs, DA state)
+.state
+hwparam.json
+
+# Device findings, logs and docs stay local + NAS only (repo is public; Stuart 2026-11-10).
+# Mirror with scripts/sync-notes.sh.
+docs/
+recon/

@@ -1,0 +1,2 @@
+# -s: no password logins at all (key-only). -R is not needed: host keys are made by S50dropbear.
+DROPBEAR_ARGS="-s"

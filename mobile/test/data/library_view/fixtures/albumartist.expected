@@ -1,0 +1,54 @@
+# artists (name, albums)
+Daft Punk	1
+Faithless	1
+Groove Armada	1
+Pepper	1
+# albums list (title, artist, songs, year)
+Back to Mine	Groove Armada	2	2000
+Back to Mine		3	2001
+Discovery	Daft Punk	2	2001
+Reverence	Faithless	2	1996
+Solo	Pepper	1	0
+# album table (title, artist)
+Discovery	Daft Punk
+Reverence	Faithless
+Back to Mine	Groove Armada
+Solo	Pepper
+Back to Mine	
+# album songs (album, title, disc, track)
+Discovery	One More Time	0	1
+Discovery	Aerodynamic	0	2
+Reverence	Insomnia	0	1
+Reverence	Salva Mea	0	2
+Back to Mine	Rise	0	1
+Back to Mine	Fall	0	2
+Solo	Alone	0	1
+Back to Mine	Take Me Away	0	1
+Back to Mine	Whatever	0	2
+Back to Mine	Blue	0	3
+# compilations (title)
+Back to Mine
+# genres (name, songs)
+Dance	1
+Electronic	4
+Trip-Hop	3
+# genre songs (genre, title)
+Dance	Insomnia
+Electronic	One More Time
+Electronic	Aerodynamic
+Electronic	Rise
+Electronic	Fall
+Trip-Hop	Take Me Away
+Trip-Hop	Whatever
+Trip-Hop	Blue
+# songs (title, artist, album)
+Aerodynamic	Daft Punk	Discovery
+Alone	Pepper	Solo
+Blue	Morcheeba	Back to Mine
+Fall	Salt	Back to Mine
+Insomnia	Faithless	Reverence
+One More Time	Daft Punk	Discovery
+Rise	Pepper	Back to Mine
+Salva Mea	Faithless	Reverence
+Take Me Away	Annette Peacock	Back to Mine
+Whatever	Alice Russell	Back to Mine

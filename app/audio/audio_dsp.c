@@ -183,3 +183,22 @@ void tonegen_fill(tonegen_t *g, int32_t *out, uint32_t frames) {
         out[2u * i + 1u] = r;
     }
 }
+
+// 32-bit left-justified stereo to 16-bit for the Bluetooth encoder (SBC carries 16 bit). With @p dither a triangular (TPDF) dither of +-1 LSB16 is
+// added before the rounding, from a xorshift generator whose state is *rng (one draw gives both uniform halves). Without it the samples are
+// only rounded, so 16-bit material at 0 dB reaches the encoder unchanged.
+void NEUPOD_RAM_FUNC(audio_s32_to_s16)(const int32_t *in, int16_t *out, uint32_t frames, bool dither, uint32_t *rng) {
+    uint32_t x = *rng != 0u ? *rng : 0x2545F491u;
+    for (uint32_t i = 0; i < frames * 2u; i++) {
+        int64_t v = in[i];
+        if (dither) {
+            x ^= x << 13;
+            x ^= x >> 17;
+            x ^= x << 5;
+            v += (int64_t)(int16_t)(x & 0xFFFFu) + (int64_t)(int16_t)(x >> 16); // two uniform +-0x8000: triangular, +-1 LSB16
+        }
+        v = (v + 0x8000) >> 16;
+        out[i] = (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v);
+    }
+    *rng = x;
+}

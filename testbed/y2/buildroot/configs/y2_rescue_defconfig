@@ -1,0 +1,29 @@
+# y2-rescue initramfs for the Innioasis Y2 (MT6582, stock Linux 3.4.67). Userland only.
+BR2_arm=y
+BR2_cortex_a7=y
+BR2_ARM_EABIHF=y
+BR2_ARM_FPU_NEON_VFPV4=y
+BR2_ARM_INSTRUCTIONS_THUMB2=y
+
+BR2_REPRODUCIBLE=y
+
+# Toolchain: musl, headers no newer than the stock 3.4.67 kernel, fully static
+BR2_TOOLCHAIN_BUILDROOT_MUSL=y
+BR2_KERNEL_HEADERS_VERSION=y
+BR2_DEFAULT_KERNEL_VERSION="3.4.113"
+BR2_PACKAGE_HOST_LINUX_HEADERS_CUSTOM_3_4=y
+BR2_STATIC_LIBS=y
+
+# System: busybox init + mdev (the stock kernel has no devtmpfs)
+BR2_TARGET_GENERIC_HOSTNAME="y2-rescue"
+BR2_TARGET_GENERIC_ISSUE="neuPod y2-rescue"
+BR2_INIT_BUSYBOX=y
+BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_MDEV=y
+BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_Y2_PATH)/../rescue/overlay"
+BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_Y2_PATH)/board/busybox.fragment"
+BR2_PACKAGE_Y2_FBTOOL=y
+
+# Output: gzip'd cpio only. No kernel, no bootloader.
+# BR2_TARGET_ROOTFS_TAR is not set
+BR2_TARGET_ROOTFS_CPIO=y
+BR2_TARGET_ROOTFS_CPIO_GZIP=y

@@ -22,8 +22,19 @@
 extern "C" {
 #endif
 
+/*
+ * Thumbnail size and cache (NP-5, docs/ui.md "Album art"): hosted builds (the simulator, the Y2) and the RP2350B with PSRAM decode to a
+ * 160 x 160 RGB565 thumbnail (50 KB) and keep the last 24 albums (1.2 MB); nothing is ever scaled up, the UI draws it smaller. The Pico 2 W
+ * (ADR-0001 amendment: frozen) keeps one 64 x 64 thumbnail (8 KB) and no cache. A build with PSRAM defines NEUPOD_ART_HIRES.
+ */
+#ifdef NEUPOD_ART_HIRES
+#define ART_MAX_DIM 160u                         /**< the thumbnail fits a 160 x 160 box */
+#define ART_CACHE_N 24u                          /**< thumbnails kept, least recently used out first */
+#else
 #define ART_MAX_DIM 64u                          /**< the thumbnail fits a 64 x 64 box */
-#define ART_PIXELS (ART_MAX_DIM * ART_MAX_DIM)   /**< RGB565 pixels in a thumbnail buffer (8 KB) */
+#define ART_CACHE_N 1u                           /**< one thumbnail: the track playing (no cache, no browse art) */
+#endif
+#define ART_PIXELS (ART_MAX_DIM * ART_MAX_DIM)   /**< RGB565 pixels in a thumbnail buffer (8 KB at 64, 50 KB at 160) */
 #ifndef ART_POOL_BYTES
 #define ART_POOL_BYTES 4096u /**< TJpgDec pool: 4:2:0 with two quantisation tables needs about 3.5 KB (measured in tests: see docs/audio.md) */
 #endif

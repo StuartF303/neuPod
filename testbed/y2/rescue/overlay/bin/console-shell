@@ -1,0 +1,5 @@
+#!/bin/sh
+# Shell on /dev/console for busybox init to respawn. Sleeps when the console is unusable
+# so a missing console does not turn into a tight respawn loop.
+sh -i </dev/console >/dev/console 2>&1
+sleep 5

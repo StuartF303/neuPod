@@ -61,6 +61,12 @@ size_t input_events_from_key(int key, input_event_t *out, size_t max) {
     case ' ':
         button = HAL_BTN_PLAY;
         break;
+    case 'l':
+        if (max < 1) {
+            return 0;
+        }
+        out[0] = (input_event_t){.type = INPUT_HOLD_TOGGLE};
+        return 1;
     case 'm':
     case 0x7f:
     case 0x08:
@@ -77,4 +83,30 @@ size_t input_events_from_key(int key, input_event_t *out, size_t max) {
         out[n++] = (input_event_t){.type = INPUT_BUTTON_UP, .button = button, .steps = 0};
     }
     return n;
+}
+
+void input_pump_init(input_pump_t *p) { *p = (input_pump_t){0}; }
+
+void input_pump_send(input_pump_t *p, input_send_fn send, void *ctx, const input_event_t *ev, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        if (!send(ctx, &ev[i])) {
+            p->dropped += (uint32_t)(n - i);
+            return; // the queue is full: the rest of this burst would not fit either
+        }
+    }
+}
+
+void input_pump_levels(input_pump_t *p, input_send_fn send, void *ctx, bool power_down, hal_hold_switch_t sw) {
+    if (power_down != p->power_sent) {
+        input_event_t e = {.type = power_down ? INPUT_POWER_DOWN : INPUT_POWER_UP};
+        if (send(ctx, &e)) {
+            p->power_sent = power_down;
+        }
+    }
+    if (sw != HAL_HOLD_SWITCH_NONE && sw != p->switch_sent) {
+        input_event_t e = {.type = INPUT_HOLD_SWITCH, .steps = sw == HAL_HOLD_SWITCH_ON ? 1 : 0};
+        if (send(ctx, &e)) {
+            p->switch_sent = sw;
+        }
+    }
 }

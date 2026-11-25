@@ -1,0 +1,30 @@
+#!/bin/sh
+# dropbear sshd, key-only. Host keys live in /etc/dropbear (root is rw ext4) and are generated on first boot.
+# Root login works only with a key in /root/.ssh/authorized_keys; -s disables all password logins.
+test -r /etc/default/dropbear && . /etc/default/dropbear
+
+start() {
+	mkdir -p /etc/dropbear
+	for t in ed25519 ecdsa rsa; do
+		[ -s /etc/dropbear/dropbear_${t}_host_key ] && continue
+		echo "Generating dropbear $t host key"
+		umask 077
+		dropbearkey -t $t -f /etc/dropbear/dropbear_${t}_host_key >/dev/null 2>&1
+	done
+	printf "Starting dropbear sshd: "
+	umask 077
+	start-stop-daemon -S -q -p /var/run/dropbear.pid --exec /usr/sbin/dropbear -- $DROPBEAR_ARGS
+	[ $? = 0 ] && echo "OK" || echo "FAIL"
+}
+stop() {
+	printf "Stopping dropbear sshd: "
+	start-stop-daemon -K -q -p /var/run/dropbear.pid
+	[ $? = 0 ] && echo "OK" || echo "FAIL"
+}
+case "$1" in
+	start) start ;;
+	stop) stop ;;
+	restart|reload) stop; start ;;
+	*) echo "Usage: $0 {start|stop|restart}"; exit 1 ;;
+esac
+exit $?

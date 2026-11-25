@@ -32,6 +32,14 @@ void settings_service_load_now(void);
  */
 void settings_service_poll(bool quiet_now);
 
+#include "hal_power.h" /* NEUPOD_POWER_MGMT */
+#if NEUPOD_POWER_MGMT
+/** Before system sleep (ADR-0021), any task: have the storage task write pending changes at its next look instead of 1.5 s after the first one. Cleared once nothing is pending. */
+void settings_service_request_flush(void);
+/** Is a change still waiting to reach the card? (False with no card too: RAM-only settings are never "pending" in a way a wait could end.) */
+bool settings_service_flush_pending(void);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

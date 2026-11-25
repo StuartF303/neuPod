@@ -54,10 +54,12 @@ bool ui_input_active(void);
 
 /* ---- Letter-jump overlay for long sorted lists ---- */
 typedef struct ui_letter_overlay ui_letter_overlay_t;
-/** Create (hidden) on @p parent. */
+/** Create (hidden) on @p parent (the screen's root): a tile at the top right with the letter, an index rail down the right edge (ui_rail.c). */
 ui_letter_overlay_t *ui_letter_overlay_create(void *lv_parent);
 /** Show or hide according to @p j (call after wi_letterjump_scroll / _tick). */
 void ui_letter_overlay_update(ui_letter_overlay_t *o, const wi_letterjump_t *j);
 void ui_letter_overlay_destroy(ui_letter_overlay_t *o);
+/** Tours only: keep the overlay up (the scripted steps are slower than the hide delay), so a snapshot can show it. */
+void ui_letter_overlay_tour_hold(bool on);
 
 #endif

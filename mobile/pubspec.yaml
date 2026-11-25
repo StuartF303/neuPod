@@ -1,0 +1,100 @@
+name: neupod
+description: "neuPod: a local music player."
+# The following line prevents the package from being accidentally published to
+# pub.dev using `flutter pub publish`. This is preferred for private packages.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+# The following defines the version and build number for your application.
+# A version number is three numbers separated by dots, like 1.2.43
+# followed by an optional build number separated by a +.
+# Both the version and the builder number may be overridden in flutter
+# build by specifying --build-name and --build-number, respectively.
+# In Android, build-name is used as versionName while build-number used as versionCode.
+# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
+# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
+# Read more about iOS versioning at
+# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+# In Windows, build-name is used as the major, minor, and patch parts
+# of the product and file versions while build-number is used as the build suffix.
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.14.0
+
+# In-repo plugins share this package's resolution (one `flutter pub get`, one
+# pubspec.lock), so `flutter analyze` here also covers them.
+workspace:
+  - packages/neupod_audio
+  - packages/neupod_device
+  - packages/neupod_storage
+
+# Dependencies specify other packages that your package needs in order to work.
+# To automatically upgrade your package dependencies to the latest versions
+# consider running `flutter pub upgrade --major-versions`. Alternatively,
+# dependencies can be manually updated by changing the version numbers below to
+# the latest version available on pub.dev. To see which dependencies have newer
+# versions available, run `flutter pub outdated`.
+dependencies:
+  # Library database (decision 0005): drift over the sqlite3 package's bundled SQLite.
+  crypto: ^3.0.8
+  drift: ^2.35.4
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^3.5.0
+  image: ^4.13.1
+  material_ui: ^1.11.0
+  # The audio engine and media session (decisions 0001 and 0002).
+  neupod_audio:
+    path: packages/neupod_audio
+  # In-repo plugin: click-wheel haptics and the system volume (decision 0007).
+  neupod_device:
+    path: packages/neupod_device
+  # In-repo plugin: folder access, SAF and security-scoped bookmarks (decision 0004).
+  neupod_storage:
+    path: packages/neupod_storage
+  sqlite3: ^3.9.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+
+  # The "flutter_lints" package below contains a set of recommended lints to
+  # encourage good coding practices. The lint set provided by the package is
+  # activated in the `analysis_options.yaml` file located at the root of your
+  # package. See that file for information about deactivating specific lint
+  # rules and activating additional ones.
+  flutter_lints: ^6.0.0
+  # drift's code generator: dart run build_runner build (generated files are committed).
+  drift_dev: ^2.35.3
+  build_runner: ^2.17.1
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter packages.
+flutter:
+
+  # The Material Icons font is not bundled: the design uses Lucide icons
+  # (docs/design/2026-11-21-ui-styles), so the Icons class is not used.
+  uses-material-design: false
+
+  assets:
+    # Licence texts shown on the Licences screen (lib/ui/features/licences).
+    - assets/fonts/OFL-Montserrat.txt
+    - assets/icons/lucide/LICENSE-Lucide.txt
+    # Generated test tones (copies of tests/assets/audio fixtures, about 57 KB)
+    # for the player debug screen and the integration tests. To leave out of
+    # store builds before release.
+    - integration_test/assets/test_media/
+
+  # Montserrat Medium (SIL OFL 1.1), the design's one weight: v9.000 of
+  # github.com/JulietaUla/Montserrat, fonts/ttf/Montserrat-Medium.ttf
+  # (sha256 c888ea70fdceef0d05752266472a940aeb86692a7bdf8f2211380587418ca223).
+  # The icons are drawn from SVG path data (lib/ui/style/icons), not a font.
+  fonts:
+    - family: Montserrat
+      fonts:
+        - asset: assets/fonts/Montserrat-Medium.ttf
+          weight: 500

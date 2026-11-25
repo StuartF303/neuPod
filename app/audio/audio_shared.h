@@ -18,6 +18,7 @@ typedef enum {
     AUDIO_CMD_STOP,
     AUDIO_CMD_STREAM_START, /* a = stream sequence number; the stream is described by g_audio_slot[a & 1] */
     AUDIO_CMD_STREAM_NEXT,  /* a = sequence number of the stream to continue with, gapless, when the current one ends */
+    AUDIO_CMD_OUTPUT,       /* a = 0 wired / 1 Bluetooth, b = Bluetooth sample rate; only with the stream closed */
 } audio_cmd_type_t;
 
 typedef struct {

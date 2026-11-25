@@ -8,6 +8,7 @@
 
 #include "art.h"
 #include "meta.h"
+#include "os_alloc_malloc.h"
 #include "unit.h"
 
 #ifndef NEUPOD_ART_ASSETS
@@ -204,6 +205,32 @@ TEST(test_yield_and_abort) {
         g_yield_limit = limit;
         ASSERT_EQ(ART_E_ABORTED, art_decode(mem_rd, &a, 0, (uint32_t)n, g_px, &info, count_yield, NULL));
     }
+    free(d);
+}
+
+// The scratch comes from os_alloc() (the RTOS heap on the device), which answers NULL when it is short: art must report ART_E_MEMORY,
+// release what it did get, and leave the picture buffer alone. The first allocation is the decoder pool, the second the strip buffers.
+TEST(test_alloc_failure) {
+    size_t n;
+    uint8_t *d = load("q420_600x600.jpg", &n);
+    ASSERT_TRUE(d != NULL);
+    if (d == NULL) return;
+    art_info_t info;
+    for (int fail_at = 0; fail_at < 2; fail_at++) {
+        memf_t m = {.d = d, .n = n};
+        memset(g_px, 0xA5, sizeof g_px);
+        int live = os_alloc_live();
+        os_alloc_fail_from(fail_at);
+        ASSERT_EQ(ART_E_MEMORY, art_decode(mem_rd, &m, 0, (uint32_t)n, g_px, &info, NULL, NULL));
+        os_alloc_fail_from(-1);
+        ASSERT_EQ(live, os_alloc_live()); // nothing leaked on the failure path
+        ASSERT_EQ(0xA5A5, g_px[0]);
+    }
+    // and it recovers: the next decode with memory available works and also frees everything
+    memf_t m = {.d = d, .n = n};
+    int live = os_alloc_live();
+    ASSERT_EQ(ART_OK, art_decode(mem_rd, &m, 0, (uint32_t)n, g_px, &info, NULL, NULL));
+    ASSERT_EQ(live, os_alloc_live());
     free(d);
 }
 
@@ -710,6 +737,7 @@ int main(void) {
     RUN(test_damaged_input);
     RUN(test_embedded_offset);
     RUN(test_yield_and_abort);
+    RUN(test_alloc_failure);
     RUN(test_folder_rank_and_pick);
     RUN(test_folder_pick_order);
     RUN(test_source_order);

@@ -35,6 +35,13 @@ The sink is chosen at build time: `scripts/build.sh rp2350 -- -DNEUPOD_AUDIO_SIN
 (the old discard-on-a-clock sink, touches no pins). The host build uses SDL for audible output when SDL2 and an
 audio device exist (`NEUPOD_HOST_AUDIO=0` forces silence), otherwise it is the null sink.
 
+On the Innioasis Y2 the wired sink is the headphone jack's CS43131 DAC ([Y2](y2.md#what-each-hal-does), Audio): the audio core is unchanged
+(same 32-bit blocks, same software volume and ramps); the HAL converts to 16 bit (TPDF dither whenever the volume or a deeper source leaves
+bits below the 16th), queues the blocks in a ring, and a writer thread paces the whole player on the DAC's clock. 44.1 kHz only, with the null
+sink as the fallback when no headphones are plugged in. `hal_audio_wired_attached()` tells the audio route whether anything is on the jack
+(always true on the other platforms): headphones pulled out while playing pause the player with a "Headphones unplugged" banner.
+The Y2's internal speaker and Line out use the same sink: `hal_audio_set_speaker()` / `hal_audio_set_line_out()` carry the route's decision (Settings > Speaker, Settings > Line out, Audio output Auto / Wired / Bluetooth / Speaker) to the HAL, `hal_audio_headphones_in()` and `hal_audio_speaker_available()` / `hal_audio_line_out_available()` report the hardware; the other platforms answer no. The amplifier-off-first rules, the volume caps (speaker 9, jack 11, Line out 15) and the allow-lists are in [Y2](y2.md#internal-speaker-and-line-out). Line out locks the software volume at 0 dB (`player_volume_set_locked()`).
+
 ### Interrupt flow
 
 1. Start: both buffers hold silence; DMA channel A is started, the PIO is enabled.
@@ -184,7 +191,7 @@ More than 2 channels are rejected with a message, as are unsupported rates ("Uns
   commands: volume, pause and the end-of-stream marker immediately; anything that tears the stream down (stop, a new track, a tone) is parked, the read is abandoned and the command runs
   next, so nothing can deadlock. 32 starved blocks in a row still stops and mutes the output.
 * The first block of audio is not played until about 23 ms are buffered (and a stream is complete if it is shorter), so a slow start is silence rather than an underrun.
-* **Seeking** (not exposed in the UI yet): forward seeks inside the decoder (including dr_flac's own) discard bytes; an absolute seek backwards sends core 0 a
+* **Seeking** inside the decoder (the Now Playing seek is different, see "Seeking to a frame" below): forward seeks inside the decoder (including dr_flac's own) discard bytes; an absolute seek backwards sends core 0 a
   request (byte offset), core 0 repositions the file and acknowledges, core 1 then empties the data ring and acknowledges back, and only then does core 0 write again
   (`stream_io.h`; unit-tested with a real second thread).
 
@@ -207,7 +214,8 @@ bytes live in `g_audio_slot[seq & 1]`. The data ring carries streams back to bac
    because of trimming (see below) skip the rest of the stream up to the boundary.
 4. The decoder returns its last frame: core 1 looks at the command ring once more (an announcement sent just before the end is not missed),
    then, if the announcement is still valid (`g_audio_next_valid` re-read after copying the description), closes the decoder, opens the next one
-   on the same sink, PCM ring and volume, and pushes the number of PCM frames written so far into a small boundary ring. The block interrupt
+   on the same sink, PCM ring and volume (the decoders' byte source `g_sio` is rebuilt for every stream, WAV included, so a WAV that hands
+   over to a codec track never opens it on an unset source), and pushes the number of PCM frames written so far into a small boundary ring. The block interrupt
    counts the frames it serves; when they reach the boundary it reports `END_OF_TRACK` with value 1 and `elapsed` restarts. So the event
    fires in the block that carries the old track's last sample (within 256 frames), not when decoding ends. No mute change, no ramp.
 5. Nothing announced (last track, gapless off, other rate or channel count, unreadable file, a track too short to chain): the track ends
@@ -270,9 +278,20 @@ opened is dropped quietly in both modes.
 | WAV | exact frame (the byte) |
 | ALAC (M4A) | exact frame: the packet is found with the sample tables (`mp4_iter_seek`: the stsc runs and one chunk, not every packet before it) and the decoder drops the frames before the target; trimming (edit list, `iTunSMPB`) stays exact |
 | FLAC | exact frame **if the file has a SEEKTABLE** (nearest earlier seek point, the decoder drops the rest); without one the track starts at the beginning (position 0) |
-| MP3 | nearest frame: from the Xing table of contents (VBR) or the byte proportion (CBR, within a frame; VBR roughly 1%). The position that is then shown and saved is computed back from where the frame header really landed, so errors do not add up over repeated resumes. The first granule after the jump may be silent (bit reservoir) and the LAME end padding is no longer trimmed |
+| MP3 | nearest frame: from the Xing table of contents or the Fraunhofer VBRI table (VBR) or the byte proportion (CBR, within a frame; VBR roughly 1%; a file with no frame count at all uses an estimate from its first frame's bit rate), then a resync to a frame header confirmed by the one after it. The position that is then shown and saved is computed back from where the frame header really landed, so errors do not add up over repeated resumes. The first granule after the jump may be silent (bit reservoir) and the LAME end padding is no longer trimmed |
 
 `tools/gen_seek_vector.py` makes the FLAC vector with a seek table for the tests (`tests/test_gapless.c`, through the real core-1 loop).
+
+**Seek from Now Playing** (`player_seek()`, UI-7): the same file is started again at the target frame, a hard start exactly like the boot resume, so core 1 sees an
+ordinary new stream and nothing new crosses between the cores. Consequences: a short mute (the ramp-down, the ring flush and the decoder opening; the audio core's
+underrun and storm counters are not involved); an announced gapless successor is withdrawn by the stop and the player's counters are re-based, and the stream controller
+announces it again for the restarted stream once its ring is full, so the handoff at the end of the track stays sample-exact (`tests/test_gapless.c`, seek during prefetch);
+paused stays paused (the restarted stream is paused before anything is fed). Only tracks whose `track_info_t.seekable` is set are offered it: WAV, ALAC, MP3 (UI-7: the scrub bar and the time show where an MP3 really landed, so a VBR file moves in jumps of up to about 1 % of the track), and FLAC with a SEEKTABLE and a
+known length (it is exact; without a table the only way would be decoding from the start; such a FLAC answers `Seek not available`). A target at or past the last frame is the end of the track: the queue advances as it does
+when a track plays out (repeat-one restarts it, the last track stops). Scrubbing applies one restart per rest of the wheel (0.35 s), not one per step.
+The player counts the start requests it has posted (the storage task answers each exactly once, in order) and applies only the answer to the last one, so a seek followed by another seek,
+Next or a seek to the end never shows the replaced start's track data; the answer to a replaced start that fails is ignored too. When a seek's restart is up, the new position is saved
+for resume once (`RESUME_EVENT`), not per scrub step.
 
 ### Memory and CPU
 
@@ -314,7 +333,8 @@ announced length is an error ("File is truncated or damaged"), so a damaged FLAC
 Once a command has interrupted the decoder's wait, every further read fails until the engine has handled it. Core 1's stack has a hardware limit
 (MSPLIM) 256 bytes above its bottom, so an overflow faults instead of corrupting RAM. The tests truncate every vector at each early byte and at 40 further
 points and flip random bits (fixed seed) in all of FLAC, MP3 and M4A; `-DNEUPOD_HOST_ASAN=ON` adds `test_codecs_asan`, the same tests under AddressSanitizer
-and UBSan (signed-overflow and shift reports are switched off: the vendored decoders wrap on corrupt data, which is harmless on ARM).
+and UBSan (signed-overflow and shift reports are switched off: the vendored decoders wrap on corrupt data, which is harmless on ARM), and
+`test_gapless_asan`, the gapless test (the real core-1 loop, every codec pair) under the same sanitizers.
 
 ### Test vectors
 

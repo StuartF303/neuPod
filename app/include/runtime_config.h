@@ -15,20 +15,40 @@
 /* Priorities (higher runs first; 0 is the kernel idle task; the timer service task is 6). */
 #define RT_PRIO_STORAGE 5u
 #define RT_PRIO_INPUT 4u
-#define RT_PRIO_RADIO 3u /* the SDK's CYW43 worker, which also runs BTstack; set via CYW43_TASK_PRIORITY on RP2350 */
+#define RT_PRIO_RADIO 6u /* the SDK's CYW43 worker, which also runs BTstack; set via CYW43_TASK_PRIORITY on RP2350. ABOVE storage on
+                            purpose: the A2DP sender has ~40 ms of slack and storage bursts to 32-40 % of core 0 during FLAC. Bench
+                            19 Nov 2026 (Pico 2 W, AirPods, Eels FLAC): radio 3 < storage 5 gave 36 stalls/10 s, catch-up to 160 ms,
+                            bitpool forced 53 to 45, one disconnect; radio above storage gave 0 stalls, 25-34 ms, bitpool 53 steady.
+                            Shares 6 with the timer service (round-robin; the timer task does microseconds, the worker is bursty and blocks between events) */
 #define RT_PRIO_UI 2u
 #define RT_PRIO_MONITOR 1u
-#define RT_PRIO_WIFI 1u  /* the Wi-Fi policy task: joins, retries, NTP; the radio worker (3) does the real work */
+#define RT_PRIO_WIFI 1u  /* the Wi-Fi policy task: joins, retries, NTP; the radio worker (6) does the real work */
 #define RT_PRIO_I2C 4u   /* I2C users run at input priority while on the bus: hal_i2c timeouts are
                             wall-clock (2 ms floor), and a UI frame at priority 2 outlasts that */
 #define RT_PRIO_CHECK 1u /* boot self-check tasks: transient, below the UI so the splash animates */
 
+/* Wi-Fi and Bluetooth together. 1 = allowed (Stuart's decision for stage 2, PROVISIONAL: to be confirmed or reversed by the bench test on the
+ * shared CYW43439, docs/bluetooth.md "Wi-Fi alongside Bluetooth"); Wi-Fi then follows its own "Wi-Fi while playing" setting.
+ * This is the single policy point: a future interlock (pause Wi-Fi while a Bluetooth link is up or pairing, or refuse a Pair while
+ * Wi-Fi is joining) hangs off this macro, at bt_service_pair() / bt_service_connect() on the Bluetooth side and wifi_service on the
+ * Wi-Fi side. No interlock exists: with 1 nothing is checked anywhere. */
+#ifndef NEUPOD_BT_WIFI_COEX_ALLOW
+#define NEUPOD_BT_WIFI_COEX_ALLOW 1
+#endif
+
+/* Bluetooth headset volume cap on connect (owner decision, 12 Nov 2026, docs/bluetooth.md): when absolute volume is first established on a connection and the
+ * headset reports more than this (0..127; 64 = 50 %), the player turns it down to this. Only ever down, never up; swipes and the wheel afterwards are
+ * respected. 127 disables the cap. */
+#ifndef NEUPOD_BT_VOLUME_CAP_ON_CONNECT
+#define NEUPOD_BT_VOLUME_CAP_ON_CONNECT 64u
+#endif
+
 /* Every RTOS task runs on core 0 (the only core the kernel owns). */
 #define RT_CORE_OTHER OS_CORE_0
 
-/* Boot splash: shown at least this long, and, if any check ends not fully correct, held this long
+/* Boot splash: shown at least this long, and, if any check ends not fully correct (or Menu is held at start), the debug splash is held this long
  * after the checks finish (any input event skips the hold). */
-#define RT_SPLASH_MIN_MS 1500u
+#define RT_SPLASH_MIN_MS 600u
 #define RT_SPLASH_HOLD_MS 8000u
 
 /* UI scrolling: Rockbox-style 4 wheel counts per list step, with velocity acceleration. The wheel
@@ -67,6 +87,9 @@
 /* Stacks, bytes. */
 #define RT_STACK_STORAGE 8192u /* file headers and tags are parsed here (about 1 KB of locals), on top of FatFs */
 #define RT_STACK_INPUT 2048u
+/* Input task to UI queue, in events (8 bytes each; a button press is two). The UI drains it once per pass, which can take a frame (about 30 ms)
+ * plus its sleep: 16 events (8 presses) overflowed under a UART burst and later keys vanished (UI-6). 64 covers 32 presses between two passes. */
+#define RT_INPUT_QUEUE_LEN 64u
 #define RT_STACK_UI 12288u
 #define RT_STACK_MONITOR 3072u
 #define RT_WIFI_JOIN_TIMEOUT_MS 60000u /* a join (associate + DHCP) not finished by then is abandoned and retried with backoff */
@@ -79,6 +102,17 @@
 /* The CYW43 worker's stack is set by CYW43_TASK_STACK_SIZE (WORDS, platforms/rp2350/freertos/CMakeLists.txt); keep the two in step. */
 #ifdef CYW43_TASK_STACK_SIZE
 _Static_assert(RT_STACK_RADIO == CYW43_TASK_STACK_SIZE * 4u, "RT_STACK_RADIO must equal CYW43_TASK_STACK_SIZE words in bytes");
+#endif
+
+_Static_assert(RT_PRIO_MONITOR < RT_PRIO_UI, "the library build runs the storage task at RT_PRIO_MONITOR so the UI preempts it (library_service.c do_build)");
+
+/* The radio worker must out-rank storage (see RT_PRIO_RADIO). Compile-time guard so a re-tune cannot silently bring back the A2DP stalls. */
+_Static_assert(RT_PRIO_RADIO > RT_PRIO_STORAGE, "RT_PRIO_RADIO must be above RT_PRIO_STORAGE (A2DP link deadline, docs/runtime.md)");
+_Static_assert(RT_PRIO_RADIO <= OS_PRIO_MAX, "RT_PRIO_RADIO exceeds OS_PRIO_MAX");
+
+/* The CYW43 worker's priority is set by CYW43_TASK_PRIORITY (platforms/rp2350/freertos/CMakeLists.txt); keep the two in step. */
+#ifdef CYW43_TASK_PRIORITY
+_Static_assert(RT_PRIO_RADIO == CYW43_TASK_PRIORITY, "RT_PRIO_RADIO must equal CYW43_TASK_PRIORITY");
 #endif
 
 #endif // NEUPOD_RUNTIME_CONFIG_H

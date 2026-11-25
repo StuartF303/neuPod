@@ -6,6 +6,7 @@
 
 #include "boot_briefs.h"
 #include "lvgl.h"
+#include "fonts/neupod_fonts.h"
 #include "src/misc/lv_text_private.h" /* lv_text_get_width: LVGL private API, fine for a host test */
 #include <stdio.h>
 #include "unit.h"
@@ -26,7 +27,7 @@ TEST(captions_fit_one_line) {
         char line[96];
         // Longest prefix: "[6/6] bluetooth: " (widest capability name, widest counter).
         snprintf(line, sizeof line, "[6/6] bluetooth: %s", briefs[i]);
-        int32_t w = lv_text_get_width(line, (uint32_t)strlen(line), &lv_font_montserrat_14, &attr);
+        int32_t w = lv_text_get_width(line, (uint32_t)strlen(line), &neupod_font_14, &attr);
         if (w > avail) {
             printf("  caption too wide: %d px > %d: '%s'\n", (int)w, (int)avail, line);
         }

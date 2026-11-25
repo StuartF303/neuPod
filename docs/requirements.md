@@ -51,7 +51,7 @@ Required: 2.4 GHz Wi-Fi, Bluetooth audio (A2DP to AirPods/headphones/speakers), 
 
 - **Radio for RP2350 route:** Infineon CYW43439 over SPI (Pico W / Pico 2 W reference design is open, ~£2–3 + antenna) or an ESP32-C6 as radio co-processor over SPI (~£1.50, Wi-Fi 6 + BLE 5 only, easier to source). The C6 has **no classic Bluetooth, so no A2DP**; it only suits Wi-Fi.
 - **Classic Bluetooth A2DP** is needed for most headphones; confirm the chosen radio supports BR/EDR, not just BLE.
-- **Antenna (requirement, 3 Nov 2026):** the shell is a Faraday cage; the only RF-transparent area is the **top plastic window of the 6G back**. The antenna sits there with its keep-out, and the radio module chosen must have a u.FL connector or an on-module antenna that can be placed there. Applies to Bluetooth first.
+- **Antenna (requirement, 3 Nov 2026; revised 15 Nov 2026):** the shell is a Faraday cage (anodised aluminium front, stainless steel back). The display glass is the only real opening, and an antenna behind the panel is shielded by the module's metal backplate, so the antenna is a **slot cut in the steel back** (see [Slot antenna](#slot-antenna) below). The radio module must have a u.FL connector (or a pad for a coax pigtail) so it can feed the slot. The earlier note of a "top plastic window of the 6G back" is superseded: the 6G back is all metal.
 - **Final-board radio:** not a bare CYW43439 (not assemblable at JLCPCB, outside the BTstack grant). Options: RM2 module, or an ESP32 with its own stack — see [ADR-0007](adr/0007-bluetooth-audio-path.md).
 - **USB-C:** 5.1 kΩ CC pulldowns for 5 V from C-to-C cables; USB 2.0 data; no PD needed at 1–2 A. The 30-pin aperture (~21 × 3 mm) takes a mid-mount USB-C receptacle with a small printed/CNC filler.
 - **GPIO:** 2× spare via the wired-remote connector (as Sprout) is a nice-to-have.
@@ -112,7 +112,7 @@ Hi-fi DAC with headphone amp driving the original 3.5 mm jack via the existing h
 
 **Single jack, line or headphone:** one 3.5 mm output from the DAC's headphone driver serves both; the codec's load/jack detection (CS43131 had this; check the ADR-0012 part) can switch a firmware "line mode" (fixed level, volume bypassed) when a high-impedance load is seen. No separate line-out socket.
 
-**Headphone jack — decision 4 Nov 2026 ([ADR-0018](adr/0018-headphone-jack-reuse.md)):** reuse the donor 6G headphone flex (3.5 mm TRRS jack, CTIA/Apple order Tip L, Ring 1 R, Ring 2 ground, Sleeve mic; hold switch; Mikey remote decoder at I²C 0x72). It fits the case hole by definition and gives L/R/ground, a **mono mic input**, and the Apple 3-button inline remote on the mic conductor (resistor ladder ≈ 0 / 240 / 620 Ω; decode via Mikey over I²C, or bias the mic line through ~2.2 kΩ and read an ADC). Plug detect from the jack switch or Mikey.
+**Headphone jack — decision 4 Nov 2026 ([ADR-0023](adr/0023-headphone-jack-reuse.md)):** reuse the donor 6G headphone flex (3.5 mm TRRS jack, CTIA/Apple order Tip L, Ring 1 R, Ring 2 ground, Sleeve mic; hold switch; Mikey remote decoder at I²C 0x72). It fits the case hole by definition and gives L/R/ground, a **mono mic input**, and the Apple 3-button inline remote on the mic conductor (resistor ladder ≈ 0 / 240 / 620 Ω; decode via Mikey over I²C, or bias the mic line through ~2.2 kΩ and read an ADC). Plug detect from the jack switch or Mikey.
 
 **Recording:** mono mic via the jack as standard. Stereo line-in on the same jack only via an analogue switch (dual SPDT, e.g. TS5A23157, one GPIO) that routes the L/R conductors to the codec ADC in a line-in mode; otherwise stereo in comes over USB-C audio. Decide with the codec.
 
@@ -172,7 +172,7 @@ Target: 2,000+ mAh in the thin shell, 3,000 mAh in the thick shell; 40 h Bluetoo
 | 2.4" AMOLED | off | 40–200 mA when on, content dependent |
 | Regulators, gauge, misc | ~1 mA | ~5 mA |
 
-Totals playing to BT, screen off: architecture A (RP2350 + CYW43439) ~80–110 mA → 23–30 h on 2,500 mAh; architecture B (ESP32-S3 + QCC) ~110–160 mA → 16–22 h. Standby target <0.5 mA: load switches on SD, DAC and radio rails; wake from hold switch or wheel. Backlight dims to ~10% within seconds and off within ~15 s; Wi-Fi off during playback; core clock scaled to the minimum that keeps the audio buffer full.
+Totals playing to BT, screen off: architecture A (RP2350 + CYW43439) ~80–110 mA → 23–30 h on 2,500 mAh; architecture B (ESP32-S3 + QCC) ~110–160 mA → 16–22 h. Idle policy ([ADR-0021](adr/0021-power-sleep.md)): after **Sleep after** (Never, 10, 30 default, 60 min) of nothing happening, off external power, the player suspends (Bluetooth controller off, settings and resume position written out first); a day asleep powers it off, and so does a battery at or below 3 % for 30 s; a paused player counts as idle, a playing one does not. Standby target <0.5 mA: load switches on SD, DAC and radio rails; wake from hold switch or wheel. Backlight dims to ~10% after the idle time (default 30 s) and goes fully off 3 min after that (Settings > Display, both adjustable; [ADR-0020](adr/0020-hold.md); this replaces the earlier "off within ~15 s": the totals above assume the screen off, so a listening session pays the 3.5 minutes of display once, after each press); Wi-Fi off during playback; core clock scaled to the minimum that keeps the audio buffer full.
 
 ## Reused parts and mechanical
 
@@ -186,10 +186,31 @@ Reuse the shell, mid-frame, click wheel and its FPC, headphone/hold-switch flex,
 - **Connectors to provide:** click wheel FPC, LCD FPC (stock pinout or new panel), headphone/hold flex, battery (3-pin, thermistor), microSD socket, USB-C mid-mount.
 - **Click wheel:** keep; serial protocol documented in Rockbox; new wheels available from Elite Obsolete.
 - **Port aperture:** 30-pin opening ~21 × 3 mm; USB-C with printed/CNC filler. Keep the port centred.
-- **Antenna keep-out:** near the headphone jack's plastic insert or under the wheel.
+- **Antenna:** slot in the steel back near the top edge; keep-out behind it. See [Slot antenna](#slot-antenna).
 - **Thermal/EMI:** metal shell; no thermal issue at RP2350 power levels.
 - **Reversibility:** no adhesive on original parts; foam spacers where the HDD was.
 - Cosmetic parts if needed: Elite Obsolete (shells, wheels, faceplates), Moonlit Market, iFlash (shells, screws, tools).
+
+### Slot antenna
+
+Working design for the 2.4 GHz antenna (Wi-Fi and Bluetooth share it). Recorded 15 Nov 2026; nothing here has been cut or measured yet.
+
+- **Where:** a closed slot in the stainless back, parallel to and about 4–6 mm in from the **top edge** (the hold switch and headphone jack end). That end is clear of the hand that holds the bottom and of the wheel. Centre it across the 61.8 mm width.
+- **Size:** about 1.5 mm wide. Length is λ/2 at 2.44 GHz: 61 mm in air, shortened by the filler. With an epoxy or polycarbonate fill (εr ≈ 3, εeff ≈ 2) expect **~43–50 mm**. Cut it short first and lengthen it while tuning. The slot needs unbroken metal around it, at least ~5 mm on every side, with no seams or screw holes in that margin.
+- **Fallback if a closed slot won't fit or tune:** an open-ended λ/4 slot, ~25–30 mm long, running in from the edge. It cuts the rim, so it's structurally and cosmetically worse.
+- **Feed:** a small FR4 or FPC feed board bonded inside the back over the slot. A 50 Ω microstrip crosses the slot about 10–20 % of its length from one end (the slot centre is roughly 500 Ω, the ends are a short), finishing in an open λg/4 stub past the slot. A U.FL connector on the board carries a pigtail to the radio. This avoids soldering to stainless, and moving the crossing point is the main matching adjustment. The feed board's ground must bond to the back on both sides of the slot (conductive adhesive tape or spring fingers).
+- **Back grounding:** the back must be tied to system ground at several points (spring contacts to the board or mid-frame). If it floats, the slot's resonance moves around.
+- **Keep-out:** keep at least 3 mm of air or foam behind the slot and feed board, with no battery pouch, PCB copper or flex over it. The battery is a metal laminate and detunes the slot badly. On the thin back (~6 mm usable depth) this sets where the cell can sit. That's one more reason for the thick back.
+- **Fill and finish:** fill flush with black epoxy or a press-fit polycarbonate strip, and **tune with the fill in place** because the filler shifts the resonance. Cut it by wire EDM (cleanest on the curved shell) or fibre laser. Deburr, and don't leave a burr bridging the gap.
+- **Pass criteria:** S11 below −10 dB across 2.400–2.4835 GHz on a NanoVNA, measured with the back assembled, the battery fitted, and a hand on the bottom half. Then compare received RSSI against a bare dev board using the ESP32 probe's Wi-Fi scan, which prints per-network RSSI.
+- **Qi option:** a plastic or glass back for Qi charging makes the slot unnecessary. The antenna then sits under the plastic, with the same keep-out from the coil and cell.
+- **Option to test: PCB-trace antenna under or around the wheel.** The click wheel and its centre button are plastic, and the gap between the wheel's rim and the aluminium front plate is a natural annular slot. Test a printed antenna on our board in that region: a meandered inverted-F (TI DN007 / AN043 style) or a trace that follows part of the wheel's outline. It costs nothing in BOM and needs no machining of the shell. Unknowns to settle on the bench:
+  - The wheel flex has its own copper (16 sense segments plus ground) and sits directly over the board. A trace *under* the wheel is probably shadowed and detuned, so the rim gap is the likelier spot.
+  - Whether the steel backing plate and the metal mid-frame leave any clear path from the board's edge to the rim gap.
+  - Coupling into the wheel's capacitive sensing: check that radio TX bursts don't cause false touches or position jitter. Also check the reverse, that the wheel's ~53 kHz scan doesn't desense the receiver.
+  - Detuning by the thumb, which rests right on top of it.
+  - Test method: a sacrificial test PCB in the board outline with two or three trace variants (and a u.FL on each for comparison), measured with a NanoVNA inside the closed shell, then an RSSI comparison against the slot using the ESP32 probe's scan.
+  If it passes, it may replace the slot. If not, the slot stays the plan.
 
 **Click wheel sub-board (how it works):** a capacitive ring of ~16 copper segments under the plastic plus five dome switches, scanned by a microcontroller on the flex itself (Cypress PSoC on the 5G; same family on the 6G). The PSoC interpolates finger position to 96 steps per revolution and streams 32-bit frames on its own ~53 kHz clock while touched; the host only listens (one init packet). It has its own 3.0 V LDO fed from the system rail. All the touch logic therefore stays in the wheel — our board needs 4 lines + power and a frame decoder (design doc §4.1).
 
@@ -203,7 +224,7 @@ Click-wheel-driven UI recreating the Classic experience (menus, Cover Flow, podc
 - Wi-Fi use cases: podcast download, library sync from a NAS/PC, firmware OTA. Streaming (Spotify/Apple Music) needs a Linux module.
 - Host side: the iPod must mount as a plain USB drive — no iTunes dependency.
 - Keep the stock-panel driver and a new-panel driver behind one display abstraction so either screen works.
-- **RAM budget:** every feature ADR states its RAM cost. The final board has 8 MB PSRAM (APS6404L, QSPI CS1, [ADR-0013](adr/0013-bluetooth-ram-psram.md)); artwork, HTTP and AAC are PSRAM-only.
+- **RAM budget:** every feature ADR states its RAM cost (the Pico 2 W's 520 KB is no longer a limit since 12 Nov 2026: the product target is the RP2350B with PSRAM, [ADR-0001 amendment](adr/0001-rp2350-phase1-platform.md#amendment-12-november-2026-the-pico-2-w-is-frozen-the-product-target-is-the-rp2350b-with-psram)). The final board has 8 MB PSRAM (APS6404L, QSPI CS1, [ADR-0013](adr/0013-bluetooth-ram-psram.md)); artwork, HTTP and AAC are PSRAM-only.
 - **Flash and OTA:** final board 16 MB W25Q128; bootrom A/B partitions with TBYB ([ADR-0014](adr/0014-ota-ab-partitions.md)).
 - **Secrets:** RP2350 random 256-bit key in OTP at provisioning, chip-ID HKDF as the pre-provisioning fallback, no secure element; ESP32 route: eFuse key + flash encryption. Secure boot decided later ([Wi-Fi](wifi.md#secrets-at-rest)).
 - **Clock:** [ADR-0015](adr/0015-clock-plan.md).

@@ -19,13 +19,14 @@
 #define NEUPOD_STORAGE_SERVICE_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define FILES_MAX_ENTRIES 256u /**< entries kept per directory (dirs first, then files); more are reported as truncated */
+#define FILES_MAX_ENTRIES 256u /**< entries kept per listing page (dirs first, then files); more are reported as truncated and read as the next page */
 #define FILES_NAME_LEN 64u     /**< bytes per name kept (UTF-8, cut at a character boundary) */
 
 typedef struct {
@@ -49,11 +50,26 @@ typedef struct {
 void storage_service_init(void);
 bool storage_service_ready(void);
 
+/**
+ * True when the storage task has nothing queued and no settings write is in flight (nfs write scope closed). For an orderly
+ * shutdown: wait for it (bounded), then lock writes. Reading a file that is streaming does not count as busy.
+ */
+bool storage_service_idle(void);
+
 /** Task body. */
 void storage_task(void *arg);
 
+/** Library requests (library_service.h) travel through the same queue: @p blob is at most 128 bytes, handed to library_service_handle(). */
+bool storage_post_library(const void *blob, size_t n);
+/** Playlist requests (playlist_service.h) travel through the same queue: @p blob is at most 128 bytes, handed to pls_service_handle(). */
+bool storage_post_playlist(const void *blob, size_t n);
+/** True while a request waits for the storage task: a long job (the library build) gives way to it. */
+bool storage_request_waiting(void);
+
 /** Ask for the listing of @p path (absolute, e.g. "/"). False if the request queue is full. */
 bool storage_list_request(const char *path, uint32_t seq);
+/** The same for page @p page (0 = the first) of the folder: entries page * FILES_MAX_ENTRIES onwards (the Files screen's "Load more"). */
+bool storage_list_request_page(const char *path, uint32_t seq, uint32_t page);
 /** Ask for total/free bytes of the volume (slow on a big FAT volume). */
 bool storage_space_request(uint32_t seq);
 /** Next finished request, if any. */

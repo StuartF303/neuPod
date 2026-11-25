@@ -20,7 +20,7 @@ usage: check_core1_closure.py <objdump> <elf> [--verbose] [--root=function]   (-
 import re, subprocess, sys
 from collections import deque
 
-ROOTS = ["audio_core_main", "dma_isr", "on_block"]
+ROOTS = ["audio_core_main", "dma_isr", "vclk_isr", "on_block"]
 FORBIDDEN = re.compile(
     r"^(malloc|calloc|realloc|free|_malloc_r|_free_r|_realloc_r|_calloc_r|aligned_alloc|memalign|"
     r"printf|fprintf|vprintf|vfprintf|iprintf|puts|putchar|putc|fputs|fputc|fwrite|fread|fopen|fclose|fflush|"

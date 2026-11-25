@@ -1,0 +1,16 @@
+# The big static buffers of the portable runtime go to PSRAM; the S3 has 8 MB of it and only ~340 KB of internal RAM, which
+# the task stacks, DMA strips and drivers need. The sources are shared with the RP2350 (where these are plain statics in its
+# 512 KB), so the placement is done here, by object file, not with attributes in app/.
+#   codec          the codec arena (99 KB): decoder working memory (core 1)
+#   audio_shared   the compressed-data ring (32 KB): SD reads (core 0) to the decoder (core 1)
+#   lv_mem_core_builtin   LVGL's allocator pool (192 KB): widgets, styles, layers
+#   ui             the UI's two partial-render buffers (2 x 36 KB at 600x450): LVGL draws into them, hal_display_blit() copies out
+# The PCM ring (audio_core, 32 KB), and the library buffers stay internal: they are the hot ones.
+[mapping:neupod_psram_bss]
+archive: libmain.a
+entries:
+    if ESP_ALLOW_BSS_SEG_EXTERNAL_MEMORY = y:
+        codec (extram_bss)
+        audio_shared (extram_bss)
+        lv_mem_core_builtin (extram_bss)
+        ui (extram_bss)

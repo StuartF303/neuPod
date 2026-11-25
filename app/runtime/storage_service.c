@@ -4,11 +4,15 @@
 #include <string.h>
 
 #include "nfs.h"
+#include "library_service.h"
 #include "art_service.h"
 #include "audio_engine.h"
 #include "os.h"
 #include "play_queue.h"
 #include "player.h"
+#include "playlist_service.h"
+#include "plays_store.h"
+#include "ratings_store.h"
 #include "resume.h"
 #include "settings_service.h"
 #include "settings_store.h"
@@ -18,27 +22,31 @@
 #include "track_stream.h"
 #include "wav.h"
 
-typedef enum { REQ_LIST, REQ_SPACE, REQ_PREFETCH, REQ_PLAY, REQ_STOP, REQ_VERIFY, REQ_SETTINGS_LOAD } req_kind_t;
+typedef enum { REQ_LIST, REQ_SPACE, REQ_PREFETCH, REQ_PLAY, REQ_STOP, REQ_VERIFY, REQ_SETTINGS_LOAD, REQ_LIBRARY, REQ_PLAYLIST } req_kind_t;
 
 typedef struct {
     req_kind_t kind;
     uint32_t seq; /* list/space: the caller's sequence number. REQ_PLAY: the start frame (resume), 0 = from the beginning */
+    uint32_t page; /* REQ_LIST: which FILES_MAX_ENTRIES-sized page of the folder (0 = the first) */
     char path[NFS_PATH_MAX];
 } storage_req_t;
 
 static os_queue_t *g_req_q;
 static os_queue_t *g_res_q;
-static file_entry_t g_entries[FILES_MAX_ENTRIES];
+static file_entry_t *g_entries; /* the Files listing: shares its buffer with the library reader (library_service.c) */
 
 void storage_service_init(void) {
     g_req_q = os_queue_create(sizeof(storage_req_t), 3);
     g_res_q = os_queue_create(sizeof(storage_result_t), 4);
+    library_service_init();
+    player_set_path_resolver(library_service_real_path);
+    art_service_set_resolver(library_service_resolve_for_art);
 }
 
 bool storage_service_ready(void) { return g_req_q != NULL && g_res_q != NULL; }
 
-static bool post(req_kind_t kind, const char *path, uint32_t seq) {
-    storage_req_t r = {.kind = kind, .seq = seq};
+static bool post_page(req_kind_t kind, const char *path, uint32_t seq, uint32_t page) {
+    storage_req_t r = {.kind = kind, .seq = seq, .page = page};
     if (path != NULL) {
         strncpy(r.path, path, sizeof r.path - 1);
     }
@@ -46,6 +54,9 @@ static bool post(req_kind_t kind, const char *path, uint32_t seq) {
     uint32_t wait = (kind == REQ_PLAY || kind == REQ_STOP || kind == REQ_VERIFY || kind == REQ_SETTINGS_LOAD) ? 50u : OS_NO_WAIT;
     return g_req_q != NULL && os_queue_send(g_req_q, &r, wait);
 }
+static bool post(req_kind_t kind, const char *path, uint32_t seq) { return post_page(kind, path, seq, 0); }
+bool storage_service_idle(void) { return g_req_q != NULL && !os_queue_pending(g_req_q) && !nfs_write_scope_active(); }
+
 bool storage_play_request(const char *path) { return path != NULL && post(REQ_PLAY, path, 0); }
 bool storage_play_request_at(const char *path, uint32_t frame) { return path != NULL && post(REQ_PLAY, path, frame); }
 bool storage_stop_request(void) { return post(REQ_STOP, NULL, 0); }
@@ -53,6 +64,24 @@ bool storage_settings_load_request(void) { return post(REQ_SETTINGS_LOAD, NULL, 
 bool storage_verify_request(const char *path) { return path != NULL && post(REQ_VERIFY, path, 0); }
 
 bool storage_list_request(const char *path, uint32_t seq) { return post(REQ_LIST, path, seq); }
+bool storage_list_request_page(const char *path, uint32_t seq, uint32_t page) { return post_page(REQ_LIST, path, seq, page); }
+bool storage_post_library(const void *blob, size_t n) {
+    storage_req_t r = {.kind = REQ_LIBRARY};
+    if (blob == NULL || n > 128u) {
+        return false;
+    }
+    memcpy(r.path, blob, n);
+    return g_req_q != NULL && os_queue_send(g_req_q, &r, OS_NO_WAIT);
+}
+bool storage_post_playlist(const void *blob, size_t n) {
+    storage_req_t r = {.kind = REQ_PLAYLIST};
+    if (blob == NULL || n > 128u) {
+        return false;
+    }
+    memcpy(r.path, blob, n);
+    return g_req_q != NULL && os_queue_send(g_req_q, &r, OS_NO_WAIT);
+}
+bool storage_request_waiting(void) { return g_req_q != NULL && os_queue_pending(g_req_q); }
 bool storage_space_request(uint32_t seq) { return post(REQ_SPACE, NULL, seq); }
 bool storage_prefetch_request(const char *path) { return path != NULL && post(REQ_PREFETCH, path, 0); }
 
@@ -60,7 +89,7 @@ bool storage_result_poll(storage_result_t *out) {
     return g_res_q != NULL && os_queue_recv(g_res_q, out, OS_NO_WAIT);
 }
 
-const file_entry_t *storage_list_entries(void) { return g_entries; }
+const file_entry_t *storage_list_entries(void) { return g_entries; } /* NULL until the first listing: callers read it only after a result */
 
 // Names: dirs first, then case-insensitive alphabetical.
 static int cmp_entries(const void *pa, const void *pb) {
@@ -101,13 +130,17 @@ static void copy_name(char *dst, const char *src) {
 
 static bool g_ui_listed; /* the UI has asked for a listing: g_entries may be on screen, the boot resume must not reuse it */
 
-static void list_dir(const storage_req_t *rq, storage_result_t *res) {
+__attribute__((noinline)) static void list_dir(const storage_req_t *rq, storage_result_t *res) {
     res->kind = STORAGE_RES_LIST;
     res->seq = rq->seq;
+    g_entries = library_service_take_listing(); /* closes the library reader if it had the buffer */
     uint32_t count = 0;
     bool truncated = false;
     nfs_err_t err = NFS_OK;
-    // Two passes so that "dirs first" survives the entry cap: directories, then files.
+    // Two passes so that "dirs first" survives the entry cap: directories, then files. A page after the first skips the entries the earlier pages hold
+    // (in this same order: directories, then files, each in the card's own order); each page is then sorted by name on its own.
+    const uint32_t skip = rq->page * FILES_MAX_ENTRIES;
+    uint32_t seen = 0;
     for (int pass = 0; pass < 2 && err == NFS_OK && !truncated; pass++) {
         nfs_dir_t *d;
         err = nfs_opendir(&d, rq->path);
@@ -127,6 +160,9 @@ static void list_dir(const storage_req_t *rq, storage_result_t *res) {
             }
             if (nfs_dirent_hidden(&e) || e.is_dir != (pass == 0)) {
                 continue; // hidden entries (dot names, FAT hidden / system); and the other pass's kind
+            }
+            if (seen++ < skip) {
+                continue; // an earlier page's entry
             }
             if (count >= FILES_MAX_ENTRIES) {
                 truncated = true;
@@ -189,9 +225,10 @@ static void to_player_file(const track_info_t *i, player_file_t *pf) {
     memcpy(pf->md5, i->md5, 16);
     pf->file_size = i->file_size;
     pf->start_frame = i->start_frame;
+    pf->seekable = i->seekable;
 }
 
-static void ts_started(const char *path, const track_info_t *i) {
+__attribute__((noinline)) static void ts_started(const char *path, const track_info_t *i) {
     player_file_t pf;
     to_player_file(i, &pf);
     player_file_started(&pf);
@@ -203,7 +240,7 @@ static void ts_started(const char *path, const track_info_t *i) {
 // Gapless handoff: the new track's art (the per-album cache makes a same-album change free).
 static void ts_track_changed(const char *path, const track_info_t *i) { art_service_track(path, &i->tags); }
 
-static void ts_next_announced(const track_info_t *i) {
+__attribute__((noinline)) static void ts_next_announced(const track_info_t *i) {
     player_file_t pf;
     to_player_file(i, &pf);
     player_next_announced(&pf);
@@ -211,13 +248,30 @@ static void ts_next_announced(const track_info_t *i) {
 
 static uint32_t ts_now(void) { return os_tick_ms(); }
 
-static const track_stream_ops_t k_stream_ops = {.open = ts_open, .close = ts_close, .next_track = player_next_track,
+// Gapless look-ahead: the player offers the next queue entry, which for a library queue is a handle to turn into the file.
+static bool ts_next_track(char *path, size_t n) {
+    if (!player_next_track(path, n)) {
+        return false;
+    }
+    if (pq_is_handle(path)) {
+        const char *why;
+        static char real[NFS_PATH_MAX]; // storage task only: off its 8 KB stack (the look-ahead runs deep in the feed)
+        if (!library_service_resolve(path, real, sizeof real, &why) || strlen(real) >= n) {
+            return false; // not playable: no gapless handoff, the ordinary start then reports it and the queue skips it
+        }
+        printf("player: next (gapless look-ahead) '%s'\n", real);
+        memcpy(path, real, strlen(real) + 1u);
+    }
+    return true;
+}
+
+static const track_stream_ops_t k_stream_ops = {.open = ts_open, .close = ts_close, .next_track = ts_next_track,
                                                 .next_announced = ts_next_announced, .started = ts_started, .track_changed = ts_track_changed,
-                                                .failed = player_file_failed, .now_ms = ts_now, .delay_ms = os_delay_ms};
+                                                .failed = player_file_failed, .stream_failed = player_stream_error, .now_ms = ts_now, .delay_ms = os_delay_ms};
 
 // Boot resume (resume.h): runs on this task right after the settings load. Lists the saved folder (into g_entries, so only while the UI has
 // not listed anything yet), checks the file against what was saved and hands the folder to the player, paused (or playing: setting "Resume playing on power-up" on and the record was playing).
-static void resume_boot(void) {
+__attribute__((noinline)) static void resume_boot(void) {
     resume_state_t r;
     char dir[NFS_PATH_MAX];
     const char *name;
@@ -279,7 +333,7 @@ static void resume_boot(void) {
 static bool g_wwp_off;       /* a write while playing was slow: not again this boot */
 static bool g_wwp_attempt;   /* the last quiet verdict relied on the exception */
 
-static bool settings_quiet_now(void) {
+__attribute__((noinline)) static bool settings_quiet_now(void) {
     player_info_t pi;
     player_get(&pi);
     g_wwp_attempt = false;
@@ -294,7 +348,7 @@ static bool settings_quiet_now(void) {
     return pi.state != PLAYER_PLAYING && pi.state != PLAYER_OPENING && pi.state != PLAYER_VERIFYING;
 }
 
-static void settings_poll(void) {
+__attribute__((noinline)) static void settings_poll(void) {
     static uint32_t last_ms;
     uint32_t now = os_tick_ms();
     if (now - last_ms < SETTINGS_POLL_MS / 2u) {
@@ -336,6 +390,8 @@ static bool art_yield(void *ctx) {
     return true;
 }
 
+/* Stack: storage_task's own frame stays small on purpose (the helpers above are noinline): the library build runs a few calls below it and
+ * needs every byte of RT_STACK_STORAGE (docs/storage.md "Stack and responsiveness"). */
 void storage_task(void *arg) {
     (void)arg;
     track_stream_init(&k_stream_ops);
@@ -346,6 +402,8 @@ void storage_task(void *arg) {
         if (!os_queue_recv(g_req_q, &rq, track_stream_active() ? 1u : SETTINGS_POLL_MS)) {
             track_stream_pump();
             settings_poll();
+            ratings_poll(os_tick_ms());
+            plays_poll(os_tick_ms());
             if (art_service_pending()) {
                 art_service_run(art_yield, NULL); // only when idle; it gives way to any request that arrives
             }
@@ -353,8 +411,29 @@ void storage_task(void *arg) {
         }
         storage_result_t res = {0};
         switch (rq.kind) {
-        case REQ_PLAY:
+        case REQ_PLAY: {
+            const char *why;
+            if (pq_is_handle(rq.path)) { // a library queue entry: find the file (FatFs is ours alone)
+                static char real[NFS_PATH_MAX]; // storage task only: off its stack (distinct from the look-ahead buffer)
+                if (!library_service_resolve(rq.path, real, sizeof real, &why)) {
+                    track_stream_stop(); // as a start that fails to open does: the track that was playing is no longer fed
+                    player_file_failed(why);
+                    continue;
+                }
+                printf("player: file '%s'\n", real); /* the queue log line names library tracks '' (the name is only known here) */
+                track_stream_start_at(real, false, rq.seq);
+                continue;
+            }
             track_stream_start_at(rq.path, false, rq.seq);
+            continue;
+        }
+        case REQ_LIBRARY:
+            g_ui_listed = true; /* the shared buffer is the library's now: the boot resume must not list into it */
+            library_service_handle(rq.path, sizeof rq.path);
+            continue;
+        case REQ_PLAYLIST:
+            g_ui_listed = true; /* the smart lists borrow the library reader (the shared buffer): the boot resume must not list into it */
+            pls_service_handle(rq.path, sizeof rq.path);
             continue;
         case REQ_VERIFY:
             track_stream_start(rq.path, true);

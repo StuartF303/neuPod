@@ -1,0 +1,17 @@
+# Innioasis Y2 (MT6582) — USB access for mtkclient / adb / fastboot without root.
+# Installed as /etc/udev/rules.d/51-mediatek.rules by testbed/y2/tools/setup-host.sh.
+# ID_MM_DEVICE_IGNORE stops ModemManager probing the preloader's CDC-ACM port,
+# which otherwise races mtkclient's handshake.
+
+# MediaTek BROM (0003), preloader (2000), preloader/DA (2001)
+SUBSYSTEM=="usb", ATTR{idVendor}=="0e8d", ATTR{idProduct}=="0003", MODE="0660", GROUP="plugdev", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0e8d", ATTR{idProduct}=="2000", MODE="0660", GROUP="plugdev", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0e8d", ATTR{idProduct}=="2001", MODE="0660", GROUP="plugdev", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0e8d", ENV{ID_MM_DEVICE_IGNORE}="1"
+
+# Google (adb/fastboot; also the IDs our rescue gadget may present)
+SUBSYSTEM=="usb", ATTR{idVendor}=="18d1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="18d1", ENV{ID_MM_DEVICE_IGNORE}="1"
+
+# Stock Y2 Android gadget enumerates as 0bb4:0001 (mass_storage); adb, if enabled, uses 0bb4 too
+SUBSYSTEM=="usb", ATTR{idVendor}=="0bb4", MODE="0660", GROUP="plugdev", TAG+="uaccess"

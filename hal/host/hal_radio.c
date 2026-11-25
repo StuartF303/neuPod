@@ -4,14 +4,24 @@
  * a fixed handful of devices (headsets, a speaker, a car kit whose name arrives late, a phone, an unnamed device) so
  * the UI and its tests run on a PC. Events are delivered from hal_bt_poll(), i.e. from the calling task, never from a
  * foreign thread. Times are shortened so the scripted tour reaches the interesting states quickly.
+ *
+ * Pairing (stage 2a) is simulated per device so every path can be tested: most devices pair and connect; the car kit refuses
+ * (AUTH), the phone has no A2DP sink (NO_SINK), an unnamed device and any address not in the table do not answer (NOT_FOUND).
+ * "Link keys" are kept in RAM and, when the stack was given a hal_bt_storage_t, mirrored into it as 'BTL0'..'BTL7' records in
+ * BTstack's own 28-byte layout and raw-index tags (hal_bt_storage_delete_key() works on them), so a saved device survives a restart of the simulation
+ * exactly like on the board. Like BTstack's dedicated bonding, a Pair deletes any old key for the address first.
  */
 #include <string.h>
 
+#include "hal_host.h"
 #include "hal_radio.h"
 #include "hal_system.h"
 
 #define SIM_BRING_UP_MS 250u
 #define SIM_SCAN_MS 2400u
+#define SIM_PAIR_MS 900u    /* a Pair action takes this long to reach its outcome */
+#define SIM_CONNECT_MS 500u /* ... a Connect this long */
+#define SIM_KEYS HAL_BT_KEY_SLOTS
 
 typedef struct {
     uint32_t at_ms;      /* when it is reported, relative to the scan start */
@@ -38,6 +48,53 @@ static hal_bt_state_t g_state = HAL_BT_OFF;
 static uint32_t g_t0;            /* start of bring-up or of the current scan */
 static uint32_t g_reported;      /* devices reported so far in this scan */
 static bool g_named[N_DEVS];
+static const hal_bt_storage_t *g_storage;
+
+/* stream (stage 2b) */
+#define SIM_STREAM_OPEN_MS 250u  /* AVDTP set-up after CONNECTED */
+#define SIM_STREAM_START_MS 120u /* start command to the first packet */
+static hal_bt_stream_state_t g_stream = HAL_BT_STREAM_CLOSED;
+static hal_bt_fail_t g_stream_reason = HAL_BT_FAIL_NONE;
+static hal_bt_codec_t g_codec;
+static uint32_t g_stream_t0;
+static bool g_start_pending;
+static hal_bt_pcm_source_t g_src;
+static bool g_have_src;
+static hal_bt_stats_t g_stats;
+static uint32_t g_pace_t0, g_pace_frac; /* ms of the last consumption, and the sub-frame remainder (in 1/1000 frame) */
+static uint32_t g_sbc_frames_frac;
+static hal_bt_fail_t g_force_stream_fail;
+static bool g_unreachable;          /* hal_host_bt_set_unreachable(): a Connect finds nobody (the headset is in its case) */
+static uint32_t g_connects;         /* Connect calls accepted */
+static uint32_t g_ignore_starts;    /* hal_host_bt_ignore_starts(): this many Start requests get no answer from the headset */
+
+/* AVRCP (stage 2c): the simulated headset has absolute volume unless it is the speaker or hal_host_bt_set_no_absolute_volume() says so. The first volume is
+ * reported SIM_AVRCP_MS after CONNECTED (the headset opens AVRCP once the link is up), a Set Absolute Volume is answered SIM_VOLUME_ANSWER_MS later. */
+#define SIM_AVRCP_MS 150u
+#define SIM_VOLUME_ANSWER_MS 30u
+static bool g_force_no_abs;
+static int g_initial_vol = -1;      /* hal_host_bt_set_initial_volume(): the volume a headset reports first (-1: 60, about 47 %; the WH-1000XM5 starts at 0) */
+static bool g_abs_cap;              /* the headset of this link has absolute volume */
+static bool g_avrcp_pending;        /* CONNECTED, the first volume report is still to come */
+static uint32_t g_avrcp_t0;
+static bool g_vol_known;
+static uint8_t g_vol;
+static bool g_ans_pending;
+static uint32_t g_ans_t0;
+static uint32_t g_vol_sets;         /* hal_bt_volume_set() calls that were accepted */
+static hal_bt_track_t g_track;
+static bool g_track_set;
+static uint32_t g_track_calls;
+
+/* link */
+static uint32_t g_attempt;
+static hal_bt_link_state_t g_link = HAL_BT_LINK_DISCONNECTED;
+static hal_bt_fail_t g_reason = HAL_BT_FAIL_NONE;
+static hal_bt_device_t g_peer;
+static uint32_t g_link_t0;
+static bool g_accepting;
+static uint8_t g_keys[SIM_KEYS][6];
+static bool g_key_used[SIM_KEYS];
 
 static void emit_state(hal_bt_state_t s) {
     g_state = s;
@@ -63,15 +120,171 @@ static void emit_dev(uint32_t i, bool with_name) {
     g_cb(&ev, g_ctx);
 }
 
+static bool is_zero_addr(const uint8_t a[6]) {
+    static const uint8_t z[6] = {0};
+    return memcmp(a, z, 6) == 0;
+}
+
+static int key_index(const uint8_t a[6]) {
+    for (uint32_t i = 0; i < SIM_KEYS; i++) {
+        if (g_key_used[i] && memcmp(g_keys[i], a, 6) == 0) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+static void key_add(const uint8_t a[6]) {
+    if (key_index(a) >= 0) {
+        return;
+    }
+    for (uint32_t i = 0; i < SIM_KEYS; i++) {
+        if (!g_key_used[i]) {
+            memcpy(g_keys[i], a, 6);
+            g_key_used[i] = true;
+            if (g_storage != NULL) {
+                uint8_t rec[HAL_BT_KEY_RECORD_LEN] = {0};
+                memcpy(rec + HAL_BT_KEY_ADDR_OFFSET, a, 6);
+                rec[HAL_BT_KEY_RECORD_LEN - 1] = 4; /* a "type" byte; the simulator never uses the key */
+                (void)g_storage->put(g_storage->ctx, HAL_BT_KEY_TAG(i), rec, sizeof rec);
+            }
+            return;
+        }
+    }
+}
+
+static void key_del(const uint8_t a[6]) {
+    int i = key_index(a);
+    if (i >= 0) {
+        g_key_used[i] = false;
+        if (g_storage != NULL) {
+            g_storage->del(g_storage->ctx, HAL_BT_KEY_TAG((uint32_t)i));
+        }
+    }
+}
+
+static void keys_load(void) {
+    memset(g_key_used, 0, sizeof g_key_used);
+    if (g_storage == NULL) {
+        return;
+    }
+    for (uint32_t i = 0; i < SIM_KEYS; i++) {
+        uint8_t rec[HAL_BT_KEY_RECORD_LEN];
+        if (g_storage->get(g_storage->ctx, HAL_BT_KEY_TAG(i), rec, sizeof rec) >= (int)(HAL_BT_KEY_ADDR_OFFSET + 6u)) {
+            memcpy(g_keys[i], rec + HAL_BT_KEY_ADDR_OFFSET, 6);
+            g_key_used[i] = true;
+        }
+    }
+}
+
+static void emit_stream(hal_bt_stream_state_t st, hal_bt_fail_t reason) {
+    g_stream = st;
+    g_stream_reason = st == HAL_BT_STREAM_FAILED ? reason : HAL_BT_FAIL_NONE;
+    if (g_cb != NULL) {
+        hal_bt_event_t ev = {.type = HAL_BT_EVT_STREAM, .state = g_state, .dev = g_peer, .stream = st, .reason = g_stream_reason};
+        if (st == HAL_BT_STREAM_OPEN || st == HAL_BT_STREAM_STREAMING || st == HAL_BT_STREAM_SUSPENDED) {
+            ev.codec = g_codec;
+        }
+        g_cb(&ev, g_ctx);
+    }
+}
+
+/* What the simulated headset negotiates: the WH-1000XM5 accepts the high bitpool (SBC-XQ), everything else is plain SBC. */
+static void sim_codec_for(const uint8_t addr[6]) {
+    memset(&g_codec, 0, sizeof g_codec);
+    g_codec = (hal_bt_codec_t){.codec = HAL_BT_CODEC_SBC, .rate = 44100, .channels = 2, .mode = HAL_BT_MODE_JOINT_STEREO,
+                               .bitpool_min = 2, .bitpool_max = 53, .bitpool = 53, .kbps = 328};
+    if (addr[0] == 0x00 && addr[1] == 0x1B) {
+        g_codec.codec = HAL_BT_CODEC_SBC_XQ;
+        g_codec.bitpool_max = g_codec.bitpool = 76;
+        g_codec.kbps = 455;
+    }
+}
+
+/* The headset of this link: the speaker has no absolute volume; the WH-1000XM5 starts silent (like an AirPods Pro that was left at 0 %), the others at 60 (about 47 %: under the connect cap). */
+static void sim_avrcp_for(const uint8_t addr[6]) {
+    bool speaker = addr[0] == 0x70 && addr[1] == 0x99;
+    g_abs_cap = !speaker && !g_force_no_abs;
+    g_vol = addr[0] == 0x00 && addr[1] == 0x1B ? 0 : g_initial_vol >= 0 ? (uint8_t)g_initial_vol : 60;
+    g_vol_known = false;
+    g_ans_pending = false;
+    g_avrcp_pending = true;
+    g_avrcp_t0 = hal_millis();
+}
+
+static void emit_volume(void) {
+    if (g_cb != NULL) {
+        hal_bt_event_t ev = {.type = HAL_BT_EVT_VOLUME, .state = g_state, .dev = g_peer, .volume = g_vol};
+        g_cb(&ev, g_ctx);
+    }
+}
+
+static void stream_reset_stats(void) {
+    memset(&g_stats, 0, sizeof g_stats);
+    g_stats.link_quality = HAL_BT_RSSI_UNKNOWN;
+    g_pace_frac = 0;
+    g_sbc_frames_frac = 0;
+}
+
+static void emit_link(hal_bt_link_state_t s, hal_bt_fail_t reason) {
+    if (s != HAL_BT_LINK_CONNECTED && g_stream != HAL_BT_STREAM_CLOSED) {
+        g_start_pending = false;
+        emit_stream(HAL_BT_STREAM_CLOSED, HAL_BT_FAIL_NONE); /* the audio connection goes with the link; announced first */
+    }
+    if (s != HAL_BT_LINK_CONNECTED) {
+        g_vol_known = false; /* AVRCP goes with the link */
+        g_avrcp_pending = false;
+        g_ans_pending = false;
+    }
+    g_link = s;
+    g_reason = s == HAL_BT_LINK_FAILED ? reason : HAL_BT_FAIL_NONE;
+    if (s != HAL_BT_LINK_PAIRING) {
+        g_accepting = false; /* the Pair action is over (or this was a Connect) */
+    }
+    if (g_cb != NULL) {
+        hal_bt_event_t ev = {.type = HAL_BT_EVT_LINK, .state = g_state, .dev = g_peer, .link = s, .reason = g_reason, .attempt = g_attempt};
+        g_cb(&ev, g_ctx);
+    }
+    if (s == HAL_BT_LINK_CONNECTED) { /* the stream opens by itself once the link is up */
+        sim_codec_for(g_peer.addr);
+        sim_avrcp_for(g_peer.addr);
+        stream_reset_stats();
+        g_stream_t0 = hal_millis();
+        emit_stream(HAL_BT_STREAM_OPENING, HAL_BT_FAIL_NONE);
+    }
+}
+
 hal_status_t hal_bt_init(hal_bt_event_fn cb, void *ctx, const hal_bt_storage_t *storage) {
-    (void)storage;
     if (g_state != HAL_BT_OFF && g_state != HAL_BT_FAILED) {
         return HAL_EBUSY;
     }
     g_cb = cb;
     g_ctx = ctx;
+    g_storage = storage;
+    keys_load();
     g_t0 = hal_millis();
     emit_state(HAL_BT_STARTING);
+    return HAL_OK;
+}
+
+hal_status_t hal_bt_power(bool on) {
+    if (g_cb == NULL) {
+        return HAL_EINVAL; /* hal_bt_init() never ran */
+    }
+    if (on) {
+        if (g_state == HAL_BT_OFF || g_state == HAL_BT_FAILED) {
+            g_t0 = hal_millis();
+            emit_state(HAL_BT_STARTING); /* hal_bt_poll() brings it up after the simulated delay */
+        }
+        return HAL_OK;
+    }
+    if (g_state == HAL_BT_SCANNING) {
+        hal_bt_inquiry_stop();
+    }
+    hal_bt_disconnect();
+    if (g_state != HAL_BT_OFF) {
+        emit_state(HAL_BT_OFF);
+    }
     return HAL_OK;
 }
 
@@ -94,6 +307,9 @@ hal_status_t hal_bt_inquiry_start(uint8_t duration_s) {
     if (g_state != HAL_BT_ON) {
         return HAL_ENODEV;
     }
+    if (g_link == HAL_BT_LINK_PAIRING || g_link == HAL_BT_LINK_CONNECTING) {
+        return HAL_EBUSY; /* an inquiry would starve the link set-up */
+    }
     g_t0 = hal_millis();
     g_reported = 0;
     memset(g_named, 0, sizeof g_named);
@@ -112,7 +328,11 @@ void hal_bt_inquiry_stop(void) {
     }
 }
 
+static void link_poll(void);
+static void stream_poll(void);
+
 void hal_bt_poll(void) {
+    link_poll();
     uint32_t dt = hal_millis() - g_t0;
     if (g_state == HAL_BT_STARTING) {
         if (dt >= SIM_BRING_UP_MS) {
@@ -140,12 +360,349 @@ void hal_bt_poll(void) {
     }
 }
 
-hal_status_t hal_radio_a2dp_connect(const uint8_t addr[6]) {
-    (void)addr;
-    return HAL_ENOTSUP; /* stage 2 */
+/* ---- pairing and the connection ---- */
+
+/* What the simulated remote does for @p addr: 0 = works, else the failure reason. */
+static hal_bt_fail_t sim_outcome(const uint8_t addr[6]) {
+    for (uint32_t i = 0; i < N_DEVS; i++) {
+        if (memcmp(addr, k_devs[i].addr, 6) == 0) {
+            if (k_devs[i].cod == 0x240404 || k_devs[i].cod == 0x240414) {
+                return HAL_BT_FAIL_NONE;
+            }
+            if (k_devs[i].cod == 0x200420) {
+                return HAL_BT_FAIL_AUTH; /* the car kit refuses to pair */
+            }
+            if (k_devs[i].name == NULL) {
+                return HAL_BT_FAIL_NOT_FOUND; /* does not answer */
+            }
+            return HAL_BT_FAIL_NO_SINK; /* the phone */
+        }
+    }
+    return HAL_BT_FAIL_NOT_FOUND;
 }
 
-void hal_radio_a2dp_disconnect(void) {}
+static bool link_idle(void) { return g_link == HAL_BT_LINK_DISCONNECTED || g_link == HAL_BT_LINK_FAILED; }
+
+static hal_status_t link_precheck(const uint8_t addr[6]) {
+    if (addr == NULL || is_zero_addr(addr)) {
+        return HAL_EINVAL;
+    }
+    if (g_state == HAL_BT_SCANNING || !link_idle()) {
+        return HAL_EBUSY;
+    }
+    if (g_state != HAL_BT_ON) {
+        return HAL_ENODEV;
+    }
+    return HAL_OK;
+}
+
+hal_status_t hal_bt_pair(const hal_bt_device_t *dev) {
+    if (dev == NULL) {
+        return HAL_EINVAL;
+    }
+    hal_status_t st = link_precheck(dev->addr);
+    if (st != HAL_OK) {
+        return st;
+    }
+    g_attempt++;
+    g_peer = *dev;
+    g_link_t0 = hal_millis();
+    key_del(dev->addr); /* bonding starts from a clean slate, as in BTstack */
+    g_accepting = true;
+    emit_link(HAL_BT_LINK_PAIRING, HAL_BT_FAIL_NONE);
+    return HAL_OK;
+}
+
+hal_status_t hal_bt_connect(const uint8_t addr[6]) {
+    hal_status_t st = link_precheck(addr);
+    if (st != HAL_OK) {
+        return st;
+    }
+    g_attempt++;
+    g_connects++;
+    memset(&g_peer, 0, sizeof g_peer);
+    memcpy(g_peer.addr, addr, 6);
+    g_peer.rssi = HAL_BT_RSSI_UNKNOWN;
+    for (uint32_t i = 0; i < N_DEVS; i++) { /* the sim "knows" the names of its devices */
+        if (memcmp(addr, k_devs[i].addr, 6) == 0) {
+            g_peer.cod = k_devs[i].cod;
+            g_peer.audio_sink = ((k_devs[i].cod >> 8) & 0x1Fu) == HAL_BT_COD_MAJOR_AUDIO_VIDEO;
+            if (k_devs[i].name != NULL) {
+                strncpy(g_peer.name, k_devs[i].name, HAL_BT_NAME_MAX);
+            }
+        }
+    }
+    g_link_t0 = hal_millis();
+    emit_link(HAL_BT_LINK_CONNECTING, HAL_BT_FAIL_NONE);
+    return HAL_OK;
+}
+
+void hal_bt_disconnect(void) {
+    if (g_link == HAL_BT_LINK_PAIRING || g_link == HAL_BT_LINK_CONNECTING || g_link == HAL_BT_LINK_CONNECTED) {
+        emit_link(HAL_BT_LINK_DISCONNECTED, HAL_BT_FAIL_NONE);
+    }
+}
+
+hal_status_t hal_bt_forget(const uint8_t addr[6]) {
+    if (addr == NULL) {
+        return HAL_EINVAL;
+    }
+    if (g_state == HAL_BT_OFF || g_state == HAL_BT_STARTING || g_state == HAL_BT_FAILED) {
+        return HAL_ENODEV; /* no stack: the caller deletes the key from the storage */
+    }
+    if (g_link != HAL_BT_LINK_DISCONNECTED && g_link != HAL_BT_LINK_FAILED && memcmp(addr, g_peer.addr, 6) == 0) {
+        hal_bt_disconnect();
+    }
+    key_del(addr);
+    return HAL_OK;
+}
+
+hal_bt_link_state_t hal_bt_link_state(void) { return g_link; }
+uint32_t hal_bt_link_attempt(void) { return g_attempt; }
+hal_bt_fail_t hal_bt_link_reason(void) { return g_link == HAL_BT_LINK_FAILED ? g_reason : HAL_BT_FAIL_NONE; }
+
+bool hal_bt_link_device(hal_bt_device_t *out) {
+    if (g_link == HAL_BT_LINK_DISCONNECTED) {
+        return false;
+    }
+    *out = g_peer;
+    return true;
+}
+
+bool hal_bt_accepting(void) { return g_accepting; }
+
+void hal_host_bt_drop_link(void) {
+    if (g_link == HAL_BT_LINK_CONNECTED) {
+        emit_link(HAL_BT_LINK_FAILED, HAL_BT_FAIL_LINK_LOST);
+    }
+}
+
+void hal_host_bt_remote_hangup(void) {
+    if (g_link == HAL_BT_LINK_CONNECTED) {
+        emit_link(HAL_BT_LINK_DISCONNECTED, HAL_BT_FAIL_NONE);
+    } else if (g_link == HAL_BT_LINK_PAIRING) {
+        emit_link(HAL_BT_LINK_FAILED, HAL_BT_FAIL_BUSY);
+    } else if (g_link == HAL_BT_LINK_CONNECTING) {
+        emit_link(HAL_BT_LINK_FAILED, HAL_BT_FAIL_NOT_FOUND);
+    }
+}
+
+static void avrcp_poll(void) {
+    uint32_t now = hal_millis();
+    if (g_link != HAL_BT_LINK_CONNECTED) {
+        return;
+    }
+    if (g_avrcp_pending && now - g_avrcp_t0 >= SIM_AVRCP_MS) {
+        g_avrcp_pending = false;
+        if (g_abs_cap) {
+            g_vol_known = true;
+            emit_volume();
+        }
+    }
+    if (g_ans_pending && now - g_ans_t0 >= SIM_VOLUME_ANSWER_MS) {
+        g_ans_pending = false;
+        if (g_vol_known) {
+            emit_volume();
+        }
+    }
+}
+
+static void link_poll(void) {
+    stream_poll();
+    avrcp_poll();
+    uint32_t dt = hal_millis() - g_link_t0;
+    if (g_link == HAL_BT_LINK_PAIRING && dt >= SIM_PAIR_MS) {
+        hal_bt_fail_t r = sim_outcome(g_peer.addr);
+        if (r == HAL_BT_FAIL_NONE || r == HAL_BT_FAIL_NO_SINK) {
+            key_add(g_peer.addr); /* authentication succeeded before the SDP check: the key is kept even without a sink */
+        }
+        emit_link(r == HAL_BT_FAIL_NONE ? HAL_BT_LINK_CONNECTED : HAL_BT_LINK_FAILED, r);
+    } else if (g_link == HAL_BT_LINK_CONNECTING && dt >= SIM_CONNECT_MS) {
+        hal_bt_fail_t r = g_unreachable ? HAL_BT_FAIL_NOT_FOUND : sim_outcome(g_peer.addr);
+        if (r == HAL_BT_FAIL_NONE && key_index(g_peer.addr) < 0) {
+            r = HAL_BT_FAIL_AUTH; /* the key was forgotten */
+        }
+        emit_link(r == HAL_BT_FAIL_NONE ? HAL_BT_LINK_CONNECTED : HAL_BT_LINK_FAILED, r);
+    }
+}
+
+/* ---- the audio stream ---- */
+
+void hal_bt_set_pcm_source(const hal_bt_pcm_source_t *src) {
+    g_have_src = src != NULL;
+    if (src != NULL) {
+        g_src = *src;
+    }
+}
+
+hal_status_t hal_bt_stream_open(void) {
+    if (g_link != HAL_BT_LINK_CONNECTED) {
+        return HAL_ENODEV;
+    }
+    if (g_stream != HAL_BT_STREAM_CLOSED && g_stream != HAL_BT_STREAM_FAILED) {
+        return HAL_EBUSY;
+    }
+    g_stream_t0 = hal_millis();
+    emit_stream(HAL_BT_STREAM_OPENING, HAL_BT_FAIL_NONE);
+    return HAL_OK;
+}
+
+hal_status_t hal_bt_stream_start(void) {
+    if (g_stream == HAL_BT_STREAM_STREAMING) {
+        return HAL_OK;
+    }
+    if (g_stream != HAL_BT_STREAM_OPEN && g_stream != HAL_BT_STREAM_SUSPENDED) {
+        return HAL_ENODEV;
+    }
+    if (g_ignore_starts > 0) {
+        g_ignore_starts--; /* the request goes out, the headset says nothing */
+        return HAL_OK;
+    }
+    g_start_pending = true;
+    g_stream_t0 = hal_millis();
+    return HAL_OK;
+}
+
+void hal_bt_stream_suspend(void) {
+    g_start_pending = false;
+    if (g_stream == HAL_BT_STREAM_STREAMING) {
+        emit_stream(HAL_BT_STREAM_SUSPENDED, HAL_BT_FAIL_NONE);
+    }
+}
+
+void hal_bt_stream_close(void) {
+    g_start_pending = false;
+    if (g_stream != HAL_BT_STREAM_CLOSED) {
+        emit_stream(HAL_BT_STREAM_CLOSED, HAL_BT_FAIL_NONE);
+    }
+}
+
+hal_bt_stream_state_t hal_bt_stream_state(void) { return g_stream; }
+hal_bt_fail_t hal_bt_stream_reason(void) { return g_stream == HAL_BT_STREAM_FAILED ? g_stream_reason : HAL_BT_FAIL_NONE; }
+
+bool hal_bt_stream_codec(hal_bt_codec_t *out) {
+    if (g_stream != HAL_BT_STREAM_OPEN && g_stream != HAL_BT_STREAM_STREAMING && g_stream != HAL_BT_STREAM_SUSPENDED) {
+        return false;
+    }
+    *out = g_codec;
+    return true;
+}
+
+void hal_bt_stats(hal_bt_stats_t *out) { *out = g_stats; }
+
+/* ---- AVRCP: volume, keys, track information ---- */
+
+bool hal_bt_volume_supported(void) { return g_link == HAL_BT_LINK_CONNECTED && g_vol_known; }
+int hal_bt_volume_get(void) { return hal_bt_volume_supported() ? (int)g_vol : -1; }
+
+hal_status_t hal_bt_volume_set(uint8_t volume) {
+    if (!hal_bt_volume_supported()) {
+        return HAL_ENODEV;
+    }
+    g_vol = volume > HAL_BT_VOLUME_MAX ? (uint8_t)HAL_BT_VOLUME_MAX : volume;
+    g_vol_sets++;
+    g_ans_pending = true;
+    g_ans_t0 = hal_millis();
+    return HAL_OK;
+}
+
+bool hal_bt_track_info(const hal_bt_track_t *info) {
+    g_track_calls++;
+    g_track_set = info != NULL;
+    if (info != NULL) {
+        g_track = *info;
+    }
+    return true;
+}
+
+void hal_host_bt_set_no_absolute_volume(bool on) { g_force_no_abs = on; }
+void hal_host_bt_set_initial_volume(int volume) { g_initial_vol = volume; }
+
+void hal_host_bt_headset_volume(uint8_t volume) {
+    if (!hal_bt_volume_supported()) {
+        return;
+    }
+    g_vol = volume > HAL_BT_VOLUME_MAX ? (uint8_t)HAL_BT_VOLUME_MAX : volume;
+    emit_volume();
+}
+
+void hal_host_bt_headset_key(hal_bt_key_t key) {
+    if (g_link != HAL_BT_LINK_CONNECTED || g_cb == NULL) {
+        return;
+    }
+    hal_bt_event_t ev = {.type = HAL_BT_EVT_KEY, .state = g_state, .dev = g_peer, .key = key};
+    g_cb(&ev, g_ctx);
+}
+
+bool hal_host_bt_track_info(hal_bt_track_t *out, uint32_t *calls) {
+    if (calls != NULL) {
+        *calls = g_track_calls;
+    }
+    if (out != NULL && g_track_set) {
+        *out = g_track;
+    }
+    return g_track_set;
+}
+
+uint32_t hal_host_bt_volume_sets(void) { return g_vol_sets; }
+
+void hal_host_bt_fail_next_stream(hal_bt_fail_t reason) { g_force_stream_fail = reason; }
+void hal_host_bt_set_unreachable(bool on) { g_unreachable = on; }
+uint32_t hal_host_bt_connect_count(void) { return g_connects; }
+void hal_host_bt_ignore_starts(uint32_t n) { g_ignore_starts = n; }
+
+/* Consume the PCM ring at the real rate while STREAMING, like a headset would (the encoder side of the real adapter). */
+static void stream_poll(void) {
+    uint32_t now = hal_millis();
+    if (g_link != HAL_BT_LINK_CONNECTED) {
+        return;
+    }
+    if (g_stream == HAL_BT_STREAM_OPENING && now - g_stream_t0 >= SIM_STREAM_OPEN_MS) {
+        if (g_force_stream_fail != HAL_BT_FAIL_NONE) {
+            hal_bt_fail_t r = g_force_stream_fail;
+            g_force_stream_fail = HAL_BT_FAIL_NONE;
+            emit_stream(HAL_BT_STREAM_FAILED, r);
+        } else {
+            emit_stream(HAL_BT_STREAM_OPEN, HAL_BT_FAIL_NONE);
+        }
+    } else if (g_start_pending && now - g_stream_t0 >= SIM_STREAM_START_MS) {
+        g_start_pending = false;
+        g_pace_t0 = now;
+        g_pace_frac = 0;
+        emit_stream(HAL_BT_STREAM_STREAMING, HAL_BT_FAIL_NONE);
+    } else if (g_stream == HAL_BT_STREAM_STREAMING) {
+        uint32_t dt = now - g_pace_t0;
+        g_pace_t0 = now;
+        uint32_t milli = dt * g_codec.rate + g_pace_frac; /* frames x 1000 */
+        uint32_t want = milli / 1000u;
+        g_pace_frac = milli % 1000u;
+        if (g_have_src && want > 0) {
+            int16_t buf[256 * 2];
+            uint32_t got_total = 0;
+            while (got_total < want) {
+                uint32_t n = want - got_total > 256u ? 256u : want - got_total;
+                uint32_t got = g_src.read(g_src.ctx, buf, n);
+                got_total += got;
+                if (got < n) {
+                    if (g_src.active == NULL || g_src.active(g_src.ctx)) {
+                        g_stats.underruns++; /* the encoder wanted audio and the ring had none (once per dry spell would be kinder; the sim is blunt) */
+                    }
+                    break;
+                }
+            }
+            uint32_t f = got_total * 1000u + g_sbc_frames_frac; /* SBC frames of 128 samples, in 1/1000 */
+            g_stats.frames_encoded += f / 128000u;
+            g_sbc_frames_frac = f % 128000u;
+            g_stats.packets_sent = g_stats.frames_encoded / 5u;
+        }
+    }
+}
+
+void hal_host_bt_stream_dropped_by_headset(void) {
+    if (g_stream == HAL_BT_STREAM_STREAMING || g_stream == HAL_BT_STREAM_OPEN || g_stream == HAL_BT_STREAM_SUSPENDED) {
+        emit_stream(HAL_BT_STREAM_CLOSED, HAL_BT_FAIL_NONE);
+    }
+}
 
 /* ============================ Wi-Fi simulation ============================ */
 /* Scan "finds" five networks after a moment; a join succeeds for any of them with a non-empty password except "wrongpass"
@@ -178,6 +735,8 @@ static hal_http_done_fn g_hdone;
 static void *g_hctx;
 static uint32_t g_h_t0, g_h_sent;
 #define SIM_HTTP_BYTES (2u * 1024u * 1024u)
+
+bool hal_wifi_present(void) { return true; }
 
 hal_status_t hal_wifi_start(void) {
     g_wifi_on = true;

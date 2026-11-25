@@ -318,6 +318,7 @@ void settings_get_status(settings_status_t *out) {
 void settings_test_set_power_loss_step(int step) { g_crash_step = step; }
 void settings_test_fail_next_reread(void) { g_test_fault = 1; }
 void settings_test_ioerr_next_reread(void) { g_test_fault = 2; }
+void settings_test_bump_generation(void) { g_generation++; }
 
 static bool power_lost_at(int step) { return g_crash_step == step; }
 
@@ -409,6 +410,8 @@ int settings_flush(void) {
         g_active = target;
         g_saves++;
         g_fail_streak = 0;
+    } else if (e == NFS_ERR_BUSY) {
+        g_dirty = true; /* someone else (the library scan) holds the write scope: nothing failed, try again next tick */
     } else {
         g_dirty = true;
         g_fail_total++;

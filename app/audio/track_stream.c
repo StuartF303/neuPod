@@ -64,6 +64,10 @@ static const char *trk_open(trk_t *t, const char *path, bool verify, uint64_t fr
     if (fail != NULL) {
         return fail;
     }
+    if (meta_tags_ext() != NULL) { // the library scanner has the parser hooks (meta_set_scratch / meta_set_tags_ext): never share them
+        g_ops->close(rctx);
+        return "Library is updating";
+    }
     meta_set_scratch(g_chunk, sizeof g_chunk); // header parsing borrows the chunk buffer: no feed step is running now
     fail = track_feed_open(&t->feed, path, size, rd, rctx, verify, &t->info);
     if (fail != NULL) {
@@ -164,7 +168,7 @@ static void stream_seek(uint64_t off) {
 static void stream_error(const char *msg) {
     track_stream_stop();
     (void)audio_stop();
-    g_ops->failed(msg);
+    (g_ops->stream_failed != NULL ? g_ops->stream_failed : g_ops->failed)(msg);
 }
 
 // The current track is completely fed. With a successor announced its bytes follow at once; otherwise this was the last one.

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "input_events.h"
+#include "runtime_config.h"
 #include "unit.h"
 
 static hal_wheel_state st(uint8_t buttons, uint8_t pos, bool touched) {
@@ -59,11 +60,100 @@ TEST(console_keys) {
     ASSERT_EQ(0, input_events_from_key('\r', ev, 1)); // not enough room for press+release
 }
 
+/* ---- the hand-over to the UI queue (UI-6): a fake bounded queue stands in for the RTOS queue ---- */
+typedef struct {
+    input_event_t ev[256];
+    size_t n, cap;
+} fake_q_t;
+
+static bool fq_send(void *ctx, const input_event_t *e) {
+    fake_q_t *q = ctx;
+    if (q->n >= q->cap) {
+        return false;
+    }
+    q->ev[q->n++] = *e;
+    return true;
+}
+
+static void burst(input_pump_t *p, fake_q_t *q, int presses, int key) {
+    for (int i = 0; i < presses; i++) {
+        input_event_t ev[2];
+        input_pump_send(p, fq_send, q, ev, input_events_from_key(key, ev, 2));
+    }
+}
+
+TEST(a_burst_of_presses_fits_the_queue_depth_of_the_runtime) {
+    /* 32 Menu presses (64 events) arriving between two UI passes: nothing may be lost at the depth the runtime uses */
+    input_pump_t p;
+    input_pump_init(&p);
+    fake_q_t q = {.cap = RT_INPUT_QUEUE_LEN};
+    burst(&p, &q, 32, 'm');
+    ASSERT_EQ(0, p.dropped);
+    ASSERT_EQ(64, q.n);
+    /* the old depth of 16 lost presses 9 and later (the bench symptom): the counter now says so */
+    input_pump_t old;
+    input_pump_init(&old);
+    fake_q_t small = {.cap = 16};
+    burst(&old, &small, 12, 'm');
+    ASSERT_EQ(16, small.n);
+    ASSERT_EQ(8, old.dropped);
+}
+
+TEST(the_queue_depth_covers_a_uart_burst_with_headroom) {
+    ASSERT_TRUE(RT_INPUT_QUEUE_LEN >= 64u);
+}
+
+TEST(power_and_switch_edges_are_retried_until_the_queue_takes_them) {
+    input_pump_t p;
+    input_pump_init(&p);
+    fake_q_t q = {.cap = 0}; /* completely full */
+    input_pump_levels(&p, fq_send, &q, true, HAL_HOLD_SWITCH_ON);
+    ASSERT_EQ(0, q.n);
+    ASSERT_EQ(0, p.dropped); /* a level is not "dropped": it is still owed */
+    q.cap = 1;
+    input_pump_levels(&p, fq_send, &q, true, HAL_HOLD_SWITCH_ON);
+    ASSERT_EQ(1, q.n);
+    ASSERT_EQ(INPUT_POWER_DOWN, q.ev[0].type);
+    q.cap = 8;
+    input_pump_levels(&p, fq_send, &q, true, HAL_HOLD_SWITCH_ON);
+    ASSERT_EQ(2, q.n);
+    ASSERT_EQ(INPUT_HOLD_SWITCH, q.ev[1].type);
+    ASSERT_EQ(1, q.ev[1].steps);
+    input_pump_levels(&p, fq_send, &q, true, HAL_HOLD_SWITCH_ON); /* nothing changed: nothing sent */
+    ASSERT_EQ(2, q.n);
+    input_pump_levels(&p, fq_send, &q, false, HAL_HOLD_SWITCH_OFF);
+    ASSERT_EQ(4, q.n);
+    ASSERT_EQ(INPUT_POWER_UP, q.ev[2].type);
+    ASSERT_EQ(0, q.ev[3].steps);
+}
+
+TEST(a_platform_without_a_switch_or_power_key_sends_nothing) {
+    input_pump_t p;
+    input_pump_init(&p);
+    fake_q_t q = {.cap = 8};
+    for (int i = 0; i < 100; i++) {
+        input_pump_levels(&p, fq_send, &q, false, HAL_HOLD_SWITCH_NONE);
+    }
+    ASSERT_EQ(0, q.n);
+}
+
+TEST(the_console_key_l_toggles_hold) {
+    input_event_t ev[2];
+    ASSERT_EQ(1, input_events_from_key('l', ev, 2));
+    ASSERT_EQ(INPUT_HOLD_TOGGLE, ev[0].type);
+    ASSERT_EQ(0, input_events_from_key('l', ev, 0));
+}
+
 int main(void) {
     RUN(button_edges);
     RUN(scroll_shortest_way_round);
     RUN(no_scroll_when_finger_lands);
     RUN(invalid_frame_and_limit);
     RUN(console_keys);
+    RUN(a_burst_of_presses_fits_the_queue_depth_of_the_runtime);
+    RUN(the_queue_depth_covers_a_uart_burst_with_headroom);
+    RUN(power_and_switch_edges_are_retried_until_the_queue_takes_them);
+    RUN(a_platform_without_a_switch_or_power_key_sends_nothing);
+    RUN(the_console_key_l_toggles_hold);
     return RESULT();
 }

@@ -66,6 +66,55 @@ From `wiring-phase1.md` (3.3 V, DAT0-DAT3 must be consecutive GPIOs, CLK is DAT0
 - **Stack:** the main stack is 4 KB for the storage test (the most core 0's scratch RAM bank can
   hold); the lowest free stack seen is printed after each test.
 
+## Playlists, play counts and On-The-Go (design review LB-7)
+
+Two files besides `ratings.bin`, both written by the storage task under the same nfs write scope (`/.neupod` only), the same hardware write lock discipline, and always through a temp file that is synced and then renamed over the old one (the card does not rename over a file, so the old one is unlinked first; a power cut leaves the old file, or a complete temp file that the next read picks up; a partial temp file fails its check and is ignored). Only the builds with `NEUPOD_ART_HIRES` (hosted, Y2, PSRAM boards) keep them; the frozen Pico 2 W compiles them out.
+
+| File | What | Format | Card refuses writes |
+| --- | --- | --- | --- |
+| `/.neupod/plays.bin` (`plays_store.[ch]`) | counted plays and "last played" per track, with the path, title and artist the smart lists show | binary: `NPPL`, version 1, serial, count, entries (key = path + size hash as for ratings, plays u16, last u32, stamp u32, three length-prefixed strings), CRC-32. 128 entries; the fewest played goes first, a rated one last | RAM only, retried every 30 s (`plays_persistent()`) |
+| `/.neupod/otg.m3u8` (`playlist_service.c`) | On-The-Go | an ordinary UTF-8 playlist (`#EXTM3U`, `#EXTINF:secs,Artist - Title`, absolute path), ending in `# end`; at most 100 entries; add, remove and clear rewrite the whole file | the add says "Card is write-protected" (nothing is kept in RAM) |
+
+A play is counted once per track start when half of it was actually heard (time spent playing, so a seek does not count), 30 s if its length is unknown, or when it ends by itself after 3 s (`play_tracker.h`). Paths of 96 bytes or more are not tracked in `plays.bin`. Ratings stay in `ratings.bin` (a hash): Top rated lists the tracks the plays store knows, which a rating of four stars or more adds (a rating made before this feature appears once the track is played or re-rated). `.m3u` / `.m3u8` files are only read, from `/`, `/Playlists` and `/Music` (not their sub-folders).
+
+## Music library index
+
+Index format 3 (12 Nov 2026): sort keys skip a leading "A " / "An " as well as "The "; an older index is "needs rebuilding" and the Music lists rebuild it by themselves. Playlists add two files under `/.neupod` (below).
+
+The Music screens read an index of `/Music` that the firmware builds on the card itself ([ADR-0017](adr/0017-music-library-index.md); screens: [UI](ui.md#music-lists)).
+
+- **Where and how.** `/.neupod/lib/`: 13 immutable files plus a manifest (about 8 MB for 100,000 tracks, roughly 90 bytes a track), each written once per build, the manifest last. A build goes
+  to `/.neupod/lib.tmp/`, is synced, and replaces `lib` with two renames (`lib` to `lib.old`, `lib.tmp` to `lib`); a power cut leaves the old library or the new one (`lib_recover()` settles an
+  interrupted swap the first time the index is opened after boot). A failed or cancelled build deletes `lib.tmp` and leaves the old library.
+- **Writes.** The index is the second thing in the firmware that unlocks card writes, after the settings save: only the storage task, only for the length of a build, and only under `/.neupod` (the
+  nfs write scope; every folder-tree change is a real `nfs_mkdir` / `nfs_unlink` / `nfs_rename`, which nfs itself gates; `/Music` is never written). Nothing else in the library writes. A write-protected card is
+  answered up front with **"Library needs a writable card"**, before anything is attempted; a card that is full says so (`Card is full`).
+- **When.** The first time a list is opened with no index on the card, and **Music > Update Library**; never in the background, and only with nothing playing (the scanner borrows the audio
+  core's decoder memory as its scratch, 99 KB, and refuses to start while anything plays or is paused). A Play press, a folder listing, Cancel or Menu stop it at the next file. Shutting
+  the firmware down during a build is safe for the same reason a power cut is.
+- **What it costs.** Static RAM (RP2350 Release, measured): nothing for the reader and the row window (they share the Files screen's 20 KB listing buffer); **+760 B** for the service's bookkeeping and path cache, the queue and the
+  resume path (free SRAM 14,504 B to 13,744 B). Flash: **+40.6 KB**: the library itself (about 28 KB of scanner, reader, sort and collation that L1 did not link yet) and about 13 KB for the lists, the service, the range queue and the screens.
+  Reading: browsing keeps the audio ring topped up between rows; the reader holds 11 files open and a 4 x 2 KB page cache.
+- **Stack and responsiveness while it runs (22 Nov 2026 bench, RP2350-Touch-AMOLED-2.41).** A first build on a fresh card wedged the whole chip silently: the build is the storage task's deepest call chain, and on a 8 KB stack
+  `lib_manifest_load()` (3.2 KB of locals: a `FIL`, a `FILINFO`, a 713 B file image, a decoded manifest) overflowed it; with the stack at 16 KB the same build finished (2,945 tracks, 108 s) with a peak near 9 KB.
+  `configCHECK_FOR_STACK_OVERFLOW` only looks at context switches, so nothing caught it. `RT_STACK_STORAGE` stays 8 KB (the Pico 2 W has no RAM to spare); instead the build path's frames were cut: the manifest reader's working
+  memory comes from the build arena (`lib_mfscratch_t`, returned before the sort stages), `lib_rmtree` is iterative on one path buffer, the per-file strings and folder name live in the build context, and the heavy
+  frames (`index_file`, the stages, `storage_task`'s inlined helpers) are `noinline` so they exist only while they run. Static worst case from `-fstack-usage` plus the call graph, 12 folder levels deep with an MP3 and the disk
+  layer allowed 0.5 KB: about 4.9 KB (before: over 9 KB). The firmware measures it: after every build the log has `library: storage stack free min N B of 8192`, and the monitor prints each task's stack-free-min every 10 s.
+  Keep a 2 KB margin: a new local on the build path above ~100 B deserves a look at that line.
+  The UI, heartbeat and Cancel stay alive through a build: for its duration `do_build` drops the storage task to the monitor's priority (below the UI; restored on every exit), because the scan and the sorts are CPU-bound
+  and at priority 5 they starved everything at 1-2. Every stage after the walk (each record read or written, each sort step; `lib_tick()`) polls the progress callback, so Cancel and "another request is waiting" now stop a build in the sort stages too, not
+  only during the walk. The callback yields 1 ms every 20 ms as a second line of defence.
+- **How long a scan takes.** Host figure (POSIX files in the simulator, warm cache): 276 tracks in 131 ms, 1,016 tracks in 322 ms; L1's 100,000-file run on a FatFs disk image: 12 s. **On the card it is not measured yet**
+  (the bench has not run it). Estimate from the ADR's costs (0.2-0.4 ms per directory entry, 10-20 ms to open and parse a file) plus about 60 small index and run files to create: **about 260 FLACs in
+  5 to 8 seconds**, 5,000 tracks in about 1.5 minutes, 100,000 in half an hour. The progress screen counts files; the sort and write at the end add a second or two without a counter.
+- **The Y2 testbed.** The Y2 firmware opens the card read-only (`O_RDONLY`) and only reopens it `O_RDWR | O_SYNC` while the library or the settings store holds the write lock, so no change to the Y2's
+  storage is needed for the index to be written, and none was made. What it does need: the card's write-protect switch off (a write-protected card is opened read-only and the screen says
+  `Library needs a writable card`); nothing else mounting the same card at the same time (the firmware's FatFs and a kernel filesystem driver writing one volume would corrupt it; the Y2's
+  rootfs does not mount the card: its `mdev.conf` only sets the node's permissions and its `fstab` has no card entry; the rescue `diag.sh` is the one thing that mounts it, on demand, so check before
+  adding an automounter); and patience, since `O_SYNC` makes every write wait for the card (a build is many small writes, so the Y2 will be slower than the
+  estimate above). The boot line `read-only` is the default lock, not a mount option.
+
 ## Rules carried into the final board (3 Nov 2026)
 
 * SD clock from **integer dividers only**.
@@ -75,11 +124,15 @@ From `wiring-phase1.md` (3.3 V, DAT0-DAT3 must be consecutive GPIOs, CLK is DAT0
 
 ## Memory allocation policy
 
-The newlib heap is only about 33 KB (static RAM fills the rest) and the Pico SDK's `malloc` wrapper **panics** on failure instead of returning NULL (to be replaced by a wrapper that returns NULL and logs, per the design response of 3 Nov 2026; not built). FatFs with `FF_USE_LFN 3` allocates scratch buffers as large as a cluster (`dir_clear`, up to 32 KB; 128 KB clusters on large exFAT cards) and relies on NULL to halve the request, so the first `mkdir` on the bench ended in "Out of memory".
+The newlib heap is about **2 KB** on the Pico 2 W image (bench, 18 Nov 2026: `end` 0x2007f79c to `__HeapLimit` 0x20080000 = 2148 B; static RAM has grown into it) and the Pico SDK's `malloc` wrapper **panics** on failure instead of returning NULL. So code that can do without its scratch memory must not call `malloc`: it uses **`os_alloc()` / `os_free()`** (`app/include/os.h`, `app/os/os_freertos.c`), which take the block from the FreeRTOS heap (`heap_4`, `NEUPOD_RTOS_HEAP_BYTES`, `app/os/memory_budget.h`) and return NULL when it cannot be satisfied. The kernel heap's malloc-failed hook normally panics; `os_alloc()` suspends the scheduler and raises a flag for the one call so the hook stands down (ESP-IDF's allocator never calls the hook). Bench failure that motivated this (18 Nov 2026): a FLAC with a 114 KB embedded JPEG panicked "Out of memory" in `art_decode`, because the guard that was meant to pick the non-panicking allocator (`#ifdef PICO_ON_DEVICE`) was dead in the app library (the macro exists only for SDK targets), so the call went to the panicking wrapper. The same guard in `ff_alloc.c` was live: that file is compiled into the SD library targets (`hal_rp2350_storage`, `hal_rp2350_storage_rtos`), which are SDK targets, so FatFs already used the real (NULL-returning) allocator. The `storage_test` bench tool, which has no kernel, links the malloc twin; the twin calls `__real_malloc` there (`NEUPOD_OS_ALLOC_REAL_MALLOC`, set in `platforms/rp2350/CMakeLists.txt`), so it keeps returning NULL instead of panicking.
 
-`app/storage/ff_alloc.c` therefore replaces the library's `ffsystem.c` (the RP2350 build removes it from the library's source list in `platforms/rp2350/CMakeLists.txt`; `lib/` is untouched, the host build uses the same file). `ff_memalloc` returns NULL for anything above `NEUPOD_FF_ALLOC_MAX_BYTES` (4 KB, `app/storage/ff_alloc.h`) and otherwise calls the real, non-panicking `malloc`, so FatFs falls back to a 4 KB buffer or its window buffer. Mutex functions are not provided: `FF_FS_REENTRANT` is 0 and the build fails if it is turned on. Host test: `tests/test_fatfs.c`.
+FatFs with `FF_USE_LFN 3` allocates scratch buffers as large as a cluster (`dir_clear`, up to 32 KB; 128 KB clusters on large exFAT cards) and relies on NULL to halve the request, so the first `mkdir` on the bench ended in "Out of memory". `app/storage/ff_alloc.c` therefore replaces the library's `ffsystem.c` (the RP2350 build removes it from the library's source list in `platforms/rp2350/CMakeLists.txt`; `lib/` is untouched, the host build uses the same file). `ff_memalloc` returns NULL for anything above `NEUPOD_FF_ALLOC_MAX_BYTES` (4 KB, `app/storage/ff_alloc.h`) and otherwise calls `os_alloc`, so FatFs falls back to a 4 KB buffer or its window buffer. Mutex functions are not provided: `FF_FS_REENTRANT` is 0 and the build fails if it is turned on. FatFs and album art are used only from the storage task (a FreeRTOS task), so the kernel heap is always usable. Host tests: `tests/test_fatfs.c`; `tests/test_art.c` (`test_alloc_failure`: allocation refused gives `ART_E_MEMORY`, nothing leaks), using the malloc-backed twin `app/os/os_alloc_malloc.c` with fault injection (binaries without the kernel link it; the `storage_test` bench tool does too).
 
-Besides FatFs the only newlib-heap callers in the firmware image are the Bluetooth firmware download (about 1 KB, once at boot) and newlib's one-off stdio setup; core 1 never allocates (checked by `tools/check_core1_closure.py`).
+Guard against a repeat: the rp2350 build runs `tools/check_app_heap.py` after linking. It walks the call graph of the ELF from `art_decode`, `ff_memalloc` and `ff_memfree` and fails the build if `malloc`, `free` or the SDK wrappers are reachable (it stops at `os_alloc` / `os_free`). Its fixtures run in ctest (`app_heap_selftest_*`).
+
+Worst-case kernel-heap demand of these callers (transient, storage task only): album art 4096 B decoder pool plus up to 3008 B of strip and averaging buffers on the 64 px build (about 7.1 KB; 3680 B of buffers on the 160 px hosted build), FatFs at most 4096 B for the duration of one `mkdir`. Both run in the storage task and never overlap (`art_decode` creates no directories mid-decode), so the peak is the art figure, about 7.1 KB. `os_alloc()` also refuses (NULL, quietly) any block that would leave less than `NEUPOD_OS_ALLOC_RESERVE` (6 KB, `app/os/memory_budget.h`; bench minimum-ever free was about 10 KB with Bluetooth A2DP up) in the heap, so scratch can never starve kernel object creation, which panics on failure; on the ESP32-S3 the free size includes PSRAM and the reserve does not bind. Host test: `tests/test_os_alloc.c` (real `os_alloc` on the FreeRTOS POSIX port). Compare with the heap's low-water mark in the monitor line / Diagnostics.
+
+Besides these, the only newlib-heap callers in the firmware image are the Bluetooth firmware download (about 1 KB, once at boot) and newlib's one-off stdio setup; core 1 never allocates (checked by `tools/check_core1_closure.py`).
 
 ## Running the tests
 

@@ -1,0 +1,12 @@
+#!/bin/sh
+# Respawned by init. Wait for the ACM port (sysfs shows it as soon as the gadget binds), run getty on it,
+# then pause so a getty that fails immediately cannot spin init.
+i=0
+while [ ! -e /sys/class/tty/ttyGS0 ]; do
+	i=$((i + 1))
+	[ $i -gt 30 ] && exit 0
+	sleep 2
+done
+[ -c /dev/ttyGS0 ] || mdev -s
+/sbin/getty -L ttyGS0 115200 vt100
+sleep 2

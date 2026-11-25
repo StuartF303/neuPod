@@ -211,8 +211,8 @@ Live stock and JLCPCB library class for every candidate part, checked on lcsc.co
 | Haptic driver | DRV2605LDGSR | C527464 | 6,753 | $1.08 | Extended | OK |
 | LRA / ERM | LEADER LD0832AA LRA / LCM1027A ERM | C2682305 / C2759984 | 1,039 / 6,892 | $1.06 / $0.45 | Extended | Lead-wire types; no pad-mount coin motor stocked |
 | Piezo | Murata PKLCS1212E4001-R1 | C113159 | 7,207 | $0.74 | Extended | OK; clone C49246959 $0.36 |
-| 3.5 mm TRRS jack with switch | SHOU HAN PJ-342 | C668606 | ~69k | $0.18 | Extended | Breadboard only — final board reuses the donor flex (ADR-0018) |
-| Optical combo jack | Everlight PLT133/T10W | C133350 | 0 | — | — | Parked (ADR-0018); Mouser + hand-solder if it returns |
+| 3.5 mm TRRS jack with switch | SHOU HAN PJ-342 | C668606 | ~69k | $0.18 | Extended | Breadboard only — final board reuses the donor flex (ADR-0023) |
+| Optical combo jack | Everlight PLT133/T10W | C133350 | 0 | — | — | Parked (ADR-0023); Mouser + hand-solder if it returns |
 | Charger | BQ25895RTWR | C80200 | 4,599 | $1.81 | Extended | OK |
 | Charger alt | BQ24074 | C54313 | 0 | — | Extended | Unavailable; MCP73871T-2CCI/ML C511310 (1,110, $1.81) is the simple alternative |
 | Fuel gauge | MAX17048G+T10 | C2682616 | ~24k | $1.76 | Extended | OK (BQ27441 C473374 969 pcs, dearer) |

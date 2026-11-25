@@ -42,12 +42,12 @@ extern "C" {
 #define SETTINGS_FILE_B SETTINGS_DIR "/settings.b"
 #define SETTINGS_FILE_OLD SETTINGS_DIR "/settings.old" /**< a file written by a NEWER firmware, kept aside instead of being wiped */
 
-#define SETTINGS_MAX_ITEMS 48u /**< distinct tags kept (settings, Wi-Fi networks, link keys, BT device records): worst case about 38 */
+#define SETTINGS_MAX_ITEMS 48u /**< distinct tags kept (settings, Wi-Fi networks, link keys, BT device records): worst case about 43 */
 #define SETTINGS_VALUE_MAX 96u /**< bytes per stored value; a sealed secret holds up to 96 - 29 = 67 bytes of plaintext (Wi-Fi passwords are at most 63) */
 #define SETTINGS_VERSION 2u /**< written; 1 (same layout, at most 32 items) is still read. Firmware older than 2 sets a version-2 file aside instead of reading it */
 #define SETTINGS_VERSION_V1 1u
 
-/** Tags of the user settings, four ASCII characters like BTstack's own ('NPxx'; BTstack uses 'BTL?' / 'BTD?'). */
+/** Tags of the user settings, four ASCII characters like BTstack's own ('NPxx'; BTstack uses 'BTL' + slot / 'BTD' + slot). */
 #define SETTINGS_TAG(a, b, c, d) (((uint32_t)(a) << 24) | ((uint32_t)(b) << 16) | ((uint32_t)(c) << 8) | (uint32_t)(d))
 #define SETTING_VOLUME_ATT_DB SETTINGS_TAG('N', 'P', 'v', 'o') /**< u8, attenuation in dB */
 #define SETTING_BACKLIGHT_PCT SETTINGS_TAG('N', 'P', 'b', 'l') /**< u8, 5..100 */
@@ -61,6 +61,17 @@ extern "C" {
 #define SETTING_SHUFFLE SETTINGS_TAG('N', 'P', 's', 'h')       /**< u8, pq_shuffle_t: 0 off, 1 songs; absent = off */
 #define SETTING_REPEAT SETTINGS_TAG('N', 'P', 'r', 'p')        /**< u8, pq_repeat_t: 0 off, 1 one, 2 all; absent = off */
 #define SETTING_RESUME_PLAY SETTINGS_TAG('N', 'P', 'r', 'a')   /**< u8, 0 or 1: start playing at boot when the resume record says playing; absent = 0 (restore paused) */
+#define SETTING_AUTODIM SETTINGS_TAG('N', 'P', 'a', 'd')       /**< u8, 0 or 1: dim the backlight when idle; absent = 1 */
+#define SETTING_AUTODIM_IDX SETTINGS_TAG('N', 'P', 'a', 't')   /**< u8, 0..5: idle time before dimming (ui_logic.h: 10 s .. 5 min); absent = 2 (30 s) */
+#define SETTING_SCREENOFF_IDX SETTINGS_TAG('N', 'P', 's', 'o') /**< u8, 0..6: time after the dim until the backlight is fully off (ui_logic.h: Never .. 5 min); absent = 5 (3 min) */
+#define SETTING_AUTOLOCK SETTINGS_TAG('N', 'P', 'a', 'l')       /**< u8, 0 or 1: Hold turns on by itself when the screen goes off (docs/adr/0020-hold.md); absent = 1 */
+#define SETTING_LOCK_HOLD SETTINGS_TAG('N', 'P', 'l', 'h')     /**< u8, seconds of Power that toggle Hold: 0 (Off), 1, 2, 3 or 5; absent or any other value = 0 (Off). Added without a version bump: an older firmware ignores an unknown tag (docs/adr/0020-hold.md) */
+#define SETTING_SLEEP_IDX SETTINGS_TAG('N', 'P', 's', 'l')     /**< u8, 0..3: idle time before the player sleeps (power_policy.h: Never, 10, 30, 60 min); absent or unknown = 2 (30 min). Added without a version bump: a file from an older firmware simply has no such item (ADR-0021) */
+#define SETTING_THEME SETTINGS_TAG('N', 'P', 't', 'h')         /**< u8, ui_theme_mode_t: 0 Light, 1 Dark, 2 Auto (dark while the backlight is dimmed); absent = 0 (Light) */
+#define SETTING_BT_DEVICE SETTINGS_TAG('N', 'P', 'b', 'd')     /**< the one remembered headset: version, address, class, name (bt_saved.h; 10..58 bytes) */
+#define SETTING_AUDIO_OUTPUT SETTINGS_TAG('N', 'P', 'a', 'o') /**< u8, audio_route_pref_t: 0 Auto (Bluetooth whenever a headset's stream is open), 1 Wired, 2 Bluetooth (BT-3: the output is Bluetooth whether or not a headset is there), 3 Speaker (the Y2's internal speaker); absent or unknown = Auto */
+#define SETTING_LINE_OUT SETTINGS_TAG('N', 'P', 'l', 'o')     /**< u8, 0 or 1: Line out, the jack at full level for an external amplifier (Y2); absent = 0 (Off). The route turns it Off by itself when the jack is empty (unplugged, or at boot) */
+#define SETTING_SPEAKER SETTINGS_TAG('N', 'P', 's', 'k')      /**< u8, 0 or 1: the internal speaker may be used (Auto without headphones or headset, or Audio output = Speaker); absent = 0 (Off: nothing comes out of the speaker by surprise) */
 #define SETTING_WIFI SETTINGS_TAG('N', 'P', 'w', 'f')            /**< 4 bytes: enabled, during playback, idle-off minutes, zone */
 #define SETTING_NTP_SERVER SETTINGS_TAG('N', 'P', 'n', 's')      /**< string */
 #define SETTING_TEST_URL SETTINGS_TAG('N', 'P', 't', 'u')        /**< string */
@@ -116,7 +127,8 @@ bool settings_dirty(void);
 /**
  * Write the image if it changed. Returns 0 when nothing needed writing or the save succeeded, otherwise an
  * nfs_err_t (never writes in RAM-only mode: returns NFS_ERR_NOT_MOUNTED). After SETTINGS_MAX_SAVE_FAILURES in a row the
- * store gives up on the card (RAM-only) until settings_attach_storage(true) is called again.
+ * store gives up on the card (RAM-only) until settings_attach_storage(true) is called again. NFS_ERR_BUSY (another task holds the nfs
+ * write scope, e.g. a library scan) is not a failure: the change stays dirty, nothing is counted, the caller retries later.
  */
 int settings_flush(void);
 #define SETTINGS_MAX_SAVE_FAILURES 3u
@@ -164,6 +176,8 @@ void settings_test_set_power_loss_step(int step);
 void settings_test_fail_next_reread(void);
 /** Unit tests only: as above, but the re-read fails with an I/O error. */
 void settings_test_ioerr_next_reread(void);
+/** Unit tests only: count a load without touching the items, as the boot-time load from the card does for its readers. */
+void settings_test_bump_generation(void);
 
 #ifdef __cplusplus
 }

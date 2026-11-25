@@ -223,6 +223,9 @@ primary source for every reused-part interface on this page.
 
 - [ ] 3D-scan the mid-frame, original logic board, thin back and (when bought) thick back on the Revopoint Metro X (matte spray on chrome/steel/gloss connectors); flatbed-scan the bare board at ≥600 dpi for the 2D outline and hole centres; keep STL + DXF with the design files
 
+- [ ] **Slot antenna in the steel back (CAD):** model the slot, feed board, keep-out and back grounding contacts on the scanned back; cut a test back and tune it with a NanoVNA (see [Requirements → Slot antenna](requirements.md#slot-antenna))
+- [ ] **Test a PCB-trace antenna at the wheel's rim gap:** a test PCB in the board outline with 2–3 trace variants, then NanoVNA and RSSI against the slot. Check for wheel false touches during TX (same section)
+
 - [ ] **Decide click feedback before board commit:** piezo (authentic, stock approach), LRA/ERM via DRV2605L (Moonlit-style haptic), or both selectable — see Requirements → Reused parts
 
 ### Questions raised at export (1 Nov 2026)
@@ -367,7 +370,7 @@ GND: header pins 3, 8, 13, 18, 23, 28, 33, 38. 3V3 out: pin 36. VSYS: pin 39. VB
 | 2026-10-27 | Display: ER-TFT024IPS-3 primary, stock panel as plan B | Fits window, documented, cheap |
 | 2026-10-27 | Radio decision deferred until A2DP source is proven on CYW43439 via BTstack | Determines whether final board copies the Pico W radio design or adds an ESP32 |
 | 2026-11-02 | Manufacturability rule: final-BOM parts must be LCSC/JLC-placeable or flagged hand-placed | LCSC survey: CYW43439 not buildable, CS43131 marginal, displays/QCC/optical hand-fitted |
-| 2026-11-04 | Reuse the donor headphone flex (TRRS + hold + Mikey); optical S/PDIF parked | Fits the case hole; mono mic + inline remote for free; combo jack body too big ([ADR-0018](adr/0018-headphone-jack-reuse.md)) |
+| 2026-11-04 | Reuse the donor headphone flex (TRRS + hold + Mikey); optical S/PDIF parked | Fits the case hole; mono mic + inline remote for free; combo jack body too big ([ADR-0023](adr/0023-headphone-jack-reuse.md)) |
 | 2026-11-04 | Testbed stays on Pico 2 W (SWD); AMOLED dev boards for panel driver and power path | RP2350 AMOLED board has no SWD header; ESP32-S3 board has USB-JTAG |
 | 2026-11-04 | "Play to…" DLNA/UPnP added as Wi-Fi stage W5 | Wi-Fi only; renderer pulls from our HTTP server |
 
@@ -411,7 +414,7 @@ What each AMOLED board already gives us (not on the list): AMOLED + touch, micro
 | Function | Options (★ = recommended for this stage) | Physical / fit notes | Source |
 | --- | --- | --- | --- |
 | Wired audio DAC | ★ Pico Audio Pack (PCM5100A, no MCLK) carried over; **ES8388 module** (adds ADC for recording, candidate final codec); PCM5102A module as no-MCLK fallback | I²S ×3 (+MCLK pad). Pack needs XSMT high | have / AliExpress ES8388 / Mouser PCM5102A |
-| 3.5 mm jack | ★ Donor headphone flex (TRRS + hold + Mikey) once the FPC pitch is measured ([ADR-0018](adr/0018-headphone-jack-reuse.md)); breadboard stand-in CUI SJ-43516-SMT (TRRS with detect) | 4-pole; the donor jack fits the case hole | have / Mouser |
+| 3.5 mm jack | ★ Donor headphone flex (TRRS + hold + Mikey) once the FPC pitch is measured ([ADR-0023](adr/0023-headphone-jack-reuse.md)); breadboard stand-in CUI SJ-43516-SMT (TRRS with detect) | 4-pole; the donor jack fits the case hole | have / Mouser |
 | Click wheel | FPC breakout for the wheel flex (pitch TBC — 0.3/0.4/0.5 mm), 18 kΩ pull-ups ×2 | 4 GPIO (3 if the 4th line proves unused) | Amazon/AliExpress breakout; Mouser connectors once pitch known |
 | Haptics | DRV2605L (have) + ★ **LRA Vybronics VG1040003D** (10 mm coin, 2 V rms, 170 Hz) vs ★ **piezo Murata PKLCS1212E4001-R1** + driver FET (stock iPod feel) — A/B both | LRA 3.6 mm thick coin; piezo 12 mm × 0.6 mm | Mouser |
 | Fuel gauge | MAX17048 breakout (have) — the on-board charger has no gauge | I²C shared bus | have |

@@ -29,7 +29,7 @@ Phase 1 testbed (Pico 2 W on a breadboard):
 | Wi-Fi | ⬜ |
 | USB MSC | ⬜ |
 | Host build + unit tests | ✅ |
-| ESP32-S3 build | ⬜ skeleton, not yet built |
+| ESP32-S3 build (Waveshare ESP32-S3-Touch-AMOLED-2.41 dev board: full runtime, null audio sink, no radio yet; [ESP32-S3](docs/esp32s3.md)) | 🟡 builds in CI; boots and runs on the board |
 
 ✅ working · 🟡 code written, not yet tested on hardware · ⬜ not started
 
@@ -62,7 +62,8 @@ neuPod/
 │   └── host/            SDL2 desktop implementation
 ├── platforms/
 │   ├── rp2350/          Pico SDK build entry + RP2350 HAL
-│   └── esp32s3/         ESP-IDF project skeleton + ESP32-S3 HAL
+│   ├── esp32s3/         ESP-IDF project: full runtime + HAL for the Waveshare ESP32-S3-Touch-AMOLED-2.41
+│   └── y2/              Innioasis Y2 testbed (Linux, armv7): same firmware as a process, Y2 HALs
 ├── lib/                 submodules: SD driver, FreeRTOS-Kernel (RP2350 SMP port), LVGL
 ├── tests/               host unit tests + headless runtime smoke test
 ├── tools/               PC-side utilities (C#/.NET welcome)
@@ -90,10 +91,21 @@ Build, flash via a Raspberry Pi Debug Probe, and open the UART0 console (115200 
     scripts/console.sh
     scripts/flash.sh rp2350 display_test   # ST7789 interactive test menu (then scripts/console.sh)
 
+Waveshare RP2350-Touch-AMOLED-2.41 dev board (600x450 touch AMOLED, no radio, SD over SPI, console on USB serial; see
+[docs/rp2350-amoled241.md](docs/rp2350-amoled241.md)):
+
+    scripts/build.sh rp2350-amoled241
+    picotool load -f -x build/rp2350-amoled241/platforms/rp2350/neupod.uf2
+
 Host build and tests (SDL2 optional — `sudo apt install libsdl2-dev` for the window):
 
     scripts/build.sh host
     ctest --test-dir build/host --output-on-failure
+
+Innioasis Y2 testbed (cross-build, then copy to the device over ssh; see [docs/y2.md](docs/y2.md)):
+
+    scripts/build.sh y2
+    testbed/y2/scripts/deploy-fw.sh --select
 
 ## Documentation
 

@@ -1,0 +1,14 @@
+#!/bin/sh
+# Sorts after S00dev, before S01seedrng/S01wdk. Pseudo filesystems, tmpfs, hostname, loopback (replaces
+# Buildroot's S40network). Root is already rw (rescue hand-off); never fsck it here.
+case "$1" in
+	start)
+		mkdir -p /dev/pts /dev/shm /tmp /run
+		mount -a 2>/dev/null
+		# directories on the tmpfs mounts must be made after mount -a
+		mkdir -p /run/lock /var/run
+		hostname -F /etc/hostname
+		ifconfig lo 127.0.0.1 netmask 255.0.0.0 up
+		;;
+esac
+exit 0

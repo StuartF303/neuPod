@@ -7,6 +7,7 @@
 #include "player.h"
 #include "resume.h"
 #include "settings_service.h"
+#include "hal_power.h" /* NEUPOD_POWER_MGMT */
 #include "settings_store.h"
 #include "storage_service.h"
 
@@ -81,11 +82,23 @@ void settings_service_load_now(void) {
     }
 }
 
+#if NEUPOD_POWER_MGMT
+static volatile bool g_flush_now; /* settings_service_request_flush(): skip the save delay once */
+void settings_service_request_flush(void) { g_flush_now = true; }
+bool settings_service_flush_pending(void) { return settings_dirty(); }
+#define FLUSH_NOW() (g_flush_now)
+#else
+#define FLUSH_NOW() false
+#endif
+
 void settings_service_poll(bool quiet_now) {
     static uint32_t dirty_since, retry_at;
     static bool pending, retry_armed; /* a deadline of 0 would read as the future after 2^31 ms */
     if (!settings_dirty()) {
         pending = false;
+#if NEUPOD_POWER_MGMT
+        g_flush_now = false;
+#endif
         return;
     }
     uint32_t now = os_tick_ms();
@@ -93,13 +106,18 @@ void settings_service_poll(bool quiet_now) {
         pending = true;
         dirty_since = now;
     }
-    if (now - dirty_since < SAVE_DELAY_MS || (retry_armed && (int32_t)(now - retry_at) < 0) || !quiet_now) {
+    if ((now - dirty_since < SAVE_DELAY_MS && !FLUSH_NOW()) || (retry_armed && (int32_t)(now - retry_at) < 0) || !quiet_now) {
         return;
     }
     int e = settings_flush();
     if (e == 0) {
         pending = false;
         retry_armed = false;
+        return;
+    }
+    if (e == NFS_ERR_BUSY) { /* the card is being written by another task (library scan): not a failure, just later */
+        retry_at = now + 1000u;
+        retry_armed = true;
         return;
     }
     printf("settings: save failed (%s)\n", nfs_err_str((nfs_err_t)e));

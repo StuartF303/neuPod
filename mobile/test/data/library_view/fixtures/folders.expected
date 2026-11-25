@@ -1,0 +1,31 @@
+# artists (name, albums)
+Bar	1
+Foo	2
+Unknown Artist	1
+# albums list (title, artist, songs, year)
+Live	Bar	1	0
+Live	Foo	3	0
+Live	Unknown Artist	1	0
+Music	Foo	1	0
+# album table (title, artist)
+Live	Bar
+Live	Foo
+Music	Foo
+Live	Unknown Artist
+# album songs (album, title, disc, track)
+Live	Bravo	0	1
+Live	Alpha	0	1
+Live	Charlie	0	2
+Live	Foxtrot	0	3
+Music	Echo	0	0
+Live	Delta	0	1
+# compilations (title)
+# genres (name, songs)
+# genre songs (genre, title)
+# songs (title, artist, album)
+Alpha	Foo	Live
+Bravo	Bar	Live
+Charlie	Foo	Live
+Delta	Unknown Artist	Live
+Echo	Foo	Music
+Foxtrot	Foo	Live

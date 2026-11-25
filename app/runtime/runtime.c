@@ -5,10 +5,13 @@
  * explains the choices.
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "audio_engine.h"
 #include "battery_store.h"
+#include "audio_route.h"
+#include "bt_control.h"
 #include "bt_service.h"
 #include "boot.h"
 #include "capabilities.h"
@@ -17,7 +20,11 @@
 #include "hal_audio.h"
 #include "hal_core.h"
 #include "hal_input.h"
+#include "hal_power.h"
+#include "hal_storage.h"
 #include "hal_system.h"
+#include "hal_touch.h"
+#include "hal_display.h"
 #include "input_events.h"
 #include "neupod_version.h"
 #include "os.h"
@@ -27,6 +34,7 @@
 #include "runtime.h"
 #include "runtime_config.h"
 #include "settings_service.h"
+#include "touch_gesture.h"
 #include "wifi_service.h"
 #include "haptic_service.h"
 #include "storage_service.h"
@@ -40,6 +48,10 @@ const neupod_runtime_config_t *rt_config(void) { return &g_cfg; }
 os_mutex_t *rt_i2c_mutex(void) { return g_i2c_mutex; }
 os_queue_t *rt_input_queue(void) { return g_input_queue; }
 
+static volatile bool g_i2c_ready;
+void rt_i2c_set_ready(bool ready) { g_i2c_ready = ready; }
+bool rt_i2c_ready(void) { return g_i2c_ready; }
+
 // --- Input task ------------------------------------------------------------------------------
 // Above the UI so wheel frames are never missed while LVGL renders: the RP2350 click-wheel PIO
 // FIFO overflows if not drained within ~4 ms (hal_input.c), hence the 2 ms period.
@@ -47,19 +59,87 @@ os_queue_t *rt_input_queue(void) { return g_input_queue; }
 static volatile uint32_t g_wheel_frames;
 uint32_t rt_wheel_frames_seen(void) { return g_wheel_frames; }
 
-static void send_events(const input_event_t *ev, size_t n) {
-    for (size_t i = 0; i < n; i++) {
-        (void)os_queue_send(g_input_queue, &ev[i], OS_NO_WAIT); // drop if the UI lags
-    }
+static input_pump_t g_pump;
+uint32_t rt_input_events_dropped(void) { return g_pump.dropped; }
+
+static bool queue_send(void *ctx, const input_event_t *ev) {
+    (void)ctx;
+    return os_queue_send(g_input_queue, ev, OS_NO_WAIT);
 }
 
-// This task is the ONLY caller of hal_input_poll() and of the console reader (the PIO FIFO and the
+// Best effort: a burst the UI cannot take is dropped, but counted (the monitor prints it). See input_pump_send().
+static void send_events(const input_event_t *ev, size_t n) { input_pump_send(&g_pump, queue_send, NULL, ev, n); }
+
+// Touch panel (boards that have one: hal_touch_present()): started once (hal_touch_init may take its reset time here: a touch board has no click wheel to starve) the I2C bus is up, polled with the wheel, turned into the wheel's own events by
+// touch_gesture.c. A controller that stops answering for TOUCH_FAIL_CANCEL polls (50 ms) drops the touch in progress instead of ending it with a tap.
+// Nothing is sent without a ready controller (fail-closed: no phantom presses from a floating bus). The bus mutex is only TRY-locked: a busy bus skips one
+// poll rather than delaying the wheel's drain.
+#define TOUCH_FAIL_CANCEL 25u
+
+typedef struct {
+    bool tried, ready;
+    uint8_t init_failures;
+    uint32_t retry_at_ms;
+    uint32_t fails;
+    touch_gesture_t gesture;
+} touch_input_t;
+
+static void touch_input_start(touch_input_t *t) {
+    t->tried = true;
+    if (!os_mutex_lock(rt_i2c_mutex(), OS_NO_WAIT)) {
+        t->tried = false; // the bus is busy with a boot check: try again next pass
+        return;
+    }
+    const hal_status_t st = hal_touch_init();
+    os_mutex_unlock(rt_i2c_mutex());
+    if (st != HAL_OK) {
+        if (++t->init_failures == 1) { // one more try after a second (a controller still coming out of reset), then give up for the session
+            printf("input: touch panel init failed (%d): retrying in 1 s\n", (int)st);
+            t->tried = false;
+            t->retry_at_ms = os_tick_ms() + 1000u;
+        } else {
+            printf("input: touch panel init failed again (%d): no touch input\n", (int)st);
+        }
+        return;
+    }
+    touch_gesture_init(&t->gesture, hal_display_width(), hal_display_height());
+    touch_gesture_cancel(&t->gesture); // a finger already down at start-up must lift before it counts
+    t->ready = true;
+    printf("input: touch panel ready (%ux%u)\n", (unsigned)hal_display_width(), (unsigned)hal_display_height());
+}
+
+static void touch_input_poll(touch_input_t *t) {
+    if (!t->tried && hal_touch_present() && rt_i2c_ready() && (int32_t)(os_tick_ms() - t->retry_at_ms) >= 0) {
+        touch_input_start(t);
+    }
+    if (!t->ready || !os_mutex_lock(rt_i2c_mutex(), OS_NO_WAIT)) {
+        return;
+    }
+    hal_touch_point_t pt = {0};
+    const bool ok = hal_touch_read(&pt);
+    os_mutex_unlock(rt_i2c_mutex());
+    if (!ok) {
+        if (++t->fails == TOUCH_FAIL_CANCEL) {
+            touch_gesture_cancel(&t->gesture);
+        }
+        return;
+    }
+    t->fails = 0;
+    input_event_t ev[2];
+    send_events(ev, touch_gesture_update(&t->gesture, &pt, os_tick_ms(), ev, 2));
+}
+
+// This task is the ONLY caller of hal_input_poll(), hal_touch_read() and of the console reader (the PIO FIFO and the
 // frame sync are single-consumer); the wheel boot check just waits for g_wheel_frames.
 static void input_task(void *arg) {
     (void)arg;
     hal_wheel_state prev = {0};
+    touch_input_t touch = {0};
     uint32_t last = os_tick_ms();
+    input_pump_init(&g_pump);
     for (;;) {
+        // Power key and Hold switch: levels turned into edges that are never lost (retried until the queue has room).
+        input_pump_levels(&g_pump, queue_send, NULL, hal_input_power_key(), hal_input_hold_switch());
         hal_wheel_state cur;
         if (hal_input_poll(&cur) && cur.valid) {
             g_wheel_frames++;
@@ -73,6 +153,7 @@ static void input_task(void *arg) {
             }
             prev = cur;
         }
+        touch_input_poll(&touch);
         if (g_cfg.console_keys) {
             int key;
             while ((key = hal_console_getc_timeout(0)) >= 0) {
@@ -157,6 +238,10 @@ static void print_ui_stats(void) {
                (unsigned)u.frame_avg_us, (unsigned)u.frame_max_us, (unsigned)u.mem_used, (unsigned)u.mem_total,
                (unsigned)u.mem_max_used, (unsigned)u.mem_frag_pct);
     }
+    uint32_t dropped = rt_input_events_dropped();
+    if (dropped != 0) { // only when something was lost: the bench has no other way to see it (UI-6)
+        printf("input: WARNING %u events dropped (queue of %u full)\n", (unsigned)dropped, (unsigned)RT_INPUT_QUEUE_LEN);
+    }
     ui_perf_new_window();
 }
 
@@ -212,6 +297,26 @@ static void read_gauge(void) {
     }
 }
 
+#define SHUTDOWN_WAIT_MS 2000u
+
+// Orderly stop: no card write may be cut short. Bounded, so a stuck task cannot keep the process from stopping.
+static void shutdown_now(void) {
+    printf("runtime: stop requested, shutting down\n");
+    uint32_t t0 = os_tick_ms();
+    while (!storage_service_idle() && os_tick_ms() - t0 < SHUTDOWN_WAIT_MS) {
+        os_delay_ms(20);
+    }
+    if (!storage_service_idle()) {
+        printf("runtime: storage still busy after %u ms, stopping anyway\n", (unsigned)SHUTDOWN_WAIT_MS);
+    }
+    hal_storage_set_write_enabled(false); // reopens read-only: everything written is synced first
+    (void)hal_storage_sync();
+    hal_storage_unmount();
+    printf("runtime: stopped\n");
+    fflush(stdout);
+    exit(0);
+}
+
 static void monitor_task(void *arg) {
     (void)arg;
     uint32_t last = os_tick_ms();
@@ -223,7 +328,15 @@ static void monitor_task(void *arg) {
         os_delay_until_ms(&last, 100);
         uint32_t t = os_tick_ms() - start;
         drain_audio_events();
+        if (NEUPOD_RT_STORAGE_HOTPLUG()) {
+            boot_storage_hotplug_poll();
+        }
+        if (NEUPOD_RT_STOP_REQUESTED()) {
+            shutdown_now();
+        }
         player_service(); // the queue moves on even when no screen is polling the player
+        audio_route_service(); // Bluetooth output: switch, start / suspend the stream, pause when the headset goes away
+        bt_control_service(); // headset volume policy, headset buttons, track information for the headset
         if (t >= next_beat) {
             next_beat += HEARTBEAT_MS;
             check_audio_alive();
@@ -273,8 +386,11 @@ void neupod_runtime_run(const neupod_runtime_config_t *cfg) {
 
     caps_init();
     battery_store_init();
+#if NEUPOD_POWER_MGMT
+    (void)hal_power_init(); /* the Y2 takes its "awake" wake lock here; the others have nothing to do (ADR-0021) */
+#endif
     g_i2c_mutex = os_mutex_create();
-    g_input_queue = os_queue_create(sizeof(input_event_t), 16);
+    g_input_queue = os_queue_create(sizeof(input_event_t), RT_INPUT_QUEUE_LEN);
     settings_service_init();
     bt_service_init();
     wifi_service_init();
@@ -290,6 +406,7 @@ void neupod_runtime_run(const neupod_runtime_config_t *cfg) {
         printf("neuPod: audio core did not start\n");
     }
     player_init(); // default volume -30 dB goes to the audio core before anything can play
+    audio_route_init();
     must_create("storage", storage_task, RT_STACK_STORAGE, RT_PRIO_STORAGE, RT_CORE_OTHER);
     must_create("haptic", haptic_task, RT_STACK_HAPTIC, RT_PRIO_HAPTIC, RT_CORE_OTHER);
     must_create("wifi", wifi_task, RT_STACK_WIFI, RT_PRIO_WIFI, RT_CORE_OTHER);

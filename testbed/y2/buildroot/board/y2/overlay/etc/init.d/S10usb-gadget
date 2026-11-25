@@ -1,0 +1,100 @@
+#!/bin/sh
+# USB gadget (android_usb, legacy sysfs): RNDIS + ACM, falling back to ACM only. Like y2-rescue but with a
+# different product id (4ee8 vs rescue's 4ee7) so the host can tell the two apart. The host gets
+# 192.168.7.1 from udhcpd; the device is 192.168.7.2.
+G=/sys/class/android_usb/android0
+LOG=/tmp/usb-gadget.log
+ADDR=192.168.7.2
+
+log() { echo "usb-gadget: $*" >>"$LOG"; }
+
+gw() { # file value
+	echo "$2" >"$G/$1" 2>>"$LOG" || { log "write $1=$2 FAILED"; return 1; }
+}
+
+gadget_try() { # functions bDeviceClass
+	log "trying functions=$1"
+	gw enable 0
+	gw idVendor 18d1
+	gw idProduct 4ee8
+	gw iManufacturer neuPod
+	gw iProduct y2-linux
+	gw iSerial y2linux0001
+	case $1 in *rndis*)
+		gw f_rndis/ethaddr 02:59:32:00:00:03
+		gw f_rndis/wceis 1
+		;;
+	esac
+	case $1 in *acm*) gw f_acm/instances 1 ;; esac # must precede 'functions'
+	gw bDeviceClass "$2"
+	gw functions "$1"
+	gw enable 1
+	got=$(cat $G/functions 2>/dev/null)
+	log "functions read back as '$got'"
+	for want in $(echo "$1" | tr , ' '); do
+		case ",$got," in *",$want,"*) ;; *) return 1 ;; esac
+	done
+	return 0
+}
+
+netdev() { # whichever name the RNDIS function registered
+	for n in rndis0 usb0; do
+		[ -d /sys/class/net/$n ] && { echo $n; return 0; }
+	done
+	return 1
+}
+
+start() {
+	: >"$LOG"
+	if [ ! -d "$G" ]; then
+		log "$G missing"
+		return 1
+	fi
+	GADGET=none
+	if gadget_try rndis,acm 0; then
+		GADGET=rndis,acm
+	elif gadget_try acm 02; then
+		GADGET=acm
+	fi
+	log "gadget=$GADGET"
+	sleep 1
+	mdev -s # ttyGS0 appears when ACM binds
+	case $GADGET in *rndis*)
+		i=0
+		NET=
+		while [ -z "$NET" ] && [ $i -lt 10 ]; do
+			NET=$(netdev) || sleep 1
+			i=$((i + 1))
+		done
+		if [ -n "$NET" ]; then
+			ifconfig "$NET" $ADDR netmask 255.255.255.0 up
+			log "$NET up at $ADDR"
+			cat >/tmp/udhcpd.conf <<CONF
+start 192.168.7.1
+end 192.168.7.1
+interface $NET
+lease_file /tmp/udhcpd.leases
+max_leases 1
+option subnet 255.255.255.0
+option lease 3600
+CONF
+			: >/tmp/udhcpd.leases
+			start-stop-daemon -S -b -m -p /var/run/udhcpd.pid -x /usr/sbin/udhcpd -- -f /tmp/udhcpd.conf
+		else
+			log "no rndis0/usb0 after 10 s"
+		fi
+		;;
+	esac
+}
+
+stop() {
+	start-stop-daemon -K -q -p /var/run/udhcpd.pid
+}
+
+case "$1" in
+	start) start ;;
+	stop) stop ;;
+	restart) stop; start ;;
+	*) echo "Usage: $0 {start|stop|restart}"; exit 1 ;;
+esac
+exit 0

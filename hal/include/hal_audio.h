@@ -101,6 +101,46 @@ typedef struct {
 } hal_audio_info_t;
 void hal_audio_get_info(hal_audio_info_t *out);
 
+/**
+ * What the next hal_audio_open() is. false (the default): the wired output: the DAC on a board that has one, otherwise the null sink.
+ * true: a virtual sink for Bluetooth output: the block clock runs at the sample rate exactly as for the wired sink, but hal_audio_write()
+ * discards, because the audio core sends the audio to the Bluetooth ring instead (docs/bluetooth.md). Call with the sink closed.
+ * A platform whose wired sink is already only a clock (host, Y2, the null sink) ignores it.
+ */
+void hal_audio_set_virtual(bool virtual_sink);
+
+/**
+ * Is there something on the wired output to listen to? false only when the platform can tell that nothing is plugged in (the Y2's headphone
+ * jack: its output is then the null sink); true everywhere else, including when it cannot tell. The audio route pauses with a notice when
+ * this goes from true to false during playback on the wired output.
+ */
+bool hal_audio_wired_attached(void);
+
+/**
+ * Is a headphone plug in the jack? false where the platform cannot tell. The audio route pauses with a notice when it goes from true to
+ * false during playback on the wired output (also when the speaker could take over: the sound must not jump to it unasked).
+ */
+bool hal_audio_headphones_in(void);
+
+/** Has the device an internal speaker the wired output can use (the Y2 once its DAC path opens)? false elsewhere. */
+bool hal_audio_speaker_available(void);
+
+/**
+ * The route lets the wired output use the internal speaker while the jack is empty (Settings: Speaker On and Audio output Auto or Speaker).
+ * Never has an effect with headphones in. Changing it to false switches the amplifier off at once. Does nothing without a speaker.
+ * hal_audio_wired_attached() also reports true while this is allowed on a platform that has one.
+ */
+void hal_audio_set_speaker(bool allow);
+
+/** Can the wired output run at line level for an external amplifier (the Y2's CS43131 at full output)? false elsewhere. */
+bool hal_audio_line_out_available(void);
+
+/**
+ * The route allows Line out (Settings > Line out is On and the output is the jack). The HAL uses the line level only with a plug in the jack and
+ * restarts its stream muted when it changes; never on the speaker or Bluetooth. Does nothing without hardware support.
+ */
+void hal_audio_set_line_out(bool allow);
+
 /** Stop the stream and release buffers. */
 void hal_audio_close(void);
 

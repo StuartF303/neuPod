@@ -1,0 +1,70 @@
+# Innioasis Y2 (MT6582, Linux) platform. Entered from the top-level CMakeLists.txt after the FreeRTOS POSIX port and app/.
+#
+# The Y2 HAL sources are compiled straight into the executable, not into a static library: the executable's own
+# objects are linked first, so hal_battery_* here wins over the MAX17048 driver in neupod_drivers (an archive member is
+# only pulled in for symbols that are still undefined). Portable logic (evdev decoding, SD device selection, sysfs
+# battery parsing, pixel conversion) lives in hal/y2_*.c and is also built by tests/CMakeLists.txt with the PC compiler.
+set(Y2_HAL ${CMAKE_CURRENT_LIST_DIR}/hal)
+set(NEUPOD_Y2_LOGIC_SOURCES
+  ${Y2_HAL}/y2_input.c
+  ${Y2_HAL}/y2_sd.c
+  ${Y2_HAL}/y2_power.c
+  ${Y2_HAL}/y2_fb.c
+  ${Y2_HAL}/y2_sysfs.c
+  ${Y2_HAL}/y2_poweroff.c
+  ${Y2_HAL}/y2_charge.c
+  ${Y2_HAL}/y2_chargeview.c
+  ${Y2_HAL}/y2_haptic.c
+  ${Y2_HAL}/y2_bt_addr.c
+  ${Y2_HAL}/y2_bt_tlv.c
+  ${Y2_HAL}/y2_bt_hciup.c
+  ${Y2_HAL}/y2_audio.c
+  ${Y2_HAL}/y2_suspend.c
+)
+set(NEUPOD_Y2_HAL_SOURCES
+  ${NEUPOD_Y2_LOGIC_SOURCES}
+  ${Y2_HAL}/hal_system.c
+  ${Y2_HAL}/hal_power.c
+  ${Y2_HAL}/hal_display.c
+  ${Y2_HAL}/hal_console.c
+  ${Y2_HAL}/hal_input.c
+  ${Y2_HAL}/hal_storage.c
+  ${Y2_HAL}/hal_battery.c
+  ${Y2_HAL}/hal_audio.c
+  ${Y2_HAL}/hal_radio.c
+  ${Y2_HAL}/bt_port_stpbt.c
+  ${Y2_HAL}/btstack_uart_stpbt.c
+  ${Y2_HAL}/btstack_chipset_mtk_consys.c
+  ${CMAKE_SOURCE_DIR}/hal/common/bt_btstack/bt_btstack.c
+  ${CMAKE_SOURCE_DIR}/hal/common/bt_btstack/bt_link_policy.c
+  ${Y2_HAL}/hal_i2c.c
+  ${Y2_HAL}/hal_haptic.c
+  ${CMAKE_SOURCE_DIR}/hal/host/hal_core.c                 # core 1 = a native thread, portable POSIX
+  ${CMAKE_SOURCE_DIR}/hal/common/hal_storage_common.c
+  ${CMAKE_SOURCE_DIR}/hal/common/hal_i2c_common.c
+  ${CMAKE_SOURCE_DIR}/hal/common/hal_touch_none.c         # the Y2 has buttons, no touch panel
+  ${CMAKE_SOURCE_DIR}/app/storage/nfs_fatfs.c             # the file API on FatFs, as on the Pico (the host uses nfs_posix.c)
+)
+
+add_executable(neupod main.c charging.c ${NEUPOD_Y2_HAL_SOURCES})
+# Bluetooth: BTstack from the Pico SDK's copy (or -DBTSTACK_ROOT=), the same source list as the y2-a2dp tool. The adapter
+# (hal/common/bt_btstack) and the stpbt port are compiled into the executable like the rest of the HAL.
+include(${CMAKE_SOURCE_DIR}/cmake/btstack_posix.cmake)
+neupod_btstack_posix(btstack_y2 ${CMAKE_CURRENT_LIST_DIR}/btstack)
+
+target_include_directories(neupod PRIVATE ${Y2_HAL} ${CMAKE_SOURCE_DIR}/hal/include ${CMAKE_SOURCE_DIR}/hal/common
+                                          ${CMAKE_SOURCE_DIR}/hal/common/bt_btstack)
+set_source_files_properties(main.c charging.c ${NEUPOD_Y2_HAL_SOURCES} PROPERTIES COMPILE_OPTIONS "${NEUPOD_WARN_FLAGS}")
+# neupod_fatfs: FatFs + diskio over hal_storage (the raw block device). Libraries after the HAL objects.
+target_link_libraries(neupod PRIVATE neupod_runtime neupod_drivers neupod_fatfs btstack_y2 pthread)
+# Bench aid: NEUPOD_BT_PCM_DUMP=<file> in the environment records the Bluetooth encoder input (Y2 only, never the product).
+target_compile_definitions(neupod PRIVATE NEUPOD_BT_PCM_TAP=1)
+# The Y2's stock-parity controller set-up after HCI-up (bt_port.h, bt_port_hci_up): compiled into no other platform.
+target_compile_definitions(neupod PRIVATE NEUPOD_BT_PORT_HCI_UP=1)
+# The MT6582's phantom-ACL recovery (bt_btstack.c, phantom_*): the Y2 controller's bug, so no other platform carries it.
+target_compile_definitions(neupod PRIVATE NEUPOD_BT_PHANTOM_RESET=1)
+
+# A smaller image to copy over USB; the unstripped one stays in the build tree for debugging.
+add_custom_command(TARGET neupod POST_BUILD
+  COMMAND ${CMAKE_STRIP} -o $<TARGET_FILE:neupod>.stripped $<TARGET_FILE:neupod>
+  COMMENT "Stripped copy: neupod.stripped")

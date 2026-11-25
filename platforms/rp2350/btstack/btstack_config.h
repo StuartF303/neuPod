@@ -13,6 +13,11 @@
 #define ENABLE_LOG_ERROR
 #define ENABLE_PRINTF_HEXDUMP
 
+// Dedicated bonding (a Pair) keeps its ACL link and reports a good result at once. Without this define BTstack reports GAP_EVENT_DEDICATED_BONDING_COMPLETED only
+// AFTER it has disconnected, and our SDP check for an A2DP sink needs the link: found on the bench, every Pair then timed out although the bonding itself
+// had succeeded. A failed bonding still disconnects.
+#define ENABLE_EXPLICIT_DEDICATED_BONDING_DISCONNECT
+
 // L2CAP enhanced retransmission is only needed by OBEX/cover art, which we do not use.
 
 // Packet buffers. HCI_OUTGOING_PRE_BUFFER_SIZE and the chunk alignment are required by the CYW43 HCI transport
@@ -27,8 +32,8 @@
 #define MAX_NR_L2CAP_CHANNELS 4         // AVDTP signalling + media, AVRCP control (+ spare)
 #define MAX_NR_AVDTP_CONNECTIONS 1
 #define MAX_NR_AVDTP_STREAM_ENDPOINTS 2 // SBC source (+ spare)
-#define MAX_NR_AVRCP_CONNECTIONS 1
-#define MAX_NR_SERVICE_RECORD_ITEMS 4   // A2DP source, AVRCP target, AVRCP controller, device id
+#define MAX_NR_AVRCP_CONNECTIONS 2      // one link = two entries (BTstack creates the controller role and the target role); 640 bytes each
+#define MAX_NR_SERVICE_RECORD_ITEMS 3   // A2DP source, AVRCP target, AVRCP controller
 #define MAX_NR_BTSTACK_LINK_KEY_DB_MEMORY_ENTRIES 0 // we use the TLV link key database (SD-backed), not the RAM one
 
 // Link key database on top of TLV (the SD-card settings store, app/settings): number of remembered headsets.

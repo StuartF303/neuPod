@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>NeuPod.Y2Demo</RootNamespace>
+    <AssemblyName>NeuPod.Y2Demo</AssemblyName>
+    <!-- Two slow cores: no background GC thread, no PGO instrumentation; keeps idle CPU at zero. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>false</TieredPGO>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\NeuPod.Platform.Linux\NeuPod.Platform.Linux.csproj" />
+    <EmbeddedResource Include="Fonts\*.bdf" LogicalName="Fonts.%(Filename)%(Extension)" />
+    <InternalsVisibleTo Include="NeuPod.Y2.Tests" />
+  </ItemGroup>
+  <!-- Embed the git short hash (shown on the About screen); "unknown" outside a git checkout. -->
+  <Target Name="EmbedGitHash" BeforeTargets="GetAssemblyAttributes">
+    <Exec Command="git rev-parse --short HEAD" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitHashRaw" />
+      <Output TaskParameter="ExitCode" PropertyName="GitExit" />
+    </Exec>
+    <PropertyGroup>
+      <GitHash Condition="'$(GitExit)' == '0'">$(GitHashRaw.Trim())</GitHash>
+      <GitHash Condition="'$(GitHash)' == ''">unknown</GitHash>
+    </PropertyGroup>
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>GitHash</_Parameter1>
+        <_Parameter2>$(GitHash)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+</Project>

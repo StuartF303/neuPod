@@ -17,6 +17,7 @@
 #include "hal_storage.h"
 #include "hal_system.h"
 #include "input_events.h"
+#include "nfs.h"
 #include "os.h"
 #include "runtime.h"
 #include "runtime_config.h"
@@ -75,17 +76,58 @@ static const char *fs_name(hal_fs_type_t t) {
 
 // --- Checks ----------------------------------------------------------------------------------
 
+#if NEUPOD_RT_HOTPLUG
+static os_mutex_t *g_storage_check_mu;         // one storage check at a time: the boot check and every hot-plug retry
+static volatile bool g_storage_check_active;   // a check holds the mutex (the hot-plug poll does not start another)
+static bool g_tried_this_card;                  // hot-plug: the card now in the slot already failed a check
+
+static void storage_check_begin(void) {
+    if (g_storage_check_mu != NULL) {
+        (void)os_mutex_lock(g_storage_check_mu, OS_WAIT_FOREVER);
+    }
+    g_storage_check_active = true;
+}
+
+// @p ok: the verdict of a boot check (a hot-plug re-run has its own bookkeeping).
+static void storage_check_end(bool ok) {
+    if (!ok && rt_config()->storage_hotplug) {
+        g_tried_this_card = hal_storage_card_present(); // a card that is there and failed is not retried until re-inserted
+    }
+    g_storage_check_active = false;
+    if (g_storage_check_mu != NULL) {
+        os_mutex_unlock(g_storage_check_mu);
+    }
+}
+#else
+static inline void storage_check_begin(void) {}
+static inline void storage_check_end(bool ok) { (void)ok; }
+#endif
+
+// Hot-plug builds (the Y2): a check that fails leaves no descriptor behind, so a card that is pulled and put back (or a
+// second attempt) starts from a clean HAL. Other targets keep the card initialised as before.
+static void storage_check_failed(void) {
+    if (NEUPOD_RT_STORAGE_HOTPLUG()) {
+        hal_storage_deinit();
+    }
+}
+
 // Returns true when the card is usable (mounted, or the host's image): the settings store may then load and save.
-static bool check_storage_inner(void) {
-    hal_storage_set_write_enabled(false); // read-only boot: the lock is the default, make it explicit
+// @p retry: not the boot check but a hot-plug re-run. It must not touch the write lock (nothing may be unmounted or locked
+// underneath a settings write that is in flight) and reports a failure through caps_resolve() too (the capability was re-armed).
+static bool check_storage_inner(bool retry) {
+    if (!NEUPOD_RT_HOTPLUG || !retry) {
+        hal_storage_set_write_enabled(false); // read-only boot: the lock is the default, make it explicit
+    }
     hal_storage_status_t st = hal_storage_init();
     if (st != HAL_STORAGE_OK) {
         caps_resolve(CAP_STORAGE, false, st == HAL_STORAGE_NO_CARD ? BR_SD_NONE : BR_SD_INIT, "card init: %s", hal_storage_status_str(st));
+        storage_check_failed();
         return false;
     }
     hal_card_info_t info;
     if (hal_storage_get_info(&info) != HAL_STORAGE_OK) {
         caps_resolve(CAP_STORAGE, false, BR_SD_INFO, "card info unreadable");
+        storage_check_failed();
         return false;
     }
     st = hal_storage_mount();
@@ -96,6 +138,7 @@ static bool check_storage_inner(void) {
     }
     if (st != HAL_STORAGE_OK) {
         caps_resolve(CAP_STORAGE, false, st == HAL_STORAGE_NO_FILESYSTEM ? BR_SD_NOFS : BR_SD_MOUNT, "mount: %s", hal_storage_status_str(st));
+        storage_check_failed();
         return false;
     }
     uint32_t gb10 = (uint32_t)(info.capacity_bytes * 10u / 1000000000u); // tenths of a GB
@@ -106,8 +149,10 @@ static bool check_storage_inner(void) {
 
 static void check_storage(void *arg) {
     (void)arg;
-    bool ok = check_storage_inner();
+    storage_check_begin();
+    bool ok = check_storage_inner(false);
     settings_service_storage_result(ok); // after the verdict is posted: loading the settings must not delay the splash
+    storage_check_end(ok);
 }
 
 static void check_battery(void *arg) {
@@ -144,7 +189,8 @@ static void check_haptics(void *arg) {
         caps_resolve(CAP_HAPTICS, false, BR_I2C_BUSY, "i2c bus busy");
         return;
     }
-    // hal_haptic_init() verifies the ACK at 0x5A and DEVICE_ID == 7, and is motor-safe.
+    // hal_haptic_init() verifies the ACK at 0x5A and DEVICE_ID == 7 (Y2: that the timed_output vibrator node can be opened
+    // for writing), and is motor-safe.
     hal_status_t st = hal_haptic_init();
     if (st == HAL_OK) {
         st = hal_haptic_standby(true); // never leave the driver (and so the motor) awake
@@ -154,10 +200,10 @@ static void check_haptics(void *arg) {
     }
     os_mutex_unlock(rt_i2c_mutex());
     if (st != HAL_OK) {
-        caps_resolve(CAP_HAPTICS, false, BR_HAPTIC, "driver (0x5A): %s", status_name(st));
+        caps_resolve(CAP_HAPTICS, false, BR_HAPTIC, HAPTIC_FAIL_FMT, status_name(st));
         return;
     }
-    caps_resolve(CAP_HAPTICS, true, NULL, "DRV2605L, standby");
+    caps_resolve(CAP_HAPTICS, true, NULL, HAPTIC_OK_MSG);
 }
 
 static void check_wheel(void *arg) {
@@ -219,7 +265,11 @@ static void check_radio(void *arg) {
     hal_status_led(true); // first LED write loads the chip firmware; do it here, not in the monitor
     hal_status_led(false);
     // "ok" means the driver and lwIP are up, not that a network is joined (joining is the Wi-Fi service's business).
-    caps_resolve(CAP_WIFI, true, NULL, "driver and lwIP up (joining is separate)");
+    if (hal_wifi_present()) {
+        caps_resolve(CAP_WIFI, true, NULL, "driver and lwIP up (joining is separate)");
+    } else {
+        caps_resolve(CAP_WIFI, false, BR_RADIO_NONE, "no Wi-Fi on this platform (Bluetooth only)");
+    }
 
     // Do not bring Bluetooth up before the settings store has loaded (link keys live there): wait briefly for the first load.
     while (os_tick_ms() - g_start_ms < 3500u) {
@@ -282,10 +332,16 @@ static const check_t k_checks[] = {
 };
 
 void boot_start(void) {
+#if NEUPOD_RT_HOTPLUG
+    if (g_storage_check_mu == NULL) {
+        g_storage_check_mu = os_mutex_create(); // before the check tasks exist
+    }
+#endif
     g_start_ms = os_tick_ms();
     g_started = true;
     // The bus is initialised once, here; the two I2C checks then take turns on it (rt_i2c_mutex).
     hal_i2c_err_t ie = hal_i2c_init(I2C_BUS_HZ);
+    rt_i2c_set_ready(ie == HAL_I2C_OK);
     for (size_t i = 0; i < sizeof k_checks / sizeof k_checks[0]; i++) {
         const check_t *c = &k_checks[i];
         bool is_i2c = c->fn == check_battery || c->fn == check_haptics;
@@ -312,6 +368,78 @@ void boot_start(void) {
         }
     }
 }
+
+// --- Card inserted or removed after boot (Y2) -------------------------------------------------------------------------
+#if NEUPOD_RT_HOTPLUG
+
+#define HOTPLUG_POLL_MS 2000u
+static volatile bool g_hotplug_busy;
+
+static void hotplug_check(void *arg) {
+    (void)arg;
+    // One check at a time, and never while a settings write is in flight (a card that was pulled mid-write): try again later.
+    if (g_storage_check_mu == NULL || !os_mutex_lock(g_storage_check_mu, 0) ) {
+        g_tried_this_card = false;
+        g_hotplug_busy = false;
+        return;
+    }
+    if (nfs_write_scope_active()) {
+        g_tried_this_card = false;
+        os_mutex_unlock(g_storage_check_mu);
+        g_hotplug_busy = false;
+        return;
+    }
+    g_storage_check_active = true;
+    printf("boot: card appeared, checking storage again\n");
+    caps_allow_late_ok(CAP_STORAGE);
+    bool ok = check_storage_inner(true);
+    settings_service_storage_result(ok);
+    g_storage_check_active = false;
+    os_mutex_unlock(g_storage_check_mu);
+    g_hotplug_busy = false;
+}
+
+void boot_storage_hotplug_poll(void) {
+    static uint32_t last_ms;
+    if (!g_started || g_hotplug_busy || g_storage_check_active) {
+        return;
+    }
+    uint32_t now = os_tick_ms();
+    if (now - last_ms < HOTPLUG_POLL_MS) {
+        return;
+    }
+    last_ms = now;
+    capabilities_t c;
+    caps_get(&c);
+    bool present = hal_storage_card_present();
+    if (c.state[CAP_STORAGE] == CAP_OK) {
+        if (!present) { // pulled while in use
+            caps_force_degraded(CAP_STORAGE, BR_SD_NONE, "card removed");
+            settings_service_storage_result(false); // settings go back to RAM-only
+            g_tried_this_card = false;
+        }
+        return;
+    }
+    if (c.state[CAP_STORAGE] != CAP_DEGRADED) {
+        return; // still checking (PENDING)
+    }
+    if (!present) {
+        g_tried_this_card = false;
+        return;
+    }
+    if (g_tried_this_card) {
+        return; // this card already failed the check: wait until it has been taken out and put back
+    }
+    g_tried_this_card = true;
+    g_hotplug_busy = true;
+    if (os_task_create(&(os_task_cfg_t){.name = "chk_sd2", .fn = hotplug_check, .stack_bytes = RT_STACK_CHECK_STORAGE,
+                                        .priority = RT_PRIO_CHECK, .core = RT_CORE_OTHER}) == NULL) {
+        g_hotplug_busy = false;
+        g_tried_this_card = false;
+    }
+}
+
+#endif // NEUPOD_RT_HOTPLUG
 
 bool boot_poll(void) {
     if (!g_started) {

@@ -1011,7 +1011,7 @@
 #define LV_FONT_MONTSERRAT_12 0
 
 /** Montserrat 14 */
-#define LV_FONT_MONTSERRAT_14 1
+#define LV_FONT_MONTSERRAT_14 0
 
 /** Montserrat 16 */
 #define LV_FONT_MONTSERRAT_16 0
@@ -1020,7 +1020,7 @@
 #define LV_FONT_MONTSERRAT_18 0
 
 /** Montserrat 20 */
-#define LV_FONT_MONTSERRAT_20 1
+#define LV_FONT_MONTSERRAT_20 0
 
 /** Montserrat 22 */
 #define LV_FONT_MONTSERRAT_22 0
@@ -1031,8 +1031,9 @@
 /** Montserrat 26 */
 #define LV_FONT_MONTSERRAT_26 0
 
-/** Montserrat 28 */
-#define LV_FONT_MONTSERRAT_28 1
+/** The built-in Montserrat fonts are all off: the UI uses its own Latin-1 builds of Montserrat 14/20/28/48 (app/ui/fonts, tools/gen_ui_fonts.sh);
+ *  the 28 is compiled for hosted builds only (NEUPOD_UI_HIRES). Montserrat 28 */
+#define LV_FONT_MONTSERRAT_28 0
 
 /** Montserrat 30 */
 #define LV_FONT_MONTSERRAT_30 0
@@ -1062,7 +1063,7 @@
 #define LV_FONT_MONTSERRAT_46 0
 
 /** Montserrat 48 */
-#define LV_FONT_MONTSERRAT_48 1
+#define LV_FONT_MONTSERRAT_48 0
 
 /** Montserrat 28 (compressed) */
 #define LV_FONT_MONTSERRAT_28_COMPRESSED 0
@@ -1112,7 +1113,13 @@
  *  If you do not, LV_FONT_DEFAULT falls back to a builtin font,
  *  which is no longer compiled in, causing a link error.
  */
-#define LV_USE_CUSTOM_FONT_DEFAULT 0
+#define LV_USE_CUSTOM_FONT_DEFAULT 1
+#if LV_USE_CUSTOM_FONT_DEFAULT
+/* The themes' font is the UI's own body font; the forward declaration keeps this header independent of lvgl.h's include order. */
+struct _lv_font_t;
+extern const struct _lv_font_t neupod_font_14;
+#define LV_FONT_DEFAULT (&neupod_font_14)
+#endif
 
 #if !LV_USE_CUSTOM_FONT_DEFAULT
 /** Font used by the themes and by widgets that do not set one explicitly.

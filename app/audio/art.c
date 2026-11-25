@@ -1,18 +1,14 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "art.h"
 
-#include <stdlib.h>
 #include <string.h>
 
+#include "os.h"
 #include "tjpgd.h"
 
-#ifdef PICO_ON_DEVICE
-/* The SDK links malloc through --wrap and the wrapper panics on exhaustion; art is optional, so use the real allocator. */
-extern void *__real_malloc(size_t n);
-#define ART_MALLOC __real_malloc
-#else
-#define ART_MALLOC malloc
-#endif
+/* Art is optional, so its scratch comes from os_alloc(): the kernel heap, NULL (never a panic) when it is short. The newlib heap
+ * is about 2 KB on the RP2350 and its malloc() panics on failure (docs/storage.md, "Memory allocation policy"). */
+#define ART_MALLOC os_alloc
 
 const char *art_err_str(art_err_t e) {
     switch (e) {
@@ -249,7 +245,7 @@ art_err_t art_decode(meta_read_fn rd, void *rd_ctx, uint64_t offset, uint32_t le
     info->h = (uint16_t)j.th;
     info->scale = scale;
 out:
-    free(extra);
-    free(pool);
+    os_free(extra);
+    os_free(pool);
     return err;
 }

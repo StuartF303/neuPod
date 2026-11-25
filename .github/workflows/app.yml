@@ -1,0 +1,499 @@
+name: app
+
+# The neuPod phone app (mobile/, docs/app/README.md "How it is tested"): Android builds and tests on Linux, iOS on a
+# GitHub-hosted Mac. No secrets and no signing: debug builds only, iOS with --no-codesign.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      update_goldens:
+        description: "Regenerate the golden PNGs on the goldens job's macOS image and upload them as an artifact (runs only that job)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}  # every run on main completes
+
+# Flutter as in docs/app/ENVIRONMENT.md. Third-party actions are pinned by commit SHA; the comment names the release.
+env:
+  FLUTTER_VERSION: "3.50.1"
+
+defaults:
+  run:
+    working-directory: mobile
+
+jobs:
+  # The workflow is not path-filtered, so that app-gate can be a required check: a firmware-only PR still gets a
+  # (passing) app-gate instead of waiting forever for jobs that never start. Path filtering happens here instead.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      app: ${{ steps.filter.outputs.app }}
+      update_goldens: ${{ steps.filter.outputs.update_goldens }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: filter
+        working-directory: .
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          UPDATE_GOLDENS: ${{ github.event_name == 'workflow_dispatch' && inputs.update_goldens }}
+        run: |
+          # The paths that make the app jobs run (the old on.*.paths globs). Git pathspecs: ** is not needed, a
+          # directory prefix matches everything below it.
+          #   - scripts/app and the audio fixtures count because android-integration runs the folder-access script and
+          #     picker driver and pushes these audio fixtures.
+          paths=(
+            "mobile/"
+            ".github/workflows/app.yml"
+            "scripts/app/"
+            "tests/assets/audio/"
+          )
+          app=false
+          update_goldens=false
+          if [ "$EVENT" = workflow_dispatch ] && [ "$UPDATE_GOLDENS" = true ]; then
+            # Regenerating goldens runs the goldens job alone; the other app jobs are skipped as for an unrelated change.
+            update_goldens=true
+          elif [ "$EVENT" = workflow_dispatch ]; then
+            app=true
+          else
+            if [ "$EVENT" = pull_request ]; then base=$PR_BASE; else base=$PUSH_BEFORE; fi
+            if [ -z "$base" ] || [ "$base" = 0000000000000000000000000000000000000000 ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+              echo "No usable base commit (new branch or unreachable): running the app jobs."
+              app=true
+            elif [ -n "$(git diff --name-only "$base" HEAD -- "${paths[@]}")" ]; then
+              app=true
+            fi
+          fi
+          echo "app=$app update_goldens=$update_goldens"
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+          echo "update_goldens=$update_goldens" >> "$GITHUB_OUTPUT"
+
+  # Formatting, static analysis, unit and widget tests.
+  check:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+          pub-cache: true
+      - run: flutter pub get
+      - name: Format
+        run: dart format --output=none --set-exit-if-changed lib test integration_test
+      - run: flutter analyze
+      - run: flutter test
+      # The wheel ports (mobile/lib/domain/wheel) are checked against vectors made by the firmware's own C. Regenerate
+      # them from the current firmware sources and fail if they no longer match the committed fixture.
+      - name: Wheel vectors match the firmware
+        run: |
+          out=$(mktemp)
+          sh tool/wheel_vectors/gen_wheel_vectors.sh "$out"
+          diff -q "$out" test/domain/wheel/fixtures/firmware_vectors.json
+      # The drift library view folds artists and albums as the firmware's library builder does; its expected lists are
+      # printed by lib_build() itself. Regenerate them and fail if they no longer match the committed fixtures.
+      - name: Library entities match the firmware
+        run: |
+          out=$(mktemp -d)
+          sh tool/library_entities/gen_library_entities.sh "$out"
+          for t in test/data/library_view/fixtures/*.tsv; do
+            e="${t%.tsv}.expected"
+            if [ ! -f "$e" ]; then
+              echo "::error file=mobile/$t::$t has no committed $(basename "$e")"
+              exit 1
+            fi
+          done
+          for f in test/data/library_view/fixtures/*.expected; do
+            diff -u "$f" "$out/$(basename "$f")"
+          done
+      # The tag reader (mobile/lib/data/scan/tag_reader.dart) is checked against what the firmware's own parser
+      # (app/audio/meta.c) and index_file() make of test/fixtures/tag_keys. Regenerate and fail if anything changed.
+      - name: Tag vectors match the firmware
+        run: |
+          python3 ../scripts/app/gen_tag_key_vectors.py
+          git status --porcelain -- test/fixtures/tag_keys
+          test -z "$(git status --porcelain -- test/fixtures/tag_keys)"
+      # The in-repo plugin's own Dart side (its Pigeon messages against a fake host).
+      - name: neupod_device plugin
+        working-directory: mobile/packages/neupod_device
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+      # The in-repo folder-access plugin: its Dart side, including the pread reader on a real host descriptor.
+      - name: neupod_storage plugin
+        working-directory: mobile/packages/neupod_storage
+        run: |
+          flutter pub get
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze
+          flutter test
+
+  # Debug APK, and the privacy check: the merged release manifest must not ask for INTERNET (R1 makes no network
+  # connection; Flutter adds INTERNET only to the debug and profile manifests, for the tool).
+  android:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "17"
+      # Gradle User Home cache (dependencies, wrapper, build scripts): restored by the commit-keyed entry of the latest
+      # run, saved at the end of the job, so every dependency (plugin builds included, which setup-java's file-hash key
+      # missed) is cached. Only main writes the cache; pull requests restore main's (the repo's Actions cache budget is limited).
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+      - name: Retry Maven 429s and timeouts
+        working-directory: .
+        run: |
+          # Maven Central answers 429 under load. Gradle retries 429, 408, 5xx and socket errors, default 3 attempts with
+          # a 1 s backoff that doubles; this gives 8 attempts (2 s .. 64 s between them). CI only: ~/.gradle, not the repo.
+          mkdir -p ~/.gradle
+          cat >> ~/.gradle/gradle.properties <<'EOF'
+          systemProp.org.gradle.internal.repository.max.tentatives=8
+          systemProp.org.gradle.internal.repository.initial.backoff=2000
+          systemProp.org.gradle.internal.http.connectionTimeout=60000
+          systemProp.org.gradle.internal.http.socketTimeout=60000
+          EOF
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+          pub-cache: true
+      - run: flutter pub get
+      - run: flutter build apk --debug
+      # JVM unit tests of the app module's Kotlin (the scan service's session and engine keeper, decision 0009).
+      - name: Android unit tests
+        run: (cd android && ./gradlew --no-daemon :app:testDebugUnitTest)
+      # The Flutter build above writes android/local.properties and the Gradle wrapper that this step needs.
+      - name: Release manifest has no network permission
+        run: |
+          (cd android && ./gradlew --no-daemon :app:processReleaseMainManifest)
+          manifest=build/app/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml
+          if [ ! -f "$manifest" ]; then
+            echo "::error::merged release manifest not found at mobile/$manifest"
+            find build/app/intermediates -name AndroidManifest.xml -path '*release*' || true
+            exit 1
+          fi
+          grep -n 'uses-permission' "$manifest" || true
+          # ACCESS_NETWORK_STATE comes in with Media3; the audio plugin's manifest removes it.
+          for permission in INTERNET ACCESS_NETWORK_STATE; do
+            if grep -q "\"android.permission.$permission\"" "$manifest"; then
+              echo "::error::the release manifest asks for android.permission.$permission; R1 makes no network connection"
+              exit 1
+            fi
+          done
+          echo "OK: no INTERNET or ACCESS_NETWORK_STATE permission in the release manifest"
+          # The library scan's foreground service (decision 0009): Android 14+ refuses to start it without its type
+          # and the type's permission.
+          if ! grep -q '"android.permission.FOREGROUND_SERVICE_DATA_SYNC"' "$manifest"; then
+            echo "::error::the release manifest lacks android.permission.FOREGROUND_SERVICE_DATA_SYNC (scan service)"
+            exit 1
+          fi
+          if ! python3 -I - "$manifest" <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          ns = '{http://schemas.android.com/apk/res/android}'
+          services = ET.parse(sys.argv[1]).getroot().iter('service')
+          ok = any(s.get(ns + 'name') == 'net.stuartfraser.neupod.ScanService'
+                   and s.get(ns + 'foregroundServiceType') == 'dataSync' for s in services)
+          sys.exit(0 if ok else 1)
+          PY
+          then
+            echo "::error::the release manifest's ScanService is not of foregroundServiceType dataSync"
+            exit 1
+          fi
+          echo "OK: the scan service is a dataSync foreground service with its permission"
+
+  # Integration tests on an emulator at the minimum API level (29, Android 10).
+  #
+  # The integration tests run natively as an Android instrumentation test (android/app/src/androidTest, the
+  # integration_test package's "Android Device Testing" route), not `flutter test`. `flutter test` finds the app's Dart
+  # VM service by reading logcat; on the hosted runner it sometimes never sees it for the second test file and waits
+  # until the job timeout (run 44993855662 attempt 1: app installed for app_launch_test.dart at 06:33:14, cancelled at
+  # 07:08:17). Under instrumentation the Dart tests run inside the app and report to JUnit through the integration_test
+  # plugin: no VM service, no logcat scrape.
+  android-integration:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Enable KVM
+        working-directory: .
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "17"
+      # Gradle User Home cache (dependencies, wrapper, build scripts): restored by the commit-keyed entry of the latest
+      # run, saved at the end of the job, so every dependency (plugin builds included, which setup-java's file-hash key
+      # missed) is cached. Only main writes the cache; pull requests restore main's (the repo's Actions cache budget is limited).
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+      - name: Retry Maven 429s and timeouts
+        working-directory: .
+        run: |
+          # Maven Central answers 429 under load. Gradle retries 429, 408, 5xx and socket errors, default 3 attempts with
+          # a 1 s backoff that doubles; this gives 8 attempts (2 s .. 64 s between them). CI only: ~/.gradle, not the repo.
+          mkdir -p ~/.gradle
+          cat >> ~/.gradle/gradle.properties <<'EOF'
+          systemProp.org.gradle.internal.repository.max.tentatives=8
+          systemProp.org.gradle.internal.repository.initial.backoff=2000
+          systemProp.org.gradle.internal.http.connectionTimeout=60000
+          systemProp.org.gradle.internal.http.socketTimeout=60000
+          EOF
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+          pub-cache: true
+      - run: flutter pub get
+      # Build the app and the instrumentation test APK before the emulator starts, so Gradle's downloads and first
+      # compile don't compete with it. `flutter build` also writes android/local.properties for ./gradlew.
+      - run: flutter build apk --debug
+      - run: (cd android && ./gradlew app:assembleDebugAndroidTest)
+      # The folder-access test app (tool/android_integration_tests.sh runs it through its adb-driven script).
+      - run: |
+          flutter build apk --debug -t integration_test/folder_access_test.dart --dart-define=NEUPOD_FOLDER_IT=true
+          mkdir -p build/folder_it && cp build/app/outputs/flutter-apk/app-debug.apk build/folder_it/app-debug.apk
+      # One instrumentation run per test file (tool/android_integration_tests.sh). No retry: a Dart test failure fails
+      # the instrumentation test, which fails Gradle, which fails the step; a hang is caught by the script's per-file
+      # timeout, then by the step timeout. The script is one line because the action runs each script line on its own.
+      # The step timeout covers the emulator boot plus every file at the per-file limit (4 files x 8 min), so a hang
+      # in any file is reported by the script's own message. Raise it when a file is added.
+      #
+      # -feature RefCountPipe: the API 29 emulator's graphics stack sometimes deadlocks on the first frame (RenderThread
+      # stuck in QemuPipeStream::commitBufferAndReadFully <- rcOpenColorBuffer2_enc <- gralloc.ranchu; ~4 in 10 runs).
+      # Run 45039175170 (25 cold launches per job): 75/75 ok with RefCountPipe across 3 jobs, against 7/75 hung on the
+      # earlier baseline without it. Keep -gpu swiftshader_indirect; -gpu guest timed out.
+      - name: Integration tests
+        timeout-minutes: 36
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 29
+          target: default
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -feature RefCountPipe -noaudio -no-boot-anim -camera-back none -no-snapshot
+          working-directory: mobile
+          script: FOLDER_IT_APK=build/folder_it/app-debug.apk bash tool/android_integration_tests.sh
+
+  # iOS: simulator build without signing, then the integration tests on an iPhone simulator. macos-26 is Apple
+  # silicon; Xcode 26.5 is the version on the owner's Mac (docs/app/ENVIRONMENT.md) and ships the iOS 26.5 simulator.
+  #
+  # The integration tests run natively with `xcodebuild test` (ios/RunnerTests, the integration_test package's
+  # "iOS Device Testing" route), not `flutter test`. `flutter test` on a simulator finds the app's Dart VM service by
+  # scraping `simctl spawn log stream`; on the hosted runner that stream sometimes misses the "Dart VM service is
+  # listening" line and the tool waits forever (runs 44977190298, both attempts). Under xcodebuild the Dart tests run
+  # inside the app and report to XCTest through the integration_test plugin: no VM service, no log scrape.
+  ios:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: macos-26
+    timeout-minutes: 40
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+          pub-cache: true
+      - run: xcodebuild -version
+      # Start booting the simulator now and wait for it only before the tests: a cold boot on the hosted runner has
+      # taken up to 7 minutes ("Waiting on Data Migration"), and it overlaps the builds below.
+      - name: Start an iPhone simulator
+        id: sim
+        working-directory: .
+        run: |
+          udid=$(xcrun simctl list devices available --json \
+            | jq -r '.devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"] // [] | map(select(.name == "iPhone 17")) | .[0].udid // empty')
+          if [ -z "$udid" ]; then
+            echo "::error::no iPhone 17 simulator with iOS 26.5"
+            xcrun simctl list devices available
+            exit 1
+          fi
+          xcrun simctl boot "$udid"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+      - run: flutter pub get
+      - run: flutter build ios --simulator --debug --no-codesign
+      # One app build per test file: `flutter build ios --config-only <file>` makes that file the app's Dart entry
+      # point, and xcodebuild builds Runner.app with it plus RunnerTests.xctest. Debug, simulator, ad-hoc signed by
+      # Xcode (no team). No retry: a Dart test failure fails XCTest, which fails xcodebuild, which fails the job; a hang
+      # is caught by XCTest's time allowance, then by the step timeout.
+      - name: Integration tests
+        timeout-minutes: 25
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
+        run: |
+          shopt -s nullglob
+          files=(integration_test/*_test.dart)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::no integration tests in mobile/integration_test"
+            exit 1
+          fi
+          for file in "${files[@]}"; do
+            name=$(basename "$file" .dart)
+            echo "::group::$file"
+            flutter build ios --config-only --simulator --debug --no-codesign "$file"
+            (cd ios && xcodebuild build-for-testing \
+              -workspace Runner.xcworkspace -scheme Runner -configuration Debug \
+              -destination "id=$UDID" -derivedDataPath ../build/ios_integ \
+              -quiet)
+            echo "Waiting for the simulator to finish booting"
+            xcrun simctl bootstatus "$UDID" -b
+            (cd ios && xcodebuild test-without-building \
+              -workspace Runner.xcworkspace -scheme Runner -configuration Debug \
+              -destination "id=$UDID" -derivedDataPath ../build/ios_integ \
+              -parallel-testing-enabled NO \
+              -test-timeouts-enabled YES -maximum-test-execution-time-allowance 300 \
+              -resultBundlePath "../build/ios_integ/$name.xcresult")
+            echo "::endgroup::"
+          done
+      - name: Simulator state on failure
+        if: failure()
+        run: |
+          xcrun simctl list devices booted
+          xcrun simctl spawn booted log show --last 10m --style compact --predicate 'process == "Runner"' | tail -200 || true
+
+  # Golden (screenshot) tests, compared pixel for pixel. Text rasterises differently on Linux, and on each macOS release
+  # (macOS 27 moved ~0.1 % of the pixels of every golden made on macOS 26, all on glyph edges), so the PNGs are made and
+  # compared on this one image only: macos-26, as the ios job, never -latest. The test config
+  # (mobile/test/ui/components/flutter_test_config.dart) compares only with NEUPOD_GOLDENS=compare and lets
+  # --update-goldens write only on GitHub Actions; the Linux check job renders the same tests without comparing.
+  #
+  # A job of its own rather than a step in ios: it costs ~2 macOS minutes more per run (its own checkout and Flutter
+  # set-up), but a golden failure doesn't stop the integration tests, it runs in parallel with ios instead of after
+  # its ~25 minutes, and regenerating (workflow_dispatch with update_goldens) runs this job alone, ~3 minutes, instead
+  # of dragging the whole ios job along. Regenerating: docs/app/ENVIRONMENT.md "Goldens".
+  goldens:
+    needs: changes
+    if: needs.changes.outputs.app == 'true' || needs.changes.outputs.update_goldens == 'true'
+    runs-on: macos-26
+    timeout-minutes: 15
+    env:
+      NEUPOD_GOLDENS: compare
+      UPDATE_GOLDENS: ${{ needs.changes.outputs.update_goldens }}
+      # Every folder with golden tests. The component and screen goldens are compared exactly; the device goldens with
+      # their own 0.5 % tolerance (test/ui/device/goldens/flutter_test_config.dart), which the check job also applies.
+      GOLDEN_TESTS: test/ui/components test/ui/screens test/ui/device/goldens
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+          pub-cache: true
+      # The image version (it changes under the macos-26 label with GitHub's image updates): when every golden fails by
+      # ~0.1 % on glyph edges, compare this line with the run that made the PNGs, then regenerate.
+      - name: Runner image
+        run: |
+          echo "image: ${ImageOS:-?} ${ImageVersion:-?}"
+          sw_vers
+          echo "Goldens $([ "$UPDATE_GOLDENS" = true ] && echo made || echo compared) on ${ImageOS:-?} ${ImageVersion:-?} ($(sw_vers -productVersion))" >> "$GITHUB_STEP_SUMMARY"
+      - run: flutter pub get
+      - name: Compare goldens
+        if: env.UPDATE_GOLDENS != 'true'
+        run: |
+          # shellcheck disable=SC2086 # GOLDEN_TESTS is a list of folders
+          flutter test $GOLDEN_TESTS
+      - name: Regenerate goldens
+        if: env.UPDATE_GOLDENS == 'true'
+        run: |
+          # shellcheck disable=SC2086 # GOLDEN_TESTS is a list of folders
+          flutter test --update-goldens $GOLDEN_TESTS
+          git status --short -- test
+      - name: Upload golden failures
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: golden-failures
+          path: mobile/test/**/failures/
+          if-no-files-found: ignore
+          retention-days: 14
+      # The archive keeps the paths below mobile/test (ui/components/goldens/...): unzip it over mobile/test.
+      - name: Upload regenerated goldens
+        if: env.UPDATE_GOLDENS == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: goldens
+          path: mobile/test/**/goldens/*.png
+          if-no-files-found: error
+          retention-days: 14
+
+  # The one check to require in branch protection. Passes when every app job succeeded, or when they were all skipped
+  # because the change did not touch the app. Fails on any failure or cancellation, and on a skip when the app changed.
+  app-gate:
+    needs: [changes, check, android, android-integration, ios, goldens]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Gate
+        working-directory: .
+        env:
+          APP: ${{ needs.changes.outputs.app }}
+          CHANGES: ${{ needs.changes.result }}
+          RESULTS: |
+            check=${{ needs.check.result }}
+            android=${{ needs.android.result }}
+            android-integration=${{ needs.android-integration.result }}
+            ios=${{ needs.ios.result }}
+            goldens=${{ needs.goldens.result }}
+        run: |
+          echo "changes: $CHANGES (app=$APP)"
+          if [ "$CHANGES" != success ]; then echo "::error::changes job did not succeed"; exit 1; fi
+          ok=true
+          for line in $RESULTS; do
+            name=${line%%=*}; result=${line#*=}
+            echo "$name: $result"
+            case "$result" in
+              success) ;;
+              skipped) [ "$APP" = true ] && { echo "::error::$name was skipped but the app changed"; ok=false; } ;;
+              *) echo "::error::$name: $result"; ok=false ;;
+            esac
+          done
+          $ok

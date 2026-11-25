@@ -63,36 +63,39 @@ Priority 7 is the highest; the kernel idle task is 0.
 
 | Task | Priority | Stack | Period / trigger | Budget |
 | --- | --- | --- | --- | --- |
-| kernel timer service | 6 | 1.5 KB | kernel timers | microseconds |
-| storage | 5 | 8 KB | request queue; while a file streams, every 1 ms; otherwise every 500 ms | directory listings and volume space for the UI (yields every 32 entries); streams the file from the card in 2 KB reads into the audio data ring; decodes the album art of the playing track in slices (2 ms of work, 1 ms sleep, audio top-ups between, aborts on any request; [UI](ui.md#now-playing-art)); loads the settings store after the card mounts and saves it about 1.5 s after a change ([Bluetooth](bluetooth.md)); later: library scan, track prefetch |
-| input | 4 | 2 KB | every 2 ms | well under 1 % (the wheel FIFO overflows after ~4.8 ms) |
+| kernel timer service | 6 (shared with the CYW43 worker; round-robin) | 1.5 KB | kernel timers | microseconds |
+| CYW43 worker (SDK) | 6 | 6 KB | radio events; **every BTstack callback and lwIP callback** | LED; Bluetooth (BTstack's one thread); lwIP (via the SDK's FreeRTOS arch; lwIP also has its own 4 KB tcpip thread) |
+| storage | 5 | 8 KB | request queue; while a file streams, every 1 ms; otherwise every 500 ms | directory listings and volume space for the UI (yields every 32 entries); streams the file from the card in 2 KB reads into the audio data ring; decodes the album art of the playing track in slices (2 ms of work, 1 ms sleep, audio top-ups between, aborts on any request; [UI](ui.md#now-playing-art)); loads the settings store after the card mounts and saves it about 1.5 s after a change ([Bluetooth](bluetooth.md)); Music > Update Library build (minutes; runs the task at priority 1, below the UI, so the screen and heartbeat stay alive, and stays inside the 8 KB stack: [storage](storage.md#music-library-index)); later: track prefetch |
+| input | 4 | 2 KB | every 2 ms | well under 1 % (the wheel FIFO overflows after ~4.8 ms); also the Power key and Hold switch levels |
 | I2C users, while on the bus | 4 (lifted) | n/a | boot checks, the 5 s gauge read | a few ms (see findings) |
-| CYW43 worker (SDK) | 3 | 6 KB | radio events; **every BTstack callback and lwIP callback** | LED; Bluetooth (BTstack's one thread); lwIP (via the SDK's FreeRTOS arch; lwIP also has its own 4 KB tcpip thread) |
 | wifi (policy) | 1 | 4 KB | every 200 ms | requests from the UI, join/retry with backoff, power policy, SNTP, the 1 s snapshot for the UI ([Wi-Fi](wifi.md)) |
 | haptic (click feedback) | 4 | 2 KB | click queue (2 deep, non-blocking for the UI) | a few ms per click; back to standby after 2 s idle |
 | UI (LVGL) | 2 | 12 KB | 5 to 30 ms, from LVGL's own timer | frame strip render + 24-line blocking DMA |
 | monitor | 1 | 3 KB | 100 ms tick: heartbeat 1 s, gauge 5 s, stats 10 s | negligible |
 | boot checks (transient, 6) | 1 | 3 to 5 KB | once at boot | bounded by per-check deadlines |
 
-Core 1 has its own 16 KB stack array and a 116 KB codec arena (both static RAM). Heap: `heap_4`, 80 KB (`NEUPOD_RTOS_HEAP_BYTES`, `app/os/memory_budget.h`), holds task stacks and kernel objects; static RAM beyond that is the LVGL
+Core 1 has its own 16 KB stack array and a 116 KB codec arena (both static RAM). Heap: `heap_4`, 80 KB (`NEUPOD_RTOS_HEAP_BYTES`, `app/os/memory_budget.h`), holds task stacks and kernel objects, and the transient scratch of album art and FatFs (`os_alloc`, [storage](storage.md)); static RAM beyond that is the LVGL
 pool (72 KB, `NEUPOD_LVGL_POOL_BYTES`), the BTstack pools (about 7 KB), the settings store (about 5 KB), the two render buffers (30 KB), the album-art thumbnail (8 KB, `app/runtime/art_service.c`), the directory-listing buffer (about 19 KB) and the audio core's rings and block buffer (about 28 KB), the play queue (about 3.9 KB, plus a 264 B rollback snapshot) and two track contexts for the stream controller (2.8 KB).
-The monitor prints the heap low-water mark and each task's lowest free stack every 10 s. Input is above
-the UI so wheel frames are never lost while LVGL renders; the monitor is lowest; boot-check tasks sit
+The monitor prints the heap low-water mark and each task's lowest free stack every 10 s. Input is above the UI so wheel frames are never lost while LVGL renders; the monitor is lowest; boot-check tasks sit
 below the UI so the splash keeps animating while they run.
+
+The CYW43 worker
+(radio, BTstack) sits **above storage** on purpose: the A2DP link has a ~40 ms deadline and storage bursts to 32-40 % of core 0 during FLAC playback
+(bench 19 Nov 2026: worker 3 below storage 5 gave 36 stalls per 10 s, catch-up up to 160 ms, bitpool forced 53 to 45 and a disconnect; worker above storage gave 0 stalls, 25-34 ms, bitpool 53 steady). `RT_PRIO_RADIO` and `CYW43_TASK_PRIORITY` are kept equal by a static assert, and `RT_PRIO_RADIO > RT_PRIO_STORAGE` is asserted too. It shares priority 6 with the timer service; the timer task does microseconds of work per wake and the worker is bursty (it blocks between events), so round-robin time slicing (4 ms at the 250 Hz tick) only delays the worker's own timer wake-ups.
 
 ### Inter-task data (core 0)
 
 | From to | Mechanism |
 | --- | --- |
-| input to UI | queue of `input_event_t` (16 deep; dropped if the UI lags) |
+| input to UI | queue of `input_event_t` (`RT_INPUT_QUEUE_LEN` = 64 deep). Wheel and key events are dropped if the UI lags, and counted (`input: WARNING n events dropped` in the 10 s statistics when it ever happens); Power-key and Hold-switch edges are retried until the queue takes them. **UI-6:** the queue was 16 deep (8 presses, two events each) and the UI drained it once per pass (a frame, about 30 ms, then its sleep), so a burst of more than 8 presses (a UART paste, a quick run on the keypad) lost the rest silently and later keys landed on the wrong screen; the UI now sleeps on the queue (an arriving event wakes it at once) and the queue holds 32 presses |
 | monitor / battery check to UI | latest value in a mutex-guarded store (`battery_store`) |
 | boot checks to UI | `capabilities_t` (mutex-guarded; first result per subsystem wins) |
 | I2C bus | one mutex (`rt_i2c_mutex`) around every battery / haptic transaction |
 | UI to haptic task | 2-deep byte queue, sent without waiting (`rt_haptic_click`) |
 | UI to player | `player.h`: a mutex-guarded state (what plays, volume) plus commands to the audio core; the storage task reports file start and errors; end of file and stream faults are read back from the audio core's counters and statistics |
-| radio worker to UI | `hal_bt_event_fn` callback turned into a 16-deep queue of `hal_bt_event_t` by `bt_service.c` (state, device found/named, scan done); non-blocking send, dropped if the UI lags |
+| radio worker to UI | `hal_bt_event_fn` callback turned into a 16-deep queue of `hal_bt_event_t` by `bt_service.c` (state, device found/named, scan done); non-blocking send, dropped if the UI lags. Link events (pairing, connection state) are not queued: the callback hands them to `bt_saved_on_event` (RAM-only settings write) and screens read `hal_bt_link_state()` |
 | anyone to settings store | `settings_store.h`: RAM image behind a mutex; only the storage task reads or writes the card file |
-| UI to storage task | request queue (list a directory, free space, settings load); results come back on a result queue and the UI polls it. The entries live in one static buffer that the UI reads only after the result for its latest request arrived. Why a task: an SD directory scan is hundreds of sector reads and the UI task must never stall |
+| UI to storage task | request queue (list a directory, free space, settings load, and the music library: open an index, fill a window of rows, build the index); results come back on a result queue and the UI polls it, the library's answers in a small mailbox it polls the same way. The entries live in one static buffer that the UI reads only after the result for its latest request arrived; the library's reader and row window share that same buffer (the Files screen and the Music screens are never on screen together), so the library adds no RAM for them. Why a task: an SD directory scan is hundreds of sector reads and the UI task must never stall, and FatFs is not re-entrant |
 
 ### UI performance
 
@@ -193,12 +196,22 @@ on the wheel.
 
 | Source | Keys |
 | --- | --- |
-| UART console on the testbed (`console_keys`) | `w` / `k` scroll up (counter-clockwise), `s` / `j` scroll down (+/-4 wheel positions = one list step); Enter or `e` = Select; `a` = Left; `d` = Right; `p` or Space = Play/Pause; `m` or Backspace = Menu |
-| Host simulator window | Up / Down arrows and the mouse wheel scroll; Enter = Select; Left / Right; Space or `p` = Play/Pause; Esc, Backspace or `m` = Menu |
+| UART console on the testbed (`console_keys`) | `w` / `k` scroll up (counter-clockwise), `s` / `j` scroll down (+/-4 wheel positions = one list step); Enter or `e` = Select; `a` = Left; `d` = Right; `p` or Space = Play/Pause; `m` or Backspace = Menu; `l` = toggle Hold (the Pico rig has no Power key, [ADR-0020](adr/0020-hold.md)) |
+| Host simulator window | Up / Down arrows and the mouse wheel scroll; Enter = Select; Left / Right; Space or `p` = Play/Pause; Esc, Backspace or `m` = Menu; **F1** = the Power key (hold it: 2 s toggles Hold, 10 s asks for a power-off, which the simulator only logs) |
 
 Any input event also skips the splash hold. The UI screens and their keys are described in [UI](ui.md). `hal_input_reinit()` failing (the init packet is still
 `TODO(hw)`) is not fatal: the wheel check passes if valid frames arrive within about 1.1 s, otherwise it is
 degraded ("not connected").
+
+## Sleep and the empty battery
+
+[ADR-0021](adr/0021-power-sleep.md). The UI task evaluates `power_service_poll()` every tick (it looks at most every 500 ms): the pure policy (`app/power/power_policy.c`) from the UI's last-input
+time, whether audio plays, whether anything is busy (card queue or write, library build, Bluetooth pair / connect / scan, Wi-Fi join, haptic calibration), external power
+(`hal_power_external()`) and the battery store. SLEEP runs the sequence on the UI task: `power_service_sleep_prepare()` (re-check, Bluetooth controller off through `hal_bt_power()`,
+settings and resume position flushed by the storage task with a bounded wait, card synced), screen off and panel sleep, `hal_power_sleep(24 h)`, then the wake. The other tasks
+keep running until the system actually suspends (the Y2's HAL waits through the scheduler). Only the UI task calls `hal_power_sleep()`; the I2C mutex is not involved: the platforms that can sleep read their battery
+without the I2C bus (the Y2: sysfs), and the system is only suspended after the card is idle.
+`hal_bt_power()` blocks while the controller goes down (bounded) and, on the Y2, while `/dev/stpbt` is reopened (about 1.3 s) on the way up. On the Pico 2 W the whole feature is compiled out (`NEUPOD_POWER_MGMT=0`).
 
 ## Failure handling
 

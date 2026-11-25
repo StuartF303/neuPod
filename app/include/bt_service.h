@@ -5,12 +5,14 @@
  *
  * The HAL (hal_radio.h) reports events from the radio worker task; this module turns them into queue items the UI task
  * polls (the UI never calls into the radio stack from its own context except the non-blocking start/stop of a scan).
- * Stage 1 (docs/bluetooth.md): bring-up and discovery only; pairing and A2DP are stage 2.
+ * Stage 1 (docs/bluetooth.md): bring-up and discovery. Stage 2a: pairing and the one remembered headset (bt_saved.h): the Pair /
+ * Connect / Disconnect / Forget actions of Settings > Bluetooth. Audio is stage 2b.
  */
 #ifndef NEUPOD_BT_SERVICE_H
 #define NEUPOD_BT_SERVICE_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "hal_radio.h"
 
@@ -33,6 +35,43 @@ hal_status_t bt_service_start(void);
 bool bt_service_event_poll(hal_bt_event_t *out);
 /** Drop everything queued (a new scan starts from nothing). */
 void bt_service_event_flush(void);
+
+/**
+ * The Pair action: pair with @p dev (a device from the Devices list) and connect. If it ends CONNECTED the device becomes the
+ * remembered headset (replacing any other, whose link key is deleted); if it fails or is cancelled nothing is remembered.
+ * Same return codes as hal_bt_pair() (HAL_EBUSY while scanning or while a link exists / is being set up).
+ */
+hal_status_t bt_service_pair(const hal_bt_device_t *dev);
+/** Connect to the remembered headset (HAL_ENODEV if there is none). Never pairs: a headset that lost its key fails with HAL_BT_FAIL_AUTH. */
+hal_status_t bt_service_connect(void);
+/** Cancel a Pair / Connect in progress, or drop the link. */
+void bt_service_disconnect(void);
+/** Forget the remembered headset: drop the link, delete its link key, delete the record. */
+void bt_service_forget(void);
+
+/** The headset is being reconnected automatically (after a lost link, or at power-up): "Reconnecting..." (bt_reconnect.h). */
+bool bt_service_reconnecting(void);
+/** Counts the times the automatic reconnect gave up (5 minutes of attempts, headset still remembered, the user did nothing): the UI says "Couldn't reconnect - paused". */
+uint32_t bt_service_gave_up_seq(void);
+
+/** Counts the times a connected headset was lost and the automatic reconnect started (not at power-up): the UI says "<name> disconnected - reconnecting". */
+uint32_t bt_service_lost_seq(void);
+/** Counts the times the automatic reconnect (after a loss or at power-up) ended with the headset connected again: the UI says "<name> connected". */
+uint32_t bt_service_reconnected_seq(void);
+
+#include "hal_power.h" /* NEUPOD_POWER_MGMT */
+#if NEUPOD_POWER_MGMT
+#define BT_SLEEP_WAS_ON 1u     /**< the controller was powered (bt_service_sleep() powered it off) */
+#define BT_SLEEP_WAS_LINKED 2u /**< ... and a headset was connected, or being reconnected */
+/**
+ * System sleep (ADR-0021), UI task: end any scan, pairing or connection, cancel the automatic reconnect and power the controller off. Returns BT_SLEEP_* flags for
+ * bt_service_wake() (0: there was nothing to power off: no radio, not up, or it would not go). The headset stays remembered; the audio route is left alone (it is
+ * not "let go": the output stays Bluetooth, as after any lost link).
+ */
+uint8_t bt_service_sleep(void);
+/** Wake from sleep: power the controller up again if it was on, and, if a headset was linked, let the power-up reconnect run as at boot (5 minutes of tries). */
+void bt_service_wake(uint8_t flags);
+#endif
 
 /** Advance the simulator on the host; no-op on hardware. Cheap; called from the UI tick. */
 void bt_service_tick(void);

@@ -1,0 +1,1 @@
+source "$BR2_EXTERNAL_Y2_PATH/package/y2-fbtool/Config.in"

@@ -3,15 +3,17 @@
 Decision background: [ADR-0007](adr/0007-bluetooth-audio-path.md) (BTstack on the CYW43439 for phase 1),
 [ADR-0011](adr/0011-bare-metal-audio-core.md) (core 1 rules). Roles: neuPod is an **A2DP source** (SBC, and SBC-XQ =
 SBC at a high bitpool) and an **AVRCP target** (plus a controller side where absolute volume needs it); the headset is the
-sink. HFP comes later. This page covers what **stage 1** built, and the plan for stages 2 and 3.
+sink. HFP comes later. This page covers what **stage 1** and **stage 2a** (pairing and connection management) built, and the plan for the rest of stage 2 and for stage 3.
 
 ## Staged plan
 
 | Stage | Content | State |
 | --- | --- | --- |
-| 1 | RAM trim; SD-backed settings store (volume, backlight, click feedback, and BTstack's link keys); BTstack classic running on core 0; HCI bring-up; device discovery with a Settings > Bluetooth screen; host simulation | built, **not yet run on the board** |
-| 2 | Pairing (SSP) and the saved device; A2DP source with SBC / SBC-XQ; AVRCP target with absolute volume; audio routing from core 1 through a new core 1 to core 0 PCM path with the source-side pacing model below; negotiated codec on the Now Playing badge | planned |
-| 3 | Reconnect on power-up and after a drop; polish (error states, auto-sleep of the radio); the ADR-0007 listening test (SBC-XQ against a QCC3008 board, AirPods Pro 3); power measurements | planned |
+| 1 | RAM trim; SD-backed settings store (volume, backlight, click feedback, and BTstack's link keys); BTstack classic running on core 0; HCI bring-up; device discovery with a Settings > Bluetooth screen; host simulation | built |
+| 2a | Pairing (SSP "just works") and one saved headset; connection states (Pairing, Connecting, Connected, Disconnected, Failed with a reason); Connect / Disconnect / Forget; Settings > Bluetooth rows and the Devices pairing flow; link keys on the SD card; host simulation and tests. **No audio.** See [Pairing and the connection](#pairing-and-the-connection-stage-2a) | built; bench: Pair / save / reconnect / Forget passed on a Sony WI-C200. Disconnect, re-pair after Forget, wiped-headset refusal and Wi-Fi + Bluetooth coexistence are deferred to 2b |
+| 2b | A2DP source with SBC / SBC-XQ; audio routing from core 1 through a new core 1 to core 0 PCM path (storage shared with the I2S ring, [ADR-0013](adr/0013-bluetooth-ram-psram.md) amendment) with the source-side pacing model below; negotiated codec on the Now Playing badge; Audio output Auto / Wired; pause on link loss; status-bar glyph. See [Stage 2b](#stage-2b-the-audio-stream-built). **Not built: hi-res decimation, 48 kHz.** | built, host-tested; bench pending (Y2 first) |
+| 2c | AVRCP: the headset's absolute volume is the volume (software at 0 dB), headset buttons, track metadata. See [Stage 2c](#stage-2c-avrcp-volume-buttons-metadata-built) | built, host-tested; bench pending (Y2 first) |
+| 3 | Reconnect on power-up and after a drop (**built**, [below](#reconnecting-stage-3-built)); polish (error states, auto-sleep of the radio); the ADR-0007 listening test (SBC-XQ against a QCC3008 board, AirPods Pro 3); power measurements | reconnect built, host-tested; the rest planned |
 
 ## The stack
 
@@ -22,34 +24,74 @@ sink. HFP comes later. This page covers what **stage 1** built, and the plan for
   Classic only: no BLE, no mesh. Configuration: `platforms/rp2350/btstack/btstack_config.h` (static pools, no `malloc`).
 * **Not used**: the SDK's `pico_btstack_cyw43` glue, because it stores BTstack's pairing data in the **internal flash**
   (`pico_btstack_flash_bank` on `flash_safe_execute`). See "Why the SD card" below.
-* **Our glue**: `platforms/rp2350/hal/hal_radio_bt.c` provides `btstack_cyw43_init()` / `btstack_cyw43_deinit()` (the SDK's
-  `cyw43_arch_init()` calls them), implements the Bluetooth half of `hal/include/hal_radio.h` (`hal_bt_*`), and wraps
-  the settings store as a `btstack_tlv_t` for the link key database. `hal/host/hal_radio.c` is the host simulator.
+* **Our glue** ([ADR-0019](adr/0019-bluetooth-audio-sink-boundary.md)): the BTstack code is one platform-neutral adapter plus a small
+  port per platform.
+  * `hal/common/bt_btstack/bt_btstack.c` implements the Bluetooth half of `hal/include/hal_radio.h` (`hal_bt_*`): discovery, the
+    pairing and connection state machine, the timeouts, and the link key database on top of the settings store (`hal_bt_storage_t`,
+    wrapped as a `btstack_tlv_t`). Nothing BTstack-specific crosses `hal_radio.h`. `hal/host/hal_radio.c` is the host simulator.
+  * `hal/common/bt_btstack/bt_port.h` is what a platform provides: `bt_port_present()` (is the controller usable), `bt_port_start()`
+    (memory, run loop and `hci_init()` with the platform's transport), `bt_port_run_sync()` and `bt_port_post()` (hand work to
+    BTstack's thread, blocking or not), `bt_port_power()`, `bt_port_storage()` (the storage BTstack's thread may use),
+    `bt_port_deliver()` and `bt_port_poll()` (events out). The local address comes from the controller on the RP2350; the Y2 port
+    reads it before HCI starts. No locking is part of the port: the adapter's state is touched by BTstack's thread only, or through atomics.
+  * RP2350: `platforms/rp2350/hal/bt_port_cyw43.c`: the CYW43 transport, the `async_context` run loop, and the SDK's
+    `btstack_cyw43_init()` / `btstack_cyw43_deinit()` hooks (`cyw43_arch_init()` calls them), as before the split.
+  * Y2: `platforms/y2/hal/bt_port_stpbt.c`: `/dev/stpbt` through `btstack_uart_stpbt.c` (one H4 packet per `read()`, the device is not
+    a tty) and `btstack_chipset_mtk_consys.c` (the MediaTek vendor script that must run before HCI_Reset), both shared with the
+    `y2-a2dp` bench tool (`testbed/y2/tools/y2-a2dp`), and the POSIX run loop on a thread of its own. Configuration:
+    `platforms/y2/btstack/btstack_config.h`; BTstack's source list is `cmake/btstack_posix.cmake` (the Pico SDK's copy, as for the tool).
 * **Controller**: the CYW43439 on the Pico 2 W. Its Bluetooth device address is the Wi-Fi MAC plus one (the SDK transport sets
   it). `CYW43_ENABLE_BLUETOOTH=1` is set once for everything that links `neupod_freertos`, because `cyw43_arch_init()` is
   compiled into several static libraries and every copy must agree.
 
 ## Threading
 
-BTstack is single-threaded. It runs on the **async context of the CYW43 driver**, which with
-`pico_cyw43_arch_sys_freertos` is one FreeRTOS task, the "CYW43 worker" (core 0, priority 3, **6 KB** stack; it was
-4 KB before BTstack). Every BTstack callback, and our packet handler, runs on that task.
+BTstack is single-threaded; which thread that is depends on the port. Every `hal_bt_*` call can be made from any RTOS task and only
+hands a request over (`bt_port_post()`) or reads an atomic; the BTstack code itself runs on one thread.
+
+**RP2350.** BTstack runs on the **async context of the CYW43 driver**, which with `pico_cyw43_arch_sys_freertos` is one FreeRTOS
+task, the "CYW43 worker" (core 0, priority 6, above storage (see [runtime](runtime.md#rtos-tasks-core-0)), **6 KB** stack; it was 4 KB before BTstack). Every BTstack callback, and our packet
+handler, runs on that task.
 
 | Caller | How it reaches BTstack | Blocks the caller? |
 | --- | --- | --- |
-| radio boot check (`hal_bt_init`) | `async_context_execute_sync` | yes, until the worker has queued the HCI power-on (milliseconds) |
-| UI task (`hal_bt_inquiry_start` / `_stop`) | `btstack_run_loop_execute_on_main_thread` (a static callback registration) | no |
-| radio worker to the UI | `hal_bt_event_fn` callback, which `app/runtime/bt_service.c` turns into a 16-deep queue (`os_queue_send`, no wait: an event is dropped rather than holding the radio up) | no |
+| radio boot check (`hal_bt_init`) | `async_context_execute_sync` (`bt_port_run_sync`) | yes, until the worker has queued the HCI power-on (milliseconds) |
+| UI task (`hal_bt_inquiry_start` / `_stop`; stage 2a: `hal_bt_pair` / `_connect` / `_disconnect` / `_forget`) | `btstack_run_loop_execute_on_main_thread` (`bt_port_post`; a static callback registration each; the state is reserved with an atomic exchange first, so one request is in flight) | no |
+| radio worker to the UI | `hal_bt_event_fn` callback (`bt_port_deliver` calls it at once), which `app/runtime/bt_service.c` turns into a 16-deep queue (`os_queue_send`, no wait: an event is dropped rather than holding the radio up) | no |
 
 Core 1 never calls any of this, and BTstack never runs on it. The rules in [Runtime](runtime.md) hold unchanged;
 `tools/check_core1_closure.py` is still green on the linked image.
+
+**Y2.** The firmware is a Linux process whose RTOS is the FreeRTOS POSIX port: tasks are pthreads that the port runs one at a time
+and its critical sections are global state, so a thread that is not an RTOS task must never call a FreeRTOS function (queue, mutex,
+event group, delay). BTstack therefore runs on the **POSIX run loop on a pthread of its own** (512 KB stack, every signal blocked,
+including the port's SIGALRM tick, which is sent to the running task's thread only). It never calls the app and never touches the settings
+store:
+
+| Direction | How |
+| --- | --- |
+| task to BTstack | `bt_port_post()`: tasks take turns (an atomic flag, sleeping through the scheduler) and call `btstack_run_loop_execute_on_main_thread`, whose own native lock then only BTstack's thread and one task contend for. `hal_bt_init` waits with `hal_delay_ms` (scheduler sleep), up to 15 s, never a native wait |
+| BTstack to the app | events go into a 64-slot lock-free ring; `hal_bt_poll()` (the UI frame calls it through `bt_service_tick`) delivers them from the calling task, in order, one task at a time. The callback therefore runs on that task, not on the radio thread: same rules (quick, no blocking, no calls back into `hal_bt_*`). A ring that overflows drops the new event and says so on the console |
+| link keys | `platforms/y2/hal/y2_bt_tlv.c`: BTstack's thread reads and writes a RAM copy of the link-key records (preloaded from the settings store in `hal_bt_init`); the same poll writes changes back to the store, retrying about once a second while the store refuses (no card, read-only, not loaded). Pairing works without a writable card; the key then lives for the session only |
+
+Start-up on the Y2: `hal_system_late_init()` calls `y2_bt_probe()`, which reads `/data/BT_Addr` (read only, 6 bytes, MSB first; an
+unreadable, short, all-zero or all-0xFF file means Bluetooth unavailable, never a default address) and opens `/dev/stpbt` on a helper
+thread with signals blocked (the open powers the chip and takes about 1.3 s). Bluetooth is available only if both worked. The descriptor is
+kept and handed to the transport, so the device is opened once. `hal_bt_init` then sets BTstack up (the MediaTek vendor script, with the
+address, runs before HCI_Reset), starts the thread and powers HCI on. There is no Wi-Fi on the Y2 (`hal_wifi_present()` is false), so the
+boot check reports Wi-Fi unavailable while Bluetooth is available. Chip bring-up before the firmware starts is `S80mtk-bt`
+([Y2 testbed](https://github.com/StuartF303/neuPod/blob/main/testbed/y2/README.md)).
+
+The controller does not report a page timeout at the configured time (the MT6582 only answers after Create_Connection_Cancel), so an
+unanswered Pair or Connect is ended by our own timer (`HAL_BT_PAIR_TIMEOUT_MS` / `HAL_BT_CONNECT_TIMEOUT_MS`), which cancels the page and ends the
+attempt as "timed out"; a late Connection_Complete with an error is ignored.
 
 ## Boot and what the UART shows
 
 The "radio" boot check task (4.8 s deadline, then it keeps waiting up to 12 s so a slow bring-up still upgrades the result) calls
 `hal_system_late_init()` (CYW43 driver, which also starts BTstack's memory and run loop through `btstack_cyw43_init`), then
 `bt_service_start()`, which sets the local name (`neuPod`), the Class of Device (Audio, portable audio), makes the device
-**not discoverable and not connectable** (nobody can pair with it in stage 1) and calls `hci_power_control(HCI_POWER_ON)`.
+**never discoverable, and not connectable or bondable** (nobody can find it; only while a Pair action runs is it connectable and bondable, for the chosen headset only, stage 2a) and calls `hci_power_control(HCI_POWER_ON)`.
 
 Expected UART lines (about 1 to 3 s after the splash starts; the exact time is a thing to measure on the board):
 
@@ -76,26 +118,41 @@ which carries neither. If the controller refuses the Inquiry command (BTstack gi
 After the inquiry the radio asks for the names of audio devices that had none, one at a time (at most 6; a name request cannot
 overlap an inquiry). Up to 12 devices are kept per scan. Stopping a scan skips the name requests.
 
-Settings > Bluetooth ([UI](ui.md)) shows the status, the address and a **Scan for devices** row. Select opens the **Devices** screen,
-which starts the scan as it opens and lists everything found as it arrives: audio devices with a speaker symbol first (after the scan
-ends), then others greyed out, with the signal on the right. Its first row is `Stop scanning` / `Scan again`. Selecting a device shows
-"Pairing: not yet": pairing is stage 2. Menu goes back and stops the scan.
+Settings > Bluetooth ([UI](ui.md)) is a short page (Audio output, **Devices**, Absolute volume). **Devices** starts the scan as it opens (unless audio is streaming) and lists the remembered headset first, then everything found as it arrives: audio devices (strongest first once the scan ends), then others greyed out with "(phone)" and the like, each with a three-bar signal; the last row is `Stop scanning` / `Scan again` and four dots at the bottom show a scan running. Selecting an audio device pairs
+with it (stage 2a, below). Menu goes back and stops the scan.
 
-A device only answers an inquiry while it is **discoverable**: headphones in pairing mode, or a phone sitting on its Bluetooth
-settings page. Headphones that are connected to something else, or a phone with the screen off, do not appear.
+`bt_service_pair` / `_connect` / `_disconnect` / `_forget` (`app/runtime/bt_service.c`) are what the UI calls. Link events are handled in the radio callback, not by a screen, so a Pair that finishes while the user has left the screen is still remembered.
 
-Console lines (UART), for testing without seeing the panel:
+**UI** ([UI](ui.md), design review BT-1 to BT-3): on **Devices** the remembered headset is the first row, its state on the right (Connected / Streaming / Saved / Pairing... / Connecting... / Reconnecting... / No audio / Failed: reason, with busy dots while working); Select on it opens **Connect** (or **Disconnect**, **Cancel**) and **Forget** (a question screen: Select = Forget, Menu = Keep). Select on a found audio device stops the scan if needed and starts the Pair action; the row says "Pairing..." with busy dots, then the device becomes the remembered headset at the top, or the row says Failed: reason. **Menu cancels a Pair in progress** (so the radio does not stay connectable for nobody). With a headset already remembered the choice is "Replace <old> with <new>?" (Select = yes): the old one is disconnected, the new one paired once the radio is free, and the old key is deleted when the new one is saved. The audio output setting is Auto / Wired / **Bluetooth** (BT-3; stored as 0 / 1 / 2, a stored value this firmware does not know reads as Auto): Bluetooth makes the output Bluetooth at once and keeps it through a Disconnect; Play with the remembered headset away connects to it ("Connecting to <name>..." and the track waits, see [Reconnecting](#reconnecting-stage-3-built)), and with no remembered headset pauses with "Headset not connected"; nothing ever comes out of the wired output by itself. Absolute volume is shown read-only. Not built: Bluetooth On / Off (the radio drivers have no clean power-down), renaming a headset.
 
-```
-bt: scan start (10 s)
-bt: found 5C:xx:xx:xx:xx:xx cod=0x240404 rssi=-52 name='...' audio=yes
-bt: named 5C:xx:xx:xx:xx:xx cod=0x240404 rssi=-52 name='AirPods' audio=yes     (name arrived from a name request)
-bt: inquiry complete (3 results delivered by BTstack, 3 kept)
-bt: scan done, 3 devices
-```
+**The link as toasts.** The frame (`ui_frame.c`) turns the link's life into toasts: "<name> disconnected . reconnecting..." when a connected headset is lost (`bt_service_lost_seq()`: only for a loss, not for the power-up attempt), "<name> connected" (info, 1.2 s) when the automatic reconnect succeeds (`bt_service_reconnected_seq()`), "Couldn't reconnect - paused" when it gives up (`bt_service_gave_up_seq()`). Reconnect-on-play adds two route notices: "Connecting to <name>..." (info) when Play starts waiting for the headset, and "Couldn't connect to <name> - paused" (warning) when the wait ends without a stream (the generic "Couldn't reconnect" toast is not also shown for that give-up). ADR-0019 stands: playback pauses and stays on Bluetooth; the firmware never switches the output by itself.
 
-"Delivered by BTstack" counts every result before the 12-device limit; if it is 0 the controller heard nothing, if it is more than
-"kept" the limit was hit.
+**Failure stance.** Fail closed for the radio: connectable and bondable go off on every way out of a Pair (success, failure, timeout, cancel, leaving the screen, the stack going down), and the 30 s timer is the backstop. Never discoverable. A saved device is written only on success.
+Fail open for the features: with no card the saved headset and the keys live in RAM for the session (as the store always does).
+
+**Known limit of 2a.** Nothing holds the link open (the A2DP signalling channel arrives in 2b), so the link closes by itself shortly after the SDP query: by BTstack's idle timeout, or by the headset itself (reason 0x13, remote user terminated, seen on the bench after 1 to 2 s with a Sony WI-C200; BTstack's own idle timeout would be later). Both are reported as DISCONNECTED and logged as `bt: link closed <addr> reason 0x.. (idle)`, not as failures; only abnormal endings (supervision timeout and the like) are `LINK_LOST`. No keep-alive is added. The 2a UI worded a CONNECTED link **"Paired, no audio yet"**; stage 2b opens the A2DP stream right after CONNECTED, which keeps the link up, and the row says "Connected - SBC" / "Streaming" ([Stage 2b](#stage-2b-the-audio-stream-built)).
+
+**Pairing method.** Only Secure Simple Pairing (2.1 and later) is supported. With "no input, no output" IO capability the key is unauthenticated (`LEVEL_2`, "just works"), which is all a headset needs. A pre-2.1 headset that asks for a PIN is refused at once (`gap_pin_code_negative`) and the Pair ends FAILED "PIN not supported". **SSP headsets only.**
+
+**Teardown.** If the link drops during bonding, SDP or authentication from the other side (or by timeout), or locally during SDP or authentication, the attempt ends at once as FAILED (a local disconnect is ignored only while bonding: BTstack sends one itself after a failed bonding and the real bonding result follows), so the Pair window closes without waiting for the timer. Cancelling a connection that is still being created retries `hci_create_connection_cancel` every 200 ms (at most 10 times) when the controller cannot take a command yet. Every Pair / Connect has an attempt number: a disconnect request or an SDP
+result that belongs to an earlier attempt cannot end the next one (a query still running from a cancelled attempt makes the next one wait for the SDP client). When BTstack reports the stack OFF, a link or attempt in progress becomes FAILED (`INTERNAL`) and everything is reset.
+
+**Pairing order.** Pair uses `gap_dedicated_bonding` and keeps the link for the SDP query: `btstack_config.h` defines `ENABLE_EXPLICIT_DEDICATED_BONDING_DISCONNECT`, so BTstack reports a good bonding at once and does not disconnect (a failed bonding still disconnects). Without that define the result is only reported after a disconnect, and every Pair timed out (found on the bench). `gap_dedicated_bonding` deletes any old key for the address first, which is what a re-pair wants; Connect cannot use it for that very reason. On real hardware the bonding result arrives before the link-key notification: neither the stray-key filter nor the candidate logic depends on the order (the Pair is still in progress when the key arrives, and a headset is only remembered after the SDP check).
+
+**Console lines** (`bt_btstack.c`, `bt_saved.c`): `bt: pair <addr>`, `bt: connect <addr>`, `bt: connected <addr>`, `bt: <addr> failed: <text>`, `bt: link lost 0x..` (abnormal end of an established link), `bt: link closed <addr> reason 0x.. (idle, no profile yet)` (clean idle drop), `bt: link dropped in set-up 0x..`, `bt: bonding 0x..`, `bt: dropped stray key <addr>`, `bt: forgot <addr>`, `bt: pair not persisted (store not writable)`, `bt: key delete waits (store not writable)`, `bt: record kept (store not writable)`.
+
+### Stage 2b to-do from the 2a review
+
+* Bench: Disconnect, re-pair after Forget, a headset that wiped its key (Connect must refuse), Wi-Fi + Bluetooth coexistence.
+* A host test that links `hal/common/bt_btstack/bt_btstack.c` against a BTstack stub and injects event sequences (bonding failure 0x16 then 0xD9, remote 0x13 during SDP, timeout in each phase, stack off mid-attempt, Forget of the current peer, PIN request). Today only the simulator in `hal/host/hal_radio.c` is tested.
+* A boot-time sweep that drops any BTstack link key whose address is not the saved record (orphan keys after a damaged record or a power cut before the stale queue drains).
+
+### Wi-Fi alongside Bluetooth (provisional)
+
+Stuart's decision for stage 2: **allow both**; Wi-Fi follows its own "Wi-Fi while playing" setting and no interlock is built. **This is provisional**: the CYW43439 shares one radio and one bus between Wi-Fi and Bluetooth,
+and the decision may be revisited after bench testing. The policy lives in one place, `NEUPOD_BT_WIFI_COEX_ALLOW` in `app/include/runtime_config.h` (default 1); a future interlock hangs off it at `bt_service_pair()` / `bt_service_connect()` and in `wifi_service`.
+With 1 nothing is checked anywhere. Bench check (stage 2a): Wi-Fi joined and an NTP / HTTP transfer running, then Pair, Connect and Disconnect: no HCI reset, no dropped link, no Wi-Fi drop, and the 6 KB radio-worker stack minimum
+(`chk_radio` / the worker line) stays above its stage 1 value. Stage 2b repeats it with an A2DP stream.
 
 ## Why the SD card holds the pairing data (and never the internal flash)
 
@@ -111,7 +168,7 @@ Link keys and the device database are stored in the **settings store** instead, 
 | | |
 | --- | --- |
 | API | `app/include/settings_store.h`, `app/settings/settings_store.c`; RTOS glue `app/runtime/settings_service.c` |
-| Content | tag (32-bit) to value (up to 96 bytes), up to 48 tags (`SETTINGS_MAX_ITEMS`; worst case about 38): volume (`NPvo`), backlight (`NPbl`), output path of the saved volume (`NPvp`), the resume record (`NPr0`/`NPr1`, [Audio](audio.md#resume-last-track-and-position)), shuffle and repeat (`NPsh`/`NPrp`), click mode (`NPck`: 0 off, 1 haptic, 2 piezo, 3 both), haptic actuator (`NPha`) and calibration (`NPhc`), Wi-Fi settings and networks ([Wi-Fi](wifi.md)), BTstack link keys (`BTL?`, 27 bytes plaintext, stored sealed since the secrets work, up to 8) and later device records. The same tag/value/length model as BTstack's TLV, so `hal_bt_storage_t` (in `hal_radio.h`) maps one to one onto `btstack_tlv_t` |
+| Content | tag (32-bit) to value (up to 96 bytes), up to 48 tags (`SETTINGS_MAX_ITEMS`; worst case about 41 with the saved headset): volume (`NPvo`), backlight (`NPbl`), auto-dim and its idle time (`NPad`/`NPat`), output path of the saved volume (`NPvp`), the resume record (`NPr0`/`NPr1`, [Audio](audio.md#resume-last-track-and-position)), shuffle and repeat (`NPsh`/`NPrp`), click mode (`NPck`: 0 off, 1 haptic, 2 piezo, 3 both), haptic actuator (`NPha`) and calibration (`NPhc`), Wi-Fi settings and networks ([Wi-Fi](wifi.md)), BTstack link keys (`BTL` + slot 0..7, 28 bytes plaintext, stored sealed since the secrets work, up to 8), the remembered headset (`NPbd`, 10 to 42 bytes, stage 2a) and later device records. The same tag/value/length model as BTstack's TLV, so `hal_bt_storage_t` (in `hal_radio.h`) maps one to one onto `btstack_tlv_t` |
 | File | two alternating files `/.neupod/settings.a` and `settings.b`: magic `NPST`, version (2; version-1 files, same layout and at most 32 items, are still read), count, sequence number, items, CRC-32. Little endian. About 4.9 KB at most (48 tags x 101 bytes). Firmware older than the version-2 store does not read these files: it sets them aside as "newer" and starts from defaults (it never overwrites them), so a rollback loses the settings but not the file |
 | Reading | `settings_load()` on the storage task right after the card mounted. A file that fails magic, version or CRC gives **defaults** (reported on the UART, replaced by the next save). A newer or older layout is treated the same way |
 | Crash-safe save | **no rename and no delete.** The image is written in place over the OLDER (or invalid) of the two files and synced; the other file is never touched. Load takes the valid file with the higher sequence (wrap-safe), so a power cut at any point leaves at least the previous complete state; a torn file just fails its CRC. A file with a NEWER layout version is moved aside as `settings.old` at the next save instead of being wiped (firmware rollback). Host tests cut the power during the write, again during a rewrite after a cut, and on the very first save |
@@ -156,6 +213,8 @@ is capped at -30 dB, exactly as before; the policy, the stored path and the test
 
 ## Memory budget (RP2350, main SRAM 512 KB)
 
+> **Since 12 Nov 2026 this is history, not a limit:** the Pico 2 W build is frozen (compile-only regression check) and its 520 KB is no longer a budget; the product target is the RP2350B with PSRAM ([ADR-0001 amendment](adr/0001-rp2350-phase1-platform.md#amendment-12-november-2026-the-pico-2-w-is-frozen-the-product-target-is-the-rp2350b-with-psram)). The figures stay as the record of what the testbed ran.
+
 The static RAM ("bss", every figure from `arm-none-eabi-size` on the linked `neupod.elf`):
 
 | | before (feat/codecs) | after stage 1 |
@@ -172,8 +231,20 @@ The two constants are in `app/os/memory_budget.h`. Heap consumers that grew: the
 for the radio check, the Bluetooth event queue (about 1 KB) and the settings mutex. The monitor prints the heap low-water mark and the LVGL pool peak every 10 s, which is
 the number to check on the board (earlier bench figures: heap minimum free about 58 KB of 112 KB, LVGL peak about 38 KB, both before this change).
 
-BTstack pools (`btstack_config.h`) are sized for **one** headset: 1 HCI connection, 4 L2CAP channels, 1 AVDTP connection, 2 stream endpoints, 1 AVRCP connection,
-8 remembered link keys; ACL buffers 1021 + 4 bytes. Revisit them in stage 2 when the real connection is up.
+**Stage 2a delta** (clean Release builds of `main` at 4944981 and of the branch, `arm-none-eabi-size` on `neupod.elf`):
+
+| | main | stage 2a | delta |
+| --- | --- | --- | --- |
+| flash image (`text`) | 1,263,280 B | 1,285,888 B | **+22,608 B** (SDP client and L2CAP now linked and used, the pairing state machine, the saved-headset module, the UI rows) |
+| `data` | 0 | 0 | 0 |
+| static RAM (`bss`) | 488,896 B | 489,340 B | **+444 B** (L2CAP and SDP client state, the link state machine, the saved-device candidate and the four-deep key-deletion queue) |
+| free SRAM (`__HeapLimit - __end__`) | 15,320 B | 14,876 B | **-444 B** |
+
+BTstack heap use: none. `HAVE_MALLOC` is not defined and every pool is a static array in `.bss`; the pool counts in `btstack_config.h` did not change (the 444 B above is everything that moved). The FreeRTOS heap and the task stacks are unchanged;
+the new code runs on the 6 KB radio-worker stack, so its high-water mark is on the bench list. No internal-flash write code is linked (`flash_safe_execute`, `pico_flash`, `btstack_tlv_flash_bank` are absent from the ELF). The core-1 closure check reports ok.
+
+BTstack pools (`btstack_config.h`) are sized for **one** headset: 1 HCI connection, 4 L2CAP channels, 1 AVDTP connection, 2 stream endpoints, 2 AVRCP entries (the two roles of one link, since 2c),
+8 remembered link keys (the UI remembers one headset; the other seven slots are headroom); ACL buffers 1021 + 4 bytes. Stage 2a needs 1 HCI connection and 1 L2CAP channel (the SDP query), so they were not touched. Revisit them in 2b when the real stream is up.
 
 ## Licence
 
@@ -184,17 +255,235 @@ with a bare CYW43439 chip (or any non-Raspberry-Pi radio route) needs a written 
 BTstack licence, before anything is sold or distributed. The cyw43-driver has the same shape of licence (non-commercial, with a Raspberry Pi
 grant for use with its chips).
 
-## Stage 2 design notes (not built)
+## Stage 2b: the audio stream (built)
 
-* **Priority and RAM ([ADR-0013](adr/0013-bluetooth-ram-psram.md)):** stage 2 follows the Audio Pack tone test and MP3/ALAC playback. 32 KB is approved
-  for the SBC encoder and the PCM ring on core 0, funded by sizing the codec arena to the measured max(FLAC, MP3, ALAC) (never below FLAC 24/96)
-  and by releasing LVGL's second render buffer while the display sleeps.
+**Headroom.** The Bluetooth output is attenuated by a fixed `NEUPOD_BT_HEADROOM_DB` (3 dB, `audio_dsp.h`) before the 16-bit conversion
+(TPDF-dithered) and SBC. Found on the Y2 with AirPods Pro (12 Nov 2026): with a track mastered to 0 dBFS at volume 0 dB, the decoded SBC
+put 80 to 135 samples per 2 s at the rail in loud passages, heard as crackle; the PCM into the encoder was bit-exact and the SBC stream
+matched a reference encode on the PC (22 to 27 dB SNR), so the overshoot is SBC's own reconstruction. At -4 dB it was clean. The headset's
+volume (AVRCP, stage 2c) makes up the level. Bench aids on the Y2 only: `NEUPOD_BT_HCI_DUMP=<file>` (HCI trace, PacketLogger format) and
+`NEUPOD_BT_PCM_DUMP=<file>` (the encoder's input PCM) in `/etc/neupod-fw.env`.
+
+Three more Y2 bench switches in the same file match the controller's set-up to the stock MediaTek stack's, for the intermittent "no AirPods in the inquiry" (the Pico 2 W
+beside it finds them every time). All of them are read at every HCI-up (first start and each controller power-on after sleep or a reset), so a change needs a firmware restart.
+The controller's own inquiry transmit power is always read and logged (`bt: inquiry tx power (controller default) N dBm`).
+* `NEUPOD_BT_INQ_TXPWR=<-70..20>`: Write Inquiry Transmit Power Level (0x0C59) with that many dBm (stock writes +6 before every inquiry; the value lasts until the
+  controller is reset, so once per HCI-up is the same). Logged with its status and a read-back (`bt: inquiry tx power set to 6 dBm -> status 0x00`, `bt: inquiry tx power
+  (read back) 6 dBm`). Unset: not sent. Not an integer in range: ignored, and logged once.
+  On the MT6582 the write is accepted (status 0x00) but the read-back stays at +10 dBm: the controller ignores it (bench 2026-11-17).
+* `NEUPOD_BT_INQ_MODE=<0|1|2>`: Write Inquiry Mode (0x0C45) after every HCI reset: 0 standard, 1 with RSSI, 2 with RSSI or extended inquiry response (EIR). BTstack's init
+  sets 2 and the shared adapter asks for 2; this overrides it, to A/B whether the controller drops AirPods' inquiry results in EIR mode (BTstack's own copy of the mode
+  stays 2, which is fine: it handles all three result events the same way). Sent right after FC66, before the power commands. Logged
+  (`bt: NEUPOD_BT_INQ_MODE=1: inquiry mode RSSI (0x0C45) after every HCI reset`, then `bt: inquiry mode set to 1 (0x0C45) -> status 0x00`). Unset: not sent. Anything but
+  exactly 0, 1 or 2: ignored, and logged once.
+* `NEUPOD_BT_MTK_FC66=1`: the MediaTek vendor command 0xFC66 with `00 10 40 9C`, which stock sends once after HCI_Reset (meaning unknown). Its status is logged.
+* `NEUPOD_BT_STOCK_INIT=1`: the rest of stock's HCI set-up, in two parts (exactly `1` enables; anything else set is logged as ignored; unset: off).
+  1. After every HCI reset, after FC66 and the inquiry mode and before the power commands: Set Event Mask (0x0C01, `ff` x 8), Write LE Host Supported (0x0C6D, `01 00`) and
+     Write Page Timeout (0x0C18, 0x3800 = 8.96 s). Each completion status is logged. The wider event mask only makes the controller send events BTstack does not use
+     (it ignores events it has no case for); BTstack's own mask from its init is overridden until the next reset. Host flow control (0x0C33/0x0C31) is deliberately not
+     enabled: BTstack never sends Host_Number_Of_Completed_Packets.
+  2. Stock's inquiry shape: rounds of 4 x 1.28 s (5.12 s), repeated until the scan window (10 s) is approximately covered; the last round is shortened to what is left, and no
+     round starts with less than one 1.28 s unit left. When there is more than one round each is logged (`bt: inquiry round N (4 x 1.28 s)`); `bt: inquiry complete ...` follows each round with a running total of results; the
+     results are de-duplicated by address across rounds, and `bt: scan done` comes once at the end. A scan stopped by the user is not restarted. Stock also passes
+     num_responses 25; BTstack's GAP API always sends 0 (unlimited) and has no setter, so that is not reproduced (unlimited is never fewer results). Not sent behind BTstack's back: it
+     would desynchronise its inquiry state.
+* `NEUPOD_BT_MTK_FC54=1`: the MediaTek vendor command 0xFC54 with `01`, once after every HCI reset (meaning unknown). Sent after FC66 and, with `NEUPOD_BT_STOCK_INIT`, after the
+  LE host command and before the page timeout. Logged with its status and the bytes it returns (`bt: MTK vendor command FC54 (01) -> status 0x00, returned 01 03 00 ...`; stock's
+  reply after the status was `01 03 00 00 00 00 00 00 00 00`). Exactly `1` enables; anything else set is logged as ignored.
+* `NEUPOD_BT_LE_SCAN_DURING_INQ=1`: stock runs an LE active scan alongside every classic inquiry; this does the same with raw HCI commands (the Y2's BTstack is built without LE, so its
+  `gap_*_scan` functions do not exist, and enabling LE would change the default controller set-up). After every HCI reset: LE Set Scan Parameters (0x200B, `01 40 01 40 01 00 00`:
+  active, interval and window 0x0140, public address, accept all). Around every inquiry (each 4 x 1.28 s round too, if `NEUPOD_BT_STOCK_INIT` is on): LE Set Scan Enable (0x200C) `00 00`,
+  Write Inquiry Transmit Power (0x0C59, only if `NEUPOD_BT_INQ_TXPWR` is set), `01 01` (filter duplicates), then the inquiry; when the inquiry has ended, is cancelled or is refused: `00 00`,
+  before the next round or the name requests. Each step's status is logged. LE advertising reports are counted and dropped (not shown, not logged); one line per inquiry,
+  `bt: le adv reports: N`. The controller only sends them if the LE Meta event is in its event mask, which needs `NEUPOD_BT_STOCK_INIT=1` (BTstack's own mask leaves it out), so without
+  that the count is 0 while the scan still runs. A failing command never keeps the inquiry from starting. Exactly `1` enables; anything else set is logged as ignored.
+* Not implemented: host flow control (0x0C33 Host Buffer Size, 0x0C31). BTstack only supports it as a compile-time option that also changes the default init and makes it send
+  Host_Number_Of_Completed_Packets; see the PR notes.
+
+A command the controller refuses or never answers is logged and skipped; Bluetooth still comes up. The commands run before the radio is reported ON, so each HCI-up
+can take up to 6 s longer in the worst case (an unanswering controller); with the switches unset it is one quick read.
+
+The MT6582 has a bug after a connection attempt that timed out: it keeps a phantom link to that headset and refuses every later Create_Connection to it with status 0x0B
+(ACL connection already exists) until it is reset. **The Y2 build only** (compile switch `NEUPOD_BT_PHANTOM_RESET`; the other platforms are unchanged) resets the controller
+(the sleep path's power-off and power-on) and retries the Pair / Connect step once:
+`bt: controller reports a phantom link to XX (0x0B): resetting the controller and retrying`. While it runs the radio shows "Starting" for a few seconds
+(the attempt stays in Connecting / Pairing). At most one reset per attempt and per headset per 60 s (a headset that keeps failing does not power-cycle the controller on every
+auto-reconnect; a link that comes up re-arms it). A reset that has not finished in 15 s ends the attempt (timeout) and leaves the radio failed, like a start that fails: the radio shows Failed, nothing happens automatically, and the user recovers by turning Bluetooth off and on again.
+Cancelling or Forgetting the headset before the controller has been switched off drops the reset; after that the reset always runs to the end (so the radio is never left half-way) and only the retry is skipped. Powering the radio down cancels it. If the retry fails as well, the failure is reported as before (`bt: SDP 0x0B (after the controller reset)`).
+
+Built and host-tested; **not yet run on a headset in the firmware** (bench steps at the end). The Y2 is where it is proved first: the BTstack A2DP source it uses is the one verified
+on AirPods Pro and a Sony WI-C200 by the `y2-a2dp` tool, now inside the shared adapter.
+
+**The stream.** Once the link is CONNECTED the adapter opens an A2DP source stream by itself (`a2dp_source_establish_stream`) with one SBC endpoint: 44.1 kHz stereo, joint stereo, 16 blocks, 8
+subbands, bitpool up to the headset's maximum but at most 53 (328 kbit/s). `NEUPOD_BT_SBC_XQ=1` raises the cap to 76 (455 kbit/s); the badge then reads `SBC-XQ` whenever the bitpool in use is above 53.
+Both are constants at the top of `hal/common/bt_btstack/bt_btstack.c`. The stream is reported as `HAL_BT_EVT_STREAM` (OPENING, OPEN, STREAMING, SUSPENDED, CLOSED, FAILED with a reason) with the
+negotiated `hal_bt_codec_t`; `hal_bt_stream_start / suspend / close / open` are asynchronous requests to BTstack's thread, and `hal_bt_stats()` gives frames encoded, packets sent, underruns, drift
+corrections and the link RSSI where the controller reports it. A headset that offers no usable configuration fails with "no common format"; one that refuses the stream with "audio refused".
+
+**Where the PCM comes from.** PCM never passes through `hal_bt_*`. The audio core (core 1) has a second output: with `audio_set_output(AUDIO_OUT_BT, 44100)` its sink is *virtual* (`hal_audio_set_virtual`:
+the block clock still ticks every 256 frames at the sample rate, nothing leaves a DAC) and the block interrupt writes each block, rounded to 16 bit (with TPDF dither when the volume is below 0 dB or the source is
+deeper than 16 bit) into a **Bluetooth ring**, `app/audio/bt_pcm.c`. The encoder (BTstack's thread) is the one consumer, through `hal_bt_set_pcm_source()` (`hal/include/hal_bt_pcm.h`), lock-free, no RTOS call
+(on the Y2 BTstack's thread is not an RTOS task). Core 1 keeps the ADR-0011 rules; `tools/check_core1_closure.py` is green with the new roots (`vclk_isr`) and `bt_pcm.c` is in the source-rule list.
+
+**One store for both rings (ADR-0013 amendment).** The 32 KB `g_pcm_store` has two layouts that never coexist: wired = the whole store is the decoder ring (4096 frames of int32 stereo); Bluetooth = its first half is the
+decoder ring (2048 frames, 46 ms at 44.1 kHz) and its second half is the Bluetooth ring (4096 frames of int16 stereo, 93 ms). The layout changes only with the stream closed (`AUDIO_CMD_OUTPUT`). No new static RAM for the rings.
+
+**Pacing, link first.** The headset's clock is not ours, so nothing is a free-running clock:
+
+* The Bluetooth ring is the only buffer between the decoder and the link. When it has no room for a block the block interrupt **waits** (consumes nothing, advances no position, counts `bt_stall_blocks`): the
+  decoder, the elapsed time and the end of the track are paced by the link.
+* The encoder is a run-loop timer (8 ms) that owes the headset rate x elapsed time of audio, never more than the catch-up budget of it (160 ms; it was a hard 40 ms cap until the Y2 walk, see [Link robustness](#link-robustness-built)), and while a finished packet waits for "can send now"
+  it produces nothing. The owed amount is steered by the ring's fill level against half of it: above half the encoder consumes up to 0.3 % faster, below half slower, one step of 0.05 % per tick; each change of step is a "drift
+  correction" in the statistics. When a stream starts the excess above half (the ring filled during the set-up) is sent at once, within a 40 ms bound (`BT_LINK_STALL_MS`).
+* An empty ring while a track plays is an **underrun** (counted once per dry spell, not per tick); an empty ring while paused is not (`active()` of the source). What was owed during an underrun is dropped: no burst when audio returns.
+* The SBC storage bound includes the payload header byte (the `y2-a2dp` review fix): the packet holds at most `min(link MTU - 1, storage - 1)` bytes of frames. 680 B of storage on the RP2350 (a typical headset MTU is 672), 1030 B on the Y2.
+
+**Routing (`app/runtime/audio_route.c`).** The saved setting **Audio output: Auto / Wired** (Settings > Bluetooth; default Auto). Auto: Bluetooth as soon as a headset's stream is open. Once the output is Bluetooth it **stays** Bluetooth until the headset is
+let go on purpose (Disconnect or Forget) or the setting is Wired. The change needs a quiet audio core: whatever plays is stopped (its place is kept, as for Stop), the audio stream is closed, the output selected, the stream reopened.
+The A2DP stream is started when something plays and suspended after 4 s of silence. **Link lost while playing:** the player is paused at once (position kept), the ring is emptied (honoured by the consumer at its next call), the banner "Headset disconnected"
+shows for 3 s, nothing plays from the wired output. Play pressed on the Bluetooth output with no remembered headset pauses again with "Headset not connected"; with one remembered, Play waits for it instead ([Reconnecting](#reconnecting-stage-3-built)). A stream the headset released while the link stays up is reopened up to three times. While playing, a stream that is OPEN or SUSPENDED is asked to start once a second; if three requests bring no `bt: a2dp streaming` the route closes the stream and opens it once more (`route: no stream start after 3 requests, closing and reopening it`), and if that fails too the player is paused with the failure notice. A START the headset refuses is logged: `bt: a2dp command rejected by the headset (signal 7, start)`.
+
+**What is not in 2b (deviations from ADR-0019 and the brief).**
+
+* **Sample rate: 44.1 kHz only.** The endpoint offers 44.1 kHz; a track at another rate (48 kHz, 88.2 / 96 kHz) is refused on the Bluetooth output ("Not supported on Bluetooth (44.1 kHz only)", and the queue skips it) because there is no resampler and ADR-0003 forbids a cheap one. 48 kHz would need a stream reconfiguration per track (or a resampler); the **hi-res decimation on core 1 (half-band FIR, 2:1 / 4:1) of ADR-0013 is a follow-up**, not built: its coefficients and state have to be measured against the closure check and the 7.7 KB of free SRAM.
+* **Volume** is the software volume as on I2S in 2b (absolute volume, the headset keys and the track information are [2c](#stage-2c-avrcp-volume-buttons-metadata-built)).
+* **`hal_bt_set_pcm_source`** is an addition to the HAL: ADR-0019 says PCM does not go through `hal_bt_*`; this call only hands the stack the consumer side of the ring.
+* The status-bar glyph for "connected" is the text colour, not white: the bar is light.
+
+**Memory (RP2350, Release, `arm-none-eabi-size` on `neupod.elf`, the phase 1 branch before and after):**
+
+| | before 2b | after 2b | delta |
+| --- | --- | --- | --- |
+| flash image (`text`) | 1,297,748 B | 1,349,812 B | **+52,064 B** (A2DP / AVDTP / the SBC encoder, routing, UI) |
+| static RAM (`bss`) | 489,712 B | 496,536 B | **+6,824 B** (SBC encoder state 1,704, SBC packet storage 680, PCM scratch 512 + 1,024, AVDTP / A2DP / SDP pools and records, 16-bit block buffer, the longer 48-byte names) |
+| free SRAM (`__HeapLimit - __end__`) | about 14.5 KB | **7,680 B** | -6.8 KB |
+
+The rings add nothing (shared store). The stack of BTstack's worker (6 KB) now also runs the SBC encoder and the A2DP state machine: **check its minimum free stack on the bench** before anything else grows. Decoder ring in Bluetooth mode is half as deep (46 ms): the bench has to show the 44.1 kHz decoders ride that out (`underruns=0`).
+
+**On the board (stage 2b), in this order.**
+
+1. Y2 first: pair, Connect, play a WAV and a FLAC: sound within a second, no gaps for 10 minutes, `bt: a2dp: SBC 44100 Hz, bitpool 53 ..., 328 kbit/s` on the console, About > BT audio underruns 0.
+2. Pause for 10 s: the stream suspends (UART `a2dp suspended`), Play resumes it. Switch the headset off while playing: pause at once, banner, the position unchanged when it is back and Connect is pressed.
+3. Audio output Wired with the headset connected: nothing on Bluetooth, the wired path (null sink on the Y2, I2S on the RP2350) as before. Auto again: playback stops and the output moves.
+4. RP2350 + WI-C200: the same, plus the 6 KB worker stack minimum, core 1 `underruns` on I2S before and after a Bluetooth session (the ring layout comes back), Wi-Fi joining and leaving while streaming (still provisional).
+5. A 48 kHz or 96 kHz file on Bluetooth: refused with the message, the queue moves on, nothing crashes.
+6. AirPods Pro 3: Connect, music; try `NEUPOD_BT_SBC_XQ=1` on a build and listen (the ADR-0007 test).
+
+## Link robustness (built)
+
+**Why.** A 47-minute walk on the Y2 with AirPods Pro (Y2 in a pocket, 12 Nov 2026; logs kept off-repo) gave glitches and some full breakdowns. What the firmware log showed:
+
+* The decoder never starved (`ring_min` 2048 of 2048 throughout, FLAC about 1.5 % of one core) and the encoder ring underran 8 times in 47 minutes. The audio was always there; the **link** was the limit.
+* Normally about 431 packets per 10 s. In bad patches the encoder waited on the link (02:14:35 to 02:14:45: only about half the audio got through). The old rule never owed the headset more than 40 ms
+  after a stall, so every stall permanently drained the headset's jitter buffer by what the link had held up, and a few of them in a row was a glitch, then a dropout.
+* The mid-song `a2dp suspended` lines (3 of the walk's 12, at 02:13:47, 02:14:38 and 02:15:46; all 12 are ours, none "by the headset") were **not** the route going quiet while playing. Each is preceded by `display: wake` / `backlight wake` a few seconds before (a key on the Y2 itself, which
+  in a pocket is a press of Play/Pause), the PCM frame counter freezes there (e.g. 726,528 to 741,632 frames over the next 10 s), and the stream resumes at a later Play (the headset's `key PLAY` at 02:13:56, or the next press). `audio_route.c` only suspends when the player is not PLAYING for 4 s, and it was paused. The firmware now says so: `player: paused (Play/Pause)`
+  / `player: playing (Play/Pause)`, and `route: not playing for N ms (player state S), suspending the stream`.
+* The `a2dp stream released` events at 02:22:34, 02:43:09, 02:43:16, 02:47:23 and 02:49:59 were **not** the headset letting go: each is followed within the same second by `route: output wired`, which only the Disconnect / Forget actions produce
+  (`audio_route_user_released`), and then by `bt: connect` (a manual Connect; the automatic one logs `bt: reconnecting`). They are the owner's manual reconnects after a breakdown. The volume cap at 02:43:15 (66 % to 50 %) happened three times in the log
+  with the same sequence and only that once was followed by a disconnect, a second later and by hand. Nothing in the log says the cap provoked anything. The actual cause of the breakdowns is not in the firmware log (no link-level lines). Hence the diagnostics below and the HCI trace advice.
+
+**What was built (one place for every number: `hal/common/bt_btstack/bt_link_policy.h`, pure functions, host tests `bt_link_policy`).**
+
+1. **Bounded catch-up.** The owed-audio cap is now `BT_LINK_CATCHUP_MS` = 160 ms. After a stall the missed audio is encoded and sent as fast as the link takes packets (one packet per 8 ms tick at most, about 3 times real time), so the headset's buffer fills
+   again. There is no unbounded burst; audio owed beyond the budget is forgone and counted (`drops`). In practice the ring is what limits it: the Bluetooth ring holds 93 ms and the audio core waits, losing nothing, while it is full (see above), so up to
+   about 93 ms of a stall can be made up; the budget is headroom for a larger ring. A ring that runs dry while paying off a stall is the catch-up having caught up, not an underrun. The start-up burst keeps the old 40 ms bound.
+2. **Adaptive bitpool: down fast, up slowly** (since 19 Nov 2026; the first version needed 2 bad windows to step and came back after 15 s). A tick is *pressured* when the packet has waited 30 ms for "can send now" or 50 ms of audio is owed. The ladder is 53, 45, 35 (never above what
+   the headset asks for, never below its minimum; steps that coincide are one; with `NEUPOD_BT_SBC_XQ` it starts at 76). `bt_link_policy_tick()` takes the packet's wait and the audio owed each 8 ms tick and steps **down at once**:
+   * **Severe stall**: owed >= 90 ms (`BT_LINK_SEVERE_OWED_MS`) or one packet waiting >= 120 ms (`BT_LINK_SEVERE_WAIT_MS`) goes straight to the last level (53 to 35, 328 to 229 kbit/s, -30 %). The Bluetooth ring holds 93 ms, so owing 90 ms means the stall has already outrun
+     what catch-up can make up; a packet waiting 120 ms is a stall of the same size.
+   * **First tick of a stall episode** (owed crossing 40 ms, the `stalls` count of the link line) steps one level.
+   * **One bad 1 s window** (>= 25 % pressured ticks) steps one level.
+   * Single steps are at least 1 s apart (`BT_LINK_DOWN_SETTLE_MS`) so the new bitpool gets a chance; a severe stall ignores that. The first second of a stream (`BT_LINK_START_GRACE_MS`) is exempt from the tick-level triggers: `media_start` owes the 40 ms start-up burst on purpose, which
+     would otherwise step down every start. A stall that ramps up tick by tick logs two changes about 50 ms apart (53 to 45 at 40 ms owed, 45 to 35 at 90 ms); one that is first seen above 90 ms logs one (53 to 35). A stall that began inside the first second and runs on past it is not a new episode (only a severe tick or a bad window steps it down). A late encoder tick (the BTstack thread held up 90 ms or more) also counts as owing 90 ms, so it steps to 35 like a link stall: on a walk, a `stalls` count with no matching `wait max` points at that.
+
+   It steps **up one level only after 30 s clean** (`BT_LINK_UP_HOLD_MS`: no stall tick at all and every window under 5 % pressured; any stall, trigger or middling window restarts the spell, and each level needs its own full hold, so 35 to 53 takes at least 60 s). The first step down
+   after a step up decides the hold once: within 120 s (`BT_LINK_QUICK_DOWN_MS`) of the rise it doubles (30, 60, 120, 240 s at most, `BT_LINK_UP_HOLD_MAX_MS`), later it resets to 30 s; further falls before the next rise (a ramping stall's 53 to 45 to 35) leave it alone. The hold does not otherwise relax within a stream, so after a bad patch even a long good stretch climbs one level per (doubled) hold. Every stream start begins at the best bitpool with the 30 s hold. The encoder is reconfigured between two frames (`set_bitpool`): SBC frames carry their bitpool, so the headset needs no AVDTP reconfigure
+   (the frames of a packet in progress keep their own length: `g_sbc_frames`). Every change is logged: `bt: a2dp: bitpool 53 -> 45 (link backpressure), frame 103 bytes, 284 kbit/s`; the Now Playing / Settings codec readout follows (it is the same published codec record). Bitrates:
+   53 is 328 kbit/s, 45 is 284, 35 is 229. The switch re-initialises the SBC encoder's filter state: expect at most a tick-sized discontinuity, which is far less than the dropout it prevents.
+
+   **Why it changed (Y2 to AirPods Pro walk, 19 Nov 2026, Y2 in the left front pocket; HCI trace and log kept off-repo).** RSSI swung -5 to -27 dB (body shielding). 31 of the 59 gaps of more than 120 ms between `Number of Completed Packets` events began with 3 or 4 of the
+   controller's 4 ACL buffers in flight: the host kept sending and the headset did not acknowledge. The owner heard scratchy, glitchy audio. Typical 10 s line in a bad patch: `rssi -24 dB, wait avg/max 7/1666 ms, inflight 8/8, bitpool 35, stalls 2, catchup 160 ms, drops 1516 ms`.
+   The old rule stepped 53 to 45 to 35 only after 2 bad windows per step, so by the time it reached 35 the 160 ms budget had been exceeded and audio dropped; and it climbed back (35 to 45 after about 60 to 90 s, 45 to 53 shortly after) only to fall again. The cost of a lower
+   bitpool for a while is small next to a drop, so the policy now pays it at the first stall and makes a return earn itself. The catch-up budget (160 ms) is unchanged. Cost (RP2350 Pico 2 W, Release, `arm-none-eabi-size`, origin/main 2cd2adc against this change): text +256 B, bss +4 B
+   (the policy state is 32 bytes, was 28). Host test `bt_link_policy` replays the walk's patterns (single stalls, severe and ramping stalls, settle, start grace, bad windows, the oscillation and its back-off, a ramping stall after a rise doubling the hold once, a 10-minute walk with exactly 8 changes ending at 35 and no rise within 30 s of a fall).
+3. **Diagnostics, every 10 s** (UART / Y2 log), next to the existing `bt: a2dp: packets ...` line:
+
+   `bt: link: rssi -4 dB, wait avg/max 3/41 ms, inflight 3/4, bitpool 53, stalls 2, catchup 88 ms, drops 0 ms`
+
+   * `rssi`: the result of `gap_read_rssi` (the line is printed when the HCI answer arrives; `?` if it never does). BR/EDR Read RSSI is in dB relative to the controller's golden receive power range (0 inside it, negative below it); some controllers report absolute dBm. What the MT6582 returns is one thing to learn from the next walk.
+   * `wait avg/max`: request to the "can send now" event, of the packets sent in the window. `inflight N/T`: the most ACL packets the controller had outstanding at an 8 ms tick, of the T buffers it reported (HCI Read Buffer Size; 4 on the MT6582, logged once as `bt: controller ACL buffers`). N = T all the time means the controller's buffers are the bottleneck.
+   * `stalls`: episodes of owing more than 40 ms (counted once per episode, not per tick). `catchup`: the most audio owed, ms (up to 160). `drops`: audio forgone beyond the budget, ms.
+   * Releases and link loss are explained in the log: `bt: acl down, reason 0x08 (link supervision timeout: ...), rssi, last packet N ms ago`; `bt: a2dp stream released (by the headset | by us; acl up | down; rssi; last packet N ms ago; bitpool)`; `bt: disconnecting (requested by the app ...)` when Disconnect / Forget does it.
+   * Track names: a library queue's entries have no name until the storage task resolves them, so the queue line reads `''`; the resolved file is now logged: `player: file '/Music/...'` (and `player: next (gapless look-ahead) '...'`).
+4. **HCI trace for a walk (Y2).** `NEUPOD_BT_HCI_DUMP=<file>` in `/etc/neupod-fw.env` writes a PacketLogger trace of the whole session. For an hour-long walk write it to the persistent ext4, not `/tmp` (RAM, and gone on a reboot):
+
+   ```
+   mkdir -p /opt/neupod-logs        # once
+   echo 'NEUPOD_BT_HCI_DUMP=/opt/neupod-logs/hci-$(date +%Y%m%d-%H%M%S).pklg' >> /etc/neupod-fw.env   # sourced by the init script, so the date is the start time
+   /etc/init.d/S91neupod-fw restart
+   ```
+   The file grows by about 40 KB/s while streaming (about 150 MB per hour: check `df /opt` first). The port keeps a second descriptor of the file and `fsync()`s it every 5 s from a helper thread (no RTOS call), so the trace is on the disk to within 5 s even if the Y2 loses power. Read it with Wireshark (PacketLogger) or BTstack's `tools/`; `Number of Completed Packets` against the data packets shows the controller's buffer use, `Disconnection Complete` has the reason.
+
+**Cost (RP2350, Release, `arm-none-eabi-size` on `neupod.elf`, origin/main 701c8f2 against this change):** `text` 1,411,808 to 1,415,144 B (**+3,336 B**), `bss` 499,876 to 499,948 B (**+72 B**: link statistics, the policy state, the encoder's saved settings). Free SRAM about 5.6 KB before, 72 B less now. The core-1 closure check is green (Release and Debug); nothing here is reachable from core 1, and the Y2's BTstack thread still makes no RTOS call (the HCI trace flusher is a plain pthread using `fsync`).
+
+**What to watch on the next walk.** `wait max` and `stalls` in the bad patches (does the catch-up refill: `catchup` up to about 90 ms, `drops` near 0?); `bitpool` stepping and the time it spends below 53 (does the headset sound better at 35 than the drops did, and does it stay down through a bad patch instead of bouncing; see [Bench](bench.md#bluetooth-walk-y2-bitpool-policy-after-19-nov-2026)); `inflight` against T; the `rssi` values on a good and a bad stretch; any `acl down` with its reason; and that no `route: not playing ... suspending` appears while playing.
+
+## Stage 2c: AVRCP, volume, buttons, metadata (built)
+
+**Roles.** The headset is the AVRCP *target* of absolute volume (category 2) and we are its *controller* for that; for the buttons and the display we are the *target* (category 1, player) and the headset is the controller. BTstack creates both roles on every AVRCP link, so `MAX_NR_AVRCP_CONNECTIONS` is **2** (640 B each) and the SDP records of both roles are registered (107 and 114 bytes). The headset normally opens the AVRCP channel itself (AirPods do); if it has not 2 s after the A2DP signalling channel we open it. The adapter (`hal/common/bt_btstack/bt_btstack.c`, same code on the RP2350 and the Y2) follows the verified `y2-a2dp` tool.
+
+**HAL (`hal_radio.h`, ADR-0019 section 1).** `HAL_BT_EVT_VOLUME` (0..127), `hal_bt_volume_set()`, `hal_bt_volume_supported()` / `hal_bt_volume_get()`, `HAL_BT_EVT_KEY` (`PLAY`, `PAUSE`, `PLAY_PAUSE`, `NEXT`, `PREV`, `STOP`, `FF`, `RW`; presses only), `hal_bt_track_info()` (title, artist, album, duration, position, play status, track id; returns false when the stack is busy with the previous call, the app asks again at its next tick). "Absolute volume supported" means the headset **has reported a volume** on the AVRCP channel (the answer to our volume-change registration): it turns true a moment after CONNECTED and false when the channel or the link goes; a headset that rejects the registration never turns it true and the software volume stays. Our own volume commands are sent without waiting for each answer (BTstack allows several in flight), the latest value wins, and the headset's reports that cross our commands are ignored so the bar does not jump back. No FreeRTOS call is made on the BTstack thread (the Y2 rule of `bt_port_stpbt.c`): the track information is one copy under a try-lock that neither side waits on, events leave through `bt_port_deliver()`.
+
+**Volume policy (`app/runtime/bt_control.c`).** On the Bluetooth output with absolute volume the wheel moves the headset's volume (`hal_bt_volume_set`, 4 of 127 per step, 32 steps lock to lock), the software volume is held at 0 dB (`player_volume_hold_unity`; the user's software level is kept and comes back when the headset is not the volume), and a swipe on the stem moves the bar. Without absolute volume, or on the wired output, the software volume is the volume as before. One scale (`bt_vol_to_db` / `bt_vol_from_db`): 127 = 0 dB, 0 = the software "off" level (80 dB), linear in dB, so a wheel step is about 2 dB in both modes; host-tested. On connect the headset's volume is read and shown; **no earlier level is ever restored to the headset**. One exception, the owner's decision of 12 Nov 2026 ("cap it"): when the headset's first volume report on a connection is above 50 % (`NEUPOD_BT_VOLUME_CAP_ON_CONNECT`, 64 of 127, `runtime_config.h`), the player turns it down to 50 % before the software volume is released to 0 dB (`bt: headset volume capped N% -> 50%`). Only ever down, never up; a swipe or the wheel afterwards above 50 % is respected; each new connection is a new first report. Host-tested (`bt_control`). If it reports 0 the bar is empty, the label says `Headset 0%` and the status line says `Playing - headset volume 0%` (the AirPods Pro that a phone left at 0 % are no longer silently "playing"). Deviation: **no per-headset volume is stored** (asked as "if cheap"): the headset keeps its own level, which is the truth, and re-applying an old level behind the user's back is a loudness risk.
+
+**Buttons.** Done by the monitor task, so they work with any screen open or none: Play/Pause toggle; PLAY only when not playing and PAUSE only when playing (a repeated or crossed press does no harm); STOP **pauses** (the place is kept; a later PLAY resumes); NEXT / PREV are Right / Left (a folder queue is needed, and Previous restarts a track more than 3 s in); FF / RW scrub by the Now Playing step (a 60th of the track, 1 to 30 s) per press, so holding the button repeats. A button press does not wake the backlight.
+
+**Track information.** While a link exists the track's title (the file name without a title tag), artist, album, length, position and play status are handed over when the track or the status changes, when the position jumps more than 2 s (a seek), and every 10 s. The stack extrapolates the position while playing, answers the headset's play-status queries, and sends the track-changed and playback-status notifications. Nothing is sent for a test tone.
+
+**UI.** Now Playing: `Headset 62%` and a bar on the same 0..127 scale; Test tone the same. Settings > Bluetooth pane: `Absolute volume: yes / no` (the pane no longer says `On` while a stream is open, to make room). Tours at 320x240 and 480x360: `np-bt-volume`, `np-bt-volume0`, `bt-key-next` ([UI](ui.md)).
+
+**Memory (RP2350, Release):** `text` 1,350,480 B to 1,374,856 B (**+24,376 B**, AVRCP, the volume / key / metadata policy and the reconnect policy, UI), `bss` 496,548 B to 498,596 B (**+2,048 B**: two AVRCP connections 1,280 B, SDP records 232 B, track information and state about 400 B), so free SRAM falls from about 7.7 KB to **about 5.6 KB**. The 6 KB worker stack now also runs the AVRCP code: its minimum is on the bench list. The core-1 closure check reports ok.
+
+**On the board (stage 2c), in this order.**
+
+1. Y2, AirPods Pro, connected after the iPhone left them at 0 %: Now Playing shows `Headset 0%` and the hint; turn the wheel: sound, the bar follows; swipe the stem: the bar follows (console: `bt: avrcp: headset volume N%`).
+2. Press the stem / buttons: Play/Pause, double and triple press give Next / Previous. The track changes on the device; the headset display (if any) shows title and artist.
+3. A headset without absolute volume (a speaker): `Absolute volume: no`, the wheel is the software volume as before.
+4. The WI-C200 and the RP2350: the same, plus the worker stack minimum and the free SRAM.
+
+## Reconnecting (stage 3, built)
+
+`app/runtime/bt_reconnect.c` (pure policy) driven by `bt_service.c`. After the link to the remembered headset is **lost** (`HAL_BT_FAIL_LINK_LOST`: out of range, switched off without saying goodbye) Connect is tried again after 2 s, 5 s, 10 s, then every 30 s, for 5 minutes in all. At power-up, once Bluetooth is on and the settings are loaded, one attempt is made at once and the same schedule follows if it fails. Every attempt is ended by the HAL's own connect timer (20 s; the MT6582 does not report its page timeout until the connection is cancelled). **Any action of the user ends it for good** (Disconnect, Forget, Pair, Connect, Cancel); a running scan or somebody else's Pair / Connect only holds it back. A headset that hangs up politely (idle disconnect, `0x13`) is not "lost" and is not chased in the background (battery); the next Play reconnects it, see below. The headset row reads `Reconnecting...` with busy dots from the loss until it is back, or given up. **Playback is not resumed** by a reconnect: the pause from the drop stays (Play, or the headset's button, continues). Not built: auto-resume of playback.
+
+**Reconnect-on-play (built, bench pending).** On the Bluetooth output (`g_out`: the setting Bluetooth always; under Auto once a headset's stream was opened and not deliberately released, which includes after an idle `0x13` hang-up) with a headset remembered, starting playback (Play, a new track, next / previous) while the stream is not usable does **not** pause. The player stays PLAYING and **waits**: the audio core stops consuming when the Bluetooth ring is full (the position does not move, no watchdog fires; the same state as a slow link), the route raises "Connecting to <name>..." and asks `bt_service` to connect. The route runs on the monitor task and may not call the reconnect policy (UI task only), so the request is a counter (`audio_route_connect_request_seq()`) that `reconnect_tick()` takes in. If an automatic schedule (loss or power-up) is already running, the Play **joins** it unchanged; otherwise `bt_rc_play()` runs a short schedule of its own: first attempt at once, **two attempts at most** (the second 2 s after the first fails, each bounded by the HAL's 20 s timer), then it gives up. Nothing retries in the background after that. A scan or somebody else's Pair / Connect holds it back as for the other schedules; no inquiry is ever started for it. When the stream becomes usable while still PLAYING the route starts it at once. The wait ends:
+
+* **stream usable**: playing begins;
+* **the user pauses, or Disconnect / Forget / Pair / Connect / Cancel**: the wait ends and the play schedule is cancelled at once, so no further attempt starts; only a connect attempt already in flight finishes by itself (the HAL's 20 s timer), and nothing plays if it succeeds. The other actions pause as a Play with no headset does ("Headset not connected", also when they come during the close / reopen below, never "Headset disconnected");
+* **the schedule gives up, the link comes up but no stream opens (the three reopen tries, which a Play with the link already up starts afresh), or `AUDIO_ROUTE_HOLD_MS` = 60 s pass** (two attempts take at most 42 s, leaving about 18 s for the stream to open and start after a late second attempt; the bound also covers a joined boot schedule whose next step is 30 s away; a wait that is already in its stream-open phase when the bound passes, or whose close is dropped, simply runs to the bound): the player is **paused** (place kept, ring emptied, as on a drop) and "Couldn't connect to <name> - paused" shows. The output stays Bluetooth; the firmware never falls back to wired by itself ([ADR-0019](adr/0019-bluetooth-audio-sink-boundary.md)).
+
+A **drop mid-play** is unchanged: the route pauses at once, the automatic reconnect does not resume. A Play pressed after it, during "Reconnecting..." or after the headset is back, waits / starts as above. **Under Auto with the output on wired** (a boot where the headset never came, or Disconnect / Forget) Play plays wired and connects nothing: Auto does not change the output while something plays, and the power-up retries (5 minutes) cover that case. With no remembered headset on the Bluetooth setting nothing changes: "Headset not connected" and a pause. The same immediate pause applies when the Bluetooth radio is off or failed (`HAL_BT_OFF`, `HAL_BT_FAILED`: it would never answer); while it is starting or scanning the Play waits. If the wait ends while a loss or power-up schedule that the Play joined keeps running, that schedule is not cancelled (it is the automatic reconnect), and its own "Couldn't reconnect - paused" toast can appear later when it gives up; only a schedule the Play started itself ends with the wait.
+
+**Cross-task state and play counting.** The wait's flags (`g_hold`, the request and give-up counters, the cancel flag) cross between the monitor task (route) and the UI task (`bt_service`); they are accessed with release / acquire atomics, as the HAL does for its own cross-task flags (the RP2350 build runs FreeRTOS on one core, so this is ordering hygiene, not a race fix). A Play that is held is PLAYING but nothing is heard, so `count_plays` (monitor task, just before the route in the same pass) adds no heard time while `audio_route_holding()` is true; a hold that begins is seen at most one 100 ms pass late.
+
+**Start requests.** The route asks for START at most every 2 s (`START_RETRY_MS`), three times, because a headset refuses a second START while one is still pending; after the third unanswered request the stream is closed and reopened once, then the failure pause.
+
+Console lines: `route: playing with no headset stream, waiting (connect asked for)` (or `(link up)`), `bt: reconnecting`, `bt: connect <addr>`, `bt: connected <addr>` and `bt: a2dp stream open`, then `route: asking the headset to start the stream (1)` and `bt: a2dp streaming`; failures end with `route: could not connect, paused`, `route: headset did not come in time, paused`, `route: headset linked but no audio stream, paused` or `route: the headset did not start the stream, paused`.
+
+**Bench evidence behind it (19 Nov 2026, Pico 2 W, AirPods Pro).** (1) After an idle hang-up (`bt: acl down, reason 0x13`, `bt: link closed ... (idle)`) nothing ever tried to connect again. (2) After a mid-track drop and a good reconnect (`bt: a2dp stream open`, AVRCP open) Play gave `player: playing (Play/Pause)` but no `bt: a2dp streaming`; the audio core sat with a full ring and `audible=0`; Play/Pause again did nothing, a track started from Files did stream. (3) Playing with the headset gone after the hang-up silently stalled. Findings on (2): the route reached its start branch and the stream was OPEN, so a START was being requested every second (now every 2 s); BTstack 1.6.2 reports a START the headset **refuses** only as `A2DP_SUBEVENT_COMMAND_REJECTED`, which the HAL did not handle, and a START whose answer is lost leaves no event at all. The cause on the headset side is not confirmed (the leading suspect is a START sent while the AirPods were still finishing their own set-up after the reconnect). Now every refusal is logged, a START that is not answered after three requests makes the route close and reopen the stream once, and a stream that still will not start ends in the failure pause instead of a silent stall.
+
+## Stage 2 design notes (2a, 2b and 2c built)
+
+* **Priority and RAM ([ADR-0013](adr/0013-bluetooth-ram-psram.md), amendment of 4 Nov 2026):** stage 2 follows the Audio Pack tone test and MP3/ALAC playback. The original funding (sizing the codec arena, releasing LVGL's second render buffer)
+  no longer pays: the arena saving was already spent in #17, and free SRAM is now about 15 KB (15,320 B measured on `main`, 14,876 B with stage 2a). The **core 1 to core 0 Bluetooth PCM ring reuses the 32 KB I2S PCM ring storage**: the outputs are
+  exclusive (I2S or Bluetooth, never both), so the same bytes serve whichever sink is active. That adds **no new static RAM**; the SBC encoder state and working buffers are measured in 2b and come out of the free SRAM.
+* **Hi-res audio to Bluetooth:** decimated **on core 1** by a 2:1 or 4:1 half-band FIR to 44.1 / 48 kHz, with 24 to 16 bit TPDF dither, before the samples enter the core 1 to core 0 ring. SBC cannot carry more than 48 kHz / 16 bit.
+* **Wi-Fi during A2DP:** allowed (Stuart's decision, **provisional**, see [Wi-Fi alongside Bluetooth](#wi-fi-alongside-bluetooth-provisional): one policy macro, no interlock). The stage 2b bench test has to show an A2DP stream stable while Wi-Fi comes and goes.
 * **Final board radio:** not a bare CYW43439 (assembly and licence, [ADR-0007](adr/0007-bluetooth-audio-path.md)); the stage 2 code stays behind `hal_bt_*`.
 
 * **Verify while Wi-Fi toggles:** the Wi-Fi service switches the station on and off (playback pause, idle timeout) on the same radio worker that runs BTstack. Before relying on it, check on the board that an A2DP stream stays stable (no dropouts, no HCI resets) when Wi-Fi comes and goes, and with "Wi-Fi while playing" On.
 
-* **Pairing and saved device**: SSP "just works", discoverable only while the Pair action runs; link keys through the TLV store above; one remembered
-  headset to begin with.
+* **Pairing and saved device (2a, built):** see [above](#pairing-and-the-connection-stage-2a).
 * **A2DP source**: BTstack's `a2dp_source` with one SBC stream endpoint; SBC at 44.1 kHz, joint stereo, 16 blocks, 8 subbands, bitpool 53 (about 328 kbit/s) as the
   default and a high bitpool (SBC-XQ, up to what the headset's capabilities allow; the AirPods Pro 3 also offer AAC, which we do not do) when the sink accepts it.
   The encoder is `pico_btstack_sbc_encoder` (Bluedroid, Apache-2.0).
@@ -206,9 +495,27 @@ grant for use with its chips).
   encoder task when the headset consumes slowly, the ring then fills, and the decoder on core 1 (which only decodes when the ring has room) slows with it, so the
   decoder is paced by the link. A fill-level target (about half the ring) with an occasional one-frame drop or repeat on drift keeps it steady; underruns on the Bluetooth path are
   counted like the I2S ones. To be proven on the bench with the AirPods Pro 3.
-* **AVRCP**: target with absolute volume (volume changes on the headset move the software volume and the other way round), play/pause/next/previous from the headset's buttons, and track metadata for the headset display.
-* **UI**: pairing flow in Settings > Bluetooth (Select on a device), connected device, negotiated codec and battery (if the headset reports it) in the pane; the Now Playing badge shows
+* **AVRCP** (2c, built, [above](#stage-2c-avrcp-volume-buttons-metadata-built)): the headset's absolute volume is the player's volume, play/pause/next/previous from the headset's buttons, and track metadata for the headset display.
+* **UI** (2a built: pairing flow, saved device and state in the pane): still to come, negotiated codec and battery (if the headset reports it) in the pane; the Now Playing badge shows
   the codec ([UI](ui.md)).
+
+## What to check on the board (stage 2a)
+
+Only the hardware can confirm these; the host simulator and tests cover the state machine, the saved record and the UI.
+
+1. **Pair.** Headset in pairing mode (AirPods Pro 3: case open, button held until the light flashes white). Settings > Bluetooth > Scan for devices > Select the headset: busy dots, then "Paired, no audio yet" within a few seconds; UART shows `bt: pair`,
+   `bt: paired with`, `bt: connected to ... (A2DP sink found)`. Back on Settings > Bluetooth the headset is listed, the right pane shows its name and state.
+2. **Never discoverable; connectable only while pairing, and only for the chosen headset.** No phone ever sees "neuPod" in its Bluetooth list, before, during or after a Pair. During a Pair a second device (or the same phone) that tries to connect to neuPod by address is rejected, and no key is created for it; after Connected / Failed / Cancel nothing can connect.
+3. **Link key on the card, not in flash.** After pairing, `/.neupod/settings.a` or `.b` has changed and no other path on the card; reboot: the headset is still listed. Nothing writes the internal flash (core 1 and the audio underrun counter unaffected during the Pair; `underruns=0`).
+4. **Connect / Disconnect / Forget.** Disconnect, Connect: reaches Connected again with the stored key and **without** the headset being put in pairing mode (it must be on and not connected to something else). Forget (twice Select): the row disappears; Connect is gone; pair again works.
+   Key lost on the headset side (forget neuPod in its own settings or factory reset it): Connect shows "Failed: pairing refused", it does not silently re-pair.
+5. **Failures.** Headset switched off: Connect shows "Failed: not found" within the 20 s limit. A phone as the target: "Failed: not a headset" and no saved device afterwards. Walk away from the headset until it drops: "Failed: link lost" (or "Not connected" if it closed an idle link).
+   Menu on the Devices screen during a Pair cancels it.
+6. **The idle link.** (2a) The headset hung up after 1 to 2 s without a profile; since 2b the stream keeps the link up.
+   Also: Connect with the key deleted from the card by hand fails at once with "pairing refused" and no radio traffic; and a headset that is busy with another phone during a Pair says "busy or not pairing".
+7. **Wi-Fi alongside (provisional policy).** With Wi-Fi joined and a transfer running, Pair, Connect and Disconnect: no HCI reset, no Wi-Fi drop, no stalled transfer. Also with "Wi-Fi while playing" On and a file playing from the card (I2S path, no Bluetooth audio yet): `underruns=0`.
+8. **Memory.** Monitor lines `heap: free=... min_free=...`, `lvgl_mem`, and the radio worker's stack minimum after several Pair / Connect / Forget cycles: the worker's free stack must stay clear of zero (the new code and its `printf`s run there).
+9. **Repeat Pair 10 times** (Forget in between) and with a headset that connects back to us by itself right after pairing (we are connectable during the Pair for this): no stuck "Pairing...", no orphan key (Forget leaves the card with no `BTL` record (tag "BTL" + raw slot number 0..7) for it).
 
 ## What to check on the board (stage 1)
 
@@ -216,7 +523,7 @@ grant for use with its chips).
    The splash should show Bluetooth solid and Wi-Fi with a cross (that is intended in stage 1).
 2. Audio must be unaffected: play a file while the radio comes up; the `audio:` line must keep `underruns=0` and the `core1_stack_free=` value must not drop.
 3. Settings > Bluetooth: Status "On", the same address as the UART, **Scan for devices** (opens Devices and scans at once) with a headset in pairing mode (AirPods Pro 3: case open, button held until the light flashes white): it
-   appears with a speaker symbol, a name after a few seconds and a signal value; other devices around you are greyed out. Select on it shows "Pairing: not yet". Menu leaves and stops the scan.
+   appears with a speaker symbol, a name after a few seconds and a signal value; other devices around you are greyed out. Select on it starts pairing (stage 2a; see its checklist above). Menu leaves and stops the scan.
 4. Change the backlight and Click feedback, switch the board off and on: both should come back. Change the volume to a quiet level and check it returns; set it loud and
    check it comes back at -30 dB. A `/.neupod/settings.a` (and later `.b`) should be on the card; no other file or folder on the card may have changed.
 5. Boot once without a card: the UART shows `settings: no usable card ...` and the screens still work.

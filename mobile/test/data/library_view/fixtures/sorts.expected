@@ -1,0 +1,36 @@
+# artists (name, albums)
+Zed	2
+The Who	1
+Wu	1
+Xu Band	1
+# albums list (title, artist, songs, year)
+Beta	Zed	1	0
+Gamma	Xu Band	1	0
+Live	The Who	2	0
+Old Title	Wu	2	0
+Alpha	Zed	1	0
+# album table (title, artist)
+Beta	Zed
+Alpha	Zed
+Live	The Who
+Old Title	Wu
+Gamma	Xu Band
+# album songs (album, title, disc, track)
+Beta	S4	0	1
+Alpha	S3	0	1
+Live	S1	0	1
+Live	S2	0	2
+Old Title	S6	0	1
+Old Title	S7	0	1
+Gamma	S5	0	1
+# compilations (title)
+# genres (name, songs)
+# genre songs (genre, title)
+# songs (title, artist, album)
+S1	The Who	Live
+S2	Who	Live
+S3	Zed	Alpha
+S4	Yan	Beta
+S5	Xu	Gamma
+S6	Wu	Old Title
+S7	Wu	Old Title
