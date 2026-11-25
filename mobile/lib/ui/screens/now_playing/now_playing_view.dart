@@ -156,8 +156,6 @@ class NowPlayingView extends StatelessWidget {
     this.page2Focus = Page2Row.rating,
     this.ratingEditing = false,
     this.onArtTap,
-    this.dragToSeek = false,
-    this.onSeekFraction,
     this.onPage2Tap,
     this.withStatusBar = true,
     super.key,
@@ -189,12 +187,6 @@ class NowPlayingView extends StatelessWidget {
 
   /// A tap on the art opens page 2 (direct touch).
   final VoidCallback? onArtTap;
-
-  /// The progress bar may be dragged (a gate switch).
-  final bool dragToSeek;
-
-  /// Where a drag or tap on the progress bar went, 0 to 1.
-  final ValueChanged<double>? onSeekFraction;
 
   /// A page 2 row was tapped.
   final ValueChanged<Page2Row>? onPage2Tap;
@@ -339,8 +331,6 @@ class NowPlayingView extends StatelessWidget {
                   children: [
                     NeupodProgressBar(
                       value: data.progress,
-                      seekable: dragToSeek,
-                      onSeek: onSeekFraction,
                       semanticsValue: spoken,
                     ),
                     const SizedBox(height: 8),

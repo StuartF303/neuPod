@@ -23,8 +23,10 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [x] Songs list (#117, 2026-11-22)
 - [x] Play a FLAC and an MP3 (#113, #124, 2026-11-22)
 - [x] Background playback with lock-screen and notification controls, artwork and scrubbing (#113, 2026-11-22)
-- [ ] Device check: the slice on the owner's iPhone and Pixel, recorded with the date (needs owner: macOS 26.6 or later, then Xcode 27, phones attached)
-- [ ] **Gate 1: stop and show the owner**
+- [x] Device check: the slice on the owner's iPhone and Pixel, recorded with the date (owner ran it 2026-11-22/23 on an iPhone 15 Pro, iOS 27.2.1, and a Pixel 7, Android 17; see Gate 1)
+- [x] **Gate 1: stop and show the owner** (closed 2026-11-25, #PR)
+  - 2026-11-22/23: the owner ran gate 1 on an iPhone 15 Pro (iOS 27.2.1) and a Pixel 7 (Android 17). Choices (spec owner decision 18): touch is **candidate 2** (the wheel plus taps and drags); seek is by the wheel's seek mode only, the progress bar is **not draggable**. On the iPhone: the slice survives a restart, wheel feel and haptics are OK, the wheel changes the volume. Cover Flow matches the device (decision 14). Apple team for device builds: the owner's personal team (set locally, never in the repo).
+  - 2026-11-25: candidate 1 and the draggable bar are removed from the code, with their tests and gate switches (#PR).
 
 ## Phase 2: look and feel
 
@@ -39,7 +41,7 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 - [x] Fast-scroll letter tile and rail, trigger and timings confirmed against `app/ui/ui_list.c` and `ui_rail.c` (design section 5) (#106, #121, 2026-11-22)
 - [x] Haptics on both platforms with the design's event table, API names confirmed against current platform docs, 30 a second cap, obeying the system setting; optional click sound (design section 5) (#111, #112, #130, 2026-11-22)
 - [x] Accessibility of the device view: rows as elements, the wheel as one adjustable element with five actions, keyboard and switch control (design section 9) (#111, 2026-11-22)
-- [x] Direct touch candidates 1 (wheel only) and 2 (wheel plus taps and drags), switchable for the gate (design section 6) (#111, #121, 2026-11-22)
+- [x] Direct touch candidates 1 (wheel only) and 2 (wheel plus taps and drags), switchable for the gate (design section 6) (#111, #121, 2026-11-22). Gate 1 chose candidate 2; candidate 1 is removed (#PR, 2026-11-25)
 - [x] Text tiers: 7, 6 and 5 rows by the phone's text size (design section 8) (#118, 2026-11-22)
 - [x] Design-gate screens in the device view, Classic Light and Modern Dark, with real data: Home, Songs with the letter tile, an album with disc headings, Cover Flow, Now Playing at rest, with volume and in seek, a panel, Search typing with the wheel and in the results; fit A and B; touch 1 and 2; both body finishes; phone status bar shown and hidden; three text tiers (design sections 2, 3, 6, 7, 8 and 10) (#120, #121, #123, #126, 2026-11-22)
 - [x] **Gate 2: stop and show the owner; record the choices here** (closed 2026-11-22; touch and drag-to-seek move to gate 1)
@@ -49,17 +51,17 @@ Every item means: works on Android and iOS, covered by tests at the levels the s
 
 ## Phase 3: library
 
-- [ ] Tags: title, artist, album artist, album, track, disc, year, genre, compilation, duration, format, embedded art
-- [ ] Sort and collation match the firmware's `lib_collate_key` (leading "The " ignored, accents folded, symbols, digits, letters). "The ", "A " and "An " skipped, as in the code (owner decision 11)
-- [ ] Source-neutral track model (a track has a source and a location), so R2 is an addition
+- [x] Tags: title, artist, album artist, album, track, disc, year, genre, compilation, duration, format, embedded art (#147, M4A and WAV #149, embedded art #148, 2026-11-23). Read from FLAC, MP3, M4A/MP4 and WAV, the formats the firmware parses (`tag_reader.dart`); an Ogg or Opus file gets the fallbacks of decision 15
+- [x] Sort and collation match the firmware's `lib_collate_key` (leading "The " ignored, accents folded, symbols, digits, letters). "The ", "A " and "An " skipped, as in the code (owner decision 11) (`collation.dart` checked against the firmware's vectors #117, 2026-11-22; artist and album merging on the collation key #132, 2026-11-22)
+- [x] Source-neutral track model (a track has a source and a location), so R2 is an addition (`sources` with a `kind` and `tracks` with `sourceId`, `relPath` and `uri`: #117, #131, 2026-11-22; decision 0005)
 - [ ] Android: the device's shared music collection offered alongside picked folders
 - [ ] iOS: files in iCloud Drive that are not downloaded are listed with a Download action (owner decision 7); the scan never hangs on them
 - [x] Generated test library: the owner's folder convention, discs, compilations, awkward names; its expectations are the device's (owner decision 15, #150)
 - [x] Read-only guarantee: a test shows no music file or folder is written, moved or deleted (#145, 2026-11-23)
 - [x] Discs merged into one album with sections: by disc number tags, as the firmware (#147). "(Disc n)" in folder or album names is not merged, as on the device: settled by owner decision 15 (#150)
 - [x] Compilations rule: COMPILATION / TCMP flag or album artist "Various Artists", as `index_file` (#147)
-- [ ] Background scan with progress, cancel, and survival across app restarts
-- [ ] Incremental rescan; removing a folder
+- [x] Background scan with progress, cancel, and survival across app restarts (progress and cancel #141, 2026-11-22; no resume after a cancel #143, 2026-11-22; Android survives the app being closed #146, 2026-11-23). On iOS a scan cannot outlive the app (owner decision 8): it restarts at the next launch and each return to the front, and unchanged files are skipped
+- [x] Incremental rescan; removing a folder (unchanged size and modification time are not reopened #117, #141; Remove a folder #141, confirmation as the firmware #145, 2026-11-22/23)
 - [x] Android: the scan survives the app being closed: a `dataSync` foreground service with the firmware's notification and Cancel keeps the app's engine, and the scan, alive after a swipe-away (decision 0009, #146, 2026-11-23). Owner check on the Pixel 7 at the next device session. Follow-up from #141
 - [x] Removing a folder deletes its tracks at the next scan, with no question asked (Settings > Library > a folder > Remove). Add a confirmation before the ratings and play counts item below lands, since those would go with the tracks. Follow-up from #141 Done: the question is the firmware's own (#145, 2026-11-23)
 - [x] Art cache and thumbnails: embedded art (FLAC PICTURE, ID3v2 APIC/PIC) and the folder's cover file, in the firmware's order; 192 and 600 px JPEGs in the app's support directory, 64 MB, off the UI isolate; screens, Modern accent and backdrop, lock screen and notification (decision 0010, 2026-11-23)

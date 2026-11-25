@@ -7,8 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/app/providers.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/ui/device/device_feedback.dart';
-import 'package:neupod/ui/device/device_options.dart';
-import 'package:neupod/ui/device/screen_host.dart';
 import 'package:neupod/ui/device/wheel_bus.dart';
 
 /// Test-only: the app does not use it (the shell, `ShellRoot`, is the
@@ -105,8 +103,6 @@ class _PlaceholderScreenState extends ConsumerState<PlaceholderScreen> {
   @override
   Widget build(BuildContext context) {
     final summary = ref.watch(librarySummaryProvider);
-    final touch =
-        DeviceScreenScope.of(context).directTouch == DirectTouch.wheelAndScreen;
     const ink = Color(0xFF181818);
     const style = TextStyle(fontSize: 26, color: ink, height: 1.1);
     // The real screens apply the design's text tiers (section 8); this
@@ -150,7 +146,7 @@ class _PlaceholderScreenState extends ConsumerState<PlaceholderScreen> {
                             i < PlaceholderScreen.items.length;
                             i++
                           )
-                            _row(i, touch),
+                            _row(i),
                         ],
                       ),
                     ),
@@ -186,7 +182,7 @@ class _PlaceholderScreenState extends ConsumerState<PlaceholderScreen> {
     );
   }
 
-  Widget _row(int i, bool touch) {
+  Widget _row(int i) {
     final n = PlaceholderScreen.items.length;
     final selected = i == _sel;
     return Semantics(
@@ -197,7 +193,7 @@ class _PlaceholderScreenState extends ConsumerState<PlaceholderScreen> {
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: touch ? () => _activate(i) : null,
+        onTap: () => _activate(i),
         child: Container(
           height: _rowH,
           padding: const EdgeInsets.symmetric(horizontal: 19),

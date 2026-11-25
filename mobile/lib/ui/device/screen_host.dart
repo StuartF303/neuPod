@@ -2,7 +2,6 @@
 
 import 'package:flutter/widgets.dart';
 import 'package:neupod/ui/device/device_geometry.dart';
-import 'package:neupod/ui/device/device_options.dart';
 import 'package:neupod/ui/device/hit_gate.dart';
 
 /// Hosts a screen inside the device: the child is laid out at 600x450
@@ -11,59 +10,36 @@ import 'package:neupod/ui/device/hit_gate.dart';
 ///
 /// The hit-routing contract for screens (direct touch, design section 6):
 ///
-/// - Candidate 1 ([DirectTouch.wheelOnly]): the screen takes no pointer
-///   touches at all; everything goes through the wheel. Semantics are kept,
-///   so the screen reader can still activate a row.
-/// - Candidate 2 ([DirectTouch.wheelAndScreen]): pointer events reach the
-///   screen in its own 600x450 coordinates (the scale is undone by the
+/// Direct touch is the wheel plus taps and drags on the screen (owner
+/// decision 18): pointer events reach the screen in its own 600x450 coordinates (the scale is undone by the
 ///   framework's hit test). The screen decides what takes touches: rows (tap
 ///   = move the selection there, then Select; pressed tint from touch-down),
 ///   list drags, Cover Flow drags, Now Playing's art, a panel's OK. The
 ///   status bar, the right-hand pane and panel backgrounds take none.
-/// - Screens read the candidate with [DeviceScreenScope.of] when they need
-///   to (for example to show the pressed tint only in candidate 2).
 class DeviceScreenHost extends StatelessWidget {
-  /// Hosts [child] at [scale] with [directTouch].
-  const DeviceScreenHost({
-    required this.scale,
-    required this.directTouch,
-    required this.child,
-    this.dragProgressToSeek = false,
-    super.key,
-  });
+  /// Hosts [child] at [scale].
+  const DeviceScreenHost({required this.scale, required this.child, super.key});
 
   /// s, the design-to-phone scale.
   final double scale;
-
-  /// The direct-touch candidate.
-  final DirectTouch directTouch;
-
-  /// Now Playing's progress bar may be dragged to seek (a gate switch).
-  final bool dragProgressToSeek;
 
   /// The screen, laid out at 600x450.
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final touch = directTouch == DirectTouch.wheelAndScreen;
     return SizedBox(
       width: DeviceGeometry.designWidth * scale,
       height: DeviceGeometry.designHeight * scale,
       child: HitGate(
-        accepts: (_, _) => touch,
+        accepts: (_, _) => true,
         child: FittedBox(
           fit: BoxFit.fill,
           alignment: Alignment.topLeft,
           child: SizedBox(
             width: DeviceGeometry.designWidth,
             height: DeviceGeometry.designHeight,
-            child: DeviceScreenScope(
-              scale: scale,
-              directTouch: directTouch,
-              dragProgressToSeek: dragProgressToSeek,
-              child: child,
-            ),
+            child: DeviceScreenScope(scale: scale, child: child),
           ),
         ),
       ),
@@ -76,8 +52,6 @@ class DeviceScreenScope extends InheritedWidget {
   /// The scope.
   const DeviceScreenScope({
     required this.scale,
-    required this.directTouch,
-    required this.dragProgressToSeek,
     required super.child,
     super.key,
   });
@@ -85,26 +59,12 @@ class DeviceScreenScope extends InheritedWidget {
   /// s, the design-to-phone scale (design px x s = points).
   final double scale;
 
-  /// The direct-touch candidate.
-  final DirectTouch directTouch;
-
-  /// Now Playing's progress bar may be dragged to seek.
-  final bool dragProgressToSeek;
-
   /// The scope above [context], or the defaults when there is none (a
   /// screen tested on its own).
   static DeviceScreenScope of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<DeviceScreenScope>() ??
-      const DeviceScreenScope(
-        scale: 1,
-        directTouch: DirectTouch.wheelAndScreen,
-        dragProgressToSeek: false,
-        child: SizedBox.shrink(),
-      );
+      const DeviceScreenScope(scale: 1, child: SizedBox.shrink());
 
   @override
-  bool updateShouldNotify(DeviceScreenScope old) =>
-      old.scale != scale ||
-      old.directTouch != directTouch ||
-      old.dragProgressToSeek != dragProgressToSeek;
+  bool updateShouldNotify(DeviceScreenScope old) => old.scale != scale;
 }
