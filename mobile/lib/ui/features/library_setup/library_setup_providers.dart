@@ -33,7 +33,21 @@ class LibraryFoldersNotifier extends AsyncNotifier<List<LibraryFolder>> {
     return folder;
   }
 
-  /// Gives up a picked folder; the scan that follows removes its songs.
+  /// Turns on the phone's shared music collection (Android), asking for the
+  /// permission to read it only now, when the user acts. Returns it, or null
+  /// if the permission was refused. Throws [FolderAccessException].
+  Future<LibraryFolder?> addSharedCollection() async {
+    final folder = await _access.addSharedCollection();
+    if (folder != null) {
+      state = AsyncData(await _access.folders());
+      _rescan();
+    }
+    return folder;
+  }
+
+  /// Gives up a picked folder, or turns the shared collection off; the scan
+  /// that follows removes its songs. Ratings and play counts stay (they are
+  /// kept apart from the library, decision 0011).
   Future<void> remove(String id) async {
     await _access.removeFolder(id);
     state = AsyncData(await _access.folders());

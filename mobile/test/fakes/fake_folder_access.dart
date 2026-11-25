@@ -7,6 +7,23 @@ import 'package:neupod/domain/library/library_folder.dart';
 class FakeFolderAccess implements FolderAccess {
   FakeFolderAccess([List<LibraryFolder>? initial]) : held = [...?initial];
 
+  /// Android: the shared collection is offered.
+  @override
+  bool offersSharedCollection = false;
+
+  /// What turning the shared collection on gives: the folder, or null as a
+  /// refused permission.
+  LibraryFolder? sharedCollection;
+  int sharedCollectionAsks = 0;
+
+  @override
+  Future<LibraryFolder?> addSharedCollection() async {
+    sharedCollectionAsks++;
+    final c = sharedCollection;
+    if (c != null && !held.any((f) => f.id == c.id)) held.add(c);
+    return c;
+  }
+
   final List<LibraryFolder> held;
   LibraryFolder? nextPick;
   FolderAccessException? pickError;

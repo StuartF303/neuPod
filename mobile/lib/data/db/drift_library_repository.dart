@@ -42,6 +42,7 @@ final class DriftLibraryRepository implements LibraryRepository {
   );
 
   static SourceKind _kind(String k) => switch (k) {
+    'media_store' => SourceKind.mediaStore,
     'nas' => SourceKind.nas,
     'device' => SourceKind.device,
     _ => SourceKind.localFolder,

@@ -35,9 +35,17 @@ enum UnreadableReason {
   }
 }
 
-/// Where a track comes from. R1 has only local folders; R2 (NAS) and R3 (a
-/// neuPod's card) add kinds, not a new model (decision 0005).
-enum SourceKind { localFolder, nas, device }
+/// Where a track comes from. R1 has local folders and, on Android, the
+/// phone's shared music collection; R2 (NAS) and R3 (a neuPod's card) add
+/// kinds, not a new model (decision 0005).
+enum SourceKind {
+  localFolder,
+
+  /// Android's shared music collection (MediaStore).
+  mediaStore,
+  nas,
+  device,
+}
 
 /// A track's source: its kind and the source's own id (for a local folder,
 /// the [LibraryFolder] id: a tree URI on Android, a bookmark id or

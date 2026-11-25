@@ -5,9 +5,18 @@ import 'package:neupod_storage/neupod_storage.dart';
 
 /// [FolderAccess] over the in-repo neupod_storage plugin (decision 0004).
 final class StorageFolderAccess implements FolderAccess {
-  StorageFolderAccess(this._storage);
+  StorageFolderAccess(this._storage, {this.offersSharedCollection = false});
 
   final NeupodStorage _storage;
+
+  @override
+  final bool offersSharedCollection;
+
+  @override
+  Future<LibraryFolder?> addSharedCollection() => _guard(() async {
+    final root = await _storage.addSharedCollection();
+    return root == null ? null : _folder(root);
+  });
 
   @override
   Future<List<LibraryFolder>> folders() =>
@@ -28,6 +37,7 @@ final class StorageFolderAccess implements FolderAccess {
     kind: switch (root.kind) {
       RootKind.appDocuments => FolderKind.appDocuments,
       RootKind.pickedFolder => FolderKind.pickedFolder,
+      RootKind.sharedCollection => FolderKind.sharedCollection,
     },
     available: root.available,
   );

@@ -8,6 +8,7 @@
 /// `audio/` stay plain Dart (enforced by `test/architecture_test.dart`).
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/audio/neupod_player.dart';
 import 'package:neupod/audio/test_media.dart';
@@ -57,7 +58,11 @@ final neupodStorageProvider = Provider<NeupodStorage>((ref) => NeupodStorage());
 
 /// Read-only access to the library folders.
 final folderAccessProvider = Provider<FolderAccess>(
-  (ref) => StorageFolderAccess(ref.watch(neupodStorageProvider)),
+  (ref) => StorageFolderAccess(
+    ref.watch(neupodStorageProvider),
+    // Android's MediaStore; iOS has no shared music collection for apps.
+    offersSharedCollection: defaultTargetPlatform == TargetPlatform.android,
+  ),
 );
 
 /// The library database (decision 0005), opened on first use in a background

@@ -74,6 +74,12 @@ class _OneFolder implements FolderAccess {
 
   @override
   Future<void> removeFolder(String id) async {}
+
+  @override
+  bool get offersSharedCollection => false;
+
+  @override
+  Future<LibraryFolder?> addSharedCollection() async => null;
 }
 
 Future<List<int>> _asset(String name) async {

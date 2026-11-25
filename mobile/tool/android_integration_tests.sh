@@ -13,6 +13,10 @@
 # scripts/app/verify-folder-access-android.sh, on the same device: shared-storage fixtures pushed with adb, the picker
 # driven with uiautomator, two launches. Set FOLDER_IT_APK to an APK built for it to skip that build.
 #
+# media_store_test.dart runs with the instrumentation argument neupodSeedMediaStore=true: the instrumentation rule
+# (android/app/src/androidTest, MainActivityTest.java) then grants the app the shared collection's read permission and
+# puts a WAV in MediaStore before the app starts.
+#
 #   bash tool/android_integration_tests.sh    (from mobile/; PER_FILE_TIMEOUT=8m by default)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -66,9 +70,13 @@ for file in "${files[@]}"; do
   echo "::group::$file"
   dadb logcat -c || true
   rm -rf build/app/outputs/androidTest-results
+  extra=()
+  if [ "$file" = integration_test/media_store_test.dart ]; then
+    extra=(-Pandroid.testInstrumentationRunnerArguments.neupodSeedMediaStore=true)
+  fi
   status=0
   (cd android && timeout --kill-after=30s "$per_file_timeout" \
-    ./gradlew app:connectedDebugAndroidTest -Ptarget="$PWD/../$file") || status=$?
+    ./gradlew app:connectedDebugAndroidTest -Ptarget="$PWD/../$file" ${extra[@]+"${extra[@]}"}) || status=$?
   echo "::endgroup::"
   if [ "$status" -ne 0 ]; then
     if [ "$status" -eq 124 ]; then

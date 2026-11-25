@@ -67,7 +67,8 @@ engine.
 
 **Shape of the schema** (the library engineer owns the details):
 
-- `sources(id, kind [local_folder | nas | device], uri_or_bookmark, display_name)`. R1 creates only `local_folder`.
+- `sources(id, kind [local_folder | media_store | nas | device], uri_or_bookmark, display_name)`. R1 creates
+  `local_folder` and, on Android, `media_store` (the shared music collection, decision 0012).
 - `tracks(id, source_id, rel_path, size, mtime, track_key, title, title_sort_key BLOB, artist_id, album_id, genre_id,
   disc_no, track_no, year, duration_ms, codec, sample_rate, bit_depth, playable_code, art_ref)`, unique on
   `(source_id, rel_path)`. Every track has a source and a location, so a NAS or device track is just another row.

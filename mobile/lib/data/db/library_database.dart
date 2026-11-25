@@ -6,12 +6,13 @@ import 'package:neupod/data/db/library_database.steps.dart';
 
 part 'library_database.g.dart';
 
-/// Where tracks come from (decision 0005). R1 writes only `local_folder`.
+/// Where tracks come from (decision 0005). R1 writes `local_folder` and, on
+/// Android, `media_store` (the phone's shared music collection).
 @DataClassName('SourceRow')
 class Sources extends Table {
   IntColumn get id => integer().autoIncrement()();
 
-  /// `local_folder`, later `nas` and `device`.
+  /// `local_folder`, `media_store`, later `nas` and `device`.
   TextColumn get kind => text()();
 
   /// The folder id from neupod_storage (tree URI or bookmark id).
