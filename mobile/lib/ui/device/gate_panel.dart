@@ -7,10 +7,10 @@ import 'package:neupod/ui/device/device_options.dart';
 import 'package:neupod/ui/features/player_debug/player_debug_screen.dart';
 import 'package:neupod/ui/screens/now_playing/now_playing_gate.dart';
 
-/// The design gate's switches, for the owner to compare the candidates on
-/// real screens: opened by a long press on the device's body. Temporary:
-/// after the gate the chosen values become defaults and the user-facing ones
-/// (Body, Haptics, Click sound) move to Settings.
+/// The design gate's switches, for the owner to compare the remaining
+/// candidates on real screens: opened by a long press on the device's body.
+/// Temporary: the touch and seek candidates are settled (owner decision 18);
+/// the user-facing switches (Haptics, Click sound) move to Settings.
 class GatePanel extends ConsumerWidget {
   /// The panel; [onClose] hides it.
   const GatePanel({required this.onClose, super.key});
