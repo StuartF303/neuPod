@@ -117,6 +117,17 @@ class Tracks extends Table {
   IntColumn get folderArtSize => integer().nullable()();
   IntColumn get folderArtMtime => integer().nullable()();
 
+  /// The audio's fingerprint (`audioFingerprint` in
+  /// `data/scan/audio_fingerprint.dart`): a hash of the first 64 KiB of the
+  /// audio payload and its length, with no tag bytes in it. A rescan that
+  /// sees a file gone and one new file with the same fingerprint carries its
+  /// ratings and play counts to the new path and size (decision 0011). Null
+  /// for a file the scanner does not open (Ogg, Opus, raw AAC, not
+  /// downloaded), one whose audio could not be found, and every row written
+  /// before schema version 5, until a rescan reads the file again (scan
+  /// version 6).
+  TextColumn get audioFingerprint => text().nullable()();
+
   /// `UnreadableReason.code` when the tags could not be read, or null.
   IntColumn get reasonCode => integer().nullable()();
 
@@ -152,9 +163,12 @@ class LibraryDatabase extends _$LibraryDatabase {
   /// `dart run drift_dev make-migrations` (it writes the snapshot in
   /// drift_schemas/library/, regenerates library_database.steps.dart and the
   /// test helpers in test/drift/library/generated/), then add the step to
-  /// [_upgrade] and run `dart run build_runner build`.
+  /// [_upgrade] and run `dart run build_runner build`. `make-migrations`
+  /// reads this getter's value without running it, and cannot read
+  /// `_testVersion ?? n`: write the bare number while it runs, then put the
+  /// `_testVersion ??` back.
   @override
-  int get schemaVersion => _testVersion ?? 4;
+  int get schemaVersion => _testVersion ?? 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -162,9 +176,11 @@ class LibraryDatabase extends _$LibraryDatabase {
     onUpgrade: (m, from, to) async {
       // One step per version, each against its snapshot, so a database at any
       // earlier version reaches this one with its rows kept. Never drop and
-      // recreate: the database will hold data a rescan cannot rebuild
-      // (ratings, play counts, playlists). A downgrade (a database from a
-      // newer build) throws a StateError instead of being changed.
+      // recreate: a drop costs the owner a full rescan, and data a rescan
+      // cannot rebuild must never be lost this way (ratings and play counts
+      // are in the stats database, owner decision 20; playlists, phase 6,
+      // must decide where they go). A downgrade (a database from a newer
+      // build) throws a StateError instead of being changed.
       //
       // drift does not wrap onUpgrade in a transaction, and writes
       // user_version only after beforeOpen succeeds. So every step and the
@@ -208,6 +224,11 @@ class LibraryDatabase extends _$LibraryDatabase {
   ///   in all six; the scanner's version went to 5 with them, so the next scan
   ///   reads every file again for its embedded picture and sets the cover file
   ///   of every folder it lists.
+  /// - 4 to 5: [Tracks.audioFingerprint] (decision 0011). Existing rows keep
+  ///   every column and get null; the scanner's version went to 6 with it,
+  ///   so the next scan reads every file again for it. Ratings and play
+  ///   counts are not here: they are in their own database, which phone
+  ///   backups keep (owner decision 20, `stats_database.dart`).
   OnUpgrade get _upgrade => stepByStep(
     from1To2: (m, schema) async {
       await m.addColumn(schema.tracks, schema.tracks.artistKeyText);
@@ -234,6 +255,9 @@ class LibraryDatabase extends _$LibraryDatabase {
       await m.addColumn(t, t.folderArtUri);
       await m.addColumn(t, t.folderArtSize);
       await m.addColumn(t, t.folderArtMtime);
+    },
+    from4To5: (m, schema) async {
+      await m.addColumn(schema.tracks, schema.tracks.audioFingerprint);
     },
   );
 }

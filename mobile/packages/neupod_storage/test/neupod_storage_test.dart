@@ -47,6 +47,13 @@ class FakeApi extends NeupodStorageApi {
     calls.add('openFd $uri');
     throw PlatformException(code: 'open-failed', message: 'gone');
   }
+
+  @override
+  Future<String> backedUpDataPath() async => '/data/files/stats';
+
+  @override
+  Future<bool> isExcludedFromBackup(String path) async =>
+      throw PlatformException(code: 'unsupported', message: 'iOS only');
 }
 
 StorageEntry entry(int i, {String? uri, EntryState state = EntryState.local}) =>
@@ -265,6 +272,23 @@ void main() {
         7,
       ]);
       FdReaderHandle(openFdOnHost(file.path)).discard();
+    });
+  });
+
+  group('backup paths', () {
+    test('the backed-up data path comes from the platform', () async {
+      final storage = NeupodStorage(api: FakeApi(const []));
+      expect(await storage.backedUpDataPath(), '/data/files/stats');
+    });
+
+    test('isExcludedFromBackup errors become StorageException', () async {
+      final storage = NeupodStorage(api: FakeApi(const []));
+      await expectLater(
+        storage.isExcludedFromBackup('/x'),
+        throwsA(
+          isA<StorageException>().having((e) => e.code, 'code', 'unsupported'),
+        ),
+      );
     });
   });
 }

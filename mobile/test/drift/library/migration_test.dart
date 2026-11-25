@@ -148,6 +148,22 @@ void main() {
     },
   );
 
+  test('4 to 5: tracks keep their rows and get no fingerprint until a '
+      'rescan', () async {
+    final schema = await verifier.schemaAt(4);
+    final before = _fillEveryTable(schema.rawDatabase, 4);
+    final db = LibraryDatabase(schema.newConnection());
+    await verifier.migrateAndValidate(db, 5);
+    final row = (await db.select(db.tracks).get()).single;
+    expect(row.relPath, before['tracks']!['rel_path']);
+    expect(row.artKind, before['tracks']!['art_kind']);
+    // Null: no carry-over for the row until the scanner (scan version 6)
+    // reads the file again.
+    expect(row.audioFingerprint, isNull);
+    expect(row.scanVersion, before['tracks']!['scan_version']);
+    await db.close();
+  });
+
   test('a database from a newer build is refused, not dropped', () async {
     final schema = await verifier.schemaAt(_versions.last);
     final rows = _fillEveryTable(schema.rawDatabase, _versions.last);

@@ -100,6 +100,14 @@ class NeupodStorage {
   /// database (never the user-visible Documents folder).
   Future<String> appSupportPath() => _guard(_api.appSupportPath);
 
+  /// A private directory for the app's data that phone backups keep (the
+  /// ratings and play counts database; owner decision 20).
+  Future<String> backedUpDataPath() => _guard(_api.backedUpDataPath);
+
+  /// iOS only, for tests: whether [path] is excluded from backups.
+  Future<bool> isExcludedFromBackup(String path) =>
+      _guard(() => _api.isExcludedFromBackup(path));
+
   /// iOS debug builds only: adds the folder at [path] as if it had been
   /// picked. For integration tests; never called by the app.
   Future<StorageRoot> debugAddRoot(String path) =>

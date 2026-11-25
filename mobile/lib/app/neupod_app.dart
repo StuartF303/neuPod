@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:neupod/app/art_providers.dart';
 import 'package:neupod/app/library_scan_providers.dart';
 import 'package:neupod/app/library_view_providers.dart';
+import 'package:neupod/app/play_stats_providers.dart';
 import 'package:neupod/app/providers.dart';
 import 'package:neupod/ui/device/device_view.dart';
 import 'package:neupod/ui/features/licences/licences_data.dart';
@@ -51,6 +52,9 @@ class _NeuPodAppState extends ConsumerState<NeuPodApp> {
   @override
   void initState() {
     super.initState();
+    // Plays are counted for as long as the app runs, whatever screen is up
+    // (the firmware counts them on its monitor task).
+    ref.read(playCounterProvider);
     unawaited(ref.read(libraryScanProvider.notifier).startIfSources());
     _lifecycle = AppLifecycleListener(
       onResume: () => unawaited(

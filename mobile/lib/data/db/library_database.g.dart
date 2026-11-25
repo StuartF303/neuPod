@@ -693,6 +693,17 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _audioFingerprintMeta = const VerificationMeta(
+    'audioFingerprint',
+  );
+  @override
+  late final GeneratedColumn<String> audioFingerprint = GeneratedColumn<String>(
+    'audio_fingerprint',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _reasonCodeMeta = const VerificationMeta(
     'reasonCode',
   );
@@ -751,6 +762,7 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     folderArtUri,
     folderArtSize,
     folderArtMtime,
+    audioFingerprint,
     reasonCode,
     scanVersion,
   ];
@@ -1036,6 +1048,15 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         ),
       );
     }
+    if (data.containsKey('audio_fingerprint')) {
+      context.handle(
+        _audioFingerprintMeta,
+        audioFingerprint.isAcceptableOrUnknown(
+          data['audio_fingerprint']!,
+          _audioFingerprintMeta,
+        ),
+      );
+    }
     if (data.containsKey('reason_code')) {
       context.handle(
         _reasonCodeMeta,
@@ -1202,6 +1223,10 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         DriftSqlType.int,
         data['${effectivePrefix}folder_art_mtime'],
       ),
+      audioFingerprint: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}audio_fingerprint'],
+      ),
       reasonCode: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}reason_code'],
@@ -1309,6 +1334,17 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
   final int? folderArtSize;
   final int? folderArtMtime;
 
+  /// The audio's fingerprint (`audioFingerprint` in
+  /// `data/scan/audio_fingerprint.dart`): a hash of the first 64 KiB of the
+  /// audio payload and its length, with no tag bytes in it. A rescan that
+  /// sees a file gone and one new file with the same fingerprint carries its
+  /// ratings and play counts to the new path and size (decision 0011). Null
+  /// for a file the scanner does not open (Ogg, Opus, raw AAC, not
+  /// downloaded), one whose audio could not be found, and every row written
+  /// before schema version 5, until a rescan reads the file again (scan
+  /// version 6).
+  final String? audioFingerprint;
+
   /// `UnreadableReason.code` when the tags could not be read, or null.
   final int? reasonCode;
 
@@ -1350,6 +1386,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     this.folderArtUri,
     this.folderArtSize,
     this.folderArtMtime,
+    this.audioFingerprint,
     this.reasonCode,
     required this.scanVersion,
   });
@@ -1417,6 +1454,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     }
     if (!nullToAbsent || folderArtMtime != null) {
       map['folder_art_mtime'] = Variable<int>(folderArtMtime);
+    }
+    if (!nullToAbsent || audioFingerprint != null) {
+      map['audio_fingerprint'] = Variable<String>(audioFingerprint);
     }
     if (!nullToAbsent || reasonCode != null) {
       map['reason_code'] = Variable<int>(reasonCode);
@@ -1487,6 +1527,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       folderArtMtime: folderArtMtime == null && nullToAbsent
           ? const Value.absent()
           : Value(folderArtMtime),
+      audioFingerprint: audioFingerprint == null && nullToAbsent
+          ? const Value.absent()
+          : Value(audioFingerprint),
       reasonCode: reasonCode == null && nullToAbsent
           ? const Value.absent()
           : Value(reasonCode),
@@ -1542,6 +1585,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       folderArtUri: serializer.fromJson<String?>(json['folderArtUri']),
       folderArtSize: serializer.fromJson<int?>(json['folderArtSize']),
       folderArtMtime: serializer.fromJson<int?>(json['folderArtMtime']),
+      audioFingerprint: serializer.fromJson<String?>(json['audioFingerprint']),
       reasonCode: serializer.fromJson<int?>(json['reasonCode']),
       scanVersion: serializer.fromJson<int>(json['scanVersion']),
     );
@@ -1586,6 +1630,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       'folderArtUri': serializer.toJson<String?>(folderArtUri),
       'folderArtSize': serializer.toJson<int?>(folderArtSize),
       'folderArtMtime': serializer.toJson<int?>(folderArtMtime),
+      'audioFingerprint': serializer.toJson<String?>(audioFingerprint),
       'reasonCode': serializer.toJson<int?>(reasonCode),
       'scanVersion': serializer.toJson<int>(scanVersion),
     };
@@ -1626,6 +1671,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     Value<String?> folderArtUri = const Value.absent(),
     Value<int?> folderArtSize = const Value.absent(),
     Value<int?> folderArtMtime = const Value.absent(),
+    Value<String?> audioFingerprint = const Value.absent(),
     Value<int?> reasonCode = const Value.absent(),
     int? scanVersion,
   }) => TrackRow(
@@ -1677,6 +1723,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     folderArtMtime: folderArtMtime.present
         ? folderArtMtime.value
         : this.folderArtMtime,
+    audioFingerprint: audioFingerprint.present
+        ? audioFingerprint.value
+        : this.audioFingerprint,
     reasonCode: reasonCode.present ? reasonCode.value : this.reasonCode,
     scanVersion: scanVersion ?? this.scanVersion,
   );
@@ -1746,6 +1795,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       folderArtMtime: data.folderArtMtime.present
           ? data.folderArtMtime.value
           : this.folderArtMtime,
+      audioFingerprint: data.audioFingerprint.present
+          ? data.audioFingerprint.value
+          : this.audioFingerprint,
       reasonCode: data.reasonCode.present
           ? data.reasonCode.value
           : this.reasonCode,
@@ -1792,6 +1844,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ..write('folderArtUri: $folderArtUri, ')
           ..write('folderArtSize: $folderArtSize, ')
           ..write('folderArtMtime: $folderArtMtime, ')
+          ..write('audioFingerprint: $audioFingerprint, ')
           ..write('reasonCode: $reasonCode, ')
           ..write('scanVersion: $scanVersion')
           ..write(')'))
@@ -1834,6 +1887,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     folderArtUri,
     folderArtSize,
     folderArtMtime,
+    audioFingerprint,
     reasonCode,
     scanVersion,
   ]);
@@ -1887,6 +1941,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           other.folderArtUri == this.folderArtUri &&
           other.folderArtSize == this.folderArtSize &&
           other.folderArtMtime == this.folderArtMtime &&
+          other.audioFingerprint == this.audioFingerprint &&
           other.reasonCode == this.reasonCode &&
           other.scanVersion == this.scanVersion);
 }
@@ -1926,6 +1981,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
   final Value<String?> folderArtUri;
   final Value<int?> folderArtSize;
   final Value<int?> folderArtMtime;
+  final Value<String?> audioFingerprint;
   final Value<int?> reasonCode;
   final Value<int> scanVersion;
   const TracksCompanion({
@@ -1963,6 +2019,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.folderArtUri = const Value.absent(),
     this.folderArtSize = const Value.absent(),
     this.folderArtMtime = const Value.absent(),
+    this.audioFingerprint = const Value.absent(),
     this.reasonCode = const Value.absent(),
     this.scanVersion = const Value.absent(),
   });
@@ -2001,6 +2058,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.folderArtUri = const Value.absent(),
     this.folderArtSize = const Value.absent(),
     this.folderArtMtime = const Value.absent(),
+    this.audioFingerprint = const Value.absent(),
     this.reasonCode = const Value.absent(),
     required int scanVersion,
   }) : sourceId = Value(sourceId),
@@ -2054,6 +2112,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Expression<String>? folderArtUri,
     Expression<int>? folderArtSize,
     Expression<int>? folderArtMtime,
+    Expression<String>? audioFingerprint,
     Expression<int>? reasonCode,
     Expression<int>? scanVersion,
   }) {
@@ -2094,6 +2153,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       if (folderArtUri != null) 'folder_art_uri': folderArtUri,
       if (folderArtSize != null) 'folder_art_size': folderArtSize,
       if (folderArtMtime != null) 'folder_art_mtime': folderArtMtime,
+      if (audioFingerprint != null) 'audio_fingerprint': audioFingerprint,
       if (reasonCode != null) 'reason_code': reasonCode,
       if (scanVersion != null) 'scan_version': scanVersion,
     });
@@ -2134,6 +2194,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Value<String?>? folderArtUri,
     Value<int?>? folderArtSize,
     Value<int?>? folderArtMtime,
+    Value<String?>? audioFingerprint,
     Value<int?>? reasonCode,
     Value<int>? scanVersion,
   }) {
@@ -2173,6 +2234,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       folderArtUri: folderArtUri ?? this.folderArtUri,
       folderArtSize: folderArtSize ?? this.folderArtSize,
       folderArtMtime: folderArtMtime ?? this.folderArtMtime,
+      audioFingerprint: audioFingerprint ?? this.audioFingerprint,
       reasonCode: reasonCode ?? this.reasonCode,
       scanVersion: scanVersion ?? this.scanVersion,
     );
@@ -2289,6 +2351,9 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     if (folderArtMtime.present) {
       map['folder_art_mtime'] = Variable<int>(folderArtMtime.value);
     }
+    if (audioFingerprint.present) {
+      map['audio_fingerprint'] = Variable<String>(audioFingerprint.value);
+    }
     if (reasonCode.present) {
       map['reason_code'] = Variable<int>(reasonCode.value);
     }
@@ -2335,6 +2400,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
           ..write('folderArtUri: $folderArtUri, ')
           ..write('folderArtSize: $folderArtSize, ')
           ..write('folderArtMtime: $folderArtMtime, ')
+          ..write('audioFingerprint: $audioFingerprint, ')
           ..write('reasonCode: $reasonCode, ')
           ..write('scanVersion: $scanVersion')
           ..write(')'))
@@ -2683,6 +2749,7 @@ typedef $$TracksTableCreateCompanionBuilder = TracksCompanion Function({
   Value<String?> folderArtUri,
   Value<int?> folderArtSize,
   Value<int?> folderArtMtime,
+  Value<String?> audioFingerprint,
   Value<int?> reasonCode,
   required int scanVersion,
 });
@@ -2721,6 +2788,7 @@ typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
   Value<String?> folderArtUri,
   Value<int?> folderArtSize,
   Value<int?> folderArtMtime,
+  Value<String?> audioFingerprint,
   Value<int?> reasonCode,
   Value<int> scanVersion,
 });
@@ -2918,6 +2986,11 @@ class $$TracksTableFilterComposer
 
   ColumnFilters<int> get folderArtMtime => $composableBuilder(
     column: $table.folderArtMtime,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get audioFingerprint => $composableBuilder(
+    column: $table.audioFingerprint,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3129,6 +3202,11 @@ class $$TracksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get audioFingerprint => $composableBuilder(
+    column: $table.audioFingerprint,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get reasonCode => $composableBuilder(
     column: $table.reasonCode,
     builder: (column) => ColumnOrderings(column),
@@ -3301,6 +3379,11 @@ class $$TracksTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get audioFingerprint => $composableBuilder(
+    column: $table.audioFingerprint,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get reasonCode => $composableBuilder(
     column: $table.reasonCode,
     builder: (column) => column,
@@ -3397,6 +3480,7 @@ class $$TracksTableTableManager
                 Value<String?> folderArtUri = const Value.absent(),
                 Value<int?> folderArtSize = const Value.absent(),
                 Value<int?> folderArtMtime = const Value.absent(),
+                Value<String?> audioFingerprint = const Value.absent(),
                 Value<int?> reasonCode = const Value.absent(),
                 Value<int> scanVersion = const Value.absent(),
               }) => TracksCompanion(
@@ -3434,6 +3518,7 @@ class $$TracksTableTableManager
                 folderArtUri: folderArtUri,
                 folderArtSize: folderArtSize,
                 folderArtMtime: folderArtMtime,
+                audioFingerprint: audioFingerprint,
                 reasonCode: reasonCode,
                 scanVersion: scanVersion,
               ),
@@ -3473,6 +3558,7 @@ class $$TracksTableTableManager
                 Value<String?> folderArtUri = const Value.absent(),
                 Value<int?> folderArtSize = const Value.absent(),
                 Value<int?> folderArtMtime = const Value.absent(),
+                Value<String?> audioFingerprint = const Value.absent(),
                 Value<int?> reasonCode = const Value.absent(),
                 required int scanVersion,
               }) => TracksCompanion.insert(
@@ -3510,6 +3596,7 @@ class $$TracksTableTableManager
                 folderArtUri: folderArtUri,
                 folderArtSize: folderArtSize,
                 folderArtMtime: folderArtMtime,
+                audioFingerprint: audioFingerprint,
                 reasonCode: reasonCode,
                 scanVersion: scanVersion,
               ),

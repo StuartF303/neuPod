@@ -58,7 +58,10 @@ Status: Accepted (2026-11-22) · Owner: Library engineer
     `LibraryDatabase.withStepsForTesting`, leaves the schema, the rows and `user_version` exactly as they were.
 - **Guard** (`mobile/test/data/db/library_tables_guard_test.dart`): fails if any table other than `sources` and
   `tracks` exists. It is updated in the same PR that adds the first user-owned table, and that PR must bring its
-  migration step.
+  migration step. The first user-owned table, `track_stats` (decision 0011), went into its own database instead,
+  `stats.sqlite`, so that phone backups keep it (owner decision 20); it follows this note's rules with its own
+  snapshots (`drift_schemas/stats/`), tests (`test/drift/stats/`) and guard. `make-migrations` cannot read
+  `_testVersion ?? n` from `schemaVersion`: write the bare number while it runs.
 
 ## Adding version 2
 

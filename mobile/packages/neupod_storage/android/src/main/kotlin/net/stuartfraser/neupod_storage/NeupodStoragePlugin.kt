@@ -328,6 +328,18 @@ class NeupodStoragePlugin :
     override fun appSupportPath(): String =
         context?.noBackupFilesDir?.absolutePath ?: throw FlutterError("detached", "plugin is detached")
 
+    // filesDir/stats: the one path the app's backup rules include (res/xml/backup_rules.xml for Android 11 and
+    // earlier, res/xml/data_extraction_rules.xml for 12 and later; owner decision 20).
+    override fun backedUpDataPath(): String {
+        val files = context?.filesDir ?: throw FlutterError("detached", "plugin is detached")
+        val dir = java.io.File(files, "stats")
+        if (!dir.isDirectory && !dir.mkdirs()) throw FlutterError("no-directory", "cannot create ${dir.path}")
+        return dir.absolutePath
+    }
+
+    override fun isExcludedFromBackup(path: String): Boolean =
+        throw FlutterError("unsupported", "isExcludedFromBackup is iOS only: Android's backup rules decide")
+
     override fun debugAddRoot(path: String): StorageRoot =
         throw FlutterError("unsupported", "debugAddRoot is iOS only")
 

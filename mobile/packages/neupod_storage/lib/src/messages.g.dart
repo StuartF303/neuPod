@@ -558,6 +558,53 @@ class NeupodStorageApi {
     return pigeonVar_replyValue! as String;
   }
 
+  /// A private directory for the app's data that the phone's own backup
+  /// keeps (owner decision 20: ratings and play counts survive a restore):
+  /// Android `filesDir/stats`, which the app's backup rules include (and
+  /// nothing else); iOS `Application Support/stats`, created if needed and
+  /// marked as included in backups (`isExcludedFromBackup` false, read
+  /// back). Never the Documents folder.
+  Future<String> backedUpDataPath() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.neupod_storage.NeupodStorageApi.backedUpDataPath$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as String;
+  }
+
+  /// iOS only: whether the file or folder at [path] is excluded from iCloud
+  /// and device backups (`URLResourceValues.isExcludedFromBackup`), for
+  /// tests. Throws `unsupported` on Android, where the backup rules decide.
+  Future<bool> isExcludedFromBackup(String path) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.neupod_storage.NeupodStorageApi.isExcludedFromBackup$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[path],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as bool;
+  }
+
   /// iOS debug builds only: stores a bookmark for the folder at [path] as if
   /// it had been picked, so integration tests can exercise bookmark storage,
   /// resolution and walking without driving the system picker UI. Throws

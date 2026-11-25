@@ -132,6 +132,13 @@ jobs:
           python3 ../scripts/app/gen_tag_key_vectors.py
           git status --porcelain -- test/fixtures/tag_keys
           test -z "$(git status --porcelain -- test/fixtures/tag_keys)"
+      # Play counting, ratings and last played (mobile/lib/domain/library/play_stats.dart) are checked against vectors
+      # printed by the firmware's own play_tracker.c, ratings_store.c and plays_store.c. Regenerate and diff.
+      - name: Play count vectors match the firmware
+        run: |
+          out=$(mktemp)
+          sh ../scripts/app/gen-plays-vectors.sh "$out"
+          diff -q "$out" test/fixtures/plays/firmware_vectors.json
       # The in-repo plugin's own Dart side (its Pigeon messages against a fake host).
       - name: neupod_device plugin
         working-directory: mobile/packages/neupod_device
@@ -243,7 +250,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 50
+    # The builds (about 12 min) plus the integration step's limit (56 min).
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -294,15 +302,16 @@ jobs:
       # One instrumentation run per test file (tool/android_integration_tests.sh). No retry: a Dart test failure fails
       # the instrumentation test, which fails Gradle, which fails the step; a hang is caught by the script's per-file
       # timeout, then by the step timeout. The script is one line because the action runs each script line on its own.
-      # The step timeout covers the emulator boot plus every file at the per-file limit (4 files x 8 min), so a hang
-      # in any file is reported by the script's own message. Raise it when a file is added.
+      # The step timeout covers the emulator boot (about 5 min) plus every file at the per-file limit (6 files x 8 min:
+      # album_art, app_launch, backup_paths, folder_access, playback, scan_service), plus 3 min of margin, so a hang in
+      # any file is reported by the script's own message. Raise it, and the job's timeout, when a file is added.
       #
       # -feature RefCountPipe: the API 29 emulator's graphics stack sometimes deadlocks on the first frame (RenderThread
       # stuck in QemuPipeStream::commitBufferAndReadFully <- rcOpenColorBuffer2_enc <- gralloc.ranchu; ~4 in 10 runs).
       # Run 45039175170 (25 cold launches per job): 75/75 ok with RefCountPipe across 3 jobs, against 7/75 hung on the
       # earlier baseline without it. Keep -gpu swiftshader_indirect; -gpu guest timed out.
       - name: Integration tests
-        timeout-minutes: 36
+        timeout-minutes: 56
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 29
@@ -360,9 +369,10 @@ jobs:
       # One app build per test file: `flutter build ios --config-only <file>` makes that file the app's Dart entry
       # point, and xcodebuild builds Runner.app with it plus RunnerTests.xctest. Debug, simulator, ad-hoc signed by
       # Xcode (no team). No retry: a Dart test failure fails XCTest, which fails xcodebuild, which fails the job; a hang
-      # is caught by XCTest's time allowance, then by the step timeout.
+      # is caught by XCTest's time allowance, then by the step timeout. Each file takes about 3 min (5 files: 15 min
+      # in run 45655153546); with 6 files the limit leaves room for a slow runner.
       - name: Integration tests
-        timeout-minutes: 25
+        timeout-minutes: 32
         env:
           UDID: ${{ steps.sim.outputs.udid }}
         run: |

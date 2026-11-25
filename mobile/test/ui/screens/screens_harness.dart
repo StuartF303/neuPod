@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/app/library_view_providers.dart';
 import 'package:neupod/app/providers.dart';
+import 'package:neupod/domain/library/play_stats.dart';
 
 import 'package:neupod/domain/library_view/library_view.dart';
 import 'package:neupod/domain/playback/player_state.dart';
@@ -26,6 +27,7 @@ import 'package:neupod/ui/screens/shell/shell_style.dart';
 import 'package:neupod/ui/style/neupod_style.dart';
 
 import '../../fakes/fake_player.dart';
+import '../../fakes/fake_track_stats_store.dart';
 import '../../support/manifest_library_view.dart';
 
 /// The gate library, from the committed manifest.
@@ -54,11 +56,14 @@ class RecordedHaptics implements HapticsPort {
 
 /// What a test holds on to.
 class ShellRig {
-  ShellRig(this.container, this.player, this.haptics);
+  ShellRig(this.container, this.player, this.haptics, this.trackStats);
 
   final ProviderContainer container;
   final FakePlayer player;
   final RecordedHaptics haptics;
+
+  /// The ratings and play counts the screens read and write.
+  final TrackStatsStore trackStats;
 
   WheelBus get bus => container.read(wheelBusProvider);
 
@@ -104,12 +109,14 @@ Future<ShellRig> pumpShell(
   ShellRegistrySetup? registry,
   List<Override> overrides = const [],
   LibraryView? library,
+  TrackStatsStore? trackStats,
 }) async {
   tester.view.physicalSize = const Size(600, 450);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final player = FakePlayer(playing ?? PlayerState.empty);
   final haptics = RecordedHaptics();
+  final stats = trackStats ?? FakeTrackStatsStore();
   final container = ProviderContainer.test(
     retry: (_, _) => null,
     overrides: [
@@ -130,6 +137,7 @@ Future<ShellRig> pumpShell(
         ],
       ),
       playerProvider.overrideWithValue(player),
+      trackStatsStoreProvider.overrideWithValue(stats),
       hapticsPortProvider.overrideWithValue(haptics),
       // The wheel's clock is the test's own (it moves with pump).
       wheelClockProvider.overrideWithValue(
@@ -168,7 +176,7 @@ Future<ShellRig> pumpShell(
     ),
   );
   await settle(tester);
-  return ShellRig(container, player, haptics);
+  return ShellRig(container, player, haptics, stats);
 }
 
 /// Called with the container before the first frame.
