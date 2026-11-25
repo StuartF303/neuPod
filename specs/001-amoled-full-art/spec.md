@@ -162,11 +162,11 @@ smart playlists, a played track shows up in Recently Played, and an On-The-Go li
 - Q: Does UI-25 also turn on the playlists, play counts, 128 ratings and the larger queue pool that share `NEUPOD_ART_HIRES`?
   → A: Yes (FR-002, User Story 3). Settled from the written record, not by asking: the owner's backlog item says "turn
   `NEUPOD_ART_HIRES` on where the board has PSRAM", and ADR-0022 says a gap with no hardware reason is a bug to close.
-  Splitting the option would create two players. The lead may overturn this; then User Story 3 and FR-002 drop out.
+  Splitting the option would create two players. Confirmed by the lead, 2026-11-25.
 - Q: What happens when the PSRAM is missing or fails? → A: Stop at start-up with a message naming the PSRAM (FR-007). This is
   what the ESP32-S3 build already does today (its PSRAM holds the codec arena, LVGL pool and display shadow, so it cannot boot
   without it), and the RP2350 AMOLED build has no internal RAM left to fall back on (about 11 KB free). Recorded as a
-  decision for the lead's review, see plan.md.
+  decision for the lead's review, see plan.md. Confirmed by the lead, 2026-11-25.
 
 ## Assumptions
 
