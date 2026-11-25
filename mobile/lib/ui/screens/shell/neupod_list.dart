@@ -86,13 +86,16 @@ class NeupodListItem {
     bool chevron = false,
     Widget Function(bool selected)? thumbnail,
     String? disabledReason,
+    String? greyedAction,
     String? initial,
     VoidCallback? onActivate,
   }) {
     // A greyed row is selectable, as on the device (`ui_list.c` never skips
     // a dim row), but Select on it opens nothing: its reason is already on
     // the row (the UI styles design moves the device's "Can't play" notice
-    // there).
+    // there). The one exception is a row with a [greyedAction]: an iCloud
+    // song not on the phone, where Select asks iOS to download it (owner
+    // decision 7).
     final greyed = disabledReason != null;
     return NeupodListItem(
       height: height,
@@ -105,7 +108,7 @@ class NeupodListItem {
         ?value,
         if (greyed && disabledReason.isNotEmpty) disabledReason,
       ].join(', '),
-      onActivate: greyed ? null : onActivate,
+      onActivate: greyed && greyedAction == null ? null : onActivate,
       builder: (context, s) => NeupodRow(
         title: title,
         subtitle: subtitle,
@@ -114,6 +117,7 @@ class NeupodListItem {
         chevron: chevron,
         thumbnail: thumbnail?.call(s.selection != RowSelection.none),
         disabledReason: disabledReason,
+        action: greyedAction,
         selection: s.selection,
         pressed: s.pressed,
         position: s.position,

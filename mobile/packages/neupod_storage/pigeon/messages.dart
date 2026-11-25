@@ -41,6 +41,26 @@ enum EntryState {
   notDownloaded,
 }
 
+/// Where an iCloud file's download stands (owner decision 7). Read from the
+/// file's metadata only: asking never reads its bytes.
+enum DownloadState {
+  /// Its bytes are on the device: the next scan reads it.
+  downloaded,
+
+  /// Not on the device, and iOS is not fetching it.
+  notDownloaded,
+
+  /// iOS is fetching it.
+  downloading,
+
+  /// iOS reported an error for its download (offline, no space, signed out
+  /// of iCloud).
+  failed,
+
+  /// No file at that URI any more (deleted, moved, or its folder removed).
+  missing,
+}
+
 /// A library folder the app holds read access to.
 class StorageRoot {
   StorageRoot({
@@ -78,7 +98,9 @@ class StorageEntry {
   /// an iCloud placeholder, the name of the file it stands for).
   final String relPath;
 
-  /// `content://` (Android) or `file://` (iOS). Open it with
+  /// `content://` (Android) or `file://` (iOS); for an iCloud placeholder,
+  /// the URL of the file it stands for, so the URI stays the same once the
+  /// file is downloaded. Open it with
   /// `NeupodStorage.openReader`, or hand it to the audio engine.
   final String uri;
 
@@ -149,6 +171,23 @@ abstract class NeupodStorageApi {
   /// the platform thread.
   @asyncCallback
   int openFd(String uri);
+
+  /// iOS only: asks iOS to download the iCloud file at [uri] (a `file://`
+  /// URI from a walk whose state was `notDownloaded`), with
+  /// `FileManager.startDownloadingUbiquitousItem(at:)`. Returns at once;
+  /// iOS fetches the file and the app reads nothing of it (owner decision
+  /// 7). Throws `not-in-root` for a URI outside the held roots and
+  /// `download-failed` when iOS refuses (not an iCloud file, signed out).
+  /// Android throws `unsupported`.
+  @asyncCallback
+  void requestDownload(String uri);
+
+  /// iOS only: the download state of each of [uris], in order, from file
+  /// metadata alone (placeholder names, `ubiquitousItemDownloadingStatus`,
+  /// the dataless flag): never a read of the file. Off the walk queue, so a
+  /// slow walk does not hold it up. Android throws `unsupported`.
+  @asyncCallback
+  List<DownloadState> downloadStates(List<String> uris);
 
   /// A private directory for the app's own data (the library database),
   /// excluded from backups: Android `noBackupFilesDir`; iOS

@@ -236,6 +236,34 @@ enum class EntryState(val raw: Int) {
 }
 
 /**
+ * Where an iCloud file's download stands (owner decision 7). Read from the
+ * file's metadata only: asking never reads its bytes.
+ */
+enum class DownloadState(val raw: Int) {
+  /** Its bytes are on the device: the next scan reads it. */
+  DOWNLOADED(0),
+  /** Not on the device, and iOS is not fetching it. */
+  NOT_DOWNLOADED(1),
+  /** iOS is fetching it. */
+  DOWNLOADING(2),
+  /**
+   * iOS reported an error for its download (offline, no space, signed out
+   * of iCloud).
+   */
+  FAILED(3),
+  /** No file at that URI any more (deleted, moved, or its folder removed). */
+  MISSING(4);
+
+  companion object {
+    private val pigeonValues = values()
+
+    fun ofRaw(raw: Int): DownloadState? {
+      return pigeonValues.getOrNull(raw)
+    }
+  }
+}
+
+/**
  * A library folder the app holds read access to.
  *
  * Generated class from Pigeon that represents data sent in messages.
@@ -309,7 +337,9 @@ data class StorageEntry (
    */
   val relPath: String,
   /**
-   * `content://` (Android) or `file://` (iOS). Open it with
+   * `content://` (Android) or `file://` (iOS); for an iCloud placeholder,
+   * the URL of the file it stands for, so the URI stays the same once the
+   * file is downloaded. Open it with
    * `NeupodStorage.openReader`, or hand it to the audio engine.
    */
   val uri: String,
@@ -434,16 +464,21 @@ private open class MessagesPigeonCodec : StandardMessageCodec() {
         }
       }
       131.toByte() -> {
-        (readValue(buffer) as? List<Any?>)?.let {
-          StorageRoot.fromList(it)
+        (readValue(buffer) as Long?)?.let {
+          DownloadState.ofRaw(it.toInt())
         }
       }
       132.toByte() -> {
         (readValue(buffer) as? List<Any?>)?.let {
-          StorageEntry.fromList(it)
+          StorageRoot.fromList(it)
         }
       }
       133.toByte() -> {
+        (readValue(buffer) as? List<Any?>)?.let {
+          StorageEntry.fromList(it)
+        }
+      }
+      134.toByte() -> {
         (readValue(buffer) as? List<Any?>)?.let {
           WalkBatch.fromList(it)
         }
@@ -461,16 +496,20 @@ private open class MessagesPigeonCodec : StandardMessageCodec() {
         stream.write(130)
         writeValue(stream, value.raw.toLong())
       }
-      is StorageRoot -> {
+      is DownloadState -> {
         stream.write(131)
-        writeValue(stream, value.toList())
+        writeValue(stream, value.raw.toLong())
       }
-      is StorageEntry -> {
+      is StorageRoot -> {
         stream.write(132)
         writeValue(stream, value.toList())
       }
-      is WalkBatch -> {
+      is StorageEntry -> {
         stream.write(133)
+        writeValue(stream, value.toList())
+      }
+      is WalkBatch -> {
+        stream.write(134)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
@@ -523,6 +562,23 @@ interface NeupodStorageApi {
    * the platform thread.
    */
   fun openFd(uri: String, callback: (Result<Long>) -> Unit)
+  /**
+   * iOS only: asks iOS to download the iCloud file at [uri] (a `file://`
+   * URI from a walk whose state was `notDownloaded`), with
+   * `FileManager.startDownloadingUbiquitousItem(at:)`. Returns at once;
+   * iOS fetches the file and the app reads nothing of it (owner decision
+   * 7). Throws `not-in-root` for a URI outside the held roots and
+   * `download-failed` when iOS refuses (not an iCloud file, signed out).
+   * Android throws `unsupported`.
+   */
+  fun requestDownload(uri: String, callback: (Result<Unit>) -> Unit)
+  /**
+   * iOS only: the download state of each of [uris], in order, from file
+   * metadata alone (placeholder names, `ubiquitousItemDownloadingStatus`,
+   * the dataless flag): never a read of the file. Off the walk queue, so a
+   * slow walk does not hold it up. Android throws `unsupported`.
+   */
+  fun downloadStates(uris: List<String>, callback: (Result<List<DownloadState>>) -> Unit)
   /**
    * A private directory for the app's own data (the library database),
    * excluded from backups: Android `noBackupFilesDir`; iOS
@@ -683,6 +739,45 @@ interface NeupodStorageApi {
             val args = message as List<Any?>
             val uriArg = args[0] as String
             api.openFd(uriArg) { result: Result<Long> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(MessagesPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(MessagesPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.neupod_storage.NeupodStorageApi.requestDownload$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val uriArg = args[0] as String
+            api.requestDownload(uriArg) { result: Result<Unit> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(MessagesPigeonUtils.wrapError(error))
+              } else {
+                reply.reply(MessagesPigeonUtils.wrapResult(null))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.neupod_storage.NeupodStorageApi.downloadStates$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val urisArg = args[0] as List<String>
+            api.downloadStates(urisArg) { result: Result<List<DownloadState>> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(MessagesPigeonUtils.wrapError(error))

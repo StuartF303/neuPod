@@ -12,7 +12,13 @@ import 'package:neupod_storage/src/messages.g.dart';
 import 'package:neupod_storage/src/readers.dart';
 
 export 'package:neupod_storage/src/messages.g.dart'
-    show EntryState, RootKind, StorageEntry, StorageRoot, WalkBatch;
+    show
+        DownloadState,
+        EntryState,
+        RootKind,
+        StorageEntry,
+        StorageRoot,
+        WalkBatch;
 export 'package:neupod_storage/src/readers.dart'
     show
         FdReaderHandle,
@@ -27,7 +33,8 @@ class StorageException implements Exception {
   StorageException(this.code, [this.message]);
 
   /// `root-unavailable`, `busy`, `open-failed`, `not-removable`, `unsupported`
-  /// and so on, as the platform side reports them.
+  /// and so on, as the platform side reports them; `timeout` for a walk page
+  /// that did not come back in time (the Dart side).
   final String code;
   final String? message;
 
@@ -35,6 +42,11 @@ class StorageException implements Exception {
   String toString() =>
       'StorageException($code${message == null ? '' : ': $message'})';
 }
+
+/// How long [NeupodStorage.walk] waits for one page by default. A page is
+/// about 500 files' metadata: well under a second on a phone, so this only
+/// trips when something is stuck.
+const walkPageTimeout = Duration(minutes: 2);
 
 /// The entry point. One instance per app is enough; it holds no state of its
 /// own (the platform side holds the grants and bookmarks).
@@ -57,12 +69,31 @@ class NeupodStorage {
   /// The last page has `done` set, and `complete` tells whether every folder
   /// was listed: files missing from an incomplete walk are not known to be
   /// gone. Cancelling the subscription stops the walk.
-  Stream<WalkBatch> walk(String rootId, {int batchSize = 500}) async* {
+  ///
+  /// A page that takes longer than [pageTimeout] ends the walk with
+  /// `StorageException('timeout')`, so a provider that never answers cannot
+  /// hang a scan (the platform side also gives up on a coordinated read that
+  /// does not start; iOS never reads a file that is not downloaded).
+  Stream<WalkBatch> walk(
+    String rootId, {
+    int batchSize = 500,
+    Duration pageTimeout = walkPageTimeout,
+  }) async* {
     final walkId = await _guard(() => _api.startWalk(rootId));
     var done = false;
     try {
       while (!done) {
-        final batch = await _guard(() => _api.nextWalkBatch(walkId, batchSize));
+        final batch = await _guard(
+          () => _api
+              .nextWalkBatch(walkId, batchSize)
+              .timeout(
+                pageTimeout,
+                onTimeout: () => throw StorageException(
+                  'timeout',
+                  'no page from $rootId in $pageTimeout',
+                ),
+              ),
+        );
         done = batch.done;
         yield batch;
       }
@@ -95,6 +126,20 @@ class NeupodStorage {
     if (uri.startsWith('file:')) return FileReaderHandle(uri);
     return FdReaderHandle(await _guard(() => _api.openFd(uri)));
   }
+
+  /// iOS only: asks iOS to download the iCloud file at [uri], the URI of an
+  /// entry a walk reported `notDownloaded` (owner decision 7). Returns once iOS has the request; the
+  /// file arrives later, and a walk then reports it `local`. The app reads
+  /// nothing of it here. Throws `download-failed` when iOS refuses,
+  /// `not-in-root` for a file outside the held folders, and `unsupported` on
+  /// Android.
+  Future<void> requestDownload(String uri) =>
+      _guard(() => _api.requestDownload(uri));
+
+  /// iOS only: where the download of each of [uris] stands, in order, from
+  /// file metadata alone. Throws `unsupported` on Android.
+  Future<List<DownloadState>> downloadStates(List<String> uris) =>
+      _guard(() => _api.downloadStates(uris));
 
   /// A private directory for the app's own data, such as the library
   /// database (never the user-visible Documents folder).

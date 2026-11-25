@@ -7,6 +7,9 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart' show PlatformException;
+import 'package:neupod/app/providers.dart';
+import 'package:neupod/domain/library_view/library_view.dart';
 import 'package:neupod/domain/wheel/feedback_ports.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/ui/components/list_row.dart';
@@ -19,8 +22,51 @@ import 'package:neupod/ui/screens/shell/neupod_list.dart';
 import 'package:neupod/ui/style/neupod_style.dart';
 import 'package:neupod/ui/screens/shell/shell_frame.dart';
 import 'package:neupod/ui/screens/shell/shell_state.dart';
+import 'package:neupod_storage/neupod_storage.dart';
+// ignore: implementation_imports
+import 'package:neupod_storage/src/messages.g.dart';
 
 import 'screens_harness.dart';
+
+/// The platform side of iCloud downloads: records requests; every state
+/// read says the download failed, so the poll ends and leaves no timer.
+class _DownloadApi extends NeupodStorageApi {
+  final requested = <String>[];
+  bool refuse = false;
+
+  @override
+  Future<void> requestDownload(String uri) async {
+    if (refuse) throw PlatformException(code: 'download-failed');
+    requested.add(uri);
+  }
+
+  @override
+  Future<List<DownloadState>> downloadStates(List<String> uris) async => [
+    for (final _ in uris) DownloadState.failed,
+  ];
+}
+
+/// Two songs, the second in iCloud and not on the phone.
+List<Song> _cloudSongs() => const [
+  Song(
+    id: '1',
+    title: 'Here',
+    artist: 'A',
+    album: 'B',
+    albumId: 'b',
+    uri: 'file:///m/here.flac',
+  ),
+  Song(
+    id: '2',
+    title: 'Away',
+    artist: 'A',
+    album: 'B',
+    albumId: 'b',
+    uri: 'file:///m/away.flac',
+    unplayableReason: 'Not downloaded',
+    downloadable: true,
+  ),
+];
 
 Finder _rowText(String text) =>
     find.descendant(of: find.byType(NeupodRow), matching: find.text(text));
@@ -346,6 +392,64 @@ void main() {
       await tester.pump();
       expect(rig.player.calls, isEmpty);
       expect(rig.container.read(shellProvider).pages, hasLength(1));
+    });
+
+    testWidgets('Select on a song not downloaded asks iOS for it and says '
+        'Downloading; nothing plays (owner decision 7)', (tester) async {
+      final api = _DownloadApi();
+      final rig = await pumpShell(
+        tester,
+        home: (_) =>
+            SongListScreen(title: 'Songs', load: (_) async => _cloudSongs()),
+        overrides: [
+          neupodStorageProvider.overrideWithValue(NeupodStorage(api: api)),
+        ],
+      );
+      expect(_rowText('Not downloaded'), findsOneWidget);
+      rig.step(1);
+      await settle(tester);
+      expect(_wheelValue(rig), startsWith('Away, '));
+      expect(_wheelValue(rig), contains('Not downloaded'));
+      await _pressCentre(tester, rig);
+      expect(api.requested, ['file:///m/away.flac']);
+      expect(_rowText('Downloading'), findsOneWidget);
+      expect(_rowText('Not downloaded'), findsNothing);
+      expect(rig.player.calls, isEmpty);
+      expect(rig.container.read(shellProvider).pages, hasLength(1));
+      // The row is still a button for the screen reader, with the action.
+      expect(
+        tester.getSemantics(find.text('Away')),
+        isSemantics(
+          hint: 'Download',
+          isEnabled: true,
+          isButton: true,
+          hasTapAction: true,
+        ),
+      );
+
+      // iOS reports the download failed: the row is Not downloaded again.
+      await tester.pump(const Duration(seconds: 3));
+      await settle(tester);
+      expect(_rowText('Not downloaded'), findsOneWidget);
+    });
+
+    testWidgets('a download iOS refuses gets the centred panel', (
+      tester,
+    ) async {
+      final api = _DownloadApi()..refuse = true;
+      final rig = await pumpShell(
+        tester,
+        home: (_) =>
+            SongListScreen(title: 'Songs', load: (_) async => _cloudSongs()),
+        overrides: [
+          neupodStorageProvider.overrideWithValue(NeupodStorage(api: api)),
+        ],
+      );
+      rig.step(1);
+      await settle(tester);
+      await _pressCentre(tester, rig);
+      expect(find.text("Can't download"), findsOneWidget);
+      expect(_rowText('Not downloaded'), findsOneWidget);
     });
 
     testWidgets('a tap on a greyed song selects it and plays nothing', (

@@ -616,6 +616,7 @@ final class _Row {
           : _platform != null && cannotDecode(_platform, t.codec)
           ? cannotDecodeText(t.codec)
           : null,
+      downloadable: reason == UnreadableReason.notDownloaded,
       sortLetter: collateLetter(t.titleSortKey),
       art: ArtRef(seed: group.seed, sources: artFiles),
     );

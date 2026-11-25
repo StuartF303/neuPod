@@ -38,6 +38,9 @@ public class NeupodStoragePlugin: NSObject, FlutterPlugin, NeupodStorageApi, UID
 
   private weak var registrar: FlutterPluginRegistrar?
   private let queue = DispatchQueue(label: "net.stuartfraser.neupod_storage")
+  /// Download states are metadata reads with no plugin state: they run here,
+  /// not behind a walk on `queue`.
+  private let statusQueue = DispatchQueue(label: "net.stuartfraser.neupod_storage.status", attributes: .concurrent)
   // Touched only on `queue`.
   private var stored: [Stored] = []
   private var held: [String: Held] = [:]
@@ -235,6 +238,48 @@ public class NeupodStoragePlugin: NSObject, FlutterPlugin, NeupodStorageApi, UID
     queue.async { self.walks.removeValue(forKey: walkId) }
   }
 
+  // MARK: iCloud downloads (owner decision 7)
+
+  /// Asks iOS to download a file that a walk reported as not downloaded. iOS
+  /// fetches it in the background (its own networking, not the app's); the
+  /// app reads nothing until a later walk sees the file on the device. This
+  /// never writes, moves or deletes: the file's content is the user's, as it
+  /// is in iCloud.
+  func requestDownload(uri: String, completion: @escaping (Result<Void, Error>) -> Void) {
+    onQueue(completion) {
+      guard let url = URL(string: uri), url.isFileURL, self.isUnderRoot(url) else {
+        throw PigeonError(code: "not-in-root", message: "not a file of a library folder", details: nil)
+      }
+      do {
+        try FileManager.default.startDownloadingUbiquitousItem(at: ICloudItem.realURL(url))
+      } catch {
+        throw PigeonError(code: "download-failed", message: error.localizedDescription, details: nil)
+      }
+    }
+  }
+
+  func downloadStates(uris: [String], completion: @escaping (Result<[DownloadState], Error>) -> Void) {
+    statusQueue.async {
+      let states = uris.map { uri -> DownloadState in
+        guard let url = URL(string: uri), url.isFileURL else { return .missing }
+        return ICloudItem.downloadState(url)
+      }
+      DispatchQueue.main.async { completion(.success(states)) }
+    }
+  }
+
+  /// Whether [url]'s folder is Documents or a held root, or inside one.
+  /// Compares the folder, which exists even while the file is only a
+  /// placeholder, with symlinks resolved (/var and /private/var).
+  private func isUnderRoot(_ url: URL) -> Bool {
+    func canonical(_ u: URL) -> String { u.standardizedFileURL.resolvingSymlinksInPath().path }
+    let dir = canonical(url.deletingLastPathComponent())
+    return ([documentsURL] + held.values.map { $0.url }).contains { root in
+      let r = canonical(root)
+      return dir == r || dir.hasPrefix(r.hasSuffix("/") ? r : r + "/")
+    }
+  }
+
   func openFd(uri: String, completion: @escaping (Result<Int64, Error>) -> Void) {
     completion(.failure(PigeonError(code: "unsupported", message: "iOS reads file:// URIs directly", details: nil)))
   }
@@ -317,12 +362,78 @@ public class NeupodStoragePlugin: NSObject, FlutterPlugin, NeupodStorageApi, UID
   }
 }
 
+/// How an iCloud file that is not on the device shows itself, from metadata
+/// alone (never a read: reading a file that is not downloaded makes iOS fetch
+/// it, or blocks until it has):
+///
+/// - a hidden placeholder `.Name.ext.icloud` in place of `Name.ext` (iCloud
+///   Drive's older layout, still used for some containers);
+/// - `ubiquitousItemDownloadingStatus` `notDownloaded`;
+/// - the APFS dataless flag (`SF_DATALESS` in `st_flags`), which File Provider
+///   sets on any file whose content is not local, including providers that
+///   report no downloading status. `lstat` reads the inode only and does not
+///   materialise the file.
+enum ICloudItem {
+  static let placeholderSuffix = ".icloud"
+  /// `SF_DATALESS` in <sys/stat.h>, spelled out in case the SDK's Swift
+  /// overlay does not import it.
+  static let datalessFlag: UInt32 = 0x4000_0000
+
+  /// The real file name for a placeholder name (`.a.flac.icloud` gives
+  /// `a.flac`), or nil if [name] is not one.
+  static func realName(ofPlaceholder name: String) -> String? {
+    guard name.hasPrefix("."), name.hasSuffix(placeholderSuffix), name.count > 1 + placeholderSuffix.count
+    else { return nil }
+    return String(name.dropFirst().dropLast(placeholderSuffix.count))
+  }
+
+  /// The URL of the file a placeholder stands for, or [url] itself.
+  static func realURL(_ url: URL) -> URL {
+    guard let real = realName(ofPlaceholder: url.lastPathComponent) else { return url }
+    return url.deletingLastPathComponent().appendingPathComponent(real)
+  }
+
+  static func placeholderURL(_ real: URL) -> URL {
+    real.deletingLastPathComponent().appendingPathComponent("." + real.lastPathComponent + placeholderSuffix)
+  }
+
+  static func isDataless(_ path: String) -> Bool {
+    var st = stat()
+    guard lstat(path, &st) == 0 else { return false }
+    return st.st_flags & datalessFlag != 0
+  }
+
+  /// Where the download of the file at [url] (a real URL or a placeholder's)
+  /// stands. Metadata only.
+  static func downloadState(_ url: URL) -> DownloadState {
+    let real = realURL(url)
+    let fm = FileManager.default
+    let placeholder = fm.fileExists(atPath: placeholderURL(real).path)
+    guard placeholder || fm.fileExists(atPath: real.path) else { return .missing }
+    var u = real
+    u.removeAllCachedResourceValues()
+    let v = try? u.resourceValues(forKeys: [
+      .ubiquitousItemDownloadingStatusKey, .ubiquitousItemIsDownloadingKey, .ubiquitousItemDownloadingErrorKey,
+    ])
+    if v?.ubiquitousItemIsDownloading == true { return .downloading }
+    if v?.ubiquitousItemDownloadingError != nil { return .failed }
+    if placeholder || v?.ubiquitousItemDownloadingStatus == .notDownloaded || isDataless(real.path) {
+      return .notDownloaded
+    }
+    return .downloaded
+  }
+}
+
 /// A pull-based recursive listing of one root. Used only on the plugin's queue.
 final class Walk {
   private static let keys: [URLResourceKey] = [
     .isDirectoryKey, .fileSizeKey, .contentModificationDateKey, .ubiquitousItemDownloadingStatusKey,
   ]
-  private static let icloudSuffix = ".icloud"
+  /// How long a page waits for its coordinated read to start before giving
+  /// up on it (another process holding a write on the folder, a provider
+  /// that does not answer). The walk then ends incomplete: the scan keeps
+  /// what it had and never hangs.
+  static let coordinationWait: TimeInterval = 15
 
   let rootId: String
   private let root: URL
@@ -344,6 +455,9 @@ final class Walk {
     errors = flag
     // Hidden files are not skipped by the enumerator, so iCloud placeholders
     // (".Name.ext.icloud") are seen; other hidden names are skipped below.
+    // A placeholder downloaded while the walk runs may be seen twice (as the
+    // placeholder and as the file); the scanner keys on the relative path, so
+    // it is still one track.
     guard
       let e = FileManager.default.enumerator(
         at: root, includingPropertiesForKeys: Self.keys, options: [],
@@ -359,10 +473,17 @@ final class Walk {
     var out: [StorageEntry] = []
     var done = false
     // Coordinated metadata read of the tree, as Apple asks for iCloud folders.
+    // `.immediatelyAvailableMetadataOnly`: never wait for a provider to
+    // fetch anything. A watchdog cancels the coordination if it has not
+    // started within `coordinationWait`; `cancel()` stops only a wait, never
+    // a running accessor.
     let coordinator = NSFileCoordinator(filePresenter: nil)
+    let watchdog = DispatchWorkItem { coordinator.cancel() }
+    DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + Self.coordinationWait, execute: watchdog)
     var coordError: NSError?
     var ran = false
     coordinator.coordinate(readingItemAt: root, options: [.immediatelyAvailableMetadataOnly], error: &coordError) { _ in
+      watchdog.cancel()
       ran = true
       while out.count < limit {
         guard let url = enumerator.nextObject() as? URL else {
@@ -384,12 +505,17 @@ final class Walk {
           continue
         }
         var relName = name
+        var fileURL = url
         var state = EntryState.local
         if name.hasPrefix(".") {
-          guard name.hasSuffix(Self.icloudSuffix), name.count > 1 + Self.icloudSuffix.count else { continue }
-          relName = String(name.dropFirst().dropLast(Self.icloudSuffix.count))
+          // Hidden: only an iCloud placeholder is listed, under the name and
+          // URL of the file it stands for (the URI then stays the same once
+          // the file is downloaded).
+          guard let real = ICloudItem.realName(ofPlaceholder: name) else { continue }
+          relName = real
+          fileURL = ICloudItem.realURL(url)
           state = .notDownloaded
-        } else if let status = values?.ubiquitousItemDownloadingStatus, status == .notDownloaded {
+        } else if values?.ubiquitousItemDownloadingStatus == .notDownloaded || ICloudItem.isDataless(url.path) {
           state = .notDownloaded
         }
         let rel = (stack.dropLast() + [relName]).joined(separator: "/")
@@ -397,10 +523,11 @@ final class Walk {
         let mtime = Int64((values?.contentModificationDate?.timeIntervalSince1970 ?? 0) * 1000)
         out.append(
           StorageEntry(
-            relPath: rel, uri: url.absoluteString, size: state == .local ? size : 0, modifiedMs: mtime,
+            relPath: rel, uri: fileURL.absoluteString, size: state == .local ? size : 0, modifiedMs: mtime,
             state: state))
       }
     }
+    watchdog.cancel()
     if coordError != nil || !ran {
       // The coordinated read failed: end the walk, and say it is incomplete.
       incomplete = true

@@ -287,13 +287,21 @@ final class LocalLibraryScanner implements LibraryScanner {
   }
 
   /// Same file as last time, read by this version, and its last read did not
-  /// fail transiently.
-  bool _unchanged(TrackRow k, StorageEntry e) =>
-      k.scanVersion == version &&
-      k.size == e.size &&
-      k.mtime == e.modifiedMs &&
-      k.uri == e.uri &&
-      !(UnreadableReason.fromCode(k.reasonCode)?.transient ?? false);
+  /// fail transiently. A file not downloaded (iCloud, owner decision 7) is
+  /// unchanged while it stays not downloaded at the same URI (its size is not
+  /// known then, and nothing of it is read); once it is on the device it is
+  /// read, whatever its size and time say.
+  bool _unchanged(TrackRow k, StorageEntry e) {
+    final wasAway = k.reasonCode == UnreadableReason.notDownloaded.code;
+    final isAway = e.state == EntryState.notDownloaded;
+    if (wasAway != isAway) return false;
+    if (isAway) return k.scanVersion == version && k.uri == e.uri;
+    return k.scanVersion == version &&
+        k.size == e.size &&
+        k.mtime == e.modifiedMs &&
+        k.uri == e.uri &&
+        !(UnreadableReason.fromCode(k.reasonCode)?.transient ?? false);
+  }
 
   Future<int> _sourceFor(LibraryFolder folder) async {
     final existing = await (_db.select(
@@ -319,7 +327,11 @@ final class LocalLibraryScanner implements LibraryScanner {
 
   /// Reads [entries] and upserts them; returns how many were read. A
   /// transient failure on a file already in [known] keeps its stored tags and
-  /// only records the reason (so it is retried next time).
+  /// only records the reason (so it is retried next time). So does a file
+  /// that was read before and is now not downloaded (iCloud evicted it): it
+  /// stays listed under its tags, greyed `Not downloaded`, with its size and
+  /// fingerprint kept, so its ratings and play counts are still found and it
+  /// is no move.
   Future<int> _readAndStore(
     int sourceId,
     List<StorageEntry> entries,
@@ -368,6 +380,18 @@ final class LocalLibraryScanner implements LibraryScanner {
           b.update(
             _db.tracks,
             TracksCompanion(reasonCode: Value(r.reason!.code)),
+            where: (t) => t.id.equals(previous.id),
+          );
+          continue;
+        }
+        if (r.reason == UnreadableReason.notDownloaded && previous != null) {
+          b.update(
+            _db.tracks,
+            TracksCompanion(
+              uri: Value(e.uri),
+              reasonCode: Value(r.reason!.code),
+              scanVersion: Value(version),
+            ),
             where: (t) => t.id.equals(previous.id),
           );
           continue;

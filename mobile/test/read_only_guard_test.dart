@@ -33,7 +33,11 @@
 //   write-permission flags.
 // - Swift: `FileManager` remove/move/copy/create/replace, `FileHandle(
 //   forWriting...)`, `write(to:)`, and `NSFileCoordinator` `writingItemAt` /
-//   `writingItemURL` / write options (`readingItemAt` alone passes).
+//   `writingItemURL` / write options (`readingItemAt` alone passes); and the
+//   iCloud calls that change a file's place or copy: `setUbiquitous` (moves
+//   a file in or out of iCloud), `evictUbiquitousItem` (removes the local
+//   copy) and `startDownloadingUbiquitousItem` (asks iOS to fetch it). Only
+//   the last is allowed, once: owner decision 7's Download action.
 //
 // A match fails the test unless it is in [_allowed]. The allow-list is per
 // occurrence: an entry names a file and the exact (trimmed) source line, and
@@ -94,6 +98,9 @@ final _forbidden = <_Lang, List<RegExp>>{
     RegExp(r'\bwritingItem(At|URL)\b'),
     RegExp(r'\bfor(Replacing|Deleting|Moving|Merging)\b'),
     RegExp(r'\b(fopen|open)\([^)]*(O_WRONLY|O_RDWR|"[wa]\+?")'),
+    RegExp(
+      r'\b(setUbiquitous|evictUbiquitousItem|startDownloadingUbiquitousItem)\b',
+    ),
   ],
 };
 
@@ -106,7 +113,8 @@ class _Allowed {
   final String reason;
 }
 
-/// The app's own database and cache directories. Nothing else.
+/// The app's own database and cache directories, and the one iCloud
+/// download request. Nothing else.
 const _allowed = <_Allowed>[
   _Allowed(
     'lib/data/art/art_cache.dart',
@@ -200,6 +208,16 @@ const _allowed = <_Allowed>[
         'withIntermediateDirectories: true)',
     'Application Support/stats, the ratings and play counts database folder '
         '(owner decision 20), never a music folder',
+  ),
+  _Allowed(
+    'packages/neupod_storage/ios/neupod_storage/Sources/neupod_storage/'
+        'NeupodStoragePlugin.swift',
+    'try FileManager.default.startDownloadingUbiquitousItem(at: '
+        'ICloudItem.realURL(url))',
+    'owner decision 7: a tap on a song not downloaded asks iOS to download '
+        "the user's own iCloud file. iOS fetches it and puts its content on "
+        'the phone unchanged; the app writes, moves and deletes nothing, and '
+        'reads the file only after a later walk finds it local',
   ),
   _Allowed(
     'packages/neupod_storage/android/src/main/kotlin/net/stuartfraser/'
@@ -394,6 +412,11 @@ void main() {
             'coordinate(with: [intent], queue: q) { _ in }\n'
             'let x = writingItemURL',
         'try fm.createFile(atPath: p, contents: d)',
+        // iCloud: moving a file into or out of iCloud, evicting it, and a
+        // download request not on the allow-list.
+        'try fm.setUbiquitous(true, itemAt: a, destinationURL: b)',
+        'try fm.evictUbiquitousItem(at: url)',
+        'try FileManager.default.startDownloadingUbiquitousItem(at: url)',
       ]) {
         flags(_Lang.swift, l);
       }

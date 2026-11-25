@@ -161,6 +161,48 @@ by `mobile/lib/data/platform/storage_folder_access.dart`. Where it differs from 
 - **Handles.** `openHandle` takes the `StorageEntry` and refuses a not-downloaded one by construction. A `ReaderHandle`
   is used exactly once (`open` or `discard`); `pread` is retried on `EINTR`, and failures carry `errno`.
 
+## iCloud files not downloaded (phase 3, 2026-11-25)
+
+Owner decision 7: such files are listed with a Download action; the app never fetches them itself, and a tap asks iOS to
+download the file. Built as follows.
+
+- **Detection, metadata only** (`ICloudItem` in `NeupodStoragePlugin.swift`). A file is not downloaded when any of these
+  holds: it is a hidden placeholder `.Name.ext.icloud`; its `ubiquitousItemDownloadingStatus` is `notDownloaded`; or
+  `lstat` shows the APFS dataless flag (`SF_DATALESS`), which File Provider sets on any file whose content is not local,
+  so a third-party provider that reports no downloading status is caught too (the risk noted below). `lstat` and
+  resource values read the inode and the provider's metadata; neither materialises the file. A placeholder is listed
+  under the real file's name **and URL**, so the track's URI does not change once the file arrives. Size is 0.
+- **Security-scoped bookmarks.** The bookmark of a picked iCloud Drive folder covers the files in it whether or not they
+  are downloaded; access is held for the root as before, so metadata reads, the download request and the later read all
+  work under it. Nothing new is bookmarked per file.
+- **Never blocking.** The walk's coordinated read keeps `.immediatelyAvailableMetadataOnly` and now has a watchdog: if
+  the coordination has not started within 15 s (another process holding a write, a provider not answering), the
+  coordinator is cancelled and the walk ends incomplete, so the scan keeps what it had. The Dart side also times a walk
+  page out after 2 minutes (`StorageException('timeout')`). The scanner never opens a not-downloaded entry
+  (`openHandle` refuses it by construction), nor a cover file that is not downloaded.
+- **Listing.** A new not-downloaded file is listed by its file name (the device's untagged fallback), greyed
+  `Not downloaded`. A file read before and then evicted keeps its tags, size and audio fingerprint, so it is still
+  listed by its title and its ratings and play counts are still found; eviction is not a move. While it stays away a
+  rescan does not touch it; once it is local the next scan reads it, whatever its size and time say.
+- **The Download action** (`requestDownload` calls `FileManager.startDownloadingUbiquitousItem(at:)` for a file under a
+  held root, and nothing else). Then `downloadStates` is polled every 2 s for the files asked for only, from metadata
+  (`downloaded`, `notDownloaded`, `downloading`, `failed` from `ubiquitousItemDownloadingError`, `missing`), for at most
+  10 minutes, while the app is in front. When a file is `downloaded` the ordinary incremental scan runs and picks it up
+  with its tags and art.
+- **Why a poll, not `NSMetadataQuery`.** A metadata query sees only the app's own ubiquity container, which needs the
+  iCloud entitlement and a container the app does not have; it cannot watch a folder the user picked in iCloud Drive. An
+  `NSFilePresenter` per file would work but adds native state and lifecycle for the same result. Rescanning only on the
+  next return to the front would leave the row stale while the user waits. The poll is a handful of metadata reads.
+- **Data safety.** `startDownloadingUbiquitousItem` is an OS action on the user's own file: iOS fetches its content
+  unchanged. The read-only guard now forbids the iCloud calls that change a file's place or copy (`setUbiquitous`,
+  `evictUbiquitousItem`) and allows the one download call, with its reason.
+- **Tests.** Unit: the scanner with walks that report files away and back; the state-to-step mapping and the controller
+  with a fake platform; the row and the action in the shell. iOS simulator (`integration_test/folder_access_test.dart`):
+  a real placeholder file in a bookmarked folder is walked, stated and scanned without being read, and a download
+  request for it is refused or ignored without touching it. A real evicted iCloud file, the status key and the dataless
+  flag cannot be made on the simulator (no iCloud account; the flag is set only by the system): that is the owner's
+  device check (PROGRESS, phase 3).
+
 For the device check (phase 1) and phase 3:
 
 - Third-party File Provider extensions may present dataless files without `ubiquitousItemDownloadingStatus`; the walk
