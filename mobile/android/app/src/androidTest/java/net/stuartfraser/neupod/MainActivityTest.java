@@ -86,9 +86,9 @@ public class MainActivityTest {
     resolver.update(item, values, null, null);
   }
 
-  /** One second of silence, 8 kHz mono 16-bit PCM, as a plain RIFF/WAVE file. */
+  /** One second of silence, 44.1 kHz mono 16-bit PCM (a WAV the device plays, so it has a duration), as a plain RIFF/WAVE file. */
   static byte[] wav() {
-    int rate = 8000, channels = 1, bits = 16;
+    int rate = 44100, channels = 1, bits = 16;
     int data = rate * channels * bits / 8;
     ByteBuffer b = ByteBuffer.allocate(44 + data).order(ByteOrder.LITTLE_ENDIAN);
     b.put("RIFF".getBytes()).putInt(36 + data).put("WAVE".getBytes());

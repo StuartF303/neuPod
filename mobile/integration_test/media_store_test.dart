@@ -120,7 +120,8 @@ void main() {
         );
         expect(t.codec, 'wav');
         expect(t.unreadableReason, isNull);
-        // One second of 8 kHz mono 16-bit PCM, from the file's own header.
+        // One second of 44.1 kHz mono 16-bit PCM, from the file's own header
+        // (wav_parse: the device gives no duration below 44.1 kHz).
         expect(t.durationMs, inInclusiveRange(990, 1010));
         expect(t.displayTitle, 'neupod_it_tone.wav');
 
