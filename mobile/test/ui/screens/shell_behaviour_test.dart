@@ -351,9 +351,7 @@ void main() {
       expect(tileOpacity(), 0);
     });
 
-    testWidgets('a tap selects the row and opens it (candidate 2)', (
-      tester,
-    ) async {
+    testWidgets('a tap selects the row and opens it', (tester) async {
       final rig = await pumpShell(tester, home: (_) => const SongsScreen());
       final songs = await gateLibrary.songs();
       await tester.tap(find.text(songs[1].title));
@@ -516,8 +514,7 @@ void main() {
       expect(tile(), 1);
     });
 
-    testWidgets('a row is one semantics element that opens it (touch '
-        'candidate 1 relies on this)', (tester) async {
+    testWidgets('a row is one semantics element that opens it', (tester) async {
       final handle = tester.ensureSemantics();
       final rig = await pumpShell(tester, home: (_) => const HomeScreen());
       final row = find.semantics.byLabel('Music, 1 of 4');

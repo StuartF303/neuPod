@@ -64,9 +64,8 @@ Status: specification, 21 November 2026. Nothing is built. The working instructi
     Bluetooth saved versus active gets a cue besides colour; Home's right pane with nothing playing shows a
     **placeholder cover, "Nothing playing" and the song count**; tapping a side cover in Cover Flow **centres it**; the Music menu's **preview pane shows for every item**, not only Albums.
     Settings: the list under [Settings](#settings) plus the **click sound** switch (off by default) and a **haptics**
-    switch. **Direct touch** (device view Open question 2) and **drag-to-seek** are judged by feel on the owner's phones at
-    gate 1: until then the build defaults to **candidate 2** (wheel plus screen, candidate 1 kept behind the gate
-    switch) and the progress bar is **not draggable**.
+    switch. **Direct touch** (device view Open question 2) and **drag-to-seek** were judged by feel on the owner's phones at
+    gate 1 and are settled by decision 18: candidate 2 (wheel plus screen), and the progress bar is **not draggable**.
 14. **Cover Flow matches the device (owner, 22 November 2026).** Cover Flow is a second view of the Albums list, as
     on the device (`app/ui/ui_library.c`, LB-6 in the [UI review](../design/2026-11-12-ui-review/REPORT.md)): the
     same albums in the same order (by title, the firmware's Albums list order), not by artist then year. Under the
@@ -91,6 +90,10 @@ Status: specification, 21 November 2026. Nothing is built. The working instructi
     proposals until the owner confirms them.
 17. **Nothing scrolls (owner, 25 November 2026).** The app always fits the phone's screen and never shows a scroll
     bar, vertical or horizontal. Inside the device's 4:3 screen, new screens avoid scrolling too where they can.
+18. **Gate 1: touch and seek (owner, 22 to 23 November 2026)**, after the slice ran on an iPhone 15 Pro and a Pixel 7.
+    Direct touch is **candidate 2**: the wheel plus taps and drags on the screen. Candidate 1 (wheel only) is removed.
+    Seeking is by the wheel's **seek mode only**: the progress bar is not draggable. The iPhone survives a restart, the
+    wheel feel and haptics are right, and the wheel sets the volume on Now Playing.
 
 Everything else in this document is the designer's proposal until the owner confirms it. Proposals that most need a
 decision are collected under [Open questions](#open-questions).
@@ -199,7 +202,7 @@ Playing).
   visible and can be reordered and cleared.
 - **Gapless** between consecutive tracks of the same format; verified by test, not by ear alone.
 - Shuffle (off, on) and repeat (off, all, one), with the same glyphs as the device's status bar.
-- Seek by dragging the progress bar; skip back restarts the track after three seconds, otherwise goes to the previous one.
+- Seek with the wheel's seek mode; the progress bar is not draggable (owner decision 18). Skip back restarts the track after three seconds, otherwise goes to the previous one.
 - **Background playback** with lock-screen and notification controls, artwork and scrubbing; headset and Bluetooth
   transport buttons; correct behaviour on interruptions (a call pauses; unplugging headphones pauses; another app
   taking audio pauses).
@@ -245,7 +248,7 @@ the same rule as the device: the dominant colour, clamped until white text on it
   (a port of the firmware's `ui_accel_feed()`), holds, haptics, direct touch, the three text tiers, accessibility and
   the phone's status bar. Its recommendations (the fit, the body finish, direct touch, the phone's status bar shown,
   the large-text tiers, the wordmark) were proposals for the owner, settled at gate 2 (owner decision 13); direct touch and
-  drag-to-seek are judged at gate 1, so both candidates stay switchable until then.
+  drag-to-seek were settled at gate 1 (owner decision 18).
 - Search is typed with the wheel's letter ring, never the phone's keyboard (owner decision 12). It sits in the Music menu
   (device view design Open question 11, owner decision 13).
 - Type is Montserrat (SIL OFL), icons are Lucide (ISC), as on the device. Every third-party asset and package is listed

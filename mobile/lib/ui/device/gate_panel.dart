@@ -22,33 +22,6 @@ class GatePanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final o = ref.watch(deviceViewOptionsProvider);
     final n = ref.read(deviceViewOptionsProvider.notifier);
-    Widget choice<T>(
-      String title,
-      T value,
-      Map<T, String> labels,
-      DeviceViewOptions Function(T) apply,
-    ) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            SegmentedButton<T>(
-              showSelectedIcon: false,
-              segments: [
-                for (final e in labels.entries)
-                  ButtonSegment<T>(value: e.key, label: Text(e.value)),
-              ],
-              selected: {value},
-              onSelectionChanged: (s) => n.set(apply(s.first)),
-            ),
-          ],
-        ),
-      );
-    }
-
     Widget toggle(
       String title,
       bool value,
@@ -80,15 +53,6 @@ class GatePanel extends ConsumerWidget {
                         'Design gate',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
-                      choice<DirectTouch>(
-                        'Touching the screen',
-                        o.directTouch,
-                        const {
-                          DirectTouch.wheelOnly: '1: wheel only',
-                          DirectTouch.wheelAndScreen: '2: wheel + screen',
-                        },
-                        (v) => o.copyWith(directTouch: v),
-                      ),
                       toggle(
                         'Phone status bar',
                         o.showStatusBar,
@@ -98,11 +62,6 @@ class GatePanel extends ConsumerWidget {
                         'Wordmark on the body',
                         o.showWordmark,
                         (v) => o.copyWith(showWordmark: v),
-                      ),
-                      toggle(
-                        'Drag the progress bar to seek',
-                        o.dragProgressToSeek,
-                        (v) => o.copyWith(dragProgressToSeek: v),
                       ),
                       const NowPlayingGateSection(),
                       toggle(

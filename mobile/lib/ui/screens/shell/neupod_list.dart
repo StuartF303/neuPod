@@ -14,10 +14,9 @@
 /// - **Window.** Whole rows only, as on the device: the list shows as many
 ///   whole rows as fit (7 one-line or 5 two-line at the standard tier), so a
 ///   partly visible row is never drawn.
-/// - **Touch (candidate 2).** A tap selects the row and activates it, with
+/// - **Touch.** A tap selects the row and activates it, with
 ///   the pressed tint from touch-down; a drag scrolls and keeps the selection
-///   on the nearest visible row. Under candidate 1 the host takes no pointer
-///   hits; the rows' semantics still open them.
+///   on the nearest visible row.
 /// - **Fast scroll.** `LetterJump`, the firmware's rule, shows the tile and
 ///   rail on long lists and hides them after 250 ms at rest with a 150 ms
 ///   fade.

@@ -47,8 +47,7 @@ class SearchView extends StatelessWidget {
   /// draws it for the screen.
   final bool withStatusBar;
 
-  /// A row was opened by a tap or the screen reader (the host takes pointer
-  /// touches away in direct-touch candidate 1; the semantics action stays).
+  /// A row was opened by a tap or the screen reader.
   final void Function(SearchHit hit)? onOpen;
 
   @override

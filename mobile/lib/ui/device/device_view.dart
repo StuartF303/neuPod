@@ -159,12 +159,7 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
           rect: g.screen,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(g.screenRadius),
-            child: DeviceScreenHost(
-              scale: g.scale,
-              directTouch: options.directTouch,
-              dragProgressToSeek: options.dragProgressToSeek,
-              child: widget.screen,
-            ),
+            child: DeviceScreenHost(scale: g.scale, child: widget.screen),
           ),
         ),
         if (options.showWordmark && g.showWordmark)

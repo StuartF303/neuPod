@@ -33,19 +33,14 @@ is the reference for the layout (`test/ui/device/device_geometry_test.dart` comp
     `NowPlayingControl`.
 - **Haptics.** `ref.read(deviceFeedbackProvider).detent()` for each step that moved something;
   `endReached()` once when a list is pushed past its end. The wheel gives the button haptics itself.
-- **Direct touch.** `DeviceScreenScope.of(context).directTouch`:
-  - Candidate 1 (`wheelOnly`): the host takes all pointer hits away from the screen. Semantics stay, so rows must
-    still have a semantics `onTap` that opens them.
-  - Candidate 2 (`wheelAndScreen`): pointer events reach the screen in its 600x450 coordinates. A row tap moves the
-    selection there and selects it, with the pressed tint from touch-down. A list drag scrolls and keeps the selection
-    on the nearest row. A Cover Flow drag moves the covers; a tap on the centre cover opens it. A tap on Now Playing's
-    art opens page 2. The status bar, the right-hand pane and panel backgrounds take no touches; a panel's `OK` can be
-    tapped.
-- **Seek by drag.** `DeviceScreenScope.of(context).dragProgressToSeek`: off by default (the design). When on, Now
-  Playing's progress bar may be dragged (the specification's wording); the owner chooses at the gate.
+- **Direct touch** is the wheel plus taps and drags on the screen (owner decision 18). Pointer events reach the screen in
+  its 600x450 coordinates. A row tap moves the selection there and selects it, with the pressed tint from touch-down.
+  A list drag scrolls and keeps the selection on the nearest row. A Cover Flow drag moves the covers; a tap on the
+  centre cover opens it. A tap on Now Playing's art opens page 2. The status bar, the right-hand pane and panel
+  backgrounds take no touches; a panel's `OK` can be tapped.
+- **Seeking** is by the wheel's seek mode only: the progress bar is not draggable (owner decision 18).
 - **Screen-reader rows.** Each row is one element: `Semantics(label: 'Albums, 4 of 7', selected: ..., button: true,
-  onTap: open, excludeSemantics: true, child: ...)`, as `placeholder_screen.dart` does. The `onTap` stays in both
-  touch candidates.
+  onTap: open, excludeSemantics: true, child: ...)`, as `placeholder_screen.dart` does. Rows keep the `onTap` so the screen reader can open them.
 - **Text size.** The host passes the phone's `MediaQuery` through unchanged, so the screen stays 600x450 whatever the
   setting. Screens read `MediaQuery.textScalerOf(context)` and apply the design's k tiers themselves (section 8:
   7, 6 or 5 rows). The body's wordmark never scales.

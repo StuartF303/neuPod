@@ -21,9 +21,7 @@ import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/domain/wheel/wheel_input.dart';
 import 'package:neupod/ui/components/status_bar.dart';
 import 'package:neupod/ui/device/device_feedback.dart';
-import 'package:neupod/ui/device/device_options.dart';
 import 'package:neupod/ui/device/device_view.dart' show gateSwitchesEnabled;
-import 'package:neupod/ui/device/screen_host.dart';
 import 'package:neupod/ui/device/system_volume.dart';
 import 'package:neupod/ui/device/wheel_bus.dart';
 import 'package:neupod/ui/screens/shell/cover_art.dart';
@@ -609,8 +607,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     final placement = ref.watch(ratingPlacementProvider);
     final item = state.current;
     final art = ref.watch(playingArtProvider).value;
-    final scope = DeviceScreenScope.of(context);
-    final touch = scope.directTouch == DirectTouch.wheelAndScreen;
 
     final seek = _npc.mode == NowPlayingWheelMode.seek;
     final mode = _page2
@@ -662,26 +658,14 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
         ratingPlacement: placement,
         page2Focus: _focus,
         ratingEditing: _ratingEditing,
-        onArtTap: touch
-            ? () {
-                setState(() {
-                  if (_npc.mode == NowPlayingWheelMode.seek) _npc.menu();
-                  _openPage2(swallowPress: false);
-                });
-                _syncHolds();
-                _describe(force: true);
-              }
-            : null,
-        dragToSeek: scope.dragProgressToSeek,
-        onSeekFraction: duration == null
-            ? null
-            : (f) => ref
-                  .read(playerProvider)
-                  .seek(
-                    Duration(
-                      milliseconds: (duration.inMilliseconds * f).round(),
-                    ),
-                  ),
+        onArtTap: () {
+          setState(() {
+            if (_npc.mode == NowPlayingWheelMode.seek) _npc.menu();
+            _openPage2(swallowPress: false);
+          });
+          _syncHolds();
+          _describe(force: true);
+        },
         onPage2Tap: (row) => setState(() {
           _focus = row;
           _activate(row);

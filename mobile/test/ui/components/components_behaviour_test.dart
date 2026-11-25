@@ -6,7 +6,6 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/domain/style/art_palette.dart';
@@ -190,65 +189,14 @@ void main() {
   });
 
   group('progress bar', () {
-    testWidgets('not seekable by default; seeks when the flag is on', (
-      tester,
-    ) async {
-      double? seeked;
-      await _pump(
-        tester,
-        NeupodProgressBar(value: 0.2, onSeek: (v) => seeked = v),
-      );
-      await tester.tap(find.byType(NeupodProgressBar));
-      expect(seeked, isNull);
-
-      await _pump(
-        tester,
-        Column(
-          children: [
-            const SizedBox(height: 40),
-            NeupodProgressBar(
-              value: 0.2,
-              seekable: true,
-              onSeek: (v) => seeked = v,
-            ),
-            const SizedBox(height: 40),
-          ],
-        ),
-      );
+    testWidgets('is display only: a tap or drag does nothing', (tester) async {
+      await _pump(tester, const NeupodProgressBar(value: 0.2));
       final box = tester.getRect(find.byType(NeupodProgressBar));
       await tester.tapAt(Offset(box.left + box.width * 0.75, box.center.dy));
-      expect(seeked, closeTo(0.75, 0.01));
-
-      // The touch area reaches 12 px above and below without taking layout
-      // height (a 12 px Classic bar stays 12 px tall).
-      expect(box.height, 12);
-      seeked = null;
-      await tester.tapAt(Offset(box.left + box.width * 0.5, box.top - 10));
-      expect(seeked, closeTo(0.5, 0.01));
-      seeked = null;
-      await tester.tapAt(Offset(box.left + box.width * 0.5, box.bottom + 20));
-      expect(seeked, isNull);
-    });
-
-    testWidgets('seekable: the screen reader can step it', (tester) async {
-      final handle = tester.ensureSemantics();
-      double? seeked;
-      await _pump(
-        tester,
-        NeupodProgressBar(
-          value: 0.5,
-          seekable: true,
-          step: 0.1,
-          onSeek: (v) => seeked = v,
-        ),
-      );
+      await tester.dragFrom(box.center, const Offset(40, 0));
       final node = tester.getSemantics(find.bySemanticsLabel('Progress'));
-      expect(node.flagsCollection.isSlider, isTrue);
-      node.owner!.performAction(node.id, SemanticsAction.increase);
-      expect(seeked, closeTo(0.6, 1e-9));
-      node.owner!.performAction(node.id, SemanticsAction.decrease);
-      expect(seeked, closeTo(0.4, 1e-9));
-      handle.dispose();
+      expect(node.flagsCollection.isSlider, isFalse);
+      expect(node.value, '20 percent');
     });
   });
 

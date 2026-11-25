@@ -2,7 +2,7 @@
 
 // The device view's layout and switches: where the screen and wheel land,
 // the screen hosted at 600x450, fits, finishes, the wordmark, the status bar
-// style, direct touch candidates and the gate panel.
+// style, direct touch and the gate panel.
 
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
@@ -75,28 +75,9 @@ void main() {
     expect(taps, 1);
   });
 
-  testWidgets('direct touch candidate 1: the screen takes no touches', (
-    tester,
-  ) async {
-    var taps = 0;
-    final c = await pumpDevice(tester, screen: _Probe(() => taps++));
-    c
-        .read(deviceViewOptionsProvider.notifier)
-        .update((o) => o.copyWith(directTouch: DirectTouch.wheelOnly));
-    await tester.pump();
-    await tester.tapAt(tester.getRect(find.byType(_Probe)).center);
-    expect(taps, 0);
-  });
-
-  testWidgets('candidate 1 keeps the rows activatable by the screen reader', (
-    tester,
-  ) async {
+  testWidgets('rows stay activatable by the screen reader', (tester) async {
     final handle = tester.ensureSemantics();
-    final c = await pumpDevice(tester);
-    c
-        .read(deviceViewOptionsProvider.notifier)
-        .update((o) => o.copyWith(directTouch: DirectTouch.wheelOnly));
-    await tester.pump();
+    await pumpDevice(tester);
     final row = find.semantics.byLabel('Settings, 3 of 5');
     expect(row, findsOneWidget);
     tester.semantics.tap(row);
@@ -105,7 +86,7 @@ void main() {
     handle.dispose();
   });
 
-  testWidgets('a row tap in candidate 2 selects and opens it', (tester) async {
+  testWidgets('a row tap selects and opens it', (tester) async {
     await pumpDevice(tester);
     await tester.tap(find.text('Shuffle Songs'));
     await tester.pump();
@@ -168,12 +149,11 @@ void main() {
     expect(find.byType(GatePanel), findsOneWidget);
     expect(find.text('A: fills'), findsNothing);
     expect(find.text('Silver'), findsNothing);
-    await tester.tap(find.text('1: wheel only'));
+    expect(find.text('1: wheel only'), findsNothing);
+    expect(find.text('Drag the progress bar to seek'), findsNothing);
+    await tester.tap(find.text('Wordmark on the body'));
     await tester.pump();
-    expect(
-      c.read(deviceViewOptionsProvider).directTouch,
-      DirectTouch.wheelOnly,
-    );
+    expect(c.read(deviceViewOptionsProvider).showWordmark, isFalse);
     // The panel scrolls; Now Playing's section made it longer than the phone.
     await tester.ensureVisible(find.text('Done'));
     await tester.pump();
