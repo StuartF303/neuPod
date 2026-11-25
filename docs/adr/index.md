@@ -26,5 +26,6 @@ Format: [Michael Nygard](https://cognitect.com/blog/2011/11/15/documenting-archi
 | [0020](0020-hold.md) | Hold: the lock that replaces the iPod's slide switch (auto-lock, Power gestures, screen off) | Accepted |
 | [0021](0021-power-sleep.md) | Power: sleep when idle, power off after a day asleep and when the battery is empty | Accepted |
 | [0022](0022-one-player-ui.md) | One player UI on every device and app; differences only for hardware, as settings | Accepted |
+| [0023](0023-headphone-jack-reuse.md) | Reuse the donor headphone jack; optical S/PDIF parked | Accepted |
 
 Every feature ADR carries a **RAM budget** line in its Consequences (from 3 Nov 2026).
