@@ -31,6 +31,7 @@ class SearchHit {
     required this.title,
     this.detail,
     this.year,
+    this.reason,
   });
 
   /// Artist, album or song.
@@ -48,12 +49,16 @@ class SearchHit {
   /// For an album, the year.
   final int? year;
 
+  /// For a song that cannot play, why (`Damaged file`): its row is greyed
+  /// with the reason at the right, and opening it does nothing.
+  final String? reason;
+
   /// What it is, at the right of a live result in Small: `Artist`,
   /// `Album · 1991`, or a song's artist.
   String get label => switch (kind) {
     SearchKind.artist => 'Artist',
     SearchKind.album => year == null ? 'Album' : 'Album · $year',
-    SearchKind.song => detail ?? 'Song',
+    SearchKind.song => reason ?? detail ?? 'Song',
   };
 
   @override
@@ -63,10 +68,11 @@ class SearchHit {
       other.id == id &&
       other.title == title &&
       other.detail == detail &&
-      other.year == year;
+      other.year == year &&
+      other.reason == reason;
 
   @override
-  int get hashCode => Object.hash(kind, id, title, detail, year);
+  int get hashCode => Object.hash(kind, id, title, detail, year, reason);
 }
 
 /// The matches for a query, grouped as the results list shows them. Each

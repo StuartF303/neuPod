@@ -55,8 +55,12 @@ Compilations, and a small Settings). Now Playing, the panel's content and Search
 - **Artists** then an artist: All Songs, then albums with cover, year and song count in year order. **Albums**,
   **Genres** then a genre (All Songs, then its albums), **Compilations**.
 - **An album**: header (cover, artist, `year · N songs · total time`), then numbered tracks; `Disc n` headings only when
-  the album has several discs; a track that cannot play is greyed with the reason at its right (and skipped by the
-  wheel); on a compilation each track shows its own artist at the right.
+  the album has several discs; a track that cannot play is greyed with the reason at its right; on a compilation each
+  track shows its own artist at the right.
+- **Greyed songs** (Songs, an album, an artist's or genre's songs, Search results): the reason at the right (`Damaged
+  file`, or `Opus, can't play` for a format the phone cannot decode; `domain/library_view/reason_words.dart`). The bar
+  lands on them, as on the device (`ui_list.c` skips no row), and takes the bar's colours there; Select or a tap opens
+  nothing; they are left out of every queue.
 - **Cover Flow**: the Albums list's albums in its order (owner decision 14); Classic angled with reflections, Modern
   flat; the wheel moves a cover per step, Select or a tap on the centre cover opens it, a drag moves the covers. Under
   the title, in both styles, the device's caption `Artist · Year · n songs` (`flow_texts` in `app/ui/ui_library.c`).

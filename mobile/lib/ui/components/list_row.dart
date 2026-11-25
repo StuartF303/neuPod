@@ -59,7 +59,11 @@ class NeupodRow extends StatelessWidget {
   final bool pressed;
 
   /// When set, the row is greyed and this reason shows at its right, visible
-  /// before the press (`AAC, can't play`).
+  /// before the press (`AAC, can't play`). The selection bar still lands on
+  /// it, as on the device (`ui_list.c` greys a row's text and never skips
+  /// it); on the bar its text takes the bar's colours (`style_row`: the
+  /// selected colour wins over the greyed one). A tap selects it; nothing
+  /// opens.
   final String? disabledReason;
 
   /// For the screen reader: `4 of 7`.
@@ -93,17 +97,17 @@ class NeupodRow extends StatelessWidget {
     final sel = style.selection;
     final tier = theme.tier;
     final height = twoLine ? tier.row2Height : tier.rowHeight;
-    final onBar = selection != RowSelection.none && !greyed;
+    final onBar = selection != RowSelection.none;
     final flash = selection == RowSelection.flash && !greyed;
 
     final Color ink;
     final Color ink2;
     final Color numberInk;
     final Color chevronInk;
-    if (greyed) {
-      ink = ink2 = numberInk = chevronInk = list.disabled;
-    } else if (flash) {
+    if (flash) {
       ink = ink2 = numberInk = chevronInk = sel.flashText;
+    } else if (greyed && !onBar) {
+      ink = ink2 = numberInk = chevronInk = list.disabled;
     } else if (onBar) {
       ink = ink2 = numberInk = chevronInk = sel.text;
     } else {
@@ -149,7 +153,12 @@ class NeupodRow extends StatelessWidget {
         // The reason must stay readable: it and the title share the row,
         // each ending in an ellipsis only if both are long.
         // The reason stays readable: the title gives way first.
-        _trailing(NeupodText(disabledReason!, type.small(list.reason))),
+        _trailing(
+          NeupodText(
+            disabledReason!,
+            withShadow(type.small(onBar ? sel.text : list.reason)),
+          ),
+        ),
       ] else if (flash) ...[
         const SizedBox(width: 12),
         NeupodIcon(
@@ -197,7 +206,7 @@ class NeupodRow extends StatelessWidget {
         skin: (flash ? sel.flash : sel.bar).copyWith(radius: radius),
         child: row,
       );
-    } else if (pressed && !greyed) {
+    } else if (pressed) {
       row = DecoratedBox(
         decoration: BoxDecoration(
           color: sel.pressedTint,
@@ -217,7 +226,7 @@ class NeupodRow extends StatelessWidget {
         child: ExcludeSemantics(
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: greyed ? null : onTap,
+            onTap: onTap,
             child: row,
           ),
         ),

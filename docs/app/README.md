@@ -94,7 +94,13 @@ Status: specification, 21 November 2026. Nothing is built. The working instructi
     Direct touch is **candidate 2**: the wheel plus taps and drags on the screen. Candidate 1 (wheel only) is removed.
     Seeking is by the wheel's **seek mode only**: the progress bar is not draggable. The iPhone survives a restart, the
     wheel feel and haptics are right, and the wheel sets the volume on Now Playing.
-20. **Ratings and play counts (owner, 25 November 2026)**, from PR #160 (decision 0011). (19 is PR #159's.)
+19. **Unplayable songs (owner, 25 November 2026)**, from PR #159. A song is unplayable when the device would mark it
+    damaged or the phone's player cannot decode it. Its row follows the UI styles design: greyed, with the **reason at
+    the right** (`Damaged file`, `Opus, can't play`), and **no toasts** (the device today shows the codec and toasts the
+    reason; the firmware follows the same design later). The selection bar lands on it, as on the device, and Select
+    opens nothing. Unplayable songs are **left out of the queue**, so none stops it, and **Shuffle Songs never starts on
+    one** (backlog UI-24 for the device).
+20. **Ratings and play counts (owner, 25 November 2026)**, from PR #160 (decision 0011).
     - **Identity:** a track's ratings and play counts are keyed as on the device, by the file's path and size, and
       a rescan that sees a file move (the old path gone and one new file with the same audio fingerprint) carries
       them to the new key. The fingerprint has no tag bytes in it, so a retag that changes the size carries them

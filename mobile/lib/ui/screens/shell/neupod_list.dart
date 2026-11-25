@@ -89,14 +89,23 @@ class NeupodListItem {
     String? initial,
     VoidCallback? onActivate,
   }) {
+    // A greyed row is selectable, as on the device (`ui_list.c` never skips
+    // a dim row), but Select on it opens nothing: its reason is already on
+    // the row (the UI styles design moves the device's "Can't play" notice
+    // there).
     final greyed = disabledReason != null;
     return NeupodListItem(
       height: height,
-      selectable: !greyed,
       twoLine: subtitle != null,
       initial: initial,
-      label: [?number, title, ?subtitle, ?value].join(', '),
-      onActivate: onActivate,
+      label: [
+        ?number,
+        title,
+        ?subtitle,
+        ?value,
+        if (greyed && disabledReason.isNotEmpty) disabledReason,
+      ].join(', '),
+      onActivate: greyed ? null : onActivate,
       builder: (context, s) => NeupodRow(
         title: title,
         subtitle: subtitle,

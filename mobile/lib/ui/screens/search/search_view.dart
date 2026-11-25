@@ -95,6 +95,7 @@ class SearchView extends StatelessWidget {
                       SearchResultRow(
                         title: hit.title,
                         label: hit.label,
+                        greyed: hit.reason != null,
                         onTap: () => onOpen?.call(hit),
                       ),
                   ],
@@ -156,6 +157,7 @@ class SearchView extends StatelessWidget {
             ? '${hit.year}'
             : null,
         chevron: hit.kind == SearchKind.artist,
+        disabledReason: hit.reason,
         selection: n == selected ? RowSelection.selected : RowSelection.none,
         position: '${n + 1} of ${session.count}',
         onTap: () => onOpen?.call(hit),
