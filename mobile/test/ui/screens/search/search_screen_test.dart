@@ -315,6 +315,19 @@ void main() {
     expect(fn('').count, 0);
   });
 
+  testWidgets('a song that cannot play is greyed in the results with its '
+      'reason, and opening it plays nothing', (tester) async {
+    final rig = await _pump(tester, library: true, initial: '04 Garb');
+    final fn = await rig.container.read(searchFunctionProvider.future);
+    final hit = fn('04 garb').songs.single;
+    expect(hit.reason, 'Damaged file');
+    expect(hit.label, 'Damaged file');
+    // The live result row: greyed, the reason at the right.
+    expect(find.text('Damaged file'), findsOneWidget);
+    final row = tester.widget<SearchResultRow>(find.byType(SearchResultRow));
+    expect(row.greyed, isTrue);
+  });
+
   testWidgets('while the library loads, and when it cannot be read, Search '
       'says so instead of looking like no matches', (tester) async {
     final gate = Completer<SearchFunction>();

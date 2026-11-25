@@ -23,12 +23,16 @@ class SearchResultRow extends StatelessWidget {
     required this.title,
     required this.label,
     this.selected = false,
+    this.greyed = false,
     this.onTap,
   });
 
   final String title;
   final String label;
   final bool selected;
+
+  /// A song that cannot play: greyed, with [label] its reason.
+  final bool greyed;
   final VoidCallback? onTap;
 
   static const double height = 50;
@@ -38,8 +42,16 @@ class SearchResultRow extends StatelessWidget {
     final theme = NeupodTheme.of(context);
     final style = theme.style;
     final type = NeupodType(theme.tier);
-    final ink = selected ? style.selection.text : style.tokens.ink;
-    final ink2 = selected ? style.selection.text : style.list.secondary;
+    final ink = selected
+        ? style.selection.text
+        : greyed
+        ? style.list.disabled
+        : style.tokens.ink;
+    final ink2 = selected
+        ? style.selection.text
+        : greyed
+        ? style.list.reason
+        : style.list.secondary;
     Widget row = SizedBox(
       height: height * theme.tier.k,
       child: Padding(
@@ -64,9 +76,10 @@ class SearchResultRow extends StatelessWidget {
     return MergeSemantics(
       child: Semantics(
         label: '$title, $label',
-        button: true,
+        button: !greyed,
+        enabled: !greyed,
         selected: selected,
-        onTap: onTap,
+        onTap: greyed ? null : onTap,
         child: ExcludeSemantics(
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,

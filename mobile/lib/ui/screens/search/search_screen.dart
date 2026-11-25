@@ -50,6 +50,7 @@ final searchFunctionProvider = FutureProvider<SearchFunction>((ref) async {
         id: s.id,
         title: s.title,
         detail: '${s.artist} · ${s.album}',
+        reason: s.unplayableReason,
       ),
   ];
   // Lower-cased once, here, not on every key.
@@ -250,6 +251,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           pushScreen(ref, artist.name, (_) => CollectionScreen.artist(artist));
         }
       case SearchKind.song:
+        if (hit.reason != null) return; // greyed: its reason is on the row
         final song = await library.song(hit.id);
         if (song != null && mounted) await playFrom(ref, [song], song);
     }

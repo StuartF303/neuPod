@@ -226,6 +226,9 @@ void main() {
         style,
         'standard',
         (_) => AlbumScreen(albumId: a.id),
+        // The bar lands on a greyed row, as on the device: it takes the
+        // bar's colours there; the rows around it stay greyed.
+        act: (rig) async => rig.step(1),
       );
     });
     testWidgets('album, compilation, $style', (tester) async {
