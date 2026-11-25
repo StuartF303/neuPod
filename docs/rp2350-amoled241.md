@@ -114,7 +114,7 @@ the small player of the Pico 2 W for comparison. Design and budget: [specs/001-a
 | Internal RAM, static (`.data` + `.bss`) | 510,376 B | 436,656 B | -73,720 B |
 | Internal RAM free above the heap | 11,452 B | 85,172 B | +73,720 B |
 | PSRAM (`.psram_noload`) | 0 | 1,507,488 B (of 8 MB) | art cache 1,230,144; LVGL pool 196,608; plays table and snapshot 48,160; play queue 8,992; playlists about 23 KB |
-| Flash (`.text` + `.rodata`) | 1,055,916 B | 1,086,248 B | +30,332 B |
+| Flash (`.text` + `.rodata`) | 1,055,916 B | 1,086,616 B | +30,700 B |
 
 The LVGL pool moved to PSRAM at 192 KB (as on the ESP32-S3): the host build with this board's UI options ran out of LVGL memory in
 the library tour at the old size. That move is most of the internal RAM freed.
