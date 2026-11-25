@@ -68,6 +68,28 @@ void main() {
       expect(rig.haptics.played, contains(FeedbackKind.detent));
     });
 
+    testWidgets('Shuffle Songs never starts on, or queues, a song that '
+        'cannot play', (tester) async {
+      final songs = await gateLibrary.songs();
+      final broken = {
+        for (final s in songs)
+          if (!s.playable) s.id,
+      };
+      expect(broken, isNotEmpty);
+      // Several shuffles, so a start on a greyed song would show.
+      for (var i = 0; i < 5; i++) {
+        final rig = await pumpShell(tester, home: (_) => const HomeScreen());
+        rig.step(3); // Shuffle Songs
+        await settle(tester);
+        await _pressCentre(tester, rig);
+        await tester.pump();
+        final queue = rig.player.state.queue;
+        expect(queue, hasLength(songs.length - broken.length));
+        expect(rig.player.state.index, 0);
+        expect(queue.where((q) => broken.contains(q.id)), isEmpty);
+      }
+    });
+
     testWidgets('a push past the end gives the end haptic once', (
       tester,
     ) async {
@@ -310,22 +332,56 @@ void main() {
       expect(rig.container.read(shellProvider).top!.name, 'nowPlaying');
     });
 
-    testWidgets('a greyed song is skipped by the wheel and left out of the '
-        'queue', (tester) async {
+    testWidgets('the wheel lands on a greyed song, as on the device '
+        '(ui_list.c skips no row); Select on it plays nothing', (tester) async {
+      final songs = await gateLibrary.songs();
+      final at = songs.indexWhere((s) => !s.playable);
+      expect(at, isNonNegative);
+      final rig = await pumpShell(tester, home: (_) => const SongsScreen());
+      rig.step(at);
+      await settle(tester);
+      expect(rig.bus.semantics.value.value, startsWith('${songs[at].title}, '));
+      expect(rig.bus.semantics.value.value, contains('Damaged file'));
+      await _pressCentre(tester, rig);
+      await tester.pump();
+      expect(rig.player.calls, isEmpty);
+      expect(rig.container.read(shellProvider).pages, hasLength(1));
+    });
+
+    testWidgets('a tap on a greyed song selects it and plays nothing', (
+      tester,
+    ) async {
+      final songs = await gateLibrary.songs();
+      final at = songs.indexWhere((s) => !s.playable);
+      final rig = await pumpShell(tester, home: (_) => const SongsScreen());
+      rig.step(at);
+      await settle(tester);
+      rig.step(-1);
+      await settle(tester);
+      await tester.tap(find.text(songs[at].title));
+      await settle(tester);
+      expect(rig.player.calls, isEmpty);
+      expect(rig.bus.semantics.value.value, startsWith('${songs[at].title}, '));
+    });
+
+    testWidgets('greyed songs are left out of the queue, so none stops it', (
+      tester,
+    ) async {
       final songs = await gateLibrary.songs();
       final broken = songs.where((s) => !s.playable).toList();
       expect(broken, isNotEmpty);
+      final at = songs.lastIndexWhere((s) => s.playable);
       final rig = await pumpShell(tester, home: (_) => const SongsScreen());
-      // The reason is visible before any press.
-      expect(find.text(broken.first.unplayableReason!), findsNothing);
-      rig.step(songs.length);
+      rig.step(at);
       await settle(tester);
       await _pressCentre(tester, rig);
       await tester.pump();
-      expect(
-        rig.player.state.queue.map((q) => q.id),
-        isNot(contains(broken.first.id)),
-      );
+      final queue = rig.player.state.queue.map((q) => q.id).toList();
+      expect(queue, hasLength(songs.length - broken.length));
+      for (final b in broken) {
+        expect(queue, isNot(contains(b.id)));
+      }
+      expect(queue[rig.player.state.index!], songs[at].id);
     });
 
     testWidgets('a long fast turn shows the letter tile, which fades after '

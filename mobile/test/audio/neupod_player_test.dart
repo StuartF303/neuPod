@@ -414,6 +414,61 @@ void main() {
     },
   );
 
+  test('a file that fails mid-play moves the queue on (the device skips a '
+      'track that errors: service() in app/runtime/player.c)', () async {
+    const third = QueueItem(id: 't3', uri: 'content://x/3.wav', title: 'Three');
+    await player.setQueue([_flac, _mp3, third]);
+    // Playing the first file, 1.2 s in.
+    audio.emit(_event(queueId: 'q1', positionMs: 1200, queueLength: 3));
+    await pumpEventQueue();
+    expect(player.state.isPlaying, isTrue);
+    // The decoder fails part-way through it.
+    audio.emit(
+      _event(
+        queueId: 'q1',
+        status: EngineStatus.idle,
+        positionMs: 1300,
+        queueLength: 3,
+        error: 'decoding error',
+      ),
+    );
+    await pumpEventQueue();
+    expect(player.state.error, 'decoding error');
+    expect(audio.calls.skip(1), ['skipTo(1)', 'play']);
+
+    // The next one plays; then it fails too: on to the third, not stopped.
+    audio.emit(_event(queueId: 'q1', index: 1, queueLength: 3));
+    audio.emit(
+      _event(
+        queueId: 'q1',
+        index: 1,
+        status: EngineStatus.idle,
+        positionMs: 500,
+        queueLength: 3,
+        error: 'decoding error',
+      ),
+    );
+    await pumpEventQueue();
+    expect(audio.calls.skip(1), ['skipTo(1)', 'play', 'skipTo(2)', 'play']);
+  });
+
+  test(
+    'a skip after a failure while paused moves on without playing',
+    () async {
+      await player.setQueue([_flac, _mp3]);
+      audio.emit(
+        _event(
+          queueId: 'q1',
+          status: EngineStatus.idle,
+          playWhenReady: false,
+          error: 'cannot decode',
+        ),
+      );
+      await pumpEventQueue();
+      expect(audio.calls.skip(1), ['skipTo(1)']);
+    },
+  );
+
   test('an unplayable last item stops without skipping', () async {
     await player.setQueue([_flac, _mp3]);
     audio.emit(

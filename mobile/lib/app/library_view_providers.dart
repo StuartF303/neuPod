@@ -5,6 +5,7 @@ library;
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/app/art_providers.dart';
 import 'package:neupod/app/library_scan_providers.dart';
@@ -12,8 +13,17 @@ import 'package:neupod/app/providers.dart';
 import 'package:neupod/data/library_view/drift_library_view.dart';
 import 'package:neupod/data/art/art_cache.dart';
 import 'package:neupod/domain/library_view/library_view.dart';
+import 'package:neupod/domain/library_view/reason_words.dart';
 import 'package:neupod/domain/playback/player_state.dart';
 import 'package:neupod/domain/playback/queue_item.dart';
+
+/// The phone whose player decides which formats cannot be decoded (greyed
+/// with `Opus, can't play`; `reason_words.dart`).
+final playerPlatformProvider = Provider<PlayerPlatform>(
+  (ref) => defaultTargetPlatform == TargetPlatform.iOS
+      ? PlayerPlatform.ios
+      : PlayerPlatform.android,
+);
 
 /// The library the browsing screens show: the scanned drift database.
 ///
@@ -25,7 +35,10 @@ final libraryViewProvider = FutureProvider<LibraryView>((ref) async {
   ref.listen(libraryScanProvider.select((s) => s?.done ?? false), (was, now) {
     if (was == false && now) ref.invalidateSelf();
   });
-  final view = DriftLibraryView(ref.watch(libraryDatabaseProvider));
+  final view = DriftLibraryView(
+    ref.watch(libraryDatabaseProvider),
+    platform: ref.watch(playerPlatformProvider),
+  );
   ref.onDispose(view.dispose);
   return view;
 });

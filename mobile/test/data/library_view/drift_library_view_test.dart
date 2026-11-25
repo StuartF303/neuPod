@@ -34,6 +34,7 @@ import 'package:neupod/data/scan/tag_reader.dart';
 import 'package:neupod/domain/library/collation.dart';
 import 'package:neupod/domain/library/track.dart';
 import 'package:neupod/domain/library_view/library_view.dart';
+import 'package:neupod/domain/library_view/reason_words.dart';
 
 import 'seed.dart';
 
@@ -464,6 +465,53 @@ void main() {
     // The firmware's wording (library_service.c: "Can't play: damaged file").
     expect(songs['Broken']!.unplayableReason, 'Damaged file');
     expect(songs['Elsewhere']!.unplayableReason, 'Not downloaded');
+  });
+
+  test('every read failure is the device\'s damaged file (index_file: a '
+      'file that will not open, the wrong format, a bad header)', () async {
+    await add('Wrong', reason: UnreadableReason.wrongFormat.code);
+    await add('Shut', reason: UnreadableReason.cannotOpen.code);
+    await add('Cut', reason: UnreadableReason.cannotRead.code);
+    final songs = {for (final s in await view.songs()) s.title: s};
+    for (final t in ['Wrong', 'Shut', 'Cut']) {
+      expect(songs[t]!.playable, isFalse, reason: t);
+      expect(songs[t]!.unplayableReason, 'Damaged file', reason: t);
+    }
+  });
+
+  test('a format the phone cannot decode is greyed with its name', () async {
+    Future<void> file(String name, String codec) => addTrack(
+      db,
+      sourceId: src,
+      relPath: 'Dir/$name.$codec',
+      title: name,
+      codec: codec,
+    );
+    await file('Vorbis', 'ogg');
+    await file('Speech', 'opus');
+    await file('Lossless', 'flac');
+    // A stored reason comes first: a damaged Ogg file is damaged.
+    await addTrack(
+      db,
+      sourceId: src,
+      relPath: 'Dir/Bad.ogg',
+      title: 'Bad',
+      codec: 'ogg',
+      reason: UnreadableReason.damaged.code,
+    );
+    final ios = DriftLibraryView(db, platform: PlayerPlatform.ios);
+    final android = DriftLibraryView(db, platform: PlayerPlatform.android);
+    addTearDown(ios.dispose);
+    addTearDown(android.dispose);
+    final onIos = {for (final s in await ios.songs()) s.title: s};
+    expect(onIos['Vorbis']!.unplayableReason, "Ogg, can't play");
+    expect(onIos['Speech']!.unplayableReason, "Opus, can't play");
+    expect(onIos['Lossless']!.playable, isTrue);
+    expect(onIos['Bad']!.unplayableReason, 'Damaged file');
+    final onAndroid = {for (final s in await android.songs()) s.title: s};
+    expect(onAndroid['Vorbis']!.playable, isTrue);
+    expect(onAndroid['Speech']!.playable, isTrue);
+    expect(onAndroid['Bad']!.unplayableReason, 'Damaged file');
   });
 
   test('artists and albums are grouped and sorted by collation', () async {

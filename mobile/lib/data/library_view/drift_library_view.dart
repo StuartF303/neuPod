@@ -118,9 +118,13 @@ const unknownArtist = 'Unknown Artist';
 /// A [LibraryView] over [LibraryDatabase]. Call [dispose] when done; after
 /// that each call reads the database again (nothing is cached unwatched).
 final class DriftLibraryView implements LibraryView {
-  DriftLibraryView(this._db);
+  DriftLibraryView(this._db, {this.platform});
 
   final LibraryDatabase _db;
+
+  /// The phone whose player decides which formats it cannot decode (those
+  /// songs are greyed, `reason_words.dart`); null greys none.
+  final PlayerPlatform? platform;
   Future<_Lib>? _lib;
   StreamSubscription<Set<TableUpdate>>? _changes;
   bool _disposed = false;
@@ -157,7 +161,11 @@ final class DriftLibraryView implements LibraryView {
     ]);
     final rows = [
       for (final r in await q.get())
-        _Row(r.readTable(_db.tracks), r.readTable(_db.sources).displayName),
+        _Row(
+          r.readTable(_db.tracks),
+          r.readTable(_db.sources).displayName,
+          platform,
+        ),
     ];
     return _Lib(rows);
   }
@@ -445,7 +453,7 @@ final class _Lib {
 }
 
 final class _Row {
-  _Row(this.t, String sourceName)
+  _Row(this.t, String sourceName, this._platform)
     : segments = _segments(t.relPath),
       artist = t.artist.isEmpty ? unknownArtist : t.artist,
       album = t.album.isNotEmpty ? t.album : _folderName(t.relPath, sourceName),
@@ -453,6 +461,7 @@ final class _Row {
 
   final TrackRow t;
   final List<Uint8List> segments;
+  final PlayerPlatform? _platform;
 
   /// The track's own artist text (or "Unknown Artist"), as stored.
   final String artist;
@@ -602,9 +611,11 @@ final class _Row {
       disc: disc == 0 ? null : disc,
       duration: t.durationMs == 0 ? null : Duration(milliseconds: t.durationMs),
       genre: inGenre?.name,
-      unplayableReason: reason == null
-          ? null
-          : unreadableReasonText(reason, t.codec),
+      unplayableReason: reason != null
+          ? unreadableReasonText(reason, t.codec)
+          : _platform != null && cannotDecode(_platform, t.codec)
+          ? cannotDecodeText(t.codec)
+          : null,
       sortLetter: collateLetter(t.titleSortKey),
       art: ArtRef(seed: group.seed, sources: artFiles),
     );

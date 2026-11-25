@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/domain/style/art_palette.dart';
 import 'package:neupod/ui/components/bars.dart';
 import 'package:neupod/ui/components/list_row.dart';
+import 'package:neupod/ui/components/neupod_screen.dart';
 import 'package:neupod/ui/components/panel.dart';
 import 'package:neupod/ui/components/small_parts.dart';
 import 'package:neupod/ui/components/status_bar.dart';
@@ -124,9 +125,9 @@ void main() {
       expect(taps, 1);
     });
 
-    testWidgets('a greyed row reads its reason and does not tap', (
-      tester,
-    ) async {
+    testWidgets('a greyed row reads its reason and is not a button; a tap '
+        'reaches the list, which selects it and opens nothing', (tester) async {
+      final handle = tester.ensureSemantics();
       var taps = 0;
       await _pump(
         tester,
@@ -137,12 +138,41 @@ void main() {
           onTap: () => taps++,
         ),
       );
+      final label = find.bySemanticsLabel(
+        "Carrier Wave, Beacon · Signal, AAC, can't play",
+      );
+      expect(label, findsOneWidget);
+      final node = tester.getSemantics(label);
+      expect(node.flagsCollection.isButton, isFalse);
       expect(
-        find.bySemanticsLabel("Carrier Wave, Beacon · Signal, AAC, can't play"),
-        findsOneWidget,
+        node.getSemanticsData().hasAction(ui.SemanticsAction.tap),
+        isFalse,
       );
       await tester.tap(find.byType(NeupodRow));
-      expect(taps, 0);
+      expect(taps, 1);
+      handle.dispose();
+    });
+
+    testWidgets('a greyed row under the bar takes the bar\'s colours, as '
+        'style_row does (the selected colour wins over the greyed one)', (
+      tester,
+    ) async {
+      final style = designedStyles['classic_light']!;
+      await _pump(
+        tester,
+        const NeupodRow(
+          title: 'Carrier Wave',
+          disabledReason: 'Damaged file',
+          selection: RowSelection.selected,
+        ),
+      );
+      Color? colourOf(String text) => tester
+          .widgetList<NeupodText>(find.byType(NeupodText))
+          .firstWhere((t) => t.text == text)
+          .style
+          .color;
+      expect(colourOf('Carrier Wave'), style.selection.text);
+      expect(colourOf('Damaged file'), style.selection.text);
     });
 
     testWidgets('row heights follow the tier', (tester) async {
