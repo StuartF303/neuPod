@@ -24,8 +24,8 @@ import 'package:neupod/ui/device/wheel_bus.dart';
 /// back leaves the app; on iOS the swipe does nothing.
 ///
 /// A long press on the body (outside the screen and the wheel) opens the
-/// design gate's switches ([GatePanel]): fit, body finish, direct touch,
-/// status bar, wordmark, progress-bar seek, haptics.
+/// design gate's switches ([GatePanel]): status bar, wordmark, rating placement,
+/// left-edge swipe, haptics.
 class DeviceView extends ConsumerStatefulWidget {
   /// The device showing [screen], which is laid out at 600x450.
   const DeviceView({required this.screen, this.brightness, super.key});
