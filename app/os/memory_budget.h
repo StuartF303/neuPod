@@ -41,6 +41,8 @@
  * The target figure is the one that counts.
  */
 #if defined(NEUPOD_LVGL_POOL_BYTES) /* set by the build: the ESP32-S3 keeps the pool in its 8 MB of PSRAM (platforms/esp32s3/main/CMakeLists.txt) */
+#elif defined(NEUPOD_PSRAM_SECTION) /* RP2350 AMOLED: the pool is in PSRAM (lv_conf.h), sized like the ESP32-S3's: Cover Flow at 600x450 (UI-25) */
+#define NEUPOD_LVGL_POOL_BYTES (192u * 1024u)
 #elif defined(NEUPOD_UI_HIRES) /* hosted build (host simulator, Y2 testbed): carries the 480x360 profile, plenty of RAM */
 #define NEUPOD_LVGL_POOL_BYTES (192u * 1024u)
 #elif defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 8 /* 64-bit host build only; any 32-bit target (ARM or RISC-V) gets 72 KB */

@@ -68,8 +68,8 @@ static void __no_inline_not_in_flash_func(psram_warm_reset_ram)(void) {
     qmi_command(CMD_QUAD_OFF, true); // in case the chip was left in quad mode; ignored by a chip in SPI mode
     qmi_command(CMD_RESET_EN, false);
     qmi_command(CMD_RESET, false);
-    uint32_t t0 = timer_hw->timerawl;
-    while (timer_hw->timerawl - t0 < 100u) { // tRST: 50 ns; 100 us of margin, as the probe
+    uint32_t t0 = timer0_hw->timerawl;
+    while (timer0_hw->timerawl - t0 < 100u) { // tRST: 50 ns; 100 us of margin, as the probe
     }
     qmi_hw->direct_csr &= ~(QMI_DIRECT_CSR_ASSERT_CS1N_BITS | QMI_DIRECT_CSR_EN_BITS);
 }

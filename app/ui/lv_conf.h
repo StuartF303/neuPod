@@ -58,6 +58,9 @@
 /** Size of the pool `lv_malloc()` allocates from. Needs to be at least 2kB (2048). */
 #include "memory_budget.h"
 #define LV_MEM_SIZE NEUPOD_LVGL_POOL_BYTES
+/* The pool (LVGL's only LV_ATTRIBUTE_LARGE_RAM_ARRAY) goes to PSRAM on the RP2350 AMOLED board (psram_bss.h; empty elsewhere). */
+#include "psram_bss.h"
+#define LV_ATTRIBUTE_LARGE_RAM_ARRAY NEUPOD_PSRAM_BSS
 
 /** Place the pool at a fixed address instead of allocating it as a normal array.
  *  0: unused.

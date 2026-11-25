@@ -977,3 +977,10 @@ add_test(NAME y2_s80_mtk_bt COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/test_y2_s80_m
 add_test(NAME y2_s78_mtk_md COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/test_y2_s78_mtk_md.sh
   ${CMAKE_SOURCE_DIR}/testbed/y2/buildroot/board/y2/overlay/etc/init.d/S78mtk-md)
 set_tests_properties(y2_s78_mtk_md PROPERTIES TIMEOUT 400 LABELS "slow")
+
+# host-amoled (scripts/build.sh host-amoled: one compiled 600x450 profile with the big-RAM player, the AMOLED boards' UI options, UI-25): these tests pin
+# the 320x240 profile's pixels or its layout-audit lines, so they do not apply there. The regular host build runs them, and their 600x450 twins (hires600_*).
+if(NOT NEUPOD_UI_HIRES AND NEUPOD_UI_PROFILE STREQUAL "600x450")
+  set_tests_properties(art_snapshot seek_snapshot ui_metrics power_tour power_charger_tour power_battery_tour hold_tour licences_tour design_tour
+    PROPERTIES DISABLED TRUE)
+endif()

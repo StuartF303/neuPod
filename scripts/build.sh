@@ -18,7 +18,8 @@ fi
 # player), in build/host-amoled, so the tours check that combination without a board (UI-25, specs/001-amoled-full-art research R9).
 if [[ "$PLATFORM" == "host-amoled" ]]; then
     PLATFORM=host
-    BOARD_ARGS=(-DNEUPOD_UI_HIRES=OFF -DNEUPOD_ART_HIRES=ON -DNEUPOD_UI_PROFILE=600x450)
+    # The LVGL pool as on the boards (192 KB, in PSRAM there); this 64-bit host needs about 1.6 times more for the same screens, so it is the stricter test.
+    BOARD_ARGS=(-DNEUPOD_UI_HIRES=OFF -DNEUPOD_ART_HIRES=ON -DNEUPOD_UI_PROFILE=600x450 "-DCMAKE_C_FLAGS=-DNEUPOD_LVGL_POOL_BYTES=196608u")
 fi
 
 (( CLEAN )) && rm -rf "$BUILD"

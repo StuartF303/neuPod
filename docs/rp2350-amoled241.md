@@ -45,7 +45,7 @@ Not built for this board: the `display_test`, `i2c_test` and `storage_test` exec
 | microSD SCK / MOSI / MISO / CS | 18 / 19 / 20 / 23 |
 | Power key (KEY_BAT, active low) / BAT_Control | 24 / 25 |
 | Battery ADC (x3 divider) | 40 (not read: no battery reading in the UI yet) |
-| PSRAM (QMI CS1) | 47 (not used by the firmware yet) |
+| PSRAM (QMI CS1) | 47 |
 
 ## Display notes
 
@@ -83,9 +83,32 @@ in the UI task) and then 0.5 s more; still running means USB power. No VBUS or c
 checked for one). The Power key is read as level; the press that switched the board on is not
 counted.
 
+## PSRAM and the big-RAM player (UI-25)
+
+The board's 8 MB PSRAM (APS6404L class, QMI CS1 = GPIO47) holds the big buffers of the **big-RAM player**, which this build has
+by default (`NEUPOD_ART_HIRES`, as the simulator and the Y2): 160 x 160 album art with the 24-album cache, art in the album
+header, Cover Flow, Playlists, play counts and 128 ratings. `-DNEUPOD_ART_HIRES=OFF` (new build directory or `--clean`) gives
+the small player of the Pico 2 W for comparison. Design and budget: [specs/001-amoled-full-art](../specs/001-amoled-full-art/plan.md).
+
+- **Bring-up.** The Pico SDK's `hardware_psram` (board header `PICO_PSRAM_CS_PIN 47`, `PICO_AUTO_DETECT_PSRAM_SIZE 1`: the chip's
+  ID is read, nothing is assumed) in `runtime_init`, preceded by our warm-start reset (quad-mode off, reset; a picotool reboot
+  or the reset button do not power-cycle the chip). `hal_system_init()` then computes the timing again for 125 MHz (the SDK
+  set it for its 150 MHz boot clock, which at 125 MHz would hold CS low 9.2 us, over the chip's 8 us limit), checks the chip
+  and zeroes the firmware's PSRAM section (`boards/amoled241/psram_amoled.c`).
+- **Placement.** Variables marked `NEUPOD_PSRAM_BSS` (`app/include/psram_bss.h`, empty on every other build) go to the SDK's
+  `.psram_noload` section: the art cache (`art_service.c`), the playlist buffers (`playlist_service.c`), the play counts
+  (`plays_store.c`) and the play queue (`player.c`).
+- **Console.** After the version line: `psram: 8192 KB at 62500 kHz, neupod section N KB`.
+- **Without PSRAM** (no chip, the chip too small, a timing error) the runtime does not start: `boot: psram FAILED: <reason>`
+  every 2 s on the console and a red screen (the text would need the UI, which needs the services). `-DNEUPOD_PSRAM_FORCE_FAIL=ON`
+  exercises that path on a healthy board (debug aid).
+
+FIGURES_RP2350
+
+Not checked on the board yet (no board attached when it was built): the boot line, the art and Cover Flow, the frame time
+of a Cover Flow step, the LVGL pool peak at 600x450, warm restarts. See the bench checklist in the PR.
+
 ## What is not done
 
-- PSRAM (8 MB on QMI CS1) is not initialised by the firmware; the driver of the bring-up probe (`testbed/amoled241/bringup/src/psram.c`)
-  is the starting point.
 - No battery voltage (GPIO40 through the x3 divider) and no RTC / IMU.
 - Display and touch orientation, and brightness, have been checked through the registers and the console only.

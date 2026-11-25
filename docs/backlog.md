@@ -15,7 +15,7 @@ the Pico 2 W build is frozen as a compile check; items may assume the RP2350B wi
 
 | ID | Item | Source | Needs | Notes |
 | --- | --- | --- | --- | --- |
-| UI-25 | **Full album art on the AMOLED dev boards** (ADR-0022 gap): the ESP32-S3 and RP2350 AMOLED builds keep the Pico's 64 x 64 thumbnail and have no browse art or Cover Flow, because `NEUPOD_ART_HIRES` is on only for hosted builds. Turn it on where the board has PSRAM, with the 24-album cache in PSRAM. | owner 24 Nov 2026 | PSRAM allocation on each board | The phone app, Y2 and simulator already have it. Check the RP2350 AMOLED board's PSRAM first; report RAM deltas. |
+| UI-25 | **Full album art on the AMOLED dev boards** (ADR-0022 gap): **built** (25 Nov 2026, [specs/001-amoled-full-art](../specs/001-amoled-full-art/spec.md)): both AMOLED builds have the big-RAM player (`NEUPOD_ART_HIRES`) with its buffers in PSRAM. Left: the bench checks (boot line, art, Cover Flow speed, LVGL pool peak, warm restarts) on both boards. | owner 24 Nov 2026 | boards on the bench | Delete this line once the bench checks pass. |
 | UI-22 | **The queue line shows library track names**: Now Playing's `n of N` line (and the queue it describes) names the track from the library's tags, not the file name, when the queue came from a library list. | req 12 Nov 2026 | — | The library reader has the title; the range queue only knows the song index today. |
 | UI-21 | **Resume restores the album or shuffle queue**, not just the one track: the resume record keeps the track and its place; it should also bring back the queue it was chosen from (album, artist, genre, all songs, a folder; shuffle with its key) so Next / Previous work after a restart. | req 12 Nov 2026 | — | [ADR-0017](adr/0017-music-library-index.md) range queues are stateless, so the record needs the range and the shuffle key, not a list. |
 | UI-20 | **Genre → Albums**: from a genre, a list of albums (as Artists has), not only All Songs and artists. | req 12 Nov 2026 | — | Needs a per-genre album grouping in the index (a table like `by_genre.u32`, ADR-0017 L2). |
@@ -60,7 +60,7 @@ From the owner-commissioned [design review](design/2026-11-12-ui-review/README.m
 | NP-2 | Seek mode: Big amber time, knob, hints, no third bar; entered by hold Select | Now Playing | S | 2 | NP-1 | 2 | built |
 | NP-3 | Now Playing page 2 (rating, shuffle, repeat, go-to); Select opens it | Now Playing | M | 2 | NP-1 | 2 | built (ratings on the card; Add to playlist greyed until LB-7) |
 | NP-4 | Volume HUD from any screen | Now Playing | S | 2 | DS-5 | 2 | built |
-| NP-5 | Art pipeline: 160² thumbnails + LRU (PSRAM board and Y2 only) | Now Playing | M | 2 | — | 2 | built (host and Y2; RP2350B with PSRAM opts in with `NEUPOD_ART_HIRES`) |
+| NP-5 | Art pipeline: 160² thumbnails + LRU (PSRAM board and Y2 only) | Now Playing | M | 2 | — | 2 | built (host, Y2, and the RP2350 / ESP32-S3 AMOLED boards with the cache in PSRAM, UI-25) |
 | LB-1 | Two-line song rows (title / artist · album) | Library | S | 3 | DS-2 | 2 | built |
 | LB-2 | Fast-scroll letter overlay + index rail, sort keys ignoring articles/diacritics (UI-4) | Library | M | 3 | DS-2 | 2 | built ("The " and accents ignored; "A " / "An " still sort under A: see LB-2b) |
 | LB-3 | Album header (art, title, artist · year, totals) | Library | S | 2 | NP-5 | 2 | built |
