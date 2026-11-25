@@ -9,6 +9,7 @@
 #include "play_tracker.h"
 #include "player.h"
 #include "plays_store.h"
+#include "psram_bss.h"
 #include "resume.h"
 #include "settings_store.h"
 #include "storage_service.h"
@@ -29,7 +30,7 @@ static bool g_vol_hold;       // the headset's volume is the volume (bt_control.
 static bool g_vol_touched;    // the volume was changed since boot (a late settings load must not override the user)
 static bool g_error_stopped;  // storage_stop_request() already sent for the current error
 static char g_path[PLAYER_PATH_MAX]; // the file last played or verified
-static play_queue_t g_q;      // the folder being played through (count 0: a single file, a test tone or nothing)
+static play_queue_t g_q NEUPOD_PSRAM_BSS; // the folder being played through (count 0: a single file, a test tone or nothing); PSRAM on the RP2350 AMOLED board (psram_bss.h)
 static bool g_auto;           // the current track was started by the queue (not chosen by the user): a track that cannot be opened is skipped
 static bool g_next_valid;     // the audio core was told to continue with the next queued track by itself; its details:
 static player_file_t g_next_pf;

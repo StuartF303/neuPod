@@ -21,6 +21,10 @@ if(NEUPOD_UI_PROFILE STREQUAL "600x450")
 elseif(NOT NEUPOD_UI_PROFILE STREQUAL "320x240")
   message(FATAL_ERROR "NEUPOD_UI_PROFILE must be 320x240 or 600x450 (got '${NEUPOD_UI_PROFILE}')")
 endif()
+# The big-RAM player (platforms/esp32s3/CMakeLists.txt option, ON by default). Undefined in IDF's script-mode pass: default ON there too.
+if(NOT DEFINED NEUPOD_ART_HIRES OR NEUPOD_ART_HIRES)
+  list(APPEND NEUPOD_UI_PROFILE_DEFS NEUPOD_ART_HIRES=1)
+endif()
 
 # --- Secrets at rest: the same crypto_secret.c / key provider, over IDF's mbed TLS (hardware AES/SHA) ---
 set(NEUPOD_CRYPTO_SOURCES

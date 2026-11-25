@@ -5,6 +5,7 @@
 
 #include "hal_storage.h"
 #include "nfs.h"
+#include "psram_bss.h"
 #include "ratings_store.h"
 #include "settings_store.h"
 
@@ -18,11 +19,11 @@ typedef struct {
     bool played;
     char path[PLAYS_PATH_MAX], title[PLAYS_TITLE_MAX], artist[PLAYS_ARTIST_MAX];
 } inbox_t;
-static inbox_t g_inbox[INBOX_N];
+static inbox_t g_inbox[INBOX_N] NEUPOD_PSRAM_BSS; /* the table and inbox: PSRAM on the RP2350 AMOLED board (psram_bss.h) */
 static volatile uint32_t g_in_head, g_in_tail; /* head: next free (producers), tail: next to read (the consumer) */
 static volatile int g_in_lock;
 
-static plays_entry_t g_t[PLAYS_MAX];
+static plays_entry_t g_t[PLAYS_MAX] NEUPOD_PSRAM_BSS;
 static uint32_t g_serial;
 static volatile bool g_dirty;
 static bool g_loaded, g_persistent;

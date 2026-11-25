@@ -9,6 +9,7 @@
 #include "meta.h"
 #include "nfs.h"
 #include "os.h"
+#include "psram_bss.h"
 
 #define ACK_WAIT_MS 300u // how long to wait for the UI to stop showing the old pixels
 
@@ -33,7 +34,7 @@ typedef struct {
     char handle[BROWSE_HANDLE_MAX]; // the library handle a browse request got this picture for ("" = it came from the track playing)
     uint16_t px[ART_PIXELS];
 } art_slot_t;
-static art_slot_t g_slot[ART_CACHE_N];
+static art_slot_t g_slot[ART_CACHE_N] NEUPOD_PSRAM_BSS; // 1.2 MB with the cache: PSRAM on the RP2350 AMOLED board (psram_bss.h)
 static uint32_t g_clock, g_ver;
 static int g_cur = -1, g_prev = -1;
 

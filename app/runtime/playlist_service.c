@@ -12,6 +12,7 @@
 #include "pl_m3u.h"
 #include "play_queue.h"
 #include "plays_store.h"
+#include "psram_bss.h"
 #include "ratings_store.h"
 #include "settings_store.h"
 #include "storage_service.h"
@@ -56,17 +57,17 @@ static struct {
 static volatile bool g_add_busy;
 
 /* the catalog: built in a staging copy and swapped in under a version count, so a screen that keeps showing it while it is refreshed never reads a half-built one */
-static pls_item_t g_cat[PLS_SMART_N + PLS_FILES_MAX], g_stage[PLS_SMART_N + PLS_FILES_MAX];
+static pls_item_t g_cat[PLS_SMART_N + PLS_FILES_MAX] NEUPOD_PSRAM_BSS, g_stage[PLS_SMART_N + PLS_FILES_MAX] NEUPOD_PSRAM_BSS;
 static uint32_t g_cat_n;
 static volatile uint32_t g_cat_ver; /* odd while the swap runs */
 #define FILE_PATH_MAX 128u
-static char g_fpath[PLS_FILES_MAX][FILE_PATH_MAX];
+static char g_fpath[PLS_FILES_MAX][FILE_PATH_MAX] NEUPOD_PSRAM_BSS;
 static uint8_t g_nfiles;
 
 /* the open list: entries packed as path\0title\0sub\0 in one pool */
-static char g_pool[PLS_POOL_BYTES];
-static uint16_t g_off[PLS_ENTRIES_MAX];
-static uint8_t g_state[PLS_ENTRIES_MAX];
+static char g_pool[PLS_POOL_BYTES] NEUPOD_PSRAM_BSS; /* the big buffers of this file: PSRAM on the RP2350 AMOLED board (psram_bss.h) */
+static uint16_t g_off[PLS_ENTRIES_MAX] NEUPOD_PSRAM_BSS;
+static uint8_t g_state[PLS_ENTRIES_MAX] NEUPOD_PSRAM_BSS;
 static uint32_t g_n, g_used;
 static bool g_trunc;
 static volatile uint32_t g_ver; /* odd while the pool is being rewritten (an open request is being handled): the entries are not readable */
@@ -389,7 +390,7 @@ static int cmp_nocase(const char *a, const char *b) {
     }
 }
 
-static char g_fname[PLS_FILES_MAX][PLS_NAME_MAX];
+static char g_fname[PLS_FILES_MAX][PLS_NAME_MAX] NEUPOD_PSRAM_BSS;
 
 static void add_file(const char *dir, const char *name) {
     char path[FILE_PATH_MAX];

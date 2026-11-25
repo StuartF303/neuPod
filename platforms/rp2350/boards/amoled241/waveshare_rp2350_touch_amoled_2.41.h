@@ -57,6 +57,20 @@ pico_board_cmake_set(PICO_PLATFORM, rp2350)
 #define PICO_FLASH_SIZE_BYTES (16 * 1024 * 1024)
 #endif
 
+// --- PSRAM --- (8 MB APS6404L-class on QMI CS1; Waveshare's "2 MB" is wrong, the bring-up probe read 64 Mbit)
+// The SDK's hardware_psram brings it up in runtime_init. AUTO_DETECT_SIZE makes it read the chip's ID first, so a missing chip
+// reads as "no PSRAM" instead of being assumed (psram_amoled.c then stops the boot, docs/rp2350-amoled241.md). The linker region
+// is sized from the CMake variable of the same name (platforms/rp2350/sdk_import.cmake).
+#ifndef PICO_PSRAM_CS_PIN
+#define PICO_PSRAM_CS_PIN 47
+#endif
+#ifndef PICO_PSRAM_SIZE_BYTES
+#define PICO_PSRAM_SIZE_BYTES (8 * 1024 * 1024)
+#endif
+#ifndef PICO_AUTO_DETECT_PSRAM_SIZE
+#define PICO_AUTO_DETECT_PSRAM_SIZE 1
+#endif
+
 // pico_cmake_set_default PICO_RP2350_A2_SUPPORTED = 1
 #ifndef PICO_RP2350_A2_SUPPORTED
 #define PICO_RP2350_A2_SUPPORTED 1

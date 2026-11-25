@@ -9,6 +9,11 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_rom_sys.h"
+#include "esp_psram.h"
+#include "sdkconfig.h"
+
+// extram_bss bounds (main/linker.lf): the static buffers the firmware keeps in PSRAM.
+extern int _ext_ram_bss_start, _ext_ram_bss_end;
 
 #define I2C_TIMEOUT_MS 50
 
@@ -48,6 +53,10 @@ esp_err_t board_init(void) {
     gpio_set_direction(PIN_BAT_CTRL, GPIO_MODE_OUTPUT);
     gpio_config_t key = {.pin_bit_mask = 1ULL << PIN_KEY_BAT, .mode = GPIO_MODE_INPUT};
     gpio_config(&key);
+
+    // The same PSRAM summary line as the RP2350 AMOLED board (UI-25, FR-008). The IDF stops the boot itself if the PSRAM is missing.
+    printf("psram: %u KB at %u kHz, neupod section %u KB\n", (unsigned)(esp_psram_get_size() / 1024u), (unsigned)CONFIG_SPIRAM_SPEED * 1000u,
+           (unsigned)(((uintptr_t)&_ext_ram_bss_end - (uintptr_t)&_ext_ram_bss_start) / 1024u));
 
     i2c_master_bus_config_t bc = {
         .i2c_port = I2C_NUM_0,

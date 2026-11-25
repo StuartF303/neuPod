@@ -11,6 +11,8 @@ elseif(NEUPOD_BOARD STREQUAL "amoled241")
   # The board header (an SDK-style header, BSD-3-Clause, see LICENSE.md) lives with the board's sources.
   set(PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR}/boards/amoled241)
   set(PICO_BOARD waveshare_rp2350_touch_amoled_2.41 CACHE STRING "Board type" FORCE)
+  # 8 MB PSRAM on QMI CS1: sizes the SDK's PSRAM linker region (pico_psram_region.ld); the board header has the C side (UI-25).
+  set(PICO_PSRAM_SIZE_BYTES 8388608)
 else()
   message(FATAL_ERROR "NEUPOD_BOARD must be pico2w or amoled241 (got '${NEUPOD_BOARD}')")
 endif()

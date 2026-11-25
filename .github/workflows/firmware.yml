@@ -93,6 +93,24 @@ jobs:
       - name: Test
         run: ctest --test-dir build/host --output-on-failure -j3
 
+  # The host simulator with exactly the AMOLED boards' UI options: one compiled 600x450 profile plus the big-RAM player
+  # (NEUPOD_ART_HIRES), a combination only those boards build. Runs the same suite, Cover Flow tours included (UI-25).
+  host-amoled:
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/stuartf303/neupod-ci@sha256:c0c5bbfc35037dc78a9897cf5104690fe53ab83d539054c5b7696217e2334f46 # 2026-11-11 first published image
+    steps:
+      - uses: actions/checkout@v7
+      - name: Fetch submodules
+        run: git submodule update --init lib/FreeRTOS-Kernel lib/lvgl
+      - name: Toolchain versions
+        run: cat /etc/neupod-ci-versions
+      - name: Build
+        run: |
+          scripts/build.sh host-amoled --clean -- -DNEUPOD_REQUIRE_CRYPTO=ON
+      - name: Test
+        run: ctest --test-dir build/host-amoled --output-on-failure -j3
+
   # Compile check of the Innioasis Y2 target (docs/y2.md). The device binary is built with the Buildroot toolchain from the
   # rootfs; CI cannot have that, so it cross-builds with Ubuntu's armhf gcc and only checks that the
   # result is a 32-bit ARM hard-float executable. The Y2's portable logic is unit-tested by the host job (ctest -R y2_).
@@ -143,3 +161,17 @@ jobs:
         run: |
           . "$IDF_PATH/export.sh"
           scripts/build.sh esp32s3
+      # RAM figures per region (internal DRAM/IRAM, PSRAM extram_bss) for the board's memory budget (docs/esp32s3.md).
+      - name: Size
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py -C platforms/esp32s3 -B build/esp32s3 size
+      - uses: actions/upload-artifact@v7
+        with:
+          name: neupod-esp32s3
+          path: |
+            build/esp32s3/neupod.bin
+            build/esp32s3/neupod.elf
+            build/esp32s3/neupod.map
+          if-no-files-found: error
