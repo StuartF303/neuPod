@@ -13,7 +13,7 @@
  *     the QMI timing for 150 MHz, and its MAX_SELECT (in units of 64 system clocks) would hold CS low 9.2 us at 125 MHz, over the
  *     chip's 8 us limit. The timing is computed again for the real clock. Then the check (the chip answered, and its size covers
  *     the neupod section) and the zeroing of the section the NEUPOD_PSRAM_BSS variables live in (NOLOAD: nothing else clears it).
- *  3. hal_psram_ok() / hal_psram_reason() / hal_psram_print(): the runtime refuses to start when the check failed (runtime.c), so
+ *  3. hal_psram_ok() / hal_psram_reason() / hal_psram_print() / hal_psram_cut_power(): the runtime refuses to start when the check failed (runtime.c), so
  *     nothing ever touches PSRAM that is not there (an access would bus-fault).
  *
  * The runtime_init step lives in this file next to hal_psram_ok(), which the runtime references: the file is linked from a static
@@ -23,7 +23,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "board.h" // BOARD_PIN_BAT_CONTROL
 #include "hal_system.h"
+#include "hardware/regs/addressmap.h"
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
 #include "hardware/psram.h"
@@ -88,6 +90,39 @@ PICO_RUNTIME_INIT_FUNC_RUNTIME(psram_amoled_warm_reset, "11070");
 static bool g_ok;
 static const char *g_reason = "not checked";
 
+// CS-low limit passed to the SDK, below the chip's 8 us (tCEM, its self-refresh window). MAX_SELECT counts 64 system clocks; at 125 MHz
+// (8 ns) that is floor(7500 / (64 x 8)) = floor(14.6) = 14 units = 14 x 512 ns = 7.168 us. The QMI checks the limit between transfers,
+// so the access in progress can add its tail (about 0.48 us at 62.5 MHz quad): about 7.65 us worst case, under 8 us. The SDK default
+// (8000 ns) gives 15 units = 7.68 us before that tail, over the limit.
+#define PSRAM_MAX_SELECT_NS 7500u
+
+// Write and read back one word at every address line (each power of two below the size) and the last word, through the uncached alias
+// (so the chip itself answers), all written before any is read (a stuck or shorted address line aliases two words), then restore zeros.
+// Runs before anything else uses the PSRAM, so the cached window holds nothing that could be written back over the test.
+static bool readback_ok(size_t size) {
+    volatile uint32_t *nc = (volatile uint32_t *)(XIP_NOCACHE_NOALLOC_BASE + 0x01000000u); // CS1, uncached
+    size_t offs[28];
+    unsigned n = 0;
+    offs[n++] = 0;
+    for (size_t o = 4; o < size && n < 26u; o <<= 1) {
+        offs[n++] = o;
+    }
+    offs[n++] = size - 4u;
+    for (unsigned i = 0; i < n; i++) {
+        nc[offs[i] / 4u] = 0x5A000000u ^ (uint32_t)offs[i] ^ (i * 0x01010101u);
+    }
+    bool ok = true;
+    for (unsigned i = 0; i < n; i++) {
+        if (nc[offs[i] / 4u] != (0x5A000000u ^ (uint32_t)offs[i] ^ (i * 0x01010101u))) {
+            ok = false;
+        }
+    }
+    for (unsigned i = 0; i < n; i++) {
+        nc[offs[i] / 4u] = 0;
+    }
+    return ok;
+}
+
 void psram_amoled_after_clock(void) {
 #if NEUPOD_PSRAM_FORCE_FAIL
     g_reason = "forced"; // debug aid (-DNEUPOD_PSRAM_FORCE_FAIL=ON): exercises the failure path on a healthy board
@@ -98,7 +133,7 @@ void psram_amoled_after_clock(void) {
         return;
     }
     uint32_t irq = save_and_disable_interrupts(); // core 1 is not running yet; nothing else uses the XIP now
-    int r = psram_configure_params(PICO_DEFAULT_PSRAM_MAX_FREQ, PICO_DEFAULT_PSRAM_MAX_SELECT, PICO_DEFAULT_PSRAM_MIN_DESELECT);
+    int r = psram_configure_params(PICO_DEFAULT_PSRAM_MAX_FREQ, PSRAM_MAX_SELECT_NS, PICO_DEFAULT_PSRAM_MIN_DESELECT);
     if (r == PICO_OK) {
         r = psram_reinitialize();
     }
@@ -113,6 +148,10 @@ void psram_amoled_after_clock(void) {
         g_reason = "too small";
         return;
     }
+    if (!readback_ok(psram_get_size())) {
+        g_reason = "readback";
+        return;
+    }
     memset(start, 0, (size_t)(end - start)); // the NEUPOD_PSRAM_BSS statics start at zero, as C promises
     g_ok = true;
     g_reason = "";
@@ -121,6 +160,11 @@ void psram_amoled_after_clock(void) {
 // ---- 3. what the runtime asks ---------------------------------------------------------------------------------------------
 
 bool hal_psram_ok(void) { return g_ok; }
+
+void hal_psram_cut_power(void) {
+    fflush(stdout);
+    gpio_put(BOARD_PIN_BAT_CONTROL, 0);
+}
 
 const char *hal_psram_reason(void) { return g_reason; }
 

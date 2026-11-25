@@ -91,6 +91,7 @@ const char *hal_platform_name(void);
 bool hal_psram_ok(void);           /**< the PSRAM passed its start-up check and its section is zeroed */
 const char *hal_psram_reason(void); /**< "" when OK, else why not: "no chip", "timing", "too small", "forced" */
 void hal_psram_print(void);         /**< one console line: size, clock and how much the firmware uses */
+void hal_psram_cut_power(void);     /**< failure path only: drop the battery latch directly (storage is not up: no power-off sequence) */
 #endif
 
 #ifdef __cplusplus

@@ -200,14 +200,20 @@ Where the plan turned out wrong, or changed while building:
 3. **The play queue is in `player.c`** (`g_q`, 8,992 B), not `play_queue.c`. The ESP32-S3 linker fragment maps `player`, and the
    RP2350 build marks `g_q`.
 4. **A buffer the estimate missed**: `plays_store.c` has a 23,552 B merge snapshot (`before[]`), found in the linked image and marked.
-5. **Failure screen (FR-007)**: the screen is red, with no text. The text would need LVGL, and LVGL needs the services that must not start.
-   The reason is on the console every 2 s.
+5. **Failure screen (FR-007)**: the screen is red, with no text, dimmed (the board may be on battery). The text would need LVGL, whose
+   pool is in PSRAM. The reason is on the console every 2 s. The Power key, held 1 s after the power-on press is let go, cuts the battery
+   latch directly (storage is not up, so there is no power-off sequence). FR-007 amended accordingly (lead decision N1, 2026-11-25).
+11. **Review fixes (#156)**: CS-low limit 7,500 ns instead of the SDK's 8,000 (14 units of 512 ns at 125 MHz, about 7.65 us with the
+    tail of an access; N2); a write and read-back check of every address line and the last word before the zeroing, reason `readback`
+    on a mismatch (N3).
 6. **T003 answers**: SDK 2.3.1's `runtime_init_setup_psram` detects the size and sets the timing at the boot clock;
    `set_sys_clock_khz()` does not set the PSRAM timing again (`clocks.c` has no PSRAM code). So the re-timing in `hal_system_init()`
    stays. The section-order question did not arise, because placement is by section name.
 7. **`host-amoled`**: nine tests pin the 320x240 profile's pixels or audit lines (`art_snapshot`, `seek_snapshot`, `ui_metrics`, and
-   the power, hold, licences and design tours). They are disabled in that configuration only. The regular host build still runs them and
-   their 600x450 twins.
+   the power, power_charger, power_battery, hold, licences and design tours). They are disabled in that configuration only. The regular
+   host build still runs all of them. Their twins at other sizes there: the hold, design and licences tours at 480x360 (`hires_*`) and
+   600x450 (`hires600_*`); `art_snapshot` and `seek_snapshot` at 480x360 only (`hires_*`); `ui_metrics` checks every profile in one test;
+   the three power tours have no twin (320x240 only).
 8. **ESP-IDF**: `playlist_service.c` compiled for the first time under `-Werror=format-truncation`. One intended snprintf cut is now an
    explicit byte cut that gives the same result.
 9. **Builds ran in CI, not locally (T022)**: the toolchain image could not be built on this Mac (the network was down and the disk was full),

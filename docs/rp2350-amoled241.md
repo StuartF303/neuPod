@@ -99,11 +99,15 @@ the small player of the Pico 2 W for comparison. Design and budget: [specs/001-a
   `.psram_noload` section: the art cache (`art_service.c`), the playlist buffers (`playlist_service.c`), the play counts
   (`plays_store.c`) and the play queue (`player.c`).
 - **Console.** After the version line: `psram: 8192 KB at 62500 kHz, neupod section N KB`.
-- **Without PSRAM** (no chip, the chip too small, a timing error) the runtime does not start: `boot: psram FAILED: <reason>`
-  every 2 s on the console and a red screen (the text would need the UI, which needs the services). `-DNEUPOD_PSRAM_FORCE_FAIL=ON`
-  exercises that path on a healthy board (debug aid).
+- **Check.** After the re-timing (CS low at most 7,500 ns: 14 units of 64 clocks at 125 MHz, about 7.65 us with the tail of an
+  access, under the chip's 8 us) one word at every address line and the last word are written and read back through the uncached
+  alias before the section is zeroed.
+- **Without PSRAM** (no chip, the chip too small, a timing error, a failed read-back) the runtime does not start:
+  `boot: psram FAILED: <reason>` every 2 s on the console and a dim red screen (text would need LVGL, whose pool is in PSRAM). The
+  Power key held 1 s (after the power-on press is let go) cuts the battery latch, so a board on battery can be switched off.
+  `-DNEUPOD_PSRAM_FORCE_FAIL=ON` exercises that path on a healthy board (debug aid).
 
-**Memory (linked, CI 25 Nov 2026, Release; before = `main` at 2d95476):**
+**Memory (linked, CI 25 Nov 2026, Release; before = `main` at 2f99ded; its RP2350 images are those of 2d95476, the firmware is unchanged between them):**
 
 | | Before | After | Change |
 |---|---|---|---|
