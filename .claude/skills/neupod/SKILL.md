@@ -25,6 +25,7 @@ quirks): [reference/boards.md](reference/boards.md).
 
 ## Rules (all targets)
 
+- **The constitution** (`docs/constitution.md`) outranks any plan or spec; check work against it.
 - **One player UI** (ADR-0022): every device and app shares the firmware's player UI. Differences only for hardware or
   platform reasons, as settings or build options. A UI change lands on every target or is logged in the backlog.
 - **Ask the owner** before anything irreversible (overwriting firmware that isn't ours to overwrite, repartitioning, dropping

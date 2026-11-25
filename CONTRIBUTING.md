@@ -2,11 +2,9 @@
 
 ## Project principles
 
-- **One player UI everywhere** ([ADR-0022](docs/adr/0022-one-player-ui.md)). Every neuPod device and app shares the same
-  player: screens, navigation, wheel, lists, sort order, text, Now Playing and album art. The firmware (`app/`) is the
-  reference. Differences are allowed only for hardware or platform reasons (screen size, input, memory, radios, OS
-  services), and each one is a setting or build option, not a redesign. A UI change lands on every target, or the gap is
-  recorded in the backlog.
+Read the [constitution](docs/constitution.md) first: one player UI everywhere, the firmware is the reference, the owner's
+music and devices are safe, fit the hardware, lossless sound, open and private, verified and reviewed before merge,
+decisions written down. Every spec, plan and review is checked against it.
 
 ## Branches
 
