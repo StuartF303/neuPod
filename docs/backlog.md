@@ -38,6 +38,21 @@ the Pico 2 W build is frozen as a compile check; items may assume the RP2350B wi
 
 A Flutter music player for iOS and Android in the neuPod styles, later a companion to the device: [specification](app/README.md). Release R1 (files on the phone) is tracked in its own [progress list](app/PROGRESS.md), not here. R3 (companion) depends on the device HTTP API, step W2 in [Wi-Fi](wifi.md).
 
+## Device and phone together 2026-11-24
+
+The phone has no card slot, so the device is the full offline library and the phone carries part of it. Three ways to play: the device plays, the phone plays from the device's card, or either plays to Bluetooth or network speakers. Owner: all of it is wanted eventually; the order is open. Working split: Bluetooth for control, Wi-Fi (or the cable) for the music itself, because no Bluetooth mode in today's radios carries CD-quality FLAC (about 1 Mbit/s, peaks to 1.4) to a phone with margin: see CN-7.
+
+| ID | Item | Source | Needs |
+| --- | --- | --- | --- |
+| CN-1 | **The app as a remote for the device**: find the device, transport, volume, now-playing, and wake its Wi-Fi on request, over Bluetooth LE. | req 24 Nov 2026 | BLE in the firmware (BTstack is built Classic only today; RAM per [ADR-0013](adr/0013-bluetooth-ram-psram.md)); app R3 |
+| CN-2 | **The phone plays from the device's card**: the device serves its files and library index over HTTP, the app browses and streams them. | req 24 Nov 2026 | W2 in [Wi-Fi](wifi.md); Wi-Fi is off during playback by default (one radio shared with Bluetooth); app R3 |
+| CN-3 | **Offline pinning**: the app copies chosen albums from the device to the phone's storage, so they play with the device away. | req 24 Nov 2026 | CN-2 |
+| CN-4 | **The device as its own access point** for use away from a home network; the app asks the phone to join it (iOS shows a prompt, and the phone's Wi-Fi is taken while joined). | req 24 Nov 2026 | CN-2; access-point mode in `hal_wifi` |
+| CN-5 | **By cable**: plugged into the phone with USB-C the device's card is a drive, and the app opens it as a library source. No radio. | req 24 Nov 2026 | USB mass storage on the final board ([requirements](requirements.md)); app: a folder on an external drive as a source |
+| CN-6 | **Network speakers** (AirPlay, Cast, DLNA) are driven from the phone app, with the device only serving files; the device itself sends to Bluetooth speakers as now. | req 24 Nov 2026 | CN-2; the app's "No Cast in R1" decision revisited |
+| CN-7 | **Investigate other Bluetooth modes for lossless.** (a) Measure LE 2M PHY throughput device to iPhone and to Android over an L2CAP channel: about 1.4 Mbit/s chip to chip, less to a phone, so at best a slow download, not a live stream. (b) Classic serial port (RFCOMM) to Android; iOS does not allow it without MFi. (c) LDAC as a second A2DP source codec for headsets that take it (lossy, 990 kbit/s, open encoder; not AirPods). (d) Bluetooth 7.0 High Data Throughput (adopted Nov 2026, up to 7.5 Mbit/s): needs new radios at both ends, so keep the radio replaceable behind `hal_radio.h` and look again when modules and phones ship. | req 24 Nov 2026 | bench time; (a) needs CN-1's BLE |
+| CN-8 | **Power cost of each mode**: BLE remote, Wi-Fi serving (continuous and in bursts with the radio asleep between tracks), access point, cable. | req 24 Nov 2026 | CN-1, CN-2 on the bench |
+
 ## UI styles 2026-11-21
 
 Classic and Modern styles, the status bar, the three feedback places and the Music screens: [design](design/2026-11-21-ui-styles/README.md). The work is tracked item by item in its own [progress list](design/2026-11-21-ui-styles/PROGRESS.md), not here. It overrides parts of the 12 November review (the toast strip, the volume HUD, the Now Playing pills and volume strip, the status-bar clock); the design's README lists them.
