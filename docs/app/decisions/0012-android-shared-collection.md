@@ -1,6 +1,7 @@
 # 0012: Android's shared music collection
 
-Status: Built (2026-11-25); the duplicate rule is a proposal awaiting the owner (Open questions) · Owner: Library engineer
+Status: Accepted (2026-11-26) · Owner: Library engineer · Owner decision 21 (spec, 26 November 2026) settled the
+duplicate rule, music only and the row's words
 
 ## Context
 
@@ -44,7 +45,7 @@ Status: Built (2026-11-25); the duplicate rule is a proposal awaiting the owner 
   few hundred milliseconds), which is also what tells the scanner a song has gone. `GENERATION_MODIFIED` (API 30+)
   would save no query, since deletions are only seen by listing.
 - **Music only:** `IS_MUSIC != 0`, as Android's own music players do, so ringtones, notification and alarm sounds,
-  recordings and podcasts are left out (Open question 3).
+  recordings and podcasts are left out (owner decision 21).
 - **Hidden names** (a name or a folder starting with `.`) are skipped, as in a folder walk.
 - **Two volumes, one path.** A track's path is unique in its source (`tracks(source_id, rel_path)`). If the phone's
   storage and an SD card both hold `Music/a.flac`, the phone's own is listed and the card's left out. Rare; noted.
@@ -60,7 +61,7 @@ Status: Built (2026-11-25); the duplicate rule is a proposal awaiting the owner 
 A file in `Music/Library/A/01 x.flac` reaches the app as `A/01 x.flac` through a picked `Music/Library` and as
 `Music/Library/A/01 x.flac` through the collection: two keys, two rows, two sets of numbers unless something chooses.
 
-**Built (proposal): the picked folder lists it; the collection leaves it out.** The scanner knows where each picked
+**Owner decision 21: the picked folder lists it; the collection leaves it out.** The scanner knows where each picked
 folder is from its tree URI (`content://com.android.externalstorage.documents/tree/primary%3AMusic%2FLibrary` is
 volume `external_primary`, path `Music/Library`; an SD card's volume id is MediaStore's volume name in lower case) and
 where each collection item is from its URI's volume and its relative path. An item inside a picked folder on the same
@@ -72,7 +73,7 @@ arrived, the same audio fingerprint. That is decision 0011's move, so the number
 (tested: `test/data/scan/shared_collection_test.dart`, "picking a folder over collection songs carries their
 numbers").
 
-### Options for the owner
+### The options the owner chose from (B chosen, owner decision 21)
 
 | | Rule | For | Against |
 | --- | --- | --- | --- |
@@ -83,17 +84,18 @@ numbers").
 
 Changing B to A or C is a few lines in `LocalLibraryScanner` (the `insidePickedFolder` skip).
 
-## Open questions (owner)
+## Owner decision 21 (26 November 2026)
 
-1. **Duplicates:** A, B (built), C or D above.
-2. **The row's words** in Settings > Library: `Add Music on This Phone` while off; listed as `Music on This Phone` as a
-   folder is while on, with `Turn Off` (the firmware's question, as Remove: `Turn off Music on This Phone?`,
-   `n songs come off the list.`, `Select = Turn Off · Menu = Keep`) where a folder has Remove. No design draws it.
-3. **Music only?** `IS_MUSIC` leaves out ringtones, notification and alarm sounds, recordings and podcasts that
-   Android has flagged as such. The device lists every audio file on its card. Proposed: music only, as on Android's
-   own players.
-4. **R3 (later):** a collection track's key runs from the top of the phone's storage (`/Music/Album/...`); a card's
-   paths run from the card's root. Matching the two for a ratings exchange is R3's to design; nothing is needed now.
+1. **Duplicates:** B, the picked folder wins (as built).
+2. **Music only** (`IS_MUSIC`), although the device lists every audio file on its card.
+3. **The row's words** stay: `Add Music on This Phone` while off; listed as `Music on This Phone` as a folder is while
+   on, with `Turn Off` (the firmware's question, as Remove: `Turn off Music on This Phone?`,
+   `n songs come off the list.`, `Select = Turn Off · Menu = Keep`) where a folder has Remove.
+
+## Note for R3
+
+A collection track's key runs from the top of the phone's storage (`/Music/Album/...`); a card's paths run from the
+card's root. Matching the two for a ratings exchange is R3's to design; nothing is needed now.
 
 ## Tests
 

@@ -8,8 +8,8 @@
 /// picked (its path relative to that folder, `Album/01 Song.flac`) and
 /// through the collection (its path from the top of the storage volume,
 /// `Music/Album/01 Song.flac`). The scanner lists it once, under the picked
-/// folder, and leaves it out of the collection (decision 0012, proposed rule
-/// awaiting the owner): a picked folder gets the folder's cover art, which the
+/// folder, and leaves it out of the collection (owner decision 21, decision
+/// 0012): a picked folder gets the folder's cover art, which the
 /// collection cannot read (owner decision 8), and its paths are the ones the
 /// user chose.
 library;

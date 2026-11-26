@@ -3,7 +3,7 @@
 // Android's shared music collection (MediaStore) in the scanner, over a fake
 // MediaStore: the collection's songs are read from their files, a rescan
 // opens only what changed, a song inside a picked folder is listed once (by
-// the folder, decision 0012), turning the collection off removes its songs
+// the folder, owner decision 21), turning the collection off removes its songs
 // and keeps their ratings and play counts (decision 0011).
 
 import 'dart:io';
