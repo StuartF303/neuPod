@@ -50,28 +50,31 @@ into a database file opened as the app opens it (SQLite in a background isolate)
 | Memory | the library view's lists under 50 MB at 20,000 | lead call | reported, not enforced (RSS is noisy across runners) | reported |
 | Scroll smoothness | no dropped frames scrolling Songs at 20,000 | spec (test table) | the device check: the host cannot measure frames | |
 
-### Numbers, host (2026-11-26)
+### Numbers (2026-11-26)
 
-Apple M1 Mac, 8 GB, macOS 27.2.1, Flutter 3.50.1, `flutter test` (debug, JIT). Host times are the code's cost, with a
-fast SSD and a desktop CPU; they say little about a phone's storage.
+**M1** is the build Mac (Apple M1, 8 GB, macOS 27.2.1, Flutter 3.50.1); **CI** is the app workflow's `check` job on
+GitHub's `ubuntu-24.04` runner (run 45841467685, `scale_tracks=20000`). Both are `flutter test`, debug (JIT): the code's
+cost on a desktop CPU and SSD, which says little about a phone's storage. M1 ranges are over three runs; CI is one run.
 
-| | 2,000 tracks | 20,000 tracks |
-| --- | --- | --- |
-| Library generated | 31 MB | 314 MB, 1,500 album folders |
-| First scan | 1.9 s | 17.6 to 18.5 s (0.9 ms a file) |
-| Rescan, nothing changed | 0.1 s | 0.8 to 1.1 s |
-| Rescan, 100 changes | 0.16 s | 0.8 to 0.9 s |
-| Database (after a checkpoint) | 1.7 MB | 17.2 MB (860 bytes a track) |
-| Table read alone (all rows, from the database isolate) | 12 ms | 188 to 193 ms |
-| First list after a scan (read and fold) | 54 ms | 424 to 428 ms |
-| Artists / Albums / Cover Flow, loaded | 0.05 ms / 0.04 ms / 0.02 ms | 0.07 ms / 0.15 ms / 0.16 ms |
-| Songs, loaded | 0.09 ms | 1.2 to 5.2 ms |
-| An artist's albums / an album's tracks | 0.18 ms / 1.1 ms | 0.17 ms / 0.9 ms |
-| Search: building its index / one keystroke | 16 ms / 0.6 ms | 29 to 37 ms / 3.3 ms |
-| Lists counted | 59 artists, 191 albums, 10 compilations | 563 artists, 1,901 albums, 100 compilations |
-| Process memory (max RSS) | 259 MB | 387 to 408 MB (231 MB at the start; the lists add 5 MB) |
+| | M1, 2,000 | CI, 2,000 | M1, 20,000 | CI, 20,000 |
+| --- | --- | --- | --- | --- |
+| Library generated | 31 MB | 31 MB | 314 MB, 1,500 album folders | 314 MB in 1.0 s |
+| First scan | 1.9 s | 2.7 s | 17.6 to 18.5 s (0.9 ms a file) | 9.9 s (0.5 ms a file) |
+| Rescan, nothing changed | 0.1 s | 0.11 s | 0.8 to 1.1 s | 0.86 s |
+| Rescan, 100 changes | 0.16 s | 0.14 s | 0.8 to 0.9 s | 0.92 s |
+| Database (after a checkpoint) | 1.7 MB | 1.5 MB | 17.2 MB (860 bytes a track) | 15.4 MB |
+| Table read alone (all rows, from the database isolate) | 12 ms | | 188 to 193 ms | 227 ms |
+| First list after a scan (read and fold) | 54 ms | 70 ms | 424 to 428 ms | 544 ms |
+| Artists / Albums / Cover Flow, loaded | 0.05 / 0.04 / 0.02 ms | | 0.07 / 0.15 / 0.16 ms | 0.07 / 0.18 / 0.05 ms |
+| Songs, loaded | 0.09 ms | 0.33 ms | 1.2 to 5.2 ms | 1.8 ms |
+| An artist's albums / an album's tracks | 0.18 / 1.1 ms | | 0.17 / 0.9 ms | 0.16 / 0.9 ms |
+| Search: building its index / one keystroke | 16 / 0.6 ms | 0.7 ms a key | 29 to 37 / 3.3 ms | 43 / 3.4 ms |
+| Lists counted | 59 artists, 191 albums, 10 compilations | the same | 563 artists, 1,901 albums, 100 compilations | the same |
+| Process memory (max RSS) | 259 MB | | 387 to 408 MB (231 MB at the start; the lists add 5 MB) | 438 MB (212 MB at the start; the lists add 4 MB) |
 
-Every target is met on the host. The phone numbers come from the device check (PROGRESS, phase 3).
+Every target is met on both. The 20,000-track step took 17 s of CI time and the whole `check` job 2.5 minutes, well
+inside its 15-minute timeout (a requested scale run gets 30). The phone numbers come from the device check (PROGRESS,
+phase 3).
 
 ### "Real queries": not now (lead call)
 

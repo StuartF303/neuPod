@@ -90,8 +90,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-24.04
-    # 15 minutes covers every PR (about 4 minutes) and a 20,000-track scale run on top (about 2 more, decision 0013);
-    # a requested scale run gets 30, for larger sizes and slow runners.
+    # 15 minutes covers every PR (about 2.5 minutes) and a 20,000-track scale run on top (17 s on CI, decision 0013);
+    # a requested scale run gets 30, for sizes up to the 100,000 allowed and slow runners.
     timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && inputs.scale_tracks != '' && 30 || 15 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
