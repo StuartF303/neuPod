@@ -341,6 +341,10 @@ final class AudioEngine {
         domain: "neupod_audio", code: 1,
         userInfo: [NSLocalizedDescriptionKey: "Not a local file URL: \(item.uri)"])
     }
+    // An iCloud file evicted since it was queued is never opened: opening it
+    // would make iOS fetch it without a tap (owner decision 7). It fails as
+    // unplayable, and the queue moves on.
+    guard LocalFile.isOnDevice(url) else { throw LocalFile.notDownloadedError(url) }
     // The root is kept accessible by neupod_storage (decision 0004); the audio
     // engine never starts or stops security-scoped access itself.
     return try AVAudioFile(forReading: url)

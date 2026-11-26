@@ -255,6 +255,28 @@ void main() {
           'away.flac': UnreadableReason.notDownloaded,
         });
 
+        // Queued before it was evicted: the engine checks before it opens a
+        // file and skips one that is not on the phone, as it skips an
+        // unplayable one (lead call under decisions 7 and 19). The next
+        // song plays; the placeholder is never read.
+        final player = NeupodPlayer(NeupodAudio());
+        try {
+          await player.setQueue([
+            QueueItem(id: 'it:away', uri: away.uri, title: 'away'),
+            QueueItem(id: 'it:here', uri: here.uri.toString(), title: 'here'),
+          ]);
+          await player.play();
+          final ended = await player.states
+              .firstWhere(
+                (s) => s.status == PlaybackStatus.ended && s.index == 1,
+              )
+              .timeout(const Duration(seconds: 30));
+          expect(ended.queue[ended.index!].id, 'it:here');
+          expect(ended.error, isNull);
+        } finally {
+          await player.dispose();
+        }
+
         // Not an iCloud file: iOS refuses (or ignores) the request. Either
         // way nothing was written.
         try {

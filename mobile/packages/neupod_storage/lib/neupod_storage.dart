@@ -51,6 +51,9 @@ const walkPageTimeout = Duration(minutes: 2);
 /// How long [NeupodStorage.roots] waits by default.
 const rootsTimeout = Duration(seconds: 30);
 
+/// How long [NeupodStorage.requestDownload] waits by default.
+const requestDownloadTimeout = Duration(seconds: 30);
+
 /// The root id of Android's shared music collection (MediaStore audio),
 /// once the user has turned it on ([NeupodStorage.addSharedCollection]).
 const sharedCollectionRootId = 'mediastore:audio';
@@ -149,8 +152,15 @@ class NeupodStorage {
   /// nothing of it here. Throws `download-failed` when iOS refuses,
   /// `not-in-root` for a file outside the held folders, and `unsupported` on
   /// Android.
-  Future<void> requestDownload(String uri) =>
-      _guard(() => _api.requestDownload(uri));
+  ///
+  /// Ends with `StorageException('timeout')` after [timeout]: the request
+  /// waits behind the plugin's queue.
+  Future<void> requestDownload(
+    String uri, {
+    Duration timeout = requestDownloadTimeout,
+  }) => _guard(
+    () => _timed(_api.requestDownload(uri), timeout, 'answer for $uri'),
+  );
 
   /// iOS only: where the download of each of [uris] stands, in order, from
   /// file metadata alone. Throws `unsupported` on Android.
