@@ -190,6 +190,11 @@ public class NeupodStoragePlugin: NSObject, FlutterPlugin, NeupodStorageApi, UID
     }
   }
 
+  // Android's shared music collection (MediaStore) has no iOS counterpart.
+  func addSharedCollection(completion: @escaping (Result<StorageRoot?, Error>) -> Void) {
+    completion(.failure(PigeonError(code: "unsupported", message: "the shared music collection is Android only", details: nil)))
+  }
+
   func removeRoot(rootId: String, completion: @escaping (Result<Void, Error>) -> Void) {
     onQueue(completion) {
       if rootId == Self.documentsId {

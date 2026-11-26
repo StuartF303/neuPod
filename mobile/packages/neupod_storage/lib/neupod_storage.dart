@@ -36,6 +36,10 @@ class StorageException implements Exception {
       'StorageException($code${message == null ? '' : ': $message'})';
 }
 
+/// The root id of Android's shared music collection (MediaStore audio),
+/// once the user has turned it on ([NeupodStorage.addSharedCollection]).
+const sharedCollectionRootId = 'mediastore:audio';
+
 /// The entry point. One instance per app is enough; it holds no state of its
 /// own (the platform side holds the grants and bookmarks).
 class NeupodStorage {
@@ -49,7 +53,14 @@ class NeupodStorage {
   /// The roots the app holds. On iOS the Documents folder comes first.
   Future<List<StorageRoot>> roots() => _guard(_api.listRoots);
 
-  /// Releases a picked root. The files are not touched.
+  /// Android only: turns on the phone's shared music collection as a root,
+  /// asking for the permission to read it if the app does not hold it.
+  /// Returns the root, or null if the permission was refused.
+  Future<StorageRoot?> addSharedCollection() =>
+      _guard(_api.addSharedCollection);
+
+  /// Releases a picked root, or turns the shared collection off. The files
+  /// are not touched.
   Future<void> removeRoot(String rootId) =>
       _guard(() => _api.removeRoot(rootId));
 

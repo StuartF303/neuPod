@@ -8,6 +8,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:neupod/data/db/library_database.dart';
 import 'package:neupod/data/scan/audio_fingerprint.dart';
+import 'package:neupod/data/scan/shared_collection.dart';
 import 'package:neupod/data/scan/tag_reader.dart';
 import 'package:neupod/domain/library/art_rules.dart';
 import 'package:neupod/domain/library/collation.dart';
@@ -79,6 +80,10 @@ String extensionOf(String path) {
 ///   the scan, is a move: [onMoves] gets it at the end of the scan, to carry
 ///   the ratings and play counts (owner decision 20). A fingerprint shared by
 ///   more than one file on either side is not a move.
+/// - Android's shared music collection is scanned as one more folder (source
+///   kind `media_store`), its paths from the top of the storage volume. An
+///   item inside a picked folder is left out of it: the folder lists it
+///   (decision 0012).
 final class LocalLibraryScanner implements LibraryScanner {
   LocalLibraryScanner({
     required this._folders,
@@ -109,13 +114,23 @@ final class LocalLibraryScanner implements LibraryScanner {
   /// Files read per isolate run and written per batch.
   final int chunk;
 
-  static const _kind = 'local_folder';
+  /// The `sources.kind` of each folder kind (decision 0005).
+  static String _kindOf(FolderKind k) =>
+      k == FolderKind.sharedCollection ? 'media_store' : 'local_folder';
+
+  static const _kinds = ['local_folder', 'media_store'];
 
   @override
   Stream<ScanProgress> scan() async* {
     var found = 0, read = 0;
     final folders = await _folders.folders();
     final moves = _Moves();
+    // Where the picked folders are, for leaving their files out of the
+    // shared collection.
+    final picked = [
+      for (final f in folders)
+        if (f.kind == FolderKind.pickedFolder) ?pickedFolderLocation(f.id),
+    ];
 
     // Removing a folder removes its tracks, and nothing else.
     final held = folders.map((f) => f.id).toList();
@@ -126,7 +141,7 @@ final class LocalLibraryScanner implements LibraryScanner {
                 _db.sources.id.equalsExp(_db.tracks.sourceId),
               ),
             ])..where(
-              _db.sources.kind.equals(_kind) &
+              _db.sources.kind.isIn(_kinds) &
                   _db.sources.uriOrBookmark.isNotIn(held),
             ))
             .get();
@@ -135,11 +150,12 @@ final class LocalLibraryScanner implements LibraryScanner {
     }
     await (_db.delete(
       _db.sources,
-    )..where((s) => s.kind.equals(_kind) & s.uriOrBookmark.isNotIn(held))).go();
+    )..where((s) => s.kind.isIn(_kinds) & s.uriOrBookmark.isNotIn(held))).go();
 
     for (final folder in folders) {
       if (!folder.available) continue; // its tracks stay until it is removed
       final sourceId = await _sourceFor(folder);
+      final collection = folder.kind == FolderKind.sharedCollection;
       final known = {
         for (final t in await (_db.select(
           _db.tracks,
@@ -160,6 +176,9 @@ final class LocalLibraryScanner implements LibraryScanner {
               continue;
             }
             if (!audioExtensions.contains(extensionOf(e.relPath))) continue;
+            if (collection && insidePickedFolder(e.relPath, e.uri, picked)) {
+              continue; // listed by the picked folder
+            }
             found++;
             seen.add(e.relPath);
             final k = known[e.relPath];
@@ -310,7 +329,7 @@ final class LocalLibraryScanner implements LibraryScanner {
         .into(_db.sources)
         .insert(
           SourcesCompanion.insert(
-            kind: _kind,
+            kind: _kindOf(folder.kind),
             uriOrBookmark: folder.id,
             displayName: folder.name,
           ),

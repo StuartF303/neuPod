@@ -11,6 +11,14 @@ class FakeApi extends NeupodStorageApi {
   final removed = <String>[];
   StorageRoot? pick;
   PlatformException? pickError;
+  StorageRoot? collection;
+  int collectionAsks = 0;
+
+  @override
+  Future<StorageRoot?> addSharedCollection() async {
+    collectionAsks++;
+    return collection;
+  }
 
   @override
   Future<List<StorageRoot>> listRoots() async => [
@@ -77,6 +85,32 @@ void main() {
         isA<FolderAccessException>().having((e) => e.code, 'code', 'busy'),
       ),
     );
+  });
+
+  test('the shared collection: refused is null, on is mapped, iOS does not '
+      'offer it', () async {
+    final api = FakeApi();
+    final storage = NeupodStorage(api: api);
+    expect(StorageFolderAccess(storage).offersSharedCollection, isFalse);
+    final access = StorageFolderAccess(storage, offersSharedCollection: true);
+    expect(access.offersSharedCollection, isTrue);
+    expect(await access.addSharedCollection(), isNull);
+    api.collection = StorageRoot(
+      id: sharedCollectionRootId,
+      displayName: 'Music on This Phone',
+      kind: RootKind.sharedCollection,
+      available: true,
+    );
+    expect(
+      await access.addSharedCollection(),
+      const LibraryFolder(
+        id: 'mediastore:audio',
+        name: 'Music on This Phone',
+        kind: FolderKind.sharedCollection,
+        available: true,
+      ),
+    );
+    expect(api.collectionAsks, 2);
   });
 
   test('remove forwards the id', () async {

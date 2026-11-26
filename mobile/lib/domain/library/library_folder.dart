@@ -8,6 +8,11 @@ enum FolderKind {
 
   /// A folder the user picked with the system picker.
   pickedFolder,
+
+  /// Android: the phone's shared music collection (MediaStore), turned on
+  /// by the user. Its tracks' paths run from the top of the phone's storage
+  /// (`Music/Album/01 Song.flac`).
+  sharedCollection,
 }
 
 /// A folder the library is built from. The app only ever reads it.
@@ -32,8 +37,9 @@ final class LibraryFolder {
   /// folder was deleted, or its drive is unplugged.
   final bool available;
 
-  /// Only picked folders can be removed; the Documents folder is permanent.
-  bool get removable => kind == FolderKind.pickedFolder;
+  /// Picked folders can be removed and the shared collection turned off;
+  /// the Documents folder is permanent.
+  bool get removable => kind != FolderKind.appDocuments;
 
   @override
   bool operator ==(Object other) =>
@@ -74,6 +80,17 @@ abstract interface class FolderAccess {
   /// held, if the user picked it again), or null if the user cancelled.
   Future<LibraryFolder?> pickFolder();
 
-  /// Gives up access to a picked folder. Its files are never touched.
+  /// Gives up access to a picked folder, or turns the shared collection
+  /// off. Its files are never touched.
   Future<void> removeFolder(String id);
+
+  /// Whether this platform has a shared music collection to offer (Android's
+  /// MediaStore). False on iOS.
+  bool get offersSharedCollection;
+
+  /// Turns on the phone's shared music collection, asking for the
+  /// permission to read it only if the app does not hold it (so only when
+  /// the user acts). Returns it as a folder, or null if the permission was
+  /// refused.
+  Future<LibraryFolder?> addSharedCollection();
 }
