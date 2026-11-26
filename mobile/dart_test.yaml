@@ -1,5 +1,7 @@
-# Test tags (test/spec/): `spec` marks the suites written from the
-# specification, `tool` the tests of tool/gen_test_library.
+# Test tags: `spec` marks the suites written from the specification
+# (test/spec/), `tool` the tests of tool/gen_test_library, `scale` the scale
+# test (test/scale/: 2,000 tracks unless NEUPOD_SCALE_TRACKS says otherwise).
 tags:
   spec:
   tool:
+  scale:

@@ -81,6 +81,59 @@ Map<String, String> _vorbis(Uint8List body) {
   return (version, frames, end);
 }
 
+/// MP4 boxes from [start] to [end]: (type, body start, end).
+List<(String, int, int)> _mp4Boxes(Uint8List b, int start, int end) {
+  final d = ByteData.sublistView(b);
+  final out = <(String, int, int)>[];
+  for (var p = start; p + 8 <= end;) {
+    final size = d.getUint32(p);
+    out.add((latin1.decode(b.sublist(p + 4, p + 8)), p + 8, p + size));
+    p += size;
+  }
+  return out;
+}
+
+/// The box at [path] (types from the top), or null.
+(String, int, int)? _mp4Find(Uint8List b, List<String> path) {
+  var (start, end) = (0, b.length);
+  (String, int, int)? box;
+  for (final type in path) {
+    box = null;
+    for (final c in _mp4Boxes(b, start, end)) {
+      if (c.$1 == type) box = c;
+    }
+    if (box == null) return null;
+    // `meta` has a version and flags before its children.
+    (start, end) = (box.$2 + (type == 'meta' ? 4 : 0), box.$3);
+  }
+  return box;
+}
+
+/// The iTunes items of an M4A by box type (`©nam` as `\u00a9nam`): text
+/// for a UTF-8 `data` box, the bytes otherwise.
+Map<String, Object> _ilst(Uint8List b) {
+  final ilst = _mp4Find(b, ['moov', 'udta', 'meta', 'ilst']);
+  if (ilst == null) return {};
+  final d = ByteData.sublistView(b);
+  return {
+    for (final (type, body, end) in _mp4Boxes(b, ilst.$2, ilst.$3))
+      for (final (_, data, dataEnd) in [_mp4Boxes(b, body, end).single])
+        type: d.getUint32(data) == 1
+            ? utf8.decode(b.sublist(data + 8, dataEnd))
+            : b.sublist(data + 8, dataEnd),
+  };
+}
+
+/// The audio of an M4A: from where its first chunk offset points to the end
+/// of `mdat`.
+Uint8List _m4aAudio(Uint8List b) {
+  final stco = _mp4Find(b, ['moov', 'trak', 'mdia', 'minf', 'stbl', 'stco'])!;
+  final first = ByteData.sublistView(b).getUint32(stco.$2 + 8);
+  final mdat = _mp4Find(b, ['mdat'])!;
+  expect(first, inInclusiveRange(mdat.$2, mdat.$3));
+  return b.sublist(first, mdat.$3);
+}
+
 void main() {
   late Directory tmp;
   late Fixtures fx;
@@ -251,9 +304,16 @@ void main() {
       expect(frames.containsKey('TPE2'), isFalse);
     });
 
-    test('untagged MP3 and ALAC are the fixtures, byte for byte', () {
+    test('untagged MP3 is the fixture, byte for byte', () {
       expect(read(g, 'Marrow/1977 Bone Dry/02 Ash.mp3'), fx.mp3);
-      expect(read(g, 'Marrow/1977 Bone Dry/06 Marrow Bones.m4a'), fx.alac);
+    });
+
+    test('untagged ALAC is the fixture with its iTunes tags taken out', () {
+      // The fixture itself has a title, artist, album and track number.
+      expect(_ilst(fx.alac), isNotEmpty);
+      final m4a = read(g, 'Marrow/1977 Bone Dry/06 Marrow Bones.m4a');
+      expect(_mp4Find(m4a, ['moov', 'udta']), isNull);
+      expect(_m4aAudio(m4a), _m4aAudio(fx.alac));
     });
 
     test('unplayable files are what they say', () {
@@ -328,7 +388,9 @@ void main() {
     test('has exactly the tracks asked for, in the convention', () {
       final audio = files.where((f) => !f.endsWith('Folder.jpg')).toList();
       expect(audio, hasLength(250));
-      final convention = RegExp(r'^[^/]+/\d{4} [^/]+/\d\d [^/]+\.(flac|mp3)$');
+      final convention = RegExp(
+        r'^[^/]+/\d{4} [^/]+/\d\d [^/]+\.(flac|mp3|m4a)$',
+      );
       for (final f in audio) {
         expect(convention.hasMatch(f), isTrue, reason: f);
       }
@@ -337,11 +399,14 @@ void main() {
       expect(m['trackCount'], 250);
     });
 
-    test('mixes formats, ", The" folders, two-disc albums and art', () {
-      expect(files.where((f) => f.endsWith('.flac')), hasLength(125));
-      expect(files.where((f) => f.endsWith('.mp3')), hasLength(125));
+    test('mixes formats, ", The" folders, two-disc albums, compilations and '
+        'art', () {
+      for (final ext in ['.flac', '.mp3', '.m4a']) {
+        expect(files.where((f) => f.endsWith(ext)), isNotEmpty, reason: ext);
+      }
       expect(files.any((f) => f.split('/').first.endsWith(', The')), isTrue);
       expect(files.any((f) => f.contains(' (Disc 2)/')), isTrue);
+      expect(files.any((f) => f.startsWith('Various Artists/')), isTrue);
       final albumDirs = {
         for (final f in files) f.substring(0, f.lastIndexOf('/')),
       };
@@ -350,9 +415,60 @@ void main() {
       }
     });
 
+    test('tagged M4A: iTunes items written, chunk offsets on the audio', () {
+      final c = scaleCases(250)
+          .firstWhere((c) => c.path.endsWith('.m4a') && c.tags != null);
+      final m4a = read(g, c.path);
+      final items = _ilst(m4a);
+      expect(items['©nam'], c.tags!.title);
+      expect(items['©ART'], c.tags!.artist);
+      expect(items['aART'], c.tags!.albumArtist);
+      expect(items['©alb'], c.tags!.album);
+      expect(items['©day'], c.tags!.year);
+      expect((items['trkn']! as List<int>).sublist(2, 4), [
+        0,
+        int.parse(c.tags!.track!),
+      ]);
+      expect(_m4aAudio(m4a), _m4aAudio(fx.alacMono));
+    });
+
     test('every 50th track is untagged, for the folder fallback', () {
       final untagged = scaleCases(250).where((c) => c.tags == null).length;
       expect(untagged, 5);
     });
+  });
+
+  test('the 20,000-track library has a real library\'s shape', () {
+    final cases = scaleCases(20000);
+    expect(cases, hasLength(20000));
+    final tagged = [for (final c in cases) ?c.tags];
+    // An album is its album tag and album artist (or the compilation).
+    String albumOf(TagSet t) =>
+        '${t.compilation || t.albumArtist == 'Various Artists' ? '' : t.albumArtist}'
+        '|${t.album}';
+    final albums = {for (final t in tagged) albumOf(t)};
+    final artists = {
+      for (final t in tagged)
+        if (!t.compilation && t.albumArtist != 'Various Artists') t.albumArtist,
+    };
+    final compilations = {
+      for (final t in tagged)
+        if (t.compilation || t.albumArtist == 'Various Artists') t.album,
+    };
+    final twoDiscs = {
+      for (final t in tagged)
+        if (t.disc == '2/2') albumOf(t),
+    };
+    expect(albums.length, inInclusiveRange(1400, 1600));
+    expect(artists.length, inInclusiveRange(500, 700));
+    expect(compilations.length, greaterThanOrEqualTo(90));
+    expect(twoDiscs.length, greaterThanOrEqualTo(150));
+    expect(artists.where((a) => a!.startsWith('The ')), isNotEmpty);
+    expect(
+      {for (final c in cases) c.path.substring(c.path.lastIndexOf('.'))},
+      {'.flac', '.mp3', '.m4a'},
+    );
+    // Every path is unique.
+    expect({for (final c in cases) c.path}, hasLength(20000));
   });
 }

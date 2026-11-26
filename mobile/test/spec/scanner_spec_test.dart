@@ -16,30 +16,48 @@
 // (dart:io), so it needs a scanner entry point that takes a directory. On a
 // device the same check belongs in integration_test/.
 //
-// WIRING: set wiredLibraryFromFolder to an adapter that scans [root] with
-// the app's scanner (into an in-memory database) and returns the browsing
-// lists through the LibraryView of library_rules_spec_test.dart.
+// WIRING: wiredLibraryFromFolder scans [root] with the app's
+// LocalLibraryScanner (test/support/host_library.dart) into an in-memory
+// drift database, kept per folder so the second call is a rescan, and
+// returns the browsing lists of the app's DriftLibraryView through the
+// LibraryView of library_rules_spec_test.dart.
 @Tags(['spec'])
 library;
 
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neupod/data/db/library_database.dart';
+import 'package:neupod/data/library_view/drift_library_view.dart';
+import 'package:neupod/domain/library_view/reason_words.dart';
 
 import '../../tool/gen_test_library/gen_test_library.dart';
-import 'library_rules_spec_test.dart' show AlbumView, LibraryView;
+import '../support/host_library.dart';
+import 'library_rules_spec_test.dart' show AlbumView, LibraryView, snapshotOf;
 
 /// Scans [root] with the app's scanner. Called twice per test for the
 /// rescan; the adapter may keep its database between the calls.
 typedef LibraryFromFolder = Future<LibraryView> Function(Directory root);
 
-// WIRE: replace null with an adapter over the app's scanner.
-final LibraryFromFolder? wiredLibraryFromFolder = null;
+/// The database of each folder scanned, so a second scan is a rescan.
+final _databases = <String, LibraryDatabase>{};
 
-final Object _skip = wiredLibraryFromFolder == null
-    ? 'awaiting implementation of the scanner (folder to library)'
-    : false;
+Future<LibraryView> _scanFolder(Directory root) async {
+  final db = _databases[root.path] ??= LibraryDatabase(NativeDatabase.memory());
+  final last = await scanHostFolder(db, root);
+  expect(last?.done, isTrue, reason: 'the scan finished');
+  expect(last?.error, isNull, reason: 'the scan finished without an error');
+  final view = DriftLibraryView(db, platform: PlayerPlatform.ios);
+  try {
+    return await snapshotOf(view);
+  } finally {
+    await view.dispose();
+  }
+}
+
+final LibraryFromFolder wiredLibraryFromFolder = _scanFolder;
 
 /// Everything about a tree that a write, move or delete would change.
 Map<String, String> _snapshot(Directory root) {
@@ -60,7 +78,7 @@ Map<String, String> _snapshot(Directory root) {
 }
 
 void main() {
-  group('scanner', skip: _skip, () {
+  group('scanner', () {
     late Directory tmp;
     late GenResult gen;
 
@@ -69,21 +87,27 @@ void main() {
       gen = generate(outDir: Directory('${tmp.path}/gen'));
     });
 
-    tearDown(() => tmp.deleteSync(recursive: true));
+    tearDown(() async {
+      for (final db in _databases.values) {
+        await db.close();
+      }
+      _databases.clear();
+      tmp.deleteSync(recursive: true);
+    });
 
     test('a scan and a rescan change nothing in the library tree', () async {
       final before = _snapshot(gen.library);
       expect(before.length, greaterThan(50));
-      await wiredLibraryFromFolder!(gen.library);
+      await wiredLibraryFromFolder(gen.library);
       expect(_snapshot(gen.library), before, reason: 'after the first scan');
-      await wiredLibraryFromFolder!(gen.library);
+      await wiredLibraryFromFolder(gen.library);
       expect(_snapshot(gen.library), before, reason: 'after the rescan');
     });
 
     test(
       'the library matches the manifest where the spec is settled',
       () async {
-        final lib = await wiredLibraryFromFolder!(gen.library);
+        final lib = await wiredLibraryFromFolder(gen.library);
         final manifest =
             jsonDecode(gen.manifest.readAsStringSync()) as Map<String, Object?>;
         final tracks = (manifest['tracks']! as List<Object?>)
@@ -130,13 +154,17 @@ void main() {
               .add('${album.artist}/${album.name}');
         }
 
-        // Every disc of a multi-disc case is the same album.
-        for (final kase in [
-          'disc-in-album-tag',
-          'disc-tags-two-folders',
-          'disc-folder-no-tags',
-        ]) {
-          expect(albumsByKase[kase], hasLength(1), reason: kase);
+        // Disc number tags make one album, even over two folders; names
+        // that differ only by "(Disc n)", in the album tags or in the
+        // folders of untagged files, stay two albums, as on the device
+        // (owner decision 15).
+        expect(
+          albumsByKase['disc-tags-two-folders'],
+          hasLength(1),
+          reason: 'disc-tags-two-folders',
+        );
+        for (final kase in ['disc-in-album-tag', 'disc-folder-no-tags']) {
+          expect(albumsByKase[kase], hasLength(2), reason: kase);
         }
         // Hidden and AppleDouble files are not songs: the firmware skips every
         // name starting with '.' (app/library/lib_build.c).

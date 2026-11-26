@@ -20,12 +20,12 @@
 // sequences were checked against the C compiled on the host (22 November
 // 2026).
 //
-// WIRING: set wiredWheelAccel to a factory of the app's port; the skip lifts
-// by itself.
+// WIRING: wiredWheelAccel is the app's port (lib/domain/wheel/wheel_accel.dart).
 @Tags(['spec'])
 library;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neupod/domain/wheel/wheel_accel.dart' as app;
 
 /// The app's port of ui_accel_t / ui_accel_feed().
 abstract interface class WheelAccel {
@@ -38,25 +38,28 @@ abstract interface class WheelAccel {
 /// A fresh accelerator, as after ui_accel_init().
 typedef WheelAccelFactory = WheelAccel Function();
 
-// WIRE: replace null with the app's factory, for example
-//   final WheelAccelFactory? wiredWheelAccel = WheelAccelerator.new;
-final WheelAccelFactory? wiredWheelAccel = null;
+/// The app's port (`lib/domain/wheel/wheel_accel.dart`), fresh as after
+/// `ui_accel_init()`.
+final class _AppAccel implements WheelAccel {
+  final _a = app.WheelAccel();
 
-final Object _skip = wiredWheelAccel == null
-    ? 'awaiting implementation of the wheel acceleration (ui_accel_feed port)'
-    : false;
+  @override
+  int feed(int positions, int nowMs) => _a.feed(positions, nowMs);
+}
+
+final WheelAccelFactory wiredWheelAccel = _AppAccel.new;
 
 /// Feeds (positions, ms) pairs to a fresh accelerator; returns every result.
 List<int> _run(List<(int, int)> feeds) {
-  final a = wiredWheelAccel!();
+  final a = wiredWheelAccel();
   return [for (final (c, t) in feeds) a.feed(c, t)];
 }
 
 void main() {
-  group('ui_accel_feed port', skip: _skip, () {
+  group('ui_accel_feed port', () {
     group('mirrors tests/test_ui_logic.c', () {
       test('accel_slow_is_one_step_per_four_counts', () {
-        final a = wiredWheelAccel!();
+        final a = wiredWheelAccel();
         var t = 1000;
         var total = 0;
         for (var i = 0; i < 8; i++) {
@@ -70,7 +73,7 @@ void main() {
       });
 
       test('accel_fast_multiplies', () {
-        final a = wiredWheelAccel!();
+        final a = wiredWheelAccel();
         var total = 0;
         var t = 5000;
         for (var i = 0; i < 20; i++) {
@@ -84,7 +87,7 @@ void main() {
       });
 
       test('accel_reversal_drops_residue', () {
-        final a = wiredWheelAccel!();
+        final a = wiredWheelAccel();
         expect(a.feed(3, 1000), 0, reason: 'leftover +3');
         expect(
           a.feed(-1, 3000),
@@ -135,7 +138,7 @@ void main() {
       });
 
       test('4 counts every 10 ms: 61 steps in all, then 1 after a pause', () {
-        final a = wiredWheelAccel!();
+        final a = wiredWheelAccel();
         var total = 0;
         for (var i = 0; i < 20; i++) {
           total += a.feed(4, 5000 + 10 * i);
@@ -178,7 +181,7 @@ void main() {
       });
 
       test('a slow full turn (96 positions) is 24 steps', () {
-        final a = wiredWheelAccel!();
+        final a = wiredWheelAccel();
         var total = 0;
         for (var i = 0; i < 96; i++) {
           total += a.feed(1, 1000 + 200 * i);
