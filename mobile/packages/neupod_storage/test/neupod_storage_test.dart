@@ -59,6 +59,10 @@ class FakeApi extends NeupodStorageApi {
   }
 
   @override
+  Future<List<StorageRoot>> listRoots() =>
+      Completer<List<StorageRoot>>().future;
+
+  @override
   Future<void> requestDownload(String uri) async {
     calls.add('download $uri');
     if (failDownload != null) throw failDownload!;
@@ -308,6 +312,14 @@ void main() {
       ]);
       FdReaderHandle(openFdOnHost(file.path)).discard();
     });
+  });
+
+  test('roots that never come back end with timeout', () async {
+    await expectLater(
+      NeupodStorage(api: FakeApi(const []))
+          .roots(timeout: const Duration(milliseconds: 20)),
+      throwsA(isA<StorageException>().having((e) => e.code, 'code', 'timeout')),
+    );
   });
 
   group('iCloud downloads', () {

@@ -55,7 +55,11 @@ void main() {
     late ProviderContainer container;
     late DateTime clock;
 
+    /// What the library lists as not downloaded after a scan.
+    late Set<String> libraryAway;
+
     setUp(() {
+      libraryAway = {};
       api = FakeDownloadApi();
       scanner = FakeLibraryScanner();
       clock = DateTime(2026, 11, 25, 12);
@@ -63,6 +67,12 @@ void main() {
         overrides: [
           neupodStorageProvider.overrideWithValue(NeupodStorage(api: api)),
           libraryScannerProvider.overrideWithValue(scanner),
+          stillNotDownloadedProvider.overrideWithValue(
+            (uris) async => {
+              for (final u in uris)
+                if (libraryAway.contains(u)) u,
+            },
+          ),
         ],
       );
       container.read(icloudDownloadsProvider.notifier).now = () => clock;
@@ -74,6 +84,9 @@ void main() {
 
     const a = 'file:///m/a.flac';
     const b = 'file:///m/b.flac';
+
+    /// Lets the rescan's quiet time pass.
+    void quiet() => clock = clock.add(ICloudDownloads.rescanAfter);
 
     test('a request asks iOS once and shows the row as Downloading', () async {
       await downloads().request(a);
@@ -108,6 +121,9 @@ void main() {
       await downloads().request(b);
       api.states[a] = DownloadState.downloaded;
       await downloads().poll();
+      expect(scanner.started, 0, reason: 'waits for more to arrive');
+      quiet();
+      await downloads().poll();
       expect(scanner.started, 1);
       expect(showing(), {a, b});
 
@@ -126,6 +142,8 @@ void main() {
       await downloads().request(a);
       api.states[a] = DownloadState.downloaded;
       await downloads().poll();
+      quiet();
+      await downloads().poll();
       expect(scanner.started, 1, reason: 'the running scan may have passed a');
 
       await scanner.finish();
@@ -136,6 +154,45 @@ void main() {
       await scanner.finish();
       await pumpEventQueue();
       expect(showing(), isEmpty);
+    });
+
+    test('songs arriving one after another share one scan', () async {
+      await downloads().request(a);
+      await downloads().request(b);
+      api.states[a] = DownloadState.downloaded;
+      await downloads().poll();
+      clock = clock.add(const Duration(seconds: 2));
+      api.states[b] = DownloadState.downloaded;
+      await downloads().poll();
+      clock = clock.add(const Duration(seconds: 2));
+      await downloads().poll();
+      expect(scanner.started, 0, reason: 'b arrived 2 s ago');
+      clock = clock.add(const Duration(seconds: 1));
+      await downloads().poll();
+      expect(scanner.started, 1);
+      await scanner.finish();
+      await pumpEventQueue();
+      expect(showing(), isEmpty);
+    });
+
+    test('downloaded by its state but still away in the scan: Downloading, '
+        'one more scan, then the library decides', () async {
+      await downloads().request(a);
+      api.states[a] = DownloadState.downloaded;
+      libraryAway = {a};
+      await downloads().poll();
+      quiet();
+      await downloads().poll();
+      await scanner.finish();
+      await pumpEventQueue();
+      expect(showing(), {a}, reason: 'kept, and retried');
+      quiet();
+      await downloads().poll();
+      expect(scanner.started, 2);
+      await scanner.finish();
+      await pumpEventQueue();
+      expect(showing(), isEmpty, reason: 'retried once only');
+      expect(scanner.started, 2);
     });
 
     test('failed or gone: back to Not downloaded, no scan', () async {

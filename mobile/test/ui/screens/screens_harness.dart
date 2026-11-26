@@ -110,6 +110,7 @@ Future<ShellRig> pumpShell(
   List<Override> overrides = const [],
   LibraryView? library,
   TrackStatsStore? trackStats,
+  bool asyncLibrary = false,
 }) async {
   tester.view.physicalSize = const Size(600, 450);
   tester.view.devicePixelRatio = 1;
@@ -120,7 +121,12 @@ Future<ShellRig> pumpShell(
   final container = ProviderContainer.test(
     retry: (_, _) => null,
     overrides: [
-      libraryViewProvider.overrideWith((ref) => library ?? gateLibrary),
+      // [asyncLibrary]: built as the app builds it, with a loading step (a
+      // rebuild then shows as loading, then data).
+      if (asyncLibrary)
+        libraryViewProvider.overrideWith((ref) async => library ?? gateLibrary)
+      else
+        libraryViewProvider.overrideWith((ref) => library ?? gateLibrary),
       // The real mapper copies test tones out of the asset bundle; the
       // screens' tests only need the queue's order and metadata.
       queueMapperProvider.overrideWithValue(

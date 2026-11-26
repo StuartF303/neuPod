@@ -226,13 +226,17 @@ final class LocalLibraryScanner implements LibraryScanner {
   /// not downloaded (iCloud) is not read (owner decision 7): the folder then
   /// has none, which is what the device shows for a cover file it cannot
   /// decode. After an incomplete walk a folder's cover is only set, never
-  /// cleared, since the folder may not have been listed.
+  /// cleared, since the folder may not have been listed, except when the walk
+  /// saw its cover file not downloaded: that is cleared, so nothing opens it.
+  /// (A local cover of lower rank in the same folder is not used then; the
+  /// next complete walk finds it.)
   Future<void> _storeCovers(
     int sourceId,
     Map<String, List<StorageEntry>> covers, {
     required bool complete,
   }) async {
     final picked = <String, StorageEntry?>{};
+    final away = <String>{};
     for (final MapEntry(key: dir, value: entries) in covers.entries) {
       entries.sort(
         (a, b) => compareKeys(
@@ -244,6 +248,7 @@ final class LocalLibraryScanner implements LibraryScanner {
       final e = best == null
           ? null
           : entries.firstWhere((e) => _fileName(e.relPath) == best.$1);
+      if (e?.state == EntryState.notDownloaded) away.add(dir);
       picked[dir] = e == null || e.state == EntryState.notDownloaded ? null : e;
     }
     final rows = await (_db.select(
@@ -252,7 +257,7 @@ final class LocalLibraryScanner implements LibraryScanner {
     await _db.batch((b) {
       for (final t in rows) {
         final dir = _folderOf(t.relPath);
-        if (!complete && picked[dir] == null) continue;
+        if (!complete && picked[dir] == null && !away.contains(dir)) continue;
         final e = picked[dir];
         if (t.folderArtUri == e?.uri &&
             t.folderArtSize == e?.size &&

@@ -212,8 +212,7 @@ const _allowed = <_Allowed>[
   _Allowed(
     'packages/neupod_storage/ios/neupod_storage/Sources/neupod_storage/'
         'NeupodStoragePlugin.swift',
-    'try FileManager.default.startDownloadingUbiquitousItem(at: '
-        'ICloudItem.realURL(url))',
+    'try FileManager.default.startDownloadingUbiquitousItem(at: real)',
     'owner decision 7: a tap on a song not downloaded asks iOS to download '
         "the user's own iCloud file. iOS fetches it and puts its content on "
         'the phone unchanged; the app writes, moves and deletes nothing, and '

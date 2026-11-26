@@ -48,6 +48,9 @@ class StorageException implements Exception {
 /// trips when something is stuck.
 const walkPageTimeout = Duration(minutes: 2);
 
+/// How long [NeupodStorage.roots] waits by default.
+const rootsTimeout = Duration(seconds: 30);
+
 /// The entry point. One instance per app is enough; it holds no state of its
 /// own (the platform side holds the grants and bookmarks).
 class NeupodStorage {
@@ -59,7 +62,11 @@ class NeupodStorage {
   Future<StorageRoot?> pickFolder() => _guard(_api.pickFolder);
 
   /// The roots the app holds. On iOS the Documents folder comes first.
-  Future<List<StorageRoot>> roots() => _guard(_api.listRoots);
+  ///
+  /// Ends with `StorageException('timeout')` after [timeout]: resolving a
+  /// bookmark or checking a root can wait on a drive or a provider.
+  Future<List<StorageRoot>> roots({Duration timeout = rootsTimeout}) =>
+      _guard(() => _timed(_api.listRoots(), timeout, 'the roots'));
 
   /// Releases a picked root. The files are not touched.
   Future<void> removeRoot(String rootId) =>
@@ -79,20 +86,18 @@ class NeupodStorage {
     int batchSize = 500,
     Duration pageTimeout = walkPageTimeout,
   }) async* {
-    final walkId = await _guard(() => _api.startWalk(rootId));
+    final walkId = await _guard(
+      () => _timed(_api.startWalk(rootId), pageTimeout, 'a walk of $rootId'),
+    );
     var done = false;
     try {
       while (!done) {
         final batch = await _guard(
-          () => _api
-              .nextWalkBatch(walkId, batchSize)
-              .timeout(
-                pageTimeout,
-                onTimeout: () => throw StorageException(
-                  'timeout',
-                  'no page from $rootId in $pageTimeout',
-                ),
-              ),
+          () => _timed(
+            _api.nextWalkBatch(walkId, batchSize),
+            pageTimeout,
+            'a page of $rootId',
+          ),
         );
         done = batch.done;
         yield batch;
@@ -157,6 +162,13 @@ class NeupodStorage {
   /// picked. For integration tests; never called by the app.
   Future<StorageRoot> debugAddRoot(String path) =>
       _guard(() => _api.debugAddRoot(path));
+
+  static Future<T> _timed<T>(Future<T> call, Duration limit, String what) =>
+      call.timeout(
+        limit,
+        onTimeout: () =>
+            throw StorageException('timeout', 'no $what in $limit'),
+      );
 
   static Future<T> _guard<T>(Future<T> Function() call) async {
     try {

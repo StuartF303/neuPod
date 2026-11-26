@@ -762,6 +762,24 @@ void main() {
       expect(moves, isEmpty);
     });
 
+    test('a cover file evicted later is cleared, even after an incomplete '
+        'walk', () async {
+      put('Album/a.flac', fixture('flac16_44k_st.flac'));
+      put('Album/cover.jpg', [0xff, 0xd8, 0xff]);
+      put('Other/b.flac', fixture('flac16_44k_st.flac'));
+      final (api, _, scanner) = setUpScanner();
+      await scanner.scan().drain<void>();
+      Future<String?> coverOfA() async => (await db.select(db.tracks).get())
+          .firstWhere((t) => t.relPath == 'Album/a.flac')
+          .folderArtUri;
+      expect(await coverOfA(), endsWith('/Album/cover.jpg'));
+
+      api.away.add('Album/cover.jpg');
+      api.unreadablePrefix = 'Other/'; // the walk is incomplete
+      await scanner.scan().drain<void>();
+      expect(await coverOfA(), isNull);
+    });
+
     test('a cover file not downloaded is not used', () async {
       put('Album/a.flac', fixture('flac16_44k_st.flac'));
       put('Album/cover.jpg', [0xff, 0xd8, 0xff]);

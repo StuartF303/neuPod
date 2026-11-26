@@ -177,18 +177,31 @@ download the file. Built as follows.
   work under it. Nothing new is bookmarked per file.
 - **Never blocking.** The walk's coordinated read keeps `.immediatelyAvailableMetadataOnly` and now has a watchdog: if
   the coordination has not started within 15 s (another process holding a write, a provider not answering), the
-  coordinator is cancelled and the walk ends incomplete, so the scan keeps what it had. The Dart side also times a walk
-  page out after 2 minutes (`StorageException('timeout')`). The scanner never opens a not-downloaded entry
-  (`openHandle` refuses it by construction), nor a cover file that is not downloaded.
+  coordinator is cancelled and the walk ends incomplete, so the scan keeps what it had. Each walk lists its pages on its
+  own serial queue, not the plugin's: a stuck enumerator holds up only its own walk, never `listRoots`, `removeRoot`,
+  `requestDownload` or another root's walk. The Dart side gives up on `startWalk` and on each walk page after 2 minutes
+  and on `listRoots` after 30 s (`StorageException('timeout')`; the scan then keeps what it had). Those are the limits:
+  a `listRoots` stuck in the system (a bookmark resolving against a gone drive) still holds the plugin queue until the
+  system answers, but no caller waits on it past 30 s. The scanner never opens a not-downloaded entry (`openHandle`
+  refuses it by construction), nor a cover file that is not downloaded.
 - **Listing.** A new not-downloaded file is listed by its file name (the device's untagged fallback), greyed
   `Not downloaded`. A file read before and then evicted keeps its tags, size and audio fingerprint, so it is still
   listed by its title and its ratings and play counts are still found; eviction is not a move. While it stays away a
   rescan does not touch it; once it is local the next scan reads it, whatever its size and time say.
+- **Art.** A not-downloaded track offers no embedded-art source on its own file (the row keeps where its picture is,
+  so the source and the cache key come back with the file); its folder's cover file is still offered. A walk that sees
+  the cover file itself not downloaded clears it from the folder's tracks, even when the walk is incomplete. And on iOS
+  the art cache's opener reads the source's download state first and refuses anything not on the phone, so a picture
+  is never the reason iOS fetches a file, even before a scan has seen an eviction.
 - **The Download action** (`requestDownload` calls `FileManager.startDownloadingUbiquitousItem(at:)` for a file under a
   held root, and nothing else). Then `downloadStates` is polled every 2 s for the files asked for only, from metadata
   (`downloaded`, `notDownloaded`, `downloading`, `failed` from `ubiquitousItemDownloadingError`, `missing`), for at most
-  10 minutes, while the app is in front. When a file is `downloaded` the ordinary incremental scan runs and picks it up
-  with its tags and art.
+  10 minutes, while the app is in front. When a file is `downloaded` the ordinary incremental scan runs, 2.5 s after
+  the last file arrived (songs tapped one after another share one walk), and picks it up with its tags and art. If
+  that scan still lists a file as not downloaded (its metadata lagging the state read), the row stays `Downloading` and
+  it is scanned once more; then the library's word stands. A downloading error the file already had before the
+  request is not reported as `failed` (iOS keeps the last error on an item until a new attempt replaces it): the plugin
+  notes it at the request and reports only a different one.
 - **Why a poll, not `NSMetadataQuery`.** A metadata query sees only the app's own ubiquity container, which needs the
   iCloud entitlement and a container the app does not have; it cannot watch a folder the user picked in iCloud Drive. An
   `NSFilePresenter` per file would work but adds native state and lifecycle for the same result. Rescanning only on the
@@ -199,7 +212,10 @@ download the file. Built as follows.
 - **Tests.** Unit: the scanner with walks that report files away and back; the state-to-step mapping and the controller
   with a fake platform; the row and the action in the shell. iOS simulator (`integration_test/folder_access_test.dart`):
   a real placeholder file in a bookmarked folder is walked, stated and scanned without being read, and a download
-  request for it is refused or ignored without touching it. A real evicted iCloud file, the status key and the dataless
+  request for it is refused or ignored without touching it. Also: a not-downloaded song's art has no source on its own
+  file; a cover file evicted later is cleared after an incomplete walk; the iOS art opener refuses every state but
+  `downloaded`; songs arriving together share a scan; the retry; a reload keeps the bar on the same song. A real
+  evicted iCloud file, the status key and the dataless
   flag cannot be made on the simulator (no iCloud account; the flag is set only by the system): that is the owner's
   device check (PROGRESS, phase 3).
 

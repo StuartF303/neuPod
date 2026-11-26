@@ -224,13 +224,22 @@ public class NeupodStoragePlugin: NSObject, FlutterPlugin, NeupodStorageApi, UID
 
   func nextWalkBatch(walkId: String, maxEntries: Int64, completion: @escaping (Result<WalkBatch, Error>) -> Void) {
     let limit = max(1, Int(maxEntries))
-    onQueue(completion) {
+    // The walk is looked up on `queue`, but its page is listed on the walk's
+    // own queue: an enumerator stuck in a provider then holds up only its
+    // own walk, never `listRoots`, `removeRoot`, `requestDownload` or
+    // another root's walk.
+    queue.async {
       guard let walk = self.walks[walkId] else {
-        throw PigeonError(code: "no-walk", message: "unknown, cancelled or finished walk \(walkId)", details: nil)
+        let error = PigeonError(
+          code: "no-walk", message: "unknown, cancelled or finished walk \(walkId)", details: nil)
+        DispatchQueue.main.async { completion(.failure(error)) }
+        return
       }
-      let batch = walk.next(limit: limit)
-      if batch.done { self.walks.removeValue(forKey: walkId) }
-      return batch
+      walk.queue.async {
+        let batch = walk.next(limit: limit)
+        if batch.done { self.queue.async { self.walks.removeValue(forKey: walkId) } }
+        DispatchQueue.main.async { completion(.success(batch)) }
+      }
     }
   }
 
@@ -247,11 +256,20 @@ public class NeupodStoragePlugin: NSObject, FlutterPlugin, NeupodStorageApi, UID
   /// is in iCloud.
   func requestDownload(uri: String, completion: @escaping (Result<Void, Error>) -> Void) {
     onQueue(completion) {
-      guard let url = URL(string: uri), url.isFileURL, self.isUnderRoot(url) else {
+      guard let given = URL(string: uri), given.isFileURL else {
         throw PigeonError(code: "not-in-root", message: "not a file of a library folder", details: nil)
       }
+      // Symlinks resolved on the whole URL, so a link inside a library
+      // folder that points outside it is not under the root.
+      let url = given.standardizedFileURL.resolvingSymlinksInPath()
+      guard self.isUnderRoot(url) else {
+        throw PigeonError(code: "not-in-root", message: "not a file of a library folder", details: nil)
+      }
+      let real = ICloudItem.realURL(url)
+      // An error left from an earlier attempt is not this request's failure.
+      ICloudItem.noteStaleError(for: real)
       do {
-        try FileManager.default.startDownloadingUbiquitousItem(at: ICloudItem.realURL(url))
+        try FileManager.default.startDownloadingUbiquitousItem(at: real)
       } catch {
         throw PigeonError(code: "download-failed", message: error.localizedDescription, details: nil)
       }
@@ -393,6 +411,36 @@ enum ICloudItem {
     return url.deletingLastPathComponent().appendingPathComponent(real)
   }
 
+  private static let staleLock = NSLock()
+  /// For each file asked for, the downloading error it had just before the
+  /// request (by path). The same error read back afterwards is old news:
+  /// iOS keeps the last error on the item until a new attempt replaces it.
+  private static var staleErrors: [String: String] = [:]
+
+  private static func currentError(_ real: URL) -> NSError? {
+    var u = real
+    u.removeAllCachedResourceValues()
+    return (try? u.resourceValues(forKeys: [.ubiquitousItemDownloadingErrorKey]))?
+      .ubiquitousItemDownloadingError as NSError?
+  }
+
+  private static func describe(_ e: NSError) -> String { "\(e.domain) \(e.code) \(e.userInfo.description)" }
+
+  static func noteStaleError(for real: URL) {
+    let old = currentError(real).map(describe)
+    staleLock.lock()
+    staleErrors[real.path] = old
+    staleLock.unlock()
+  }
+
+  /// Whether [error] on [real] is a new one, not the one it had before the
+  /// request.
+  private static func isFresh(_ error: NSError, for real: URL) -> Bool {
+    staleLock.lock()
+    defer { staleLock.unlock() }
+    return staleErrors[real.path] != describe(error)
+  }
+
   static func placeholderURL(_ real: URL) -> URL {
     real.deletingLastPathComponent().appendingPathComponent("." + real.lastPathComponent + placeholderSuffix)
   }
@@ -416,7 +464,7 @@ enum ICloudItem {
       .ubiquitousItemDownloadingStatusKey, .ubiquitousItemIsDownloadingKey, .ubiquitousItemDownloadingErrorKey,
     ])
     if v?.ubiquitousItemIsDownloading == true { return .downloading }
-    if v?.ubiquitousItemDownloadingError != nil { return .failed }
+    if let error = v?.ubiquitousItemDownloadingError as NSError?, isFresh(error, for: real) { return .failed }
     if placeholder || v?.ubiquitousItemDownloadingStatus == .notDownloaded || isDataless(real.path) {
       return .notDownloaded
     }
@@ -426,6 +474,9 @@ enum ICloudItem {
 
 /// A pull-based recursive listing of one root. Used only on the plugin's queue.
 final class Walk {
+  /// Pages of this walk are listed here, one at a time, off the plugin's
+  /// queue (see `nextWalkBatch`).
+  let queue = DispatchQueue(label: "net.stuartfraser.neupod_storage.walk")
   private static let keys: [URLResourceKey] = [
     .isDirectoryKey, .fileSizeKey, .contentModificationDateKey, .ubiquitousItemDownloadingStatusKey,
   ]

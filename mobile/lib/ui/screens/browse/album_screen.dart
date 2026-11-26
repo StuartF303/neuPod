@@ -94,6 +94,7 @@ class AlbumScreen extends ConsumerWidget {
             disabledReason: songRowReason(song, downloading),
             greyedAction: song.downloadable ? downloadActionText : null,
             onActivate: () => playFrom(ref, songs, song),
+            id: song.id,
           ),
       ],
     ];

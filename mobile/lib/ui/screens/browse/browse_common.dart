@@ -114,6 +114,7 @@ class LibraryLoader<T> extends ConsumerStatefulWidget {
 
 class _LibraryLoaderState<T> extends ConsumerState<LibraryLoader<T>> {
   T? _data;
+  bool _loaded = false;
 
   @override
   void initState() {
@@ -125,6 +126,7 @@ class _LibraryLoaderState<T> extends ConsumerState<LibraryLoader<T>> {
     try {
       final library = await ref.read(libraryViewProvider.future);
       final data = await widget.load(library);
+      _loaded = true;
       if (mounted) setState(() => _data = data);
     } on Object {
       if (!mounted) return;
@@ -143,9 +145,9 @@ class _LibraryLoaderState<T> extends ConsumerState<LibraryLoader<T>> {
   Widget build(BuildContext context) {
     // A finished scan rebuilds the library view: load again, so an open list
     // shows what the scan found (a song downloaded from iCloud now playable).
+    // (Not the first load's own loading-to-data step: initState covers it.)
     ref.listen(libraryViewProvider, (was, now) {
-      final view = now.value;
-      if (view != null && was?.value != null && !identical(view, was!.value)) {
+      if (_loaded && was?.isLoading == true && !now.isLoading && now.hasValue) {
         unawaited(_load());
       }
     });
@@ -170,6 +172,7 @@ NeupodListItem songItem(
     disabledReason: songRowReason(song, downloading),
     greyedAction: song.downloadable ? downloadActionText : null,
     onActivate: onActivate,
+    id: song.id,
   );
 }
 

@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart' show PlatformException;
+import 'package:neupod/app/library_view_providers.dart';
 import 'package:neupod/app/providers.dart';
 import 'package:neupod/domain/library_view/library_view.dart';
 import 'package:neupod/domain/wheel/feedback_ports.dart';
@@ -431,6 +432,41 @@ void main() {
       await tester.pump(const Duration(seconds: 3));
       await settle(tester);
       expect(_rowText('Not downloaded'), findsOneWidget);
+    });
+
+    testWidgets('a finished scan reloads the list, and the bar stays on the '
+        'same song when rows arrive above it', (tester) async {
+      Song s(String id) => Song(
+        id: id,
+        title: 'Song $id',
+        artist: 'A',
+        album: 'B',
+        albumId: 'b',
+        uri: 'file:///m/$id.flac',
+      );
+      var songs = [s('c'), s('d'), s('e')];
+      final rig = await pumpShell(
+        tester,
+        home: (_) => SongListScreen(title: 'Songs', load: (_) async => songs),
+        asyncLibrary: true,
+      );
+      rig.step(2);
+      await settle(tester);
+      expect(_wheelValue(rig), startsWith('Song e, '));
+
+      songs = [s('a'), s('b'), ...songs];
+      rig.container.invalidate(libraryViewProvider);
+      await settle(tester);
+      expect(_wheelValue(rig), startsWith('Song e, '));
+      // Reloaded: the new rows are there, above.
+      rig.step(-4);
+      await settle(tester);
+      expect(_wheelValue(rig), startsWith('Song a, '));
+      rig.step(4);
+      await settle(tester);
+      // Select plays the song under the bar.
+      await _pressCentre(tester, rig);
+      expect(rig.player.state.queue[rig.player.state.index!].id, 'e');
     });
 
     testWidgets('a download iOS refuses gets the centred panel', (

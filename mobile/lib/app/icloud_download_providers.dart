@@ -8,7 +8,11 @@
 /// for the file's download state every [ICloudDownloads.pollEvery] (a
 /// metadata read, never the file), shows the row as `Downloading` meanwhile,
 /// and when the file is on the phone runs the library scan, which reads only
-/// new or changed files, so the song comes back with its tags and art.
+/// new or changed files, so the song comes back with its tags and art. The
+/// scan waits until no file has arrived for [ICloudDownloads.rescanAfter],
+/// so songs tapped one after another share one walk. If the scan still sees
+/// a file as not downloaded (its metadata lagging the state read), it is
+/// kept `Downloading` and scanned once more.
 ///
 /// Why a poll and not `NSMetadataQuery`: a metadata query sees only the
 /// app's own iCloud container (it needs the iCloud entitlement and a
@@ -26,6 +30,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/app/library_scan_providers.dart';
 import 'package:neupod/app/providers.dart';
+import 'package:neupod/data/db/library_database.dart';
 import 'package:neupod_storage/neupod_storage.dart';
 
 /// The URIs of songs the user has asked iOS to download whose new state the
@@ -33,6 +38,13 @@ import 'package:neupod_storage/neupod_storage.dart';
 final icloudDownloadsProvider = NotifierProvider<ICloudDownloads, Set<String>>(
   ICloudDownloads.new,
 );
+
+/// Which of the given URIs the library still lists as not downloaded (read
+/// after a scan; tests stand in).
+final stillNotDownloadedProvider =
+    Provider<Future<Set<String>> Function(List<String> uris)>(
+      (ref) => ref.watch(libraryDatabaseProvider).urisNotDownloaded,
+    );
 
 /// What the controller does with a file in each [DownloadState].
 enum DownloadStep {
@@ -61,10 +73,17 @@ class ICloudDownloads extends Notifier<Set<String>> {
   /// How long a file is shown `Downloading` without arriving.
   static const giveUpAfter = Duration(minutes: 10);
 
+  /// How long after the last arrival the scan starts.
+  static const rescanAfter = Duration(milliseconds: 2500);
+
   final _asked = <String, DateTime>{};
 
   /// Arrived, waiting for a scan to start.
   final _arrived = <String>{};
+  DateTime? _lastArrival;
+
+  /// Scanned once already but still not downloaded in the library.
+  final _retried = <String>{};
 
   /// Arrived and covered by the scan running now: dropped when it ends.
   final _inScan = <String>{};
@@ -80,8 +99,9 @@ class ICloudDownloads extends Notifier<Set<String>> {
   Set<String> build() {
     ref.listen(libraryScanProvider.select((s) => s?.done ?? false), (was, now) {
       if (was == false && now && _inScan.isNotEmpty) {
-        _remove(_inScan.toList());
+        final scanned = _inScan.toList();
         _inScan.clear();
+        unawaited(_afterScan(scanned));
       }
     });
     ref.onDispose(() => _timer?.cancel());
@@ -123,7 +143,7 @@ class ICloudDownloads extends Notifier<Set<String>> {
           switch (downloadStep(states[i])) {
             case DownloadStep.arrived:
               _asked.remove(uri);
-              _arrived.add(uri);
+              _arrive(uri);
             case DownloadStep.drop:
               _asked.remove(uri);
               drop.add(uri);
@@ -137,7 +157,10 @@ class ICloudDownloads extends Notifier<Set<String>> {
         _remove(drop);
       }
       final scan = ref.read(libraryScanProvider.notifier);
-      if (_arrived.isNotEmpty && !scan.running) {
+      final settled =
+          _lastArrival != null &&
+          now().difference(_lastArrival!) >= rescanAfter;
+      if (_arrived.isNotEmpty && settled && !scan.running) {
         _inScan.addAll(_arrived);
         _arrived.clear();
         await scan.start();
@@ -148,6 +171,37 @@ class ICloudDownloads extends Notifier<Set<String>> {
       }
     } finally {
       _polling = false;
+    }
+  }
+
+  void _arrive(String uri) {
+    _arrived.add(uri);
+    _lastArrival = now();
+  }
+
+  /// After the scan that covered [scanned]: the rows it now lists as
+  /// playable are done; one still not downloaded is scanned once more, then
+  /// left to the library's word.
+  Future<void> _afterScan(List<String> scanned) async {
+    Set<String> away;
+    try {
+      away = await ref.read(stillNotDownloadedProvider)(scanned);
+    } on Object {
+      away = {};
+    }
+    if (!ref.mounted) return;
+    final done = <String>[];
+    for (final uri in scanned) {
+      if (away.contains(uri) && _retried.add(uri)) {
+        _arrive(uri);
+      } else {
+        _retried.remove(uri);
+        done.add(uri);
+      }
+    }
+    _remove(done);
+    if (_arrived.isNotEmpty) {
+      _timer ??= Timer.periodic(pollEvery, (_) => unawaited(poll()));
     }
   }
 
