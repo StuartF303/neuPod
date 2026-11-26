@@ -29,25 +29,26 @@ library's "untagged" ALAC file: it was the fixture byte for byte, and the fixtur
 folder, scans it with the app's `LocalLibraryScanner` (through a dart:io storage root, `test/support/host_library.dart`)
 into a database file opened as the app opens it (SQLite in a background isolate), and deletes it all afterwards.
 
-- **Every PR** runs it at 2,000 tracks inside `flutter test`, against the limits below. At that size the limits are
-  loose, so they catch a regression of several times, not a slow percent.
+- **Every PR** runs it at 2,000 tracks inside `flutter test`, against tight limits of its own (the last column below):
+  about 5 to 10 times what the slower of the M1 host and the CI runner takes, so a regression of that size fails and
+  CI's own variation does not.
 - **The full run** is `NEUPOD_SCALE_TRACKS=20000 flutter test test/scale` from `mobile/`, or the app workflow's
   `scale_tracks` input (`gh workflow run app.yml --ref <branch> -f scale_tracks=20000`), which uploads the numbers as
   the `scale-report` artifact. `NEUPOD_SCALE_REPORT=<file>` writes them as JSON locally.
 
 ### Targets and limits
 
-| What | Target | Source | Limit in the test (host) |
-| --- | --- | --- | --- |
-| First scan | 5,000 FLAC files in 5 minutes on a mid-range phone (60 ms a file) | spec | 60 ms × tracks |
-| Rescan, nothing changed | under 10 s at 20,000 | spec | 10 s |
-| Rescan, 100 changes (60 retagged, 20 removed, 20 added) | under 16 s at 20,000 (the unchanged rescan plus 100 files at the first scan's rate) | lead call | 16 s |
-| First list after a launch or a scan (the table read and folded) | under 1 s at 20,000 | lead call | 1 s |
-| Any list once loaded: Artists, Albums, Cover Flow, Songs, an artist's albums, an album's tracks | under 100 ms at 20,000 | lead call | 100 ms |
-| A Search keystroke (the prefix match over every name) | under 50 ms at 20,000 | lead call | 50 ms |
-| Database | under 2 KB a track (40 MB at 20,000) | lead call | 2 KB × tracks |
-| Memory | the library view's lists under 50 MB at 20,000 | lead call | reported, not enforced (RSS is noisy across runners) |
-| Scroll smoothness | no dropped frames scrolling Songs at 20,000 | spec (test table) | the device check: the host cannot measure frames |
+| What | Target | Source | Limit at 20,000 (the full run) | Limit at 2,000 (every PR) |
+| --- | --- | --- | --- | --- |
+| First scan | 5,000 FLAC files in 5 minutes on a mid-range phone (60 ms a file) | spec | 60 ms × tracks | 15 s (CI 2.7 s) |
+| Rescan, nothing changed | under 10 s at 20,000 | spec | 10 s | 2 s (CI 0.16 s) |
+| Rescan, 100 changes (60 retagged, 20 removed, 20 added) | under 16 s at 20,000 (the unchanged rescan plus 100 files at the first scan's rate) | lead call | 16 s | 3 s |
+| First list after a launch or a scan (the table read and folded) | under 1 s at 20,000 | lead call | 1 s | 500 ms (CI 124 ms) |
+| Any list once loaded: Artists, Albums, Cover Flow, Songs, an artist's albums, an album's tracks | under 100 ms at 20,000 | lead call | 100 ms | 20 ms |
+| A Search keystroke (the prefix match over every name) | under 50 ms at 20,000 | lead call | 50 ms | 20 ms |
+| Database | under 2 KB a track (40 MB at 20,000) | lead call | 2 KB × tracks | 2 KB × tracks |
+| Memory | the library view's lists under 50 MB at 20,000 | lead call | reported, not enforced (RSS is noisy across runners) | reported |
+| Scroll smoothness | no dropped frames scrolling Songs at 20,000 | spec (test table) | the device check: the host cannot measure frames | |
 
 ### Numbers, host (2026-11-26)
 
