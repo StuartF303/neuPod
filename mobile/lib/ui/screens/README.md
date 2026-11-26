@@ -64,7 +64,7 @@ Compilations, and a small Settings). Now Playing, the panel's content and Search
   the phone; owner decision 7): Select or a tap asks iOS to download it, the reason reads `Downloading` until the scan
   finds it on the phone (`app/icloud_download_providers.dart`), and then the row is an ordinary song. The screen reader
   hears the row as a button with the hint `Download`. A download iOS refuses gets the centred panel `Can't download`.
-  Search results take the action too, but keep `Not downloaded` until the next scan.
+  Search results take the action and read `Downloading` too; their index is rebuilt after every finished scan.
 - **Cover Flow**: the Albums list's albums in its order (owner decision 14); Classic angled with reflections, Modern
   flat; the wheel moves a cover per step, Select or a tap on the centre cover opens it, a drag moves the covers. Under
   the title, in both styles, the device's caption `Artist · Year · n songs` (`flow_texts` in `app/ui/ui_library.c`).

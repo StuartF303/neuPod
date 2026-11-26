@@ -211,6 +211,17 @@ download the file. Built as follows.
 - **Data safety.** `startDownloadingUbiquitousItem` is an OS action on the user's own file: iOS fetches its content
   unchanged. The read-only guard now forbids the iCloud calls that change a file's place or copy (`setUbiquitous`,
   `evictUbiquitousItem`) and allows the one download call, with its reason.
+- **A queued song evicted later** (lead call, 2026-11-26, under decisions 7 and 19). A song can be evicted after it was
+  queued. neupod_audio's engine checks the file's download state from metadata (`LocalFile.swift`, the same three
+  signs as the walk) before it opens the current item or pre-schedules the next, and fails one that is not on the
+  phone as `Not downloaded`; the player skips it as it skips an unplayable song, so AVFoundation never fetches it. The
+  lock screen reads embedded art only from a file on the phone. neupod_audio's privacy manifest declares the file
+  timestamp API for its `lstat`. The simulator test queues a placeholder-only song before a real one: the real one
+  plays.
+- **Search** rebuilds its index after every finished scan (it watches the library view), and its rows read
+  `Downloading` once asked for.
+- **Limits.** `requestDownload` gives up after 30 s on the Dart side. The notes of a file's earlier downloading error
+  are dropped once its request settles (downloaded, failed or gone) and capped at 256 files.
 - **Tests.** Unit: the scanner with walks that report files away and back; the state-to-step mapping and the controller
   with a fake platform; the row and the action in the shell. iOS simulator (`integration_test/folder_access_test.dart`):
   a real placeholder file in a bookmarked folder is walked, stated and scanned without being read, and a download

@@ -29,6 +29,7 @@ class FakeApi extends NeupodStorageApi {
   /// absent).
   final states = <String, DownloadState>{};
   PlatformException? failDownload;
+  bool stallDownload = false;
 
   @override
   Future<String> startWalk(String rootId) async {
@@ -65,6 +66,7 @@ class FakeApi extends NeupodStorageApi {
   @override
   Future<void> requestDownload(String uri) async {
     calls.add('download $uri');
+    if (stallDownload) return Completer<void>().future;
     if (failDownload != null) throw failDownload!;
   }
 
@@ -312,6 +314,17 @@ void main() {
       ]);
       FdReaderHandle(openFdOnHost(file.path)).discard();
     });
+  });
+
+  test('a download request that never comes back ends with timeout', () async {
+    final api = FakeApi(const [])..stallDownload = true;
+    await expectLater(
+      NeupodStorage(api: api).requestDownload(
+        'file:///m/a.flac',
+        timeout: const Duration(milliseconds: 20),
+      ),
+      throwsA(isA<StorageException>().having((e) => e.code, 'code', 'timeout')),
+    );
   });
 
   test('roots that never come back end with timeout', () async {

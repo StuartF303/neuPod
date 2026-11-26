@@ -22,7 +22,7 @@ let package = Package(
                 .product(name: "FlutterFramework", package: "FlutterFramework")
             ],
             resources: [
-                // No required-reason APIs, no tracking, no data collected.
+                // File timestamp API (lstat, LocalFile.swift); no tracking, no data collected.
                 .process("PrivacyInfo.xcprivacy")
             ],
             linkerSettings: [

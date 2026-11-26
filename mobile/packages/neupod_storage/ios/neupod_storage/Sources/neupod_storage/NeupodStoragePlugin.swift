@@ -421,6 +421,8 @@ enum ICloudItem {
   /// request (by path). The same error read back afterwards is old news:
   /// iOS keeps the last error on the item until a new attempt replaces it.
   private static var staleErrors: [String: String] = [:]
+  /// The paths in [staleErrors], oldest first.
+  private static var staleOrder: [String] = []
 
   private static func currentError(_ real: URL) -> NSError? {
     var u = real
@@ -431,11 +433,27 @@ enum ICloudItem {
 
   private static func describe(_ e: NSError) -> String { "\(e.domain) \(e.code) \(e.userInfo.description)" }
 
+  /// Most files remembered at once; past it the oldest notes are dropped
+  /// (a dropped note can only make an old error read as `failed`).
+  static let staleErrorLimit = 256
+
   static func noteStaleError(for real: URL) {
     let old = currentError(real).map(describe)
     staleLock.lock()
+    defer { staleLock.unlock() }
     staleErrors[real.path] = old
-    staleLock.unlock()
+    if old != nil {
+      staleOrder.removeAll { $0 == real.path }
+      staleOrder.append(real.path)
+      while staleOrder.count > staleErrorLimit { staleErrors.removeValue(forKey: staleOrder.removeFirst()) }
+    }
+  }
+
+  /// A request that has settled (downloaded, failed or gone) needs no note.
+  private static func forgetStaleError(for real: URL) {
+    staleLock.lock()
+    defer { staleLock.unlock() }
+    if staleErrors.removeValue(forKey: real.path) != nil { staleOrder.removeAll { $0 == real.path } }
   }
 
   /// Whether [error] on [real] is a new one, not the one it had before the
@@ -460,6 +478,15 @@ enum ICloudItem {
   /// stands. Metadata only.
   static func downloadState(_ url: URL) -> DownloadState {
     let real = realURL(url)
+    let state = stateOf(real)
+    switch state {
+    case .downloaded, .failed, .missing: forgetStaleError(for: real)
+    case .notDownloaded, .downloading: break
+    }
+    return state
+  }
+
+  private static func stateOf(_ real: URL) -> DownloadState {
     let fm = FileManager.default
     let placeholder = fm.fileExists(atPath: placeholderURL(real).path)
     guard placeholder || fm.fileExists(atPath: real.path) else { return .missing }
@@ -477,7 +504,8 @@ enum ICloudItem {
   }
 }
 
-/// A pull-based recursive listing of one root. Used only on the plugin's queue.
+/// A pull-based recursive listing of one root. Created and looked up on the
+/// plugin's queue; its pages are listed on its own `queue`, one at a time.
 final class Walk {
   /// Pages of this walk are listed here, one at a time, off the plugin's
   /// queue (see `nextWalkBatch`).

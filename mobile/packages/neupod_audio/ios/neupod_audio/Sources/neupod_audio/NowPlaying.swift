@@ -132,7 +132,8 @@ final class NowPlaying {
     artwork = nil
     let id = item.id
     let artURL = item.artUri.flatMap(URL.init(string:)).flatMap { $0.isFileURL ? $0 : nil }
-    let fileURL = URL(string: item.uri).flatMap { $0.isFileURL ? $0 : nil }
+    // Embedded art only from a file on the phone (owner decision 7).
+    let fileURL = URL(string: item.uri).flatMap { $0.isFileURL && LocalFile.isOnDevice($0) ? $0 : nil }
     // Decoding the image (and reading the file's metadata) stays off the
     // main thread; the result is applied only if the item is still current.
     Task.detached(priority: .utility) { [weak self] in

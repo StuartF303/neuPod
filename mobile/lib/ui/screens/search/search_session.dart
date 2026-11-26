@@ -17,6 +17,7 @@
 /// | Play/Pause | to the results | (the screen plays or pauses) |
 library;
 
+import 'package:neupod/domain/library_view/reason_words.dart';
 import 'package:neupod/domain/text_entry/wheel_text_entry.dart' as entry;
 
 /// What a hit is.
@@ -33,6 +34,7 @@ class SearchHit {
     this.year,
     this.reason,
     this.downloadable = false,
+    this.uri,
   });
 
   /// Artist, album or song.
@@ -58,6 +60,23 @@ class SearchHit {
   /// it asks iOS to download it.
   final bool downloadable;
 
+  /// For a song, the file the player opens (to match a download the user
+  /// asked for); null otherwise.
+  final String? uri;
+
+  /// The reason on the row, given the URIs the user has asked iOS to
+  /// download ([downloading]): `Downloading` for this song once asked for,
+  /// its [reason] otherwise (`songRowReason` for songs in lists).
+  String? reasonWith(Set<String> downloading) =>
+      downloadable && uri != null && downloading.contains(uri)
+      ? downloadingText
+      : reason;
+
+  /// [label], with [reasonWith] for a song.
+  String labelWith(Set<String> downloading) => kind == SearchKind.song
+      ? reasonWith(downloading) ?? detail ?? 'Song'
+      : label;
+
   /// What it is, at the right of a live result in Small: `Artist`,
   /// `Album · 1991`, or a song's artist.
   String get label => switch (kind) {
@@ -75,11 +94,12 @@ class SearchHit {
       other.detail == detail &&
       other.year == year &&
       other.reason == reason &&
-      other.downloadable == downloadable;
+      other.downloadable == downloadable &&
+      other.uri == uri;
 
   @override
   int get hashCode =>
-      Object.hash(kind, id, title, detail, year, reason, downloadable);
+      Object.hash(kind, id, title, detail, year, reason, downloadable, uri);
 }
 
 /// The matches for a query, grouped as the results list shows them. Each
