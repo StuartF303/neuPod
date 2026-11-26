@@ -150,6 +150,12 @@ class WheelInput {
   /// The pointer that owns the wheel, or null.
   int? get owner => _pointer;
 
+  /// How far the owning touch has turned the wheel since touch-down, in
+  /// positions (3.75 degrees each, clockwise positive, the fraction kept);
+  /// 0 until the touch is a turn. What [WheelStep]s are counted from.
+  double get turnedPositions =>
+      _kind == _Kind.turning ? _travel / WheelZones.degreesPerPosition : 0;
+
   /// What to draw.
   WheelVisual get visual => switch (_kind) {
     _Kind.none || _Kind.dead => const WheelIdle(),

@@ -37,6 +37,7 @@ class Fixtures {
   late final Uint8List flac24 = _read('audio/flac24_96k_st.flac');
   late final Uint8List mp3 = _read('audio/mp3_44k_st.mp3');
   late final Uint8List alac = _read('audio/alac16_44k_st.m4a');
+  late final Uint8List alacMono = _read('audio/alac16_48k_mono.m4a');
   late final Uint8List folderJpg = _read('art/q420_600x600.jpg');
   late final Uint8List coverJpg = _read('art/q444_128x128.jpg');
   late final Uint8List smallJpg = _read('art/q420_40x30.jpg');
@@ -69,6 +70,7 @@ enum Source {
   flac24,
   mp3,
   alac,
+  alacMono,
 
   /// An empty file.
   zeroBytes,
@@ -837,7 +839,8 @@ Uint8List render(GenFile f, Fixtures fx) {
     ),
     Source.flac24 => flacWithTags(fx.flac24, tags: f.tags, pictureJpeg: art),
     Source.mp3 => mp3WithTags(fx.mp3, tags: f.tags, version: f.id3Version),
-    Source.alac => Uint8List.fromList(fx.alac),
+    Source.alac => m4aWithTags(fx.alac, tags: f.tags),
+    Source.alacMono => m4aWithTags(fx.alacMono, tags: f.tags),
     Source.zeroBytes => Uint8List(0),
     Source.garbage => _garbage(4096, _fnv1a(f.path)),
     Source.truncatedFlac => Uint8List.fromList(fx.flac16.sublist(0, 20)),
@@ -952,53 +955,95 @@ const _words = [
   '#',
   'Ünder',
   'Fjörd',
+  'Москва',
+  '東京',
 ];
 
-/// [n] tracks: artists of 10 albums of 10 tracks, alternating FLAC and MP3,
-/// tags on all but every 50th track (untagged: the device's fallback, owner decision 15), every 9th artist (from the second) a
-/// ", The" folder, every 7th album in two discs.
+/// Tracks per album, in turn (13.3 on average, as a real library's).
+const _albumLengths = [10, 12, 14, 9, 16, 11, 13, 18, 12, 8, 15, 22];
+
+/// Albums per artist, in turn (2.5 on average).
+const _artistAlbums = [1, 2, 3, 4, 2, 1, 3, 5, 2, 2];
+
+/// The scale library of [n] tracks, shaped like a real one: about 13 tracks
+/// an album and 2.5 albums an artist (so 20,000 tracks are about 1,500
+/// albums by about 600 artists), each album one format (FLAC, MP3 and M4A in
+/// turn), with:
+///
+/// - every 15th album a compilation: by album artist "Various Artists" or,
+///   in turn, by the compilation flag alone, its tracks by other artists;
+/// - every 8th other album in two discs (disc tags, the album tag the same,
+///   the discs in `(Disc n)` folders: one album with two discs);
+/// - every 9th artist a "The" name, in a ", The" folder every other time;
+/// - accented, Nordic, Cyrillic and Japanese names, digits and symbols;
+/// - tags on all but every 50th track (untagged: the device's fallback,
+///   owner decision 15).
 List<GenFile> scaleCases(int n) {
   final out = <GenFile>[];
-  for (var i = 0; i < n; i++) {
-    final a = i ~/ 100; // artist index
-    final al = (i ~/ 10) % 10; // album index within the artist
-    final t = i % 10 + 1;
-    final artist = _scaleArtist(a);
-    final folderArtist = a % 9 == 1 ? '${artist.substring(4)}, The' : artist;
-    final year = 1960 + (a * 7 + al * 3) % 66;
-    final twoDiscs = (a * 10 + al) % 7 == 3;
-    final disc = twoDiscs ? (t <= 5 ? 1 : 2) : null;
-    final trackNo = twoDiscs ? (t <= 5 ? t : t - 5) : t;
-    final album =
-        '${_words[(a + al) % _words.length]} '
-        '${_words[(a * 3 + al * 5 + 1) % _words.length]} ${al + 1}';
-    final albumFolder = '$year $album${disc == null ? '' : ' (Disc $disc)'}';
-    final title =
-        '${_words[(i * 7) % _words.length]} '
-        '${_words[(i * 11 + 3) % _words.length]} $i';
-    final mp3 = i.isOdd;
-    final ext = mp3 ? 'mp3' : 'flac';
-    final tagged = i % 50 != 49;
-    final nn = trackNo.toString().padLeft(2, '0');
-    out.add(
-      GenFile(
-        '$folderArtist/$albumFolder/$nn $title.$ext',
-        mp3 ? Source.mp3 : Source.flacMono,
-        kase: 'scale',
-        tags: tagged
-            ? TagSet(
-                title: title,
-                artist: artist,
-                albumArtist: artist,
-                album: album,
-                track: '$trackNo',
-                disc: disc == null ? null : '$disc/2',
-                year: '$year',
-                genre: _words[a % _words.length],
-              )
-            : null,
-      ),
-    );
+  var album = 0; // album index
+  var artist = 0; // artist index
+  var ofArtist = 0; // albums of the current artist so far
+  var compilations = 0;
+  while (out.length < n) {
+    final length = _albumLengths[album % _albumLengths.length];
+    final comp = album % 15 == 14;
+    final twoDiscs = !comp && album % 8 == 3;
+    final aa = _scaleArtist(artist);
+    final folderArtist = artist % 9 == 1 && artist % 2 == 1
+        ? '${aa.substring(4)}, The'
+        : aa;
+    final year = 1958 + (album * 7) % 68;
+    final name =
+        '${_words[(album * 5 + 2) % _words.length]} '
+        '${_words[(album * 3 + artist) % _words.length]} ${album + 1}';
+    final ext = const ['flac', 'mp3', 'm4a'][album % 3];
+    final source = const [
+      Source.flacMono,
+      Source.mp3,
+      Source.alacMono,
+    ][album % 3];
+    final byVa = compilations.isEven;
+    for (var t = 1; t <= length && out.length < n; t++) {
+      final i = out.length;
+      final half = (length + 1) ~/ 2;
+      final disc = twoDiscs ? (t <= half ? 1 : 2) : null;
+      final trackNo = disc == 2 ? t - half : t;
+      final performer = comp ? _scaleArtist((album * 13 + t * 7) % 600) : aa;
+      final title =
+          '${_words[(i * 7) % _words.length]} '
+          '${_words[(i * 11 + 3) % _words.length]} $i';
+      final folder = comp
+          ? '${byVa ? _va : 'Compilations'}/$year $name'
+          : '$folderArtist/$year $name${disc == null ? '' : ' (Disc $disc)'}';
+      final nn = trackNo.toString().padLeft(2, '0');
+      out.add(
+        GenFile(
+          '$folder/$nn $title.$ext',
+          source,
+          kase: 'scale',
+          tags: i % 50 == 49
+              ? null
+              : TagSet(
+                  title: title,
+                  artist: performer,
+                  albumArtist: comp ? (byVa ? _va : null) : aa,
+                  album: name,
+                  track: '$trackNo',
+                  disc: disc == null ? null : '$disc/2',
+                  year: '$year',
+                  genre: _words[(comp ? album : artist) % _words.length],
+                  compilation: comp && !byVa,
+                ),
+        ),
+      );
+    }
+    album++;
+    if (comp) {
+      compilations++;
+    } else if (++ofArtist >= _artistAlbums[artist % _artistAlbums.length]) {
+      artist++;
+      ofArtist = 0;
+    }
   }
   return out;
 }

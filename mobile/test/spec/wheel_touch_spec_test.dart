@@ -31,14 +31,22 @@
 // the right and y down (screen coordinates), so clockwise on screen is an
 // increasing atan2(y, x). Every test uses R = 100.
 //
-// WIRING: set wiredWheelGeometry and wiredWheelTouch below, adapting the
-// app's types to the small ones declared here; the skip lifts by itself.
+// WIRING: wiredWheelGeometry and wiredWheelTouch below adapt the app's wheel
+// (lib/domain/wheel/wheel_input.dart) to the small types declared here.
+//
+// The app sets holds per screen, as the firmware does (Previous and Next
+// skip on every screen but Now Playing): the adapter gives the wheel
+// Now Playing's holds when [centreHolds] is true, and otherwise the scan
+// holds of Previous and Next alone, which is what this suite asserts.
 @Tags(['spec'])
 library;
 
 import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neupod/domain/wheel/firmware_constants.dart';
+import 'package:neupod/domain/wheel/wheel_events.dart' as app;
+import 'package:neupod/domain/wheel/wheel_input.dart' as app;
 
 enum WheelZone { centre, deadBand, ring, outside }
 
@@ -158,22 +166,90 @@ typedef WheelTouchFactory = WheelTouch Function({
   required bool centreHolds,
 });
 
-// WIRE: replace null with adapters over the app's wheel, for example
-//   final WheelGeometryFactory? wiredWheelGeometry = (r) => _Geo(r);
-//   final WheelTouchFactory? wiredWheelTouch =
-//       ({required radius, required centreHolds}) => _Touch(...);
-final WheelGeometryFactory? wiredWheelGeometry = null;
-final WheelTouchFactory? wiredWheelTouch = null;
+/// The app's hit testing, in units of R.
+final class _Geo implements WheelGeometry {
+  _Geo(this.radius);
+  final double radius;
+
+  @override
+  WheelZone zoneAt(double dx, double dy) => WheelZone.values.byName(
+    app.WheelInput.zoneOf(dx / radius, dy / radius).name,
+  );
+
+  @override
+  WheelButton sectorAt(double dx, double dy) => _button(
+    app.WheelInput.sectorOf(app.WheelInput.angleOf(dx / radius, dy / radius)),
+  );
+}
+
+WheelButton _button(app.WheelButton b) => WheelButton.values.byName(b.name);
+
+/// The app's press-or-turn machine. Its events map to this suite's:
+/// [app.WheelButtonUp] is the release half of a press or hold and has no
+/// counterpart here; [app.WheelStep]s (accelerated list steps) are left out
+/// and the turn is reported as the positions the app counts them from
+/// ([app.WheelInput.turnedPositions]), since the last report.
+final class _Touch implements WheelTouch {
+  _Touch(this.radius, {required bool centreHolds})
+    : _w = app.WheelInput(
+        holdMs: centreHolds
+            ? Map.of(app.WheelInput.nowPlayingHoldMs)
+            : {
+                app.WheelButton.previous: uiHoldMs,
+                app.WheelButton.next: uiHoldMs,
+              },
+      );
+
+  final double radius;
+  final app.WheelInput _w;
+  double _reported = 0;
+
+  List<WheelEvent> _map(List<app.WheelEvent> events) {
+    final out = <WheelEvent>[
+      for (final e in events)
+        ?switch (e) {
+          app.WheelButtonDown(:final button) => PressDown(_button(button)),
+          app.WheelButtonCancelled(:final button) => PressCancelled(
+            _button(button),
+          ),
+          app.WheelPress(:final button) => Pressed(_button(button)),
+          app.WheelHoldStart(:final button) => HoldStarted(_button(button)),
+          app.WheelHoldEnd(:final button) => HoldEnded(_button(button)),
+          app.WheelButtonUp() || app.WheelStep() => null,
+        },
+    ];
+    final turned = _w.turnedPositions;
+    if (_w.owner == null) {
+      _reported = 0;
+    } else if (turned != _reported) {
+      out.add(Turned(turned - _reported));
+      _reported = turned;
+    }
+    return out;
+  }
+
+  @override
+  List<WheelEvent> down(int pointer, double dx, double dy, int ms) =>
+      _map(_w.down(pointer, dx / radius, dy / radius, ms));
+
+  @override
+  List<WheelEvent> move(int pointer, double dx, double dy, int ms) =>
+      _map(_w.move(pointer, dx / radius, dy / radius, ms));
+
+  @override
+  List<WheelEvent> up(int pointer, int ms) => _map(_w.up(pointer, ms));
+
+  @override
+  List<WheelEvent> tick(int ms) => _map(_w.tick(ms));
+}
+
+final WheelGeometryFactory wiredWheelGeometry = _Geo.new;
+WheelTouch wiredWheelTouch({
+  required double radius,
+  required bool centreHolds,
+}) => _Touch(radius, centreHolds: centreHolds);
 
 const double _r = 100;
-
-final Object _skipGeometry = wiredWheelGeometry == null
-    ? 'awaiting implementation of the wheel hit zones (device view section 4)'
-    : false;
-final Object _skipTouch = wiredWheelTouch == null
-    ? 'awaiting implementation of the wheel press-or-turn (device view '
-          'sections 4 and 5)'
-    : false;
 
 /// A point at [radius] and [degrees] clockwise from straight up.
 (double, double) _at(double radius, double degrees) {
@@ -182,7 +258,7 @@ final Object _skipTouch = wiredWheelTouch == null
 }
 
 WheelTouch _touch({bool centreHolds = false}) =>
-    wiredWheelTouch!(radius: _r, centreHolds: centreHolds);
+    wiredWheelTouch(radius: _r, centreHolds: centreHolds);
 
 double _positions(Iterable<WheelEvent> events) =>
     events.whereType<Turned>().fold(0.0, (s, e) => s + e.positions);
@@ -220,8 +296,8 @@ List<WheelEvent> _sweep(
 }
 
 void main() {
-  group('wheel hit zones', skip: _skipGeometry, () {
-    WheelGeometry geo() => wiredWheelGeometry!(_r);
+  group('wheel hit zones', () {
+    WheelGeometry geo() => wiredWheelGeometry(_r);
 
     final zones = <(double, double, WheelZone)>[
       (0, 0, WheelZone.centre),
@@ -274,7 +350,7 @@ void main() {
     }
   });
 
-  group('wheel press or turn', skip: _skipTouch, () {
+  group('wheel press or turn', () {
     group('presses', () {
       for (final (deg, button) in [
         (0.0, WheelButton.menu),

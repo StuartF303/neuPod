@@ -17,12 +17,14 @@
 // - On-phone sizes at 393 pt: Body 15.0, 17.5 and 21.0 pt; a one-line row 32,
 //   38 and 44 pt. Accessibility sizes beyond the largest tier are capped.
 //
-// WIRING: set the wired* values below to adapters over the app's code; each
-// group's skip lifts by itself.
+// WIRING: the wired* values below are adapters over the app's code
+// (lib/ui/style/text_tier.dart, lib/ui/device/device_geometry.dart).
 @Tags(['spec'])
 library;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neupod/ui/device/device_geometry.dart';
+import 'package:neupod/ui/style/text_tier.dart' as app;
 
 enum TextTier { standard, large, largest }
 
@@ -62,175 +64,191 @@ typedef MetricsOf = TierMetrics Function(TextTier tier);
 /// The screen's scale s for a phone [width] in points.
 typedef ScreenScale = double Function(double width);
 
-// WIRE: replace null with adapters over the app's code.
-final IosTier? wiredIosTier = null;
-final AndroidTier? wiredAndroidTier = null;
-final MetricsOf? wiredTierMetrics = null;
-final ScreenScale? wiredScreenScale = null;
+/// iOS reports a Dynamic Type size to Flutter as a text scale: the size's
+/// Body point size over Large's 17 pt (Apple's Human Interface Guidelines,
+/// the Dynamic Type sizes table).
+const _iosBodyPt = {
+  IosTextSize.extraSmall: 14,
+  IosTextSize.small: 15,
+  IosTextSize.medium: 16,
+  IosTextSize.large: 17,
+  IosTextSize.extraLarge: 19,
+  IosTextSize.extraExtraLarge: 21,
+  IosTextSize.extraExtraExtraLarge: 23,
+  IosTextSize.accessibilityMedium: 28,
+  IosTextSize.accessibilityLarge: 33,
+  IosTextSize.accessibilityExtraLarge: 40,
+  IosTextSize.accessibilityExtraExtraLarge: 47,
+  IosTextSize.accessibilityExtraExtraExtraLarge: 53,
+};
 
-Object _skipIf(Object? wired, String item) =>
-    wired == null ? 'awaiting implementation of $item' : false;
+TextTier _tier(app.TextTier t) => TextTier.values.byName(t.name);
+
+/// A whole design px: the app's heights are doubles, the table's integers.
+int _px(double v) {
+  if (v != v.roundToDouble()) throw StateError('$v is not a whole px');
+  return v.toInt();
+}
+
+TextTier wiredIosTier(IosTextSize size) =>
+    _tier(app.TextTier.fromTextScale(_iosBodyPt[size]! / 17, ios: true));
+TextTier wiredAndroidTier(double scale) =>
+    _tier(app.TextTier.fromTextScale(scale, ios: false));
+TierMetrics wiredTierMetrics(TextTier tier) {
+  final t = app.TextTier.values.byName(tier.name);
+  return (
+    k: t.k,
+    rowsOneLine: t.rowsOneLine,
+    rowsTwoLines: t.rowsTwoLine,
+    statusBar: _px(t.statusBarHeight),
+    rowOneLine: _px(t.rowHeight),
+    rowTwoLines: _px(t.row2Height),
+  );
+}
+
+/// The device view's screen scale on a phone of [width] (any height that
+/// leaves room for the wheel; the scale depends on the width only).
+double wiredScreenScale(double width) => DeviceGeometry.compute(
+  width: width,
+  height: 900,
+  safeTop: 0,
+  safeBottom: 0,
+).scale;
 
 /// Body type at 600x450 (docs/ui.md, the 600x450 profile: 26 px).
 const _bodyPx = 26;
 
 void main() {
-  group(
-    'iOS text size to tier',
-    skip: _skipIf(wiredIosTier, 'the iOS text-size tiers (device view 8)'),
-    () {
-      const expected = {
-        IosTextSize.extraSmall: TextTier.standard,
-        IosTextSize.small: TextTier.standard,
-        IosTextSize.medium: TextTier.standard,
-        IosTextSize.large: TextTier.standard,
-        IosTextSize.extraLarge: TextTier.large,
-        IosTextSize.extraExtraLarge: TextTier.large,
-        IosTextSize.extraExtraExtraLarge: TextTier.largest,
-        IosTextSize.accessibilityMedium: TextTier.largest,
-        IosTextSize.accessibilityLarge: TextTier.largest,
-        IosTextSize.accessibilityExtraLarge: TextTier.largest,
-        IosTextSize.accessibilityExtraExtraLarge: TextTier.largest,
-        IosTextSize.accessibilityExtraExtraExtraLarge: TextTier.largest,
-      };
-      for (final MapEntry(key: size, value: tier) in expected.entries) {
-        test('${size.name} is ${tier.name}', () {
-          expect(wiredIosTier!(size), tier);
-        });
-      }
-    },
-  );
+  group('iOS text size to tier', () {
+    const expected = {
+      IosTextSize.extraSmall: TextTier.standard,
+      IosTextSize.small: TextTier.standard,
+      IosTextSize.medium: TextTier.standard,
+      IosTextSize.large: TextTier.standard,
+      IosTextSize.extraLarge: TextTier.large,
+      IosTextSize.extraExtraLarge: TextTier.large,
+      IosTextSize.extraExtraExtraLarge: TextTier.largest,
+      IosTextSize.accessibilityMedium: TextTier.largest,
+      IosTextSize.accessibilityLarge: TextTier.largest,
+      IosTextSize.accessibilityExtraLarge: TextTier.largest,
+      IosTextSize.accessibilityExtraExtraLarge: TextTier.largest,
+      IosTextSize.accessibilityExtraExtraExtraLarge: TextTier.largest,
+    };
+    for (final MapEntry(key: size, value: tier) in expected.entries) {
+      test('${size.name} is ${tier.name}', () {
+        expect(wiredIosTier(size), tier);
+      });
+    }
+  });
 
-  group(
-    'Android font scale to tier',
-    skip: _skipIf(
-      wiredAndroidTier,
-      'the Android font-scale tiers '
-      '(device view 8)',
-    ),
-    () {
-      const expected = <(double, TextTier)>[
-        (0.85, TextTier.standard),
-        (1.0, TextTier.standard),
-        (1.1, TextTier.standard),
-        (1.149, TextTier.standard),
-        (1.15, TextTier.large),
-        (1.2, TextTier.large),
-        (1.299, TextTier.large),
-        (1.3, TextTier.largest),
-        (1.5, TextTier.largest),
-        (2.0, TextTier.largest),
-      ];
-      for (final (scale, tier) in expected) {
-        test('$scale is ${tier.name}', () {
-          expect(wiredAndroidTier!(scale), tier);
-        });
-      }
-    },
-  );
+  group('Android font scale to tier', () {
+    const expected = <(double, TextTier)>[
+      (0.85, TextTier.standard),
+      (1.0, TextTier.standard),
+      (1.1, TextTier.standard),
+      (1.149, TextTier.standard),
+      (1.15, TextTier.large),
+      (1.2, TextTier.large),
+      (1.299, TextTier.large),
+      (1.3, TextTier.largest),
+      (1.5, TextTier.largest),
+      (2.0, TextTier.largest),
+    ];
+    for (final (scale, tier) in expected) {
+      test('$scale is ${tier.name}', () {
+        expect(wiredAndroidTier(scale), tier);
+      });
+    }
+  });
 
-  group(
-    'tier metrics',
-    skip: _skipIf(wiredTierMetrics, 'the text-tier metrics (device view 8)'),
-    () {
-      const table = <TextTier, TierMetrics>{
-        TextTier.standard: (
-          k: 1,
-          rowsOneLine: 7,
-          rowsTwoLines: 5,
-          statusBar: 45,
-          rowOneLine: 56,
-          rowTwoLines: 75,
-        ),
-        TextTier.large: (
-          k: 7 / 6,
-          rowsOneLine: 6,
-          rowsTwoLines: 4,
-          statusBar: 52,
-          rowOneLine: 66,
-          rowTwoLines: 99,
-        ),
-        TextTier.largest: (
-          k: 7 / 5,
-          rowsOneLine: 5,
-          rowsTwoLines: 3,
-          statusBar: 63,
-          rowOneLine: 77,
-          rowTwoLines: 129,
-        ),
-      };
-      for (final MapEntry(key: tier, value: m) in table.entries) {
-        test('${tier.name}: k, rows, status bar and row heights', () {
-          final got = wiredTierMetrics!(tier);
-          expect(got.k, closeTo(m.k, 1e-9));
-          expect(got.rowsOneLine, m.rowsOneLine);
-          expect(got.rowsTwoLines, m.rowsTwoLines);
-          expect(got.statusBar, m.statusBar);
-          expect(got.rowOneLine, m.rowOneLine);
-          expect(got.rowTwoLines, m.rowTwoLines);
-        });
+  group('tier metrics', () {
+    const table = <TextTier, TierMetrics>{
+      TextTier.standard: (
+        k: 1,
+        rowsOneLine: 7,
+        rowsTwoLines: 5,
+        statusBar: 45,
+        rowOneLine: 56,
+        rowTwoLines: 75,
+      ),
+      TextTier.large: (
+        k: 7 / 6,
+        rowsOneLine: 6,
+        rowsTwoLines: 4,
+        statusBar: 52,
+        rowOneLine: 66,
+        rowTwoLines: 99,
+      ),
+      TextTier.largest: (
+        k: 7 / 5,
+        rowsOneLine: 5,
+        rowsTwoLines: 3,
+        statusBar: 63,
+        rowOneLine: 77,
+        rowTwoLines: 129,
+      ),
+    };
+    for (final MapEntry(key: tier, value: m) in table.entries) {
+      test('${tier.name}: k, rows, status bar and row heights', () {
+        final got = wiredTierMetrics(tier);
+        expect(got.k, closeTo(m.k, 1e-9));
+        expect(got.rowsOneLine, m.rowsOneLine);
+        expect(got.rowsTwoLines, m.rowsTwoLines);
+        expect(got.statusBar, m.statusBar);
+        expect(got.rowOneLine, m.rowOneLine);
+        expect(got.rowTwoLines, m.rowTwoLines);
+      });
 
-        test('${tier.name}: the rows and the status bar fit 450 px', () {
-          final got = wiredTierMetrics!(tier);
-          expect(
-            got.statusBar + got.rowsOneLine * got.rowOneLine,
-            lessThanOrEqualTo(450),
-          );
-          expect(
-            got.statusBar + got.rowsTwoLines * got.rowTwoLines,
-            lessThanOrEqualTo(450),
-          );
-        });
-      }
-    },
-  );
-
-  group(
-    'screen scale',
-    skip: _skipIf(wiredScreenScale, 'the device screen scale (device view 1)'),
-    () {
-      final cases = <(double, double)>[
-        (375, 0.550),
-        (393, 0.5764),
-        (440, 0.6453),
-        (364, 0.5339),
-        (360, 320 / 600), // the screen stays 320 pt
-        (344, 320 / 600), // the narrowest supported phone
-      ];
-      for (final (w, s) in cases) {
-        test('$w pt wide: s = ${s.toStringAsFixed(4)}', () {
-          expect(wiredScreenScale!(w), closeTo(s, 5e-5));
-        });
-      }
-    },
-  );
-
-  group(
-    'on-phone sizes at 393 pt',
-    skip: wiredScreenScale == null || wiredTierMetrics == null
-        ? 'awaiting implementation of the screen scale and the tier metrics'
-        : false,
-    () {
-      final expected = <TextTier, (double, double)>{
-        TextTier.standard: (15.0, 32),
-        TextTier.large: (17.5, 38),
-        TextTier.largest: (21.0, 44),
-      };
-      for (final MapEntry(key: tier, value: (body, row)) in expected.entries) {
-        test('${tier.name}: Body $body pt, one-line row about $row pt', () {
-          final s = wiredScreenScale!(393);
-          final m = wiredTierMetrics!(tier);
-          expect(_bodyPx * m.k * s, closeTo(body, 0.05));
-          expect(m.rowOneLine * s, closeTo(row, 0.5));
-        });
-      }
-      test('the largest tier reaches the 44 pt touch target', () {
-        final s = wiredScreenScale!(393);
+      test('${tier.name}: the rows and the status bar fit 450 px', () {
+        final got = wiredTierMetrics(tier);
         expect(
-          wiredTierMetrics!(TextTier.largest).rowOneLine * s,
-          greaterThanOrEqualTo(44),
+          got.statusBar + got.rowsOneLine * got.rowOneLine,
+          lessThanOrEqualTo(450),
+        );
+        expect(
+          got.statusBar + got.rowsTwoLines * got.rowTwoLines,
+          lessThanOrEqualTo(450),
         );
       });
-    },
-  );
+    }
+  });
+
+  group('screen scale', () {
+    final cases = <(double, double)>[
+      (375, 0.550),
+      (393, 0.5764),
+      (440, 0.6453),
+      (364, 0.5339),
+      (360, 320 / 600), // the screen stays 320 pt
+      (344, 320 / 600), // the narrowest supported phone
+    ];
+    for (final (w, s) in cases) {
+      test('$w pt wide: s = ${s.toStringAsFixed(4)}', () {
+        expect(wiredScreenScale(w), closeTo(s, 5e-5));
+      });
+    }
+  });
+
+  group('on-phone sizes at 393 pt', () {
+    final expected = <TextTier, (double, double)>{
+      TextTier.standard: (15.0, 32),
+      TextTier.large: (17.5, 38),
+      TextTier.largest: (21.0, 44),
+    };
+    for (final MapEntry(key: tier, value: (body, row)) in expected.entries) {
+      test('${tier.name}: Body $body pt, one-line row about $row pt', () {
+        final s = wiredScreenScale(393);
+        final m = wiredTierMetrics(tier);
+        expect(_bodyPx * m.k * s, closeTo(body, 0.05));
+        expect(m.rowOneLine * s, closeTo(row, 0.5));
+      });
+    }
+    test('the largest tier reaches the 44 pt touch target', () {
+      final s = wiredScreenScale(393);
+      expect(
+        wiredTierMetrics(TextTier.largest).rowOneLine * s,
+        greaterThanOrEqualTo(44),
+      );
+    });
+  });
 }

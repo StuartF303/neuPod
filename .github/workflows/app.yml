@@ -13,6 +13,10 @@ on:
         description: "Regenerate the golden PNGs on the goldens job's macOS image and upload them as an artifact (runs only that job)"
         type: boolean
         default: false
+      scale_tracks:
+        description: "Also run the scale test (mobile/test/scale) at this many tracks, e.g. 20000, and upload its numbers; empty runs only the 2,000-track one of every PR"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -101,7 +105,24 @@ jobs:
       - name: Format
         run: dart format --output=none --set-exit-if-changed lib test integration_test
       - run: flutter analyze
+      # Includes the scale test at 2,000 tracks (test/scale, docs/app/decisions/0013-scale-test.md).
       - run: flutter test
+      - name: Scale test at the requested size
+        if: github.event_name == 'workflow_dispatch' && inputs.scale_tracks != ''
+        env:
+          NEUPOD_SCALE_TRACKS: ${{ inputs.scale_tracks }}
+          NEUPOD_SCALE_REPORT: ${{ runner.temp }}/scale-report.json
+        run: |
+          case "$NEUPOD_SCALE_TRACKS" in
+            ''|*[!0-9]*) echo "::error::scale_tracks must be a whole number"; exit 1 ;;
+          esac
+          flutter test test/scale
+      - name: Upload the scale test's numbers
+        if: github.event_name == 'workflow_dispatch' && inputs.scale_tracks != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: scale-report
+          path: ${{ runner.temp }}/scale-report.json
       # The wheel ports (mobile/lib/domain/wheel) are checked against vectors made by the firmware's own C. Regenerate
       # them from the current firmware sources and fail if they no longer match the committed fixture.
       - name: Wheel vectors match the firmware
