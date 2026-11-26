@@ -10,7 +10,11 @@ Read-only folder access for the neuPod app, as chosen in
   downloaded (placeholders, the downloading status key, the dataless flag) are reported as `notDownloaded` and never
   read; `requestDownload` asks iOS to fetch one (owner decision 7) and `downloadStates` reads where it stands from
   metadata.
-- No call writes, moves or deletes a file, and no permission is requested.
+- **Android, the shared music collection:** MediaStore audio (`IS_MUSIC`) as one more root, turned on by the user
+  (`addSharedCollection`), listed by one query and opened through `ContentResolver` like a folder's files
+  ([decision 0012](../../../docs/app/decisions/0012-android-shared-collection.md)).
+- No call writes, moves or deletes a file. The only permission is the collection's (`READ_MEDIA_AUDIO` on Android 13+,
+  `READ_EXTERNAL_STORAGE` before), asked for when the user turns it on.
 
 The platform API is in `pigeon/messages.dart`. After changing it:
 

@@ -1,3 +1,8 @@
 <!-- SPDX-License-Identifier: MPL-2.0 -->
-<!-- No permissions: SAF tree grants need none (decision 0004). -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
+<!-- SAF tree grants need no permission (decision 0004). The phone's shared music collection (MediaStore audio)
+     needs READ_MEDIA_AUDIO on Android 13 and later and READ_EXTERNAL_STORAGE before; either is asked for only when
+     the user turns the collection on (NeupodStoragePlugin.addSharedCollection). Read only: no write permission. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+</manifest>

@@ -123,7 +123,9 @@ by `mobile/lib/data/platform/storage_folder_access.dart`. Where it differs from 
 - **Calls.** `pickFolder`, `listRoots`, `removeRoot`, `startWalk` / `nextWalkBatch` / `cancelWalk`, `openFd`
   (Android), `appSupportPath` (the private directory for the library database, so `path_provider` is not needed; see
   [0005](0005-database.md)) and `debugAddRoot` (iOS debug builds only). `mediaStoreAudio` is left to its own phase 3 item ("Android:
-  the device's shared music collection"), so phase 1 requests **no permission at all** on either platform.
+  the device's shared music collection"), so phase 1 requests **no permission at all** on either platform. (Phase 3:
+  built as `addSharedCollection` plus a root of kind `sharedCollection` that the same walk calls list, see
+  [0012](0012-android-shared-collection.md).)
 - **Walk as pages, not a stream.** The walk is pull-based: each `nextWalkBatch` continues the breadth-first
   DocumentsContract walk (Android) or the `FileManager` enumerator (iOS) on a background thread until it has about N
   files. Dart wraps it as a `Stream<List<StorageEntry>>`; cancelling the subscription calls `cancelWalk`. This gives

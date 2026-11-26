@@ -109,6 +109,14 @@ Status: specification, 21 November 2026. Nothing is built. The working instructi
     - **Skip counts are dropped for now**, on the app and the device (the firmware has none).
     - **Backups:** ratings and play counts are kept in their own small database, which iCloud and Google backups
       include; the library database, which a rescan rebuilds, stays out of backups.
+21. **Android's shared music collection (owner, 26 November 2026)**, from PR #162 (decision 0012).
+    - **Duplicates:** a file inside a picked folder is listed once, by the folder; the collection leaves it out.
+      Adding or removing a folder over songs already listed carries their ratings and play counts to the new path
+      (decision 20's carry-over).
+    - **Music only:** the collection lists what Android marks as music (`IS_MUSIC`); ringtones, notification and
+      alarm sounds, recordings and podcasts are left out.
+    - **Words:** Settings > Library shows `Add Music on This Phone` while it is off; once on, it is listed as a folder
+      is, as `Music on This Phone`, with `Turn Off` where a folder has Remove (asking first, as Remove does).
 
 Everything else in this document is the designer's proposal until the owner confirms it. Proposals that most need a
 decision are collected under [Open questions](#open-questions).

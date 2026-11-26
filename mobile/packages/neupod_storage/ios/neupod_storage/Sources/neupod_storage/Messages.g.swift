@@ -194,6 +194,12 @@ enum RootKind: Int, CaseIterable {
   /// A folder the user picked with the system picker (Android SAF tree,
   /// iOS security-scoped bookmark).
   case pickedFolder = 1
+  /// Android only: the phone's shared music collection (MediaStore audio,
+  /// `IS_MUSIC`), turned on by the user. Its id is `mediastore:audio`
+  /// (`sharedCollectionRootId`); entries' `relPath` is MediaStore's `RELATIVE_PATH`
+  /// plus `DISPLAY_NAME` (the path from the top of the phone's storage), and
+  /// their `uri` is the item's `content://media/<volume>/audio/media/<id>`.
+  case sharedCollection = 2
 }
 
 /// Whether a file's bytes are on the device.
@@ -481,9 +487,18 @@ protocol NeupodStorageApi {
   /// The roots the app holds, in the order they were added. On iOS the
   /// Documents folder is first.
   func listRoots(completion: @escaping (Result<[StorageRoot], Error>) -> Void)
+  /// Android only: turns on the phone's shared music collection as a root.
+  /// Asks for the permission it needs (`READ_MEDIA_AUDIO` on Android 13 and
+  /// later, `READ_EXTERNAL_STORAGE` before) only if it is not already held,
+  /// so only when the user acts. Returns the root, or null if the user
+  /// refused the permission (or the system refused without asking, after
+  /// earlier refusals). iOS throws `unsupported`.
+  func addSharedCollection(completion: @escaping (Result<StorageRoot?, Error>) -> Void)
   /// Releases a picked root (Android: the persisted grant; iOS: the bookmark
-  /// and its security-scoped access) and cancels its walks. Files are not
-  /// touched. Runs off the platform thread.
+  /// and its security-scoped access) and cancels its walks; for the shared
+  /// collection, turns it off (the permission itself stays with the app
+  /// until the user takes it away). Files are not touched. Runs off the
+  /// platform thread.
   func removeRoot(rootId: String, completion: @escaping (Result<Void, Error>) -> Void)
   /// Starts a recursive walk of [rootId] and returns a walk id for
   /// [nextWalkBatch]. Throws `root-unavailable` if access is gone. Runs off
@@ -576,9 +591,32 @@ class NeupodStorageApiSetup {
     } else {
       listRootsChannel.setMessageHandler(nil)
     }
+    /// Android only: turns on the phone's shared music collection as a root.
+    /// Asks for the permission it needs (`READ_MEDIA_AUDIO` on Android 13 and
+    /// later, `READ_EXTERNAL_STORAGE` before) only if it is not already held,
+    /// so only when the user acts. Returns the root, or null if the user
+    /// refused the permission (or the system refused without asking, after
+    /// earlier refusals). iOS throws `unsupported`.
+    let addSharedCollectionChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.neupod_storage.NeupodStorageApi.addSharedCollection\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      addSharedCollectionChannel.setMessageHandler { _, reply in
+        api.addSharedCollection { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      addSharedCollectionChannel.setMessageHandler(nil)
+    }
     /// Releases a picked root (Android: the persisted grant; iOS: the bookmark
-    /// and its security-scoped access) and cancels its walks. Files are not
-    /// touched. Runs off the platform thread.
+    /// and its security-scoped access) and cancels its walks; for the shared
+    /// collection, turns it off (the permission itself stays with the app
+    /// until the user takes it away). Files are not touched. Runs off the
+    /// platform thread.
     let removeRootChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.neupod_storage.NeupodStorageApi.removeRoot\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       removeRootChannel.setMessageHandler { message, reply in

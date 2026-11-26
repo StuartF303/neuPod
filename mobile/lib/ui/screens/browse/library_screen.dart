@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 /// Settings > Library: the folders the library is read from (add, remove),
+/// on Android the phone's shared music collection (turn on, turn off),
 /// Update Library, and the scan's progress, as a plain wheel list.
 ///
 /// Not drawn by any design: the layout is this build's simplest reading of
@@ -66,6 +67,19 @@ String addFolderMessage(String code, TargetPlatform platform) => switch (code) {
   _ => "neuPod couldn't keep access to that folder ($code).",
 };
 
+/// The name of Android's shared music collection (MediaStore) in the
+/// library's list, where it is listed as a folder is.
+const sharedCollectionTitle = 'Music on This Phone';
+
+/// The row that turns the shared collection on, after Add Folder.
+const addSharedCollectionTitle = 'Add $sharedCollectionTitle';
+
+/// What the panel says when the permission to read the collection was
+/// refused (the system may refuse without asking after two refusals).
+const sharedCollectionRefused =
+    'neuPod needs permission to read music and audio on this phone. You can '
+    "allow it in the phone's Settings, under Apps > neuPod > Permissions.";
+
 /// The progress line of a running scan: `120 found · 45 read`.
 String scanProgressLabel(ScanProgress p) =>
     '${groupedCount(p.filesFound)} found · ${groupedCount(p.filesRead)} read';
@@ -104,6 +118,9 @@ class LibraryScreen extends ConsumerWidget {
       }
     });
     final folders = ref.watch(libraryFoldersProvider);
+    final offersCollection = ref
+        .watch(folderAccessProvider)
+        .offersSharedCollection;
     final scan = ref.watch(libraryScanProvider);
     final scanning = scan != null && !scan.done;
     return ShellFrame(
@@ -114,6 +131,9 @@ class LibraryScreen extends ConsumerWidget {
             final tier = NeupodTheme.of(context).tier;
             final h = tier.rowHeight;
             final list = folders.value;
+            final collectionOn =
+                list?.any((f) => f.kind == FolderKind.sharedCollection) ??
+                false;
             return NeupodList(
               indexed: false,
               items: [
@@ -124,6 +144,12 @@ class LibraryScreen extends ConsumerWidget {
                   title: 'Add Folder$_ellipsis',
                   onActivate: () => _add(ref),
                 ),
+                if (offersCollection && list != null && !collectionOn)
+                  NeupodListItem.row(
+                    height: h,
+                    title: addSharedCollectionTitle,
+                    onActivate: () => _addCollection(ref),
+                  ),
                 if (scanning)
                   NeupodListItem.row(
                     height: tier.row2Height,
@@ -172,13 +198,14 @@ class LibraryScreen extends ConsumerWidget {
       if (f.kind == FolderKind.appDocuments) 'On My iPhone',
       if (!f.available) 'Not available',
     ].join(' · ');
+    final name = folderTitle(f);
     return NeupodListItem.row(
       height: second.isEmpty ? tier.rowHeight : tier.row2Height,
-      title: f.name,
+      title: name,
       subtitle: second.isEmpty ? null : second,
       chevron: f.removable,
       onActivate: f.removable
-          ? () => pushScreen(ref, f.name, (_) => FolderScreen(folder: f))
+          ? () => pushScreen(ref, name, (_) => FolderScreen(folder: f))
           // The Documents folder cannot be removed: say how to fill it.
           : () => ref
                 .read(shellProvider.notifier)
@@ -187,6 +214,27 @@ class LibraryScreen extends ConsumerWidget {
                   message: libraryHintFor(TargetPlatform.iOS),
                 ),
     );
+  }
+
+  Future<void> _addCollection(WidgetRef ref) async {
+    final shell = ref.read(shellProvider.notifier);
+    try {
+      // Turned on, it starts a scan (LibraryFoldersNotifier).
+      final on = await ref
+          .read(libraryFoldersProvider.notifier)
+          .addSharedCollection();
+      if (on == null) {
+        await shell.showPanel(
+          title: "Can't read music",
+          message: sharedCollectionRefused,
+        );
+      }
+    } on FolderAccessException catch (e) {
+      await shell.showPanel(
+        title: "Can't read music",
+        message: "neuPod couldn't turn on $sharedCollectionTitle (${e.code}).",
+      );
+    }
   }
 
   Future<void> _add(WidgetRef ref) async {
@@ -203,18 +251,30 @@ class LibraryScreen extends ConsumerWidget {
   }
 }
 
+/// The name a folder is listed under: the shared collection's own words,
+/// otherwise the folder's name as the system gives it.
+String folderTitle(LibraryFolder f) =>
+    f.kind == FolderKind.sharedCollection ? sharedCollectionTitle : f.name;
+
 /// A picked folder: Remove, which asks first (the firmware's question, as for
 /// Forget: `Remove Music?`, `Select = Remove  ·  Menu = Keep`) and then goes
-/// back to Library. Menu keeps it.
+/// back to Library. Menu keeps it. The shared collection's screen says Turn
+/// Off where a folder's says Remove; its songs come off the list the same
+/// way, and their ratings and play counts stay (decision 0011).
 class FolderScreen extends ConsumerWidget {
   /// The screen of [folder].
   const FolderScreen({required this.folder, super.key});
 
   final LibraryFolder folder;
 
+  bool get _collection => folder.kind == FolderKind.sharedCollection;
+
+  /// The action's word: `Remove`, or `Turn Off` for the shared collection.
+  String get _word => _collection ? 'Turn Off' : 'Remove';
+
   @override
   Widget build(BuildContext context, WidgetRef ref) => ShellFrame(
-    title: folder.name,
+    title: folderTitle(folder),
     body: BrowseListBody(
       child: Builder(
         builder: (context) => NeupodList(
@@ -222,7 +282,7 @@ class FolderScreen extends ConsumerWidget {
           items: [
             NeupodListItem.row(
               height: NeupodTheme.of(context).tier.rowHeight,
-              title: 'Remove',
+              title: _word,
               onActivate: () => unawaited(_ask(ref)),
             ),
           ],
@@ -237,12 +297,14 @@ class FolderScreen extends ConsumerWidget {
     final n = songs.where((t) => t.source.id == folder.id).length;
     pushScreen(
       ref,
-      'Remove',
+      _word,
       (_) => ConfirmScreen(
-        title: 'Remove',
-        head: 'Remove ${folder.name}?',
+        title: _word,
+        head: _collection
+            ? 'Turn off $sharedCollectionTitle?'
+            : 'Remove ${folder.name}?',
         sub: removeFolderSub(n),
-        yesWord: 'Remove',
+        yesWord: _word,
         noWord: 'Keep',
         onYes: () => _remove(ref),
       ),
@@ -257,8 +319,10 @@ class FolderScreen extends ConsumerWidget {
       shell.pop();
     } on FolderAccessException catch (e) {
       await shell.showPanel(
-        title: "Can't remove folder",
-        message: "neuPod couldn't give up that folder (${e.code}).",
+        title: _collection ? "Can't turn off" : "Can't remove folder",
+        message: _collection
+            ? "neuPod couldn't turn off $sharedCollectionTitle (${e.code})."
+            : "neuPod couldn't give up that folder (${e.code}).",
       );
     }
   }

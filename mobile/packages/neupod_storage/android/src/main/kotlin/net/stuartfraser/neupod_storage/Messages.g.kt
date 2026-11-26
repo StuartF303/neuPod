@@ -205,7 +205,15 @@ enum class RootKind(val raw: Int) {
    * A folder the user picked with the system picker (Android SAF tree,
    * iOS security-scoped bookmark).
    */
-  PICKED_FOLDER(1);
+  PICKED_FOLDER(1),
+  /**
+   * Android only: the phone's shared music collection (MediaStore audio,
+   * `IS_MUSIC`), turned on by the user. Its id is `mediastore:audio`
+   * (`sharedCollectionRootId`); entries' `relPath` is MediaStore's `RELATIVE_PATH`
+   * plus `DISPLAY_NAME` (the path from the top of the phone's storage), and
+   * their `uri` is the item's `content://media/<volume>/audio/media/<id>`.
+   */
+  SHARED_COLLECTION(2);
 
   companion object {
     private val pigeonValues = values()
@@ -536,9 +544,20 @@ interface NeupodStorageApi {
    */
   fun listRoots(callback: (Result<List<StorageRoot>>) -> Unit)
   /**
+   * Android only: turns on the phone's shared music collection as a root.
+   * Asks for the permission it needs (`READ_MEDIA_AUDIO` on Android 13 and
+   * later, `READ_EXTERNAL_STORAGE` before) only if it is not already held,
+   * so only when the user acts. Returns the root, or null if the user
+   * refused the permission (or the system refused without asking, after
+   * earlier refusals). iOS throws `unsupported`.
+   */
+  fun addSharedCollection(callback: (Result<StorageRoot?>) -> Unit)
+  /**
    * Releases a picked root (Android: the persisted grant; iOS: the bookmark
-   * and its security-scoped access) and cancels its walks. Files are not
-   * touched. Runs off the platform thread.
+   * and its security-scoped access) and cancels its walks; for the shared
+   * collection, turns it off (the permission itself stays with the app
+   * until the user takes it away). Files are not touched. Runs off the
+   * platform thread.
    */
   fun removeRoot(rootId: String, callback: (Result<Unit>) -> Unit)
   /**
@@ -641,6 +660,24 @@ interface NeupodStorageApi {
         if (api != null) {
           channel.setMessageHandler { _, reply ->
             api.listRoots{ result: Result<List<StorageRoot>> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(MessagesPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(MessagesPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.neupod_storage.NeupodStorageApi.addSharedCollection$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            api.addSharedCollection{ result: Result<StorageRoot?> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(MessagesPigeonUtils.wrapError(error))

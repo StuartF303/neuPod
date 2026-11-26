@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // Settings > Library, driven with the wheel: the folders, Add Folder...,
-// Update Library, Remove, the scan's progress row and its cancel, and the
-// empty library pointing to it from Home and Songs.
+// Update Library, Remove, the shared music collection on Android (turn on,
+// a refused permission, turn off), the scan's progress row and its cancel,
+// and the empty library pointing to it from Home and Songs.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/app/library_scan_providers.dart';
@@ -18,6 +19,7 @@ import 'package:neupod/ui/screens/browse/library_screen.dart';
 import 'package:neupod/ui/screens/browse/songs_screen.dart';
 import 'package:neupod/ui/screens/panel/panel_overlay.dart';
 import 'package:neupod/ui/screens/shell/shell_state.dart';
+import 'package:neupod_storage/neupod_storage.dart' show sharedCollectionRootId;
 
 import '../../fakes/fake_folder_access.dart';
 import '../../fakes/fake_library_scanner.dart';
@@ -42,14 +44,30 @@ const drive = LibraryFolder(
   available: false,
 );
 
-/// Songs in `Music` (2) and `USB` (1), as the repository reports them.
+const collection = LibraryFolder(
+  id: sharedCollectionRootId,
+  name: 'Music on This Phone',
+  kind: FolderKind.sharedCollection,
+  available: true,
+);
+
+/// Songs in `Music` (2), `USB` (1) and the shared collection (1), as the
+/// repository reports them.
 class _Songs implements LibraryRepository {
   @override
   Stream<List<Track>> watchSongs() => Stream.value([
-    for (final (i, id) in [(1, music.id), (2, music.id), (3, drive.id)])
+    for (final (i, id) in [
+      (1, music.id),
+      (2, music.id),
+      (3, drive.id),
+      (4, collection.id),
+    ])
       Track(
         id: i,
-        source: TrackSource(SourceKind.localFolder, id),
+        source: TrackSource(
+          id == collection.id ? SourceKind.mediaStore : SourceKind.localFolder,
+          id,
+        ),
         location: TrackLocation(relPath: '$i.flac', uri: 'file:///$i.flac'),
         codec: 'flac',
       ),
@@ -280,6 +298,100 @@ void main() {
     await settle(tester);
     expect(access.removed, isEmpty);
     expect(_row('Music'), findsOneWidget);
+  });
+
+  group('the shared music collection (Android)', () {
+    testWidgets('not offered (iOS): no row for it', (tester) async {
+      await _openLibrary(
+        tester,
+        FakeFolderAccess([music]),
+        FakeLibraryScanner(),
+      );
+      expect(_row(addSharedCollectionTitle), findsNothing);
+    });
+
+    testWidgets('offered and off: a row after Add Folder turns it on, asking '
+        'for the permission only then, and starts a scan', (tester) async {
+      final access = FakeFolderAccess([music])
+        ..offersSharedCollection = true
+        ..sharedCollection = collection;
+      final scanner = FakeLibraryScanner();
+      final rig = await _openLibrary(tester, access, scanner);
+      expect(access.sharedCollectionAsks, 0);
+      expect(_row('Add Music on This Phone'), findsOneWidget);
+      await _step(
+        tester,
+        rig,
+        2,
+      ); // Music, Add Folder…, Add Music on This Phone
+      expect(_wheelValue(rig), startsWith('Add Music on This Phone'));
+      await _select(tester, rig);
+      expect(access.sharedCollectionAsks, 1);
+      expect(scanner.started, 1);
+      // Listed as a folder is; the add row is gone.
+      expect(_row('Music on This Phone'), findsOneWidget);
+      expect(_row('Add Music on This Phone'), findsNothing);
+      expect(rig.container.read(shellProvider).panel, isNull);
+    });
+
+    testWidgets('a refused permission says how to allow it, and scans '
+        'nothing', (tester) async {
+      final access = FakeFolderAccess()..offersSharedCollection = true;
+      final scanner = FakeLibraryScanner();
+      final rig = await _openLibrary(tester, access, scanner);
+      await _step(tester, rig, 1); // Add Folder…, Add Music on This Phone
+      await _select(tester, rig);
+      final panel = rig.container.read(shellProvider).panel!;
+      expect(panel.title, "Can't read music");
+      expect(panel.message, sharedCollectionRefused);
+      expect(scanner.started, 0);
+      expect(_row('Add Music on This Phone'), findsOneWidget);
+    });
+
+    testWidgets('on: Turn Off asks first, as Remove does, then turns it off '
+        'and rescans', (tester) async {
+      final access = FakeFolderAccess([music, collection])
+        ..offersSharedCollection = true;
+      final scanner = FakeLibraryScanner();
+      final rig = await _openLibrary(tester, access, scanner);
+      expect(_row('Add Music on This Phone'), findsNothing);
+      await _step(tester, rig, 1); // Music on This Phone
+      await _select(tester, rig);
+      expect(
+        rig.container.read(shellProvider).top!.name,
+        'Music on This Phone',
+      );
+      expect(_row('Turn Off'), findsOneWidget);
+      await _select(tester, rig);
+      expect(find.text('Turn off Music on This Phone?'), findsOneWidget);
+      expect(find.text('1 song come off the list.'), findsOneWidget);
+      expect(find.text('Select = Turn Off  ·  Menu = Keep'), findsOneWidget);
+      expect(access.removed, isEmpty);
+      await _select(tester, rig);
+      expect(access.removed, [sharedCollectionRootId]);
+      expect(rig.container.read(shellProvider).top!.name, 'Library');
+      expect(_row('Music on This Phone'), findsNothing);
+      expect(_row('Add Music on This Phone'), findsOneWidget);
+      expect(scanner.started, 1);
+    });
+
+    testWidgets('on but its permission taken away: Not available', (
+      tester,
+    ) async {
+      const gone = LibraryFolder(
+        id: sharedCollectionRootId,
+        name: 'Music on This Phone',
+        kind: FolderKind.sharedCollection,
+        available: false,
+      );
+      await _openLibrary(
+        tester,
+        FakeFolderAccess([gone])..offersSharedCollection = true,
+        FakeLibraryScanner(),
+      );
+      expect(_row('Music on This Phone'), findsOneWidget);
+      expect(_row('Not available'), findsOneWidget);
+    });
   });
 
   testWidgets('a running scan shows its progress; Select cancels it', (
