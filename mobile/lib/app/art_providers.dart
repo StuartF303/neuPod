@@ -3,6 +3,7 @@
 /// Wires the art cache (decision 0010) to the screens and the player.
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/app/providers.dart';
 import 'package:neupod/data/art/art_cache.dart';
@@ -14,7 +15,11 @@ final artCacheProvider = Provider<ArtCache>((ref) {
   final storage = ref.watch(neupodStorageProvider);
   return ArtCache(
     directory: () async => '${await storage.appSupportPath()}/art',
-    open: storageArtOpener(storage),
+    // iOS: never open a picture's file that iCloud has not put on the phone.
+    open: storageArtOpener(
+      storage,
+      checkDownloaded: defaultTargetPlatform == TargetPlatform.iOS,
+    ),
   );
 });
 

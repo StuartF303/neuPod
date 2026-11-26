@@ -40,6 +40,10 @@ class DirApi extends NeupodStorageApi {
   /// Entries per page; null serves the whole walk as one page.
   int? pageSize;
 
+  /// Relative paths reported as iCloud files not downloaded (besides any
+  /// path with "cloud" in it), with size 0, as the iOS walk reports them.
+  final away = <String>{};
+
   /// The platform loses the root mid-walk (a grant revoked, a drive pulled):
   /// after this many pages the next one fails, as `root-unavailable`.
   int? loseRootAfterPages;
@@ -55,15 +59,14 @@ class DirApi extends NeupodStorageApi {
       if (unreadablePrefix != null && rel.startsWith(unreadablePrefix!)) {
         continue;
       }
+      final isAway = rel.contains('cloud') || away.contains(rel);
       entries.add(
         StorageEntry(
           relPath: rel,
           uri: f.uri.toString(),
-          size: f.lengthSync(),
+          size: isAway ? 0 : f.lengthSync(),
           modifiedMs: f.lastModifiedSync().millisecondsSinceEpoch,
-          state: rel.contains('cloud')
-              ? EntryState.notDownloaded
-              : EntryState.local,
+          state: isAway ? EntryState.notDownloaded : EntryState.local,
         ),
       );
     }
@@ -687,6 +690,105 @@ void main() {
       );
     },
   );
+
+  group('iCloud files not downloaded (owner decision 7)', () {
+    test('a new one is listed by name, greyed, and never opened', () async {
+      put('Album/a.flac', flac(['TITLE=Here', 'ARTIST=X', 'ALBUM=Album']));
+      put('Album/b.flac', flac(['TITLE=Away', 'ARTIST=X', 'ALBUM=Album']));
+      final (api, storage, scanner) = setUpScanner();
+      api.away.add('Album/b.flac');
+      final last = await scanner.scan().last;
+      expect(last.done, isTrue);
+      expect(storage.opened, ['a.flac']);
+      final byTitle = {
+        for (final t in await tracks()) t.displayTitle: t.unreadableReason,
+      };
+      // Untagged until it is on the phone: the file name, as the device
+      // lists a file it could not read (owner decision 15).
+      expect(byTitle, {'Here': null, 'b.flac': UnreadableReason.notDownloaded});
+    });
+
+    test('while it stays away, a rescan does not touch it', () async {
+      put('b.flac', flac(['TITLE=Away']));
+      final (api, storage, scanner) = setUpScanner();
+      api.away.add('b.flac');
+      await scanner.scan().drain<void>();
+      final again = await scanner.scan().last;
+      expect(again.filesFound, 1);
+      expect(again.filesRead, 0);
+      expect(storage.opened, isEmpty);
+    });
+
+    test('once downloaded, the next scan reads its tags', () async {
+      put('b.flac', flac(['TITLE=Away', 'ARTIST=X', 'ALBUM=Y']));
+      final (api, storage, scanner) = setUpScanner();
+      api.away.add('b.flac');
+      await scanner.scan().drain<void>();
+      api.away.clear(); // iOS downloaded it after the user asked
+      final last = await scanner.scan().last;
+      expect(last.filesRead, 1);
+      expect(storage.opened, ['b.flac']);
+      final t = (await tracks()).single;
+      expect((t.displayTitle, t.unreadableReason), ('Away', null));
+      expect(t.durationMs, greaterThan(0));
+    });
+
+    test('one read before and then evicted keeps its tags, size and '
+        'fingerprint, greyed', () async {
+      put('b.flac', flac(['TITLE=Song', 'ARTIST=X', 'ALBUM=Y']));
+      final moves = <TrackMove>[];
+      final (api, storage, scanner) = setUpScanner(
+        onMoves: (m) async => moves.addAll(m),
+      );
+      await scanner.scan().drain<void>();
+      final before = (await db.select(db.tracks).get()).single;
+      expect(before.audioFingerprint, isNotNull);
+
+      api.away.add('b.flac'); // iOS freed the space: only metadata is left
+      await scanner.scan().drain<void>();
+      final away = (await db.select(db.tracks).get()).single;
+      expect(away.title, 'Song');
+      expect(away.size, before.size); // its ratings key still finds it
+      expect(away.audioFingerprint, before.audioFingerprint);
+      expect(away.reasonCode, UnreadableReason.notDownloaded.code);
+      expect(moves, isEmpty, reason: 'eviction is not a move');
+      expect(storage.opened, ['b.flac']); // read once, before it went
+
+      api.away.clear();
+      await scanner.scan().drain<void>();
+      final back = (await db.select(db.tracks).get()).single;
+      expect((back.title, back.reasonCode), ('Song', null));
+      expect(storage.opened, ['b.flac', 'b.flac']);
+      expect(moves, isEmpty);
+    });
+
+    test('a cover file evicted later is cleared, even after an incomplete '
+        'walk', () async {
+      put('Album/a.flac', fixture('flac16_44k_st.flac'));
+      put('Album/cover.jpg', [0xff, 0xd8, 0xff]);
+      put('Other/b.flac', fixture('flac16_44k_st.flac'));
+      final (api, _, scanner) = setUpScanner();
+      await scanner.scan().drain<void>();
+      Future<String?> coverOfA() async => (await db.select(db.tracks).get())
+          .firstWhere((t) => t.relPath == 'Album/a.flac')
+          .folderArtUri;
+      expect(await coverOfA(), endsWith('/Album/cover.jpg'));
+
+      api.away.add('Album/cover.jpg');
+      api.unreadablePrefix = 'Other/'; // the walk is incomplete
+      await scanner.scan().drain<void>();
+      expect(await coverOfA(), isNull);
+    });
+
+    test('a cover file not downloaded is not used', () async {
+      put('Album/a.flac', fixture('flac16_44k_st.flac'));
+      put('Album/cover.jpg', [0xff, 0xd8, 0xff]);
+      final (api, _, scanner) = setUpScanner();
+      api.away.add('Album/cover.jpg');
+      await scanner.scan().drain<void>();
+      expect((await db.select(db.tracks).get()).single.folderArtUri, isNull);
+    });
+  });
 
   test('scans never change the music: bytes, modes, mtimes, folders', () async {
     put('a.flac', flac(['TITLE=A']));

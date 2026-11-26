@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/data/db/library_database.dart';
 import 'package:neupod/data/library_view/drift_library_view.dart';
 import 'package:neupod/domain/library/art_rules.dart';
+import 'package:neupod/domain/library/track.dart';
 import 'package:neupod/domain/library_view/library_view.dart';
 
 import 'seed.dart';
@@ -37,6 +38,7 @@ void main() {
     int trackNo = 0,
     ArtKind kind = ArtKind.none,
     String? folder,
+    int? reason,
   }) => addTrack(
     db,
     sourceId: src,
@@ -51,6 +53,7 @@ void main() {
     folderArtUri: folder,
     folderArtSize: folder == null ? null : 5000,
     folderArtMtime: folder == null ? null : 7,
+    reason: reason,
   );
 
   test('a song with an embedded JPEG and a cover file: embedded first, then '
@@ -67,6 +70,27 @@ void main() {
       ),
       coverFile,
     ]);
+  });
+
+  // Owner decision 7: opening a file iCloud has not put on the phone makes
+  // iOS fetch it. A not-downloaded song keeps where its picture is (so it
+  // comes back with the file) but offers no source on its own file.
+  test('a song not downloaded: no source on its own file; its folder cover '
+      'is still offered', () async {
+    await add(
+      'A/1.flac',
+      kind: ArtKind.jpeg,
+      folder: cover,
+      reason: UnreadableReason.notDownloaded.code,
+    );
+    final song = (await view.songs()).single;
+    expect(song.art.sources, [coverFile]);
+    expect(
+      song.art.sources.where((s) => s.uri == 'file:///music/A/1.flac'),
+      isEmpty,
+    );
+    final row = (await db.select(db.tracks).get()).single;
+    expect((row.artKind, row.artOffset), (ArtKind.jpeg.code, 100));
   });
 
   test('an embedded PNG is not a source (the device cannot decode it); the '

@@ -7,7 +7,9 @@ Read-only folder access for the neuPod app, as chosen in
   walk with one `DocumentsContract` query per directory; detached read-only file descriptors read with `pread`.
 - **iOS:** the app's Documents folder (visible in Files and Finder through the app's Info.plist) plus folders picked in
   Files, kept as bookmarks whose security-scoped access this plugin alone starts and holds; iCloud files that are not
-  downloaded are reported as `notDownloaded` and never read.
+  downloaded (placeholders, the downloading status key, the dataless flag) are reported as `notDownloaded` and never
+  read; `requestDownload` asks iOS to fetch one (owner decision 7) and `downloadStates` reads where it stands from
+  metadata.
 - **Android, the shared music collection:** MediaStore audio (`IS_MUSIC`) as one more root, turned on by the user
   (`addSharedCollection`), listed by one query and opened through `ContentResolver` like a folder's files
   ([decision 0012](../../../docs/app/decisions/0012-android-shared-collection.md)).

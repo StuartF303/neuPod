@@ -125,6 +125,7 @@ final class Song {
     this.duration,
     this.genre,
     this.unplayableReason,
+    this.downloadable = false,
     this.sortLetter = '#',
     this.art = ArtRef.none,
   });
@@ -152,6 +153,10 @@ final class Song {
   /// Set when the song cannot be played: the reason shown at the right of its
   /// greyed row (`Opus, can't play`).
   final String? unplayableReason;
+
+  /// An iCloud file that is not on the phone (iOS; owner decision 7): greyed
+  /// `Not downloaded`, and Select asks iOS to download it.
+  final bool downloadable;
 
   /// The fast-scroll letter of the title: `A` to `Z`, or `#`.
   final String sortLetter;

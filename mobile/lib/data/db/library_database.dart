@@ -3,6 +3,7 @@
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:neupod/data/db/library_database.steps.dart';
+import 'package:neupod/domain/library/track.dart' show UnreadableReason;
 
 part 'library_database.g.dart';
 
@@ -261,4 +262,20 @@ class LibraryDatabase extends _$LibraryDatabase {
       await m.addColumn(schema.tracks, schema.tracks.audioFingerprint);
     },
   );
+}
+
+/// Library queries for the iCloud Download action (owner decision 7).
+extension LibraryDownloads on LibraryDatabase {
+  /// Which of [uris] the library still holds as not downloaded.
+  Future<Set<String>> urisNotDownloaded(List<String> uris) async {
+    if (uris.isEmpty) return {};
+    final rows =
+        await (select(tracks)..where(
+              (t) =>
+                  t.uri.isIn(uris) &
+                  t.reasonCode.equals(UnreadableReason.notDownloaded.code),
+            ))
+            .get();
+    return {for (final r in rows) r.uri};
+  }
 }

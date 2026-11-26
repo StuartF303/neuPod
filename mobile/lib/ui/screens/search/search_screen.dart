@@ -8,6 +8,7 @@ library;
 import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neupod/app/icloud_download_providers.dart';
 import 'package:neupod/app/library_view_providers.dart';
 import 'package:neupod/app/providers.dart';
 import 'package:neupod/domain/text_entry/wheel_text_entry.dart' as entry;
@@ -51,6 +52,8 @@ final searchFunctionProvider = FutureProvider<SearchFunction>((ref) async {
         title: s.title,
         detail: '${s.artist} · ${s.album}',
         reason: s.unplayableReason,
+        downloadable: s.downloadable,
+        uri: s.uri,
       ),
   ];
   // Lower-cased once, here, not on every key.
@@ -251,7 +254,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           pushScreen(ref, artist.name, (_) => CollectionScreen.artist(artist));
         }
       case SearchKind.song:
-        if (hit.reason != null) return; // greyed: its reason is on the row
+        // Greyed: its reason is on the row, and Select does nothing, except
+        // on a song not downloaded from iCloud, which it asks iOS for.
+        if (hit.reason != null && !hit.downloadable) return;
         final song = await library.song(hit.id);
         if (song != null && mounted) await playFrom(ref, [song], song);
     }
@@ -345,6 +350,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         withStatusBar: false,
         onOpen: _open,
         notice: _notice,
+        downloading: ref.watch(icloudDownloadsProvider),
       ),
     );
   }

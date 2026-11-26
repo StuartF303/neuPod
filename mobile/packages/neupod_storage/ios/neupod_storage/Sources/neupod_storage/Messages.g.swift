@@ -211,6 +211,22 @@ enum EntryState: Int, CaseIterable {
   case notDownloaded = 1
 }
 
+/// Where an iCloud file's download stands (owner decision 7). Read from the
+/// file's metadata only: asking never reads its bytes.
+enum DownloadState: Int, CaseIterable {
+  /// Its bytes are on the device: the next scan reads it.
+  case downloaded = 0
+  /// Not on the device, and iOS is not fetching it.
+  case notDownloaded = 1
+  /// iOS is fetching it.
+  case downloading = 2
+  /// iOS reported an error for its download (offline, no space, signed out
+  /// of iCloud).
+  case failed = 3
+  /// No file at that URI any more (deleted, moved, or its folder removed).
+  case missing = 4
+}
+
 /// A library folder the app holds read access to.
 ///
 /// Generated class from Pigeon that represents data sent in messages.
@@ -275,7 +291,9 @@ struct StorageEntry: Hashable, CustomStringConvertible {
   /// Path relative to the root, `/`-separated, with the real file name (for
   /// an iCloud placeholder, the name of the file it stands for).
   var relPath: String
-  /// `content://` (Android) or `file://` (iOS). Open it with
+  /// `content://` (Android) or `file://` (iOS); for an iCloud placeholder,
+  /// the URL of the file it stands for, so the URI stays the same once the
+  /// file is downloaded. Open it with
   /// `NeupodStorage.openReader`, or hand it to the audio engine.
   var uri: String
   /// Size in bytes; 0 when unknown.
@@ -400,10 +418,16 @@ private class MessagesPigeonCodecReader: FlutterStandardReader {
       }
       return nil
     case 131:
-      return StorageRoot.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return DownloadState(rawValue: enumResultAsInt)
+      }
+      return nil
     case 132:
-      return StorageEntry.fromList(self.readValue() as! [Any?])
+      return StorageRoot.fromList(self.readValue() as! [Any?])
     case 133:
+      return StorageEntry.fromList(self.readValue() as! [Any?])
+    case 134:
       return WalkBatch.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -419,14 +443,17 @@ private class MessagesPigeonCodecWriter: FlutterStandardWriter {
     } else if let value = value as? EntryState {
       super.writeByte(130)
       super.writeValue(value.rawValue)
-    } else if let value = value as? StorageRoot {
+    } else if let value = value as? DownloadState {
       super.writeByte(131)
-      super.writeValue(value.toList())
-    } else if let value = value as? StorageEntry {
+      super.writeValue(value.rawValue)
+    } else if let value = value as? StorageRoot {
       super.writeByte(132)
       super.writeValue(value.toList())
-    } else if let value = value as? WalkBatch {
+    } else if let value = value as? StorageEntry {
       super.writeByte(133)
+      super.writeValue(value.toList())
+    } else if let value = value as? WalkBatch {
+      super.writeByte(134)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -488,6 +515,19 @@ protocol NeupodStorageApi {
   /// Runs on its own background executor (a provider can block), never on
   /// the platform thread.
   func openFd(uri: String, completion: @escaping (Result<Int64, Error>) -> Void)
+  /// iOS only: asks iOS to download the iCloud file at [uri] (a `file://`
+  /// URI from a walk whose state was `notDownloaded`), with
+  /// `FileManager.startDownloadingUbiquitousItem(at:)`. Returns at once;
+  /// iOS fetches the file and the app reads nothing of it (owner decision
+  /// 7). Throws `not-in-root` for a URI outside the held roots and
+  /// `download-failed` when iOS refuses (not an iCloud file, signed out).
+  /// Android throws `unsupported`.
+  func requestDownload(uri: String, completion: @escaping (Result<Void, Error>) -> Void)
+  /// iOS only: the download state of each of [uris], in order, from file
+  /// metadata alone (placeholder names, `ubiquitousItemDownloadingStatus`,
+  /// the dataless flag): never a read of the file. Off the walk queue, so a
+  /// slow walk does not hold it up. Android throws `unsupported`.
+  func downloadStates(uris: [String], completion: @escaping (Result<[DownloadState], Error>) -> Void)
   /// A private directory for the app's own data (the library database),
   /// excluded from backups: Android `noBackupFilesDir`; iOS
   /// `Application Support/library`, created if needed and marked excluded
@@ -671,6 +711,51 @@ class NeupodStorageApiSetup {
       }
     } else {
       openFdChannel.setMessageHandler(nil)
+    }
+    /// iOS only: asks iOS to download the iCloud file at [uri] (a `file://`
+    /// URI from a walk whose state was `notDownloaded`), with
+    /// `FileManager.startDownloadingUbiquitousItem(at:)`. Returns at once;
+    /// iOS fetches the file and the app reads nothing of it (owner decision
+    /// 7). Throws `not-in-root` for a URI outside the held roots and
+    /// `download-failed` when iOS refuses (not an iCloud file, signed out).
+    /// Android throws `unsupported`.
+    let requestDownloadChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.neupod_storage.NeupodStorageApi.requestDownload\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      requestDownloadChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let uriArg = args[0] as! String
+        api.requestDownload(uri: uriArg) { result in
+          switch result {
+          case .success:
+            reply(wrapResult(nil))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      requestDownloadChannel.setMessageHandler(nil)
+    }
+    /// iOS only: the download state of each of [uris], in order, from file
+    /// metadata alone (placeholder names, `ubiquitousItemDownloadingStatus`,
+    /// the dataless flag): never a read of the file. Off the walk queue, so a
+    /// slow walk does not hold it up. Android throws `unsupported`.
+    let downloadStatesChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.neupod_storage.NeupodStorageApi.downloadStates\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      downloadStatesChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let urisArg = args[0] as! [String]
+        api.downloadStates(uris: urisArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      downloadStatesChannel.setMessageHandler(nil)
     }
     /// A private directory for the app's own data (the library database),
     /// excluded from backups: Android `noBackupFilesDir`; iOS

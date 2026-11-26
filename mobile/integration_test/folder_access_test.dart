@@ -29,6 +29,7 @@ import 'package:neupod/audio/neupod_player.dart';
 import 'package:neupod/data/scan/local_library_scanner.dart';
 import 'package:neupod/domain/playback/player_state.dart';
 import 'package:neupod/domain/playback/queue_item.dart';
+import 'package:neupod/domain/library/track.dart';
 import 'package:neupod_audio/neupod_audio.dart';
 import 'package:neupod_storage/neupod_storage.dart';
 
@@ -185,6 +186,129 @@ void main() {
         expect(paths, contains('$folderName/c.flac'));
       } finally {
         copied.deleteSync(recursive: true);
+      }
+    },
+    skip: !Platform.isIOS,
+    semanticsEnabled: false,
+  );
+
+  // Owner decision 7 on the simulator. A real iCloud file that is not
+  // downloaded cannot be made here (no iCloud account; the dataless flag is
+  // set only by the system), but the placeholder layout can: a hidden
+  // `.Name.ext.icloud` file. The walk lists it under its real name with its
+  // real URL, the scan lists it greyed without opening it, its state reads
+  // not downloaded from metadata, and asking iOS to download a file that is
+  // not in iCloud is refused or ignored without touching it. The owner's
+  // iPhone check covers a real evicted file (docs/app/PROGRESS.md, phase 3
+  // device check).
+  testWidgets(
+    'iOS: an iCloud placeholder is listed not downloaded and never read',
+    (_) async {
+      final dir = Directory('${Directory.systemTemp.path}/neupod_icloud_it')
+        ..createSync(recursive: true);
+      final here = File('${dir.path}/here.flac')
+        ..writeAsBytesSync(
+          (await rootBundle.load(
+            'integration_test/assets/test_media/flac16_44k_st.flac',
+          )).buffer.asUint8List(),
+        );
+      // What iCloud leaves in place of an evicted file: a small plist. Its
+      // bytes are not audio, so a read of them would show as damaged.
+      final placeholder = File('${dir.path}/.away.flac.icloud')
+        ..writeAsBytesSync([0x62, 0x70, 0x6c, 0x69, 0x73, 0x74]);
+      final before = placeholder.statSync();
+      final root = await storage.debugAddRoot(dir.path);
+      final db = openLibraryDatabase(storage.appSupportPath);
+      try {
+        final entries = await storage
+            .walk(root.id)
+            .expand((p) => p.entries)
+            .toList();
+        final byPath = {for (final e in entries) e.relPath: e};
+        expect(byPath.keys.toSet(), {'here.flac', 'away.flac'});
+        final away = byPath['away.flac']!;
+        expect(away.state, EntryState.notDownloaded);
+        expect(away.uri, endsWith('/away.flac'));
+        expect(away.size, 0);
+        await expectLater(
+          storage.openHandle(away),
+          throwsA(isA<StorageException>()),
+        );
+
+        expect(await storage.downloadStates([here.uri.toString(), away.uri]), [
+          DownloadState.downloaded,
+          DownloadState.notDownloaded,
+        ]);
+
+        await LocalLibraryScanner(
+          folders: StorageFolderAccess(storage),
+          storage: storage,
+          db: db,
+        ).scan().last.timeout(const Duration(seconds: 60));
+        final songs = await DriftLibraryRepository(db).watchSongs().first;
+        final reasons = {
+          for (final t in songs)
+            if (t.source.id == root.id) t.displayTitle: t.unreadableReason,
+        };
+        expect(reasons, {
+          'here.flac': null,
+          'away.flac': UnreadableReason.notDownloaded,
+        });
+
+        // Queued before it was evicted: the engine checks before it opens a
+        // file and skips one that is not on the phone, as it skips an
+        // unplayable one (lead call under decisions 7 and 19). The next
+        // song plays; the placeholder is never read.
+        final player = NeupodPlayer(NeupodAudio());
+        try {
+          await player.setQueue([
+            QueueItem(id: 'it:away', uri: away.uri, title: 'away'),
+            QueueItem(id: 'it:here', uri: here.uri.toString(), title: 'here'),
+          ]);
+          await player.play();
+          final ended = await player.states
+              .firstWhere(
+                (s) => s.status == PlaybackStatus.ended && s.index == 1,
+              )
+              .timeout(const Duration(seconds: 30));
+          expect(ended.queue[ended.index!].id, 'it:here');
+          expect(ended.error, isNull);
+        } finally {
+          await player.dispose();
+        }
+
+        // Not an iCloud file: iOS refuses (or ignores) the request. Either
+        // way nothing was written.
+        try {
+          await storage.requestDownload(away.uri);
+        } on StorageException catch (e) {
+          expect(e.code, 'download-failed');
+        }
+        await expectLater(
+          storage.requestDownload('file:///private/etc/hosts'),
+          throwsA(
+            isA<StorageException>().having(
+              (e) => e.code,
+              'code',
+              'not-in-root',
+            ),
+          ),
+        );
+        final after = placeholder.statSync();
+        expect(placeholder.readAsBytesSync(), [
+          0x62,
+          0x70,
+          0x6c,
+          0x69,
+          0x73,
+          0x74,
+        ]);
+        expect(after.modified, before.modified);
+        expect(File('${dir.path}/away.flac').existsSync(), isFalse);
+      } finally {
+        await db.close();
+        await storage.removeRoot(root.id);
+        dir.deleteSync(recursive: true);
       }
     },
     skip: !Platform.isIOS,

@@ -11,7 +11,9 @@ library;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neupod/app/icloud_download_providers.dart';
 import 'package:neupod/domain/library_view/library_view.dart';
+import 'package:neupod/domain/library_view/reason_words.dart';
 import 'package:neupod/ui/components/art_frame.dart';
 import 'package:neupod/ui/components/list_parts.dart';
 import 'package:neupod/ui/screens/browse/browse_common.dart';
@@ -75,6 +77,7 @@ class AlbumScreen extends ConsumerWidget {
   ) {
     final tier = NeupodTheme.of(context).tier;
     final songs = detail.songs;
+    final downloading = ref.watch(icloudDownloadsProvider);
     return [
       for (final disc in detail.discs) ...[
         if (detail.hasDiscHeadings && disc.number != null)
@@ -88,8 +91,10 @@ class AlbumScreen extends ConsumerWidget {
             title: song.title,
             number: song.track?.toString(),
             value: detail.album.compilation ? song.artist : null,
-            disabledReason: song.unplayableReason,
+            disabledReason: songRowReason(song, downloading),
+            greyedAction: song.downloadable ? downloadActionText : null,
             onActivate: () => playFrom(ref, songs, song),
+            id: song.id,
           ),
       ],
     ];

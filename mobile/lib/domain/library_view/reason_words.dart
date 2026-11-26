@@ -11,6 +11,7 @@
 library;
 
 import 'package:neupod/domain/library/track.dart';
+import 'package:neupod/domain/library_view/library_view.dart';
 
 /// The device's reasons a track cannot play (`lib_play_t`, library.h), the
 /// ones the phone has. The others (`LIB_PLAY_CHANNELS`, `_BITS`, `_RATE`,
@@ -58,10 +59,29 @@ DevicePlayReason? devicePlayReason(UnreadableReason reason) => switch (reason) {
 /// can't play`), with the device's codec names (`codec_name`, ui_library.c).
 String unreadableReasonText(UnreadableReason reason, String codec) =>
     switch (devicePlayReason(reason)) {
-      null => 'Not downloaded',
+      null => notDownloadedText,
       DevicePlayReason.damaged => damagedText,
       DevicePlayReason.codec => cannotDecodeText(codec),
     };
+
+/// The reason on the row of an iCloud file that is not on the phone (owner
+/// decision 7; the app's own, the device has no iCloud).
+const notDownloadedText = 'Not downloaded';
+
+/// The reason on that row once the user has asked iOS to download it, until
+/// a scan finds it on the phone.
+const downloadingText = 'Downloading';
+
+/// What a screen reader says Select does on that row.
+const downloadActionText = 'Download';
+
+/// The reason at the right of [song]'s row: its [Song.unplayableReason], or
+/// [downloadingText] for a not-downloaded song in [downloading] (the URIs
+/// the user has asked iOS to download).
+String? songRowReason(Song song, Set<String> downloading) =>
+    song.downloadable && downloading.contains(song.uri)
+    ? downloadingText
+    : song.unplayableReason;
 
 /// The reason on the row of a damaged file.
 const damagedText = 'Damaged file';

@@ -7,6 +7,7 @@
 library;
 
 import 'package:flutter/widgets.dart';
+import 'package:neupod/domain/library_view/reason_words.dart';
 import 'package:neupod/ui/components/list_parts.dart';
 import 'package:neupod/ui/components/list_row.dart';
 import 'package:neupod/ui/components/neupod_screen.dart';
@@ -30,6 +31,7 @@ class SearchView extends StatelessWidget {
     this.onOpen,
     this.withStatusBar = true,
     this.notice,
+    this.downloading = const {},
     super.key,
   });
 
@@ -49,6 +51,10 @@ class SearchView extends StatelessWidget {
 
   /// A row was opened by a tap or the screen reader.
   final void Function(SearchHit hit)? onOpen;
+
+  /// The URIs the user has asked iOS to download: their songs read
+  /// `Downloading` (owner decision 7).
+  final Set<String> downloading;
 
   @override
   Widget build(BuildContext context) {
@@ -94,7 +100,7 @@ class SearchView extends StatelessWidget {
                     for (final hit in live)
                       SearchResultRow(
                         title: hit.title,
-                        label: hit.label,
+                        label: hit.labelWith(downloading),
                         greyed: hit.reason != null,
                         onTap: () => onOpen?.call(hit),
                       ),
@@ -157,7 +163,8 @@ class SearchView extends StatelessWidget {
             ? '${hit.year}'
             : null,
         chevron: hit.kind == SearchKind.artist,
-        disabledReason: hit.reason,
+        disabledReason: hit.reasonWith(downloading),
+        action: hit.downloadable ? downloadActionText : null,
         selection: n == selected ? RowSelection.selected : RowSelection.none,
         position: '${n + 1} of ${session.count}',
         onTap: () => onOpen?.call(hit),

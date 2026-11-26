@@ -13,6 +13,20 @@ import 'package:neupod/data/art/art_cache.dart';
 import 'package:neupod/data/scan/tag_reader.dart';
 import 'package:neupod/domain/library_view/library_view.dart';
 import 'package:neupod_storage/neupod_storage.dart';
+// ignore: implementation_imports
+import 'package:neupod_storage/src/messages.g.dart';
+
+/// Download states by URI; records each ask.
+class _StatesApi extends NeupodStorageApi {
+  final states = <String, DownloadState>{};
+  final asked = <String>[];
+
+  @override
+  Future<List<DownloadState>> downloadStates(List<String> uris) async {
+    asked.addAll(uris);
+    return [for (final u in uris) states[u] ?? DownloadState.missing];
+  }
+}
 
 const _fixtures = 'test/fixtures/art';
 
@@ -326,6 +340,53 @@ void main() {
           .map((e) => e.path.split('/').last),
       ['front_jpeg.flac'],
     );
+  });
+
+  group('the opener on iOS (owner decision 7)', () {
+    test(
+      'a file that is not on the phone is refused before it is opened',
+      () async {
+        final api = _StatesApi();
+        final open = storageArtOpener(
+          NeupodStorage(api: api),
+          checkDownloaded: true,
+        );
+        for (final s in [
+          DownloadState.notDownloaded,
+          DownloadState.downloading,
+          DownloadState.failed,
+          DownloadState.missing,
+        ]) {
+          api.states['file:///m/a.flac'] = s;
+          await expectLater(
+            open(const ArtFile(uri: 'file:///m/a.flac', size: 1, mtime: 1)),
+            throwsA(
+              isA<StorageException>().having(
+                (e) => e.code,
+                'code',
+                'not-downloaded',
+              ),
+            ),
+            reason: '$s',
+          );
+        }
+        api.states['file:///m/a.flac'] = DownloadState.downloaded;
+        final h = await open(
+          const ArtFile(uri: 'file:///m/a.flac', size: 1, mtime: 1),
+        );
+        expect(h, isA<FileReaderHandle>());
+        h.discard();
+      },
+    );
+
+    test('Android asks nothing first', () async {
+      final api = _StatesApi();
+      final h = await storageArtOpener(NeupodStorage(api: api))(
+        const ArtFile(uri: 'file:///m/a.flac', size: 1, mtime: 1),
+      );
+      expect(api.asked, isEmpty);
+      h.discard();
+    });
   });
 
   test('a ready path passes through; no sources and no path is null', () async {
