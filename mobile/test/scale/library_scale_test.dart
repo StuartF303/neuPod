@@ -13,8 +13,9 @@
 //   Albums (and Cover Flow, which shows the same list, owner decision 14),
 //   Songs, an artist's albums, an album's tracks, and Search's prefix match.
 //
-// Size: NEUPOD_SCALE_TRACKS (default 2,000, run on every PR with generous
-// limits, so a regression shows). The full run is 20,000:
+// Size: NEUPOD_SCALE_TRACKS (default 2,000, run on every PR with limits
+// about 5 to 10 times what CI takes, so a regression of that size fails).
+// The full run is 20,000:
 //
 //   NEUPOD_SCALE_TRACKS=20000 flutter test test/scale
 //
@@ -46,32 +47,54 @@ import '../support/host_library.dart';
 final int _tracks =
     int.tryParse(Platform.environment['NEUPOD_SCALE_TRACKS'] ?? '') ?? 2000;
 
-/// The limits every run must meet, from the targets in
-/// docs/app/decisions/0013-scale-test.md. The spec's own targets are for a
-/// mid-range phone, so on the host they are loose: at the 2,000 tracks of
-/// every PR they catch a regression of several times, not a slow percent.
-abstract final class _Limits {
-  /// The spec's first scan: 5,000 FLAC files in five minutes, 60 ms a file.
-  static Duration firstScan(int tracks) => Duration(milliseconds: 60 * tracks);
+/// The limits a run must meet (docs/app/decisions/0013-scale-test.md).
+///
+/// - **Every PR (2,000 tracks or fewer):** tight, about 5 to 10 times what
+///   the slower of the M1 host and the CI runner takes, so a regression of
+///   that size fails and CI's own variation does not.
+/// - **A larger run (the full 20,000):** the targets, the spec's own (first
+///   scan, unchanged rescan) and the lead calls (the rest). The spec's are for
+///   a mid-range phone, so the host meets them easily.
+final class _Limits {
+  _Limits(this.tracks);
+  final int tracks;
+  bool get _perPr => tracks <= 2000;
 
-  /// The spec's rescan with nothing changed: ten seconds.
-  static const rescanUnchanged = Duration(seconds: 10);
+  /// Per PR 15 s (CI 2.7 s); the spec: 5,000 FLAC files in five minutes,
+  /// 60 ms a file.
+  Duration get firstScan => _perPr
+      ? const Duration(seconds: 15)
+      : Duration(milliseconds: 60 * tracks);
 
-  /// A rescan after 100 changes (lead call): as the unchanged one, plus
-  /// 100 files read at the first scan's rate.
-  static const rescan100 = Duration(seconds: 16);
+  /// Per PR 2 s (CI 0.16 s); the spec: ten seconds.
+  Duration get rescanUnchanged =>
+      _perPr ? const Duration(seconds: 2) : const Duration(seconds: 10);
+
+  /// Per PR 3 s (CI 0.2 s); the target: the unchanged rescan plus 100 files
+  /// at the first scan's rate.
+  Duration get rescan100 =>
+      _perPr ? const Duration(seconds: 3) : const Duration(seconds: 16);
 
   /// The first list after a launch or a scan, which reads the whole table
-  /// and folds it into the firmware's entities (lead call).
-  static const coldLoad = Duration(seconds: 1);
+  /// and folds it into the firmware's entities. Per PR 500 ms (CI 124 ms);
+  /// the target 1 s.
+  Duration get coldLoad =>
+      _perPr ? const Duration(milliseconds: 500) : const Duration(seconds: 1);
 
-  /// Any list once loaded (lead call).
-  static const listRead = Duration(milliseconds: 100);
+  /// Any list once loaded. Per PR 20 ms (host under 1.2 ms); the target
+  /// 100 ms.
+  Duration get listRead => _perPr
+      ? const Duration(milliseconds: 20)
+      : const Duration(milliseconds: 100);
 
-  /// One Search keystroke, the prefix match over every name (lead call).
-  static const searchKey = Duration(milliseconds: 50);
+  /// One Search keystroke, the prefix match over every name. Per PR 20 ms
+  /// (host 0.6 ms); the target 50 ms.
+  Duration get searchKey => _perPr
+      ? const Duration(milliseconds: 20)
+      : const Duration(milliseconds: 50);
 
-  /// Bytes of database per track (lead call: 40 MB at 20,000).
+  /// Bytes of database per track (the target: 40 MB at 20,000; 850 bytes
+  /// measured).
   static const dbBytesPerTrack = 2048;
 }
 
@@ -100,6 +123,7 @@ void main() {
     'the scale library: scans, rescans and list reads at $_tracks tracks',
     timeout: const Timeout(Duration(minutes: 60)),
     () async {
+      final limits = _Limits(_tracks);
       final report = <String, Object>{'tracks': _tracks};
       final rssAtStart = ProcessInfo.currentRss;
 
@@ -256,28 +280,24 @@ void main() {
       final out = Platform.environment['NEUPOD_SCALE_REPORT'];
       if (out != null && out.isNotEmpty) File(out).writeAsStringSync(text);
 
-      expect(
-        firstScan,
-        lessThan(_Limits.firstScan(_tracks)),
-        reason: 'first scan',
-      );
+      expect(firstScan, lessThan(limits.firstScan), reason: 'first scan');
       expect(
         rescan,
-        lessThan(_Limits.rescanUnchanged),
+        lessThan(limits.rescanUnchanged),
         reason: 'rescan, nothing changed',
       );
-      expect(rescan100, lessThan(_Limits.rescan100), reason: '100 changes');
-      expect(coldLoad, lessThan(_Limits.coldLoad), reason: 'first list');
+      expect(rescan100, lessThan(limits.rescan100), reason: '100 changes');
+      expect(coldLoad, lessThan(limits.coldLoad), reason: 'first list');
       for (final MapEntry(:key, :value) in reads.entries) {
         expect(
           Duration(microseconds: value),
-          lessThan(_Limits.listRead),
+          lessThan(limits.listRead),
           reason: '$key (${_ms(value)} ms)',
         );
       }
       expect(
         Duration(microseconds: searchKey),
-        lessThan(_Limits.searchKey),
+        lessThan(limits.searchKey),
         reason: 'a Search keystroke (${_ms(searchKey)} ms)',
       );
       expect(dbBytes, lessThan(_Limits.dbBytesPerTrack * _tracks));

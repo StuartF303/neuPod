@@ -153,13 +153,23 @@ StorageRoot? findTestRoot(List<StorageRoot> roots) {
 }
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   final storage = NeupodStorage();
 
-  // Under `flutter run` the platform turns semantics on shortly after start;
-  // let that happen before the first test, whose end-of-test check would
-  // otherwise count the new SemanticsHandle as leaked.
-  setUpAll(() => Future<void>.delayed(const Duration(seconds: 2)));
+  // As in app_launch_test.dart: under `xcodebuild test` iOS turns
+  // accessibility on just after launch, and the SemanticsHandle the binding
+  // then opens must not land inside a test ("A SemanticsHandle was active at
+  // the end of the test"). Wait until it is on (bounded: a device without
+  // VoiceOver never turns it on), not a fixed time, which a slow runner
+  // outlasts.
+  setUpAll(() async {
+    if (!Platform.isIOS) return;
+    final deadline = DateTime.now().add(const Duration(seconds: 10));
+    while (!binding.platformDispatcher.semanticsEnabled &&
+        DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+  });
 
   testWidgets(
     'iOS: Documents is always a root and is walkable',

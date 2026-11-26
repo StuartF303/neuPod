@@ -546,6 +546,49 @@ void main() {
     });
 
     group('sort order of the lists', () {
+      // `alb_cmp` (app/library/lib_build.c): an album's songs are in disc,
+      // then track number order (none counts as 0, so first), then the
+      // title's collation key; the file names' order plays no part.
+      test('an album without track numbers is in title order', () async {
+        final lib = await _lib([
+          for (final (file, title) in [
+            ('01 Zulu.flac', 'Zulu'),
+            ('02 The Mike.flac', 'The Mike'),
+            ('03 alpha.flac', 'alpha'),
+            ('04 Écho.flac', 'Écho'),
+          ])
+            _t('A/2000 B/$file', title: title, artist: 'A', album: 'B'),
+        ]);
+        expect(_titles(lib.albumsOf('A').single), [
+          'alpha',
+          'Écho',
+          'The Mike',
+          'Zulu',
+        ]);
+      });
+
+      test('songs without a track number come before numbered ones', () async {
+        final lib = await _lib([
+          _t(
+            'A/2000 B/01 Bee.flac',
+            title: 'Bee',
+            artist: 'A',
+            album: 'B',
+            track: 1,
+          ),
+          _t('A/2000 B/Zed.flac', title: 'Zed', artist: 'A', album: 'B'),
+          _t(
+            'A/2000 B/Ant.flac',
+            title: 'Ant',
+            artist: 'A',
+            album: 'B',
+            track: 2,
+          ),
+          _t('A/2000 B/Yak.flac', title: 'Yak', artist: 'A', album: 'B'),
+        ]);
+        expect(_titles(lib.albumsOf('A').single), ['Yak', 'Zed', 'Bee', 'Ant']);
+      });
+
       test('Songs sort by the collation rule', () async {
         final lib = await _lib([
           for (final title in ['Ash', 'The Apple', '7 Seconds', '#1 Fan'])
