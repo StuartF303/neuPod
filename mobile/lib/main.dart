@@ -7,6 +7,10 @@ import 'package:neupod/app/neupod_app.dart';
 import 'package:neupod/app/scan_service_platform.dart';
 
 void main() {
+  // First, before any override is built: the Android scan service registers
+  // its channel handler when it is constructed, and a channel needs the
+  // binding. Without this the app dies in main() on Android.
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(
     // Automatic retry is off (decision 0006): a provider that fails to open a
     // resource, such as the database, should fail visibly, not retry forever.
