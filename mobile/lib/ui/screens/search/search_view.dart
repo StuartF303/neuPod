@@ -7,6 +7,7 @@
 library;
 
 import 'package:flutter/widgets.dart';
+import 'package:neupod/domain/library_view/reason_words.dart';
 import 'package:neupod/ui/components/list_parts.dart';
 import 'package:neupod/ui/components/list_row.dart';
 import 'package:neupod/ui/components/neupod_screen.dart';
@@ -158,6 +159,7 @@ class SearchView extends StatelessWidget {
             : null,
         chevron: hit.kind == SearchKind.artist,
         disabledReason: hit.reason,
+        action: hit.downloadable ? downloadActionText : null,
         selection: n == selected ? RowSelection.selected : RowSelection.none,
         position: '${n + 1} of ${session.count}',
         onTap: () => onOpen?.call(hit),

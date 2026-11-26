@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/domain/library/track.dart';
+import 'package:neupod/domain/library_view/library_view.dart';
 import 'package:neupod/domain/library_view/reason_words.dart';
 
 String _source(String path) => File('../$path').readAsStringSync();
@@ -104,5 +105,35 @@ void main() {
       expect(cannotDecode(PlayerPlatform.ios, c), isFalse, reason: c);
       expect(cannotDecode(PlayerPlatform.android, c), isFalse, reason: c);
     }
+  });
+
+  test('a song not downloaded says Downloading once asked for, until then '
+      'Not downloaded; other reasons are untouched', () {
+    Song song(String? reason, {bool downloadable = false}) => Song(
+      id: '1',
+      title: 't',
+      artist: 'a',
+      album: 'b',
+      albumId: 'b',
+      uri: 'file:///m/t.flac',
+      unplayableReason: reason,
+      downloadable: downloadable,
+    );
+    final away = song(notDownloadedText, downloadable: true);
+    expect(songRowReason(away, const {}), 'Not downloaded');
+    expect(songRowReason(away, const {'file:///m/t.flac'}), 'Downloading');
+    expect(
+      songRowReason(away, const {'file:///m/other.flac'}),
+      notDownloadedText,
+    );
+    expect(
+      songRowReason(song(damagedText), const {'file:///m/t.flac'}),
+      'Damaged file',
+    );
+    expect(songRowReason(song(null), const {'file:///m/t.flac'}), isNull);
+    expect(
+      unreadableReasonText(UnreadableReason.notDownloaded, 'flac'),
+      notDownloadedText,
+    );
   });
 }

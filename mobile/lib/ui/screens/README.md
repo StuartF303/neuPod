@@ -60,7 +60,11 @@ Compilations, and a small Settings). Now Playing, the panel's content and Search
 - **Greyed songs** (Songs, an album, an artist's or genre's songs, Search results): the reason at the right (`Damaged
   file`, or `Opus, can't play` for a format the phone cannot decode; `domain/library_view/reason_words.dart`). The bar
   lands on them, as on the device (`ui_list.c` skips no row), and takes the bar's colours there; Select or a tap opens
-  nothing; they are left out of every queue.
+  nothing; they are left out of every queue. The one exception is `Not downloaded` (iOS, an iCloud file that is not on
+  the phone; owner decision 7): Select or a tap asks iOS to download it, the reason reads `Downloading` until the scan
+  finds it on the phone (`app/icloud_download_providers.dart`), and then the row is an ordinary song. The screen reader
+  hears the row as a button with the hint `Download`. A download iOS refuses gets the centred panel `Can't download`.
+  Search results take the action too, but keep `Not downloaded` until the next scan.
 - **Cover Flow**: the Albums list's albums in its order (owner decision 14); Classic angled with reflections, Modern
   flat; the wheel moves a cover per step, Select or a tap on the centre cover opens it, a drag moves the covers. Under
   the title, in both styles, the device's caption `Artist · Year · n songs` (`flow_texts` in `app/ui/ui_library.c`).

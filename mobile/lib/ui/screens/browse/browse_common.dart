@@ -9,9 +9,11 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neupod/app/icloud_download_providers.dart';
 import 'package:neupod/app/library_view_providers.dart';
 import 'package:neupod/app/providers.dart';
 import 'package:neupod/domain/library_view/library_view.dart';
+import 'package:neupod/domain/library_view/reason_words.dart';
 import 'package:neupod/ui/components/art_frame.dart';
 import 'package:neupod/ui/components/list_parts.dart';
 import 'package:neupod/ui/screens/shell/cover_art.dart';
@@ -96,7 +98,8 @@ class BrowseListBody extends StatelessWidget {
       ListGround(besidePane: besidePane, topRule: topRule, child: child);
 }
 
-/// Loads once from the library view and builds with the result, or with
+/// Loads from the library view (again whenever a finished scan rebuilds it)
+/// and builds with the result, or with
 /// null while it loads (the screens draw their status bar either way).
 class LibraryLoader<T> extends ConsumerStatefulWidget {
   /// Loads with [load] and builds with [builder].
@@ -111,6 +114,7 @@ class LibraryLoader<T> extends ConsumerStatefulWidget {
 
 class _LibraryLoaderState<T> extends ConsumerState<LibraryLoader<T>> {
   T? _data;
+  bool _loaded = false;
 
   @override
   void initState() {
@@ -122,6 +126,7 @@ class _LibraryLoaderState<T> extends ConsumerState<LibraryLoader<T>> {
     try {
       final library = await ref.read(libraryViewProvider.future);
       final data = await widget.load(library);
+      _loaded = true;
       if (mounted) setState(() => _data = data);
     } on Object {
       if (!mounted) return;
@@ -137,14 +142,26 @@ class _LibraryLoaderState<T> extends ConsumerState<LibraryLoader<T>> {
   }
 
   @override
-  Widget build(BuildContext context) => widget.builder(context, _data);
+  Widget build(BuildContext context) {
+    // A finished scan rebuilds the library view: load again, so an open list
+    // shows what the scan found (a song downloaded from iCloud now playable).
+    // (Not the first load's own loading-to-data step: initState covers it.)
+    ref.listen(libraryViewProvider, (was, now) {
+      if (_loaded && was?.isLoading == true && !now.isLoading && now.hasValue) {
+        unawaited(_load());
+      }
+    });
+    return widget.builder(context, _data);
+  }
 }
 
-/// A song as a two-line row: the title over `Artist · Album`.
+/// A song as a two-line row: the title over `Artist · Album`. [downloading]
+/// is `icloudDownloadsProvider`'s set, watched by the screen.
 NeupodListItem songItem(
   BuildContext context, {
   required Song song,
   required VoidCallback onActivate,
+  Set<String> downloading = const {},
 }) {
   final tier = NeupodTheme.of(context).tier;
   return NeupodListItem.row(
@@ -152,8 +169,10 @@ NeupodListItem songItem(
     title: song.title,
     subtitle: '${song.artist} · ${song.album}',
     initial: song.sortLetter,
-    disabledReason: song.unplayableReason,
+    disabledReason: songRowReason(song, downloading),
+    greyedAction: song.downloadable ? downloadActionText : null,
     onActivate: onActivate,
+    id: song.id,
   );
 }
 
@@ -183,7 +202,12 @@ NeupodListItem albumItem(
 /// Plays [songs] from [chosen]: the list it came from is the queue, the songs
 /// before it kept for Previous (docs/ui.md). Greyed songs are left out of the
 /// queue, so one that cannot play never stops it. Opens Now Playing.
+///
+/// A [chosen] song that is in iCloud and not on the phone is not played:
+/// Select asks iOS to download it (owner decision 7), and its row says
+/// `Downloading` until the scan finds it on the phone.
 Future<void> playFrom(WidgetRef ref, List<Song> songs, Song chosen) async {
+  if (chosen.downloadable) return download(ref, chosen);
   final playable = [
     for (final s in songs)
       if (s.playable) s,
@@ -202,6 +226,24 @@ Future<void> playAll(WidgetRef ref, List<Song> songs) async {
   ];
   if (playable.isEmpty) return;
   await _start(ref, playable, 0);
+}
+
+/// Asks iOS to download [song] (owner decision 7). If iOS refuses (signed
+/// out of iCloud, say), a centred panel says so, as the one for a song that
+/// will not play does.
+Future<void> download(WidgetRef ref, Song song) async {
+  try {
+    await ref.read(icloudDownloadsProvider.notifier).request(song.uri);
+  } on Object {
+    unawaited(
+      ref
+          .read(shellProvider.notifier)
+          .showPanel(
+            title: "Can't download",
+            message: "iCloud couldn't download this song.",
+          ),
+    );
+  }
 }
 
 Future<void> _start(WidgetRef ref, List<Song> songs, int start) async {

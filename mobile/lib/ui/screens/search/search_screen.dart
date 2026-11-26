@@ -51,6 +51,7 @@ final searchFunctionProvider = FutureProvider<SearchFunction>((ref) async {
         title: s.title,
         detail: '${s.artist} · ${s.album}',
         reason: s.unplayableReason,
+        downloadable: s.downloadable,
       ),
   ];
   // Lower-cased once, here, not on every key.
@@ -251,7 +252,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           pushScreen(ref, artist.name, (_) => CollectionScreen.artist(artist));
         }
       case SearchKind.song:
-        if (hit.reason != null) return; // greyed: its reason is on the row
+        // Greyed: its reason is on the row, and Select does nothing, except
+        // on a song not downloaded from iCloud, which it asks iOS for.
+        if (hit.reason != null && !hit.downloadable) return;
         final song = await library.song(hit.id);
         if (song != null && mounted) await playFrom(ref, [song], song);
     }

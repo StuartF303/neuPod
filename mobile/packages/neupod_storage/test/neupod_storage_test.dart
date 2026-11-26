@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
@@ -21,6 +22,14 @@ class FakeApi extends NeupodStorageApi {
   /// What the last page reports as `complete`.
   bool complete = true;
 
+  /// When set, a page never comes back (a provider that does not answer).
+  bool stall = false;
+
+  /// What [downloadStates] answers, by URI ([DownloadState.missing] if
+  /// absent).
+  final states = <String, DownloadState>{};
+  PlatformException? failDownload;
+
   @override
   Future<String> startWalk(String rootId) async {
     calls.add('start $rootId');
@@ -32,6 +41,7 @@ class FakeApi extends NeupodStorageApi {
   @override
   Future<WalkBatch> nextWalkBatch(String walkId, int maxEntries) async {
     calls.add('next $walkId $maxEntries');
+    if (stall) return Completer<WalkBatch>().future;
     final end = (_cursor + maxEntries).clamp(0, files.length);
     final page = files.sublist(_cursor, end);
     _cursor = end;
@@ -47,6 +57,21 @@ class FakeApi extends NeupodStorageApi {
     calls.add('openFd $uri');
     throw PlatformException(code: 'open-failed', message: 'gone');
   }
+
+  @override
+  Future<List<StorageRoot>> listRoots() =>
+      Completer<List<StorageRoot>>().future;
+
+  @override
+  Future<void> requestDownload(String uri) async {
+    calls.add('download $uri');
+    if (failDownload != null) throw failDownload!;
+  }
+
+  @override
+  Future<List<DownloadState>> downloadStates(List<String> uris) async => [
+    for (final u in uris) states[u] ?? DownloadState.missing,
+  ];
 
   @override
   Future<String> backedUpDataPath() async => '/data/files/stats';
@@ -138,6 +163,20 @@ void main() {
           .walk('root', batchSize: 2)
           .first;
       expect(first.entries, hasLength(2));
+      await pumpEventQueue();
+      expect(api.calls, contains('cancel w1'));
+    });
+
+    test('a page that never comes back ends the walk with timeout', () async {
+      final api = FakeApi([entry(1)])..stall = true;
+      await expectLater(
+        NeupodStorage(api: api)
+            .walk('root', pageTimeout: const Duration(milliseconds: 20))
+            .toList(),
+        throwsA(
+          isA<StorageException>().having((e) => e.code, 'code', 'timeout'),
+        ),
+      );
       await pumpEventQueue();
       expect(api.calls, contains('cancel w1'));
     });
@@ -272,6 +311,52 @@ void main() {
         7,
       ]);
       FdReaderHandle(openFdOnHost(file.path)).discard();
+    });
+  });
+
+  test('roots that never come back end with timeout', () async {
+    await expectLater(
+      NeupodStorage(api: FakeApi(const []))
+          .roots(timeout: const Duration(milliseconds: 20)),
+      throwsA(isA<StorageException>().having((e) => e.code, 'code', 'timeout')),
+    );
+  });
+
+  group('iCloud downloads', () {
+    test('a download request goes to the platform with the URI', () async {
+      final api = FakeApi(const []);
+      await NeupodStorage(api: api).requestDownload('file:///m/a.flac');
+      expect(api.calls, ['download file:///m/a.flac']);
+    });
+
+    test('a refused download becomes StorageException', () async {
+      final api = FakeApi(const [])
+        ..failDownload = PlatformException(code: 'download-failed');
+      await expectLater(
+        NeupodStorage(api: api).requestDownload('file:///m/a.flac'),
+        throwsA(
+          isA<StorageException>().having(
+            (e) => e.code,
+            'code',
+            'download-failed',
+          ),
+        ),
+      );
+    });
+
+    test('states come back in the order asked', () async {
+      final api = FakeApi(const [])
+        ..states['file:///a'] = DownloadState.downloading
+        ..states['file:///b'] = DownloadState.downloaded;
+      expect(
+        await NeupodStorage(api: api)
+            .downloadStates(['file:///b', 'file:///a', 'file:///c']),
+        [
+          DownloadState.downloaded,
+          DownloadState.downloading,
+          DownloadState.missing,
+        ],
+      );
     });
   });
 

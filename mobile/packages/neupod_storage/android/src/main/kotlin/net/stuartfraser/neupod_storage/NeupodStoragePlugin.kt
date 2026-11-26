@@ -494,6 +494,14 @@ class NeupodStoragePlugin :
             pfd.detachFd().toLong()
         }
 
+    // iCloud downloads (owner decision 7) are iOS only: an Android walk never reports a file as not downloaded (the
+    // picker is local-only and virtual documents are skipped).
+    override fun requestDownload(uri: String, callback: (Result<Unit>) -> Unit) =
+        callback(Result.failure(FlutterError("unsupported", "requestDownload is iOS only")))
+
+    override fun downloadStates(uris: List<String>, callback: (Result<List<DownloadState>>) -> Unit) =
+        callback(Result.failure(FlutterError("unsupported", "downloadStates is iOS only")))
+
     override fun appSupportPath(): String =
         context?.noBackupFilesDir?.absolutePath ?: throw FlutterError("detached", "plugin is detached")
 

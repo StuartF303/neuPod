@@ -32,6 +32,7 @@ class NeupodRow extends StatelessWidget {
     this.selection = RowSelection.none,
     this.pressed = false,
     this.disabledReason,
+    this.action,
     this.position,
     this.paintsBar = true,
     this.onTap,
@@ -65,6 +66,11 @@ class NeupodRow extends StatelessWidget {
   /// selected colour wins over the greyed one). A tap selects it; nothing
   /// opens.
   final String? disabledReason;
+
+  /// What Select does on a greyed row that still does something, for the
+  /// screen reader (`Download` on an iCloud song that is not on the phone,
+  /// owner decision 7). Null: a greyed row does nothing.
+  final String? action;
 
   /// For the screen reader: `4 of 7`.
   final String? position;
@@ -220,9 +226,10 @@ class NeupodRow extends StatelessWidget {
       child: Semantics(
         label: semanticsLabel,
         selected: selection != RowSelection.none,
-        enabled: !greyed,
-        button: !greyed,
-        onTap: greyed ? null : onTap,
+        enabled: !greyed || action != null,
+        button: !greyed || action != null,
+        hint: greyed ? action : null,
+        onTap: greyed && action == null ? null : onTap,
         child: ExcludeSemantics(
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,

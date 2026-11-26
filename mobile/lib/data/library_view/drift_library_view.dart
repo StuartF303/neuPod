@@ -568,9 +568,16 @@ final class _Row {
 
   /// The pictures to try for this track, in the firmware's order
   /// (`art_sources`): the embedded JPEG, then the folder's cover file.
+  ///
+  /// A track not downloaded from iCloud has no embedded source: opening its
+  /// file would make iOS fetch it without a tap (owner decision 7). The row
+  /// keeps where its picture is, so the source (and the cache key) come back
+  /// with the file. Its folder's cover file is still tried; the scanner
+  /// clears a cover file that is itself not downloaded.
   late final List<ArtFile> artFiles = () {
     final kind = ArtKind.fromCode(t.artKind);
-    final embedded = kind == ArtKind.none
+    final away = t.reasonCode == UnreadableReason.notDownloaded.code;
+    final embedded = kind == ArtKind.none || away
         ? null
         : EmbeddedArt(
             offset: t.artOffset ?? 0,
@@ -616,6 +623,7 @@ final class _Row {
           : _platform != null && cannotDecode(_platform, t.codec)
           ? cannotDecodeText(t.codec)
           : null,
+      downloadable: reason == UnreadableReason.notDownloaded,
       sortLetter: collateLetter(t.titleSortKey),
       art: ArtRef(seed: group.seed, sources: artFiles),
     );

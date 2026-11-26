@@ -32,6 +32,7 @@ class SearchHit {
     this.detail,
     this.year,
     this.reason,
+    this.downloadable = false,
   });
 
   /// Artist, album or song.
@@ -53,6 +54,10 @@ class SearchHit {
   /// with the reason at the right, and opening it does nothing.
   final String? reason;
 
+  /// A song in iCloud that is not on the phone (owner decision 7): opening
+  /// it asks iOS to download it.
+  final bool downloadable;
+
   /// What it is, at the right of a live result in Small: `Artist`,
   /// `Album · 1991`, or a song's artist.
   String get label => switch (kind) {
@@ -69,10 +74,12 @@ class SearchHit {
       other.title == title &&
       other.detail == detail &&
       other.year == year &&
-      other.reason == reason;
+      other.reason == reason &&
+      other.downloadable == downloadable;
 
   @override
-  int get hashCode => Object.hash(kind, id, title, detail, year, reason);
+  int get hashCode =>
+      Object.hash(kind, id, title, detail, year, reason, downloadable);
 }
 
 /// The matches for a query, grouped as the results list shows them. Each

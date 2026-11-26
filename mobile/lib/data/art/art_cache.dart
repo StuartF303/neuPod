@@ -48,16 +48,32 @@ typedef ArtReaderOpener = StorageReader Function(ReaderHandle handle);
 typedef ArtIsolateRunner = Future<R> Function<R>(R Function() computation);
 
 /// The handle opener over neupod_storage: the source as a downloaded entry.
-ArtHandleOpener storageArtOpener(NeupodStorage storage) =>
-    (f) => storage.openHandle(
-      StorageEntry(
-        relPath: '',
-        uri: f.uri,
-        size: f.size,
-        modifiedMs: f.mtime,
-        state: EntryState.local,
-      ),
-    );
+///
+/// With [checkDownloaded] (iOS), the file's download state is read from its
+/// metadata first and anything not on the phone is refused
+/// (`not-downloaded`), so a picture is never the reason iOS fetches a file
+/// from iCloud (owner decision 7), even when the library has not yet seen
+/// it evicted. A refused source is tried again at the next ask.
+ArtHandleOpener storageArtOpener(
+  NeupodStorage storage, {
+  bool checkDownloaded = false,
+}) => (f) async {
+  if (checkDownloaded) {
+    final [state] = await storage.downloadStates([f.uri]);
+    if (state != DownloadState.downloaded) {
+      throw StorageException('not-downloaded', f.uri);
+    }
+  }
+  return storage.openHandle(
+    StorageEntry(
+      relPath: '',
+      uri: f.uri,
+      size: f.size,
+      modifiedMs: f.mtime,
+      state: EntryState.local,
+    ),
+  );
+};
 
 /// Largest picture read (an embedded picture or a cover file); bigger ones
 /// are skipped as damaged. A known difference: the firmware has no byte

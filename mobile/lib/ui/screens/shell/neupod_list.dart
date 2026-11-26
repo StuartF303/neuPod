@@ -74,6 +74,7 @@ class NeupodListItem {
     this.initial,
     this.label = '',
     this.onActivate,
+    this.id,
   });
 
   /// A row of the list's text tier, from the common parts.
@@ -86,15 +87,20 @@ class NeupodListItem {
     bool chevron = false,
     Widget Function(bool selected)? thumbnail,
     String? disabledReason,
+    String? greyedAction,
     String? initial,
     VoidCallback? onActivate,
+    Object? id,
   }) {
     // A greyed row is selectable, as on the device (`ui_list.c` never skips
     // a dim row), but Select on it opens nothing: its reason is already on
     // the row (the UI styles design moves the device's "Can't play" notice
-    // there).
+    // there). The one exception is a row with a [greyedAction]: an iCloud
+    // song not on the phone, where Select asks iOS to download it (owner
+    // decision 7).
     final greyed = disabledReason != null;
     return NeupodListItem(
+      id: id,
       height: height,
       twoLine: subtitle != null,
       initial: initial,
@@ -105,7 +111,7 @@ class NeupodListItem {
         ?value,
         if (greyed && disabledReason.isNotEmpty) disabledReason,
       ].join(', '),
-      onActivate: greyed ? null : onActivate,
+      onActivate: greyed && greyedAction == null ? null : onActivate,
       builder: (context, s) => NeupodRow(
         title: title,
         subtitle: subtitle,
@@ -114,6 +120,7 @@ class NeupodListItem {
         chevron: chevron,
         thumbnail: thumbnail?.call(s.selection != RowSelection.none),
         disabledReason: disabledReason,
+        action: greyedAction,
         selection: s.selection,
         pressed: s.pressed,
         position: s.position,
@@ -134,6 +141,12 @@ class NeupodListItem {
   final String label;
   final VoidCallback? onActivate;
   final Widget Function(BuildContext context, ItemState state) builder;
+
+  /// What the row stands for (a song's id), or null. When the list's items
+  /// change (a finished scan reloads it), the bar stays on the item with the
+  /// same id, at the same place on the screen, rather than at the same
+  /// index.
+  final Object? id;
 }
 
 /// A band as an item: [child] is drawn at the item's height.
@@ -219,7 +232,20 @@ class _NeupodListState extends ConsumerState<NeupodList>
   @override
   void didUpdateWidget(NeupodList old) {
     super.didUpdateWidget(old);
+    final was = _sel >= 0 && _sel < old.items.length
+        ? old.items[_sel].id
+        : null;
+    final oldTops = _tops;
     _layout();
+    if (was != null && _sel < oldTops.length) {
+      final i = _items.indexWhere((item) => item.id == was);
+      if (i >= 0 && i != _sel) {
+        _scroll += _tops[i] - oldTops[_sel];
+        _sel = i;
+        _animate = false;
+        if (_placed) _scroll = _scrollFor(i, _scroll);
+      }
+    }
     if (_sel < 0 || _sel >= _items.length || !_items[_sel].selectable) {
       _sel = _firstSelectable(_sel < 0 ? 0 : _sel);
     }

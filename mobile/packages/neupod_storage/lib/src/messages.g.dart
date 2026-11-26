@@ -127,6 +127,26 @@ enum EntryState {
   notDownloaded,
 }
 
+/// Where an iCloud file's download stands (owner decision 7). Read from the
+/// file's metadata only: asking never reads its bytes.
+enum DownloadState {
+  /// Its bytes are on the device: the next scan reads it.
+  downloaded,
+
+  /// Not on the device, and iOS is not fetching it.
+  notDownloaded,
+
+  /// iOS is fetching it.
+  downloading,
+
+  /// iOS reported an error for its download (offline, no space, signed out
+  /// of iCloud).
+  failed,
+
+  /// No file at that URI any more (deleted, moved, or its folder removed).
+  missing,
+}
+
 /// A library folder the app holds read access to.
 class StorageRoot {
   StorageRoot({
@@ -206,7 +226,9 @@ class StorageEntry {
   /// an iCloud placeholder, the name of the file it stands for).
   String relPath;
 
-  /// `content://` (Android) or `file://` (iOS). Open it with
+  /// `content://` (Android) or `file://` (iOS); for an iCloud placeholder,
+  /// the URL of the file it stands for, so the URI stays the same once the
+  /// file is downloaded. Open it with
   /// `NeupodStorage.openReader`, or hand it to the audio engine.
   String uri;
 
@@ -337,14 +359,17 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is EntryState) {
       buffer.putUint8(130);
       writeValue(buffer, value.index);
-    } else if (value is StorageRoot) {
+    } else if (value is DownloadState) {
       buffer.putUint8(131);
-      writeValue(buffer, value.encode());
-    } else if (value is StorageEntry) {
+      writeValue(buffer, value.index);
+    } else if (value is StorageRoot) {
       buffer.putUint8(132);
       writeValue(buffer, value.encode());
-    } else if (value is WalkBatch) {
+    } else if (value is StorageEntry) {
       buffer.putUint8(133);
+      writeValue(buffer, value.encode());
+    } else if (value is WalkBatch) {
+      buffer.putUint8(134);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -361,10 +386,13 @@ class _PigeonCodec extends StandardMessageCodec {
         final value = readValue(buffer) as int?;
         return value == null ? null : EntryState.values[value];
       case 131:
-        return StorageRoot.decode(readValue(buffer)!);
+        final value = readValue(buffer) as int?;
+        return value == null ? null : DownloadState.values[value];
       case 132:
-        return StorageEntry.decode(readValue(buffer)!);
+        return StorageRoot.decode(readValue(buffer)!);
       case 133:
+        return StorageEntry.decode(readValue(buffer)!);
+      case 134:
         return WalkBatch.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -567,6 +595,56 @@ class NeupodStorageApi {
       isNullValid: false,
     );
     return pigeonVar_replyValue! as int;
+  }
+
+  /// iOS only: asks iOS to download the iCloud file at [uri] (a `file://`
+  /// URI from a walk whose state was `notDownloaded`), with
+  /// `FileManager.startDownloadingUbiquitousItem(at:)`. Returns at once;
+  /// iOS fetches the file and the app reads nothing of it (owner decision
+  /// 7). Throws `not-in-root` for a URI outside the held roots and
+  /// `download-failed` when iOS refuses (not an iCloud file, signed out).
+  /// Android throws `unsupported`.
+  Future<void> requestDownload(String uri) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.neupod_storage.NeupodStorageApi.requestDownload$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[uri],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+  }
+
+  /// iOS only: the download state of each of [uris], in order, from file
+  /// metadata alone (placeholder names, `ubiquitousItemDownloadingStatus`,
+  /// the dataless flag): never a read of the file. Off the walk queue, so a
+  /// slow walk does not hold it up. Android throws `unsupported`.
+  Future<List<DownloadState>> downloadStates(List<String> uris) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.neupod_storage.NeupodStorageApi.downloadStates$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[uris],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return (pigeonVar_replyValue! as List<Object?>).cast<DownloadState>();
   }
 
   /// A private directory for the app's own data (the library database),
