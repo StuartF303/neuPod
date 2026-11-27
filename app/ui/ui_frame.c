@@ -152,16 +152,16 @@ static bool g_state_rec;      /* the glyph is in the recording colour (else the 
 static int8_t g_scan_dir;                /* ui_status_set_scan() */
 static uint8_t g_activity;               /* ui_activity_t, ui_status_set_activity() */
 static bool g_ext_speaker;               /* ui_status_set_external_speaker() */
-static lv_obj_t *g_dots_box, *g_dots[3]; /* three busy dots, first in the right zone, while the library builds in the background (LB-4; icon set decision 6) */
-static int g_dots_phase = -1; /* -1: not showing */
-static uint32_t g_dots_col[3];
+static lv_obj_t *g_dots[3]; /* three busy dots in a box, first in the right zone, while the library builds in the background (LB-4; icon set decision 6) */
+static int8_t g_dots_phase = -1; /* -1: not showing */
+static int8_t g_dots_lit = -1;   /* the dot drawn in ink (the others are ink3); -1 none. The Pico 2 W has no static RAM to spare: no colour table */
 static lv_obj_t *g_right;    /* the right-hand group, a flex row: busy dots, Wi-Fi, Bluetooth, output, lock, battery percentage, battery */
 static lv_obj_t *g_wifi, *g_bt, *g_out, *g_lock, *g_pct;
 static uint8_t g_out_shown; /* ui_out_glyph_t on show */
 static lv_obj_t *g_batt, *g_batt_fill; /* the drawn battery: outline with a terminal, and the fill inside it */
 static lv_obj_t *g_frame_scr;          /* the screen the frame lives on (the strips are children of it) */
 static uint32_t g_notice_seen, g_skip_seen;
-static int g_bt_shown = -1;
+static int8_t g_bt_shown = -1;
 static uint32_t g_bt_col = UI_C_STATUS_DIM;
 static hal_wifi_status g_wifi_shown = (hal_wifi_status)99;
 static uint32_t g_wifi_col = UI_C_INK2;
@@ -237,21 +237,21 @@ void ui_frame_init(lv_obj_t *scr) {
     lv_obj_set_flex_align(g_right, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(g_right, UIM->bar_gap, 0);
     lv_obj_align(g_right, LV_ALIGN_RIGHT_MID, -UIM->bar_inset, 0);
-    g_dots_box = lv_obj_create(g_right); /* busy dots: one bright, the others dim, moving along (the same dots the list rows use) */
-    lv_obj_remove_style_all(g_dots_box);
-    lv_obj_set_size(g_dots_box, 4 * UIM->glyph_step + UIM->glyph_bar_w, UIM->glyph_bar_w);
-    lv_obj_set_scrollable(g_dots_box, false);
-    lv_obj_set_hidden(g_dots_box, true);
+    lv_obj_t *dots_box = lv_obj_create(g_right); /* busy dots: one bright, the others dim, moving along (the same dots the list rows use) */
+    lv_obj_remove_style_all(dots_box);
+    lv_obj_set_size(dots_box, 4 * UIM->glyph_step + UIM->glyph_bar_w, UIM->glyph_bar_w);
+    lv_obj_set_scrollable(dots_box, false);
+    lv_obj_set_hidden(dots_box, true);
     for (int i = 0; i < 3; i++) {
-        g_dots[i] = lv_obj_create(g_dots_box);
+        g_dots[i] = lv_obj_create(dots_box);
         lv_obj_remove_style_all(g_dots[i]);
         lv_obj_set_size(g_dots[i], UIM->glyph_bar_w, UIM->glyph_bar_w);
         lv_obj_set_style_radius(g_dots[i], UIM->glyph_bar_w / 2, 0);
         lv_obj_set_pos(g_dots[i], i * UIM->glyph_step * 2, 0);
-        g_dots_col[i] = UI_C_INK3;
-        ui_obj_bg(g_dots[i], g_dots_col[i], 0);
+        ui_obj_bg(g_dots[i], UI_C_INK3, 0);
     }
     g_dots_phase = -1;
+    g_dots_lit = -1;
     g_wifi = ui_icon(g_right, UI_ICON_WIFI, false, UI_C_INK2); /* Wi-Fi state: hidden when the station is off, dim while joining, green when up */
     lv_obj_set_hidden(g_wifi, true);
     g_bt = ui_icon(g_right, UI_ICON_BLUETOOTH, false, UI_C_STATUS_DIM);
@@ -906,7 +906,7 @@ static void update_busy_dots(uint32_t now_ms) {
     }
     if (!on) {
         g_dots_phase = -1;
-        lv_obj_set_hidden(g_dots_box, true);
+        lv_obj_set_hidden(lv_obj_get_parent(g_dots[0]), true);
         return;
     }
     int phase = (int)((now_ms / 250u) % 3u);
@@ -914,14 +914,14 @@ static void update_busy_dots(uint32_t now_ms) {
         return;
     }
     if (g_dots_phase < 0) {
-        lv_obj_set_hidden(g_dots_box, false);
+        lv_obj_set_hidden(lv_obj_get_parent(g_dots[0]), false);
     }
-    g_dots_phase = phase;
-    for (int i = 0; i < 3; i++) {
-        uint32_t c = i == phase ? UI_C_INK : UI_C_INK3;
-        ui_obj_bg_swap(g_dots[i], g_dots_col[i], c, 0);
-        g_dots_col[i] = c;
+    g_dots_phase = (int8_t)phase;
+    if (g_dots_lit >= 0) {
+        ui_obj_bg_swap(g_dots[g_dots_lit], UI_C_INK, UI_C_INK3, 0);
     }
+    ui_obj_bg_swap(g_dots[phase], UI_C_INK3, UI_C_INK, 0);
+    g_dots_lit = (int8_t)phase;
 }
 
 // ---- The icon set's status-bar glyphs (docs/design/2026-11-26-icon-set) -------------------------------------------------------------------------
