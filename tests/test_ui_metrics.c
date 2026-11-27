@@ -11,6 +11,7 @@
 #include "lvgl.h"
 #include "fonts/neupod_fonts.h"
 #include "src/misc/lv_text_private.h" /* lv_text_get_width: LVGL private API, fine for a host test */
+#include "ui_icons.h"
 #include "ui_logic.h"
 #include "ui_metrics.h"
 #include "ui_theme.h"
@@ -246,6 +247,51 @@ TEST(text_filter_matches_the_fonts) {
     ASSERT_TRUE(font_has(&neupod_font_48, 0xF001));
 }
 
+// Every UI_ICON_* (ui_icons.h) has a glyph in every icon font compiled into this build: a missing one would draw as nothing, or a box at 16 px.
+// Keep the list in step with ui_icons.h.
+static uint32_t utf8_cp(const char *s) {
+    const unsigned char *u = (const unsigned char *)s;
+    if (u[0] < 0x80) {
+        return u[0];
+    }
+    if ((u[0] & 0xE0u) == 0xC0u) {
+        return ((u[0] & 0x1Fu) << 6) | (u[1] & 0x3Fu);
+    }
+    return ((u[0] & 0x0Fu) << 12) | ((u[1] & 0x3Fu) << 6) | (u[2] & 0x3Fu); /* the icons are all three bytes (U+E000..U+EFFF) */
+}
+
+TEST(every_icon_is_in_every_icon_font) {
+    static const char *const icons[] = {
+        UI_ICON_CHEVRON_RIGHT, UI_ICON_PLAY, UI_ICON_PAUSE, UI_ICON_SKIP_BACK, UI_ICON_SKIP_FORWARD, UI_ICON_SHUFFLE, UI_ICON_REPEAT,
+        UI_ICON_REPEAT_1, UI_ICON_VOLUME, UI_ICON_BLUETOOTH, UI_ICON_WIFI, UI_ICON_LOCK, UI_ICON_FOLDER, UI_ICON_FILE, UI_ICON_LOCK_OPEN,
+        UI_ICON_MONITOR, UI_ICON_HARD_DRIVE, UI_ICON_BATTERY, UI_ICON_VIBRATE, UI_ICON_CIRCLE_DOT,
+        /* the icon set of 2026-11-26 */
+        UI_ICON_FAST_FORWARD, UI_ICON_REWIND, UI_ICON_OPENING, UI_ICON_CANT_PLAY, UI_ICON_BUSY, UI_ICON_SPEAKER, UI_ICON_DOWNLOAD,
+        UI_ICON_DOWNLOADING, UI_ICON_STAR, UI_ICON_STAR_FILLED, UI_ICON_BLUETOOTH_CONNECTED, UI_ICON_JACK_PLUG, UI_ICON_RECORD, UI_ICON_HEADPHONES,
+    };
+    const lv_font_t *fonts[] = {&neupod_icons_16, &neupod_icons_24,
+#ifdef NEUPOD_UI_HIRES
+                                &neupod_icons_30, &neupod_icons_36, &neupod_icons_45,
+#endif
+    };
+    for (size_t f = 0; f < sizeof fonts / sizeof fonts[0]; f++) {
+        for (size_t i = 0; i < sizeof icons / sizeof icons[0]; i++) {
+            const uint32_t cp = utf8_cp(icons[i]);
+            ASSERT_EQ(3u, (unsigned)strlen(icons[i]));
+            if (!font_has(fonts[f], cp)) {
+                printf("  icon font %zu: U+%04X missing\n", f, (unsigned)cp);
+            }
+            ASSERT_TRUE(font_has(fonts[f], cp));
+            lv_font_glyph_dsc_t d;
+            ASSERT_TRUE(lv_font_get_glyph_dsc(fonts[f], &d, cp, 0) && d.box_w > 0 && d.box_h > 0); /* it draws something */
+        }
+    }
+    // the icon set's three own glyphs (tools/build_icon_extra_font.py) sit where ui_icons.h says
+    ASSERT_EQ(0xEF00u, utf8_cp(UI_ICON_JACK_PLUG));
+    ASSERT_EQ(0xEF01u, utf8_cp(UI_ICON_RECORD));
+    ASSERT_EQ(0xEF02u, utf8_cp(UI_ICON_STAR_FILLED));
+}
+
 // The two themes (app/ui/ui_theme.c, DS-1): every token is RGB565-safe (red and blue multiples of 8, green of 4: what the panel shows is what was
 // written), the text tokens are readable on the surfaces they are drawn on (WCAG contrast), and selecting a theme changes what a token resolves to.
 static double lum(uint32_t rgb) {
@@ -280,7 +326,18 @@ TEST(themes_are_rgb565_safe_and_readable) {
         ASSERT_TRUE(contrast(th->c[UI_TOK_INK], th->c[UI_TOK_ACCENT_SOFT]) >= 7.0);
         ASSERT_TRUE(contrast(th->c[UI_TOK_INK], th->c[UI_TOK_AMBER_SOFT]) >= 7.0);
         ASSERT_TRUE(contrast(th->c[UI_TOK_INK3], th->c[UI_TOK_SURFACE]) >= 2.5); // hints and disabled rows only
+        // The icon set's glyph colours (docs/design/2026-11-26-icon-set, README "Contrast"): 4.5:1 on the bar, and on the worst ground of the style
+        // they come from (Classic Light's darkest bar stop #B6BBC2; Modern's bar over a gold wash #2F2A1F); the stars on the page.
+        const uint32_t worst = t == 0 ? 0xB6BBC2u : 0x2F2A1Fu;
+        const ui_tok_t bar_glyphs[] = {UI_TOK_STATUS_DIM, UI_TOK_BT_ACTIVE, UI_TOK_RECORDING};
+        for (size_t i = 0; i < sizeof bar_glyphs / sizeof bar_glyphs[0]; i++) {
+            ASSERT_TRUE(contrast(th->c[bar_glyphs[i]], th->c[UI_TOK_BAR]) >= 4.5);
+            ASSERT_TRUE(contrast(th->c[bar_glyphs[i]], worst) >= 4.5);
+        }
+        ASSERT_TRUE(contrast(th->c[UI_TOK_RATING_UNLIT], th->c[UI_TOK_BG]) >= 4.5); // Now Playing page 2 draws them on the screen ground
+        ASSERT_EQ(th->c[UI_TOK_ACCENT], th->c[UI_TOK_RATING_LIT]); // lit = the accent (Classic Light's selection blue; dark: the progress fill's colour)
     }
+    ASSERT_TRUE(contrast(k_ui_theme_light.c[UI_TOK_RATING_LIT], k_ui_theme_light.c[UI_TOK_BG]) >= 4.5);
     // the review's published values
     ASSERT_EQ(0x1858C8u, k_ui_theme_light.c[UI_TOK_ACCENT]);
     ASSERT_EQ(0x2868D8u, k_ui_theme_dark.c[UI_TOK_ACCENT]);
@@ -332,6 +389,7 @@ int main(void) {
     RUN(splash_captions_fit_one_line_in_every_profile);
     RUN(selection_picks_the_largest_profile_that_fits);
     RUN(text_filter_matches_the_fonts);
+    RUN(every_icon_is_in_every_icon_font);
     RUN(themes_are_rgb565_safe_and_readable);
     RUN(a_token_follows_the_active_theme_and_a_literal_does_not);
 #ifdef NEUPOD_UI_HIRES

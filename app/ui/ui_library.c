@@ -138,6 +138,9 @@ static void lib_get(void *ctx, int32_t idx, ui_list_item_t *out) {
         return;
     }
     out->dim = r.child.kind == LVW_KINDS && r.play != LIB_PLAY_OK; /* a song the player cannot play (D6): listed, greyed */
+    if (out->dim) {
+        out->icon = UI_ICON_CANT_PLAY; /* icon set: the can't-play glyph leads the row; the reason (its codec) stays */
+    }
     if (s->view.kind == LVW_ALBUM) { /* "3   Title", the length at the right; a song that cannot play names its codec in brackets */
         char num[12] = "";
         if (r.track != 0) {

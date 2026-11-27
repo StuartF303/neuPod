@@ -308,6 +308,19 @@ static const char *script_step(const char *p, uint32_t now, bool *done) {
         ui_apply_theme();
         return end;
     }
+    if (strncmp(p, "status:", 7) == 0) {
+        /* Tour only: the status bar's icon-set states the tours cannot reach otherwise (no streaming, recording or network speaker yet; scanning
+           needs a held key on Now Playing): status:scan:1 / scan:-1 / scan:0, status:open, status:rec, status:none, status:spk:on / spk:off. */
+        const char *a = p + 7;
+        if (strncmp(a, "scan:", 5) == 0) {
+            ui_status_set_scan(atoi(a + 5));
+        } else if (strncmp(a, "spk:", 4) == 0) {
+            ui_status_set_external_speaker(strncmp(a + 4, "on", 2) == 0);
+        } else {
+            ui_status_set_activity(strncmp(a, "rec", 3) == 0 ? UI_ACT_RECORDING : strncmp(a, "open", 4) == 0 ? UI_ACT_OPENING : UI_ACT_NONE);
+        }
+        return end;
+    }
     if (strncmp(p, "dim:", 4) == 0) {
         /* Tour only: Auto-dim on, dimming after the first choice (10 s), so a tour can reach the dimmed backlight with sleep:. */
         g_ui_state.autodim = true;

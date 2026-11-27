@@ -424,6 +424,13 @@ static void service(action_t *a, bool have, const audio_stats_t *st) {
     }
 }
 
+bool player_failed(void) {
+    lock();
+    const bool f = g_info.src == PLAYER_SRC_FILE && g_info.state == PLAYER_ERROR;
+    unlock();
+    return f;
+}
+
 uint32_t player_skip_notice(char *reason, size_t n) {
     if (reason != NULL && n > 0) {
         snprintf(reason, n, "%s", g_skip_msg); /* a torn copy is only text; the counter says it is new */

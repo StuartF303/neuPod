@@ -14,6 +14,10 @@ const ui_theme_t k_ui_theme_light = {{
     [UI_TOK_INK] = 0x181818,         [UI_TOK_INK2] = 0x606060,        [UI_TOK_INK3] = 0xA0A0A0,       [UI_TOK_ACCENT] = 0x1858C8,
     [UI_TOK_ON_ACCENT] = 0xFFFFFF,   [UI_TOK_ACCENT_SOFT] = 0xD8E4F8, [UI_TOK_AMBER] = 0xD08018,      [UI_TOK_AMBER_SOFT] = 0xF8E8C8,
     [UI_TOK_GREEN] = 0x209858,       [UI_TOK_RED] = 0xD03028,
+    /* The icon set's Classic Light values, RGB565-rounded (README #474b52 / #123f8f / #8a1a15 / #737373): 4.5:1 or more on this bar and on
+       Classic Light's darkest bar stop #B6BBC2 (dim 4.69, Bluetooth 5.04, recording 4.96); the stars on the page ground (lit 6.05, unlit 4.66) */
+    [UI_TOK_STATUS_DIM] = 0x484850,  [UI_TOK_BT_ACTIVE] = 0x104090,  [UI_TOK_RECORDING] = 0x881818, [UI_TOK_RATING_LIT] = 0x1858C8,
+    [UI_TOK_RATING_UNLIT] = 0x707070,
 }};
 
 const ui_theme_t k_ui_theme_dark = {{
@@ -21,6 +25,11 @@ const ui_theme_t k_ui_theme_dark = {{
     [UI_TOK_INK] = 0xF0F0F0,         [UI_TOK_INK2] = 0xA0A0A0,        [UI_TOK_INK3] = 0x686868,       [UI_TOK_ACCENT] = 0x2868D8,
     [UI_TOK_ON_ACCENT] = 0xFFFFFF,   [UI_TOK_ACCENT_SOFT] = 0x203050, [UI_TOK_AMBER] = 0xE89828,      [UI_TOK_AMBER_SOFT] = 0x483818,
     [UI_TOK_GREEN] = 0x30B870,       [UI_TOK_RED] = 0xE84840,
+    /* The icon set's Modern (dark) values, RGB565-rounded (README #9a9a9a / #5aa2ff / #ff7b70 / #7c7c7c): 4.5:1 or more on this bar and on Modern's
+       worst case, a gold wash #2F2A1F. The lit star is the progress fill's colour (Modern: the art's tint; here the accent, 3.7:1 on the ground,
+       as the star was before: the fill, not the colour, says "lit"). */
+    [UI_TOK_STATUS_DIM] = 0x989898,  [UI_TOK_BT_ACTIVE] = 0x58A4FF,  [UI_TOK_RECORDING] = 0xFF7C70, [UI_TOK_RATING_LIT] = 0x2868D8,
+    [UI_TOK_RATING_UNLIT] = 0x808080,
 }};
 
 static const ui_theme_t *g_theme = &k_ui_theme_light;
@@ -38,8 +47,9 @@ uint32_t ui_rgb(uint32_t colour) {
 lv_color_t ui_color(uint32_t colour) { return lv_color_hex(ui_rgb(colour)); }
 
 typedef enum { K_TEXT, K_BG, K_BORDER, K_KINDS } kind_t;
-/* 14 tokens, plus the literals in use (white on art, the splash palette, the seek track ...): 8 spare per kind. */
-#define SLOTS (UI_TOK_COUNT + 12)
+/* A slot per colour in use of each kind: the tokens a kind is drawn with plus the literals in use (white on art, the splash palette, the seek
+   track ...). Fixed at 26 (it was 14 tokens + 12): the five icon-set tokens are text colours only, and the Pico 2 W image has no static RAM to spare. */
+#define SLOTS 26
 
 typedef struct {
     uint32_t colour;

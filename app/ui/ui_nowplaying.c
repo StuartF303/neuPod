@@ -401,6 +401,8 @@ static void np_tick(ui_screen_t *s) {
     if (p->have) { /* the wheel-mode clock, the Select hold, the scrub commit and the Left / Right hold run on every pass; the poll below is rate-limited */
         ui_npc_track_t trk = np_track(&p->info);
         np_events(p, ui_npc_tick(&p->ctl, &trk, now));
+        /* the status bar's play-state slot: fast-forward / rewind while a held Left / Right scans (not on a track that cannot seek) */
+        ui_status_set_scan(p->ctl.holding && trk.seekable ? p->ctl.hold_dir : 0);
     }
     if (now - p->last_ms < POLL_MS && p->have) {
         return;
@@ -456,6 +458,7 @@ static bool np_button(ui_screen_t *s, uint8_t btn) {
 static void np_suspend(ui_screen_t *s) {
     np_t *p = (np_t *)s;
     ui_npc_cancel_hold(&p->ctl);
+    ui_status_set_scan(0);
     p->ctl.pending = false;
     p->ctl.mode = UI_WHEEL_VOLUME;
     p->ctl.sel_down = false;
@@ -501,6 +504,7 @@ static void np_button_up(ui_screen_t *s, uint8_t btn) {
 
 static void np_destroy(ui_screen_t *s) {
     np_t *p = (np_t *)s;
+    ui_status_set_scan(0);
     ui_artbox_destroy(p->art);
     for (lv_obj_t *l = p->title; l != NULL; l = (l == p->title ? p->artist : l == p->artist ? p->album : NULL)) {
         ui_label_ticker(l, false); /* the registry must not hold labels that are about to go */
@@ -715,7 +719,7 @@ static void stars_set(p2_t *p, uint8_t stars) {
     p->stars = stars;
     char on[24] = "", off[24] = "";
     for (uint8_t i = 0; i < 5; i++) {
-        strcat(i < stars ? on : off, UI_SYMBOL_STAR);
+        strcat(i < stars ? on : off, i < stars ? UI_ICON_STAR_FILLED : UI_ICON_STAR);
     }
     lv_label_set_text(p->stars_on, on);
     lv_label_set_text(p->stars_off, off);
@@ -890,18 +894,19 @@ ui_screen_t *ui_screen_nowplaying_page2_create(void) {
     lv_label_set_long_mode(p->line2, LV_LABEL_LONG_DOT);
     ui_label_ticker(p->line2, true);
     lv_obj_set_pos(p->line2, UIM->hd_text_x, UIM->hd_art_y + UIM->line_h + 4);
-    /* the stars: lit ones in the accent colour, the rest in a hairline grey; a soft box behind them while the wheel adjusts them */
+    /* the stars (icon set, 2026-11-26): lit ones filled in rating_lit, the rest outlined in rating_unlit (filled versus outline carries the meaning
+       without colour), the icon font's large size; a soft box behind them while the wheel adjusts them */
     int32_t sy = UIM->hd_art_y + UIM->line_h + UIM->np_album_h + 8;
     p->stars_box = lv_obj_create(r);
     lv_obj_remove_style_all(p->stars_box);
-    lv_obj_set_size(p->stars_box, w, lv_font_get_line_height(UIM->font_body) + 4);
+    lv_obj_set_size(p->stars_box, w, lv_font_get_line_height(UIM->font_icon_lg) + 4);
     lv_obj_set_pos(p->stars_box, UIM->hd_text_x - 4, sy - 2);
     lv_obj_set_style_radius(p->stars_box, UIM->sel_radius, 0);
     ui_obj_bg(p->stars_box, UI_C_ACCENT_SOFT, 0);
     lv_obj_set_hidden(p->stars_box, true);
-    p->stars_on = ui_label(r, "", UI_C_ACCENT);
+    p->stars_on = ui_icon(r, "", true, UI_C_RATING_LIT);
     lv_obj_set_pos(p->stars_on, UIM->hd_text_x, sy);
-    p->stars_off = ui_label(r, "", UI_C_LINE);
+    p->stars_off = ui_icon(r, "", true, UI_C_RATING_UNLIT);
     lv_obj_set_pos(p->stars_off, UIM->hd_text_x, sy);
     int32_t top = UIM->hd_art_y + UIM->hd_art + 10;
     p->list = ui_list_create(r, UI_W, &(ui_list_model_t){.count = P2_ROWS, .ctx = p, .get = p2_get, .top = top});

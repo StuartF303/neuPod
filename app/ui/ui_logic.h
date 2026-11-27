@@ -267,6 +267,32 @@ void *ui_stack_pop(ui_stack_t *s);             /**< NULL if empty */
 void *ui_stack_top(const ui_stack_t *s);
 void *ui_stack_below_top(const ui_stack_t *s); /**< the entry that becomes visible after a pop */
 
+/* ---- Status bar glyphs (icon set, docs/design/2026-11-26-icon-set) ---------------------------------------------------------------------------- */
+
+/** What the play-state slot at the left of the status bar shows (nothing in the ordinary states: the context text has the slot). */
+typedef enum {
+    UI_PS_NONE = 0,
+    UI_PS_FAST_FORWARD, /**< Next held on Now Playing: scanning forward */
+    UI_PS_REWIND,       /**< Previous held: scanning back */
+    UI_PS_RECORDING,    /**< recording (no recording feature yet: ui_status_set_activity()) */
+    UI_PS_OPENING,      /**< a network stream opening (no streaming yet: ui_status_set_activity()) */
+    UI_PS_CANT_PLAY,    /**< the current track could not be played */
+} ui_play_glyph_t;
+
+/** The play-state glyph, first match wins: a held seek key (@p scan_dir -1 back, +1 forward, 0 none), recording, opening, a failed track. */
+ui_play_glyph_t ui_status_play_glyph(int scan_dir, bool recording, bool opening, bool failed);
+
+/** What the output slot of the right zone shows (after Bluetooth, before the lock). */
+typedef enum {
+    UI_OUT_NONE = 0,    /**< no glyph: the output is Bluetooth (its own glyph says so), the internal speaker, or nothing the firmware can tell */
+    UI_OUT_HEADPHONES,  /**< the wired output with headphones in the jack */
+    UI_OUT_JACK_PLUG,   /**< the wired output at line level (Settings > Line out, in force) */
+    UI_OUT_SPEAKER,     /**< an external (network) speaker: no such output yet (ui_status_set_external_speaker()) */
+} ui_out_glyph_t;
+
+/** The output glyph: an external speaker, else none on Bluetooth, else Line out in force, else headphones in the jack, else none. */
+ui_out_glyph_t ui_status_output_glyph(bool external_speaker, bool bluetooth, bool line_out, bool headphones_in);
+
 #ifdef __cplusplus
 }
 #endif

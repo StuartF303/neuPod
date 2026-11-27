@@ -71,6 +71,8 @@ void player_init(void);
 
 /** Latest state (cheap; also folds in end-of-file and stream faults reported by the audio core). */
 void player_get(player_info_t *out);
+/** The file that was to play could not be (PLAYER_ERROR with a file source), as player_get() last saw it: the status bar's "can't play" glyph. Any task. */
+bool player_failed(void);
 /** Tracks the queue skipped because they cannot be played (LB-5): a counter that moves on every skip, and the reason of the last one ("Can't play: unsupported
  *  codec (AAC)"). The UI shows a toast when the counter moves. Any task. */
 uint32_t player_skip_notice(char *reason, size_t n);
