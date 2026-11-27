@@ -31,6 +31,10 @@ uint32_t player_skip_notice(char *reason, size_t n) {
     return 0;
 }
 bool ui_library_background(void) { return false; }
+bool player_failed(void) { return false; }
+audio_output_t audio_route_output(void) { return AUDIO_OUT_WIRED; }
+bool audio_route_line_out_active(void) { return false; }
+bool hal_audio_headphones_in(void) { return false; }
 bool bt_service_reconnecting(void) { return false; }
 uint32_t bt_service_reconnected_seq(void) { return 0; }
 void player_pause_toggle(void) { g_pause++; }

@@ -143,6 +143,23 @@ int ui_signal_bars(int32_t rssi, const ui_signal_thr_t *thr, int prev, int32_t h
 
 int ui_signal_class(int bars) { return bars >= 3 ? 3 : bars == 2 ? 2 : 1; }
 
+ui_play_glyph_t ui_status_play_glyph(int scan_dir, bool recording, bool opening, bool failed) {
+    if (scan_dir != 0) {
+        return scan_dir > 0 ? UI_PS_FAST_FORWARD : UI_PS_REWIND;
+    }
+    return recording ? UI_PS_RECORDING : opening ? UI_PS_OPENING : failed ? UI_PS_CANT_PLAY : UI_PS_NONE;
+}
+
+ui_out_glyph_t ui_status_output_glyph(bool external_speaker, bool bluetooth, bool line_out, bool headphones_in) {
+    if (external_speaker) {
+        return UI_OUT_SPEAKER;
+    }
+    if (bluetooth) {
+        return UI_OUT_NONE;
+    }
+    return line_out ? UI_OUT_JACK_PLUG : headphones_in ? UI_OUT_HEADPHONES : UI_OUT_NONE;
+}
+
 int ui_signal_bars3(int bars) { return bars <= 0 ? 0 : bars == 1 ? 1 : bars >= 4 ? 3 : 2; }
 
 const char *ui_bt_class_word(uint32_t cod) {
@@ -436,8 +453,8 @@ bool ui_text_has_glyph(uint32_t cp) {
     switch (cp) {
     case 0x2013: case 0x2014: case 0x2018: case 0x2019: case 0x201C: case 0x201D: case 0x2022: case 0x2026: case 0x20AC:
     // Font Awesome symbols still in the fonts (tools/gen_ui_fonts.sh SYMS): LV_SYMBOL_ AUDIO OK IMAGE WIFI BATTERY_3 BLUETOOTH SD_CARD.
-    // The chevron, transport, folder / file, lock and battery glyphs are Lucide icons or drawn shapes now (ui_icons.h), not text.
-    case 0xF001: case 0xF005: case 0xF00C: case 0xF03E: case 0xF1EB: case 0xF241: case 0xF293: case 0xF7C2:
+    // The chevron, transport, folder / file, lock, battery and rating star glyphs are icon-font glyphs or drawn shapes now (ui_icons.h), not text.
+    case 0xF001: case 0xF00C: case 0xF03E: case 0xF1EB: case 0xF241: case 0xF293: case 0xF7C2:
         return true;
     default:
         return false;

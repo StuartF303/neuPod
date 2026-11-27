@@ -75,6 +75,7 @@ typedef struct {
     const char *sub;   /**< "Artist" or the folder name; may be "" */
     const char *path;  /**< absolute; "" when unresolvable */
     uint8_t state;     /**< pls_ent_state_t: anything but OK is greyed and skipped when a list is played */
+    uint8_t stars;     /**< Top rated: the track's rating (drawn as stars on the row); 0 in the other lists */
 } pls_entry_view_t;
 
 /* ---- UI side: post a request, poll for its answer --------------------------------------------------------------------------------- */

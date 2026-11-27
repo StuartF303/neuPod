@@ -5,6 +5,8 @@
  *   - is not completely inside the panel,
  *   - is not completely inside its parent (the parent's edge would cut it; one pixel over the parent's far edge is tolerated,
  *     which is what a container's own hairline border does to its content, e.g. the Home pane's left border),
+ *   - overlaps a visible sibling inside the status bar or its right-hand group (flagged UI_OBJ_FLAG_NO_OVERLAP in ui_frame.c: the title must give
+ *     way to the icons, and no icon may sit on another),
  *   - is a label whose text does not fit its box: a one-line label wider than its box, or a wrapping label that needs more
  *     lines than its box is tall. Labels in "dots" or scrolling long modes shorten or scroll their text on purpose and are
  *     not measured.
@@ -18,6 +20,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "src/misc/lv_area_private.h" /* lv_area_intersect */
 #include "src/misc/lv_text_private.h" /* lv_text_get_size_attributes: LVGL private API, fine for a host-only check */
 #include "src/widgets/label/lv_label_private.h"
 #include "ui_internal.h"
@@ -84,7 +87,39 @@ static void check_label(lv_obj_t *o, const lv_area_t *a, audit_t *au) {
     }
 }
 
+/* The visible children of @p o must not overlap one another (a zero-width box covers nothing). */
+static void check_overlap(lv_obj_t *o, audit_t *au) {
+    uint32_t n = lv_obj_get_child_count(o);
+    for (uint32_t i = 0; i < n; i++) {
+        lv_obj_t *a = lv_obj_get_child(o, (int32_t)i);
+        if (lv_obj_is_hidden(a)) {
+            continue;
+        }
+        lv_area_t aa;
+        lv_obj_get_coords(a, &aa);
+        if (lv_area_get_width(&aa) <= 0 || lv_area_get_height(&aa) <= 0) {
+            continue;
+        }
+        for (uint32_t j = i + 1; j < n; j++) {
+            lv_obj_t *b = lv_obj_get_child(o, (int32_t)j);
+            if (lv_obj_is_hidden(b)) {
+                continue;
+            }
+            lv_area_t ba, common;
+            lv_obj_get_coords(b, &ba);
+            if (lv_area_get_width(&ba) > 0 && lv_area_get_height(&ba) > 0 && lv_area_intersect(&common, &aa, &ba)) {
+                char what[96];
+                snprintf(what, sizeof what, "overlaps its sibling (%d,%d)-(%d,%d) in the status bar", (int)ba.x1, (int)ba.y1, (int)ba.x2, (int)ba.y2);
+                fail(au, &aa, what);
+            }
+        }
+    }
+}
+
 static void walk(lv_obj_t *o, const lv_area_t *parent_area, const lv_area_t *panel, audit_t *au) {
+    if (lv_obj_has_flag(o, UI_OBJ_FLAG_NO_OVERLAP)) {
+        check_overlap(o, au);
+    }
     uint32_t n = lv_obj_get_child_count(o);
     for (uint32_t i = 0; i < n; i++) {
         lv_obj_t *c = lv_obj_get_child(o, (int32_t)i);

@@ -150,7 +150,7 @@ Questions 2 to 5 were settled on the recommendations below (owner, 27 November 2
 
 Everything drawn here is the project's own: the sheets and this text CC BY 4.0, the SVGs and the app icon alongside the
 firmware under MPL-2.0. Nine glyphs are unmodified Lucide icons and `star-filled` is derived from Lucide `star`: all ten
-are **ISC** (Lucide 1.72.0), and none of them derives from Feather. Add them to the Lucide row of `LICENSE.md` (now
+are **ISC** (Lucide 1.72.0). Correction (firmware PR #173, checked against `lucide-static` 1.72.0's LICENSE): `download` and `ellipsis` (Feather's `more-horizontal`) derive from Feather (MIT), as do `headphones` and `monitor`, which the firmware also draws. Add them to the Lucide row of `LICENSE.md` (now
 "the 15 icons of the design system and the 5 of the boot splash" plus these 10) and to the Licences screen
 (`app/ui/ui_licence_data.c`), which `tests/test_licences.c` checks. `jack-plug`, `record` and the app icon are entirely
 neuPod's; direction A's letters are Montserrat Medium outlines (SIL OFL 1.1, already in the table).

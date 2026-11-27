@@ -137,6 +137,22 @@ TEST(signal_bars_thresholds) {
     ASSERT_EQ(3, ui_signal_class(4));
 }
 
+// The icon set's status-bar glyphs (docs/design/2026-11-26-icon-set): the play-state slot (a held seek key first, then recording, opening, a failed
+// track) and the output slot (an external speaker first; none on Bluetooth; Line out in force, then headphones in the jack).
+TEST(status_bar_play_and_output_glyphs) {
+    ASSERT_EQ(UI_PS_NONE, ui_status_play_glyph(0, false, false, false));
+    ASSERT_EQ(UI_PS_FAST_FORWARD, ui_status_play_glyph(1, true, true, true));
+    ASSERT_EQ(UI_PS_REWIND, ui_status_play_glyph(-1, false, false, true));
+    ASSERT_EQ(UI_PS_RECORDING, ui_status_play_glyph(0, true, true, true));
+    ASSERT_EQ(UI_PS_OPENING, ui_status_play_glyph(0, false, true, true));
+    ASSERT_EQ(UI_PS_CANT_PLAY, ui_status_play_glyph(0, false, false, true));
+    ASSERT_EQ(UI_OUT_NONE, ui_status_output_glyph(false, false, false, false));
+    ASSERT_EQ(UI_OUT_SPEAKER, ui_status_output_glyph(true, true, true, true));
+    ASSERT_EQ(UI_OUT_NONE, ui_status_output_glyph(false, true, true, true));
+    ASSERT_EQ(UI_OUT_JACK_PLUG, ui_status_output_glyph(false, false, true, true));
+    ASSERT_EQ(UI_OUT_HEADPHONES, ui_status_output_glyph(false, false, false, true));
+}
+
 TEST(bluetooth_meter_has_three_bars_and_devices_have_a_class_word) {
     ASSERT_EQ(0, ui_signal_bars3(0));
     ASSERT_EQ(1, ui_signal_bars3(1));
@@ -817,6 +833,7 @@ int main(void) {
     RUN(signal_bars_unknown_rssi);
     RUN(signal_bars_thresholds);
     RUN(bluetooth_meter_has_three_bars_and_devices_have_a_class_word);
+    RUN(status_bar_play_and_output_glyphs);
     RUN(signal_bars_hysteresis);
     RUN(nav_clamps_and_window_follows);
     RUN(nav_short_and_empty_lists);

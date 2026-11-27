@@ -30,6 +30,8 @@ static lv_style_t g_gs[GS_N]; /* shared by every glyph rectangle: no per-object 
 typedef struct {
     lv_obj_t *obj, *label, *sub, *detail, *chev, *icon; /* sub: the second (Small) line of a two-line row, created on demand */
     lv_obj_t *g[GLYPH_N]; /* created the first time the row needs a glyph */
+    lv_obj_t *stars[2];   /* a rating: the lit stars and the unlit ones (two colours), created the first time the row shows one */
+    lv_obj_t *dicon;      /* the glyph before the detail text (ui_list_item_t.detail_icon), created the first time the row shows one */
     const lv_style_t *gs[GLYPH_N];
     uint8_t bars;
     bool mono; /* three monochrome bars (Bluetooth) instead of four traffic-light ones */
@@ -37,7 +39,8 @@ typedef struct {
     bool chevron;
     int32_t idx; /* bound item, -1 = unbound/hidden */
     bool sel;
-    uint32_t c_label, c_detail, c_chev, c_sub; /* colours currently applied (shared styles, see ui_label) */
+    bool stars_sel; /* the stars are drawn in on_accent (the row is under the selection bar) */
+    uint32_t c_label, c_detail, c_chev, c_sub, c_icon; /* colours currently applied (shared styles, see ui_label) */
 } row_t;
 
 static bool g_styles_ready;
@@ -105,7 +108,17 @@ static void style_row(ui_list_t *l, row_t *r, bool dim) {
     ui_label_recolour(r->label, r->c_label, text);
     ui_label_recolour(r->detail, r->c_detail, sub);
     ui_label_recolour(r->chev, r->c_chev, sub);
-    ui_label_recolour(r->icon, r->c_chev, sub);
+    const uint32_t icon = on ? UI_C_ON_ACCENT : dim ? UI_C_INK3 : UI_C_INK2; /* the row's glyphs grey out with its label */
+    ui_label_recolour(r->icon, r->c_icon, icon);
+    if (r->dicon != NULL) {
+        ui_label_recolour(r->dicon, r->c_icon, icon);
+    }
+    r->c_icon = icon;
+    if (r->stars[0] != NULL && on != r->stars_sel) { /* under the bar both turn on_accent: filled versus outline still tells them apart */
+        ui_label_recolour(r->stars[0], on ? UI_C_RATING_LIT : UI_C_ON_ACCENT, on ? UI_C_ON_ACCENT : UI_C_RATING_LIT);
+        ui_label_recolour(r->stars[1], on ? UI_C_RATING_UNLIT : UI_C_ON_ACCENT, on ? UI_C_ON_ACCENT : UI_C_RATING_UNLIT);
+        r->stars_sel = on;
+    }
     r->c_label = text;
     r->c_detail = sub;
     r->c_chev = sub;
@@ -243,6 +256,39 @@ static void busy_timer_sync(ui_list_t *l) {
     }
 }
 
+/* A rating at the right edge, @p right px in from it: lit (filled) stars then unlit (outline) ones at the icon font's small size. Returns the width
+   it takes (0 with no rating). */
+static int32_t stars_bind(ui_list_t *l, row_t *r, uint8_t stars, int32_t right) {
+    if (stars == 0) {
+        if (r->stars[0] != NULL) {
+            lv_obj_set_hidden(r->stars[0], true);
+            lv_obj_set_hidden(r->stars[1], true);
+        }
+        return 0;
+    }
+    if (stars > 5) {
+        stars = 5;
+    }
+    if (r->stars[0] == NULL) {
+        r->stars[0] = ui_icon(r->obj, "", false, UI_C_RATING_LIT);
+        r->stars[1] = ui_icon(r->obj, "", false, UI_C_RATING_UNLIT);
+        r->stars_sel = false;
+    }
+    char on[16] = "", off[16] = "";
+    for (uint8_t i = 0; i < 5; i++) {
+        strcat(i < stars ? on : off, i < stars ? UI_ICON_STAR_FILLED : UI_ICON_STAR);
+    }
+    lv_label_set_text(r->stars[0], on);
+    lv_label_set_text(r->stars[1], off);
+    const int32_t gw = (int32_t)lv_font_get_glyph_width(UIM->font_icon_sm, 0xE176u, 0); /* every icon has the same advance */
+    const int32_t x = l->w - right - 5 * gw;
+    lv_obj_align(r->stars[0], LV_ALIGN_LEFT_MID, x, 0);
+    lv_obj_align(r->stars[1], LV_ALIGN_LEFT_MID, x + stars * gw, 0);
+    lv_obj_set_hidden(r->stars[0], false);
+    lv_obj_set_hidden(r->stars[1], stars == 5);
+    return 5 * gw + UIM->glyph_gap;
+}
+
 static void bind_row(ui_list_t *l, row_t *r, int32_t idx) {
     r->idx = idx;
     if (idx < 0 || idx >= l->model.count) {
@@ -258,6 +304,16 @@ static void bind_row(ui_list_t *l, row_t *r, int32_t idx) {
     r->sel = idx == l->nav.sel;
     set_text(r->label, it.label);
     set_text(r->detail, it.detail);
+    const bool has_dicon = it.detail_icon != NULL;
+    if (has_dicon && r->dicon == NULL) {
+        r->dicon = ui_icon(r->obj, it.detail_icon, false, r->c_icon);
+    }
+    if (r->dicon != NULL) {
+        if (has_dicon) {
+            lv_label_set_text_static(r->dicon, it.detail_icon);
+        }
+        lv_obj_set_hidden(r->dicon, !has_dicon);
+    }
     if (lv_obj_is_hidden(r->chev) == it.chevron) {
         lv_obj_set_hidden(r->chev, !it.chevron);
     }
@@ -273,12 +329,23 @@ static void bind_row(ui_list_t *l, row_t *r, int32_t idx) {
     r->bars = it.bars > 4 ? 4 : it.bars;
     r->mono = it.mono;
     int32_t gw = (r->busy || r->bars != 0) ? row_glyph_w(r->mono, r->busy) + UIM->glyph_gap : 0;
+    gw += stars_bind(l, r, it.stars, (it.chevron ? UIM->chev_w : UIM->row_inset) + gw);
     int32_t detail_w = it.detail[0] ? (int32_t)strlen(it.detail) * UIM->detail_char_w + UIM->detail_pad : 0; /* about 7.5 px per character at 14 pt */
+    if (has_dicon) {
+        detail_w += UIM->icon_w; /* the glyph and its gap */
+    }
     int32_t lx = UIM->pad + (has_icon ? UIM->icon_w : 0);
     int32_t label_w = l->w - lx - (it.chevron ? UIM->chev_w : UIM->row_inset) - gw - detail_w;
     lv_obj_set_width(r->label, label_w);
     lv_obj_set_x(r->label, lx);
     lv_obj_align(r->detail, LV_ALIGN_RIGHT_MID, -(it.chevron ? UIM->chev_w : UIM->row_inset) - gw, 0);
+    if (has_dicon) { /* just before the detail's text, whatever its width */
+        if (it.detail[0] != '\0') {
+            lv_obj_align_to(r->dicon, r->detail, LV_ALIGN_OUT_LEFT_MID, -(UIM->icon_w - (int32_t)lv_font_get_glyph_width(UIM->font_icon_sm, 0xE6FEu, 0)), 0);
+        } else {
+            lv_obj_align(r->dicon, LV_ALIGN_RIGHT_MID, -(it.chevron ? UIM->chev_w : UIM->row_inset) - gw, 0);
+        }
+    }
     if (l->model.two_line) { /* the title above, "Artist . Album" under it in Small; a row with no second line centres its title */
         bool has_sub = it.sub[0] != '\0';
         if (r->sub == NULL) {
@@ -390,6 +457,8 @@ static void build(ui_list_t *l) {
         r->sel = false;
         memset(r->g, 0, sizeof r->g);
         memset(r->gs, 0, sizeof r->gs);
+        r->stars[0] = r->stars[1] = NULL;
+        r->dicon = NULL;
         r->bars = 0;
         r->mono = false;
         r->busy = false;
@@ -401,7 +470,7 @@ static void build(ui_list_t *l) {
         lv_obj_set_size(r->obj, l->w, l->row_h);
         lv_obj_set_scrollable(r->obj, false);
         r->c_label = UI_C_INK;
-        r->c_detail = r->c_chev = UI_C_INK2;
+        r->c_detail = r->c_chev = r->c_icon = UI_C_INK2;
         r->sub = NULL;
         r->icon = ui_icon(r->obj, UI_ICON_FOLDER, false, UI_C_INK2); /* a leading icon (Files): folder or file */
         lv_obj_align(r->icon, LV_ALIGN_LEFT_MID, UIM->pad, 0);

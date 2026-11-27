@@ -2,7 +2,7 @@
 /*
  * Colour tokens and the Light / Dark themes (design review of 12 Nov 2026, DS-1; docs/ui.md "Design system").
  *
- * Every colour the UI draws with is one of 14 tokens. A theme is a table of those 14 colours (RGB565-safe: red and blue are multiples
+ * Every colour the UI draws with is one of 19 tokens. A theme is a table of those 19 colours (RGB565-safe: red and blue are multiples
  * of 8, green of 4, so the panel shows exactly the value written). Screens never hold a hex value of their own: they name a token
  * (UI_C_INK ...) and the shared styles below read the active theme, so swapping the theme restyles every widget at once.
  *
@@ -33,6 +33,12 @@ typedef enum {
     UI_TOK_AMBER_SOFT,  /**< warning toast background */
     UI_TOK_GREEN,       /**< charging, streaming OK, signal full */
     UI_TOK_RED,         /**< battery < 15 %, errors */
+    /* The icon set's glyph colours (docs/design/2026-11-26-icon-set, README "Contrast"): 4.5:1 on the ground under them */
+    UI_TOK_STATUS_DIM,  /**< a status-bar glyph that is present but not active (a saved, unconnected headset) */
+    UI_TOK_BT_ACTIVE,   /**< the Bluetooth glyph while a headset is connected or in use */
+    UI_TOK_RECORDING,   /**< the record glyph */
+    UI_TOK_RATING_LIT,  /**< a lit (filled) rating star */
+    UI_TOK_RATING_UNLIT, /**< an unlit (outline) rating star */
     UI_TOK_COUNT
 } ui_tok_t;
 
@@ -60,6 +66,11 @@ extern const ui_theme_t k_ui_theme_dark;
 #define UI_C_AMBER_SOFT UI_C(UI_TOK_AMBER_SOFT)
 #define UI_C_GREEN UI_C(UI_TOK_GREEN)
 #define UI_C_RED UI_C(UI_TOK_RED)
+#define UI_C_STATUS_DIM UI_C(UI_TOK_STATUS_DIM)
+#define UI_C_BT_ACTIVE UI_C(UI_TOK_BT_ACTIVE)
+#define UI_C_RECORDING UI_C(UI_TOK_RECORDING)
+#define UI_C_RATING_LIT UI_C(UI_TOK_RATING_LIT)
+#define UI_C_RATING_UNLIT UI_C(UI_TOK_RATING_UNLIT)
 
 /** The active theme (Light until ui_theme_set()). */
 const ui_theme_t *ui_theme(void);

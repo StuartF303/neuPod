@@ -66,7 +66,7 @@ static uint8_t g_nfiles;
 /* the open list: entries packed as path\0title\0sub\0 in one pool */
 static char g_pool[PLS_POOL_BYTES];
 static uint16_t g_off[PLS_ENTRIES_MAX];
-static uint8_t g_state[PLS_ENTRIES_MAX];
+static uint8_t g_state[PLS_ENTRIES_MAX]; /* pls_ent_state_t in the low nibble, a Top rated entry's stars in the high one */
 static uint32_t g_n, g_used;
 static bool g_trunc;
 static volatile uint32_t g_ver; /* odd while the pool is being rewritten (an open request is being handled): the entries are not readable */
@@ -141,7 +141,8 @@ bool pls_entry(uint32_t i, pls_entry_view_t *out) {
     out->title = p;
     p += strlen(p) + 1u;
     out->sub = p;
-    out->state = g_state[i];
+    out->state = g_state[i] & 0x0Fu;
+    out->stars = (uint8_t)(g_state[i] >> 4);
     return true;
 }
 
@@ -256,7 +257,7 @@ static uint8_t classify(const char *path) {
     return nfs_stat(path, &st) == NFS_OK && !st.is_dir ? PLS_ENT_OK : PLS_ENT_MISSING;
 }
 
-static void add_classified(const char *path, const char *title_in, const char *sub_in) {
+static void add_classified_rated(const char *path, const char *title_in, const char *sub_in, uint8_t stars) {
     uint8_t state = classify(path);
     char title[PL_TITLE_MAX], sub[48];
     if (title_in != NULL && title_in[0] != '\0') {
@@ -275,8 +276,10 @@ static void add_classified(const char *path, const char *title_in, const char *s
             folder_of(path, sub, sizeof sub);
         }
     }
-    (void)add_entry(path, title, sub, state);
+    (void)add_entry(path, title, sub, (uint8_t)(state | (stars > 5u ? 5u : stars) << 4));
 }
+
+static void add_classified(const char *path, const char *title_in, const char *sub_in) { add_classified_rated(path, title_in, sub_in, 0); }
 
 /* ---- reading a playlist file ----------------------------------------------------------------------------------------------------------------- */
 
@@ -568,15 +571,16 @@ static pls_status_t open_plays(uint8_t kind) {
         }
         taken[bi] = 1;
         (void)plays_at((uint32_t)bi, &best);
-        char tail[24];
-        if (kind == PLS_MOST) {
-            snprintf(tail, sizeof tail, "%u %s", (unsigned)best.plays, best.plays == 1 ? "play" : "plays");
-        } else {
-            snprintf(tail, sizeof tail, "%u stars", (unsigned)ratings_get(best.key));
-        }
         char sub[48];
-        sub_with(sub, sizeof sub, best.artist, tail);
-        add_classified(best.path, best.title, sub); /* an untagged track has no title: the file name stands in */
+        if (kind == PLS_MOST) {
+            char tail[24];
+            snprintf(tail, sizeof tail, "%u %s", (unsigned)best.plays, best.plays == 1 ? "play" : "plays");
+            sub_with(sub, sizeof sub, best.artist, tail);
+            add_classified(best.path, best.title, sub); /* an untagged track has no title: the file name stands in */
+        } else { /* Top rated: the rating is drawn as stars on the row (icon set), the second line keeps the artist */
+            copy_cut(sub, sizeof sub, best.artist);
+            add_classified_rated(best.path, best.title, sub, (uint8_t)ratings_get(best.key));
+        }
         track_stream_pump();
     }
     return PLS_OK;

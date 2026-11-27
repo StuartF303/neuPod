@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 /*
- * Screen framework: one LVGL screen holds a persistent status bar (left context slot, title, Bluetooth / Wi-Fi / battery) and a
+ * Screen framework: one LVGL screen holds a persistent status bar (left: the play-state glyph and the context slot; the title; right: busy dots,
+ * Wi-Fi, Bluetooth, output, lock, battery) and a
  * content area; each ui_screen_t owns a root object inside the content area. Push hides the current
  * screen and shows the new one, pop destroys the top and shows the one below. Menu = back, Select = enter
  * (screens decide what Select does). A push slides the new screen in 24 px from the right over 120 ms, a pop slides the revealed one in
@@ -16,6 +17,7 @@
 #include "bt_control.h"
 #include "bt_service.h"
 #include "capabilities.h"
+#include "hal_audio.h"
 #include "hal_display.h"
 #include "hal_radio.h"
 #include "haptic_logic.h"
@@ -144,21 +146,35 @@ static void sync_from_settings(void) {
 static lv_obj_t *g_content;
 static lv_obj_t *g_title;
 static lv_obj_t *g_left;     /* the left context slot (Small, ink2): clock, "n of m", a count, a path */
-static lv_obj_t *g_dots[3];  /* three busy dots that take the slot's place while the library builds in the background (LB-4) */
-static int g_dots_phase = -1; /* -1: not showing */
-static uint32_t g_dots_col[3];
-static lv_obj_t *g_right;    /* the right-hand group, a flex row: Wi-Fi, Bluetooth, lock, battery percentage, battery */
-static lv_obj_t *g_wifi, *g_bt, *g_lock, *g_pct;
+static lv_obj_t *g_state;    /* the play-state glyph before it: scanning, opening, recording, can't play (icon set); hidden otherwise */
+static uint8_t g_state_shown; /* ui_play_glyph_t on show */
+static bool g_state_rec;      /* the glyph is in the recording colour (else the ink) */
+static int8_t g_scan_dir;                /* ui_status_set_scan() */
+static uint8_t g_activity;               /* ui_activity_t, ui_status_set_activity() */
+static bool g_ext_speaker;               /* ui_status_set_external_speaker() */
+static lv_obj_t *g_dots[3]; /* three busy dots in a box, first in the right zone, while the library builds in the background (LB-4; icon set decision 6) */
+static int8_t g_dots_phase = -1; /* -1: not showing */
+static int8_t g_dots_lit = -1;   /* the dot drawn in ink (the others are ink3); -1 none. The Pico 2 W has no static RAM to spare: no colour table */
+static lv_obj_t *g_right;    /* the right-hand group, a flex row: busy dots, Wi-Fi, Bluetooth, output, lock, battery percentage, battery */
+static lv_obj_t *g_wifi, *g_bt, *g_out, *g_lock, *g_pct;
+static uint8_t g_out_shown; /* ui_out_glyph_t on show */
 static lv_obj_t *g_batt, *g_batt_fill; /* the drawn battery: outline with a terminal, and the fill inside it */
 static lv_obj_t *g_frame_scr;          /* the screen the frame lives on (the strips are children of it) */
 static uint32_t g_notice_seen, g_skip_seen;
-static int g_bt_shown = -1;
-static uint32_t g_bt_col = UI_C_INK3;
+static int8_t g_bt_shown = -1;
+static uint32_t g_bt_col = UI_C_STATUS_DIM;
 static hal_wifi_status g_wifi_shown = (hal_wifi_status)99;
+#ifdef NEUPOD_UI_HIRES
+static bool g_tour_all; /* ui_status_tour_all(): hosted builds only, no RAM on the Pico 2 W */
+#define TOUR_ALL g_tour_all
+#else
+#define TOUR_ALL false
+#endif
+
 static uint32_t g_wifi_col = UI_C_INK2;
 static ui_stack_t g_stack;
 static ui_accel_t g_accel;
-static int g_shown_pct = -3;
+static int16_t g_shown_pct = -3; /* -1 no gauge, 0..100 (small types: the Pico 2 W has no static RAM to spare) */
 static bool g_shown_charging;
 static uint32_t g_batt_col = UI_C_INK;
 static uint32_t g_pct_col = UI_C_INK2;
@@ -201,6 +217,9 @@ void ui_frame_init(lv_obj_t *scr) {
     lv_obj_set_scrollable(bar, false);
     ui_obj_bg(bar, UI_C_BAR, 0);
     ui_obj_border(bar, UI_C_LINE, 1, LV_BORDER_SIDE_BOTTOM);
+#ifdef NEUPOD_UI_HIRES
+    lv_obj_add_flag(bar, UI_OBJ_FLAG_NO_OVERLAP);
+#endif
 
     g_title = ui_label(bar, "", UI_C_INK);
     lv_obj_set_size(g_title, UIM->title_w, UIM->title_h);
@@ -213,18 +232,11 @@ void ui_frame_init(lv_obj_t *scr) {
     lv_obj_set_size(g_left, UIM->slot_w, lv_font_get_line_height(UIM->font_small)); /* one line: a long path ends in dots instead of wrapping */
     lv_label_set_long_mode(g_left, LV_LABEL_LONG_DOT);
     lv_obj_align(g_left, LV_ALIGN_LEFT_MID, UIM->bar_inset, 0);
-
-    for (int i = 0; i < 3; i++) { /* busy dots: one bright, the others dim, moving along (the same dots the list rows use) */
-        g_dots[i] = lv_obj_create(bar);
-        lv_obj_remove_style_all(g_dots[i]);
-        lv_obj_set_size(g_dots[i], UIM->glyph_bar_w, UIM->glyph_bar_w);
-        lv_obj_set_style_radius(g_dots[i], UIM->glyph_bar_w / 2, 0);
-        lv_obj_align(g_dots[i], LV_ALIGN_LEFT_MID, UIM->bar_inset + i * UIM->glyph_step * 2, 0);
-        g_dots_col[i] = UI_C_INK3;
-        ui_obj_bg(g_dots[i], g_dots_col[i], 0);
-        lv_obj_set_hidden(g_dots[i], true);
-    }
-    g_dots_phase = -1;
+    g_state = ui_icon(bar, "", false, UI_C_INK); /* the play-state glyph; while it shows, the context text moves right by a leading icon's width */
+    lv_obj_align(g_state, LV_ALIGN_LEFT_MID, UIM->bar_inset, 0);
+    lv_obj_set_hidden(g_state, true);
+    g_state_shown = UI_PS_NONE;
+    g_state_rec = false;
 
     // Right-hand group: hidden members take no room, so the rest closes up (flex row, right-aligned).
     g_right = lv_obj_create(bar);
@@ -235,10 +247,31 @@ void ui_frame_init(lv_obj_t *scr) {
     lv_obj_set_flex_align(g_right, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(g_right, UIM->bar_gap, 0);
     lv_obj_align(g_right, LV_ALIGN_RIGHT_MID, -UIM->bar_inset, 0);
+#ifdef NEUPOD_UI_HIRES
+    lv_obj_add_flag(g_right, UI_OBJ_FLAG_NO_OVERLAP);
+#endif
+    lv_obj_t *dots_box = lv_obj_create(g_right); /* busy dots: one bright, the others dim, moving along (the same dots the list rows use) */
+    lv_obj_remove_style_all(dots_box);
+    lv_obj_set_size(dots_box, 4 * UIM->glyph_step + UIM->glyph_bar_w, UIM->glyph_bar_w);
+    lv_obj_set_scrollable(dots_box, false);
+    lv_obj_set_hidden(dots_box, true);
+    for (int i = 0; i < 3; i++) {
+        g_dots[i] = lv_obj_create(dots_box);
+        lv_obj_remove_style_all(g_dots[i]);
+        lv_obj_set_size(g_dots[i], UIM->glyph_bar_w, UIM->glyph_bar_w);
+        lv_obj_set_style_radius(g_dots[i], UIM->glyph_bar_w / 2, 0);
+        lv_obj_set_pos(g_dots[i], i * UIM->glyph_step * 2, 0);
+        ui_obj_bg(g_dots[i], UI_C_INK3, 0);
+    }
+    g_dots_phase = -1;
+    g_dots_lit = -1;
     g_wifi = ui_icon(g_right, UI_ICON_WIFI, false, UI_C_INK2); /* Wi-Fi state: hidden when the station is off, dim while joining, green when up */
     lv_obj_set_hidden(g_wifi, true);
-    g_bt = ui_icon(g_right, UI_ICON_BLUETOOTH, false, UI_C_INK3);
+    g_bt = ui_icon(g_right, UI_ICON_BLUETOOTH, false, UI_C_STATUS_DIM);
     lv_obj_set_hidden(g_bt, true);
+    g_out = ui_icon(g_right, UI_ICON_HEADPHONES, false, UI_C_INK); /* the output: headphones, jack plug (Line out) or speaker; none on Bluetooth */
+    lv_obj_set_hidden(g_out, true);
+    g_out_shown = UI_OUT_NONE;
     g_lock = ui_icon(g_right, UI_ICON_LOCK, false, UI_C_INK); /* Hold is on */
     lv_obj_set_hidden(g_lock, true);
     g_pct = ui_label_small(g_right, "", UI_C_INK2); /* the battery percentage: only below 20 % or while charging */
@@ -274,7 +307,7 @@ void ui_frame_init(lv_obj_t *scr) {
     g_shown_pct = -3; /* the bar of an earlier init (tests) is gone: draw the battery again */
     g_bt_shown = -1;
     g_wifi_shown = (hal_wifi_status)99;
-    g_bt_col = UI_C_INK3; /* the colours the new objects were created with */
+    g_bt_col = UI_C_STATUS_DIM; /* the colours the new objects were created with */
     g_wifi_col = UI_C_INK2;
     g_pct_col = UI_C_INK2;
     g_htoast_until = 0;
@@ -638,7 +671,7 @@ static void update_battery(void) {
     if (pct == g_shown_pct && charging == g_shown_charging) {
         return; // touch LVGL only when something changed
     }
-    g_shown_pct = pct;
+    g_shown_pct = (int16_t)pct;
     g_shown_charging = charging;
     if (!have) { // no gauge: an empty outline, no number (the review: never "--")
         lv_obj_set_hidden(g_batt_fill, true);
@@ -662,14 +695,16 @@ static void update_battery(void) {
     lv_obj_set_hidden(g_pct, !show);
 }
 
-static int g_wifi_bars; /* bars last shown for the joined network (0 = not joined), with hysteresis */
+static int8_t g_wifi_bars; /* bars last shown for the joined network (0 = not joined), with hysteresis */
 
 int ui_wifi_bars(void) { return g_wifi_bars; }
 
 static void update_wifi(void) {
-    hal_wifi_status st = hal_wifi_state();
+    hal_wifi_status st = TOUR_ALL ? HAL_WIFI_UP : hal_wifi_state();
     int bars = 0;
-    if (st == HAL_WIFI_UP) {
+    if (TOUR_ALL) {
+        bars = 4;
+    } else if (st == HAL_WIFI_UP) {
         wifi_info_t wi;
         wifi_get_info(&wi);
         bars = ui_signal_bars(wi.rssi, &k_ui_signal_wifi, g_wifi_bars, UI_SIG_HYST_DB);
@@ -678,7 +713,7 @@ static void update_wifi(void) {
         return;
     }
     g_wifi_shown = st;
-    g_wifi_bars = bars;
+    g_wifi_bars = (int8_t)bars;
     int cls = ui_signal_class(bars);
     uint32_t col = st == HAL_WIFI_UP ? (bars == 0 ? UI_C_GREEN : cls == 3 ? UI_C_GREEN : cls == 2 ? UI_C_AMBER : UI_C_RED)
                    : st == HAL_WIFI_FAILED || st == HAL_WIFI_BAD_AUTH ? UI_C_RED : UI_C_INK3;
@@ -689,6 +724,9 @@ static void update_wifi(void) {
 
 /* Bluetooth glyph of the status bar. 0 hidden (no radio, or nothing remembered and no link), 1 remembered, not connected, 2 connected, 3 streaming. */
 static int bt_level(void) {
+    if (TOUR_ALL) {
+        return 2;
+    }
     hal_bt_state_t st = hal_bt_state();
     if (st != HAL_BT_ON && st != HAL_BT_SCANNING) {
         return 0;
@@ -703,14 +741,16 @@ static int bt_level(void) {
     return bt_saved_get(NULL) || l != HAL_BT_LINK_DISCONNECTED ? 1 : 0;
 }
 
-// DS-3: ink3 = a saved headset that is not connected, ink = connected, accent = streaming; nothing without a radio or a headset.
+// Icon set decision 5 (owner decision 13): a saved headset that is not connected is the plain glyph in the dim colour; connected or streaming is
+// bluetooth-connected in the active colour (the shape tells them apart, not only the shade); nothing without a radio or a headset.
 static void update_bt(void) {
     int lv = bt_level();
     if (lv == g_bt_shown) {
         return;
     }
     g_bt_shown = lv;
-    uint32_t col = lv == 3 ? UI_C_ACCENT : lv == 2 ? UI_C_INK : UI_C_INK3;
+    uint32_t col = lv >= 2 ? UI_C_BT_ACTIVE : UI_C_STATUS_DIM;
+    lv_label_set_text_static(g_bt, lv >= 2 ? UI_ICON_BLUETOOTH_CONNECTED : UI_ICON_BLUETOOTH);
     lv_obj_set_hidden(g_bt, lv == 0);
     ui_label_recolour(g_bt, g_bt_col, col);
     g_bt_col = col;
@@ -875,18 +915,16 @@ static void kick_haptics(void) {
     }
 }
 
-// LB-4: while the library builds with its screen left, three busy dots replace the left slot on every screen.
+// LB-4: while the library builds with its screen left, three busy dots sit first in the status bar's right zone on every screen (icon set
+// decision 6: a background job is device state, like the radios; the left zone belongs to playback).
 static void update_busy_dots(uint32_t now_ms) {
-    const bool on = ui_library_background() && !g_idle.off;
+    const bool on = (ui_library_background() || TOUR_ALL) && !g_idle.off;
     if (!on && g_dots_phase < 0) {
         return;
     }
     if (!on) {
         g_dots_phase = -1;
-        for (int i = 0; i < 3; i++) {
-            lv_obj_set_hidden(g_dots[i], true);
-        }
-        lv_obj_set_hidden(g_left, false);
+        lv_obj_set_hidden(lv_obj_get_parent(g_dots[0]), true);
         return;
     }
     int phase = (int)((now_ms / 250u) % 3u);
@@ -894,15 +932,85 @@ static void update_busy_dots(uint32_t now_ms) {
         return;
     }
     if (g_dots_phase < 0) {
-        lv_obj_set_hidden(g_left, true);
+        lv_obj_set_hidden(lv_obj_get_parent(g_dots[0]), false);
     }
-    g_dots_phase = phase;
-    for (int i = 0; i < 3; i++) {
-        uint32_t c = i == phase ? UI_C_INK : UI_C_INK3;
-        ui_obj_bg_swap(g_dots[i], g_dots_col[i], c, 0);
-        g_dots_col[i] = c;
-        lv_obj_set_hidden(g_dots[i], false);
+    g_dots_phase = (int8_t)phase;
+    if (g_dots_lit >= 0) {
+        ui_obj_bg_swap(g_dots[g_dots_lit], UI_C_INK, UI_C_INK3, 0);
     }
+    ui_obj_bg_swap(g_dots[phase], UI_C_INK3, UI_C_INK, 0);
+    g_dots_lit = (int8_t)phase;
+}
+
+// ---- The icon set's status-bar glyphs (docs/design/2026-11-26-icon-set) -------------------------------------------------------------------------
+void ui_status_set_scan(int dir) { g_scan_dir = (int8_t)(dir > 0 ? 1 : dir < 0 ? -1 : 0); }
+void ui_status_set_activity(ui_activity_t a) { g_activity = (uint8_t)a; }
+void ui_status_set_external_speaker(bool on) { g_ext_speaker = on; }
+
+static const char *play_glyph(ui_play_glyph_t g) {
+    switch (g) {
+    case UI_PS_FAST_FORWARD: return UI_ICON_FAST_FORWARD;
+    case UI_PS_REWIND: return UI_ICON_REWIND;
+    case UI_PS_RECORDING: return UI_ICON_RECORD;
+    case UI_PS_OPENING: return UI_ICON_OPENING;
+    default: return UI_ICON_CANT_PLAY;
+    }
+}
+
+// The play-state slot: a glyph before the context text while scanning, opening, recording or after a track failed; nothing otherwise.
+static void update_play_state(void) {
+    const ui_play_glyph_t g = ui_status_play_glyph(g_scan_dir, g_activity == UI_ACT_RECORDING, g_activity == UI_ACT_OPENING, player_failed());
+    if (g == g_state_shown) {
+        return;
+    }
+    const bool was = g_state_shown != UI_PS_NONE;
+    g_state_shown = g;
+    if (g != UI_PS_NONE) {
+        lv_label_set_text_static(g_state, play_glyph(g));
+        const bool rec = g == UI_PS_RECORDING;
+        ui_label_recolour(g_state, g_state_rec ? UI_C_RECORDING : UI_C_INK, rec ? UI_C_RECORDING : UI_C_INK);
+        g_state_rec = rec;
+    }
+    if (was != (g != UI_PS_NONE)) {
+        lv_obj_set_hidden(g_state, g == UI_PS_NONE);
+        const int32_t dx = g != UI_PS_NONE ? UIM->icon_w : 0; /* the context text keeps its right end: it gives up the glyph's room */
+        lv_obj_set_width(g_left, UIM->slot_w - dx);
+        lv_obj_align(g_left, LV_ALIGN_LEFT_MID, UIM->bar_inset + dx, 0);
+    }
+}
+
+// The title gives way to the right-hand group: its box shrinks (centred, so its ticker scrolls inside) to keep clear of the icons, never wider
+// than the profile's title_w. At 320x240 a full right zone (busy dots, Wi-Fi, Bluetooth, output, lock, percentage, battery) leaves no room at all.
+static void fit_title(void) {
+    lv_obj_update_layout(g_right); /* only does work when something in the bar changed */
+    const int32_t room = UI_W - 2 * (lv_obj_get_width(g_right) + UIM->bar_inset + UIM->bar_gap);
+    const int32_t w = room >= UIM->title_w ? UIM->title_w : room > 0 ? room : 0;
+    if (lv_obj_get_width(g_title) != w) {
+        lv_obj_set_width(g_title, w);
+    }
+}
+
+#ifdef NEUPOD_UI_HIRES
+void ui_status_tour_all(bool on) {
+    g_tour_all = on;
+    g_wifi_shown = (hal_wifi_status)99; /* look again at once */
+    g_bt_shown = -1;
+    lv_obj_set_hidden(g_lock, !on && !g_hold.locked);
+}
+#endif
+
+// The output slot: what the firmware knows of the output (a plug in the jack, Line out in force); Bluetooth has its own glyph.
+static void update_output(void) {
+    const ui_out_glyph_t g =
+        ui_status_output_glyph(g_ext_speaker, audio_route_output() == AUDIO_OUT_BT, audio_route_line_out_active(), hal_audio_headphones_in());
+    if (g == g_out_shown) {
+        return;
+    }
+    g_out_shown = g;
+    if (g != UI_OUT_NONE) {
+        lv_label_set_text_static(g_out, g == UI_OUT_SPEAKER ? UI_ICON_SPEAKER : g == UI_OUT_JACK_PLUG ? UI_ICON_JACK_PLUG : UI_ICON_HEADPHONES);
+    }
+    lv_obj_set_hidden(g_out, g == UI_OUT_NONE);
 }
 
 #if NEUPOD_POWER_MGMT
@@ -1048,7 +1156,10 @@ void ui_frame_tick(uint32_t now_ms) {
     update_banner();
     update_volume_hud();
     update_busy_dots(now_ms);
+    update_play_state();
+    update_output();
     update_battery();
+    fit_title();
     ui_strips_tick(now_ms);
     bt_service_tick(); /* the radio simulator on the host; stale pairing keys; cheap */
     ui_screen_t *top = ui_stack_top(&g_stack);

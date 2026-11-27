@@ -53,6 +53,10 @@
 int ui_layout_audit(const char *screen);
 /** Marks the list's pool rows for the audit: rows outside the visible window are clipped away on purpose. */
 #define UI_OBJ_FLAG_POOL_ROW LV_OBJ_FLAG_USER_1
+/** Marks the status bar and its right-hand group for the audit: no two of their visible children may overlap (the title gives way to the icons). */
+#define UI_OBJ_FLAG_NO_OVERLAP LV_OBJ_FLAG_USER_2
+/** Tour only: every right-zone member of the status bar on at once (busy dots, Wi-Fi, Bluetooth connected, lock), to check the bar at its fullest. */
+void ui_status_tour_all(bool on);
 #endif
 
 /* ---- Boot splash (ui_splash.c) -------------------------------------------------------------------- */
@@ -161,6 +165,16 @@ void ui_log_screen(const char *title, const char *what, const char *now_top);
 /** Bars (1..4) of the joined Wi-Fi network as the status bar shows them (hysteresis applied); 0 when not joined. */
 int ui_wifi_bars(void);
 
+/* Status-bar glyphs of the icon set (docs/design/2026-11-26-icon-set). The play-state slot at the left shows scanning, opening, recording or
+ * can't play (ui_status_play_glyph()); the output slot shows headphones, the jack plug (Line out) or a speaker (ui_status_output_glyph()). */
+/** Now Playing: a seek key is held and scanning (-1 Previous, +1 Next, 0 none). The screen clears it when it is suspended or goes. */
+void ui_status_set_scan(int dir);
+/** Hooks for features the firmware does not have yet: a network stream opening, recording, an external (network) speaker as the output.
+ *  Nothing calls them today; the glyphs, colours and their place in the bar are ready for the feature that does. */
+typedef enum { UI_ACT_NONE = 0, UI_ACT_OPENING, UI_ACT_RECORDING } ui_activity_t;
+void ui_status_set_activity(ui_activity_t a);
+void ui_status_set_external_speaker(bool on);
+
 /* ---- List widget (ui_list.c) ---------------------------------------------------------------------- */
 
 typedef struct {
@@ -169,7 +183,9 @@ typedef struct {
     char sub[48];    /* second line of a two-line list (ui_list_model_t.two_line): Small, ink2; "" = none */
     bool chevron;    /* the Lucide chevron at the right edge */
     const char *icon; /* a Lucide glyph (ui_icons.h, a string constant) before the label; NULL = none */
+    const char *detail_icon; /* a glyph just before the detail text (the can't-play glyph before a greyed song's reason); NULL = none */
     bool dim;        /* greyed, not meant to be opened */
+    uint8_t stars;   /* a rating at the right edge (icon set): this many lit stars of five, the rest unlit; 0 = none */
     uint8_t bars;    /* signal meter at the right edge, 1..4 (ui_signal_bars; 0 = none) */
     bool mono;       /* the meter is the monochrome three-bar one of the Bluetooth lists (ink and line, never traffic-light colours): bars 1..4 still, shown as 1..3 */
     bool busy;       /* pulsing dots at the right edge instead of the meter: the row's action is still running.

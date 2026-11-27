@@ -138,26 +138,25 @@ static void lib_get(void *ctx, int32_t idx, ui_list_item_t *out) {
         return;
     }
     out->dim = r.child.kind == LVW_KINDS && r.play != LIB_PLAY_OK; /* a song the player cannot play (D6): listed, greyed */
-    if (s->view.kind == LVW_ALBUM) { /* "3   Title", the length at the right; a song that cannot play names its codec in brackets */
+    if (out->dim) {
+        out->detail_icon = UI_ICON_CANT_PLAY; /* icon set (brief 2d, as the app): the can't-play glyph just before the reason at the right */
+    }
+    if (s->view.kind == LVW_ALBUM) { /* "3   Title", the length at the right; a song that cannot play has its codec there instead (below) */
         char num[12] = "";
         if (r.track != 0) {
             snprintf(num, sizeof num, "%u   ", (unsigned)r.track);
         }
-        if (out->dim && r.codec != LIB_CODEC_NONE) {
-            snprintf(out->label, sizeof out->label, "%s%s (%s)", num, r.text, codec_name(r.codec));
-        } else {
-            snprintf(out->label, sizeof out->label, "%s%s", num, r.text);
-        }
+        snprintf(out->label, sizeof out->label, "%s%s", num, r.text);
     } else {
         snprintf(out->label, sizeof out->label, "%s", r.text);
     }
     if (two_line_kind(s->view.kind)) {
-        snprintf(out->sub, sizeof out->sub, "%s", r.sub); /* the artist moved to the second line: the codec of a greyed song (LB-5) at the right */
-        if (out->dim && r.codec != LIB_CODEC_NONE) {
-            snprintf(out->detail, sizeof out->detail, "%s", codec_name(r.codec));
-        }
+        snprintf(out->sub, sizeof out->sub, "%s", r.sub); /* the artist moved to the second line */
     } else {
         snprintf(out->detail, sizeof out->detail, "%s", r.detail);
+    }
+    if (out->dim && r.codec != LIB_CODEC_NONE) { /* a greyed song (LB-5): its codec at the right, the can't-play glyph before it */
+        snprintf(out->detail, sizeof out->detail, "%s", codec_name(r.codec));
     }
     out->chevron = r.child.kind != LVW_KINDS;
 }
