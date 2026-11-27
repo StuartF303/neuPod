@@ -107,19 +107,11 @@ class RatingStars extends StatelessWidget {
           children: [
             for (var i = 0; i < 5; i++) ...[
               if (i > 0) SizedBox(width: s * 0.2),
-              i < rating
-                  ? NeupodIcon(
-                      NeupodGlyph.star,
-                      size: s,
-                      color: skin.filled,
-                      paint: GlyphPaint.fillAndStroke,
-                    )
-                  : NeupodIcon(
-                      NeupodGlyph.star,
-                      size: s,
-                      color: skin.empty,
-                      strokeWidth: 2,
-                    ),
+              NeupodIcon(
+                i < rating ? NeupodGlyph.starFilled : NeupodGlyph.star,
+                size: s,
+                color: i < rating ? skin.filled : skin.empty,
+              ),
             ],
           ],
         ),

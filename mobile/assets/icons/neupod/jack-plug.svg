@@ -1,8 +1,2 @@
-<!-- SPDX-License-Identifier: MPL-2.0. Drawn for the neuPod UI styles design (docs/design/2026-11-21-ui-styles/mockups/classic-status-states.html); not a Lucide icon. -->
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M10 13V4.5a2 2 0 0 1 4 0V13" />
-  <path d="M10 7.5h4" />
-  <path d="M10 10.5h4" />
-  <rect x="8" y="13" width="8" height="7" rx="1.5" />
-  <path d="M12 20v2.5" />
-</svg>
+<!-- SPDX-License-Identifier: MPL-2.0. Drawn for the neuPod icon set (docs/design/2026-11-26-icon-set); not a Lucide icon. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12V6a3 3 0 0 1 6 0v6"/><path d="M9 9h6"/><path d="M7 12h10v3a4 4 0 0 1-4 4h-2a4 4 0 0 1-4-4z"/><path d="M12 19v3"/></svg>

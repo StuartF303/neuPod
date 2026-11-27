@@ -104,11 +104,62 @@ enum NeupodGlyph {
   ),
   jackPlug(
     'neupod/jack-plug',
-    '<path d="M10 13V4.5a2 2 0 0 1 4 0V13" />'
-        '<path d="M10 7.5h4" />'
-        '<path d="M10 10.5h4" />'
-        '<rect x="8" y="13" width="8" height="7" rx="1.5" />'
-        '<path d="M12 20v2.5" />',
+    '<path d="M9 12V6a3 3 0 0 1 6 0v6" />'
+        '<path d="M9 9h6" />'
+        '<path d="M7 12h10v3a4 4 0 0 1-4 4h-2a4 4 0 0 1-4-4z" />'
+        '<path d="M12 19v3" />',
+  ),
+  record(
+    'neupod/record',
+    '<circle cx="12" cy="12" r="9" />'
+        '<circle cx="12" cy="12" r="4" fill="currentColor" />',
+  ),
+  starFilled(
+    'neupod/star-filled',
+    '<path fill="currentColor" d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 '
+        '1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 '
+        '0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 '
+        '0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 '
+        '0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 '
+        '0 1.597-1.16z" />',
+  ),
+  fastForward(
+    'lucide/fast-forward',
+    '<path d="M12 6a2 2 0 0 1 3.414-1.414l6 6a2 2 0 0 1 0 2.828l-6 6A2 2 0 0 1 12 18z" />'
+        '<path d="M2 6a2 2 0 0 1 3.414-1.414l6 6a2 2 0 0 1 0 2.828l-6 6A2 2 0 0 1 2 18z" />',
+  ),
+  rewind(
+    'lucide/rewind',
+    '<path d="M12 6a2 2 0 0 0-3.414-1.414l-6 6a2 2 0 0 0 0 2.828l6 6A2 2 0 0 0 12 18z" />'
+        '<path d="M22 6a2 2 0 0 0-3.414-1.414l-6 6a2 2 0 0 0 0 2.828l6 6A2 2 0 0 0 22 18z" />',
+  ),
+  loaderCircle(
+    'lucide/loader-circle',
+    '<path d="M21 12a9 9 0 1 1-6.219-8.56" />',
+  ),
+  playOff(
+    'lucide/play-off',
+    '<path d="m10.215 4.56 9.79 5.71a2 2 0 0 1 .003 3.458l-.393.23" />'
+        '<path d="m16.042 16.042-8.034 4.686A2 2 0 0 1 5 19V5" />'
+        '<path d="m2 2 20 20" />',
+  ),
+  ellipsis(
+    'lucide/ellipsis',
+    '<circle cx="12" cy="12" r="1" />'
+        '<circle cx="19" cy="12" r="1" />'
+        '<circle cx="5" cy="12" r="1" />',
+  ),
+  download(
+    'lucide/download',
+    '<path d="M12 15V3" />'
+        '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />'
+        '<path d="m7 10 5 5 5-5" />',
+  ),
+  cloudDownload(
+    'lucide/cloud-download',
+    '<path d="M12 13v8l-4-4" />'
+        '<path d="m12 21 4-4" />'
+        '<path d="M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284" />',
   ),
   play('neupod/play', '<path d="M6 3l14 9-14 9z" />'),
   playRounded('neupod/play-rounded', '<path d="M7 4l12 8-12 8z" />'),
@@ -133,8 +184,16 @@ enum NeupodGlyph {
 
   static final Map<NeupodGlyph, Path> _paths = {};
 
+  static final Map<NeupodGlyph, Path> _fills = {};
+
   /// The glyph's outline in its 24x24 view box (parsed once).
   Path get path => _paths[this] ??= parseSvgShapes(shapes);
+
+  /// The shapes the SVG fills with `fill="currentColor"` (the lit star, the
+  /// record dot), drawn in the glyph's colour under the stroke; empty for a
+  /// glyph that is only stroked.
+  Path get fillPath =>
+      _fills[this] ??= parseSvgShapes(shapes, fillCurrentColourOnly: true);
 }
 
 /// Draws a [NeupodGlyph] at [size] design px. [strokeWidth] is in the glyph's
@@ -183,6 +242,16 @@ class _GlyphPainter extends CustomPainter {
     canvas.save();
     canvas.scale(size.width / 24, size.height / 24);
     final path = glyph.path;
+    final marked = glyph.fillPath;
+    if (marked.getBounds() != Rect.zero) {
+      canvas.drawPath(
+        marked,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.fill
+          ..isAntiAlias = true,
+      );
+    }
     if (mode != GlyphPaint.stroke) {
       canvas.drawPath(
         path,

@@ -32,6 +32,8 @@ class NeupodRow extends StatelessWidget {
     this.selection = RowSelection.none,
     this.pressed = false,
     this.disabledReason,
+    this.reasonGlyph,
+    this.rating,
     this.action,
     this.position,
     this.paintsBar = true,
@@ -66,6 +68,16 @@ class NeupodRow extends StatelessWidget {
   /// selected colour wins over the greyed one). A tap selects it; nothing
   /// opens.
   final String? disabledReason;
+
+  /// The glyph before the reason (icon set design): `play-off` for a song
+  /// that cannot play, `cloud-download` for an iCloud file not on the phone.
+  /// On a two-line row with `cloud-download` the reason moves to the second
+  /// line and the glyph stands alone at the right. Null: the reason alone.
+  final NeupodGlyph? reasonGlyph;
+
+  /// A rating, 1 to 5, drawn as lit and unlit stars at the right in the small
+  /// icon size (icon set design: rated list rows). Null or 0: none.
+  final int? rating;
 
   /// What Select does on a greyed row that still does something, for the
   /// screen reader (`Download` on an iCloud song that is not on the phone,
@@ -126,13 +138,20 @@ class NeupodRow extends StatelessWidget {
     TextStyle withShadow(TextStyle s) =>
         shadows.isEmpty ? s : s.copyWith(shadows: shadows);
 
+    // An iCloud file not on the phone says why on the second line, so the
+    // right-hand side holds only the glyph.
+    final reasonBelow =
+        twoLine && greyed && reasonGlyph == NeupodGlyph.cloudDownload;
+    final secondLine = reasonBelow
+        ? (disabledReason!.isEmpty ? subtitle : '$disabledReason · $subtitle')
+        : subtitle;
     final text = twoLine
         ? Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               NeupodText(title, withShadow(type.body(ink))),
-              NeupodText(subtitle!, withShadow(type.small(ink2))),
+              NeupodText(secondLine!, withShadow(type.small(ink2))),
             ],
           )
         : NeupodText(title, withShadow(type.body(ink)));
@@ -159,12 +178,26 @@ class NeupodRow extends StatelessWidget {
         // The reason must stay readable: it and the title share the row,
         // each ending in an ellipsis only if both are long.
         // The reason stays readable: the title gives way first.
-        _trailing(
-          NeupodText(
-            disabledReason!,
-            withShadow(type.small(onBar ? sel.text : list.reason)),
+        if (reasonGlyph != null) ...[
+          NeupodIcon(
+            reasonGlyph!,
+            size: 20 * k,
+            color: onBar ? sel.text : list.reason,
+            strokeWidth: 2.5,
           ),
-        ),
+          if (!reasonBelow && disabledReason!.isNotEmpty)
+            const SizedBox(width: 6),
+        ],
+        if (!reasonBelow)
+          _trailing(
+            NeupodText(
+              disabledReason!,
+              withShadow(type.small(onBar ? sel.text : list.reason)),
+            ),
+          ),
+      ] else if (rating != null && rating! > 0) ...[
+        const SizedBox(width: 12),
+        _stars(onBar ? sel.text : null, theme),
       ] else if (flash) ...[
         const SizedBox(width: 12),
         NeupodIcon(
@@ -238,6 +271,28 @@ class NeupodRow extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+extension on NeupodRow {
+  /// Five stars, [rating] lit (`star-filled`, the style's accent) and the
+  /// rest unlit (`star`, line grey); one ink on the selection bar.
+  Widget _stars(Color? barInk, NeupodTheme theme) {
+    final skin = theme.style.rating;
+    final size = 18 * theme.tier.k;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < 5; i++) ...[
+          if (i > 0) SizedBox(width: size * 0.15),
+          NeupodIcon(
+            i < rating! ? NeupodGlyph.starFilled : NeupodGlyph.star,
+            size: size,
+            color: barInk ?? (i < rating! ? skin.filled : skin.empty),
+          ),
+        ],
+      ],
     );
   }
 }
