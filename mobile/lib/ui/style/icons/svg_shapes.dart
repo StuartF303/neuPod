@@ -11,13 +11,16 @@ final _element = RegExp(r'<(path|rect|circle|line|polyline)\b([^>]*?)/?>');
 final _attribute = RegExp(r'([a-zA-Z-]+)="([^"]*)"');
 
 /// The shapes of an SVG fragment (the elements inside `<svg>`), as one path.
-Path parseSvgShapes(String svg) {
+/// With [fillCurrentColourOnly], only the elements marked
+/// `fill="currentColor"` (the lit star, the record dot).
+Path parseSvgShapes(String svg, {bool fillCurrentColourOnly = false}) {
   final path = Path();
   for (final m in _element.allMatches(svg)) {
     final attrs = {
       for (final a in _attribute.allMatches(m.group(2)!))
         a.group(1)!: a.group(2)!,
     };
+    if (fillCurrentColourOnly && attrs['fill'] != 'currentColor') continue;
     double n(String k, [double d = 0]) =>
         attrs[k] == null ? d : double.parse(attrs[k]!);
     switch (m.group(1)) {

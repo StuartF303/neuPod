@@ -87,8 +87,9 @@ NeupodStyle modernDark(ArtPalette? art) {
       glyph: _ink,
       context: const Color(0xffb8b8b8),
       title: _ink,
-      dim: const Color(0xff7a7a7a),
+      dim: const Color(0xff9a9a9a),
       bluetoothActive: const Color(0xff5aa2ff),
+      recording: const Color(0xffff7b70),
       iconGap: 10,
       play: NeupodGlyph.playRounded,
       pause: NeupodGlyph.pauseRounded,
@@ -295,6 +296,6 @@ NeupodStyle modernDark(ArtPalette? art) {
       ),
       chipOffText: const Color(0xffc8c8c8),
     ),
-    rating: const RatingSkin(filled: Color(0xffd8d8d8), empty: _ink2),
+    rating: RatingSkin(filled: progressFill, empty: const Color(0xff7c7c7c)),
   );
 }

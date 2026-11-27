@@ -15,6 +15,7 @@ import 'package:neupod/ui/components/panel.dart';
 import 'package:neupod/ui/components/search_entry.dart';
 import 'package:neupod/ui/components/small_parts.dart';
 import 'package:neupod/ui/components/status_bar.dart';
+import 'package:neupod/ui/style/icons/neupod_glyphs.dart';
 import 'package:neupod/ui/style/skins.dart';
 
 import 'golden_harness.dart';
@@ -123,6 +124,114 @@ void main() {
           NeupodRow(
             title: 'Impact (The Earth Is Burning) - a very long title indeed',
             selection: RowSelection.flash,
+          ),
+        ],
+      ),
+    );
+  });
+
+  // The icon set's status bar states (icon set design, "The status bar"):
+  // scanning, opening, can't play with Line out, a library update, recording.
+  goldenSheet('status_bar_icons', (t) => 6 * (t.statusBarHeight + _gap), (
+    style,
+    tier,
+  ) {
+    Widget bar(StatusBar b) => SizedBox(height: tier.statusBarHeight, child: b);
+    return _gapped([
+      bar(
+        const StatusBar(
+          title: 'Now Playing',
+          playState: PlayState.playing,
+          transient: TransientState.scanForward,
+          bluetooth: BluetoothIcon.active,
+          battery: BatteryState(level: 0.78),
+        ),
+      ),
+      bar(
+        const StatusBar(
+          title: 'Now Playing',
+          playState: PlayState.playing,
+          transient: TransientState.scanBack,
+          bluetooth: BluetoothIcon.saved,
+          output: OutputIcon.headphones,
+          battery: BatteryState(level: 0.78),
+        ),
+      ),
+      bar(
+        const StatusBar(
+          title: 'Radio',
+          transient: TransientState.opening,
+          output: OutputIcon.external,
+          battery: BatteryState(level: 0.78),
+        ),
+      ),
+      bar(
+        const StatusBar(
+          title: 'Songs',
+          playState: PlayState.paused,
+          busy: true,
+          locked: true,
+          battery: BatteryState(level: 0.78),
+        ),
+      ),
+      bar(
+        const StatusBar(
+          title: 'Now Playing',
+          transient: TransientState.cantPlay,
+          output: OutputIcon.line,
+          battery: BatteryState(level: 0.78),
+        ),
+      ),
+      bar(
+        const StatusBar(
+          title: 'Recording',
+          transient: TransientState.recording,
+          battery: BatteryState(level: 0.78),
+        ),
+      ),
+    ]);
+  });
+
+  // Rows with a rating, a song that cannot play and an iCloud file not on the
+  // phone (reason on the second line).
+  goldenSheet('rows_icons', (t) => 3 * t.rowHeight + 3 * t.row2Height, (
+    style,
+    tier,
+  ) {
+    return ListGround(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: const [
+          NeupodRow(title: 'Harbour Lights', rating: 4),
+          NeupodRow(
+            title: 'Ember',
+            rating: 2,
+            selection: RowSelection.selected,
+          ),
+          NeupodRow(
+            title: 'Carrier Wave',
+            disabledReason: "AAC, can't play",
+            reasonGlyph: NeupodGlyph.playOff,
+          ),
+          NeupodRow(
+            title: 'Signal',
+            subtitle: 'Beacon · Signal',
+            disabledReason: 'Not downloaded',
+            reasonGlyph: NeupodGlyph.cloudDownload,
+            action: 'Download',
+          ),
+          NeupodRow(
+            title: 'Orbital',
+            subtitle: 'Aurora Lane · First Light',
+            disabledReason: "AAC, can't play",
+            reasonGlyph: NeupodGlyph.playOff,
+          ),
+          NeupodRow(
+            title: 'Ember',
+            subtitle: 'The Cinders · Now 7',
+            disabledReason: 'Downloading',
+            reasonGlyph: NeupodGlyph.cloudDownload,
+            action: 'Download',
           ),
         ],
       ),

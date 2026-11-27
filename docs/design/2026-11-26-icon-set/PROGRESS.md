@@ -25,13 +25,13 @@ Checklist for the [implementation brief](IMPLEMENTATION-BRIEF.md). Tick an item 
 
 ## App
 
-- [ ] SVGs copied to `mobile/assets/icons/lucide/` and `mobile/assets/icons/neupod/`; path data in `neupod_glyphs.dart`
-- [ ] Painter honours `fill="currentColor"` (record dot, lit star)
-- [ ] Same glyph placement as the firmware; download, downloading and speaker in the app-only places
+- [x] SVGs copied to `mobile/assets/icons/lucide/` and `mobile/assets/icons/neupod/`; path data in `neupod_glyphs.dart`
+- [x] Painter honours `fill="currentColor"` (record dot, lit star)
+- [x] Same glyph placement as the firmware; download, downloading and speaker in the app-only places
 - [ ] `mobile/tool/export_app_icon.sh` and the exported PNGs
 - [ ] `flutter_launcher_icons` configured and run; `AppIcon.appiconset` and `mipmap-*` committed
 - [ ] Checked on an iPhone (light, dark, tinted) and a Pixel (themed icons on and off)
-- [ ] Licences screen in the app lists the Lucide additions
+- [x] Licences screen in the app lists the Lucide additions
 - [ ] Backlog AP-2 closed; app PROGRESS release item ticked
 
 ## Later

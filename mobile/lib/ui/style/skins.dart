@@ -173,6 +173,7 @@ final class StatusBarSkin {
     required this.title,
     required this.dim,
     required this.bluetoothActive,
+    required this.recording,
     required this.iconGap,
     required this.play,
     required this.pause,
@@ -197,6 +198,9 @@ final class StatusBarSkin {
 
   /// Bluetooth connected or in use (fixed, not the accent).
   final Color bluetoothActive;
+
+  /// The recording mark (icon set design: a solid dot in a ring, in red).
+  final Color recording;
 
   /// Space after each hardware icon.
   final double iconGap;
@@ -488,9 +492,9 @@ final class SearchFieldSkin {
 final class RatingSkin {
   const RatingSkin({required this.filled, required this.empty});
 
-  /// Not designed (the mock-ups have no stars; the specification asks for
-  /// them). Filled stars in the secondary ink, empty ones as outlines in the
-  /// tertiary ink: the shape differs, so it does not rely on colour.
+  /// Icon set design: lit stars filled in the style's accent (Classic's
+  /// selection blue; Modern's art tint), unlit ones outlined in line grey. The
+  /// shape differs, so it does not rely on colour.
   final Color filled;
   final Color empty;
 }
