@@ -1,0 +1,11 @@
+# App icon (backlog AP-2): Turning wheel, docs/design/2026-11-26-icon-set. PNGs come from tool/export_app_icon.sh.
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/app_icon/icon.png
+  image_path_ios_dark_transparent: assets/app_icon/icon_dark.png
+  image_path_ios_tinted_grayscale: assets/app_icon/icon_tinted.png
+  remove_alpha_ios: true
+  adaptive_icon_foreground: assets/app_icon/android_fg.png
+  adaptive_icon_background: assets/app_icon/android_bg.png
+  adaptive_icon_monochrome: assets/app_icon/android_mono.png

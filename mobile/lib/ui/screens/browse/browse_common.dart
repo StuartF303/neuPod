@@ -19,6 +19,7 @@ import 'package:neupod/ui/components/list_parts.dart';
 import 'package:neupod/ui/screens/shell/cover_art.dart';
 import 'package:neupod/ui/screens/shell/neupod_list.dart';
 import 'package:neupod/ui/screens/shell/shell_state.dart';
+import 'package:neupod/ui/style/icons/neupod_glyphs.dart';
 import 'package:neupod/ui/style/neupod_style.dart';
 import 'package:neupod/ui/style/skins.dart';
 
@@ -155,6 +156,11 @@ class _LibraryLoaderState<T> extends ConsumerState<LibraryLoader<T>> {
   }
 }
 
+/// The glyph before a greyed song's reason: `cloud-download` for an iCloud
+/// file not on the phone, `play-off` for one that cannot play.
+NeupodGlyph songReasonGlyph(Song song) =>
+    song.downloadable ? NeupodGlyph.cloudDownload : NeupodGlyph.playOff;
+
 /// A song as a two-line row: the title over `Artist · Album`. [downloading]
 /// is `icloudDownloadsProvider`'s set, watched by the screen.
 NeupodListItem songItem(
@@ -170,6 +176,7 @@ NeupodListItem songItem(
     subtitle: '${song.artist} · ${song.album}',
     initial: song.sortLetter,
     disabledReason: songRowReason(song, downloading),
+    reasonGlyph: songReasonGlyph(song),
     greyedAction: song.downloadable ? downloadActionText : null,
     onActivate: onActivate,
     id: song.id,

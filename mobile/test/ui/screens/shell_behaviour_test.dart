@@ -72,6 +72,12 @@ List<Song> _cloudSongs() => const [
 Finder _rowText(String text) =>
     find.descendant(of: find.byType(NeupodRow), matching: find.text(text));
 
+/// An iCloud row's reason, which leads its second line (icon set design).
+Finder _rowReason(String text) => find.descendant(
+  of: find.byType(NeupodRow),
+  matching: find.textContaining(text),
+);
+
 String _wheelValue(ShellRig rig) => rig.bus.semantics.value.value;
 
 Future<void> _pressCentre(WidgetTester tester, ShellRig rig) async {
@@ -406,15 +412,15 @@ void main() {
           neupodStorageProvider.overrideWithValue(NeupodStorage(api: api)),
         ],
       );
-      expect(_rowText('Not downloaded'), findsOneWidget);
+      expect(_rowReason('Not downloaded'), findsOneWidget);
       rig.step(1);
       await settle(tester);
       expect(_wheelValue(rig), startsWith('Away, '));
       expect(_wheelValue(rig), contains('Not downloaded'));
       await _pressCentre(tester, rig);
       expect(api.requested, ['file:///m/away.flac']);
-      expect(_rowText('Downloading'), findsOneWidget);
-      expect(_rowText('Not downloaded'), findsNothing);
+      expect(_rowReason('Downloading'), findsOneWidget);
+      expect(_rowReason('Not downloaded'), findsNothing);
       expect(rig.player.calls, isEmpty);
       expect(rig.container.read(shellProvider).pages, hasLength(1));
       // The row is still a button for the screen reader, with the action.
@@ -431,7 +437,7 @@ void main() {
       // iOS reports the download failed: the row is Not downloaded again.
       await tester.pump(const Duration(seconds: 3));
       await settle(tester);
-      expect(_rowText('Not downloaded'), findsOneWidget);
+      expect(_rowReason('Not downloaded'), findsOneWidget);
     });
 
     testWidgets('a finished scan reloads the list, and the bar stays on the '
@@ -485,7 +491,7 @@ void main() {
       await settle(tester);
       await _pressCentre(tester, rig);
       expect(find.text("Can't download"), findsOneWidget);
-      expect(_rowText('Not downloaded'), findsOneWidget);
+      expect(_rowReason('Not downloaded'), findsOneWidget);
     });
 
     testWidgets('a tap on a greyed song selects it and plays nothing', (

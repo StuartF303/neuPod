@@ -474,19 +474,13 @@ class _RatingRow extends StatelessWidget {
                     children: [
                       for (var i = 0; i < 5; i++) ...[
                         if (i > 0) SizedBox(width: size * 0.2),
-                        i < rating
-                            ? NeupodIcon(
-                                NeupodGlyph.star,
-                                size: size,
-                                color: filled,
-                                paint: GlyphPaint.fillAndStroke,
-                              )
-                            : NeupodIcon(
-                                NeupodGlyph.star,
-                                size: size,
-                                color: empty,
-                                strokeWidth: 2,
-                              ),
+                        NeupodIcon(
+                          i < rating
+                              ? NeupodGlyph.starFilled
+                              : NeupodGlyph.star,
+                          size: size,
+                          color: i < rating ? filled : empty,
+                        ),
                       ],
                     ],
                   ),

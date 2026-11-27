@@ -16,6 +16,7 @@ import 'package:neupod/ui/components/small_parts.dart';
 import 'package:neupod/ui/components/status_bar.dart';
 import 'package:neupod/ui/screens/common/scroll_window.dart';
 import 'package:neupod/ui/screens/search/search_session.dart';
+import 'package:neupod/ui/style/icons/neupod_glyphs.dart';
 import 'package:neupod/ui/style/neupod_style.dart';
 import 'package:neupod/ui/style/neupod_type.dart';
 
@@ -164,6 +165,11 @@ class SearchView extends StatelessWidget {
             : null,
         chevron: hit.kind == SearchKind.artist,
         disabledReason: hit.reasonWith(downloading),
+        reasonGlyph: hit.reason == null
+            ? null
+            : hit.downloadable
+            ? NeupodGlyph.cloudDownload
+            : NeupodGlyph.playOff,
         action: hit.downloadable ? downloadActionText : null,
         selection: n == selected ? RowSelection.selected : RowSelection.none,
         position: '${n + 1} of ${session.count}',

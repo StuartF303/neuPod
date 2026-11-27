@@ -89,6 +89,7 @@ class ShellFrame extends ConsumerWidget {
           repeat: repeat,
           output: status.output,
           bluetooth: status.bluetooth,
+          busy: status.busy,
           battery: status.battery,
         ),
         body: body,
