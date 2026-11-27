@@ -69,6 +69,7 @@ dev_dependencies:
   # drift's code generator: dart run build_runner build (generated files are committed).
   drift_dev: ^2.35.3
   build_runner: ^2.17.1
+  flutter_launcher_icons: 0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
