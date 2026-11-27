@@ -136,13 +136,15 @@ order is: busy, Wi-Fi, Bluetooth, output (headphones, jack plug or speaker), loc
 
 ## Open questions
 
+Questions 2 to 5 were settled on the recommendations below (owner, 27 November 2026).
+
 | # | Question | Recommendation |
 | --- | --- | --- |
 | 1 | ~~App icon direction~~ | **Decided 26 Nov 2026: B, Turning wheel** |
-| 2 | **Transport glyph fills.** The 21 November mock-ups draw play and pause filled; the firmware draws Lucide's outlines. The new scanning, can't-play and opening glyphs follow the outlines | **Outline everywhere**, the firmware as reference (ADR-0022); redraw the mock-ups' play and pause when they are next touched |
-| 3 | **Busy dots' place**: first in the right zone (drawn) or after the play glyph on the left | **Right zone**, decision 6 |
-| 4 | **Classic Light dim and Bluetooth colours** change for 4.5:1 (table above) | **Adopt**, together with `bluetooth-connected` as the shape cue |
-| 5 | **Classic Dark** was needed as a ground to test on and is still undesigned | Treat the provisional colours as a test ground only; check these glyphs again when Classic Dark is designed |
+| 2 | ~~**Transport glyph fills.**~~ **Decided 27 Nov 2026: outline everywhere.** The 21 November mock-ups draw play and pause filled; the firmware draws Lucide's outlines. The new scanning, can't-play and opening glyphs follow the outlines | **Outline everywhere**, the firmware as reference (ADR-0022); redraw the mock-ups' play and pause when they are next touched |
+| 3 | ~~**Busy dots' place**~~ **Decided 27 Nov 2026: right zone.**: first in the right zone (drawn) or after the play glyph on the left | **Right zone**, decision 6 |
+| 4 | ~~**Classic Light dim and Bluetooth colours**~~ **Decided 27 Nov 2026: adopted.** change for 4.5:1 (table above) | **Adopt**, together with `bluetooth-connected` as the shape cue |
+| 5 | ~~**Classic Dark**~~ **Decided 27 Nov 2026: test ground only.** was needed as a ground to test on and is still undesigned | Treat the provisional colours as a test ground only; check these glyphs again when Classic Dark is designed |
 
 ## Licences
 
