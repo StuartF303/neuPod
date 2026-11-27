@@ -5,7 +5,7 @@ Checklist for the [implementation brief](IMPLEMENTATION-BRIEF.md). Tick an item 
 ## Owner
 
 - [x] Choose the app icon direction: B, Turning wheel (owner, 26 Nov 2026)
-- [ ] Answer open questions 2 to 5
+- [x] Answer open questions 2 to 5: the recommendations (owner, 27 Nov 2026)
 
 ## Firmware
 
