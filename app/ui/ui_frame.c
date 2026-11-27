@@ -167,7 +167,7 @@ static hal_wifi_status g_wifi_shown = (hal_wifi_status)99;
 static uint32_t g_wifi_col = UI_C_INK2;
 static ui_stack_t g_stack;
 static ui_accel_t g_accel;
-static int g_shown_pct = -3;
+static int16_t g_shown_pct = -3; /* -1 no gauge, 0..100 (small types: the Pico 2 W has no static RAM to spare) */
 static bool g_shown_charging;
 static uint32_t g_batt_col = UI_C_INK;
 static uint32_t g_pct_col = UI_C_INK2;
@@ -658,7 +658,7 @@ static void update_battery(void) {
     if (pct == g_shown_pct && charging == g_shown_charging) {
         return; // touch LVGL only when something changed
     }
-    g_shown_pct = pct;
+    g_shown_pct = (int16_t)pct;
     g_shown_charging = charging;
     if (!have) { // no gauge: an empty outline, no number (the review: never "--")
         lv_obj_set_hidden(g_batt_fill, true);
@@ -682,7 +682,7 @@ static void update_battery(void) {
     lv_obj_set_hidden(g_pct, !show);
 }
 
-static int g_wifi_bars; /* bars last shown for the joined network (0 = not joined), with hysteresis */
+static int8_t g_wifi_bars; /* bars last shown for the joined network (0 = not joined), with hysteresis */
 
 int ui_wifi_bars(void) { return g_wifi_bars; }
 
@@ -698,7 +698,7 @@ static void update_wifi(void) {
         return;
     }
     g_wifi_shown = st;
-    g_wifi_bars = bars;
+    g_wifi_bars = (int8_t)bars;
     int cls = ui_signal_class(bars);
     uint32_t col = st == HAL_WIFI_UP ? (bars == 0 ? UI_C_GREEN : cls == 3 ? UI_C_GREEN : cls == 2 ? UI_C_AMBER : UI_C_RED)
                    : st == HAL_WIFI_FAILED || st == HAL_WIFI_BAD_AUTH ? UI_C_RED : UI_C_INK3;
