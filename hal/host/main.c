@@ -138,8 +138,9 @@
 // until taken down), Settings > Display with its Theme row, the dark theme on Home and on a list (Select on the Theme row cycles Light, Dark, Auto;
 // theme: sets it directly), and Auto: light while the backlight is at full, dark once it dims (dim:10 makes that 10 s; sleep: lets the UI clock run), light
 // again on the next key. Then the status bar's icon-set states (docs/design/2026-11-26-icon-set; status: tokens): scanning forward and back, a stream
-// opening on an external speaker, recording (the host has headphones in the jack, so the output slot shows them otherwise). The ctest fixture wipes the
-// stored settings first.
+// opening on an external speaker, recording (the host has headphones in the jack, so the output slot shows them otherwise), and the bar at its
+// fullest (status:all: busy dots, Wi-Fi, Bluetooth connected, headphones, lock, the percentage at 18 %; the title gives way, the audit checks no
+// overlap). The ctest fixture wipes the stored settings first.
 #define TOUR_DESIGN                                                                                \
     "x snap:ds-home toast:warn:Headset_disconnected x snap:ds-toast-warn strips:off x "            \
     "toast:info:Headset_connected x snap:ds-toast-info strips:off x hud:Volume_-18_dB:62 x snap:ds-hud strips:off x " \
@@ -147,7 +148,8 @@
     "x snap:ds-home-dark w w w w _ x snap:ds-music-dark m theme:auto x x snap:ds-home-auto "          \
     "dim:10 sleep:11500 snap:ds-home-auto-dim s x snap:ds-home-auto-wake theme:light x x "           \
     "status:scan:1 x x snap:ds-status-ff status:scan:-1 x x snap:ds-status-rew status:scan:0 status:open status:spk:on x x snap:ds-status-opening " \
-    "status:rec x x snap:ds-status-rec status:none status:spk:off x x snap:ds-status-plain"
+    "status:rec x x snap:ds-status-rec status:none status:spk:off x x snap:ds-status-plain "        \
+    "status:all:on batt:18 x x snap:ds-status-all status:all:off x x"
 
 // Music > Playlists (LB-7) on the library card with its playlist files (tests/tools/make_library_card.py --playlists: On-The-Go seeded with three
 // songs and a deleted one, /Playlists/Night drive.m3u with relative paths and bad entries, /Running.m3u8 with a byte-order mark and CRLF). Artists builds

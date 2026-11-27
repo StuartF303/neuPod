@@ -53,6 +53,10 @@
 int ui_layout_audit(const char *screen);
 /** Marks the list's pool rows for the audit: rows outside the visible window are clipped away on purpose. */
 #define UI_OBJ_FLAG_POOL_ROW LV_OBJ_FLAG_USER_1
+/** Marks the status bar and its right-hand group for the audit: no two of their visible children may overlap (the title gives way to the icons). */
+#define UI_OBJ_FLAG_NO_OVERLAP LV_OBJ_FLAG_USER_2
+/** Tour only: every right-zone member of the status bar on at once (busy dots, Wi-Fi, Bluetooth connected, lock), to check the bar at its fullest. */
+void ui_status_tour_all(bool on);
 #endif
 
 /* ---- Boot splash (ui_splash.c) -------------------------------------------------------------------- */
@@ -179,6 +183,7 @@ typedef struct {
     char sub[48];    /* second line of a two-line list (ui_list_model_t.two_line): Small, ink2; "" = none */
     bool chevron;    /* the Lucide chevron at the right edge */
     const char *icon; /* a Lucide glyph (ui_icons.h, a string constant) before the label; NULL = none */
+    const char *detail_icon; /* a glyph just before the detail text (the can't-play glyph before a greyed song's reason); NULL = none */
     bool dim;        /* greyed, not meant to be opened */
     uint8_t stars;   /* a rating at the right edge (icon set): this many lit stars of five, the rest unlit; 0 = none */
     uint8_t bars;    /* signal meter at the right edge, 1..4 (ui_signal_bars; 0 = none) */

@@ -10,7 +10,7 @@ Strokes are expanded to outlines with picosvg and scaled to the Lucide font's gr
 ascent 1000, descent 0, advance 1000), so lv_font_conv rasterises them with the same metrics as the Lucide glyphs. Lifted from
 build_extra_font() in docs/design/2026-11-26-icon-set/render.py, which drew the mock-up sheets with the same font.
 
-Needs exactly the pinned versions below (pip install fonttools==4.65.0 picosvg==0.23.0): a different picosvg can expand a stroke
+Needs exactly the pinned versions below (pip install fonttools==4.65.0 picosvg==0.23.0 skia-pathops==0.9.2): a different picosvg can expand a stroke
 differently and move pixels in the generated fonts.
 """
 import hashlib
@@ -19,6 +19,7 @@ import sys
 
 FONTTOOLS_VER = "4.65.0"
 PICOSVG_VER = "0.23.0"
+SKIA_PATHOPS_VER = "0.9.2"  # picosvg expands the strokes with it: a different version can move pixels too
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 SVG_DIR = os.path.join(ROOT, "docs", "design", "2026-11-26-icon-set", "svg")
@@ -28,10 +29,10 @@ GLYPHS = [("jack-plug", 0xEF00), ("record", 0xEF01), ("star-filled", 0xEF02)]
 def check_versions():
     from importlib.metadata import version
 
-    got = {"fonttools": version("fonttools"), "picosvg": version("picosvg")}
-    want = {"fonttools": FONTTOOLS_VER, "picosvg": PICOSVG_VER}
+    got = {"fonttools": version("fonttools"), "picosvg": version("picosvg"), "skia-pathops": version("skia-pathops")}
+    want = {"fonttools": FONTTOOLS_VER, "picosvg": PICOSVG_VER, "skia-pathops": SKIA_PATHOPS_VER}
     if got != want:
-        sys.exit(f"build_icon_extra_font: need {want}, have {got} (pip install fonttools=={FONTTOOLS_VER} picosvg=={PICOSVG_VER})")
+        sys.exit(f"build_icon_extra_font: need {want}, have {got} (pip install fonttools=={FONTTOOLS_VER} picosvg=={PICOSVG_VER} skia-pathops=={SKIA_PATHOPS_VER})")
 
 
 def build(out_path):

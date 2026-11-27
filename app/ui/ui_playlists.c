@@ -207,7 +207,7 @@ static void pv_get(void *ctx, int32_t idx, ui_list_item_t *out) {
         out->dim = e.state != PLS_ENT_OK;
         out->stars = e.stars; /* Top rated: the rating as stars at the right */
         if (e.state == PLS_ENT_CANT_PLAY) {
-            out->icon = UI_ICON_CANT_PLAY; /* icon set: the can't-play glyph leads the row; the reason stays on its second line */
+            out->detail_icon = UI_ICON_CANT_PLAY; /* icon set: the can't-play glyph at the right; the reason stays on the second line (as the app's) */
         }
     } else if (v->st == V_READY && (uint32_t)idx == v->n) {
         snprintf(out->label, sizeof out->label, "Clear On-The-Go");

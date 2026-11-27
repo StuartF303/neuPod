@@ -335,6 +335,7 @@ TEST(themes_are_rgb565_safe_and_readable) {
             ASSERT_TRUE(contrast(th->c[bar_glyphs[i]], worst) >= 4.5);
         }
         ASSERT_TRUE(contrast(th->c[UI_TOK_RATING_UNLIT], th->c[UI_TOK_BG]) >= 4.5); // Now Playing page 2 draws them on the screen ground
+        ASSERT_TRUE(contrast(th->c[UI_TOK_RATING_UNLIT], th->c[UI_TOK_SURFACE]) >= 4.5); // and a list row (Top rated) may sit on the surface
         ASSERT_EQ(th->c[UI_TOK_ACCENT], th->c[UI_TOK_RATING_LIT]); // lit = the accent (Classic Light's selection blue; dark: the progress fill's colour)
     }
     ASSERT_TRUE(contrast(k_ui_theme_light.c[UI_TOK_RATING_LIT], k_ui_theme_light.c[UI_TOK_BG]) >= 4.5);

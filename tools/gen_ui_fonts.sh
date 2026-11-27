@@ -4,8 +4,8 @@
 # fonts (lib/lvgl/scripts/generators/built_in_font), so ASCII glyphs render exactly as lv_font_montserrat_* did.
 # Also generates the Lucide icon set (DS-6; ISC licence, a few icons derive from Feather, MIT): app/ui/fonts/neupod_icons_*.c, 1 bit per pixel.
 # The icon set's own glyphs (jack plug, record, lit star; docs/design/2026-11-26-icon-set) are built into a small font by tools/build_icon_extra_font.py
-# and merged into the same icon fonts by the same lv_font_conv call.
-# Needs node (npx fetches lv_font_conv, npm fetches lucide-static; both pinned below) and python3 with fonttools 4.65.0 and picosvg 0.23.0 (pinned in
+# and merged into the same icon fonts by the same lv_font_conv call (the generated header's "--font neupod-icons-extra.ttf" is that font).
+# Needs node (npx fetches lv_font_conv, npm fetches lucide-static; both pinned below) and python3 with fonttools 4.65.0, picosvg 0.23.0 and skia-pathops 0.9.2 (pinned in
 # build_icon_extra_font.py; PYTHON=... picks the interpreter, e.g. a venv's). Run from anywhere:  tools/gen_ui_fonts.sh
 # Keep the code point lists in step with the ranges in ui_text_display() (app/ui/ui_logic.c): the filter keeps exactly what the fonts have.
 set -euo pipefail
@@ -78,3 +78,8 @@ for sz in 16 24 30 36 45; do
     sed "s| -o [^ ]*neupod_icons_$sz.c| -o app/ui/fonts/neupod_icons_$sz.c|; s|--font lucide.ttf|--font lucide-static@$LUCIDE_VER/font/lucide.ttf|; /^ [*] Opts:/r $TMP/sums.txt" \
         "$TMP/neupod_icons_$sz.c" > "$OUT/neupod_icons_$sz.c"
 done
+# The line height stays what it was before the icon set (as the text fonts' are pinned above): bluetooth-connected is one row taller than the
+# other glyphs at 16 and 36 px and would grow those fonts' line by 1 px, moving every icon in the status bar and the rows. Its top row draws
+# above the label instead, inside LVGL's extra draw area (a quarter of the line height).
+sedi "s/[.]line_height = [0-9]*,/.line_height = 14,/" "$OUT/neupod_icons_16.c"
+sedi "s/[.]line_height = [0-9]*,/.line_height = 33,/" "$OUT/neupod_icons_36.c"

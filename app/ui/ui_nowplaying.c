@@ -403,6 +403,8 @@ static void np_tick(ui_screen_t *s) {
         np_events(p, ui_npc_tick(&p->ctl, &trk, now));
         /* the status bar's play-state slot: fast-forward / rewind while a held Left / Right scans (not on a track that cannot seek) */
         ui_status_set_scan(p->ctl.holding && trk.seekable ? p->ctl.hold_dir : 0);
+    } else {
+        ui_status_set_scan(0); /* nothing known to scan (playback stopped during a hold): no glyph left behind */
     }
     if (now - p->last_ms < POLL_MS && p->have) {
         return;

@@ -164,6 +164,13 @@ static uint32_t g_notice_seen, g_skip_seen;
 static int8_t g_bt_shown = -1;
 static uint32_t g_bt_col = UI_C_STATUS_DIM;
 static hal_wifi_status g_wifi_shown = (hal_wifi_status)99;
+#ifdef NEUPOD_UI_HIRES
+static bool g_tour_all; /* ui_status_tour_all(): hosted builds only, no RAM on the Pico 2 W */
+#define TOUR_ALL g_tour_all
+#else
+#define TOUR_ALL false
+#endif
+
 static uint32_t g_wifi_col = UI_C_INK2;
 static ui_stack_t g_stack;
 static ui_accel_t g_accel;
@@ -210,6 +217,9 @@ void ui_frame_init(lv_obj_t *scr) {
     lv_obj_set_scrollable(bar, false);
     ui_obj_bg(bar, UI_C_BAR, 0);
     ui_obj_border(bar, UI_C_LINE, 1, LV_BORDER_SIDE_BOTTOM);
+#ifdef NEUPOD_UI_HIRES
+    lv_obj_add_flag(bar, UI_OBJ_FLAG_NO_OVERLAP);
+#endif
 
     g_title = ui_label(bar, "", UI_C_INK);
     lv_obj_set_size(g_title, UIM->title_w, UIM->title_h);
@@ -237,6 +247,9 @@ void ui_frame_init(lv_obj_t *scr) {
     lv_obj_set_flex_align(g_right, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(g_right, UIM->bar_gap, 0);
     lv_obj_align(g_right, LV_ALIGN_RIGHT_MID, -UIM->bar_inset, 0);
+#ifdef NEUPOD_UI_HIRES
+    lv_obj_add_flag(g_right, UI_OBJ_FLAG_NO_OVERLAP);
+#endif
     lv_obj_t *dots_box = lv_obj_create(g_right); /* busy dots: one bright, the others dim, moving along (the same dots the list rows use) */
     lv_obj_remove_style_all(dots_box);
     lv_obj_set_size(dots_box, 4 * UIM->glyph_step + UIM->glyph_bar_w, UIM->glyph_bar_w);
@@ -687,9 +700,11 @@ static int8_t g_wifi_bars; /* bars last shown for the joined network (0 = not jo
 int ui_wifi_bars(void) { return g_wifi_bars; }
 
 static void update_wifi(void) {
-    hal_wifi_status st = hal_wifi_state();
+    hal_wifi_status st = TOUR_ALL ? HAL_WIFI_UP : hal_wifi_state();
     int bars = 0;
-    if (st == HAL_WIFI_UP) {
+    if (TOUR_ALL) {
+        bars = 4;
+    } else if (st == HAL_WIFI_UP) {
         wifi_info_t wi;
         wifi_get_info(&wi);
         bars = ui_signal_bars(wi.rssi, &k_ui_signal_wifi, g_wifi_bars, UI_SIG_HYST_DB);
@@ -709,6 +724,9 @@ static void update_wifi(void) {
 
 /* Bluetooth glyph of the status bar. 0 hidden (no radio, or nothing remembered and no link), 1 remembered, not connected, 2 connected, 3 streaming. */
 static int bt_level(void) {
+    if (TOUR_ALL) {
+        return 2;
+    }
     hal_bt_state_t st = hal_bt_state();
     if (st != HAL_BT_ON && st != HAL_BT_SCANNING) {
         return 0;
@@ -900,7 +918,7 @@ static void kick_haptics(void) {
 // LB-4: while the library builds with its screen left, three busy dots sit first in the status bar's right zone on every screen (icon set
 // decision 6: a background job is device state, like the radios; the left zone belongs to playback).
 static void update_busy_dots(uint32_t now_ms) {
-    const bool on = ui_library_background() && !g_idle.off;
+    const bool on = (ui_library_background() || TOUR_ALL) && !g_idle.off;
     if (!on && g_dots_phase < 0) {
         return;
     }
@@ -960,6 +978,26 @@ static void update_play_state(void) {
         lv_obj_align(g_left, LV_ALIGN_LEFT_MID, UIM->bar_inset + dx, 0);
     }
 }
+
+// The title gives way to the right-hand group: its box shrinks (centred, so its ticker scrolls inside) to keep clear of the icons, never wider
+// than the profile's title_w. At 320x240 a full right zone (busy dots, Wi-Fi, Bluetooth, output, lock, percentage, battery) leaves no room at all.
+static void fit_title(void) {
+    lv_obj_update_layout(g_right); /* only does work when something in the bar changed */
+    const int32_t room = UI_W - 2 * (lv_obj_get_width(g_right) + UIM->bar_inset + UIM->bar_gap);
+    const int32_t w = room >= UIM->title_w ? UIM->title_w : room > 0 ? room : 0;
+    if (lv_obj_get_width(g_title) != w) {
+        lv_obj_set_width(g_title, w);
+    }
+}
+
+#ifdef NEUPOD_UI_HIRES
+void ui_status_tour_all(bool on) {
+    g_tour_all = on;
+    g_wifi_shown = (hal_wifi_status)99; /* look again at once */
+    g_bt_shown = -1;
+    lv_obj_set_hidden(g_lock, !on && !g_hold.locked);
+}
+#endif
 
 // The output slot: what the firmware knows of the output (a plug in the jack, Line out in force); Bluetooth has its own glyph.
 static void update_output(void) {
@@ -1121,6 +1159,7 @@ void ui_frame_tick(uint32_t now_ms) {
     update_play_state();
     update_output();
     update_battery();
+    fit_title();
     ui_strips_tick(now_ms);
     bt_service_tick(); /* the radio simulator on the host; stale pairing keys; cheap */
     ui_screen_t *top = ui_stack_top(&g_stack);

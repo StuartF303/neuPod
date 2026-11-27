@@ -29,7 +29,7 @@ const ui_theme_t k_ui_theme_dark = {{
        worst case, a gold wash #2F2A1F. The lit star is the progress fill's colour (Modern: the art's tint; here the accent, 3.7:1 on the ground,
        as the star was before: the fill, not the colour, says "lit"). */
     [UI_TOK_STATUS_DIM] = 0x989898,  [UI_TOK_BT_ACTIVE] = 0x58A4FF,  [UI_TOK_RECORDING] = 0xFF7C70, [UI_TOK_RATING_LIT] = 0x2868D8,
-    [UI_TOK_RATING_UNLIT] = 0x808080,
+    [UI_TOK_RATING_UNLIT] = 0x808480, /* green up one step: 4.68 on the surface (a list row), #808080 was 4.496 */
 }};
 
 static const ui_theme_t *g_theme = &k_ui_theme_light;

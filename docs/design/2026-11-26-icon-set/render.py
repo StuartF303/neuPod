@@ -112,7 +112,13 @@ def build_extra_font():
         gname = "u%04X" % cp
         order.append(gname); cmap[cp] = gname; glyphs[gname] = pen.glyph(); metrics[gname] = (1000, 0)
     fb = FontBuilder(1000, isTTF=True)
-    fb.setupGlyphOrder(order); fb.setupCharacterMap(cmap); fb.setupGlyf(glyphs); fb.setupHorizontalMetrics(metrics)
+    fb.setupGlyphOrder(order); fb.setupCharacterMap(cmap); fb.setupGlyf(glyphs)
+    # the left side bearing is the glyph's xMin, as tools/build_icon_extra_font.py writes it (0 put every glyph against the cell's left edge)
+    glyf = fb.font["glyf"]
+    for gname in order[1:]:
+        glyf[gname].recalcBounds(glyf)
+        metrics[gname] = (1000, glyf[gname].xMin)
+    fb.setupHorizontalMetrics(metrics)
     fb.setupHorizontalHeader(ascent=1000, descent=0)
     fb.setupNameTable({"familyName": "neuPod Icons Extra", "styleName": "Regular"})
     fb.setupOS2(sTypoAscender=1000, sTypoDescender=0, usWinAscent=1090, usWinDescent=0)
