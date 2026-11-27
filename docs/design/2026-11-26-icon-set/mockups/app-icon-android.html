@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>neuPod mock-up: Android adaptive icon</title>
+<!-- 1500x660 px. Design mock-up, not firmware output, except the glyph pixels: those are lv_font_conv 1.5.3 output at 1 bpp
+     (render.py). Font: Montserrat Medium. Icons: Lucide (ISC) and neuPod's own (svg/). -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500&display=swap">
+<style>body{margin:0}</style>
+</head>
+<body>
+<div style="width: 1500px; height: 660px; box-sizing: border-box; background: #f3f4f6; font-family: Montserrat, system-ui, sans-serif; font-weight: 500; overflow: hidden">
+<div style="padding: 40px 48px; display: flex; flex-direction: column; gap: 26px">
+  <div style="display: flex; justify-content: space-between; align-items: baseline"><div style="font-size: 32px; color: #181818">Android adaptive icon: direction B</div><div style="font-size: 14px; color: #606060">108 dp canvas; dashed square = 72 dp visible; circle = 66 dp safe zone</div></div>
+  <div style="display: flex; gap: 32px">
+    <div style="display: flex; flex-direction: column; gap: 10px; width: 216px">
+  <div style="font-size: 16px; color: #181818">android-background.svg</div>
+  <div style="position: relative; width: 216px; height: 216px; background: #e9ebee">
+    <svg aria-hidden="true" viewBox="0 0 108 108" width="216" height="216" style="display:block; position: absolute; inset: 0"><defs><linearGradient id="abg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b7bb4"/><stop offset="1" stop-color="#215f8c"/></linearGradient></defs><rect width="108" height="108" fill="url(#abg)"/></svg>
+    <svg aria-hidden="true" viewBox="0 0 108 108" width="216" height="216" style="display:block; position: absolute; inset: 0"><rect x="18" y="18" width="72" height="72" fill="none" stroke="#e0457b" stroke-width=".6" stroke-dasharray="2 1.5"/><circle cx="54" cy="54" r="33" fill="none" stroke="#e0457b" stroke-width=".6"/></svg>
+  </div>
+  <div style="font-size: 12px; line-height: 17px; color: #4a4a4a">Harbour body gradient, full bleed.</div>
+</div>
+    <div style="display: flex; flex-direction: column; gap: 10px; width: 216px">
+  <div style="font-size: 16px; color: #181818">android-foreground.svg</div>
+  <div style="position: relative; width: 216px; height: 216px; background: repeating-conic-gradient(#d9dbe0 0 25%, #f3f4f6 0 50%) 0 0 / 20px 20px">
+    <svg aria-hidden="true" viewBox="0 0 108 108" width="216" height="216" style="display:block; position: absolute; inset: 0"><defs><linearGradient id="ringaf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f2f0ec"/><stop offset="1" stop-color="#dcd8d0"/></linearGradient><linearGradient id="ctraf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#23628f"/><stop offset="1" stop-color="#1b4d72"/></linearGradient></defs><path d="M23 54a31 31 0 1 0 62 0a31 31 0 1 0 -62 0zM40.36 54a13.64 13.64 0 1 0 27.28 0a13.64 13.64 0 1 0 -27.28 0z" fill-rule="evenodd" fill="url(#ringaf)"/><path d="M56.7 23.1A31 31 0 0 1 79.4 36.2L65.2 46.2A13.6 13.6 0 0 0 55.2 40.4z" fill="rgba(43,123,180,.22)"/><circle cx="54.0" cy="31.7" r="1.6" fill="#7d8a96"/><circle cx="76.3" cy="54.0" r="1.6" fill="#7d8a96"/><circle cx="54.0" cy="76.3" r="1.6" fill="#7d8a96"/><circle cx="31.7" cy="54.0" r="1.6" fill="#7d8a96"/><circle cx="54" cy="54" r="13.6" fill="#173f5c"/><circle cx="54" cy="54" r="11.8" fill="url(#ctraf)"/></svg>
+    <svg aria-hidden="true" viewBox="0 0 108 108" width="216" height="216" style="display:block; position: absolute; inset: 0"><rect x="18" y="18" width="72" height="72" fill="none" stroke="#e0457b" stroke-width=".6" stroke-dasharray="2 1.5"/><circle cx="54" cy="54" r="33" fill="none" stroke="#e0457b" stroke-width=".6"/></svg>
+  </div>
+  <div style="font-size: 12px; line-height: 17px; color: #4a4a4a">Wheel, 62 dp across, inside the 66 dp safe circle; transparent around it.</div>
+</div>
+    <div style="display: flex; flex-direction: column; gap: 10px; width: 216px">
+  <div style="font-size: 16px; color: #181818">android-monochrome.svg</div>
+  <div style="position: relative; width: 216px; height: 216px; background: repeating-conic-gradient(#d9dbe0 0 25%, #f3f4f6 0 50%) 0 0 / 20px 20px">
+    <svg aria-hidden="true" viewBox="0 0 108 108" width="216" height="216" style="display:block; position: absolute; inset: 0"><defs><mask id="mam"><rect width="100%" height="100%" fill="#fff"/><circle cx="54.0" cy="31.7" r="1.6" fill="#000"/><circle cx="76.3" cy="54.0" r="1.6" fill="#000"/><circle cx="54.0" cy="76.3" r="1.6" fill="#000"/><circle cx="31.7" cy="54.0" r="1.6" fill="#000"/></mask></defs><path d="M23 54a31 31 0 1 0 62 0a31 31 0 1 0 -62 0zM40.36 54a13.64 13.64 0 1 0 27.28 0a13.64 13.64 0 1 0 -27.28 0z" fill-rule="evenodd" fill="#000000" mask="url(#mam)"/><circle cx="54" cy="54" r="11.8" fill="#000000"/></svg>
+    <svg aria-hidden="true" viewBox="0 0 108 108" width="216" height="216" style="display:block; position: absolute; inset: 0"><rect x="18" y="18" width="72" height="72" fill="none" stroke="#e0457b" stroke-width=".6" stroke-dasharray="2 1.5"/><circle cx="54" cy="54" r="33" fill="none" stroke="#e0457b" stroke-width=".6"/></svg>
+  </div>
+  <div style="font-size: 12px; line-height: 17px; color: #4a4a4a">One colour, alpha only: ring with the four dots cut out, groove open, centre solid.</div>
+</div>
+  </div>
+  <div style="display: flex; gap: 48px; align-items: flex-end">
+    <div style="display: flex; flex-direction: column; gap: 10px; align-items: center">
+  <svg role="img" aria-label="app icon, Circle mask" viewBox="18 18 72 72" width="144" height="144" style="display:block; border-radius: 50%"><defs><linearGradient id="abg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b7bb4"/><stop offset="1" stop-color="#215f8c"/></linearGradient></defs><rect width="108" height="108" fill="url(#abg)"/><defs><linearGradient id="ringaf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f2f0ec"/><stop offset="1" stop-color="#dcd8d0"/></linearGradient><linearGradient id="ctraf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#23628f"/><stop offset="1" stop-color="#1b4d72"/></linearGradient></defs><path d="M23 54a31 31 0 1 0 62 0a31 31 0 1 0 -62 0zM40.36 54a13.64 13.64 0 1 0 27.28 0a13.64 13.64 0 1 0 -27.28 0z" fill-rule="evenodd" fill="url(#ringaf)"/><path d="M56.7 23.1A31 31 0 0 1 79.4 36.2L65.2 46.2A13.6 13.6 0 0 0 55.2 40.4z" fill="rgba(43,123,180,.22)"/><circle cx="54.0" cy="31.7" r="1.6" fill="#7d8a96"/><circle cx="76.3" cy="54.0" r="1.6" fill="#7d8a96"/><circle cx="54.0" cy="76.3" r="1.6" fill="#7d8a96"/><circle cx="31.7" cy="54.0" r="1.6" fill="#7d8a96"/><circle cx="54" cy="54" r="13.6" fill="#173f5c"/><circle cx="54" cy="54" r="11.8" fill="url(#ctraf)"/></svg>
+  <div style="font-size: 13px; color: #606060">Circle</div>
+</div>
+    <div style="display: flex; flex-direction: column; gap: 10px; align-items: center">
+  <svg role="img" aria-label="app icon, Squircle mask" viewBox="18 18 72 72" width="144" height="144" style="display:block; border-radius: 38%"><defs><linearGradient id="abg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b7bb4"/><stop offset="1" stop-color="#215f8c"/></linearGradient></defs><rect width="108" height="108" fill="url(#abg)"/><defs><linearGradient id="ringaf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f2f0ec"/><stop offset="1" stop-color="#dcd8d0"/></linearGradient><linearGradient id="ctraf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#23628f"/><stop offset="1" stop-color="#1b4d72"/></linearGradient></defs><path d="M23 54a31 31 0 1 0 62 0a31 31 0 1 0 -62 0zM40.36 54a13.64 13.64 0 1 0 27.28 0a13.64 13.64 0 1 0 -27.28 0z" fill-rule="evenodd" fill="url(#ringaf)"/><path d="M56.7 23.1A31 31 0 0 1 79.4 36.2L65.2 46.2A13.6 13.6 0 0 0 55.2 40.4z" fill="rgba(43,123,180,.22)"/><circle cx="54.0" cy="31.7" r="1.6" fill="#7d8a96"/><circle cx="76.3" cy="54.0" r="1.6" fill="#7d8a96"/><circle cx="54.0" cy="76.3" r="1.6" fill="#7d8a96"/><circle cx="31.7" cy="54.0" r="1.6" fill="#7d8a96"/><circle cx="54" cy="54" r="13.6" fill="#173f5c"/><circle cx="54" cy="54" r="11.8" fill="url(#ctraf)"/></svg>
+  <div style="font-size: 13px; color: #606060">Squircle</div>
+</div>
+    <div style="display: flex; flex-direction: column; gap: 10px; align-items: center">
+  <svg role="img" aria-label="app icon, Rounded square mask" viewBox="18 18 72 72" width="144" height="144" style="display:block; border-radius: 18%"><defs><linearGradient id="abg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b7bb4"/><stop offset="1" stop-color="#215f8c"/></linearGradient></defs><rect width="108" height="108" fill="url(#abg)"/><defs><linearGradient id="ringaf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f2f0ec"/><stop offset="1" stop-color="#dcd8d0"/></linearGradient><linearGradient id="ctraf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#23628f"/><stop offset="1" stop-color="#1b4d72"/></linearGradient></defs><path d="M23 54a31 31 0 1 0 62 0a31 31 0 1 0 -62 0zM40.36 54a13.64 13.64 0 1 0 27.28 0a13.64 13.64 0 1 0 -27.28 0z" fill-rule="evenodd" fill="url(#ringaf)"/><path d="M56.7 23.1A31 31 0 0 1 79.4 36.2L65.2 46.2A13.6 13.6 0 0 0 55.2 40.4z" fill="rgba(43,123,180,.22)"/><circle cx="54.0" cy="31.7" r="1.6" fill="#7d8a96"/><circle cx="76.3" cy="54.0" r="1.6" fill="#7d8a96"/><circle cx="54.0" cy="76.3" r="1.6" fill="#7d8a96"/><circle cx="31.7" cy="54.0" r="1.6" fill="#7d8a96"/><circle cx="54" cy="54" r="13.6" fill="#173f5c"/><circle cx="54" cy="54" r="11.8" fill="url(#ctraf)"/></svg>
+  <div style="font-size: 13px; color: #606060">Rounded square</div>
+</div>
+    <div style="display: flex; flex-direction: column; gap: 10px; align-items: center"><svg role="img" aria-label="themed icon" viewBox="18 18 72 72" width="144" height="144" style="display:block; border-radius: 50%; background: #d3e3fd"><g style="filter: none"><defs><mask id="mam"><rect width="100%" height="100%" fill="#fff"/><circle cx="54.0" cy="31.7" r="1.6" fill="#000"/><circle cx="76.3" cy="54.0" r="1.6" fill="#000"/><circle cx="54.0" cy="76.3" r="1.6" fill="#000"/><circle cx="31.7" cy="54.0" r="1.6" fill="#000"/></mask></defs><path d="M23 54a31 31 0 1 0 62 0a31 31 0 1 0 -62 0zM40.36 54a13.64 13.64 0 1 0 27.28 0a13.64 13.64 0 1 0 -27.28 0z" fill-rule="evenodd" fill="#0b3a73" mask="url(#mam)"/><circle cx="54" cy="54" r="11.8" fill="#0b3a73"/></g></svg><div style="font-size: 13px; color: #606060">Themed (monochrome, system tint)</div></div>
+  </div>
+</div>
+</div>
+</body>
+</html>
