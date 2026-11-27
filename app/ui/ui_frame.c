@@ -984,7 +984,8 @@ static void update_play_state(void) {
 static void fit_title(void) {
     lv_obj_update_layout(g_right); /* only does work when something in the bar changed */
     const int32_t room = UI_W - 2 * (lv_obj_get_width(g_right) + UIM->bar_inset + UIM->bar_gap);
-    const int32_t w = room >= UIM->title_w ? UIM->title_w : room > 0 ? room : 0;
+    /* below about three characters a scrolling sliver is noise, so the title goes until an icon does */
+    const int32_t w = room >= UIM->title_w ? UIM->title_w : room >= 2 * UIM->icon_w ? room : 0;
     if (lv_obj_get_width(g_title) != w) {
         lv_obj_set_width(g_title, w);
     }
