@@ -92,6 +92,7 @@ class AlbumScreen extends ConsumerWidget {
             number: song.track?.toString(),
             value: detail.album.compilation ? song.artist : null,
             disabledReason: songRowReason(song, downloading),
+            reasonGlyph: songReasonGlyph(song),
             greyedAction: song.downloadable ? downloadActionText : null,
             onActivate: () => playFrom(ref, songs, song),
             id: song.id,

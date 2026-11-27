@@ -73,6 +73,16 @@ void main() {
     }
   });
 
+  test('only the lit star and the record dot carry fill="currentColor"', () {
+    for (final g in NeupodGlyph.values) {
+      final filled = g == NeupodGlyph.starFilled || g == NeupodGlyph.record;
+      expect(g.fillPath.getBounds() != Rect.zero, filled, reason: g.name);
+    }
+    // The record's dot only: the ring is stroked, not filled.
+    final dot = NeupodGlyph.record.fillPath.getBounds();
+    expect(dot.width, closeTo(8, 0.01));
+  });
+
   test(
     'the path reader handles packed numbers, relative commands and arcs',
     () {

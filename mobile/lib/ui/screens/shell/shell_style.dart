@@ -94,11 +94,15 @@ class DeviceStatus {
     this.battery = const BatteryState(level: 1),
     this.output = OutputIcon.none,
     this.bluetooth = BluetoothIcon.none,
+    this.busy = false,
   });
 
   final BatteryState battery;
   final OutputIcon output;
   final BluetoothIcon bluetooth;
+
+  /// A background job is running (the busy dots).
+  final bool busy;
 }
 
 /// The device's status (battery, output, Bluetooth).

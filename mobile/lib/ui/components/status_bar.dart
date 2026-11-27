@@ -5,8 +5,8 @@
 /// the right. The title gives way to a message or to the volume bar.
 ///
 /// No Wi-Fi icon: the app makes no network connection in R1 (device view
-/// design, section 10), so the right-hand group is, in the design's order,
-/// Bluetooth, output, lock and battery. The output icon follows the phone's
+/// design, section 10), so the right-hand group is, in the icon set design's
+/// order, busy, Bluetooth, output, lock and battery. The output icon follows the phone's
 /// route (owner decision 13): the speaker shows none, USB and wired the jack
 /// plug, AirPlay and other wireless a generic speaker.
 library;
@@ -21,6 +21,19 @@ import 'package:neupod/ui/style/skins.dart';
 enum PlayState { stopped, playing, paused }
 
 enum RepeatState { off, all, one }
+
+/// What takes the play-state slot in place of the play or pause glyph (icon
+/// set design, brief 2d): scanning while a seek key is held, opening while a
+/// stream opens, a track that cannot play, recording. The mode glyphs follow
+/// as ever.
+enum TransientState {
+  none,
+  scanForward,
+  scanBack,
+  opening,
+  cantPlay,
+  recording,
+}
 
 /// Bluetooth: no headset saved, saved but not connected (drawn dim, UI styles
 /// Open question 4), connected or in use (blue). Colour is not the only cue:
@@ -72,6 +85,8 @@ class StatusBar extends StatelessWidget {
     this.playState = PlayState.stopped,
     this.shuffle = false,
     this.repeat = RepeatState.off,
+    this.transient = TransientState.none,
+    this.busy = false,
     this.context,
     this.contextLabel,
     this.message,
@@ -86,6 +101,13 @@ class StatusBar extends StatelessWidget {
   final PlayState playState;
   final bool shuffle;
   final RepeatState repeat;
+
+  /// A transient state shown in the play-state slot.
+  final TransientState transient;
+
+  /// A background job (a library update) is running: the busy dots, first in
+  /// the right zone.
+  final bool busy;
 
   /// The screen's context text (`3 of 12`, `1,204`); Home and menus have none.
   final String? context;
@@ -113,6 +135,14 @@ class StatusBar extends StatelessWidget {
         PlayState.playing => 'Playing',
         PlayState.paused => 'Paused',
       },
+      ?switch (transient) {
+        TransientState.none => null,
+        TransientState.scanForward => 'scanning forward',
+        TransientState.scanBack => 'scanning back',
+        TransientState.opening => 'opening',
+        TransientState.cantPlay => "can't play",
+        TransientState.recording => 'recording',
+      },
       if (shuffle) 'shuffle on',
       if (repeat == RepeatState.all) 'repeat all',
       if (repeat == RepeatState.one) 'repeat one',
@@ -121,6 +151,7 @@ class StatusBar extends StatelessWidget {
         'volume ${(volume! * 100).round()} percent'
       else
         ?message,
+      if (busy) 'busy',
       if (output == OutputIcon.headphones) 'headphones',
       if (output == OutputIcon.line) 'line out',
       if (output == OutputIcon.external) 'external speaker',
@@ -143,6 +174,7 @@ class StatusBar extends StatelessWidget {
       playState: playState,
       shuffle: shuffle,
       repeat: repeat,
+      transient: transient,
       context: message != null && volume == null ? null : this.context,
     );
     final Widget centre = volume != null
@@ -156,6 +188,7 @@ class StatusBar extends StatelessWidget {
     final right = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (busy) _hardware(NeupodGlyph.ellipsis, skin.glyph, 2.5, skin, k),
         if (bluetooth != BluetoothIcon.none)
           _hardware(
             bluetooth == BluetoothIcon.active
@@ -284,12 +317,14 @@ class PlayStateGlyphs extends StatelessWidget {
     required this.playState,
     this.shuffle = false,
     this.repeat = RepeatState.off,
+    this.transient = TransientState.none,
     this.context,
   });
 
   final PlayState playState;
   final bool shuffle;
   final RepeatState repeat;
+  final TransientState transient;
   final String? context;
 
   @override
@@ -297,8 +332,23 @@ class PlayStateGlyphs extends StatelessWidget {
     final theme = NeupodTheme.of(context);
     final skin = theme.style.statusBar;
     final k = theme.tier.k;
+    final (NeupodGlyph, Color)? transientGlyph = switch (transient) {
+      TransientState.none => null,
+      TransientState.scanForward => (NeupodGlyph.fastForward, skin.glyph),
+      TransientState.scanBack => (NeupodGlyph.rewind, skin.glyph),
+      TransientState.opening => (NeupodGlyph.loaderCircle, skin.glyph),
+      TransientState.cantPlay => (NeupodGlyph.playOff, skin.glyph),
+      TransientState.recording => (NeupodGlyph.record, skin.recording),
+    };
     final glyphs = <Widget>[
-      if (playState != PlayState.stopped)
+      if (transientGlyph != null)
+        NeupodIcon(
+          transientGlyph.$1,
+          size: 20 * k,
+          color: transientGlyph.$2,
+          strokeWidth: 2.5,
+        )
+      else if (playState != PlayState.stopped)
         NeupodIcon(
           playState == PlayState.playing ? skin.play : skin.pause,
           size: 18 * k,

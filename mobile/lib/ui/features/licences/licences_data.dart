@@ -45,12 +45,13 @@ const List<BundledLicence> bundledLicences = [
   ),
   BundledLicence(
     name: 'Lucide icons',
-    version: '1.72.0 (a subset of 14 icons)',
+    version: '1.72.0 (a subset of 21 icons)',
     spdx: 'ISC AND MIT',
     use:
         'Icons: chevron-right, check, headphones, bluetooth, '
         'bluetooth-connected, speaker, shuffle, repeat, repeat-1, volume, '
-        'volume-2, lock, star and search; also skip-back and skip-forward '
+        'volume-2, lock, star, search, cloud-download, download, ellipsis, '
+        'fast-forward, loader-circle, play-off and rewind; also skip-back and skip-forward '
         '(the wheel\'s Previous and Next). Some derive from Feather (MIT).',
     textAsset: 'assets/icons/lucide/LICENSE-Lucide.txt',
   ),

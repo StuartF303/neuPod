@@ -36,6 +36,7 @@ import 'package:neupod/ui/components/small_parts.dart';
 import 'package:neupod/ui/device/device_feedback.dart';
 import 'package:neupod/ui/device/wheel_bus.dart';
 import 'package:neupod/ui/screens/shell/screen_scope.dart';
+import 'package:neupod/ui/style/icons/neupod_glyphs.dart';
 import 'package:neupod/ui/style/neupod_style.dart';
 
 /// What a row's builder is told.
@@ -87,6 +88,8 @@ class NeupodListItem {
     bool chevron = false,
     Widget Function(bool selected)? thumbnail,
     String? disabledReason,
+    NeupodGlyph? reasonGlyph,
+    int? rating,
     String? greyedAction,
     String? initial,
     VoidCallback? onActivate,
@@ -120,6 +123,8 @@ class NeupodListItem {
         chevron: chevron,
         thumbnail: thumbnail?.call(s.selection != RowSelection.none),
         disabledReason: disabledReason,
+        reasonGlyph: reasonGlyph,
+        rating: rating,
         action: greyedAction,
         selection: s.selection,
         pressed: s.pressed,
