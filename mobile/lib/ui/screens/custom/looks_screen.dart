@@ -85,16 +85,16 @@ class _LooksScreenState extends ConsumerState<LooksScreen> {
     openLook(ref, look);
   }
 
-  void _new() {
+  Future<void> _new() async {
     _rest.cancel();
     _preview.show(null);
-    final made = ref
+    final made = await ref
         .read(customLookActionsProvider)
         .newLook(
           phoneIsLight:
               MediaQuery.platformBrightnessOf(context) == Brightness.light,
         );
-    if (made != null) {
+    if (made != null && mounted) {
       pushScreen(ref, made.name, (_) => LookDetailScreen(lookId: made.id));
     }
   }

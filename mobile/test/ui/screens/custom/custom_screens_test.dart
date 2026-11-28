@@ -5,6 +5,7 @@
 // wheel bus as the click wheel drives them (AP-1, 3/3).
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod/app/accessibility_providers.dart';
 import 'package:neupod/app/custom_look_actions.dart';
@@ -52,6 +53,7 @@ Future<ShellRig> _pump(
   double scale = 1.0,
   bool reduceMotion = false,
   bool reduceTransparency = false,
+  void Function(ProviderContainer)? before,
 }) async {
   final store = MemorySettingsStore();
   final rig = await pumpShell(
@@ -65,6 +67,7 @@ Future<ShellRig> _pump(
         reduceTransparencyProvider.overrideWithValue(true),
     ],
     registry: (c) {
+      before?.call(c);
       if (looks != null) c.read(customLooksProvider.notifier).set(looks);
     },
   );
@@ -226,11 +229,39 @@ void main() {
     testWidgets('a look id is never reused after a delete', (tester) async {
       final rig = await _pump(tester, (_) => const LooksScreen());
       final actions = rig.container.read(customLookActionsProvider);
-      expect(actions.newLook(phoneIsLight: true)!.id, 'look-4');
+      expect((await actions.newLook(phoneIsLight: true))!.id, 'look-4');
       actions.removeLook('look-4');
-      expect(actions.newLook(phoneIsLight: true)!.id, 'look-5');
+      expect((await actions.newLook(phoneIsLight: true))!.id, 'look-5');
       // And the number is kept in the settings file.
       expect(rig.container.read(lookSequenceProvider), 5);
+    });
+
+    testWidgets('a look id is not reused after a restart', (tester) async {
+      final store = MemorySettingsStore();
+      Future<String> newId() async {
+        final c = ProviderContainer.test(
+          overrides: [settingsStoreProvider.overrideWithValue(store)],
+        );
+        // As main.dart does: the stored looks and counter are read first.
+        await c.read(customLooksProvider.notifier).loaded;
+        final actions = c.read(customLookActionsProvider);
+        final made = (await actions.newLook(phoneIsLight: true))!;
+        actions.removeLook(made.id);
+        c.read(customLooksProvider.notifier).flush();
+        return made.id;
+      }
+
+      expect(await newId(), 'look-4');
+      // A new container over the same file: a restart.
+      expect(await newId(), 'look-5');
+      // Even when nothing waited for the counter to load.
+      final c = ProviderContainer.test(
+        overrides: [settingsStoreProvider.overrideWithValue(store)],
+      );
+      final made = await c
+          .read(customLookActionsProvider)
+          .newLook(phoneIsLight: true);
+      expect(made!.id, 'look-6');
     });
 
     testWidgets('no scroll bar is drawn when the rows do not fit', (
@@ -644,6 +675,86 @@ void main() {
       expect(pulse!.strength, greaterThan(0.9));
       await tester.pump(const Duration(milliseconds: 300));
       expect(rig.container.read(edgePulseProvider), isNull);
+    });
+
+    for (final reduce in [false, true]) {
+      testWidgets(
+        'opening on a part pulses its edge${reduce ? ' not, with Reduce Motion' : ' once'}',
+        (tester) async {
+          final plain = _plain();
+          final seen = <EdgePulse?>[];
+          await _pump(
+            tester,
+            (_) => PartPickerScreen(lookId: plain.id),
+            looks: CustomLooks(looks: [plain], lookInUse: plain.id),
+            reduceMotion: reduce,
+            before: (c) => c.listen(edgePulseProvider, (_, n) => seen.add(n)),
+          );
+          final lit = seen.whereType<EdgePulse>().toList();
+          if (reduce) {
+            expect(lit, isEmpty);
+          } else {
+            expect(lit, isNotEmpty);
+            expect(lit.every((p) => p.part == LookPart.body), isTrue);
+            expect(seen.last, isNull); // and it ends
+          }
+        },
+      );
+    }
+
+    testWidgets('a drag is kept live but written at most every 250 ms', (
+      tester,
+    ) async {
+      final store = MemorySettingsStore();
+      final c = ProviderContainer.test(
+        overrides: [settingsStoreProvider.overrideWithValue(store)],
+      );
+      await c.read(customLooksProvider.notifier).loaded;
+      final n = c.read(customLooksProvider.notifier);
+      final base = store.writes;
+      for (var h = 1; h <= 200; h++) {
+        n.update(
+          (l) => l.replaced(
+            l.looks.first.copyWith(
+              body: l.looks.first.body.copyWith(hue: h % 360),
+            ),
+          ),
+        );
+      }
+      // Live at once; one write so far.
+      expect(c.read(customLooksProvider).looks.first.body.hue, 200);
+      expect(store.writes - base, 1);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(store.writes - base, 2);
+      expect(
+        CustomLooks.tryFromJson(store.values[customLooksKey])!
+            .looks
+            .first
+            .body
+            .hue,
+        200,
+      );
+      // And flush writes what is waiting.
+      n.update(
+        (l) => l.replaced(
+          l.looks.first.copyWith(body: l.looks.first.body.copyWith(hue: 7)),
+        ),
+      );
+      n.update(
+        (l) => l.replaced(
+          l.looks.first.copyWith(body: l.looks.first.body.copyWith(hue: 9)),
+        ),
+      );
+      n.flush();
+      expect(
+        CustomLooks.tryFromJson(store.values[customLooksKey])!
+            .looks
+            .first
+            .body
+            .hue,
+        9,
+      );
+      await tester.pump(const Duration(milliseconds: 600));
     });
 
     testWidgets('Reduce Motion: no pulse', (tester) async {
