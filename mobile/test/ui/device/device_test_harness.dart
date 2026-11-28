@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:neupod/domain/style/custom_look.dart';
 import 'package:neupod/domain/wheel/feedback_ports.dart';
 import 'package:neupod/ui/device/device_feedback.dart';
 import 'package:neupod/ui/device/device_view.dart';
@@ -63,6 +64,7 @@ Future<ProviderContainer> pumpDevice(
   TestClock? clock,
   RecordingHaptics? haptics,
   Brightness brightness = Brightness.light,
+  CustomLook? look,
   List<Override> overrides = const [],
 }) async {
   usePhone(tester, phone ?? designPhones[1]);
@@ -82,6 +84,7 @@ Future<ProviderContainer> pumpDevice(
         home: DeviceView(
           screen: screen ?? const PlaceholderScreen(),
           brightness: brightness,
+          look: look,
         ),
       ),
     ),

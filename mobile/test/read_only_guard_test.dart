@@ -117,6 +117,21 @@ class _Allowed {
 /// download request. Nothing else.
 const _allowed = <_Allowed>[
   _Allowed(
+    'lib/data/settings/file_settings_store.dart',
+    'await file.parent.create(recursive: true);',
+    "the settings file's own folder (settings/) in the app's data directory, never a music folder",
+  ),
+  _Allowed(
+    'lib/data/settings/file_settings_store.dart',
+    'await temp.writeAsString(jsonEncode(all), flush: true);',
+    'the settings file is written to a temp file beside it in the app\'s own settings folder',
+  ),
+  _Allowed(
+    'lib/data/settings/file_settings_store.dart',
+    'await temp.rename(file.path);',
+    'the same temp file, moved over settings.json in the same folder (atomic write)',
+  ),
+  _Allowed(
     'lib/data/art/art_cache.dart',
     'await Directory(d).create(recursive: true);',
     "the art cache's own directory under the app's support directory (decision 0010), never a music folder",

@@ -8,7 +8,9 @@ is the reference for the layout (`test/ui/device/device_geometry_test.dart` comp
 | --- | --- |
 | `device_view.dart` | `DeviceView(screen: ...)`: body, frame, screen, wordmark, wheel; status bar style; back gesture = Menu; long press on the body opens the gate switches |
 | `device_geometry.dart` | Every position from W, the phone's width: fit A, minimum width, wheel shrink, wordmark rule |
-| `device_finish.dart` | Silver and black, the finish table's colours |
+| `device_paint.dart` | `DevicePaint`: everything the painters read (gradients, edge, groove, ink, tints, status-bar ink, opacities and cap/badge/board flags). The one paint type |
+| `device_finish.dart` | Silver and black, the finish table's colours, as a `DevicePaint` (`finish.paint`) |
+| `custom_device_paint.dart` | `customDevicePaint(look)`: a custom look (and the Increase Contrast flag) to a `DevicePaint`, by the contrast rule in `domain/style/custom_paint.dart`. Solid parts only for now |
 | `device_options.dart` | The switchable choices (direct touch, status bar, wordmark, progress-bar seek, iOS edge swipe, haptics, click sound) |
 | `click_wheel.dart` | The wheel widget (touch, haptics, the screen reader's adjustable element) and `WheelKeyboard` |
 | `wheel_painter.dart` | The wheel's drawing, five states |

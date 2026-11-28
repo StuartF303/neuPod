@@ -62,7 +62,7 @@ void main() {
                   CustomPaint(
                     size: const Size.square(200),
                     painter: WheelPainter(
-                      finish: finish,
+                      devicePaint: finish.paint,
                       visual: v,
                       disabled: disabled,
                     ),

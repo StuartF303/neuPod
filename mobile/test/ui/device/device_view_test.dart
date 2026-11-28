@@ -137,7 +137,7 @@ void main() {
     );
     await pumpDevice(tester, brightness: Brightness.dark);
     final wheel = tester.widget<ClickWheel>(find.byType(ClickWheel));
-    expect(wheel.finish, DeviceFinish.black);
+    expect(wheel.paint, DeviceFinish.black.paint);
   });
 
   testWidgets('a long press on the body opens the gate switches', (

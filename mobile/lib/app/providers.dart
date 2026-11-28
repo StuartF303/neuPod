@@ -8,6 +8,8 @@
 /// `audio/` stay plain Dart (enforced by `test/architecture_test.dart`).
 library;
 
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/audio/neupod_player.dart';
@@ -19,12 +21,14 @@ import 'package:neupod/data/db/library_database.dart';
 import 'package:neupod/data/db/open_library_database.dart';
 import 'package:neupod/data/platform/storage_folder_access.dart';
 import 'package:neupod/data/scan/local_library_scanner.dart';
+import 'package:neupod/data/settings/file_settings_store.dart';
 import 'package:neupod/domain/library/library_folder.dart';
 import 'package:neupod/domain/library/library_ports.dart';
 import 'package:neupod/domain/library/library_summary.dart';
 import 'package:neupod/domain/library/play_stats.dart';
 import 'package:neupod/domain/playback/player.dart';
 import 'package:neupod/domain/playback/player_state.dart';
+import 'package:neupod/domain/settings/settings_store.dart';
 import 'package:neupod_audio/neupod_audio.dart';
 import 'package:neupod_storage/neupod_storage.dart';
 
@@ -83,6 +87,19 @@ final statsDatabaseProvider = Provider<StatsDatabase>((ref) {
   final db = openStatsDatabase(storage.backedUpDataPath);
   ref.onDispose(db.close);
   return db;
+});
+
+/// The app's settings (Mode, the Custom looks, ...): one JSON file in a
+/// `settings/` folder beside the stats database, in the backed-up data
+/// directory, so phone backups keep it too (owner decision 20). On iOS that is
+/// Application Support, not excluded from backup; on Android `filesDir`,
+/// which `backup_rules.xml` and `data_extraction_rules.xml` include.
+final settingsStoreProvider = Provider<SettingsStore>((ref) {
+  final storage = ref.watch(neupodStorageProvider);
+  return FileSettingsStore(() async {
+    final stats = await storage.backedUpDataPath();
+    return '${Directory(stats).parent.path}/settings';
+  });
 });
 
 /// Ratings and play counts, with tracks found in the library.

@@ -23,6 +23,7 @@ import 'package:neupod/ui/components/status_bar.dart';
 import 'package:neupod/ui/device/device_feedback.dart';
 import 'package:neupod/ui/device/wheel_bus.dart';
 import 'package:neupod/ui/screens/shell/shell_root.dart';
+import 'package:neupod/domain/style/custom_look.dart';
 import 'package:neupod/ui/screens/shell/shell_style.dart';
 import 'package:neupod/ui/style/neupod_style.dart';
 
@@ -158,7 +159,7 @@ Future<ShellRig> pumpShell(
       .set(
         StyleChoice(
           family: family,
-          mode: dark ? StyleMode.dark : StyleMode.light,
+          mode: dark ? ModeSetting.dark : ModeSetting.light,
         ),
       );
   registry?.call(container);

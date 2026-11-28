@@ -67,6 +67,7 @@ class ShellFrame extends ConsumerWidget {
     final mode = effectiveMode(
       choice,
       MediaQuery.platformBrightnessOf(buildContext),
+      look: ref.watch(activeLookProvider),
     );
     final art = palette ?? ref.watch(ambientPaletteProvider);
     final style = NeupodStyles.resolve(choice.family, mode, art: art);

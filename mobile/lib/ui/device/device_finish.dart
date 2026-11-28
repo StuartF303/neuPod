@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import 'package:flutter/widgets.dart';
+import 'package:neupod/ui/device/device_paint.dart';
 
 /// The body finishes (design section 3). Colours exactly as the finish table;
 /// gradients run top to bottom.
@@ -83,11 +84,23 @@ enum DeviceFinish {
   final bool darkStatusText;
 
   /// The body as a gradient.
-  LinearGradient get bodyGradient => LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: body,
-    stops: bodyStops,
+  LinearGradient get bodyGradient => paint.bodyGradient;
+
+  /// What the painters read: this finish's table values, unchanged.
+  DevicePaint get paint => DevicePaint(
+    body: body,
+    bodyStops: bodyStops,
+    ring: ring,
+    ringEdge: ringEdge,
+    groove: groove,
+    centre: centre,
+    centreEdge: ringEdge,
+    glyph: glyph,
+    wordmark: wordmark,
+    press: press,
+    centrePress: press,
+    touch: touch,
+    darkStatusText: darkStatusText,
   );
 
   /// The finish for a brightness: silver in Light, black in Dark (the mode,
