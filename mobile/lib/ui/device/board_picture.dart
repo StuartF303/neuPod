@@ -12,10 +12,14 @@ import 'package:neupod/domain/style/board.dart';
 class BoardAssets {
   const BoardAssets();
 
-  /// Decodes the picture at asset [path].
-  Future<ui.Image> decode(String path) async {
+  /// Decodes the picture at asset [path], scaled down to [targetWidth] pixels
+  /// wide when that is given (and under the picture's own width).
+  Future<ui.Image> decode(String path, {int? targetWidth}) async {
     final data = await rootBundle.load(path);
-    final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
+    final codec = await ui.instantiateImageCodec(
+      data.buffer.asUint8List(),
+      targetWidth: targetWidth,
+    );
     try {
       return (await codec.getNextFrame()).image;
     } finally {
@@ -27,28 +31,45 @@ class BoardAssets {
 /// The source of the board pictures.
 final boardAssetsProvider = Provider<BoardAssets>((ref) => const BoardAssets());
 
-/// The sharp picture of board [id], decoded once and kept. Read only while a
-/// see-through body needs it: a look with every part solid never reads it.
-final boardPictureProvider = FutureProvider.family<ui.Image, String>((
-  ref,
-  id,
-) async {
-  final image = await ref
-      .watch(boardAssetsProvider)
-      .decode('assets/boards/$id.webp');
-  ref.onDispose(image.dispose);
-  return image;
-});
+/// Which sharp picture to decode: board [id], [width] pixels across.
+typedef BoardPictureKey = ({String id, int width});
 
-/// The blurred copy of board [id] (300 x 780), decoded once and kept. Read
-/// only while a see-through wheel or centre needs it.
-final boardFrostProvider = FutureProvider.family<ui.Image, String>((
+/// The pixel width to decode the sharp picture at for a phone [logicalWidth]
+/// points wide at [devicePixelRatio]: the width it is drawn at, never more
+/// than the picture has.
+int boardPictureDecodeWidth(double logicalWidth, double devicePixelRatio) =>
+    (logicalWidth * devicePixelRatio).round().clamp(1, boardPictureWidth);
+
+/// The sharp picture of a board, decoded at the width it is drawn at (not the
+/// full 1200 x 3120, about 15 MB) and released when nothing shows it. Read
+/// only while a see-through body needs it: a look with every part solid never
+/// reads it.
+final boardPictureProvider = FutureProvider.autoDispose
+    .family<ui.Image, BoardPictureKey>((ref, key) async {
+      final image = await ref
+          .watch(boardAssetsProvider)
+          .decode('assets/boards/${key.id}.webp', targetWidth: key.width);
+      if (!ref.mounted) {
+        image.dispose();
+        throw StateError('board picture released before it was decoded');
+      }
+      ref.onDispose(image.dispose);
+      return image;
+    });
+
+/// The blurred copy of board [id] (300 x 780, small), released when nothing
+/// shows it. Read only while a see-through wheel or centre needs it.
+final boardFrostProvider = FutureProvider.autoDispose.family<ui.Image, String>((
   ref,
   id,
 ) async {
   final image = await ref
       .watch(boardAssetsProvider)
       .decode('assets/boards/$id.frost.webp');
+  if (!ref.mounted) {
+    image.dispose();
+    throw StateError('board frost released before it was decoded');
+  }
   ref.onDispose(image.dispose);
   return image;
 });

@@ -109,6 +109,9 @@ class PreloadedBoardAssets extends BoardAssets {
   /// Every path the app asked to decode, in order.
   final List<String> decoded = [];
 
+  /// The target width each decode asked for, by path.
+  final Map<String, int?> widths = {};
+
   /// Reads boards.json and decodes every picture, outside the fake clock.
   static Future<PreloadedBoardAssets> load(WidgetTester tester) async {
     const real = BoardAssets();
@@ -129,8 +132,9 @@ class PreloadedBoardAssets extends BoardAssets {
   }
 
   @override
-  Future<ui.Image> decode(String path) async {
+  Future<ui.Image> decode(String path, {int? targetWidth}) async {
     decoded.add(path);
+    widths[path] = targetWidth;
     return _images[path]!.clone();
   }
 }

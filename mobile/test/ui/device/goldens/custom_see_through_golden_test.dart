@@ -11,12 +11,14 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neupod/domain/style/accessibility_port.dart';
 import 'package:neupod/domain/style/board_list.dart';
 import 'package:neupod/domain/style/custom_look.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/domain/wheel/wheel_input.dart';
 import 'package:neupod/ui/device/board_picture.dart';
 import 'package:neupod/ui/device/custom_device_paint.dart';
+import 'package:neupod/ui/device/device_accessibility.dart';
 import 'package:neupod/ui/device/device_view.dart';
 import 'package:neupod/ui/device/wheel_painter.dart';
 
@@ -57,6 +59,29 @@ void main() {
     final name = 'device_${phone.name}_custom_clear';
     testWidgets(name, (tester) => device(tester, name, _clear, phone));
   }
+
+  // Reduce Transparency: Clear case painted solid, no board picture (design
+  // a11y-reduce-transparency.png).
+  testWidgets('device_393x852_custom_clear_reduce_transparency', (
+    tester,
+  ) async {
+    final assets = await PreloadedBoardAssets.load(tester);
+    await pumpDevice(
+      tester,
+      screen: const _Pattern(),
+      look: _clear,
+      overrides: [
+        boardAssetsProvider.overrideWithValue(assets),
+        accessibilityPortProvider.overrideWithValue(const _ReduceOn()),
+      ],
+    );
+    await settleBoards(tester);
+    expect(assets.decoded, isEmpty);
+    await expectLater(
+      find.byType(DeviceView),
+      matchesGoldenFile('device_393x852_custom_clear_reduce_transparency.png'),
+    );
+  });
 
   testWidgets('wheel_states_custom_clear', (tester) async {
     tester.view.devicePixelRatio = 1;
@@ -115,6 +140,16 @@ void main() {
       matchesGoldenFile('wheel_states_custom_clear.png'),
     );
   });
+}
+
+class _ReduceOn implements AccessibilityPort {
+  const _ReduceOn();
+
+  @override
+  Future<bool> reduceTransparency() async => true;
+
+  @override
+  Stream<bool> reduceTransparencyChanges() => const Stream.empty();
 }
 
 /// A text-free 600x450 pattern, as in custom_golden_test.dart.

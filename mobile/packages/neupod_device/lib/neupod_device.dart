@@ -36,14 +36,18 @@ class NeupodDevice {
       (await _accessibility.invokeMethod<bool>('reduceTransparency')) ?? false;
 
   /// The new value each time the user changes Reduce Transparency (iOS).
-  Stream<bool> reduceTransparencyChanges() {
+  Stream<bool> reduceTransparencyChanges() => (_changes ??= _listen()).stream;
+
+  StreamController<bool>? _changes;
+
+  StreamController<bool> _listen() {
     final changes = StreamController<bool>.broadcast();
     _accessibility.setMethodCallHandler((call) async {
       if (call.method == 'reduceTransparencyChanged') {
         changes.add(call.arguments == true);
       }
     });
-    return changes.stream;
+    return changes;
   }
 
   /// The media volume now.

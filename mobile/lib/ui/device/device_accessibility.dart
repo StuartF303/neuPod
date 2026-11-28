@@ -24,23 +24,35 @@ final systemReduceTransparencyProvider =
     );
 
 /// Holds Reduce Transparency: null until the platform has answered (the
-/// device view loads no board picture before it knows), then the setting.
+/// device view loads no board picture before it knows), then the setting. A
+/// failed platform call answers false, so see-through looks are never left
+/// solid for want of an answer.
 class ReduceTransparencyNotifier extends Notifier<bool?> {
+  final Completer<void> _loaded = Completer<void>();
+
+  /// Completes when the first answer (or failure) has arrived: `main` waits
+  /// for it with the other launch reads, so the first frame is right.
+  Future<void> get loaded => _loaded.future;
+
   @override
   bool? build() {
     final port = ref.watch(accessibilityPortProvider);
     var alive = true;
-    final sub = port.reduceTransparencyChanges().listen((v) {
+    void answer(bool v) {
       if (alive) state = v;
-    });
+      if (!_loaded.isCompleted) _loaded.complete();
+    }
+
+    final sub = port.reduceTransparencyChanges().listen(answer);
     ref.onDispose(() {
       alive = false;
       unawaited(sub.cancel());
     });
     unawaited(
-      port.reduceTransparency().then((v) {
-        if (alive) state = v;
-      }, onError: (Object _) {}),
+      port.reduceTransparency().then(
+        answer,
+        onError: (Object _) => answer(false),
+      ),
     );
     return null;
   }

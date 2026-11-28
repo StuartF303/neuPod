@@ -110,7 +110,17 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
         look.wheel.clamped(LookPart.wheel).transparency > 0 ||
         look.centre.clamped(LookPart.centre).transparency > 0;
     final sharp = needSharp
-        ? ref.watch(boardPictureProvider(info.id)).value
+        ? ref
+              .watch(
+                boardPictureProvider((
+                  id: info.id,
+                  width: boardPictureDecodeWidth(
+                    MediaQuery.sizeOf(context).width,
+                    MediaQuery.devicePixelRatioOf(context),
+                  ),
+                )),
+              )
+              .value
         : null;
     final frost = needFrost
         ? ref.watch(boardFrostProvider(info.id)).value
@@ -129,7 +139,9 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
     final body = DecoratedBox(
       decoration: BoxDecoration(gradient: paint.bodyGradient),
     );
-    if (!paint.hasBoard || board == null) return body;
+    // The board shows under the body only when the body is see-through; a
+    // solid body (a see-through wheel alone) has nothing to paint under it.
+    if (!paint.hasBoard || board == null || paint.bodyOpacity == 1) return body;
     final picture = board.picture;
     final cap = paint.capColour;
     return Stack(

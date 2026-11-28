@@ -58,3 +58,19 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.3.0")
     androidTestImplementation("androidx.test:rules:1.2.0")
 }
+
+// Custom mode's board pictures are placeholders until the owner supplies real ones, and a store build must not
+// ship one. With NEUPOD_STORE_BUILD=1 in the environment, assembleRelease and bundleRelease first run
+// tool/check_release_boards.dart and fail while any board is a placeholder. Debug and profile builds, and
+// release builds without the variable (the owner's local installs), are not stopped.
+val checkBoardPictures by tasks.registering(Exec::class) {
+    description = "Fails a store build while a Custom mode board picture is a placeholder"
+    workingDir = file("../..")
+    commandLine("dart", "run", "tool/check_release_boards.dart")
+}
+
+if (System.getenv("NEUPOD_STORE_BUILD") == "1") {
+    tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+        dependsOn(checkBoardPictures)
+    }
+}

@@ -9,9 +9,11 @@
 // FlutterTest font. Small text and anti-aliased edges (the wheel's circles,
 // gradients, shadows) can differ by a few pixels between the two hosts.
 //
-// A golden passes when at most [_tolerance] (1 %) of its pixels differ. (The
-// see-through looks draw a 1200x3120 board picture scaled down, whose
-// filtering differs a little between the two hosts: 0.51 % at 375x667.)
+// A golden passes when at most [_tolerance] (0.5 %) of its pixels differ; the
+// goldens that draw a board picture (the see-through looks, `_custom_clear`
+// and `_custom_seaglass`) get [_pictureTolerance] (1 %), because the picture,
+// scaled down, filters a little differently on the two hosts (0.51 % at
+// 375x667).
 // That is acceptable because the goldens are not the guard on positions:
 // test/ui/device/device_geometry_test.dart pins every position to render.py
 // within 1e-9 pt, and device_view_test.dart checks the rendered screen and
@@ -27,7 +29,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const double _tolerance = 0.01; // 1 % of the pixels
+const double _tolerance = 0.005; // 0.5 % of the pixels
+const double _pictureTolerance = 0.01; // 1 %, goldens with a board picture
+
+final RegExp _withPicture = RegExp(r'_custom_(clear|seaglass)\.png$');
 
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   final base = goldenFileComparator;
@@ -48,7 +53,10 @@ class _TolerantComparator extends LocalFileComparator {
       imageBytes,
       await getGoldenBytes(golden),
     );
-    if (result.passed || result.diffPercent <= _tolerance) {
+    final limit = _withPicture.hasMatch(golden.path)
+        ? _pictureTolerance
+        : _tolerance;
+    if (result.passed || result.diffPercent <= limit) {
       result.dispose();
       return true;
     }

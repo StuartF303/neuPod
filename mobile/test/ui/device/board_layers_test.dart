@@ -32,6 +32,12 @@ class _ReduceTransparencyOn implements AccessibilityPort {
 }
 
 void main() {
+  test('the decode width is the drawn width, at most the picture\'s', () {
+    expect(boardPictureDecodeWidth(393, 3), 1179);
+    expect(boardPictureDecodeWidth(440, 3), 1200);
+    expect(boardPictureDecodeWidth(375, 1), 375);
+  });
+
   group('the picture is anchored on the wheel\'s centre', () {
     for (final phone in designPhones) {
       testWidgets(phone.name, (tester) async {
@@ -81,6 +87,9 @@ void main() {
     );
     await settleBoards(tester);
     expect(assets.decoded, ['assets/boards/main-top.webp']);
+    // At the width it is drawn at (393 points, 1 pixel each), not the full
+    // 1200 x 3120.
+    expect(assets.widths['assets/boards/main-top.webp'], 393);
   });
 
   testWidgets('a see-through wheel decodes the frost copy only, once', (
@@ -182,6 +191,25 @@ void main() {
     );
   });
 
+  testWidgets('a failed platform read means not reduced: see-through stays', (
+    tester,
+  ) async {
+    final assets = await PreloadedBoardAssets.load(tester);
+    await pumpDevice(
+      tester,
+      look: _seaGlass,
+      overrides: [
+        boardAssetsProvider.overrideWithValue(assets),
+        accessibilityPortProvider.overrideWithValue(_Failing()),
+      ],
+    );
+    await settleBoards(tester);
+    expect(
+      tester.widget<ClickWheel>(find.byType(ClickWheel)).paint.bodyOpacity,
+      closeTo(0.45, 1e-9),
+    );
+  });
+
   testWidgets('Increase Contrast: solid, no picture is loaded', (tester) async {
     tester.platformDispatcher.accessibilityFeaturesTestValue =
         const FakeAccessibilityFeatures(highContrast: true);
@@ -204,6 +232,14 @@ void main() {
   ) async {
     expect(reduceTransparencyReason, 'Reduce Transparency is on');
   });
+}
+
+class _Failing implements AccessibilityPort {
+  @override
+  Future<bool> reduceTransparency() async => throw StateError('no channel');
+
+  @override
+  Stream<bool> reduceTransparencyChanges() => const Stream.empty();
 }
 
 class _Changing implements AccessibilityPort {

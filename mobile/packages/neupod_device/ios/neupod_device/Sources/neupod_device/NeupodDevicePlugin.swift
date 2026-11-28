@@ -60,6 +60,13 @@ public class NeupodDevicePlugin: NSObject, FlutterPlugin, DeviceApi {
       name: UIScene.didActivateNotification, object: nil)
   }
 
+  public func detachFromEngine(for registrar: FlutterPluginRegistrar) {
+    NotificationCenter.default.removeObserver(self)
+    accessibilityChannel?.setMethodCallHandler(nil)
+    accessibilityChannel = nil
+    DeviceApiSetup.setUp(binaryMessenger: registrar.messenger(), api: nil)
+  }
+
   private var accessibilityChannel: FlutterMethodChannel?
 
   @objc private func reduceTransparencyChanged() {

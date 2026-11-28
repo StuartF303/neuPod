@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
+import 'package:neupod/domain/style/board.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/domain/wheel/wheel_input.dart';
 import 'package:neupod/ui/device/device_paint.dart';
@@ -185,7 +186,12 @@ class WheelPainter extends CustomPainter {
     canvas.drawImageRect(
       image,
       Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
-      Rect.fromLTWH(100 - 600 * u, 100 - 2040 * u, 1200 * u, 3120 * u),
+      Rect.fromLTWH(
+        100 - boardAnchorX * u,
+        100 - boardAnchorY * u,
+        boardPictureWidth * u,
+        boardPictureHeight * u,
+      ),
       Paint()..filterQuality = FilterQuality.medium,
     );
     canvas.restore();

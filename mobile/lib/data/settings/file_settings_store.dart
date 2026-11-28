@@ -37,13 +37,16 @@ class FileSettingsStore implements SettingsStore {
 
   static Future<Map<String, Object?>> _readFile(File file) async {
     if (!await file.exists()) return {};
+    // An I/O error on the read (EIO, a file locked by data protection) is
+    // thrown on, so a write drops this one change rather than replacing the
+    // saved looks with a file holding only its own key.
+    final bytes = await file.readAsBytes();
     try {
-      // Bytes, then utf8.decode: bad UTF-8 is a FormatException here, where
-      // readAsString would raise a FileSystemException.
-      final decoded = jsonDecode(utf8.decode(await file.readAsBytes()));
+      // utf8.decode, not readAsString: bad UTF-8 is a FormatException here.
+      final decoded = jsonDecode(utf8.decode(bytes));
       if (decoded is Map) return Map<String, Object?>.from(decoded);
-    } on Object {
-      // Corrupt or unreadable: treated as empty; the next write replaces it.
+    } on FormatException {
+      // Corrupt contents: treated as empty; the next write replaces it.
     }
     return {};
   }
