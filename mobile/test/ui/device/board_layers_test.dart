@@ -13,6 +13,7 @@ import 'package:neupod/domain/style/board.dart';
 import 'package:neupod/domain/style/custom_look.dart';
 import 'package:neupod/ui/device/board_picture.dart';
 import 'package:neupod/ui/device/click_wheel.dart';
+import 'package:neupod/app/accessibility_providers.dart';
 import 'package:neupod/ui/device/device_accessibility.dart';
 import 'package:neupod/ui/device/device_options.dart';
 

@@ -94,6 +94,34 @@ class DevicePaint {
   /// A board picture shows through.
   final bool hasBoard;
 
+  /// This paint with other edges (the part editor's edge pulse).
+  DevicePaint withEdges({
+    Color? ringEdge,
+    Color? centreEdge,
+    List<BoxShadow>? frameShadow,
+  }) => DevicePaint(
+    body: body,
+    bodyStops: bodyStops,
+    ring: ring,
+    ringEdge: ringEdge ?? this.ringEdge,
+    groove: groove,
+    centre: centre,
+    centreEdge: centreEdge ?? this.centreEdge,
+    glyph: glyph,
+    wordmark: wordmark,
+    press: press,
+    centrePress: centrePress,
+    touch: touch,
+    darkStatusText: darkStatusText,
+    frameShadow: frameShadow ?? this.frameShadow,
+    bodyOpacity: bodyOpacity,
+    ringOpacity: ringOpacity,
+    centreOpacity: centreOpacity,
+    hasCap: hasCap,
+    hasBadge: hasBadge,
+    hasBoard: hasBoard,
+  );
+
   /// The body as a gradient, at the body's opacity.
   LinearGradient get bodyGradient => LinearGradient(
     begin: Alignment.topCenter,

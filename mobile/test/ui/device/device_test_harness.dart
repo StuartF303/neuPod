@@ -9,7 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:neupod/domain/style/board.dart';
+import 'package:neupod/domain/style/board_list.dart';
 import 'package:neupod/domain/style/custom_look.dart';
 import 'package:neupod/domain/wheel/feedback_ports.dart';
 import 'package:neupod/ui/device/board_picture.dart';
@@ -102,9 +102,8 @@ Future<ProviderContainer> pumpDevice(
 /// app asked to decode. Each decode hands out a clone, so a provider disposing
 /// its image does not spoil the next test.
 class PreloadedBoardAssets extends BoardAssets {
-  PreloadedBoardAssets._(this._json, this._images);
+  PreloadedBoardAssets._(this._images);
 
-  final String _json;
   final Map<String, ui.Image> _images;
 
   /// Every path the app asked to decode, in order.
@@ -113,11 +112,9 @@ class PreloadedBoardAssets extends BoardAssets {
   /// Reads boards.json and decodes every picture, outside the fake clock.
   static Future<PreloadedBoardAssets> load(WidgetTester tester) async {
     const real = BoardAssets();
-    late String json;
     final images = <String, ui.Image>{};
     await tester.runAsync(() async {
-      json = await real.loadCatalog();
-      for (final b in parseBoards(json)) {
+      for (final b in boardList) {
         for (final path in [b.picturePath, b.frostPath]) {
           images[path] = await real.decode(path);
         }
@@ -128,11 +125,8 @@ class PreloadedBoardAssets extends BoardAssets {
         i.dispose();
       }
     });
-    return PreloadedBoardAssets._(json, images);
+    return PreloadedBoardAssets._(images);
   }
-
-  @override
-  Future<String> loadCatalog() async => _json;
 
   @override
   Future<ui.Image> decode(String path) async {

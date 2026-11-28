@@ -6,17 +6,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:neupod/domain/style/board.dart';
+import 'package:neupod/app/accessibility_providers.dart';
+import 'package:neupod/domain/style/board_list.dart';
 import 'package:neupod/domain/style/custom_look.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/ui/device/board_picture.dart';
 import 'package:neupod/ui/device/click_wheel.dart';
 import 'package:neupod/ui/device/custom_device_paint.dart';
-import 'package:neupod/ui/device/device_accessibility.dart';
 import 'package:neupod/ui/device/device_finish.dart';
 import 'package:neupod/ui/device/device_geometry.dart';
 import 'package:neupod/ui/device/device_options.dart';
 import 'package:neupod/ui/device/device_paint.dart';
+import 'package:neupod/ui/device/edge_pulse.dart';
 import 'package:neupod/ui/device/gate_panel.dart';
 import 'package:neupod/ui/device/screen_host.dart';
 import 'package:neupod/ui/device/wheel_bus.dart';
@@ -103,9 +104,7 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
       (p) => look.paintOf(p).clamped(p).transparency > 0,
     );
     if (forcedSolid || !seeThrough) return null;
-    final catalog = ref.watch(boardCatalogProvider).value;
-    final info = catalog == null ? null : boardFor(catalog, look.board);
-    if (info == null) return null;
+    final info = boardById(look.board);
     final needSharp = look.body.clamped(LookPart.body).transparency > 0;
     final needFrost =
         look.wheel.clamped(LookPart.wheel).transparency > 0 ||
@@ -212,15 +211,23 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
     final increaseContrast = MediaQuery.highContrastOf(context);
     final board = look == null
         ? null
-        : _boardFor(look, reduceTransparency || increaseContrast);
-    final paint = look != null
-        ? customDevicePaint(
+        : _boardFor(
             look,
-            board: board?.info,
-            reduceTransparency: reduceTransparency,
-            increaseContrast: increaseContrast,
-          )
-        : options.finishFor(brightness).paint;
+            reduceTransparency ||
+                increaseContrast ||
+                !ref.watch(reduceTransparencyKnownProvider),
+          );
+    final paint = applyEdgePulse(
+      look != null
+          ? customDevicePaint(
+              look,
+              board: board?.info,
+              reduceTransparency: reduceTransparency,
+              increaseContrast: increaseContrast,
+            )
+          : options.finishFor(brightness).paint,
+      ref.watch(edgePulseProvider),
+    );
 
     final media = MediaQuery.of(context);
     final size = media.size;

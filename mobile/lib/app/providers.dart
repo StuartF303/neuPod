@@ -20,15 +20,15 @@ import 'package:neupod/data/db/stats_database.dart';
 import 'package:neupod/data/db/library_database.dart';
 import 'package:neupod/data/db/open_library_database.dart';
 import 'package:neupod/data/platform/storage_folder_access.dart';
-import 'package:neupod/data/settings/file_settings_store.dart';
-import 'package:neupod/domain/settings/settings_store.dart';
 import 'package:neupod/data/scan/local_library_scanner.dart';
+import 'package:neupod/data/settings/file_settings_store.dart';
 import 'package:neupod/domain/library/library_folder.dart';
 import 'package:neupod/domain/library/library_ports.dart';
 import 'package:neupod/domain/library/library_summary.dart';
 import 'package:neupod/domain/library/play_stats.dart';
 import 'package:neupod/domain/playback/player.dart';
 import 'package:neupod/domain/playback/player_state.dart';
+import 'package:neupod/domain/settings/settings_store.dart';
 import 'package:neupod_audio/neupod_audio.dart';
 import 'package:neupod_storage/neupod_storage.dart';
 

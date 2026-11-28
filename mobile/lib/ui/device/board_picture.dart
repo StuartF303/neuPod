@@ -12,10 +12,6 @@ import 'package:neupod/domain/style/board.dart';
 class BoardAssets {
   const BoardAssets();
 
-  /// `assets/boards/boards.json`.
-  Future<String> loadCatalog() =>
-      rootBundle.loadString('assets/boards/boards.json');
-
   /// Decodes the picture at asset [path].
   Future<ui.Image> decode(String path) async {
     final data = await rootBundle.load(path);
@@ -30,13 +26,6 @@ class BoardAssets {
 
 /// The source of the board pictures.
 final boardAssetsProvider = Provider<BoardAssets>((ref) => const BoardAssets());
-
-/// Every board's data. Cheap text, read when a see-through look first needs
-/// it; no picture is decoded by it.
-final boardCatalogProvider = FutureProvider<List<BoardInfo>>(
-  (ref) async =>
-      parseBoards(await ref.watch(boardAssetsProvider).loadCatalog()),
-);
 
 /// The sharp picture of board [id], decoded once and kept. Read only while a
 /// see-through body needs it: a look with every part solid never reads it.

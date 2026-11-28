@@ -10,6 +10,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:neupod/domain/style/board.dart';
+import 'package:neupod/domain/style/board_list.dart';
 import 'package:neupod/domain/style/colour_math.dart';
 import 'package:neupod/domain/style/custom_look.dart';
 import 'package:neupod/domain/style/custom_paint.dart';
@@ -37,6 +38,19 @@ void main() {
       [for (final b in boards) b.name],
       ['Main board, top', 'Main board, bottom', 'Copper only'],
     );
+  });
+
+  test('board_list.dart is boards.json (run tool/build_board.dart)', () {
+    final json = _boards();
+    expect(boardList.length, json.length);
+    for (var i = 0; i < json.length; i++) {
+      final (a, b) = (boardList[i], json[i]);
+      expect(
+        (a.id, a.name, a.ground, a.frostDark, a.frostLight, a.placeholder),
+        (b.id, b.name, b.ground, b.frostDark, b.frostLight, b.placeholder),
+        reason: '${b.id}: regenerate lib/domain/style/board_list.dart',
+      );
+    }
   });
 
   for (final board in _boards()) {

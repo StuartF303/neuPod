@@ -15,18 +15,19 @@ final accessibilityPortProvider = Provider<AccessibilityPort>(
   (ref) => const NoAccessibilitySettings(),
 );
 
-/// Whether the system's Reduce Transparency is on. While it is, the device
-/// paints every part of a custom look solid and loads no board picture, and
-/// the editor greys its Transparency field with [reduceTransparencyReason].
-final reduceTransparencyProvider =
-    NotifierProvider<ReduceTransparencyNotifier, bool>(
+/// The system's Reduce Transparency, as the platform reports it. Read it
+/// through `reduceTransparencyProvider` (`app/accessibility_providers.dart`),
+/// which a test can override with a value.
+final systemReduceTransparencyProvider =
+    NotifierProvider<ReduceTransparencyNotifier, bool?>(
       ReduceTransparencyNotifier.new,
     );
 
-/// Holds Reduce Transparency: off until the platform says otherwise.
-class ReduceTransparencyNotifier extends Notifier<bool> {
+/// Holds Reduce Transparency: null until the platform has answered (the
+/// device view loads no board picture before it knows), then the setting.
+class ReduceTransparencyNotifier extends Notifier<bool?> {
   @override
-  bool build() {
+  bool? build() {
     final port = ref.watch(accessibilityPortProvider);
     var alive = true;
     final sub = port.reduceTransparencyChanges().listen((v) {
@@ -41,6 +42,6 @@ class ReduceTransparencyNotifier extends Notifier<bool> {
         if (alive) state = v;
       }, onError: (Object _) {}),
     );
-    return false;
+    return null;
   }
 }

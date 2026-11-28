@@ -17,6 +17,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:neupod/data/db/open_library_database.dart';
 import 'package:neupod/data/db/stats_database.dart';
+import 'package:neupod/data/settings/file_settings_store.dart';
 import 'package:neupod_storage/neupod_storage.dart';
 
 void main() {
@@ -73,7 +74,18 @@ void main() {
     expect(File('$library/library.sqlite').existsSync(), isTrue);
     expect(File('$stats/stats.sqlite').existsSync(), isTrue);
 
+    // The settings file: a settings/ folder beside stats/, in the backed-up
+    // area on both platforms (the Android rules include settings/).
+    final settings = '${Directory(stats).parent.path}/settings';
+    await tester.runAsync(() async {
+      final store = FileSettingsStore(() async => settings);
+      await store.put('backup-check', 1);
+      expect(File('$settings/settings.json').existsSync(), isTrue);
+      expect((await store.read())['backup-check'], 1);
+    });
+
     if (Platform.isIOS) {
+      expect(await storage.isExcludedFromBackup(settings), isFalse);
       expect(await storage.isExcludedFromBackup(library), isTrue);
       expect(await storage.isExcludedFromBackup(stats), isFalse);
       expect(
@@ -85,6 +97,7 @@ void main() {
     } else {
       expect(library, endsWith('/no_backup'));
       expect(stats, endsWith('/files/stats'));
+      expect(settings, endsWith('/files/settings'));
     }
   });
 }

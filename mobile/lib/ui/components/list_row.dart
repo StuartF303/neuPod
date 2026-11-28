@@ -29,6 +29,8 @@ class NeupodRow extends StatelessWidget {
     this.value,
     this.chevron = false,
     this.thumbnail,
+    this.leading,
+    this.tick = false,
     this.selection = RowSelection.none,
     this.pressed = false,
     this.disabledReason,
@@ -56,6 +58,14 @@ class NeupodRow extends StatelessWidget {
 
   /// A cover thumbnail before the text (an artist's albums).
   final Widget? thumbnail;
+
+  /// A small widget before the text (Custom mode's colour swatch), as tall
+  /// as a line of text.
+  final Widget? leading;
+
+  /// A tick before the chevron: the item in use (the look in use, the board
+  /// chosen).
+  final bool tick;
   final RowSelection selection;
 
   /// Under a finger (device view candidate 2): a tint from touch-down.
@@ -102,6 +112,7 @@ class NeupodRow extends StatelessWidget {
     title,
     ?subtitle,
     ?value,
+    if (tick) 'in use',
     if (greyed) disabledReason! else ?position,
   ].join(', ');
 
@@ -172,7 +183,20 @@ class NeupodRow extends StatelessWidget {
         SizedBox.square(dimension: 59 * k, child: thumbnail),
         const SizedBox(width: 14),
       ],
+      if (leading != null) ...[
+        SizedBox.square(dimension: 30 * k, child: leading),
+        SizedBox(width: 14 * k),
+      ],
       Expanded(child: text),
+      if (tick && !greyed) ...[
+        const SizedBox(width: 12),
+        NeupodIcon(
+          NeupodGlyph.check,
+          size: 26 * k,
+          color: chevronInk,
+          strokeWidth: 3,
+        ),
+      ],
       if (greyed) ...[
         const SizedBox(width: 12),
         // The reason must stay readable: it and the title share the row,

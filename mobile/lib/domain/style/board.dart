@@ -60,6 +60,9 @@ final class BoardInfo {
   /// The pair the contrast rule measures a see-through wheel against.
   List<int> get frostPair => [frostDark, frostLight];
 
+  /// [frostPair] by the name the part editor uses.
+  List<int> get grounds => frostPair;
+
   /// Asset path of the sharp picture.
   String get picturePath => 'assets/boards/$id.webp';
 

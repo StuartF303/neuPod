@@ -190,7 +190,9 @@ final class CustomLook {
     final rawName = json['name'];
     var name = rawName is String ? rawName.trim() : '';
     if (name.isEmpty) name = 'Look';
-    if (name.length > 16) name = name.substring(0, 16);
+    if (name.runes.length > 16) {
+      name = String.fromCharCodes(name.runes.take(16));
+    }
     final rawBoard = json['board'];
     return CustomLook(
       id: id,

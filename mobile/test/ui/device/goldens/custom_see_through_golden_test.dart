@@ -11,7 +11,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:neupod/domain/style/board.dart';
+import 'package:neupod/domain/style/board_list.dart';
 import 'package:neupod/domain/style/custom_look.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/domain/wheel/wheel_input.dart';
@@ -65,10 +65,9 @@ void main() {
     // Clear case over the first board, as the design's sheet draws it.
     const boardId = 'main-top';
     final assets = const BoardAssets();
-    late BoardInfo info;
+    final info = boardById(boardId);
     late ui.Image frost;
     await tester.runAsync(() async {
-      info = boardFor(parseBoards(await assets.loadCatalog()), boardId)!;
       frost = await assets.decode(info.frostPath);
     });
     addTearDown(frost.dispose);

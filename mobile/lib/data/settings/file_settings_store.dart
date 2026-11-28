@@ -38,10 +38,12 @@ class FileSettingsStore implements SettingsStore {
   static Future<Map<String, Object?>> _readFile(File file) async {
     if (!await file.exists()) return {};
     try {
-      final decoded = jsonDecode(await file.readAsString());
+      // Bytes, then utf8.decode: bad UTF-8 is a FormatException here, where
+      // readAsString would raise a FileSystemException.
+      final decoded = jsonDecode(utf8.decode(await file.readAsBytes()));
       if (decoded is Map) return Map<String, Object?>.from(decoded);
-    } on FormatException {
-      // Corrupt: treated as empty; the next write replaces it.
+    } on Object {
+      // Corrupt or unreadable: treated as empty; the next write replaces it.
     }
     return {};
   }
@@ -61,6 +63,8 @@ class FileSettingsStore implements SettingsStore {
       all[key] = value;
       final temp = File('${file.path}.tmp');
       await temp.writeAsString(jsonEncode(all), flush: true);
+      // No fsync of the directory after the rename: if the phone dies before
+      // the rename reaches the disk, the old file comes back, which is safe.
       await temp.rename(file.path);
     } on Object catch (e) {
       debugPrint('neupod: settings not saved: $e');

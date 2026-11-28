@@ -124,10 +124,19 @@ class RatingStars extends StatelessWidget {
 /// the text and a caret, in a 60 px band. Visual only: the phone's keyboard
 /// does the typing.
 class SearchFieldBox extends StatelessWidget {
-  const SearchFieldBox({super.key, required this.text, this.caret = true});
+  const SearchFieldBox({
+    super.key,
+    required this.text,
+    this.caret = true,
+    this.glyph = true,
+  });
 
   final String text;
   final bool caret;
+
+  /// The magnifying glass at the left (Search's); false for another entry
+  /// (a look's name).
+  final bool glyph;
 
   @override
   Widget build(BuildContext context) {
@@ -145,13 +154,15 @@ class SearchFieldBox extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(
               children: [
-                NeupodIcon(
-                  NeupodGlyph.search,
-                  size: 24 * k,
-                  color: skin.glyph,
-                  strokeWidth: 2.5,
-                ),
-                const SizedBox(width: 10),
+                if (glyph) ...[
+                  NeupodIcon(
+                    NeupodGlyph.search,
+                    size: 24 * k,
+                    color: skin.glyph,
+                    strokeWidth: 2.5,
+                  ),
+                  const SizedBox(width: 10),
+                ],
                 Flexible(
                   child: NeupodText(
                     text,
