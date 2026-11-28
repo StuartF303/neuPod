@@ -90,3 +90,9 @@ Every item means: unit and golden tests pass, `flutter analyze` is clean, and no
   reaches the nearest detent (60 or 64, 92 or 96); the widget test asserts hue and brightness exact and saturation within 2.
   A value off the grid first lands on the grid (a detent), so 218 degrees reaches 205 in three detents.
 - 2026-11-28 (#177): `domain/style/board_list.dart` is now generated from `boards.json` by `tool/build_board.dart` (#178). The board picker's pane is a plain tile until there are pictures.
+- 2026-11-28: Built in #176 (core, saved looks), #177 (settings, looks list, editor) and #178 (see-through parts,
+  board, Reduce Transparency, store-build check). Follow-ups from the #178 review, for before a store release:
+  the placeholder check runs only with `NEUPOD_STORE_BUILD=1`, so an Xcode Product > Archive skips it (also run it
+  when `ACTION = install`) and Android should hook `bundleRelease` unconditionally; the Gradle hook calls bare `dart`
+  (use `$FLUTTER_ROOT/bin/dart`); the board picture re-decodes, and a see-through body shows solid for a moment, on
+  every window-width change (iPad Stage Manager): round the width up or keep the last image until the new one is ready.
