@@ -7,23 +7,23 @@ Every item means: unit and golden tests pass, `flutter analyze` is clean, and no
 
 ## 1. The model and the rule
 
-- [ ] `PartPaint`, `CustomLook`, `CustomLooks`, `ModeSetting`; JSON that round-trips and clamps
-- [ ] `hsvToRgb` and `mix` in `colour_math.dart`
-- [ ] `paintPart`: ink, flat, transparency given back; matches the brief's check values
-- [ ] Walk test: every colour on the grid reaches 4.5:1, solid and see-through
-- [ ] Increase Contrast function: every colour on the grid reaches 7:1
+- [x] `PartPaint`, `CustomLook`, `CustomLooks`, `ModeSetting`; JSON that round-trips and clamps (#176, 2026-11-28)
+- [x] `hsvToRgb` and `mix` in `colour_math.dart` (#176, 2026-11-28)
+- [x] `paintPart`: ink, flat, transparency given back; matches the brief's check values (#176, 2026-11-28)
+- [x] Walk test: every colour on the grid reaches 4.5:1, solid and see-through (#176, 2026-11-28)
+- [x] Increase Contrast function: every colour on the grid reaches 7:1 (#176, 2026-11-28)
 
 ## 2. One paint type for the device
 
-- [ ] `DevicePaint`; silver and black map onto it; painters read it only
-- [ ] Every existing device and wheel golden byte-identical
+- [x] `DevicePaint`; silver and black map onto it; painters read it only (#176, 2026-11-28)
+- [x] Every existing device and wheel golden byte-identical (#176, 2026-11-28)
 
 ## 3. Custom paint, solid
 
-- [ ] Body, wheel and centre in custom colours with their gradients
-- [ ] Legends, edge, groove, touch and press tints in ink
-- [ ] Frame outer edge; phone status-bar style from the body's top colour
-- [ ] Goldens: Harbour, Chalk, Flare, default light, default dark; wheel states
+- [x] Body, wheel and centre in custom colours with their gradients (#176, 2026-11-28)
+- [x] Legends, edge, groove, touch and press tints in ink (#176, 2026-11-28)
+- [x] Frame outer edge; phone status-bar style from the body's top colour (#176, 2026-11-28)
+- [x] Goldens: Harbour, Chalk, Flare, default light, default dark; wheel states (#176, 2026-11-28)
 
 ## 4. Transparency and the board
 
@@ -36,10 +36,10 @@ Every item means: unit and golden tests pass, `flutter analyze` is clean, and no
 
 ## 5. The mode setting
 
-- [ ] `StyleChoice.mode` is `ModeSetting`; Light, Dark and Auto unchanged
-- [ ] `customLooksProvider` with the three starters, behind a store interface
-- [ ] Custom: screen mode from the look, paint from the look; falls back to Auto with no look
-- [ ] Looks persisted. BLOCKED: the app has no settings storage yet (`docs/app/PROGRESS.md`, phase 6)
+- [x] `StyleChoice.mode` is `ModeSetting`; Light, Dark and Auto unchanged (#176, 2026-11-28)
+- [x] `customLooksProvider` with the three starters, behind a store interface (#176, 2026-11-28)
+- [x] Custom: screen mode from the look, paint from the look; falls back to Auto with no look (#176, 2026-11-28)
+- [x] Looks persisted: a small JSON settings store (`settings/settings.json` beside `stats/`, atomic write, tolerant read, in the Android backup rules) (#176, 2026-11-28)
 
 ## 6. Settings rows and the lists
 
