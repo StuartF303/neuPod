@@ -11,6 +11,7 @@ import 'package:neupod/ui/device/custom_device_paint.dart';
 import 'package:neupod/ui/device/device_finish.dart';
 import 'package:neupod/ui/device/device_geometry.dart';
 import 'package:neupod/ui/device/device_options.dart';
+import 'package:neupod/ui/device/edge_pulse.dart';
 import 'package:neupod/ui/device/gate_panel.dart';
 import 'package:neupod/ui/device/screen_host.dart';
 import 'package:neupod/ui/device/wheel_bus.dart';
@@ -96,9 +97,15 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
     final brightness =
         widget.brightness ?? MediaQuery.platformBrightnessOf(context);
     final look = widget.look;
-    final paint = look != null
-        ? customDevicePaint(look)
-        : options.finishFor(brightness).paint;
+    final paint = applyEdgePulse(
+      look != null
+          ? customDevicePaint(
+              look,
+              increaseContrast: MediaQuery.highContrastOf(context),
+            )
+          : options.finishFor(brightness).paint,
+      ref.watch(edgePulseProvider),
+    );
 
     final media = MediaQuery.of(context);
     final size = media.size;

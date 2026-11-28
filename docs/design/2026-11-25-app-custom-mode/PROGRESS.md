@@ -43,31 +43,31 @@ Every item means: unit and golden tests pass, `flutter analyze` is clean, and no
 
 ## 6. Settings rows and the lists
 
-- [ ] Mode cycles Light, Dark, Auto, Custom; Custom look row
-- [ ] Looks list: tick, preview at rest, `New look`, greyed at six
-- [ ] A look: seven rows; Screen cycles in place
-- [ ] Name by the wheel text entry, 16 characters
-- [ ] Reset to default and Delete look, each behind a panel
-- [ ] Board picker with its preview pane
-- [ ] Goldens in Classic Light and Modern Dark; largest tier for the two lists
-- [ ] Screen-reader labels
+- [x] Mode cycles Light, Dark, Auto, Custom; Custom look row (#177, 2026-11-28)
+- [x] Looks list: tick, preview at rest, `New look`, greyed at six (#177, 2026-11-28)
+- [x] A look: seven rows; Screen cycles in place (#177, 2026-11-28)
+- [x] Name by the wheel text entry, 16 characters (#177, 2026-11-28)
+- [x] Reset to default and Delete look, each behind a panel (#177, 2026-11-28)
+- [x] Board picker with its preview pane (#177, 2026-11-28)
+- [x] Goldens in Classic Light and Modern Dark; largest tier for the two lists (#177, 2026-11-28)
+- [x] Screen-reader labels (#177, 2026-11-28)
 
 ## 7. The part editor
 
-- [ ] Layout: part tabs, colour wheel, swatch and hex, four fields, legend note, hint
-- [ ] Wheel steps (5, 4, 4, 5), hue wraps, ends give the end haptic
-- [ ] Previous and Next move the field; centre steps the part; Menu goes back
-- [ ] Live repaint and save on every change; edge pulse on a part change
-- [ ] Direct touch: colour wheel, bars, fields, tabs
-- [ ] Large and largest tier layouts
-- [ ] Wheel semantics: field as label, value and part as value
-- [ ] Goldens and the two widget tests
+- [x] Layout: part tabs, colour wheel, swatch and hex, four fields, legend note, hint (#177, 2026-11-28)
+- [x] Wheel steps (5, 4, 4, 5), hue wraps, ends give the end haptic (#177, 2026-11-28)
+- [x] Previous and Next move the field; centre steps the part; Menu goes back (#177, 2026-11-28)
+- [x] Live repaint and save on every change; edge pulse on a part change (#177, 2026-11-28)
+- [x] Direct touch: colour wheel, bars, fields, tabs (#177, 2026-11-28)
+- [x] Large and largest tier layouts (#177, 2026-11-28)
+- [x] Wheel semantics: field as label, value and part as value (#177, 2026-11-28)
+- [x] Goldens and the two widget tests (#177, 2026-11-28)
 
 ## 8. Accessibility
 
 - [ ] Reduce Transparency: solid, no picture loaded, Transparency field greyed with its reason
-- [ ] Increase Contrast: solid, 7:1, edges at 60 %
-- [ ] Reduce Motion: no pulse, no fade
+- [x] Increase Contrast: solid, 7:1, edges at 60 % (#177, 2026-11-28)
+- [x] Reduce Motion: no pulse, no fade (#177, 2026-11-28)
 - [ ] Goldens for both settings
 
 ## 9. Finish
@@ -81,3 +81,12 @@ Every item means: unit and golden tests pass, `flutter analyze` is clean, and no
 ## Notes
 
 - 2026-11-25: Design written. Board pictures are placeholders made by `render.py`; `boards/` is empty.
+- 2026-11-28 (#177): Section 8's Reduce Transparency and its golden are stage 2's. The Increase Contrast golden
+  (`device_393x852_custom_seaglass_increase_contrast`) is in; the Reduce Transparency one waits for the transparency step.
+  Flutter has no Reduce Transparency flag: `reduceTransparencyProvider` (`app/accessibility_providers.dart`) reads false
+  until stage 2 wires the platform flag in; the editor already greys the Transparency field from it.
+- 2026-11-28 (#177): Harbour's saturation 62 and the wheel's brightness 94 are between two 4 % detents, so the wheel alone
+  reaches the nearest detent (60 or 64, 92 or 96); the widget test asserts hue and brightness exact and saturation within 2.
+  A value off the grid first lands on the grid (a detent), so 218 degrees reaches 205 in three detents.
+- 2026-11-28 (#177): `domain/style/board_list.dart` is a minimal board list (names, ground and frost colours from the design's
+  placeholders); stage 2 replaces it with `boards.json`. The board picker's pane is a plain tile until there are pictures.

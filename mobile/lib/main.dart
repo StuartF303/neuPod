@@ -2,6 +2,7 @@
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neupod/app/custom_look_actions.dart';
 import 'package:neupod/app/custom_looks_provider.dart';
 import 'package:neupod/app/device_platform.dart';
 import 'package:neupod/app/neupod_app.dart';
@@ -27,6 +28,7 @@ Future<void> main() async {
   await Future.wait([
     container.read(styleChoiceProvider.notifier).loaded,
     container.read(customLooksProvider.notifier).loaded,
+    container.read(lookSequenceProvider.notifier).loaded,
   ]).timeout(const Duration(seconds: 1), onTimeout: () => const []);
   // A stalled read opens in the defaults; the notifiers apply the stored
   // values when they arrive, and never over a change made meanwhile.

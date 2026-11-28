@@ -87,6 +87,8 @@ class NeupodListItem {
     String? value,
     bool chevron = false,
     Widget Function(bool selected)? thumbnail,
+    Widget? leading,
+    bool tick = false,
     String? disabledReason,
     NeupodGlyph? reasonGlyph,
     int? rating,
@@ -112,6 +114,7 @@ class NeupodListItem {
         title,
         ?subtitle,
         ?value,
+        if (tick) 'in use',
         if (greyed && disabledReason.isNotEmpty) disabledReason,
       ].join(', '),
       onActivate: greyed && greyedAction == null ? null : onActivate,
@@ -122,6 +125,8 @@ class NeupodListItem {
         value: value,
         chevron: chevron,
         thumbnail: thumbnail?.call(s.selection != RowSelection.none),
+        leading: leading,
+        tick: tick,
         disabledReason: disabledReason,
         reasonGlyph: reasonGlyph,
         rating: rating,
@@ -167,6 +172,7 @@ class NeupodList extends ConsumerStatefulWidget {
     this.onSelectionChanged,
     this.indexed = true,
     this.rightInset = 0,
+    this.showScrollBar = true,
     super.key,
   });
 
@@ -183,6 +189,10 @@ class NeupodList extends ConsumerStatefulWidget {
 
   /// Space kept free at the right (a pane beside the list needs none).
   final double rightInset;
+
+  /// Whether a list longer than its space draws the scroll bar. Custom mode's
+  /// screens draw none (design owner decision 2); the wheel still moves them.
+  final bool showScrollBar;
 
   @override
   ConsumerState<NeupodList> createState() => _NeupodListState();
@@ -532,7 +542,7 @@ class _NeupodListState extends ConsumerState<NeupodList>
           _placed = true;
           _scroll = _scrollFor(_sel, 0);
         }
-        final overflow = _total > _viewport + 0.5;
+        final overflow = widget.showScrollBar && _total > _viewport + 0.5;
         final window = _windowAt(_scroll);
         final barWidth = style.scrollBar.width;
         final selectedItem = _sel >= 0 ? _items[_sel] : null;

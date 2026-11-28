@@ -107,7 +107,7 @@ Future<ShellRig> _openLibrary(
   await _step(tester, rig, 2); // Settings
   await _select(tester, rig);
   expect(_row('Library'), findsOneWidget);
-  await _step(tester, rig, 2); // Style, Mode, Library
+  await _step(tester, rig, 3); // Style, Mode, Custom look, Library
   await _select(tester, rig);
   expect(rig.container.read(shellProvider).top!.name, 'Library');
   return rig;

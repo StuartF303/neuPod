@@ -136,7 +136,9 @@ class _ShellRootState extends ConsumerState<ShellRoot>
     if (st.panel != null) {
       if (e is WheelPress &&
           (e.button == WheelButton.centre || e.button == WheelButton.menu)) {
-        ref.read(shellProvider.notifier).dismissPanel();
+        ref
+            .read(shellProvider.notifier)
+            .dismissPanel(confirmed: e.button == WheelButton.centre);
       }
       return;
     }
@@ -197,7 +199,9 @@ class _ShellRootState extends ConsumerState<ShellRoot>
             Positioned.fill(
               child: PanelOverlay(
                 request: st.panel!,
-                onOk: ref.read(shellProvider.notifier).dismissPanel,
+                onOk: () => ref
+                    .read(shellProvider.notifier)
+                    .dismissPanel(confirmed: true),
               ),
             ),
         ],
