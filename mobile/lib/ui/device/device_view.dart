@@ -1,16 +1,22 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import 'dart:ui' as ui;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neupod/domain/style/board.dart';
 import 'package:neupod/domain/style/custom_look.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
+import 'package:neupod/ui/device/board_picture.dart';
 import 'package:neupod/ui/device/click_wheel.dart';
 import 'package:neupod/ui/device/custom_device_paint.dart';
+import 'package:neupod/ui/device/device_accessibility.dart';
 import 'package:neupod/ui/device/device_finish.dart';
 import 'package:neupod/ui/device/device_geometry.dart';
 import 'package:neupod/ui/device/device_options.dart';
+import 'package:neupod/ui/device/device_paint.dart';
 import 'package:neupod/ui/device/gate_panel.dart';
 import 'package:neupod/ui/device/screen_host.dart';
 import 'package:neupod/ui/device/wheel_bus.dart';
@@ -89,6 +95,112 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
     );
   }
 
+  /// The board a see-through [look] shows, once its pictures are decoded:
+  /// null while a look is solid (every part solid, or Reduce Transparency or
+  /// Increase Contrast on) so no picture is read, and until they are ready.
+  _Board? _boardFor(CustomLook look, bool forcedSolid) {
+    final seeThrough = LookPart.values.any(
+      (p) => look.paintOf(p).clamped(p).transparency > 0,
+    );
+    if (forcedSolid || !seeThrough) return null;
+    final catalog = ref.watch(boardCatalogProvider).value;
+    final info = catalog == null ? null : boardFor(catalog, look.board);
+    if (info == null) return null;
+    final needSharp = look.body.clamped(LookPart.body).transparency > 0;
+    final needFrost =
+        look.wheel.clamped(LookPart.wheel).transparency > 0 ||
+        look.centre.clamped(LookPart.centre).transparency > 0;
+    final sharp = needSharp
+        ? ref.watch(boardPictureProvider(info.id)).value
+        : null;
+    final frost = needFrost
+        ? ref.watch(boardFrostProvider(info.id)).value
+        : null;
+    if ((needSharp && sharp == null) || (needFrost && frost == null)) {
+      return null;
+    }
+    return _Board(info, sharp, frost);
+  }
+
+  /// Layers 1 to 4 of the design's section 5: the board's ground colour, the
+  /// sharp picture (anchored on the wheel's centre when [g] is given), the
+  /// body at its opacity, and the solid cap under the status bar. A solid
+  /// paint is the body gradient alone.
+  Widget _backdrop(DevicePaint paint, _Board? board, DeviceGeometry? g) {
+    final body = DecoratedBox(
+      decoration: BoxDecoration(gradient: paint.bodyGradient),
+    );
+    if (!paint.hasBoard || board == null) return body;
+    final picture = board.picture;
+    final cap = paint.capColour;
+    return Stack(
+      clipBehavior: Clip.hardEdge,
+      fit: StackFit.expand,
+      children: [
+        ColoredBox(color: Color(0xFF000000 | board.info.ground)),
+        if (g != null && picture != null && paint.bodyOpacity < 1)
+          BoardPictureLayer(
+            image: picture,
+            rect: boardPictureRect(width: g.width, wheelCentre: g.wheelCentre),
+          ),
+        body,
+        if (g != null && paint.hasCap)
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            height: g.frame.top + 0.06 * g.width,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [cap, cap, cap.withValues(alpha: 0)],
+                  stops: [0, g.frame.top / (g.frame.top + 0.06 * g.width), 1],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// The wordmark, on its badge when the body is see-through: a solid patch
+  /// of the body's colour, radius 0.036 W, 0.012 W above and below and 0.03 W
+  /// each side.
+  Widget _wordmark(DevicePaint paint, DeviceGeometry g) {
+    final text = Text(
+      'neuPod',
+      textDirection: TextDirection.ltr,
+      // Always 0.036 W: the wordmark is part of the body, and the 44 pt gap
+      // rule assumes its size.
+      textScaler: TextScaler.noScaling,
+      style: TextStyle(
+        fontFamily: 'Montserrat',
+        fontWeight: FontWeight.w500,
+        fontSize: g.wordmarkSize,
+        letterSpacing: 0.04 * g.wordmarkSize,
+        color: paint.wordmark,
+        decoration: TextDecoration.none,
+        height: paint.hasBadge ? 1.2 : 1,
+      ),
+    );
+    if (!paint.hasBadge) return text;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: paint.badgeColour,
+        borderRadius: BorderRadius.circular(g.wordmarkSize),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: 0.03 * g.width,
+          vertical: 0.012 * g.width,
+        ),
+        child: text,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final options = ref.watch(deviceViewOptionsProvider);
@@ -96,8 +208,18 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
     final brightness =
         widget.brightness ?? MediaQuery.platformBrightnessOf(context);
     final look = widget.look;
+    final reduceTransparency = ref.watch(reduceTransparencyProvider);
+    final increaseContrast = MediaQuery.highContrastOf(context);
+    final board = look == null
+        ? null
+        : _boardFor(look, reduceTransparency || increaseContrast);
     final paint = look != null
-        ? customDevicePaint(look)
+        ? customDevicePaint(
+            look,
+            board: board?.info,
+            reduceTransparency: reduceTransparency,
+            increaseContrast: increaseContrast,
+          )
         : options.finishFor(brightness).paint;
 
     final media = MediaQuery.of(context);
@@ -148,9 +270,7 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
               onLongPress: gateSwitchesEnabled
                   ? () => setState(() => _gateOpen = true)
                   : null,
-              child: DecoratedBox(
-                decoration: BoxDecoration(gradient: paint.bodyGradient),
-              ),
+              child: _backdrop(paint, board, g),
             ),
           ),
         ),
@@ -182,24 +302,7 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
             height: g.wordmarkSize * 2,
             child: IgnorePointer(
               child: ExcludeSemantics(
-                child: Center(
-                  child: Text(
-                    'neuPod',
-                    textDirection: TextDirection.ltr,
-                    // Always 0.036 W: the wordmark is part of the body, and
-                    // the 44 pt gap rule assumes its size.
-                    textScaler: TextScaler.noScaling,
-                    style: TextStyle(
-                      fontFamily: 'Montserrat',
-                      fontWeight: FontWeight.w500,
-                      fontSize: g.wordmarkSize,
-                      letterSpacing: 0.04 * g.wordmarkSize,
-                      color: paint.wordmark,
-                      decoration: TextDecoration.none,
-                      height: 1,
-                    ),
-                  ),
-                ),
+                child: Center(child: _wordmark(paint, g)),
               ),
             ),
           ),
@@ -208,7 +311,17 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
           top: g.wheelCentre.dy - extent / 2,
           width: extent,
           height: extent,
-          child: ClickWheel(diameter: g.wheelDiameter, paint: paint),
+          child: ClickWheel(
+            diameter: g.wheelDiameter,
+            paint: paint,
+            frost: paint.ringOpacity < 1 || paint.centreOpacity < 1
+                ? board?.frost
+                : null,
+            frostUnitsPerPixel: boardUnitsPerPixel(
+              width: g.width,
+              wheelDiameter: g.wheelDiameter,
+            ),
+          ),
         ),
         if (iosSwipe)
           Positioned(
@@ -233,9 +346,7 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
     if (plan.empty) {
       // A window under 1 pt (Android's first frame can be 0x0): only the
       // empty, correctly coloured body, no screen host or wheel.
-      device = DecoratedBox(
-        decoration: BoxDecoration(gradient: paint.bodyGradient),
-      );
+      device = _backdrop(paint, board, null);
     } else {
       // The same tree for a phone and for a short or narrow window, so a
       // plan change (rotation, split screen, a resize near the threshold)
@@ -245,11 +356,7 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
       // the body finish filling the rest.
       device = Stack(
         children: [
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(gradient: paint.bodyGradient),
-            ),
-          ),
+          Positioned.fill(child: _backdrop(paint, board, null)),
           Positioned(
             left: plan.offsetX,
             top: 0,
@@ -314,4 +421,17 @@ class _EdgeSwipeState extends State<_EdgeSwipe> {
       },
     );
   }
+}
+
+/// A see-through look's board once its pictures are ready.
+class _Board {
+  const _Board(this.info, this.picture, this.frost);
+
+  final BoardInfo info;
+
+  /// The sharp picture, when the body is see-through.
+  final ui.Image? picture;
+
+  /// The blurred copy, when the wheel or the centre is see-through.
+  final ui.Image? frost;
 }

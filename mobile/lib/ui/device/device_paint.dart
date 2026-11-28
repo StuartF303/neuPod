@@ -79,7 +79,8 @@ class DevicePaint {
   /// The shadow that draws the frame's outer 1 px edge.
   final List<BoxShadow> frameShadow;
 
-  /// Opacity of the body, the ring and the centre (1 = solid).
+  /// Opacity of the body, the ring and the centre (1 = solid). The colours
+  /// above stay opaque; the painters apply these.
   final double bodyOpacity;
   final double ringOpacity;
   final double centreOpacity;
@@ -93,13 +94,22 @@ class DevicePaint {
   /// A board picture shows through.
   final bool hasBoard;
 
-  /// The body as a gradient.
+  /// The body as a gradient, at the body's opacity.
   LinearGradient get bodyGradient => LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: body,
+    colors: bodyOpacity == 1
+        ? body
+        : [for (final c in body) c.withValues(alpha: c.a * bodyOpacity)],
     stops: bodyStops,
   );
+
+  /// The cap's colour: the body's top colour, solid.
+  Color get capColour => body.first;
+
+  /// The badge's colour under the wordmark: the body's own colour, flat and
+  /// solid.
+  Color get badgeColour => body[body.length ~/ 2];
 
   @override
   bool operator ==(Object other) =>

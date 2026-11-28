@@ -1,0 +1,28 @@
+{
+  "boards": [
+    {
+      "id": "main-top",
+      "name": "Main board, top",
+      "ground": "#123524",
+      "placeholder": true,
+      "frostDark": "#0a0c10",
+      "frostLight": "#5b6539"
+    },
+    {
+      "id": "main-bottom",
+      "name": "Main board, bottom",
+      "ground": "#101a2e",
+      "placeholder": true,
+      "frostDark": "#0a0c10",
+      "frostLight": "#44536c"
+    },
+    {
+      "id": "copper",
+      "name": "Copper only",
+      "ground": "#2a1c10",
+      "placeholder": true,
+      "frostDark": "#090c10",
+      "frostLight": "#654b35"
+    }
+  ]
+}

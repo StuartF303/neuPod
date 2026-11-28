@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
@@ -22,6 +23,8 @@ class WheelPainter extends CustomPainter {
     required this.visual,
     this.disabled = false,
     this.menuFont = 'Montserrat',
+    this.frost,
+    this.frostUnitsPerPixel = 0,
   });
 
   /// What to paint with.
@@ -35,6 +38,15 @@ class WheelPainter extends CustomPainter {
 
   /// The family for `MENU`.
   final String menuFont;
+
+  /// The board's blurred copy, seen through a see-through ring or centre
+  /// (design section 5, layers 7 and 8): 300 x 780 px standing for the
+  /// 1200 x 3120 picture, anchor (600, 2040) on the wheel's centre.
+  final ui.Image? frost;
+
+  /// Canvas units (of the 200-unit square) per pixel of the full-size
+  /// picture, see `boardUnitsPerPixel`.
+  final double frostUnitsPerPixel;
 
   static const double _c = 36; // centre radius, of 100
   static const double _groove = _c + 4;
@@ -56,11 +68,26 @@ class WheelPainter extends CustomPainter {
     );
 
     final ringRect = Rect.fromCircle(center: centre, radius: 99);
-    canvas.drawCircle(
-      centre,
-      99,
-      Paint()..shader = _vertical(devicePaint.ring).createShader(ringRect),
-    );
+    final ringOpacity = devicePaint.ringOpacity;
+    final centreOpacity = devicePaint.centreOpacity;
+    // A see-through ring or centre: the ring is an annulus with the centre
+    // button's hole in it, and the blurred board shows through.
+    final seeThrough = ringOpacity < 1 || centreOpacity < 1;
+    if (ringOpacity < 1) _frost(canvas, 99);
+    final ringPaint = Paint()
+      ..shader = _vertical(_faded(devicePaint.ring, ringOpacity))
+          .createShader(ringRect);
+    if (seeThrough) {
+      canvas.drawPath(
+        Path()
+          ..fillType = PathFillType.evenOdd
+          ..addOval(ringRect)
+          ..addOval(Rect.fromCircle(center: centre, radius: _c)),
+        ringPaint,
+      );
+    } else {
+      canvas.drawCircle(centre, 99, ringPaint);
+    }
     canvas.drawCircle(
       centre,
       99,
@@ -85,12 +112,26 @@ class WheelPainter extends CustomPainter {
         break;
     }
 
-    canvas.drawCircle(centre, _groove, Paint()..color = devicePaint.groove);
+    if (seeThrough) {
+      // The groove is the ring from the centre button's edge to 0.04 R.
+      canvas.drawPath(
+        Path()
+          ..fillType = PathFillType.evenOdd
+          ..addOval(Rect.fromCircle(center: centre, radius: _groove))
+          ..addOval(Rect.fromCircle(center: centre, radius: _c)),
+        Paint()..color = devicePaint.groove,
+      );
+    } else {
+      canvas.drawCircle(centre, _groove, Paint()..color = devicePaint.groove);
+    }
+    if (centreOpacity < 1) _frost(canvas, _c);
     final centreRect = Rect.fromCircle(center: centre, radius: _c);
     canvas.drawCircle(
       centre,
       _c,
-      Paint()..shader = _vertical(devicePaint.centre).createShader(centreRect),
+      Paint()
+        ..shader = _vertical(_faded(devicePaint.centre, centreOpacity))
+            .createShader(centreRect),
     );
     canvas.drawCircle(
       centre,
@@ -123,6 +164,30 @@ class WheelPainter extends CustomPainter {
       p.addRRect(_bar(18, 4, 4, 16));
       p.addRRect(_bar(25, 4, 4, 16));
     });
+    canvas.restore();
+  }
+
+  static List<Color> _faded(List<Color> colours, double opacity) => opacity == 1
+      ? colours
+      : [for (final c in colours) c.withValues(alpha: c.a * opacity)];
+
+  /// The blurred board inside a circle of [radius] about the wheel's centre.
+  void _frost(Canvas canvas, double radius) {
+    final image = frost;
+    if (image == null || frostUnitsPerPixel <= 0) return;
+    final u = frostUnitsPerPixel;
+    canvas.save();
+    canvas.clipPath(
+      Path()..addOval(
+        Rect.fromCircle(center: const Offset(100, 100), radius: radius),
+      ),
+    );
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      Rect.fromLTWH(100 - 600 * u, 100 - 2040 * u, 1200 * u, 3120 * u),
+      Paint()..filterQuality = FilterQuality.medium,
+    );
     canvas.restore();
   }
 
@@ -192,6 +257,8 @@ class WheelPainter extends CustomPainter {
   bool shouldRepaint(WheelPainter old) =>
       old.devicePaint != devicePaint ||
       old.disabled != disabled ||
+      old.frost != frost ||
+      old.frostUnitsPerPixel != frostUnitsPerPixel ||
       !_sameVisual(old.visual, visual);
 
   static bool _sameVisual(WheelVisual a, WheelVisual b) => switch ((a, b)) {

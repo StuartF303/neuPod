@@ -1,0 +1,122 @@
+// SPDX-License-Identifier: MPL-2.0
+
+// Makes a board's frost copy and measures its frost pair (design README,
+// section 6).
+//
+//   cd mobile && dart run tool/build_board.dart [board-id ...]
+//
+// For each board in assets/boards/boards.json (or the ids given): reads
+// assets/boards/<id>.webp (1200 x 3120, opaque, sRGB), blurs it with a
+// Gaussian of radius 36 px (0.03 W), saves it at 300 x 780 px as
+// <id>.frost.webp (lossless, through `cwebp`: brew install webp), and writes
+// `frostDark` and `frostLight` into boards.json: the darkest and lightest
+// pixel, by relative luminance, of the frost copy inside radius 384 px (at
+// full size) of the anchor (600, 2040). A new board needs its `id`, `name`
+// and `ground` in boards.json first; `placeholder` stays true until a real
+// picture of a neuPod board replaces a placeholder.
+
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:image/image.dart' as img;
+import 'package:neupod/domain/style/colour_math.dart';
+
+const int _w = 1200;
+const int _h = 3120;
+const int _anchorX = 600;
+const int _anchorY = 2040;
+const int _blurRadius = 36;
+const int _frostW = 300;
+const int _frostH = 780;
+const int _measureRadius = 384;
+
+Future<void> main(List<String> args) async {
+  final dir = Directory('assets/boards');
+  final file = File('${dir.path}/boards.json');
+  final json = jsonDecode(await file.readAsString()) as Map<String, Object?>;
+  final boards = [
+    for (final b in json['boards']! as List<Object?>)
+      Map<String, Object?>.of(b! as Map<String, Object?>),
+  ];
+
+  for (final board in boards) {
+    final id = board['id']! as String;
+    if (args.isNotEmpty && !args.contains(id)) continue;
+    stdout.writeln('$id: blurring');
+    final source = img.decodeWebP(
+      await File('${dir.path}/$id.webp').readAsBytes(),
+    );
+    if (source == null || source.width != _w || source.height != _h) {
+      throw StateError(
+        '$id.webp must be a $_w x $_h WebP '
+        '(got ${source?.width} x ${source?.height})',
+      );
+    }
+    final blurred = img.gaussianBlur(
+      source.convert(numChannels: 3),
+      radius: _blurRadius,
+    );
+    final frost = img.copyResize(
+      blurred,
+      width: _frostW,
+      height: _frostH,
+      interpolation: img.Interpolation.average,
+    );
+
+    final tmp = await Directory.systemTemp.createTemp('neupod-frost-');
+    try {
+      final png = File('${tmp.path}/$id.png');
+      await png.writeAsBytes(img.encodePng(frost));
+      final result = await Process.run('cwebp', [
+        '-quiet',
+        '-lossless',
+        '-z',
+        '9',
+        png.path,
+        '-o',
+        '${dir.path}/$id.frost.webp',
+      ]);
+      if (result.exitCode != 0) {
+        throw StateError('cwebp failed: ${result.stderr}');
+      }
+    } finally {
+      await tmp.delete(recursive: true);
+    }
+
+    // Measure what was saved.
+    final saved = img.decodeWebP(
+      await File('${dir.path}/$id.frost.webp').readAsBytes(),
+    )!;
+    final k = _frostW / _w;
+    final cx = _anchorX * k;
+    final cy = _anchorY * k;
+    final r = _measureRadius * k;
+    int? dark, light;
+    double darkL = 2, lightL = -1;
+    for (final p in saved) {
+      final dx = p.x + 0.5 - cx;
+      final dy = p.y + 0.5 - cy;
+      if (dx * dx + dy * dy > r * r) continue;
+      final rgb = rgbOf(p.r, p.g, p.b);
+      final l = relativeLuminance(rgb);
+      if (l < darkL) {
+        darkL = l;
+        dark = rgb;
+      }
+      if (l > lightL) {
+        lightL = l;
+        light = rgb;
+      }
+    }
+    board['frostDark'] = _hex(dark!);
+    board['frostLight'] = _hex(light!);
+    stdout.writeln('$id: frostDark ${_hex(dark)}, frostLight ${_hex(light)}');
+  }
+
+  json['boards'] = boards;
+  await file.writeAsString(
+    '${const JsonEncoder.withIndent('  ').convert(json)}\n',
+  );
+}
+
+String _hex(int rgb) => '#${rgb.toRadixString(16).padLeft(6, '0')}';

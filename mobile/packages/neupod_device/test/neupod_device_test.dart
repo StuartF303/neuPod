@@ -3,6 +3,7 @@
 // The Dart side of the plugin against a fake host: the right channel
 // messages go out and the replies come back as VolumeState.
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neupod_device/neupod_device.dart';
 import 'package:neupod_device/src/device_api.g.dart';
@@ -56,6 +57,36 @@ void main() {
     await d.playHaptic(HapticEvent.endReached);
     expect(calls['playHaptic'], [HapticEvent.endReached]);
   });
+
+  test(
+    'Reduce Transparency: read, and changes pushed by the platform',
+    () async {
+      const channel = MethodChannel('neupod_device/accessibility');
+      var on = false;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'reduceTransparency');
+        return on;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final d = NeupodDevice();
+      expect(await d.reduceTransparency(), isFalse);
+      on = true;
+      expect(await d.reduceTransparency(), isTrue);
+
+      final seen = <bool>[];
+      final sub = d.reduceTransparencyChanges().listen(seen.add);
+      addTearDown(sub.cancel);
+      // The platform tells Dart: the handler set by reduceTransparencyChanges.
+      await messenger.handlePlatformMessage(
+        channel.name,
+        channel.codec.encodeMethodCall(
+          const MethodCall('reduceTransparencyChanged', true),
+        ),
+        (_) {},
+      );
+      expect(seen, [true]);
+    },
+  );
 
   test(
     'volume: read and step by one platform step whatever the size',

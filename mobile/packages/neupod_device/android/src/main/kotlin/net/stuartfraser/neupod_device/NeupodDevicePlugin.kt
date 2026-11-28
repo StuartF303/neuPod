@@ -12,6 +12,7 @@ import android.view.View
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
+import io.flutter.plugin.common.MethodChannel
 
 /**
  * Click-wheel haptics and the system media volume
@@ -37,10 +38,21 @@ class NeupodDevicePlugin : FlutterPlugin, ActivityAware, DeviceApi {
         debuggable = (binding.applicationContext.applicationInfo.flags and
             ApplicationInfo.FLAG_DEBUGGABLE) != 0
         DeviceApi.setUp(binding.binaryMessenger, this)
+        // Android has no Reduce Transparency setting (its "Reduce bright colours" dims the
+        // screen and is not about transparency), so Custom mode keeps the look's transparency:
+        // the answer is always false. iOS answers from UIAccessibility.
+        accessibility = MethodChannel(binding.binaryMessenger, "neupod_device/accessibility")
+        accessibility?.setMethodCallHandler { call, result ->
+            if (call.method == "reduceTransparency") result.success(false) else result.notImplemented()
+        }
     }
+
+    private var accessibility: MethodChannel? = null
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         DeviceApi.setUp(binding.binaryMessenger, null)
+        accessibility?.setMethodCallHandler(null)
+        accessibility = null
         context = null
     }
 

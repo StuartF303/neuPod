@@ -9,7 +9,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:neupod/domain/style/accessibility_port.dart';
 import 'package:neupod/domain/wheel/feedback_ports.dart';
+import 'package:neupod/ui/device/device_accessibility.dart';
 import 'package:neupod/domain/wheel/system_volume_port.dart';
 import 'package:neupod/ui/device/device_feedback.dart';
 import 'package:neupod/ui/device/system_volume.dart';
@@ -74,11 +76,29 @@ class PlatformSystemVolume implements SystemVolumePort {
       _of(await device.stepVolume(direction));
 }
 
+/// Reduce Transparency through the plugin (iOS reads UIAccessibility; Android
+/// has no such setting and answers false).
+class PlatformAccessibility implements AccessibilityPort {
+  /// Settings through [device].
+  PlatformAccessibility(this.device);
+
+  /// The plugin.
+  final NeupodDevice device;
+
+  @override
+  Future<bool> reduceTransparency() => device.reduceTransparency();
+
+  @override
+  Stream<bool> reduceTransparencyChanges() =>
+      device.reduceTransparencyChanges();
+}
+
 /// The overrides `main.dart` installs on a phone.
 List<Override> devicePlatformOverrides() {
   final device = NeupodDevice();
   return [
     hapticsPortProvider.overrideWithValue(PlatformHaptics(device)),
     systemVolumeProvider.overrideWithValue(PlatformSystemVolume(device)),
+    accessibilityPortProvider.overrideWithValue(PlatformAccessibility(device)),
   ];
 }

@@ -10,10 +10,12 @@ is the reference for the layout (`test/ui/device/device_geometry_test.dart` comp
 | `device_geometry.dart` | Every position from W, the phone's width: fit A, minimum width, wheel shrink, wordmark rule |
 | `device_paint.dart` | `DevicePaint`: everything the painters read (gradients, edge, groove, ink, tints, status-bar ink, opacities and cap/badge/board flags). The one paint type |
 | `device_finish.dart` | Silver and black, the finish table's colours, as a `DevicePaint` (`finish.paint`) |
-| `custom_device_paint.dart` | `customDevicePaint(look)`: a custom look (and the Increase Contrast flag) to a `DevicePaint`, by the contrast rule in `domain/style/custom_paint.dart`. Solid parts only for now |
+| `custom_device_paint.dart` | `customDevicePaint(look, board:, reduceTransparency:, increaseContrast:)`: a custom look to a `DevicePaint`, by the contrast rule in `domain/style/custom_paint.dart`. See-through only when a `BoardInfo` is given (its frost pair is the wheel's ground) and neither flag is on; otherwise every part is solid |
+| `board_picture.dart` | The board pictures: `boardCatalogProvider` (boards.json), `boardPictureProvider` and `boardFrostProvider` (decoded once, kept, read only while a part is see-through), `boardPictureRect` (anchor (600, 2040) on the wheel's centre), `BoardPictureLayer` |
+| `device_accessibility.dart` | `reduceTransparencyProvider` (the system's Reduce Transparency, through `AccessibilityPort`) and `reduceTransparencyReason`, the editor's greyed-field note |
 | `device_options.dart` | The switchable choices (direct touch, status bar, wordmark, progress-bar seek, iOS edge swipe, haptics, click sound) |
 | `click_wheel.dart` | The wheel widget (touch, haptics, the screen reader's adjustable element) and `WheelKeyboard` |
-| `wheel_painter.dart` | The wheel's drawing, five states |
+| `wheel_painter.dart` | The wheel's drawing, five states; with a see-through ring or centre the blurred board shows through (`frost`) |
 | `wheel_bus.dart` | `wheelBusProvider`: events out to the screen; semantics, `atRoot`, `enabled` and hold times in from it |
 | `screen_host.dart` | `DeviceScreenHost` (600x450, scaled by s) and `DeviceScreenScope` |
 | `device_feedback.dart`, `system_volume.dart` | Haptics, click-sound seam and system volume, behind providers that `app/` overrides with the `neupod_device` plugin |

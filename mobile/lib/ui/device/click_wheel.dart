@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
 import 'package:flutter/semantics.dart';
@@ -23,13 +24,26 @@ import 'package:neupod/ui/device/wheel_painter.dart';
 /// middle; touches outside 1.06 R pass through to what is behind it.
 class ClickWheel extends ConsumerStatefulWidget {
   /// A wheel [diameter] points across, in [paint].
-  const ClickWheel({required this.diameter, required this.paint, super.key});
+  const ClickWheel({
+    required this.diameter,
+    required this.paint,
+    this.frost,
+    this.frostUnitsPerPixel = 0,
+    super.key,
+  });
 
   /// D, the drawn diameter.
   final double diameter;
 
   /// What to paint with.
   final DevicePaint paint;
+
+  /// The board's blurred copy behind a see-through ring or centre, with its
+  /// scale (see `boardUnitsPerPixel`); null when both are solid.
+  final ui.Image? frost;
+
+  /// Canvas units per pixel of the full-size board picture.
+  final double frostUnitsPerPixel;
 
   /// The widget's side: the touch area, 1.06 D.
   static double extentFor(double diameter) => diameter * WheelZones.ringOuter;
@@ -218,6 +232,8 @@ class _ClickWheelState extends ConsumerState<ClickWheel> {
                   devicePaint: widget.paint,
                   visual: _input.visual,
                   disabled: !enabled,
+                  frost: widget.frost,
+                  frostUnitsPerPixel: widget.frostUnitsPerPixel,
                 ),
               ),
             ),
