@@ -17,6 +17,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/app/art_providers.dart';
+import 'package:neupod/app/custom_look_actions.dart' show lookPreviewProvider;
 import 'package:neupod/app/custom_looks_provider.dart';
 import 'package:neupod/app/library_view_providers.dart';
 import 'package:neupod/app/providers.dart';
@@ -95,9 +96,12 @@ final styleChoiceProvider = NotifierProvider<StyleChoiceNotifier, StyleChoice>(
   StyleChoiceNotifier.new,
 );
 
-/// The look the device is painted with: the look in use while Mode is Custom
-/// and one is in use, otherwise null (Custom with no look is Auto).
+/// The look the device is painted with: a look being previewed (the looks list
+/// and the board picker, after 250 ms at rest), else the look in use while Mode
+/// is Custom and one is in use, otherwise null (Custom with no look is Auto).
 final activeLookProvider = Provider<CustomLook?>((ref) {
+  final preview = ref.watch(lookPreviewProvider);
+  if (preview != null) return preview;
   final mode = ref.watch(styleChoiceProvider.select((c) => c.mode));
   if (mode != ModeSetting.custom) return null;
   return ref.watch(customLooksProvider.select((l) => l.inUse));

@@ -28,6 +28,7 @@ void main() {
       expect(chevrons, {
         'Style': false, // changes in place
         'Mode': false, // changes in place
+        'Custom look': true, // opens the list of looks
         'Library': true, // opens Library
         'Licences': true, // opens Licences
       });

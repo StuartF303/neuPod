@@ -68,7 +68,7 @@ Compilations, and a small Settings). Now Playing, the panel's content and Search
 - **Cover Flow**: the Albums list's albums in its order (owner decision 14); Classic angled with reflections, Modern
   flat; the wheel moves a cover per step, Select or a tap on the centre cover opens it, a drag moves the covers. Under
   the title, in both styles, the device's caption `Artist · Year · n songs` (`flow_texts` in `app/ui/ui_library.c`).
-- **Settings**: Style (Classic or Modern), Mode (Auto, Light, Dark), Library and, last, Licences (`licences_screen.dart`: Montserrat, Lucide, then the Dart and Flutter packages from `LicenseRegistry`; Select opens a text the wheel scrolls); the rest is phase 6. `NeuPodApp` calls `registerBundledLicences()`.
+- **Settings**: Style (Classic or Modern), Mode (cycles Light, Dark, Auto, Custom), Custom look (always shown; opens the looks), Library and, last, Licences (`licences_screen.dart`: Montserrat, Lucide, then the Dart and Flutter packages from `LicenseRegistry`; Select opens a text the wheel scrolls); the rest is phase 6. `NeuPodApp` calls `registerBundledLicences()`.
 - **Settings > Library** (`browse/library_screen.dart`): a row per folder (`On My iPhone` under the iOS Documents
   folder, whose Select explains how to fill it; a picked folder opens a screen with Remove), `Add Folder…` (the
   system picker; a refusal is a panel), and `Update Library`, which becomes `Building library` with `N found · N read
@@ -92,3 +92,22 @@ over the scanned drift database, `data/library_view/drift_library_view.dart`, gr
 library builder does (albums under their album artist, compilations, discs, years, genres). Art is still a placeholder
 cover until the art cache. The screens' tests and goldens and the gate-2 tool use
 `test/support/manifest_library_view.dart`, a test-only fake over the generated test library's manifest.
+
+## Custom mode's screens (`custom/`, AP-1)
+
+Settings > Custom look > a look > a part, all ordinary device screens; the real body, wheel and centre button are the
+live preview. Design: `docs/design/2026-11-25-app-custom-mode/`.
+
+| File | What |
+| --- | --- |
+| `looks_screen.dart` | The looks, one row each (tick on the one in use), then `New look` (greyed `6 of 6`). Resting 250 ms on a look previews it (`lookPreviewProvider`, which `activeLookProvider` prefers); Select opens it, makes it in use and Mode Custom |
+| `look_screen.dart` | `LookDetailScreen`: Body, Wheel, Centre (swatch, `Solid` or `55 % clear`), Board, Screen (cycles in place), Name, Reset or delete |
+| `name_screen.dart` | The wheel text entry (letter ring, chips), 16 characters; Play keeps, Menu deletes one, on empty leaves and the old name stays |
+| `reset_delete_screen.dart` | `Reset to default` and `Delete look`, each behind the centred panel (`showPanel(onConfirm:)`: Select or a tap answers yes, Menu keeps) |
+| `board_screen.dart` | The board picker: boards at the left, a picture at the right (a placeholder tile until the transparency step), 250 ms preview, Select chooses |
+| `part_picker_screen.dart`, `part_picker_view.dart`, `colour_wheel.dart` | The part editor: tabs, colour wheel, swatch and hex, four fields, legend note, hint; the wheel steps are `domain/style/look_edit.dart`'s `stepped` |
+| `wheel_screen.dart` | `WheelScreenState` (take the wheel while on top) and `RestTimer` |
+
+No scroll bar is drawn on these screens (`NeupodList(showScrollBar: false)`); at the Large and Largest tiers the rows move with the wheel. Looks are
+saved on every change through `app/custom_look_actions.dart` (`customLookActionsProvider`; the highest look id ever made is kept in the settings
+file, so an id is never reused). The boards list is `domain/style/board_list.dart`, a minimal list the transparency step replaces with `boards.json`.

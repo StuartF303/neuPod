@@ -195,6 +195,11 @@ const _allowed = <_Allowed>[
     'the Search keyboard\'s backspace chip, not a file operation',
   ),
   _Allowed(
+    'lib/ui/screens/custom/name_screen.dart',
+    '_entry.chip != entry.TextChip.delete) {',
+    "the look name entry's backspace chip, not a file operation",
+  ),
+  _Allowed(
     'lib/domain/text_entry/wheel_text_entry.dart',
     'TextChip.delete,',
     'the Search keyboard\'s backspace chip, not a file operation',

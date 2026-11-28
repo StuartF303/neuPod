@@ -94,6 +94,7 @@ class PanelRequest {
     required this.message,
     this.okLabel = 'OK',
     this.onDismissed,
+    this.onConfirm,
   });
 
   /// Something lost: the library update was stopped before it finished (UI
@@ -102,7 +103,8 @@ class PanelRequest {
     : title = 'Library update stopped',
       message =
           'Some songs may be missing. Update the library again to finish.',
-      okLabel = 'OK';
+      okLabel = 'OK',
+      onConfirm = null;
 
   /// The title, in Body.
   final String title;
@@ -115,6 +117,11 @@ class PanelRequest {
 
   /// Called once, after the panel went away.
   final VoidCallback? onDismissed;
+
+  /// For a question (`Delete Harbour?`): called when Select or a tap on the
+  /// button answers yes, after the panel went away. Menu goes away without
+  /// calling it. Null: Select, Menu and the button all just dismiss.
+  final VoidCallback? onConfirm;
 }
 
 /// The stack and the panel.
@@ -198,12 +205,14 @@ class ShellController extends Notifier<ShellState> {
     required String message,
     String okLabel = 'OK',
     VoidCallback? onDismissed,
+    VoidCallback? onConfirm,
   }) => showPanelRequest(
     PanelRequest(
       title: title,
       message: message,
       okLabel: okLabel,
       onDismissed: onDismissed,
+      onConfirm: onConfirm,
     ),
   );
 
@@ -225,14 +234,16 @@ class ShellController extends Notifier<ShellState> {
     return done.future;
   }
 
-  /// Dismisses the panel.
-  void dismissPanel() {
+  /// Dismisses the panel. [confirmed] is Select or a tap on its button: a
+  /// question's `onConfirm` is then called, after `onDismissed`.
+  void dismissPanel({bool confirmed = false}) {
     final request = state.panel;
     if (request == null) return;
     state = ShellState(pages: state.pages, lastWasPush: state.lastWasPush);
     _panelDone?.complete();
     _panelDone = null;
     request.onDismissed?.call();
+    if (confirmed) request.onConfirm?.call();
   }
 }
 

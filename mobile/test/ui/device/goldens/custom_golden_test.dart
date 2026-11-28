@@ -56,6 +56,25 @@ void main() {
     });
   }
 
+  // Increase Contrast: Sea glass painted solid, its legends at 7:1, edges at
+  // 60 % (design a11y-increase-contrast.png).
+  testWidgets('device_393x852_custom_seaglass_increase_contrast', (
+    tester,
+  ) async {
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(highContrast: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    await pumpDevice(
+      tester,
+      screen: const _Pattern(),
+      look: CustomLooks.starters.looks[1],
+    );
+    await expectLater(
+      find.byType(DeviceView),
+      matchesGoldenFile('device_393x852_custom_seaglass_increase_contrast.png'),
+    );
+  });
+
   testWidgets('wheel_states_custom_harbour', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(1180, 290);

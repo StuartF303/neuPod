@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
-/// Settings, as far as the gate needs: Style (Classic or Modern) and Mode
-/// (Auto, Light or Dark), the choices the specification puts in Settings
+/// Settings, as far as the gate needs: Style (Classic or Modern), Mode
+/// (Light, Dark, Auto or Custom) and the Custom look row that opens the list
+/// of looks (AP-1), the choices the specification puts in Settings
 /// ("style is chosen in Settings; mode follows the phone by default"), and
 /// Library (the folders: add, remove, rescan), then Licences. Select changes
 /// a value in place, or opens Library or Licences. The rest of Settings is
@@ -13,7 +14,9 @@ library;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neupod/app/custom_looks_provider.dart';
 import 'package:neupod/ui/screens/browse/browse_common.dart';
+import 'package:neupod/ui/screens/custom/looks_screen.dart';
 import 'package:neupod/ui/screens/browse/library_screen.dart';
 import 'package:neupod/ui/screens/browse/licences_screen.dart';
 import 'package:neupod/ui/screens/shell/neupod_list.dart';
@@ -31,6 +34,8 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final choice = ref.watch(styleChoiceProvider);
     final notifier = ref.read(styleChoiceProvider.notifier);
+    final lookName =
+        ref.watch(customLooksProvider.select((l) => l.inUse?.name)) ?? 'None';
     return ShellFrame(
       title: 'Settings',
       body: BrowseListBody(
@@ -67,14 +72,27 @@ class SettingsScreen extends ConsumerWidget {
                   onActivate: () => notifier.set(
                     StyleChoice(
                       family: choice.family,
+                      // The owner's order: Light, Dark, Auto, Custom.
                       mode: switch (choice.mode) {
-                        ModeSetting.auto => ModeSetting.light,
                         ModeSetting.light => ModeSetting.dark,
-                        // Custom joins the cycle with the Custom look rows.
-                        ModeSetting.dark ||
-                        ModeSetting.custom => ModeSetting.auto,
+                        ModeSetting.dark => ModeSetting.auto,
+                        ModeSetting.auto => ModeSetting.custom,
+                        ModeSetting.custom => ModeSetting.light,
                       },
                     ),
+                  ),
+                ),
+                // Always shown (owner decision, 28 Nov 2026); it keeps the
+                // last look's name when Mode is not Custom.
+                NeupodListItem.row(
+                  height: h,
+                  title: 'Custom look',
+                  value: lookName,
+                  chevron: true,
+                  onActivate: () => pushScreen(
+                    ref,
+                    'Custom look',
+                    (_) => const LooksScreen(),
                   ),
                 ),
                 NeupodListItem.row(

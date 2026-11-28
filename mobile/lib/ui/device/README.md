@@ -67,3 +67,10 @@ The long press that opens the gate switches is compiled in unless the build pass
 Store builds should pass it. The long press is hidden from the screen reader, and while the panel is open the keyboard
 drives the panel, not the wheel.
 
+## Custom mode additions (AP-1, 3/3)
+
+- `edge_pulse.dart`: `edgePulseProvider` and `applyEdgePulse`. The part editor lights the edge of the part it just switched to (400 ms, up to full ink
+  and back; never under Reduce Motion); `DeviceView` applies it to the paint (`DevicePaint.withEdges`).
+- `DeviceView` passes `MediaQuery.highContrastOf(context)` to `customDevicePaint(increaseContrast:)`: Increase Contrast paints a look solid at 7:1.
+- Reduce Transparency has no Flutter flag: `app/accessibility_providers.dart`'s `reduceTransparencyProvider` is the one place it is read (false until the
+  transparency step wires the platform flag in).
