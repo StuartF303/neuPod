@@ -100,7 +100,10 @@ class _NeuPodAppState extends ConsumerState<NeuPodApp> {
         );
       }
     });
-    final mode = ref.watch(styleChoiceProvider.select((c) => c.mode));
+    final pinned = pinnedMode(
+      ref.watch(styleChoiceProvider),
+      ref.watch(activeLookProvider),
+    );
     // Now Playing and Search plug into the shell (idempotent).
     registerGateScreens(ref.read(shellRegistryProvider));
     // The bundled fonts' and icons' licences join Flutter's (idempotent).
@@ -110,7 +113,8 @@ class _NeuPodAppState extends ConsumerState<NeuPodApp> {
       debugShowCheckedModeBanner: false,
       home: DeviceView(
         screen: const BrowseRoot(),
-        brightness: switch (mode) {
+        look: ref.watch(activeLookProvider),
+        brightness: switch (pinned) {
           null => null,
           StyleMode.light => Brightness.light,
           StyleMode.dark => Brightness.dark,

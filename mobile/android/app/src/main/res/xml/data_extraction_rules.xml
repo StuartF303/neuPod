@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Cloud backup and device-to-device transfer on Android 12 and later (android:dataExtractionRules). The same rule as
-     backup_rules.xml (owner decision 20): only filesDir/stats, the ratings and play counts database. -->
+     backup_rules.xml (owner decision 20): only filesDir/stats (ratings and play counts) and filesDir/settings (the settings file). -->
 <data-extraction-rules>
     <cloud-backup>
         <include domain="file" path="stats/" />
+        <include domain="file" path="settings/" />
     </cloud-backup>
     <device-transfer>
         <include domain="file" path="stats/" />
+        <include domain="file" path="settings/" />
     </device-transfer>
 </data-extraction-rules>

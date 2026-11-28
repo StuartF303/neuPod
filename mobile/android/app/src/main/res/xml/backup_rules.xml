@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Auto Backup on Android 11 and earlier (android:fullBackupContent). Owner decision 20: only the ratings and play
-     counts database is backed up (filesDir/stats, neupod_storage backedUpDataPath()). The library database and the
+<!-- Auto Backup on Android 11 and earlier (android:fullBackupContent). Owner decision 20: the ratings and play
+     counts database and the settings file are backed up (filesDir/stats and filesDir/settings, beside neupod_storage backedUpDataPath()). The library database and the
      art cache are in noBackupFilesDir, which Android never backs up; with an include rule nothing else is either. -->
 <full-backup-content>
     <include domain="file" path="stats/" />
+    <include domain="file" path="settings/" />
 </full-backup-content>

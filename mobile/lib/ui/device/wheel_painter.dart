@@ -5,7 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/domain/wheel/wheel_input.dart';
-import 'package:neupod/ui/device/device_finish.dart';
+import 'package:neupod/ui/device/device_paint.dart';
 
 /// Paints the click wheel (design section 4) in its five states. Drawn in a
 /// 200-unit square scaled to the wheel's diameter, with the same shapes as
@@ -16,16 +16,16 @@ import 'package:neupod/ui/device/device_finish.dart';
 /// The glyphs: Lucide's `skip-back` and `skip-forward` shapes (ISC), and the
 /// play/pause and `MENU` of the design. Drawn fresh; nothing traced.
 class WheelPainter extends CustomPainter {
-  /// A painter for [finish] showing [visual]; [disabled] dims the glyphs.
+  /// A painter for [devicePaint] showing [visual]; [disabled] dims the glyphs.
   WheelPainter({
-    required this.finish,
+    required this.devicePaint,
     required this.visual,
     this.disabled = false,
     this.menuFont = 'Montserrat',
   });
 
-  /// The body finish.
-  final DeviceFinish finish;
+  /// What to paint with.
+  final DevicePaint devicePaint;
 
   /// What is touched.
   final WheelVisual visual;
@@ -59,7 +59,7 @@ class WheelPainter extends CustomPainter {
     canvas.drawCircle(
       centre,
       99,
-      Paint()..shader = _vertical(finish.ring).createShader(ringRect),
+      Paint()..shader = _vertical(devicePaint.ring).createShader(ringRect),
     );
     canvas.drawCircle(
       centre,
@@ -67,12 +67,12 @@ class WheelPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1
-        ..color = finish.ringEdge,
+        ..color = devicePaint.ringEdge,
     );
 
     switch (visual) {
       case WheelTouchingRing(:final angleDegrees):
-        _wedge(canvas, angleDegrees - 25, angleDegrees + 25, finish.touch);
+        _wedge(canvas, angleDegrees - 25, angleDegrees + 25, devicePaint.touch);
       case WheelPressing(:final button) when button != WheelButton.centre:
         final mid = switch (button) {
           WheelButton.menu => 0.0,
@@ -80,17 +80,17 @@ class WheelPainter extends CustomPainter {
           WheelButton.playPause => 180.0,
           _ => 270.0,
         };
-        _wedge(canvas, mid - 45, mid + 45, finish.press);
+        _wedge(canvas, mid - 45, mid + 45, devicePaint.press);
       case _:
         break;
     }
 
-    canvas.drawCircle(centre, _groove, Paint()..color = finish.groove);
+    canvas.drawCircle(centre, _groove, Paint()..color = devicePaint.groove);
     final centreRect = Rect.fromCircle(center: centre, radius: _c);
     canvas.drawCircle(
       centre,
       _c,
-      Paint()..shader = _vertical(finish.centre).createShader(centreRect),
+      Paint()..shader = _vertical(devicePaint.centre).createShader(centreRect),
     );
     canvas.drawCircle(
       centre,
@@ -98,14 +98,14 @@ class WheelPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 0.8
-        ..color = finish.ringEdge,
+        ..color = devicePaint.centreEdge,
     );
     if (visual case WheelPressing(button: WheelButton.centre)) {
-      canvas.drawCircle(centre, _c, Paint()..color = finish.press);
+      canvas.drawCircle(centre, _c, Paint()..color = devicePaint.centrePress);
     }
 
     final glyph = Paint()
-      ..color = finish.glyph.withValues(alpha: disabled ? 0.35 : 1);
+      ..color = devicePaint.glyph.withValues(alpha: disabled ? 0.35 : 1);
     _menu(canvas, glyph.color);
     // Next: translate(160 91) scale(.75), Lucide skip-forward.
     _glyph(canvas, const Offset(160, 91), 0.75, glyph, (p) {
@@ -190,7 +190,7 @@ class WheelPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(WheelPainter old) =>
-      old.finish != finish ||
+      old.devicePaint != devicePaint ||
       old.disabled != disabled ||
       !_sameVisual(old.visual, visual);
 

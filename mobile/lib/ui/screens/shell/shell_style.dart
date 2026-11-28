@@ -10,34 +10,37 @@
 /// mode as the device view design says.
 library;
 
+import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/app/art_providers.dart';
+import 'package:neupod/app/custom_looks_provider.dart';
 import 'package:neupod/app/library_view_providers.dart';
 import 'package:neupod/app/providers.dart';
 import 'package:neupod/domain/library_view/library_view.dart';
 import 'package:neupod/domain/style/art_palette.dart';
+import 'package:neupod/domain/style/custom_look.dart';
 import 'package:neupod/ui/components/status_bar.dart';
 import 'package:neupod/ui/style/art_colours.dart';
 import 'package:neupod/ui/style/neupod_style.dart';
 
-/// The chosen style and, when pinned, the mode.
+/// The chosen style and the mode setting.
 @immutable
 class StyleChoice {
-  /// A choice; [mode] null follows the phone.
-  const StyleChoice({this.family = StyleFamily.classic, this.mode});
+  /// A choice; [mode] defaults to Auto, which follows the phone.
+  const StyleChoice({
+    this.family = StyleFamily.classic,
+    this.mode = ModeSetting.auto,
+  });
 
   final StyleFamily family;
-  final StyleMode? mode;
+  final ModeSetting mode;
 
-  StyleChoice copyWith({StyleFamily? family, StyleMode? Function()? mode}) =>
-      StyleChoice(
-        family: family ?? this.family,
-        mode: mode == null ? this.mode : mode(),
-      );
+  StyleChoice copyWith({StyleFamily? family, ModeSetting? mode}) =>
+      StyleChoice(family: family ?? this.family, mode: mode ?? this.mode);
 
   @override
   bool operator ==(Object other) =>
@@ -47,12 +50,44 @@ class StyleChoice {
   int get hashCode => Object.hash(family, mode);
 }
 
-/// Holds the [StyleChoice].
-class StyleChoiceNotifier extends Notifier<StyleChoice> {
-  @override
-  StyleChoice build() => const StyleChoice();
+/// The settings-file key that holds the mode.
+const String modeSettingKey = 'mode';
 
-  void set(StyleChoice choice) => state = choice;
+/// Holds the [StyleChoice]. The mode is kept in the settings file; the style
+/// is not stored yet.
+class StyleChoiceNotifier extends Notifier<StyleChoice> {
+  bool _changed = false;
+
+  /// Completes when the stored mode has been read (and applied, unless the
+  /// choice was changed meanwhile). Never completes with an error.
+  Future<void> loaded = Future<void>.value();
+
+  @override
+  StyleChoice build() {
+    loaded = _load();
+    return const StyleChoice();
+  }
+
+  Future<void> _load() async {
+    try {
+      final stored = await ref.read(settingsStoreProvider).read();
+      final mode = modeSettingFromName(stored[modeSettingKey]);
+      if (!_changed && ref.mounted) state = state.copyWith(mode: mode);
+    } on Object catch (e) {
+      debugPrint('neupod: mode not loaded: $e');
+    }
+  }
+
+  void set(StyleChoice choice) {
+    _changed = true;
+    final modeChanged = choice.mode != state.mode;
+    state = choice;
+    if (modeChanged) {
+      unawaited(
+        ref.read(settingsStoreProvider).put(modeSettingKey, choice.mode.name),
+      );
+    }
+  }
 }
 
 /// The chosen style and mode.
@@ -60,9 +95,37 @@ final styleChoiceProvider = NotifierProvider<StyleChoiceNotifier, StyleChoice>(
   StyleChoiceNotifier.new,
 );
 
-/// The mode in force: pinned, or the phone's.
-StyleMode effectiveMode(StyleChoice choice, Brightness platform) =>
-    choice.mode ?? StyleMode.fromBrightness(platform);
+/// The look the device is painted with: the look in use while Mode is Custom
+/// and one is in use, otherwise null (Custom with no look is Auto).
+final activeLookProvider = Provider<CustomLook?>((ref) {
+  final mode = ref.watch(styleChoiceProvider.select((c) => c.mode));
+  if (mode != ModeSetting.custom) return null;
+  return ref.watch(customLooksProvider.select((l) => l.inUse));
+});
+
+/// The mode in force: pinned, the phone's, or in Custom the look's screen
+/// ([look] is [activeLookProvider]'s value; none falls back to Auto).
+StyleMode effectiveMode(
+  StyleChoice choice,
+  Brightness platform, {
+  CustomLook? look,
+}) => switch (pinnedMode(choice, look)) {
+  final m? => m,
+  null => StyleMode.fromBrightness(platform),
+};
+
+/// The mode the choice pins, or null to follow the phone.
+StyleMode? pinnedMode(StyleChoice choice, CustomLook? look) =>
+    switch (choice.mode) {
+      ModeSetting.light => StyleMode.light,
+      ModeSetting.dark => StyleMode.dark,
+      ModeSetting.auto => null,
+      ModeSetting.custom => switch (look?.screen) {
+        LookScreen.light => StyleMode.light,
+        LookScreen.dark => StyleMode.dark,
+        LookScreen.auto || null => null,
+      },
+    };
 
 /// The art of the song now loaded: its own picture, as the device's Now
 /// Playing shows (with its album's placeholder), or null when nothing is

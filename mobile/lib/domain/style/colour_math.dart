@@ -45,6 +45,38 @@ double contrastRatio(int a, int b) {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+/// Rounds half to even, as Python's `round` does, so the colour arithmetic
+/// agrees with the design's `render.py` on exact halves.
+int _roundHalfEven(double v) {
+  final f = v.floorToDouble();
+  final d = v - f;
+  if (d < 0.5) return f.toInt();
+  if (d > 0.5) return f.toInt() + 1;
+  return f.toInt().isEven ? f.toInt() : f.toInt() + 1;
+}
+
+/// The colour for hue 0..359, saturation and brightness 0..100 (the usual HSV
+/// conversion, `hsv()` in the Custom mode design's `render.py`).
+int hsvToRgb(int hue, int saturation, int brightness) {
+  final s = saturation / 100, v = brightness / 100;
+  int f(int n) {
+    final k = (n + hue / 60) % 6;
+    final ramp = math.max(0.0, math.min(k, math.min(4 - k, 1.0)));
+    return _roundHalfEven(255 * (v - v * s * ramp));
+  }
+
+  return (f(5) << 16) | (f(3) << 8) | f(1);
+}
+
+/// [a] moved toward [b] by [t] (0 to 1), per channel in sRGB bytes:
+/// `round(a + (b - a) * t)`, half to even.
+int mix(int a, int b, double t) {
+  final (ar, ag, ab) = channels(a);
+  final (br, bg, bb) = channels(b);
+  int c(int x, int y) => _roundHalfEven(x + (y - x) * t);
+  return (c(ar, br) << 16) | (c(ag, bg) << 8) | c(ab, bb);
+}
+
 /// A colour in HSL: hue in degrees (0 to 360), saturation and lightness 0 to 1.
 final class Hsl {
   const Hsl(this.hue, this.saturation, this.lightness);

@@ -13,7 +13,7 @@ Compilations, and a small Settings). Now Playing, the panel's content and Search
 | `shell_root.dart` | `ShellRoot(home: ...)`: the stack, the 80 ms slide, wheel routing, the panel layer, `bus.atRoot` |
 | `screen_scope.dart` | `ScreenScope` / `ScreenHandle`: `isTop` and the wheel handler of a screen |
 | `shell_frame.dart` | `ShellFrame`: canvas + status bar + body, in the chosen style, mode and text tier |
-| `shell_style.dart` | `styleChoiceProvider` (style, mode), `deviceStatusProvider`, `ambientPaletteProvider`, `artPaletteProvider` |
+| `shell_style.dart` | `styleChoiceProvider` (style, `ModeSetting`; the mode is saved), `activeLookProvider`, `deviceStatusProvider`, `ambientPaletteProvider`, `artPaletteProvider` |
 | `neupod_list.dart` | `NeupodList`: rows, the sliding selection bar, wheel, touch, scroll bar, letter tile |
 | `cover_art.dart` | `CoverArt(ArtRef)`: the cover file or the mock-ups' split-square placeholder |
 | `stand_in_screen.dart` | A greyed "Not built yet" screen, shown until a destination registers |

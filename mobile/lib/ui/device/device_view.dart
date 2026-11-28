@@ -4,8 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neupod/domain/style/custom_look.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/ui/device/click_wheel.dart';
+import 'package:neupod/ui/device/custom_device_paint.dart';
 import 'package:neupod/ui/device/device_finish.dart';
 import 'package:neupod/ui/device/device_geometry.dart';
 import 'package:neupod/ui/device/device_options.dart';
@@ -28,13 +30,22 @@ import 'package:neupod/ui/device/wheel_bus.dart';
 /// left-edge swipe, haptics.
 class DeviceView extends ConsumerStatefulWidget {
   /// The device showing [screen], which is laid out at 600x450.
-  const DeviceView({required this.screen, this.brightness, super.key});
+  const DeviceView({
+    required this.screen,
+    this.brightness,
+    this.look,
+    super.key,
+  });
 
   /// The screen inside the device.
   final Widget screen;
 
   /// The mode, for the Automatic body; defaults to the platform's.
   final Brightness? brightness;
+
+  /// The custom look to paint with (Mode is Custom and one is in use), or
+  /// null for the silver or black finish.
+  final CustomLook? look;
 
   @override
   ConsumerState<DeviceView> createState() => _DeviceViewState();
@@ -84,7 +95,10 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
     final bus = ref.watch(wheelBusProvider);
     final brightness =
         widget.brightness ?? MediaQuery.platformBrightnessOf(context);
-    final finish = options.finishFor(brightness);
+    final look = widget.look;
+    final paint = look != null
+        ? customDevicePaint(look)
+        : options.finishFor(brightness).paint;
 
     final media = MediaQuery.of(context);
     final size = media.size;
@@ -103,7 +117,7 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
       safeTop: plan.safeTop ?? pad.top,
       safeBottom: plan.safeBottom ?? pad.bottom,
     );
-    final darkText = finish.darkStatusText;
+    final darkText = paint.darkStatusText;
     final overlay = SystemUiOverlayStyle(
       statusBarColor: const Color(0x00000000),
       systemNavigationBarColor: const Color(0x00000000),
@@ -135,7 +149,7 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
                   ? () => setState(() => _gateOpen = true)
                   : null,
               child: DecoratedBox(
-                decoration: BoxDecoration(gradient: finish.bodyGradient),
+                decoration: BoxDecoration(gradient: paint.bodyGradient),
               ),
             ),
           ),
@@ -148,9 +162,7 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
                 color: deviceFrame,
                 borderRadius: BorderRadius.circular(g.frameRadius),
                 border: Border.all(color: deviceFrameEdge, width: 1),
-                boxShadow: const [
-                  BoxShadow(color: Color(0x59FFFFFF), offset: Offset(0, 1)),
-                ],
+                boxShadow: paint.frameShadow,
               ),
             ),
           ),
@@ -182,7 +194,7 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
                       fontWeight: FontWeight.w500,
                       fontSize: g.wordmarkSize,
                       letterSpacing: 0.04 * g.wordmarkSize,
-                      color: finish.wordmark,
+                      color: paint.wordmark,
                       decoration: TextDecoration.none,
                       height: 1,
                     ),
@@ -196,7 +208,7 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
           top: g.wheelCentre.dy - extent / 2,
           width: extent,
           height: extent,
-          child: ClickWheel(diameter: g.wheelDiameter, finish: finish),
+          child: ClickWheel(diameter: g.wheelDiameter, paint: paint),
         ),
         if (iosSwipe)
           Positioned(
@@ -222,7 +234,7 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
       // A window under 1 pt (Android's first frame can be 0x0): only the
       // empty, correctly coloured body, no screen host or wheel.
       device = DecoratedBox(
-        decoration: BoxDecoration(gradient: finish.bodyGradient),
+        decoration: BoxDecoration(gradient: paint.bodyGradient),
       );
     } else {
       // The same tree for a phone and for a short or narrow window, so a
@@ -235,7 +247,7 @@ class _DeviceViewState extends ConsumerState<DeviceView> {
         children: [
           Positioned.fill(
             child: DecoratedBox(
-              decoration: BoxDecoration(gradient: finish.bodyGradient),
+              decoration: BoxDecoration(gradient: paint.bodyGradient),
             ),
           ),
           Positioned(

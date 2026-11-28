@@ -101,6 +101,7 @@ class _PanelOverlayState extends ConsumerState<PanelOverlay> {
     final mode = effectiveMode(
       choice,
       MediaQuery.platformBrightnessOf(context),
+      look: ref.watch(activeLookProvider),
     );
     final style = NeupodStyles.resolve(
       choice.family,

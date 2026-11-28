@@ -19,6 +19,7 @@ import 'package:neupod/domain/playback/queue_item.dart';
 import 'package:neupod/ui/components/status_bar.dart';
 import 'package:neupod/ui/device/device_options.dart';
 import 'package:neupod/ui/screens/shell/shell_state.dart';
+import 'package:neupod/domain/style/custom_look.dart';
 import 'package:neupod/ui/screens/shell/shell_style.dart';
 import 'package:neupod/ui/style/neupod_style.dart';
 
@@ -102,7 +103,7 @@ ProviderContainer gate2Container({
       .set(
         StyleChoice(
           family: family,
-          mode: dark ? StyleMode.dark : StyleMode.light,
+          mode: dark ? ModeSetting.dark : ModeSetting.light,
         ),
       );
   container.read(deviceViewOptionsProvider.notifier).set(options);

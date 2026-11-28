@@ -9,7 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/domain/wheel/wheel_events.dart';
 import 'package:neupod/domain/wheel/wheel_input.dart';
 import 'package:neupod/ui/device/device_feedback.dart';
-import 'package:neupod/ui/device/device_finish.dart';
+import 'package:neupod/ui/device/device_paint.dart';
 import 'package:neupod/ui/device/hit_gate.dart';
 import 'package:neupod/ui/device/wheel_bus.dart';
 import 'package:neupod/ui/device/wheel_painter.dart';
@@ -22,14 +22,14 @@ import 'package:neupod/ui/device/wheel_painter.dart';
 /// 6 % beyond its drawn edge) with the wheel of [diameter] drawn in the
 /// middle; touches outside 1.06 R pass through to what is behind it.
 class ClickWheel extends ConsumerStatefulWidget {
-  /// A wheel [diameter] points across, in [finish].
-  const ClickWheel({required this.diameter, required this.finish, super.key});
+  /// A wheel [diameter] points across, in [paint].
+  const ClickWheel({required this.diameter, required this.paint, super.key});
 
   /// D, the drawn diameter.
   final double diameter;
 
-  /// The body finish.
-  final DeviceFinish finish;
+  /// What to paint with.
+  final DevicePaint paint;
 
   /// The widget's side: the touch area, 1.06 D.
   static double extentFor(double diameter) => diameter * WheelZones.ringOuter;
@@ -215,7 +215,7 @@ class _ClickWheelState extends ConsumerState<ClickWheel> {
               child: CustomPaint(
                 size: Size.square(widget.diameter),
                 painter: WheelPainter(
-                  finish: widget.finish,
+                  devicePaint: widget.paint,
                   visual: _input.visual,
                   disabled: !enabled,
                 ),

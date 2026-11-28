@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
-// Android backups (owner decision 20): only filesDir/stats, the ratings and
-// play counts database, is backed up, by both rule sets (Auto Backup on
+// Android backups (owner decision 20): only filesDir/stats (the ratings and
+// play counts database) and filesDir/settings (the settings file) are backed up, by both rule sets (Auto Backup on
 // Android 11 and earlier, data extraction rules on 12 and later). The
 // library database is in noBackupFilesDir, never backed up. The on-device
 // half is integration_test/backup_paths_test.dart.
@@ -32,20 +32,29 @@ void main() {
     );
   });
 
-  test('Android 11 and earlier: only filesDir/stats', () {
+  test('Android 11 and earlier: filesDir/stats and filesDir/settings', () {
     final xml = File('$_res/backup_rules.xml').readAsStringSync();
     expect(xml, contains('<full-backup-content>'));
-    expect(_rules(xml), ['include file stats/']);
+    expect(_rules(xml), ['include file stats/', 'include file settings/']);
   });
 
-  test('Android 12 and later: only filesDir/stats, for cloud backup and '
-      'device transfer', () {
-    final xml = File('$_res/data_extraction_rules.xml').readAsStringSync();
-    String section(String name) =>
-        RegExp('<$name>(.*?)</$name>', dotAll: true).firstMatch(xml)![1]!;
-    expect(_rules(section('cloud-backup')), ['include file stats/']);
-    expect(_rules(section('device-transfer')), ['include file stats/']);
-  });
+  test(
+    'Android 12 and later: filesDir/stats and settings, for cloud backup and '
+    'device transfer',
+    () {
+      final xml = File('$_res/data_extraction_rules.xml').readAsStringSync();
+      String section(String name) =>
+          RegExp('<$name>(.*?)</$name>', dotAll: true).firstMatch(xml)![1]!;
+      expect(_rules(section('cloud-backup')), [
+        'include file stats/',
+        'include file settings/',
+      ]);
+      expect(_rules(section('device-transfer')), [
+        'include file stats/',
+        'include file settings/',
+      ]);
+    },
+  );
 
   test('the plugin puts the stats database where the rules include it, and '
       'the library where Android never backs up', () {

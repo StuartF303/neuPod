@@ -17,6 +17,7 @@ import 'package:neupod/ui/screens/browse/browse_common.dart';
 import 'package:neupod/ui/screens/browse/library_screen.dart';
 import 'package:neupod/ui/screens/browse/licences_screen.dart';
 import 'package:neupod/ui/screens/shell/neupod_list.dart';
+import 'package:neupod/domain/style/custom_look.dart';
 import 'package:neupod/ui/screens/shell/shell_frame.dart';
 import 'package:neupod/ui/screens/shell/shell_style.dart';
 import 'package:neupod/ui/style/neupod_style.dart';
@@ -58,17 +59,20 @@ class SettingsScreen extends ConsumerWidget {
                   height: h,
                   title: 'Mode',
                   value: switch (choice.mode) {
-                    null => 'Auto',
-                    StyleMode.light => 'Light',
-                    StyleMode.dark => 'Dark',
+                    ModeSetting.auto => 'Auto',
+                    ModeSetting.light => 'Light',
+                    ModeSetting.dark => 'Dark',
+                    ModeSetting.custom => 'Custom',
                   },
                   onActivate: () => notifier.set(
                     StyleChoice(
                       family: choice.family,
                       mode: switch (choice.mode) {
-                        null => StyleMode.light,
-                        StyleMode.light => StyleMode.dark,
-                        StyleMode.dark => null,
+                        ModeSetting.auto => ModeSetting.light,
+                        ModeSetting.light => ModeSetting.dark,
+                        // Custom joins the cycle with the Custom look rows.
+                        ModeSetting.dark ||
+                        ModeSetting.custom => ModeSetting.auto,
                       },
                     ),
                   ),
