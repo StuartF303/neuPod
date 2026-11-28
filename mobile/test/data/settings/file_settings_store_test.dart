@@ -19,6 +19,33 @@ void main() {
   });
   tearDown(() => root.deleteSync(recursive: true));
 
+  test('an I/O error on the read drops the change and leaves the file intact, '
+      'it does not read as empty and wipe the saved looks', () async {
+    await store.put('custom', {'looks': 'all of them'});
+    final file = File('$dir/settings.json');
+    final before = file.readAsStringSync();
+    // An unreadable file: the read throws a FileSystemException (EIO and a
+    // file locked by data protection are the same to the store).
+    Process.runSync('chmod', ['000', file.path]);
+    addTearDown(() => Process.runSync('chmod', ['644', file.path]));
+    var readFails = false;
+    try {
+      file.readAsBytesSync();
+    } on FileSystemException {
+      readFails = true;
+    }
+    if (!readFails) {
+      markTestSkipped('this user can read a mode 000 file (root)');
+      return;
+    }
+    await store.put('mode', 'dark'); // must not replace the file
+    Process.runSync('chmod', ['644', file.path]);
+    expect(file.readAsStringSync(), before);
+    expect(await store.read(), {
+      'custom': {'looks': 'all of them'},
+    });
+  });
+
   test('a missing file reads as empty', () async {
     expect(await store.read(), isEmpty);
   });

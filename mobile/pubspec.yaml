@@ -85,6 +85,11 @@ flutter:
     # Licence texts shown on the Licences screen (lib/ui/features/licences).
     - assets/fonts/OFL-Montserrat.txt
     - assets/icons/lucide/LICENSE-Lucide.txt
+    # Custom mode's board pictures, their blurred copies and boards.json
+    # (design 2026-11-25-app-custom-mode, section 6). The pictures are
+    # PLACEHOLDERS until the owner supplies real ones: tool/check_release_boards.dart
+    # fails a store build that still has one.
+    - assets/boards/
     # Generated test tones (copies of tests/assets/audio fixtures, about 57 KB)
     # for the player debug screen and the integration tests. To leave out of
     # store builds before release.

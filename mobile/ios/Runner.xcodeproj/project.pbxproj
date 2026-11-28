@@ -153,6 +153,7 @@
 			buildConfigurationList = 97C147051CF9000F007C117D /* Build configuration list for PBXNativeTarget "Runner" */;
 			buildPhases = (
 				9740EEB61CF901F6004384FC /* Run Script */,
+				4E5D0B6A2E0C1A00005B0A01 /* Check board pictures (store build) */,
 				97C146EA1CF9000F007C117D /* Sources */,
 				97C146EB1CF9000F007C117D /* Frameworks */,
 				97C146EC1CF9000F007C117D /* Resources */,
@@ -265,6 +266,21 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
+		};
+		4E5D0B6A2E0C1A00005B0A01 /* Check board pictures (store build) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Check board pictures (store build)";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Custom mode's board pictures are placeholders until the owner supplies real ones.\n# A Release build made with NEUPOD_STORE_BUILD=1 fails while any is (tool/check_release_boards.dart).\n# Debug and Profile, and Release without the variable (a local install), are not stopped.\nif [ \"$CONFIGURATION\" = \"Release\" ] && [ \"$NEUPOD_STORE_BUILD\" = \"1\" ]; then\n  cd \"$SRCROOT/..\" && \"$FLUTTER_ROOT/bin/dart\" run tool/check_release_boards.dart || exit 1\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

@@ -20,8 +20,8 @@ void main() {
     );
   });
 
-  test('main installs the haptics and volume overrides', () {
-    expect(devicePlatformOverrides(), hasLength(2));
+  test('main installs the haptics, volume and accessibility overrides', () {
+    expect(devicePlatformOverrides(), hasLength(3));
   });
 
   test('a volume step that did not land reaches the app as failed', () async {

@@ -10,10 +10,12 @@ is the reference for the layout (`test/ui/device/device_geometry_test.dart` comp
 | `device_geometry.dart` | Every position from W, the phone's width: fit A, minimum width, wheel shrink, wordmark rule |
 | `device_paint.dart` | `DevicePaint`: everything the painters read (gradients, edge, groove, ink, tints, status-bar ink, opacities and cap/badge/board flags). The one paint type |
 | `device_finish.dart` | Silver and black, the finish table's colours, as a `DevicePaint` (`finish.paint`) |
-| `custom_device_paint.dart` | `customDevicePaint(look)`: a custom look (and the Increase Contrast flag) to a `DevicePaint`, by the contrast rule in `domain/style/custom_paint.dart`. Solid parts only for now |
+| `custom_device_paint.dart` | `customDevicePaint(look, board:, reduceTransparency:, increaseContrast:)`: a custom look to a `DevicePaint`, by the contrast rule in `domain/style/custom_paint.dart`. See-through only when a `BoardInfo` is given (its frost pair is the wheel's ground) and neither flag is on; otherwise every part is solid |
+| `board_picture.dart` | The board pictures: `boardPictureProvider` (the sharp picture, decoded at the width it is drawn at) and `boardFrostProvider` (the blurred copy), both autoDispose and read only while a part is see-through; `boardPictureRect` (anchor (600, 2040) on the wheel's centre); `BoardPictureLayer`. The board data is `domain/style/board_list.dart` |
+| `device_accessibility.dart` | `systemReduceTransparencyProvider` (the system's Reduce Transparency, through `AccessibilityPort`), `accessibilityPortProvider` and `reduceTransparencyReason` |
 | `device_options.dart` | The switchable choices (direct touch, status bar, wordmark, progress-bar seek, iOS edge swipe, haptics, click sound) |
 | `click_wheel.dart` | The wheel widget (touch, haptics, the screen reader's adjustable element) and `WheelKeyboard` |
-| `wheel_painter.dart` | The wheel's drawing, five states |
+| `wheel_painter.dart` | The wheel's drawing, five states; with a see-through ring or centre the blurred board shows through (`frost`) |
 | `wheel_bus.dart` | `wheelBusProvider`: events out to the screen; semantics, `atRoot`, `enabled` and hold times in from it |
 | `screen_host.dart` | `DeviceScreenHost` (600x450, scaled by s) and `DeviceScreenScope` |
 | `device_feedback.dart`, `system_volume.dart` | Haptics, click-sound seam and system volume, behind providers that `app/` overrides with the `neupod_device` plugin |
@@ -72,5 +74,4 @@ drives the panel, not the wheel.
 - `edge_pulse.dart`: `edgePulseProvider` and `applyEdgePulse`. The part editor lights the edge of the part it just switched to (400 ms, up to full ink
   and back; never under Reduce Motion); `DeviceView` applies it to the paint (`DevicePaint.withEdges`).
 - `DeviceView` passes `MediaQuery.highContrastOf(context)` to `customDevicePaint(increaseContrast:)`: Increase Contrast paints a look solid at 7:1.
-- Reduce Transparency has no Flutter flag: `app/accessibility_providers.dart`'s `reduceTransparencyProvider` is the one place it is read (false until the
-  transparency step wires the platform flag in).
+- Reduce Transparency has no Flutter flag: `app/accessibility_providers.dart`'s `reduceTransparencyProvider` is the one place it is read (a plain `bool`, overridable in tests). It follows `systemReduceTransparencyProvider` (`device_accessibility.dart`), which reads the `neupod_device` plugin's `neupod_device/accessibility` channel through `AccessibilityPort`: iOS `UIAccessibility.isReduceTransparencyEnabled` and its change notification; Android has no such setting and reads false. Custom mode paints every part solid and decodes no board picture while it is true; the part editor greys the Transparency field.

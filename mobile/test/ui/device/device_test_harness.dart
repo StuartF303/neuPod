@@ -3,12 +3,16 @@
 // Shared set-up for the device view tests: phone sizes from the design
 // (render.py's PHONES), a manual clock, and a recording haptics port.
 
+import 'dart:ui' as ui;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:neupod/domain/style/board_list.dart';
 import 'package:neupod/domain/style/custom_look.dart';
 import 'package:neupod/domain/wheel/feedback_ports.dart';
+import 'package:neupod/ui/device/board_picture.dart';
 import 'package:neupod/ui/device/device_feedback.dart';
 import 'package:neupod/ui/device/device_view.dart';
 import 'package:neupod/ui/device/placeholder_screen.dart';
@@ -91,4 +95,53 @@ Future<ProviderContainer> pumpDevice(
   );
   await tester.pump();
   return container;
+}
+
+/// Board assets that are decoded up front, in real time, so that the device
+/// view's providers resolve inside the test's fake clock; they count what the
+/// app asked to decode. Each decode hands out a clone, so a provider disposing
+/// its image does not spoil the next test.
+class PreloadedBoardAssets extends BoardAssets {
+  PreloadedBoardAssets._(this._images);
+
+  final Map<String, ui.Image> _images;
+
+  /// Every path the app asked to decode, in order.
+  final List<String> decoded = [];
+
+  /// The target width each decode asked for, by path.
+  final Map<String, int?> widths = {};
+
+  /// Reads boards.json and decodes every picture, outside the fake clock.
+  static Future<PreloadedBoardAssets> load(WidgetTester tester) async {
+    const real = BoardAssets();
+    final images = <String, ui.Image>{};
+    await tester.runAsync(() async {
+      for (final b in boardList) {
+        for (final path in [b.picturePath, b.frostPath]) {
+          images[path] = await real.decode(path);
+        }
+      }
+    });
+    addTearDown(() {
+      for (final i in images.values) {
+        i.dispose();
+      }
+    });
+    return PreloadedBoardAssets._(images);
+  }
+
+  @override
+  Future<ui.Image> decode(String path, {int? targetWidth}) async {
+    decoded.add(path);
+    widths[path] = targetWidth;
+    return _images[path]!.clone();
+  }
+}
+
+/// Pumps the frames in which the board providers resolve.
+Future<void> settleBoards(WidgetTester tester) async {
+  for (var i = 0; i < 4; i++) {
+    await tester.pump();
+  }
 }

@@ -17,6 +17,10 @@ on:
         description: "Also run the scale test (mobile/test/scale) at this many tracks, e.g. 20000, and upload its numbers; empty runs only the 2,000-track one of every PR"
         type: string
         default: ""
+      release_check:
+        description: "Also run the release check: fails while a Custom mode board picture is still a placeholder (run before a store build)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -109,6 +113,12 @@ jobs:
       - run: flutter analyze
       # Includes the scale test at 2,000 tracks (test/scale, docs/app/decisions/0013-scale-test.md).
       - run: flutter test
+      # Custom mode's board pictures are placeholders until the owner supplies real ones; a store build must not
+      # carry one. Off by default, so every PR stays green; the owner runs it (or `dart run
+      # tool/check_release_boards.dart`) before submitting.
+      - name: Release check, no placeholder board picture
+        if: github.event_name == 'workflow_dispatch' && inputs.release_check
+        run: dart run tool/check_release_boards.dart
       - name: Scale test at the requested size
         if: github.event_name == 'workflow_dispatch' && inputs.scale_tracks != ''
         env:

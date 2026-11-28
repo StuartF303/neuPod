@@ -27,12 +27,12 @@ Every item means: unit and golden tests pass, `flutter analyze` is clean, and no
 
 ## 4. Transparency and the board
 
-- [ ] Board assets, `boards.json`, `build_board` tool (frost copy, `frostDark`, `frostLight`), placeholders in
-- [ ] The nine layers; cap; wordmark badge; frost under the wheel and the centre
-- [ ] Anchor on the wheel's centre at 375x667, 393x852 and 440x956
-- [ ] No picture decoded when every part is solid
-- [ ] Asset test on the frost pair
-- [ ] Goldens: Sea glass, Clear case at three sizes, see-through wheel states
+- [x] Board assets, `boards.json`, `build_board` tool (frost copy, `frostDark`, `frostLight`), placeholders in (#178, 2026-11-28)
+- [x] The nine layers; cap; wordmark badge; frost under the wheel and the centre (#178, 2026-11-28)
+- [x] Anchor on the wheel's centre at 375x667, 393x852 and 440x956 (#178, 2026-11-28)
+- [x] No picture decoded when every part is solid (#178, 2026-11-28)
+- [x] Asset test on the frost pair (#178, 2026-11-28)
+- [x] Goldens: Sea glass, Clear case at three sizes, see-through wheel states (#178, 2026-11-28)
 
 ## 5. The mode setting
 
@@ -65,15 +65,15 @@ Every item means: unit and golden tests pass, `flutter analyze` is clean, and no
 
 ## 8. Accessibility
 
-- [ ] Reduce Transparency: solid, no picture loaded, Transparency field greyed with its reason
+- [x] Reduce Transparency: solid, no picture loaded, Transparency field greyed with its reason (#177, #178, 2026-11-28)
 - [x] Increase Contrast: solid, 7:1, edges at 60 % (#177, 2026-11-28)
 - [x] Reduce Motion: no pulse, no fade (#177, 2026-11-28)
-- [ ] Goldens for both settings
+- [x] Goldens for both settings (#177, #178, 2026-11-28)
 
 ## 9. Finish
 
 - [ ] Real board pictures. BLOCKED: the owner's to supply (README Open question 2)
-- [ ] Release check: no placeholder board in a store build
+- [x] Release check: no placeholder board in a store build: `tool/check_release_boards.dart`, run by an iOS Release Run Script phase and by Gradle's `preReleaseBuild` when `NEUPOD_STORE_BUILD=1` is set (#178, 2026-11-28)
 - [ ] Device check on the iPhone and the Pixel, recorded with the date
 - [ ] `docs/app/README.md`, `docs/app/PROGRESS.md`, `mobile/lib/ui/device/README.md`, `CHANGELOG.md`
 - [ ] This folder's README updated where the build differs, with the reason
@@ -81,12 +81,12 @@ Every item means: unit and golden tests pass, `flutter analyze` is clean, and no
 ## Notes
 
 - 2026-11-25: Design written. Board pictures are placeholders made by `render.py`; `boards/` is empty.
+- 2026-11-28 (stage 2, #178): Board pictures are the render.py placeholders, `"placeholder": true` in `boards.json`; `dart run tool/check_release_boards.dart` fails while any board has the flag. It runs by itself in a store build: an iOS Release Run Script phase and Gradle's `preReleaseBuild` call it when `NEUPOD_STORE_BUILD=1` is in the environment, so the owner's own local release installs (no variable) are not stopped; the app workflow also has a `release_check` input. Build a store build with `NEUPOD_STORE_BUILD=1 flutter build ipa` or `appbundle`. Reduce Transparency is read through a hand-written method channel `neupod_device/accessibility` (iOS `UIAccessibility`; Android has no such setting and answers false, so Custom mode keeps its transparency there). Increase Contrast comes from `MediaQuery.highContrast`; its item and golden are still open. The frost pair is measured from the saved frost copy by `tool/build_board.dart`; the white-wheel asset test treats black to white as the worst pair (it keeps exactly 50 %). The wordmark badge uses line height 1.2 as in render.py.
 - 2026-11-28 (#177): Section 8's Reduce Transparency and its golden are stage 2's. The Increase Contrast golden
-  (`device_393x852_custom_seaglass_increase_contrast`) is in; the Reduce Transparency one waits for the transparency step.
-  Flutter has no Reduce Transparency flag: `reduceTransparencyProvider` (`app/accessibility_providers.dart`) reads false
-  until stage 2 wires the platform flag in; the editor already greys the Transparency field from it.
+  (`device_393x852_custom_seaglass_increase_contrast`) is in; the Reduce Transparency one (`device_393x852_custom_clear_reduce_transparency`) is #178's.
+  Flutter has no Reduce Transparency flag: `reduceTransparencyProvider` (`app/accessibility_providers.dart`) now follows
+  the platform read (#178); the editor greys the Transparency field from it.
 - 2026-11-28 (#177): Harbour's saturation 62 and the wheel's brightness 94 are between two 4 % detents, so the wheel alone
   reaches the nearest detent (60 or 64, 92 or 96); the widget test asserts hue and brightness exact and saturation within 2.
   A value off the grid first lands on the grid (a detent), so 218 degrees reaches 205 in three detents.
-- 2026-11-28 (#177): `domain/style/board_list.dart` is a minimal board list (names, ground and frost colours from the design's
-  placeholders); stage 2 replaces it with `boards.json`. The board picker's pane is a plain tile until there are pictures.
+- 2026-11-28 (#177): `domain/style/board_list.dart` is now generated from `boards.json` by `tool/build_board.dart` (#178). The board picker's pane is a plain tile until there are pictures.

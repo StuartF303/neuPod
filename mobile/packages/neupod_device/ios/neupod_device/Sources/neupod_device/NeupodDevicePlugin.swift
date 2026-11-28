@@ -38,11 +38,40 @@ public class NeupodDevicePlugin: NSObject, FlutterPlugin, DeviceApi {
   public static func register(with registrar: FlutterPluginRegistrar) {
     let instance = NeupodDevicePlugin()
     DeviceApiSetup.setUp(binaryMessenger: registrar.messenger(), api: instance)
+    // Reduce Transparency: Flutter does not expose it, so read it here (a plain method channel;
+    // Custom mode paints every part solid while it is on).
+    let channel = FlutterMethodChannel(
+      name: "neupod_device/accessibility", binaryMessenger: registrar.messenger())
+    instance.accessibilityChannel = channel
+    channel.setMethodCallHandler { call, result in
+      if call.method == "reduceTransparency" {
+        result(UIAccessibility.isReduceTransparencyEnabled)
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    NotificationCenter.default.addObserver(
+      instance, selector: #selector(reduceTransparencyChanged),
+      name: UIAccessibility.reduceTransparencyStatusDidChangeNotification, object: nil)
     // Put the hidden volume view in place as soon as there is a window, well before the first
     // step: a freshly added MPVolumeView needs a moment before its slider works.
     NotificationCenter.default.addObserver(
       instance, selector: #selector(sceneActive),
       name: UIScene.didActivateNotification, object: nil)
+  }
+
+  public func detachFromEngine(for registrar: FlutterPluginRegistrar) {
+    NotificationCenter.default.removeObserver(self)
+    accessibilityChannel?.setMethodCallHandler(nil)
+    accessibilityChannel = nil
+    DeviceApiSetup.setUp(binaryMessenger: registrar.messenger(), api: nil)
+  }
+
+  private var accessibilityChannel: FlutterMethodChannel?
+
+  @objc private func reduceTransparencyChanged() {
+    accessibilityChannel?.invokeMethod(
+      "reduceTransparencyChanged", arguments: UIAccessibility.isReduceTransparencyEnabled)
   }
 
   @objc private func sceneActive() {

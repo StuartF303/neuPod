@@ -5,8 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/app/custom_look_actions.dart';
 import 'package:neupod/app/custom_looks_provider.dart';
 import 'package:neupod/app/device_platform.dart';
+import 'package:neupod/app/launch_wait.dart';
 import 'package:neupod/app/neupod_app.dart';
 import 'package:neupod/app/scan_service_platform.dart';
+import 'package:neupod/ui/device/device_accessibility.dart';
 import 'package:neupod/ui/screens/shell/shell_style.dart';
 
 Future<void> main() async {
@@ -25,13 +27,15 @@ Future<void> main() async {
   // The saved mode and looks are read before the first frame, so the device
   // is never painted in Auto or Harbour and then repainted. A small file; the
   // stores never throw.
-  await Future.wait([
+  // The platform's Reduce Transparency joins them, so a see-through look is
+  // not painted solid for a frame. Bounded (launch_wait.dart): a stalled read
+  // opens in the defaults and the notifiers apply the value when it arrives.
+  await awaitLaunchReads([
     container.read(styleChoiceProvider.notifier).loaded,
     container.read(customLooksProvider.notifier).loaded,
     container.read(lookSequenceProvider.notifier).loaded,
-  ]).timeout(const Duration(seconds: 1), onTimeout: () => const []);
-  // A stalled read opens in the defaults; the notifiers apply the stored
-  // values when they arrive, and never over a change made meanwhile.
+    container.read(systemReduceTransparencyProvider.notifier).loaded,
+  ]);
   runApp(
     UncontrolledProviderScope(container: container, child: const NeuPodApp()),
   );
