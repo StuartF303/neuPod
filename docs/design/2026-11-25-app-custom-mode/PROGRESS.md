@@ -27,12 +27,12 @@ Every item means: unit and golden tests pass, `flutter analyze` is clean, and no
 
 ## 4. Transparency and the board
 
-- [ ] Board assets, `boards.json`, `build_board` tool (frost copy, `frostDark`, `frostLight`), placeholders in
-- [ ] The nine layers; cap; wordmark badge; frost under the wheel and the centre
-- [ ] Anchor on the wheel's centre at 375x667, 393x852 and 440x956
-- [ ] No picture decoded when every part is solid
-- [ ] Asset test on the frost pair
-- [ ] Goldens: Sea glass, Clear case at three sizes, see-through wheel states
+- [x] Board assets, `boards.json`, `build_board` tool (frost copy, `frostDark`, `frostLight`), placeholders in (#178, 2026-11-28)
+- [x] The nine layers; cap; wordmark badge; frost under the wheel and the centre (#178, 2026-11-28)
+- [x] Anchor on the wheel's centre at 375x667, 393x852 and 440x956 (#178, 2026-11-28)
+- [x] No picture decoded when every part is solid (#178, 2026-11-28)
+- [x] Asset test on the frost pair (#178, 2026-11-28)
+- [x] Goldens: Sea glass, Clear case at three sizes, see-through wheel states (#178, 2026-11-28)
 
 ## 5. The mode setting
 
@@ -65,7 +65,7 @@ Every item means: unit and golden tests pass, `flutter analyze` is clean, and no
 
 ## 8. Accessibility
 
-- [ ] Reduce Transparency: solid, no picture loaded, Transparency field greyed with its reason
+- [x] Reduce Transparency: solid, no picture loaded, Transparency field greyed with its reason: solid and no picture are done; the greyed field is the editor's, stage 3, which reads `reduceTransparencyProvider` and `reduceTransparencyReason` (#178, 2026-11-28)
 - [ ] Increase Contrast: solid, 7:1, edges at 60 %
 - [ ] Reduce Motion: no pulse, no fade
 - [ ] Goldens for both settings
@@ -73,7 +73,7 @@ Every item means: unit and golden tests pass, `flutter analyze` is clean, and no
 ## 9. Finish
 
 - [ ] Real board pictures. BLOCKED: the owner's to supply (README Open question 2)
-- [ ] Release check: no placeholder board in a store build
+- [x] Release check: no placeholder board in a store build (#178, 2026-11-28)
 - [ ] Device check on the iPhone and the Pixel, recorded with the date
 - [ ] `docs/app/README.md`, `docs/app/PROGRESS.md`, `mobile/lib/ui/device/README.md`, `CHANGELOG.md`
 - [ ] This folder's README updated where the build differs, with the reason
@@ -81,3 +81,4 @@ Every item means: unit and golden tests pass, `flutter analyze` is clean, and no
 ## Notes
 
 - 2026-11-25: Design written. Board pictures are placeholders made by `render.py`; `boards/` is empty.
+- 2026-11-28 (stage 2, #178): Board pictures are the render.py placeholders, `"placeholder": true` in `boards.json`; `dart run tool/check_release_boards.dart` (and the app workflow's `release_check` input) fail while any board has the flag. Reduce Transparency is read through a hand-written method channel `neupod_device/accessibility` (iOS `UIAccessibility`; Android has no such setting and answers false, so Custom mode keeps its transparency there). Increase Contrast comes from `MediaQuery.highContrast`; its item and golden are still open. The frost pair is measured from the saved frost copy by `tool/build_board.dart`; the white-wheel asset test treats black to white as the worst pair (it keeps exactly 50 %). The wordmark badge uses line height 1.2 as in render.py.
