@@ -456,6 +456,13 @@ board and the accessibility settings each time, so a changed rule or a new board
 
 For the owner. Nothing here is settled by the drawings.
 
+**Settled 28 November 2026 (owner): every question goes with what was drawn meanwhile.** In short: the Custom look
+row is always shown; three board pictures, placeholders until the owner supplies real ones (question 2 stays open for
+the pictures themselves, and no store build ships a placeholder); the starter colours of section 7; six looks; the
+lists move with the wheel at the largest tiers; Settings keeps seven rows for now; 85 % and 60 % most transparency;
+the wordmark badge; Android's status bar accepted; Modern's accent left alone; the phone app only (the device never
+needs the look).
+
 | # | Question | What was drawn meanwhile |
 | --- | --- | --- |
 | 1 | **The Custom look row.** Always shown under Mode (recommended), or only while Mode is Custom | Always shown |

@@ -202,34 +202,39 @@ void main() {
       }
     }
 
-    test('every colour reaches 4.5:1, solid and see-through', () {
-      for (final p in grid()) {
-        for (final part in LookPart.values) {
-          final r = paintPart(p, part);
+    test(
+      'every colour reaches 4.5:1, solid, and the wheel at 60% over each frost',
+      () {
+        for (final p in grid()) {
+          for (final part in LookPart.values) {
+            final r = paintPart(p, part);
+            expect(
+              r.worst,
+              greaterThanOrEqualTo(contrastTarget),
+              reason: '$part $p',
+            );
+          }
+        }
+        for (final p in grid(60)) {
+          for (final frost in _frost.values) {
+            final r = paintPart(p, LookPart.wheel, grounds: frost);
+            expect(
+              r.worst,
+              greaterThanOrEqualTo(contrastTarget),
+              reason: 'wheel $p $frost',
+            );
+          }
+          // The body passes no grounds (the rule measures the body's own
+          // colours only), so this is not a see-through measurement.
+          final b = paintPart(p.copyWith(transparency: 85), LookPart.body);
           expect(
-            r.worst,
+            b.worst,
             greaterThanOrEqualTo(contrastTarget),
-            reason: '$part $p',
+            reason: 'body $p',
           );
         }
-      }
-      for (final p in grid(60)) {
-        for (final frost in _frost.values) {
-          final r = paintPart(p, LookPart.wheel, grounds: frost);
-          expect(
-            r.worst,
-            greaterThanOrEqualTo(contrastTarget),
-            reason: 'wheel $p $frost',
-          );
-        }
-        final b = paintPart(p.copyWith(transparency: 85), LookPart.body);
-        expect(
-          b.worst,
-          greaterThanOrEqualTo(contrastTarget),
-          reason: 'body $p',
-        );
-      }
-    });
+      },
+    );
 
     test('Increase Contrast reaches 7:1 for every colour', () {
       for (final p in grid()) {
