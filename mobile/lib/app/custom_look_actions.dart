@@ -17,8 +17,6 @@ const String lookSequenceKey = 'customLookSeq';
 /// The highest look id number ever made (`look-7` is 7). The starters are 1
 /// to 3.
 class LookSequenceNotifier extends Notifier<int> {
-  bool _changed = false;
-
   /// Completes when the stored number has been read.
   Future<void> loaded = Future<void>.value();
 
@@ -32,15 +30,18 @@ class LookSequenceNotifier extends Notifier<int> {
     try {
       final stored = await ref.read(settingsStoreProvider).read();
       final v = stored[lookSequenceKey];
-      if (v is int && !_changed && ref.mounted) state = v;
+      // Never lower: a number taken before this finished stays taken.
+      if (v is int && ref.mounted && v > state) state = v;
     } on Object catch (e) {
       debugPrint('neupod: look sequence not loaded: $e');
     }
   }
 
   /// Takes the next number, above every one made and every id in [looks].
-  int take(Iterable<CustomLook> looks) {
-    _changed = true;
+  /// Waits for the stored number first, so it is right however early it is
+  /// asked.
+  Future<int> take(Iterable<CustomLook> looks) async {
+    await loaded;
     final n = nextLookIdNumber(state, looks);
     state = n;
     unawaited(ref.read(settingsStoreProvider).put(lookSequenceKey, n));
@@ -94,7 +95,7 @@ class CustomLookActions {
 
   /// A new look: a copy of the look in use (the default finish when there is
   /// none), named `Look n`, in use, Mode Custom. Null when six are saved.
-  CustomLook? newLook({required bool phoneIsLight}) {
+  Future<CustomLook?> newLook({required bool phoneIsLight}) async {
     final now = looks;
     if (now.full) return null;
     final from = now.inUse;
@@ -110,8 +111,9 @@ class CustomLookActions {
             centre: d.centre,
           );
         }();
-    final n = ref.read(lookSequenceProvider.notifier).take(now.looks);
-    final made = base.copyWith(id: 'look-$n', name: nextLookName(now.looks));
+    final n = await ref.read(lookSequenceProvider.notifier).take(now.looks);
+    if (looks.full) return null; // another New look got in while waiting
+    final made = base.copyWith(id: 'look-$n', name: nextLookName(looks.looks));
     _notifier.update((l) => l.added(made));
     open(made.id);
     return made;

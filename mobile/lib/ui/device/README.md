@@ -75,4 +75,3 @@ drives the panel, not the wheel.
   and back; never under Reduce Motion); `DeviceView` applies it to the paint (`DevicePaint.withEdges`).
 - `DeviceView` passes `MediaQuery.highContrastOf(context)` to `customDevicePaint(increaseContrast:)`: Increase Contrast paints a look solid at 7:1.
 - Reduce Transparency has no Flutter flag: `app/accessibility_providers.dart`'s `reduceTransparencyProvider` is the one place it is read (a plain `bool`, overridable in tests). It follows `systemReduceTransparencyProvider` (`device_accessibility.dart`), which reads the `neupod_device` plugin's `neupod_device/accessibility` channel through `AccessibilityPort`: iOS `UIAccessibility.isReduceTransparencyEnabled` and its change notification; Android has no such setting and reads false. Custom mode paints every part solid and decodes no board picture while it is true; the part editor greys the Transparency field.
-  transparency step wires the platform flag in).

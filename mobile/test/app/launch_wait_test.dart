@@ -45,6 +45,7 @@ void main() {
     for (final read in [
       'styleChoiceProvider.notifier).loaded',
       'customLooksProvider.notifier).loaded',
+      'lookSequenceProvider.notifier).loaded',
       'systemReduceTransparencyProvider.notifier).loaded',
     ]) {
       expect(code, contains(read));

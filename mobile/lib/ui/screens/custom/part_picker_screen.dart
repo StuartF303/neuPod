@@ -90,11 +90,13 @@ class _PartPickerScreenState extends ConsumerState<PartPickerScreen>
   bool _atEnd = false;
   late final EdgePulseNotifier _pulse;
   late final AnimationController _anim;
+  late final CustomLooksNotifier _looks;
 
   @override
   void initState() {
     super.initState();
     _pulse = ref.read(edgePulseProvider.notifier);
+    _looks = ref.read(customLooksProvider.notifier);
     _anim = AnimationController(vsync: this, duration: edgePulseDuration)
       ..addListener(_tick);
   }
@@ -115,7 +117,18 @@ class _PartPickerScreenState extends ConsumerState<PartPickerScreen>
   }
 
   @override
+  void becameTop() {
+    // Opening on a part says which one it is, as changing part does.
+    if (_opened) return;
+    _opened = true;
+    if (!MediaQuery.disableAnimationsOf(context)) _anim.forward(from: 0);
+  }
+
+  bool _opened = false;
+
+  @override
   void leftTop() {
+    _looks.flush(); // the latest change is on disk once the editor is left
     // Never leave an edge lit behind.
     if (_anim.isAnimating) _anim.stop();
     final pulse = _pulse;

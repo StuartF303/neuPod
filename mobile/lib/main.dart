@@ -2,6 +2,7 @@
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neupod/app/custom_look_actions.dart';
 import 'package:neupod/app/custom_looks_provider.dart';
 import 'package:neupod/app/device_platform.dart';
 import 'package:neupod/app/launch_wait.dart';
@@ -32,6 +33,7 @@ Future<void> main() async {
   await awaitLaunchReads([
     container.read(styleChoiceProvider.notifier).loaded,
     container.read(customLooksProvider.notifier).loaded,
+    container.read(lookSequenceProvider.notifier).loaded,
     container.read(systemReduceTransparencyProvider.notifier).loaded,
   ]);
   runApp(

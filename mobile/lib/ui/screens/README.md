@@ -110,4 +110,4 @@ live preview. Design: `docs/design/2026-11-25-app-custom-mode/`.
 
 No scroll bar is drawn on these screens (`NeupodList(showScrollBar: false)`); at the Large and Largest tiers the rows move with the wheel. Looks are
 saved on every change through `app/custom_look_actions.dart` (`customLookActionsProvider`; the highest look id ever made is kept in the settings
-file, so an id is never reused). The boards list is `domain/style/board_list.dart`, generated from `assets/boards/boards.json` by `tool/build_board.dart` (a test fails when they differ).
+file, so an id is never reused). The boards list is `domain/style/board_list.dart`, a minimal list the transparency step replaces with `boards.json`.

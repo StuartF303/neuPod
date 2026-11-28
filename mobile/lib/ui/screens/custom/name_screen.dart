@@ -16,7 +16,6 @@
 /// An empty name is not accepted.
 library;
 
-import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neupod/app/custom_look_actions.dart';
@@ -55,8 +54,7 @@ class _NameScreenState extends ConsumerState<NameScreen>
     initial: ref.read(customLooksProvider).byId(widget.lookId)?.name ?? '',
     maxChars: maxLookNameLength,
   );
-  Map<WheelButton, int> _savedHolds = const {};
-  Map<WheelButton, int> _ownHolds = const {};
+  int? _savedMenuHold;
   bool _claimed = false;
 
   List<String> get _ring {
@@ -74,20 +72,21 @@ class _NameScreenState extends ConsumerState<NameScreen>
   void becameTop() {
     if (_claimed) return;
     _claimed = true;
-    _savedHolds = Map.of(wheelBus.holdMs);
+    _savedMenuHold = wheelBus.holdMs[WheelButton.menu];
     // Menu held 600 ms clears the field (`CLEAR_HOLD_MS`).
     wheelBus.holdMs[WheelButton.menu] = entry.kClearHoldTime.inMilliseconds;
-    _ownHolds = Map.of(wheelBus.holdMs);
   }
 
   @override
   void leftTop() {
     if (!_claimed) return;
     _claimed = false;
-    if (mapEquals(wheelBus.holdMs, _ownHolds)) {
-      wheelBus.holdMs
-        ..clear()
-        ..addAll(_savedHolds);
+    // Always put back what was there, whoever else has set it since.
+    final saved = _savedMenuHold;
+    if (saved == null) {
+      wheelBus.holdMs.remove(WheelButton.menu);
+    } else {
+      wheelBus.holdMs[WheelButton.menu] = saved;
     }
   }
 
