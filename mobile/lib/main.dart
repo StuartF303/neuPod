@@ -27,7 +27,9 @@ Future<void> main() async {
   await Future.wait([
     container.read(styleChoiceProvider.notifier).loaded,
     container.read(customLooksProvider.notifier).loaded,
-  ]);
+  ]).timeout(const Duration(seconds: 1), onTimeout: () => const []);
+  // A stalled read opens in the defaults; the notifiers apply the stored
+  // values when they arrive, and never over a change made meanwhile.
   runApp(
     UncontrolledProviderScope(container: container, child: const NeuPodApp()),
   );
