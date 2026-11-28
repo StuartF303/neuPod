@@ -25,7 +25,7 @@ void main() {
   testWidgets('the app launches on a device as the device view', (
     tester,
   ) async {
-    app.main();
+    await app.main();
     await tester.pumpAndSettle();
 
     // Home inside the device view (the title and the wordmark both read

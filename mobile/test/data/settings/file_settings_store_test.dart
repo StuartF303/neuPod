@@ -79,6 +79,15 @@ void main() {
     },
   );
 
+  test('invalid UTF-8 reads as empty and the next write replaces it', () async {
+    Directory(dir).createSync(recursive: true);
+    File('$dir/settings.json')
+        .writeAsBytesSync([0x7b, 0x22, 0xe9, 0x22, 0x3a, 0x31, 0x7d]);
+    expect(await store.read(), isEmpty);
+    await store.put('mode', 'dark');
+    expect(await store.read(), {'mode': 'dark'});
+  });
+
   test('JSON that is not an object reads as empty', () async {
     Directory(dir).createSync(recursive: true);
     File('$dir/settings.json').writeAsStringSync('[1, 2, 3]');

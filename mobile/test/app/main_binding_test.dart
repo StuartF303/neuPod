@@ -18,7 +18,7 @@ void main() {
         .map((line) => line.replaceFirst(RegExp(r'//.*'), ''))
         .join('\n');
 
-    final start = code.indexOf('void main()');
+    final start = code.indexOf('Future<void> main()');
     expect(start, isNonNegative, reason: 'lib/main.dart has no main()');
     final body = code.substring(code.indexOf('{', start) + 1).trimLeft();
 

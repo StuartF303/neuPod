@@ -130,6 +130,14 @@ void main() {
       expect(look.name.length, 16);
     });
 
+    test('truncates a name by characters, not UTF-16 units', () {
+      final look = CustomLook.tryFromJson({
+        'id': 'a',
+        'name': '${'a' * 15}\u{1F600}\u{1F600}',
+      }, fallbackId: 'z')!;
+      expect(look.name, '${'a' * 15}\u{1F600}');
+    });
+
     test('drops a seventh look and beyond, and repeated ids', () {
       Map<String, Object?> one(String id) => {'id': id, 'name': id};
       final looks = CustomLooks.tryFromJson({

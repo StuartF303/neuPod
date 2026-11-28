@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
-// Android backups (owner decision 20): only filesDir/stats (the ratings and
-// play counts database) and filesDir/settings (the settings file) are backed up, by both rule sets (Auto Backup on
+// Android backups (owner decision 20): filesDir/stats (the ratings and play
+// counts database) and filesDir/settings (the settings file) are the only paths
+// backed up, by both rule sets (Auto Backup on
 // Android 11 and earlier, data extraction rules on 12 and later). The
 // library database is in noBackupFilesDir, never backed up. The on-device
 // half is integration_test/backup_paths_test.dart.
