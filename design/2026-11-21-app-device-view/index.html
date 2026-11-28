@@ -1,0 +1,2918 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/design/2026-11-21-app-device-view/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
+    
+    
+      
+        <title>App device view, 21 November 2026 - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#app-device-view-21-november-2026" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              App device view, 21 November 2026
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../constitution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Constitution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../bluetooth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wifi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../touch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Touch input (600x450 boards)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../y2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Innioasis Y2 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../esp32s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-S3 platform (dev board)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../rp2350-amoled241/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Waveshare RP2350 AMOLED dev board
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../i2c-peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../teardown/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Donor teardown (photos, findings)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0017-music-library-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0018-ui-resolution-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0018 UI resolution profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0019-bluetooth-audio-sink-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0019 Bluetooth audio boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0020-hold/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0020 Hold
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0021-power-sleep/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0021 Power and sleep
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0022-one-player-ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0022 One player UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0023-headphone-jack-reuse/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0023 Headphone jack reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#recommendations-at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommendations at a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-device-geometry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Device geometry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-fitting-the-phone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Fitting the phone
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-body-finishes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Body finishes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-the-click-wheel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. The click wheel
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. The click wheel">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#hit-zones" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hit zones
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-wheel-behaviour-in-numbers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Wheel behaviour, in numbers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-direct-touch-on-the-screen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Direct touch on the screen
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-screens-in-the-device" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Screens in the device
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-largest-text-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Largest text size
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-accessibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Accessibility
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-the-phones-status-bar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. The phone's status bar
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="app-device-view-21-november-2026">App device view, 21 November 2026<a class="headerlink" href="#app-device-view-21-november-2026" title="Permanent link">&para;</a></h1>
+<p>The layout framework for the phone app: how the neuPod's 4:3 screen and click wheel sit on a phone, and how the wheel
+behaves, in numbers. It answers the <a href="https://github.com/StuartF303/neuPod/blob/docs/app-phase0/docs/app/DESIGN-REQUEST-device-view.md">design request</a>
+and follows the owner's decision that <strong>the app is the device</strong> (app specification, owner decisions 9 to 11).</p>
+<p><strong>Owner decision, 22 November 2026: Search is typed with the wheel</strong>, as text is on the device, not with the phone's
+keyboard. This overrides the design request and the app specification, which both say Search opens the keyboard.</p>
+<p>This folder holds:</p>
+<ul>
+<li>this README: decisions, rules and exact values;</li>
+<li><code>mockups/</code>: 43 drawings as PNG and as the standalone HTML they were rendered from;</li>
+<li><code>render.py</code>: the generator. Every position in the mock-ups is computed from the ratios below, so it doubles as a
+  reference implementation of the layout.</li>
+</ul>
+<p>The screens inside the device are the <a href="../2026-11-21-ui-styles/">UI styles design</a>, unchanged. Nothing here
+redesigns a screen; it only places them. The mock-ups are design intent drawn in HTML, not app output. A blue circle
+marks a finger and is not part of the UI. Album art squares are placeholders.</p>
+<p><strong>Drawn fresh.</strong> The body, the wheel and the glyphs are this project's own geometry and rendering. No Apple logo, no
+"iPod", nothing traced from Apple's products. The proportions below are deliberately our own (a wider screen and a
+thinner frame than the donor shell), chosen for legibility on a phone. Type is Montserrat (SIL OFL); the previous and
+next glyphs are Lucide's <code>skip-back</code> and <code>skip-forward</code> shapes (ISC); the play/pause glyph and the wordmark are drawn
+for this design.</p>
+<h2 id="recommendations-at-a-glance">Recommendations at a glance<a class="headerlink" href="#recommendations-at-a-glance" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Question</th>
+<th>Recommendation</th>
+<th>Alternative drawn</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>How the device fits the phone</td>
+<td><strong>A: the body fills the phone</strong>, edge to edge</td>
+<td>B: the body at fixed proportions on a dark surround</td>
+</tr>
+<tr>
+<td>Body finish</td>
+<td><strong>Follows the mode</strong>: silver in Light, black in Dark, with a setting to pin one</td>
+<td>Either finish with either style</td>
+</tr>
+<tr>
+<td>Touching the screen</td>
+<td><strong>Wheel plus taps and drags on the screen</strong></td>
+<td>Wheel only</td>
+</tr>
+<tr>
+<td>The phone's status bar</td>
+<td><strong>Shown, above the device</strong></td>
+<td>Hidden</td>
+</tr>
+<tr>
+<td>Large text</td>
+<td><strong>Fewer, larger rows</strong>: 7, 6 or 5</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>The owner chooses between the candidates at the app's design gate, on real screens.</p>
+<h2 id="1-device-geometry">1. Device geometry<a class="headerlink" href="#1-device-geometry" title="Permanent link">&para;</a></h2>
+<p><img alt="Geometry" src="mockups/geometry.png" /></p>
+<p>Everything is a ratio of <strong>W, the phone's width in points</strong>. The app lays the device out from these at any size.</p>
+<table>
+<thead>
+<tr>
+<th>Part</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Screen</td>
+<td>0.88 W wide, 0.66 W high (4:3), centred horizontally</td>
+</tr>
+<tr>
+<td>Screen frame (black glass)</td>
+<td>0.012 W on every side of the screen; outer corner radius 0.02 W; screen corner radius 0.008 W</td>
+</tr>
+<tr>
+<td>Side margin, body edge to screen</td>
+<td>0.06 W (frame included)</td>
+</tr>
+<tr>
+<td>Wheel diameter D</td>
+<td>0.64 W, centred horizontally</td>
+</tr>
+<tr>
+<td>Centre button</td>
+<td>0.36 D across; a groove 0.04 R wide round it (R = D / 2)</td>
+</tr>
+<tr>
+<td>Button glyphs</td>
+<td>on a circle of radius 0.70 R: <code>MENU</code> at the top, next at the right, play/pause at the bottom, previous at the left</td>
+</tr>
+<tr>
+<td>Wordmark</td>
+<td><code>neuPod</code>, 0.036 W high, centred between the frame and the wheel; omitted when that gap is under 44 pt</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Scale.</strong> The screens are designed at 600x450. The app lays them out at 600x450 and scales the whole screen uniformly
+by <strong>s = 0.88 W / 600</strong>. It does not pick a different layout per phone.</p>
+<table>
+<thead>
+<tr>
+<th>Phone</th>
+<th>Screen (pt)</th>
+<th>s</th>
+<th>Small / Body / Title (pt)</th>
+<th>Row, one / two lines (pt)</th>
+<th>Wheel D (pt)</th>
+<th>Centre (pt)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>375x667</td>
+<td>330 x 247.5</td>
+<td>0.550</td>
+<td>12.1 / 14.3 / 20.9</td>
+<td>30.8 / 41.2</td>
+<td>240</td>
+<td>86</td>
+</tr>
+<tr>
+<td>393x852</td>
+<td>345.8 x 259.4</td>
+<td>0.576</td>
+<td>12.7 / 15.0 / 21.9</td>
+<td>32.3 / 43.2</td>
+<td>251.5</td>
+<td>90.5</td>
+</tr>
+<tr>
+<td>440x956</td>
+<td>387.2 x 290.4</td>
+<td>0.645</td>
+<td>14.2 / 16.8 / 24.5</td>
+<td>36.1 / 48.4</td>
+<td>281.6</td>
+<td>101</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Minimum.</strong> The screen is never narrower than <strong>320 pt</strong> (s = 0.533, where Small is 11.7 pt). On a phone narrower than
+364 pt the screen stays 320 pt and the side margin shrinks instead, down to 12 pt, so the narrowest supported phone is
+344 pt wide. Portrait only. Tablets and landscape are out of scope for R1.</p>
+<h2 id="2-fitting-the-phone">2. Fitting the phone<a class="headerlink" href="#2-fitting-the-phone" title="Permanent link">&para;</a></h2>
+<p>Two candidates, drawn at all three sizes in Classic and at 393x852 in Modern.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>A: fills the phone (recommended)</th>
+<th>B: fixed proportions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>375x667</td>
+<td><img alt="A 375" src="mockups/fit-a-classic-375.png" /></td>
+<td><img alt="B 375" src="mockups/fit-b-classic-375.png" /></td>
+</tr>
+<tr>
+<td>393x852</td>
+<td><img alt="A 393" src="mockups/fit-a-classic-393.png" /></td>
+<td><img alt="B 393" src="mockups/fit-b-classic-393.png" /></td>
+</tr>
+<tr>
+<td>440x956</td>
+<td><img alt="A 440" src="mockups/fit-a-classic-440.png" /></td>
+<td><img alt="B 440" src="mockups/fit-b-classic-440.png" /></td>
+</tr>
+<tr>
+<td>Modern</td>
+<td><img alt="A modern" src="mockups/fit-a-modern-393.png" /></td>
+<td><img alt="B modern" src="mockups/fit-b-modern-393.png" /></td>
+</tr>
+</tbody>
+</table>
+<p><strong>A: the body fills the phone.</strong> The body finish is the app's background, under the status bar, the notch or Dynamic
+Island, the home indicator and the Android gesture bar. There is no outline and no surround.</p>
+<ul>
+<li>Frame top = top safe-area inset + max(8 pt, 0.03 W).</li>
+<li>Floor = phone height less max(bottom safe-area inset, 0.03 W).</li>
+<li><strong>Wheel centre = midway between the frame's bottom edge and the floor.</strong> A taller phone therefore gets more body
+  above and below the wheel; the screen and wheel do not grow.</li>
+<li>If the space between the frame and the floor is less than D + 24 pt, shrink D until it fits, to no less than 0.56 W.</li>
+</ul>
+<p><strong>B: fixed proportions.</strong> The body is W wide and <strong>1.675 W</strong> high with corner radius 0.08 W, sitting on a surround.</p>
+<ul>
+<li>Body bottom = the bottom safe-area inset (the phone's bottom edge where there is none). The surplus height shows as
+  surround above the body, which keeps the wheel within reach of the thumb.</li>
+<li>Frame top = body top + 0.075 W. The wheel is centred between the frame and the body's bottom edge less 0.03 W.</li>
+<li><strong>The surround is <code>#0b0c0e</code> in every style and mode.</strong> The silver body gets a drop shadow
+  (<code>0 18px 40px rgba(0,0,0,.6)</code>); the black body also gets a 1 px <code>rgba(255,255,255,.14)</code> edge so it separates from it.</li>
+<li>If the body is taller than the safe height, fall back to A.</li>
+</ul>
+<p>Why A: on a tall phone B leaves a dark band of 100 pt or more above the body that does nothing, and the body's corners
+compete with the phone's own. A looks like the object in your hand and is simpler to build. B's advantage is that it
+reads as a device with an outline, and it looks the same on every phone.</p>
+<h2 id="3-body-finishes">3. Body finishes<a class="headerlink" href="#3-body-finishes" title="Permanent link">&para;</a></h2>
+<p>Two finishes. Colours run top to bottom.</p>
+<table>
+<thead>
+<tr>
+<th>Part</th>
+<th>Silver</th>
+<th>Black</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Body</td>
+<td><code>#eceef1</code>, <code>#d9dce1</code> at 45 %, <code>#c3c7ce</code></td>
+<td><code>#1b1c20</code>, <code>#101114</code> at 50 %, <code>#08090a</code></td>
+</tr>
+<tr>
+<td>Wheel ring</td>
+<td><code>#fbfbfc</code> to <code>#e1e4e8</code>, 1 px <code>#a9aeb6</code> edge</td>
+<td><code>#2b2d32</code> to <code>#1d1f23</code>, 1 px <code>#3a3c42</code> edge</td>
+</tr>
+<tr>
+<td>Groove round the centre</td>
+<td><code>#b4b9c0</code></td>
+<td><code>#050506</code></td>
+</tr>
+<tr>
+<td>Centre button</td>
+<td><code>#e6e9ed</code> to <code>#c9cdd4</code></td>
+<td><code>#15161a</code> to <code>#0b0c0e</code></td>
+</tr>
+<tr>
+<td>Glyphs and <code>MENU</code></td>
+<td><code>#5a5f67</code> (5.0:1 or better on the ring)</td>
+<td><code>#cfcfcf</code> (8.8:1 or better on the ring)</td>
+</tr>
+<tr>
+<td>Wordmark</td>
+<td><code>#8d929a</code></td>
+<td><code>#5c5f66</code></td>
+</tr>
+<tr>
+<td>Phone status bar text (fit A)</td>
+<td>dark</td>
+<td>light</td>
+</tr>
+<tr>
+<td>Screen frame</td>
+<td><code>#050608</code> with a 1 px <code>rgba(255,255,255,.08)</code> inner edge, both finishes</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Rule.</strong> The finish follows the <strong>mode</strong>, not the style: silver in Light, black in Dark. Classic Light is therefore
+silver and Modern Dark is black, as drawn. This also covers Classic Dark (black) and Modern Light (silver), which the
+UI styles design has not drawn yet; their screens are still blocked on that design's Open question 1, but the body is
+not. Recommended on top: a <strong>Body</strong> setting (Automatic, Silver, Black), so an owner of a black neuPod can keep a black
+body with a light screen. Both cross-combinations are drawn:</p>
+<p><img alt="Black body, Classic screen" src="mockups/finish-black-with-classic.png" />
+<img alt="Silver body, Modern screen" src="mockups/finish-silver-with-modern.png" /></p>
+<h2 id="4-the-click-wheel">4. The click wheel<a class="headerlink" href="#4-the-click-wheel" title="Permanent link">&para;</a></h2>
+<p><img alt="Wheel states, silver" src="mockups/wheel-states-silver.png" />
+<img alt="Wheel states, black" src="mockups/wheel-states-black.png" /></p>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Drawing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Idle</td>
+<td>as the finish table</td>
+</tr>
+<tr>
+<td>Finger on the ring</td>
+<td>a 50 degree wedge of the ring under the finger, tinted <code>rgba(0,0,0,.07)</code> (silver) or <code>rgba(255,255,255,.08)</code> (black); it follows the finger</td>
+</tr>
+<tr>
+<td>Button pressed</td>
+<td>that button's 90 degree sector tinted <code>rgba(0,0,0,.13)</code> or <code>rgba(255,255,255,.14)</code>, from touch-down until release</td>
+</tr>
+<tr>
+<td>Centre pressed</td>
+<td>the centre button tinted the same</td>
+</tr>
+<tr>
+<td>Disabled</td>
+<td>glyphs and <code>MENU</code> at 35 % opacity; ring and centre unchanged. For any moment the wheel cannot act; no screen drawn here uses it</td>
+</tr>
+</tbody>
+</table>
+<h3 id="hit-zones">Hit zones<a class="headerlink" href="#hit-zones" title="Permanent link">&para;</a></h3>
+<p><img alt="Hit zones" src="mockups/wheel-hit-zones.png" /></p>
+<p>With R = D / 2, measured from the wheel's centre:</p>
+<table>
+<thead>
+<tr>
+<th>Zone</th>
+<th>Radius</th>
+<th>Acts as</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Centre</td>
+<td>0 to 0.36 R</td>
+<td>Select</td>
+</tr>
+<tr>
+<td>Dead band</td>
+<td>0.36 R to 0.44 R</td>
+<td>nothing; a touch that starts here is ignored</td>
+</tr>
+<tr>
+<td>Ring</td>
+<td>0.44 R to 1.06 R (6 % beyond the drawn edge)</td>
+<td>turning, and the four buttons</td>
+</tr>
+</tbody>
+</table>
+<p>The four buttons are 90 degree sectors of the ring centred on up (Menu), right (Next), down (Play/Pause) and left
+(Previous). Every zone is at least 44 pt in its smaller dimension at the minimum screen size.</p>
+<p><strong>Press or turn.</strong> A touch that starts on the ring is undecided until it moves.</p>
+<ul>
+<li><strong>Turn:</strong> the finger's angle about the centre has moved <strong>7.5 degrees</strong> or more from where it touched down. From then
+  on it is a turn until the finger lifts, and no button fires on release.</li>
+<li><strong>Press:</strong> the finger lifts, or is held, without reaching 7.5 degrees. The button is the sector under the touch-down
+  point. The press shows and clicks at touch-down; if the touch then becomes a turn, the press is cancelled without
+  acting.</li>
+<li>Once turning, track the angle wherever the finger goes, including over the centre and outside the ring. Ignore
+  samples closer than 0.2 R to the centre, where the angle is unstable.</li>
+<li>A touch that starts on the centre is a Select press for as long as it stays within 0.44 R; sliding out cancels it.</li>
+</ul>
+<h2 id="5-wheel-behaviour-in-numbers">5. Wheel behaviour, in numbers<a class="headerlink" href="#5-wheel-behaviour-in-numbers" title="Permanent link">&para;</a></h2>
+<p>The app ports the firmware's logic rather than imitating it. The constants are the firmware's
+(<code>app/include/runtime_config.h</code>, <code>hal/include/hal_input.h</code>, <code>app/ui/ui_logic.[ch]</code>).</p>
+<p><strong>Detents.</strong> The device's wheel reports 96 positions a turn and 4 positions make a list step.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>One position</td>
+<td>3.75 degrees of finger travel</td>
+</tr>
+<tr>
+<td>One list step (one detent)</td>
+<td><strong>15 degrees</strong>; 24 steps a turn</td>
+</tr>
+<tr>
+<td>Direction</td>
+<td>clockwise moves down a list, raises volume, seeks forward</td>
+</tr>
+</tbody>
+</table>
+<p>Convert the finger's angle change to positions (keep the fraction), counted from the touch-down angle so the 7.5 degree
+threshold swallows nothing, and feed them to a port of <code>ui_accel_feed()</code>.</p>
+<p><strong>Acceleration</strong>, exactly as the firmware: an energy value gains the positions received and decays linearly to zero
+over 150 ms; the step multiplier comes from the energy.</p>
+<table>
+<thead>
+<tr>
+<th>Energy (positions within the window)</th>
+<th>Multiplier</th>
+<th>Roughly, at a steady speed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>under 12</td>
+<td>1x</td>
+<td>under 300 degrees a second</td>
+</tr>
+<tr>
+<td>12 or more</td>
+<td>2x</td>
+<td>from 300 degrees a second</td>
+</tr>
+<tr>
+<td>24 or more</td>
+<td>4x</td>
+<td>from 600 degrees a second</td>
+</tr>
+<tr>
+<td>40 or more</td>
+<td>8x</td>
+<td>from 1,000 degrees a second</td>
+</tr>
+</tbody>
+</table>
+<p>A reversal drops the leftover positions of the old direction. The selection bar slides to an adjacent row in 80 ms; a
+move of more than three rows jumps.</p>
+<p><strong>Fast-scroll letter tile.</strong> On an indexed list (Artists, Albums, Songs and the like), the letter tile and the index
+rail appear while the multiplier is 2x or more, stay while the wheel moves, and fade over 150 ms once it has rested
+for 250 ms. (Trigger and timings as the UI document describes them; confirm against <code>ui_list.c</code> and <code>ui_rail.c</code> when
+porting.)</p>
+<p><strong>Press and hold.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Short press</th>
+<th>Held</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Previous, Next</td>
+<td>previous or next track (Previous restarts the track after 3 s of play)</td>
+<td>after <strong>600 ms</strong>: scan at 10 times speed while held; applied 350 ms after release; ends itself after 30 s</td>
+</tr>
+<tr>
+<td>Centre, on Now Playing</td>
+<td>page 2</td>
+<td>after <strong>500 ms</strong>: seek mode. The wheel then moves the target by about 1/60 of the track a step (1 to 30 s); Select applies, Menu cancels, 10 s without input cancels</td>
+</tr>
+<tr>
+<td>Centre, elsewhere</td>
+<td>Select</td>
+<td>nothing in R1</td>
+</tr>
+<tr>
+<td>Menu</td>
+<td>back one level</td>
+<td>nothing in R1</td>
+</tr>
+<tr>
+<td>Play/Pause</td>
+<td>play or pause</td>
+<td>nothing in R1 (Open question 4)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>On Now Playing the wheel sets the phone's system volume</strong> (owner decision 10). One step is one of the platform's
+volume steps. While it turns, the device's volume bar replaces the progress bar, and returns to progress 1.2 s after
+the wheel rests.</p>
+<p><strong>Haptics.</strong> One generator per kind, prepared in advance so the first tick is not late. Names are the platform APIs to
+use; check them against current documentation.</p>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th>iOS</th>
+<th>Android</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Detent (each list step, volume step or seek step)</td>
+<td><code>UISelectionFeedbackGenerator.selectionChanged()</code></td>
+<td><code>HapticFeedbackConstants.CLOCK_TICK</code>; <code>SEGMENT_FREQUENT_TICK</code> where available (API 34)</td>
+</tr>
+<tr>
+<td>Button or centre down</td>
+<td><code>UIImpactFeedbackGenerator(style: .rigid)</code>, intensity 0.8</td>
+<td><code>HapticFeedbackConstants.VIRTUAL_KEY</code></td>
+</tr>
+<tr>
+<td>Button or centre up</td>
+<td><code>UIImpactFeedbackGenerator(style: .light)</code>, intensity 0.5</td>
+<td><code>HapticFeedbackConstants.VIRTUAL_KEY_RELEASE</code> (API 27)</td>
+</tr>
+<tr>
+<td>A hold takes effect (scan starts, seek mode entered)</td>
+<td><code>UIImpactFeedbackGenerator(style: .medium)</code></td>
+<td><code>HapticFeedbackConstants.LONG_PRESS</code></td>
+</tr>
+<tr>
+<td>End of a list reached</td>
+<td><code>UIImpactFeedbackGenerator(style: .soft)</code>, once</td>
+<td><code>HapticFeedbackConstants.REJECT</code> (API 30), once</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>When accelerated steps arrive faster than 30 a second, fire at most 30 ticks a second and drop the rest.</li>
+<li>No haptic on a press that is cancelled by becoming a turn, beyond the touch-down click already given.</li>
+<li>Haptics obey the system setting and a <strong>Haptics</strong> setting in the app (On by default).</li>
+</ul>
+<p><strong>Click sound.</strong> Off by default (<strong>Click sound</strong>: Off, On). When on: a tick of about 8 ms per detent and a lower click
+per press, synthesised for this project (not a sample of any product), played as a system sound so it follows the
+ringer switch and silent mode, never mixed into the music stream, and limited to 30 a second like the haptics.</p>
+<p><strong>Other touches.</strong></p>
+<ul>
+<li>The first touch that lands on the wheel owns it until it lifts. Further touches on the wheel are ignored.</li>
+<li>The wheel's edge is 0.18 W from each side of the phone, clear of the system edge gestures.</li>
+<li>The system back gesture is <strong>Menu</strong>: Android's back gesture or button, and a swipe from the left edge on iOS. At
+  Home, Android's back leaves the app as usual; on iOS it does nothing.</li>
+<li>The home-indicator swipe and the notification shade are the system's and are never intercepted.</li>
+</ul>
+<h2 id="6-direct-touch-on-the-screen">6. Direct touch on the screen<a class="headerlink" href="#6-direct-touch-on-the-screen" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>1: the wheel only</th>
+<th>2: the wheel plus the screen (recommended)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><img alt="Wheel only" src="mockups/touch-1-wheel-only.png" /></td>
+<td><img alt="Wheel and screen" src="mockups/touch-2-wheel-and-screen.png" /></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Candidate 1.</strong> The screen is display only. Everything goes through the wheel, as on the device.</p>
+<p><strong>Candidate 2.</strong> The wheel works exactly as in candidate 1, and the screen also takes touches:</p>
+<ul>
+<li><strong>Tap a row:</strong> the selection bar jumps to it and it is activated, as wheel-to-it then Select. The row shows a pressed
+  tint (<code>rgba(24,88,200,.18)</code> in Classic, <code>rgba(255,255,255,.12)</code> in Modern) from touch-down.</li>
+<li><strong>Drag a list:</strong> it scrolls with the finger; the selection bar stays on the row nearest its place on screen, so it
+  never leaves the view.</li>
+<li><strong>Cover Flow:</strong> a horizontal drag moves the covers; a tap on the centre cover opens it.</li>
+<li><strong>Now Playing:</strong> a tap on the art opens page 2. The progress bar is not draggable (seek mode is the way to seek).</li>
+<li>The status bar, the right-hand pane and panels' backgrounds take no touches. A panel's <code>OK</code> can be tapped.</li>
+</ul>
+<p>Why 2: on a touch screen people tap what they see, and a row that ignores a tap feels broken. The cost: one-line rows are 31 to 36 pt high at the default text
+size, under the 44 pt guideline. The wheel with Select is the path that meets the guideline; taps are a convenience on
+top of it, and at the largest text tier the rows reach 44 pt.</p>
+<h2 id="7-screens-in-the-device">7. Screens in the device<a class="headerlink" href="#7-screens-in-the-device" title="Permanent link">&para;</a></h2>
+<p>All at 393x852, fit A. Classic Light on the silver body, Modern Dark on the black body.</p>
+<table>
+<thead>
+<tr>
+<th>Screen</th>
+<th>Classic</th>
+<th>Modern</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Home</td>
+<td><img alt="" src="mockups/classic-home.png" /></td>
+<td><img alt="" src="mockups/modern-home.png" /></td>
+</tr>
+<tr>
+<td>Songs, wheel spinning, letter tile and rail</td>
+<td><img alt="" src="mockups/classic-songs.png" /></td>
+<td><img alt="" src="mockups/modern-songs.png" /></td>
+</tr>
+<tr>
+<td>Album with a disc heading</td>
+<td><img alt="" src="mockups/classic-album.png" /></td>
+<td><img alt="" src="mockups/modern-album.png" /></td>
+</tr>
+<tr>
+<td>Cover Flow</td>
+<td><img alt="" src="mockups/classic-cover-flow.png" /></td>
+<td><img alt="" src="mockups/modern-cover-flow.png" /></td>
+</tr>
+<tr>
+<td>Now Playing, at rest</td>
+<td><img alt="" src="mockups/classic-now-playing.png" /></td>
+<td><img alt="" src="mockups/modern-now-playing.png" /></td>
+</tr>
+<tr>
+<td>Now Playing, wheel setting the volume</td>
+<td><img alt="" src="mockups/classic-now-playing-volume.png" /></td>
+<td><img alt="" src="mockups/modern-now-playing-volume.png" /></td>
+</tr>
+<tr>
+<td>Now Playing, seek mode</td>
+<td><img alt="" src="mockups/classic-now-playing-seek.png" /></td>
+<td><img alt="" src="mockups/modern-now-playing-seek.png" /></td>
+</tr>
+<tr>
+<td>Centred panel, centre pressed</td>
+<td><img alt="" src="mockups/classic-panel.png" /></td>
+<td><img alt="" src="mockups/modern-panel.png" /></td>
+</tr>
+<tr>
+<td>Search, typing with the wheel</td>
+<td><img alt="" src="mockups/classic-search.png" /></td>
+<td><img alt="" src="mockups/modern-search.png" /></td>
+</tr>
+<tr>
+<td>Search, in the results</td>
+<td><img alt="" src="mockups/classic-search-results.png" /></td>
+<td><img alt="" src="mockups/modern-search-results.png" /></td>
+</tr>
+</tbody>
+</table>
+<p>Notes on the screens the UI styles design had not drawn:</p>
+<ul>
+<li><strong>Letter tile and rail:</strong> 82 px tile, radius 15, 52 px from the right edge and 21 px below the status bar, the letter
+  at 48 px; the rail is 26 px wide at the right edge, every second letter at 17 px with the current one at 22 px.
+  Classic: tile <code>rgba(24,24,24,.86)</code> with a white letter. Modern: tile <code>rgba(240,240,240,.92)</code> with a <code>#101010</code> letter.</li>
+<li><strong>Disc heading:</strong> a 34 px band, Small text. Classic: <code>#e9ebee</code> with <code>#606060</code> text. Modern: <code>rgba(255,255,255,.07)</code>
+  with <code>#c4c4c4</code>. Every disc gets one; track numbers restart under each. The album drawn is the owner's <code>In Sides</code>,
+  whose first disc's track names are real.</li>
+<li><strong>Seek mode:</strong> the seek time at 72 px in the style's amber (<code>#d08018</code> Classic, <code>#e89828</code> Modern), a 6 px amber bar
+  with a 26 px knob on a soft amber track, the times, and the hint <code>Scroll: seek · Select: go · Menu: cancel</code>. The
+  format line and the album line give way to it. Classic's amber on white is 3.1:1; it is used only at this large size, and
+  is flagged in the UI styles design.</li>
+<li><strong>Search:</strong> see below.</li>
+</ul>
+<p><strong>Search, by the wheel.</strong> Search is an item in the Music menu. It never raises the phone's keyboard, and tapping the
+field does nothing. It reuses the device's text entry (<code>docs/ui-input.md</code>: the letter ring and mode chips, in search
+mode, where every edit calls back so the list can filter live). The firmware has that widget but no Search screen yet,
+so the screen below is new for both.</p>
+<p><em>Typing</em> (first drawing). From the top of the 405 px content area:</p>
+<table>
+<thead>
+<tr>
+<th>Part</th>
+<th>Size (design px)</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Field</td>
+<td>44 high in a 60 band</td>
+<td>magnifier, the text typed so far, a caret in the accent</td>
+</tr>
+<tr>
+<td>Live results</td>
+<td>three rows of 50</td>
+<td>the best three matches, with what each is at the right in Small (<code>Artist</code>, <code>Album · 1991</code>)</td>
+</tr>
+<tr>
+<td>Letter ring</td>
+<td>64 band, hairline above</td>
+<td>nine glyphs; the current one at 56 px in the accent, its neighbours at 30, 26, 22 and 18 px fading from ink to tertiary</td>
+</tr>
+<tr>
+<td>Mode chips</td>
+<td>36 high, radius 18, in a 40 band</td>
+<td><code>abc</code>, <code>ABC</code>, <code>123</code>, <code>space</code>, <code>del</code>; the active one filled (Classic <code>#d8e4f8</code> with <code>#1858c8</code> text; Modern the accent with white text), the others outlined</td>
+</tr>
+<tr>
+<td>Hint</td>
+<td>Small, tertiary</td>
+<td><code>Select: type · Menu: delete · Play: results</code></td>
+</tr>
+</tbody>
+</table>
+<p>The count of matches follows the play glyph in the status bar (<code>4 found</code>).</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>While typing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Wheel</td>
+<td>turns the letter ring, one glyph a detent; the firmware's acceleration jumps three</td>
+</tr>
+<tr>
+<td>Centre</td>
+<td>types the current glyph (on <code>space</code> a space, on <code>del</code> deletes one)</td>
+</tr>
+<tr>
+<td>Previous, Next</td>
+<td>move along the mode chips</td>
+</tr>
+<tr>
+<td>Menu</td>
+<td>deletes one character; held, clears the field; on an empty field, leaves Search</td>
+</tr>
+<tr>
+<td>Play/Pause</td>
+<td>goes to the results</td>
+</tr>
+</tbody>
+</table>
+<p><em>In the results</em> (second drawing). The field stays at the top without its caret, and the full results follow under
+30 px headings <code>Artists</code>, <code>Albums</code>, <code>Songs</code>, as an ordinary list: the wheel scrolls it, the centre opens a row, and
+<strong>Menu returns to typing</strong> with the text kept. Play/Pause is play or pause again.</p>
+<p>With direct touch (candidate 2), a live result or a mode chip can also be tapped.</p>
+<h2 id="8-largest-text-size">8. Largest text size<a class="headerlink" href="#8-largest-text-size" title="Permanent link">&para;</a></h2>
+<p>The 4:3 screen cannot reflow, so it honours the phone's text size by showing <strong>fewer, larger rows</strong>. The whole screen
+stays 600x450; type and bars are multiplied by k and the row count drops.</p>
+<table>
+<thead>
+<tr>
+<th>Tier</th>
+<th>k</th>
+<th>iOS text size</th>
+<th>Android font scale</th>
+<th>Rows, one line</th>
+<th>Rows, two lines</th>
+<th>Status bar</th>
+<th>Row height (design px)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Standard</td>
+<td>1</td>
+<td>up to Large (the default)</td>
+<td>under 1.15</td>
+<td>7</td>
+<td>5</td>
+<td>45</td>
+<td>56 / 75 (as built)</td>
+</tr>
+<tr>
+<td>Large</td>
+<td>7/6</td>
+<td>Extra Large, Extra Extra Large</td>
+<td>1.15 to under 1.3</td>
+<td>6</td>
+<td>4</td>
+<td>52</td>
+<td>66 / 99</td>
+</tr>
+<tr>
+<td>Largest</td>
+<td>7/5</td>
+<td>Extra Extra Extra Large and the accessibility sizes</td>
+<td>1.3 and above</td>
+<td>5</td>
+<td>3</td>
+<td>63</td>
+<td>77 / 129</td>
+</tr>
+</tbody>
+</table>
+<p>On-phone sizes: Body is 15.0, 17.5 and 21.0 pt at 393 pt wide across the three tiers, and a one-line row is 32, 38 and
+44 pt. The same tiers apply at every phone size, since the screen scales with the phone.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>7 rows</th>
+<th>6 rows</th>
+<th>5 rows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Home</td>
+<td><img alt="" src="mockups/text-7-rows-home.png" /></td>
+<td><img alt="" src="mockups/text-6-rows-home.png" /></td>
+<td><img alt="" src="mockups/text-5-rows-home.png" /></td>
+</tr>
+<tr>
+<td>Songs</td>
+<td><img alt="" src="mockups/text-7-rows-songs.png" /></td>
+<td><img alt="" src="mockups/text-6-rows-songs.png" /></td>
+<td><img alt="" src="mockups/text-5-rows-songs.png" /></td>
+</tr>
+</tbody>
+</table>
+<p><img alt="Home, 5 rows, Modern" src="mockups/text-5-rows-home-modern.png" /></p>
+<p>Rules:</p>
+<ul>
+<li>Lists simply show fewer rows; they already scroll. Text that no longer fits ends in an ellipsis, and the focused
+  row's text scrolls as a ticker, as on the device.</li>
+<li>Fixed layouts scale their type by k and keep their structure: on Home the art shrinks to 200 px at the largest tier;
+  on Now Playing the art shrinks to make room and the album line is dropped first, then the format line.</li>
+<li>Nothing may clip. The app's golden tests cover every screen at all three tiers.</li>
+<li>The accessibility sizes beyond the largest standard setting are capped at the largest tier (Open question 3).</li>
+</ul>
+<h2 id="9-accessibility">9. Accessibility<a class="headerlink" href="#9-accessibility" title="Permanent link">&para;</a></h2>
+<p>With VoiceOver or TalkBack running, the picture of the device is not the interface; the semantics below are.</p>
+<p><strong>The screen.</strong> Each row is one element, in order, so swiping moves row by row.</p>
+<table>
+<thead>
+<tr>
+<th>Element</th>
+<th>Label</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A row</td>
+<td>its text, then its second line or value, then position: <code>Albums, 4 of 7</code></td>
+<td>activate opens it (always, whichever touch candidate is chosen)</td>
+</tr>
+<tr>
+<td>A greyed row</td>
+<td>its text, then the reason: <code>Carrier Wave, AAC, can't play</code></td>
+<td>none; announced as dimmed</td>
+</tr>
+<tr>
+<td>Status bar</td>
+<td>one element: <code>Playing, shuffle on, track 3 of 12, headphones, battery 78 percent</code></td>
+<td>none</td>
+</tr>
+<tr>
+<td>Screen title</td>
+<td>announced when the screen changes</td>
+<td></td>
+</tr>
+<tr>
+<td>A panel</td>
+<td>focus moves to it; its title, then its text</td>
+<td><code>OK</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>The wheel</strong> is one adjustable element.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Lists and menus</th>
+<th>Now Playing</th>
+<th>Seek mode</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Label</td>
+<td><code>Click wheel</code></td>
+<td><code>Volume</code></td>
+<td><code>Seek</code></td>
+</tr>
+<tr>
+<td>Value</td>
+<td>the focused row, as above</td>
+<td><code>62 percent</code></td>
+<td><code>2 minutes 14 seconds of 4 minutes 1</code></td>
+</tr>
+<tr>
+<td>Increment</td>
+<td>next row</td>
+<td>volume up one step</td>
+<td>forward one step</td>
+</tr>
+<tr>
+<td>Decrement</td>
+<td>previous row</td>
+<td>volume down one step</td>
+<td>back one step</td>
+</tr>
+</tbody>
+</table>
+<p>It carries five named actions, in this order: <strong>Select</strong>, <strong>Menu</strong>, <strong>Previous track</strong>, <strong>Next track</strong>, and <strong>Play</strong>
+or <strong>Pause</strong> according to the state. The four buttons and the centre are not separate elements, so the screen reader
+does not stop on them twice.</p>
+<ul>
+<li>A change made by the wheel is announced through the element's value, not as a separate announcement.</li>
+<li>Haptics still fire. With Reduce Motion on, the selection bar and screen changes do not animate.</li>
+<li>Switch control and external keyboards: arrow up and down move the selection, Return is Select, Escape is Menu, Space
+  is Play/Pause, left and right arrows are Previous and Next.</li>
+<li>Contrast and "nothing by colour alone" are inherited from the screens; the wheel's glyphs meet 4.5:1 in both finishes.</li>
+</ul>
+<h2 id="10-the-phones-status-bar">10. The phone's status bar<a class="headerlink" href="#10-the-phones-status-bar" title="Permanent link">&para;</a></h2>
+<p><strong>Recommended: shown, above the device.</strong> The phone's status bar stays visible, drawn over the body finish (fit A) or
+the surround (fit B), with dark text on silver and light text on black.</p>
+<ul>
+<li>The device has no clock, by the owner's decision; on a phone the system clock is right there and people rely on it.</li>
+<li>On a phone with a notch or Dynamic Island the space is reserved whether the bar is shown or not, so hiding it gains
+  nothing. On a home-button phone it would gain 20 pt.</li>
+<li>Hidden makes a purer picture and is what a game would do; it is the alternative, not drawn separately because it
+  differs only by the missing text.</li>
+<li>Merged (the phone's time or signal inside the device's bar) is not recommended: it changes the device's screen, which
+  the UI styles design fixes.</li>
+</ul>
+<p>In the device's own status bar the battery shows the <strong>phone's</strong> battery, the output icon follows the phone's route
+(headphones for wired, the Bluetooth glyph in blue for Bluetooth), and Wi-Fi is not shown in R1 because the app makes
+no network connection.</p>
+<h2 id="open-questions">Open questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
+<p>For the owner. Nothing here is settled by the drawings.</p>
+<p><strong>Answered at gate 2 (22 November 2026), see the app spec's owner decision 13:</strong> 1, 3 to 11 and 13 are decided; 2
+(direct touch) is judged by feel at gate 1; 12 stays open. Route icons (7): the speaker shows none, USB and wired
+outputs the jack plug, AirPlay and other wireless outputs a new generic external-speaker icon in the device's style.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Question</th>
+<th>What was drawn meanwhile</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>Fit A or B</strong></td>
+<td>Both, at three sizes; the screens use A</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>Direct touch</strong>: wheel only, or wheel plus the screen. Candidate 2's one-line rows are under 44 pt at the default text size</td>
+<td>Both; candidate 2 recommended</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Text beyond the largest tier.</strong> The accessibility sizes are capped at 5 rows. Is that acceptable, or should those sizes switch to a plain, reflowing list view outside the device picture?</td>
+<td>Capped</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Holding Play/Pause.</strong> The device has a separate Hold; the phone has its own lock. Should a hold do anything (stop and clear the queue, for example)?</td>
+<td>Nothing</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>Body setting.</strong> Follow the mode automatically only, or also offer Silver and Black as a choice</td>
+<td>Automatic, with both cross-combinations drawn</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>Proportions.</strong> The screen is wider and the frame thinner than the donor shell, for legibility. Closer to the real device would mean a screen of about 0.82 W (Body 14 pt at 393)</td>
+<td>Our own proportions</td>
+</tr>
+<tr>
+<td>7</td>
+<td><strong>AirPlay and other routes.</strong> The device's icon set has headphones, a jack plug and Bluetooth. What shows for AirPlay, the phone's speaker and USB audio?</td>
+<td>Not drawn; speaker shows no icon</td>
+</tr>
+<tr>
+<td>8</td>
+<td><strong>The wordmark on the body.</strong> Keep <code>neuPod</code> between the screen and the wheel, or leave the body plain</td>
+<td>Drawn, small and low-contrast</td>
+</tr>
+<tr>
+<td>9</td>
+<td><strong>Left-edge swipe as Menu on iOS</strong></td>
+<td>Specified as Menu</td>
+</tr>
+<tr>
+<td>10</td>
+<td><strong>Click sound.</strong> Whether it plays through headphones or only the phone's speaker</td>
+<td>System sound, follows the ringer switch</td>
+</tr>
+<tr>
+<td>11</td>
+<td><strong>Search placement.</strong> An item in the Music menu, or on Home</td>
+<td>Music menu</td>
+</tr>
+<tr>
+<td>13</td>
+<td><strong>Search, three live results.</strong> Three rows fit above the letter ring. Fewer and larger, or none until Play/Pause? At the larger text tiers only two, then one, will fit</td>
+<td>Three</td>
+</tr>
+<tr>
+<td>12</td>
+<td><strong>Classic Dark and Modern Light screens</strong> are still undrawn (UI styles Open question 1); only their bodies are covered here</td>
+<td>Bodies only</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

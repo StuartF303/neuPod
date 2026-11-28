@@ -1,0 +1,2194 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/app/decisions/0005-database/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
+    
+    
+      
+        <title>0005: Library database - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#0005-library-database" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              0005: Library database
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../constitution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Constitution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../bluetooth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../wifi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../touch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Touch input (600x450 boards)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../y2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Innioasis Y2 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../esp32s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-S3 platform (dev board)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../rp2350-amoled241/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Waveshare RP2350 AMOLED dev board
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../i2c-peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../teardown/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Donor teardown (photos, findings)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0017-music-library-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0018-ui-resolution-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0018 UI resolution profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0019-bluetooth-audio-sink-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0019 Bluetooth audio boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0020-hold/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0020 Hold
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0021-power-sleep/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0021 Power and sleep
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0022-one-player-ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0022 One player UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0023-headphone-jack-reuse/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0023 Headphone jack reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#options-considered" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Options considered
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#consequences-and-risks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Consequences and risks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#to-verify-in-the-phase-1-spike" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        To verify in the phase 1 spike
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-phase-1-2026-11-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation (phase 1, 2026-11-22)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sources
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="0005-library-database">0005: Library database<a class="headerlink" href="#0005-library-database" title="Permanent link">&para;</a></h1>
+<p>Status: Proposed (2026-11-21) · Owner: Architect</p>
+<h2 id="context">Context<a class="headerlink" href="#context" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Library of 20,000 tracks: artists, album artists, albums, discs, genres, compilations, embedded and folder art references.</li>
+<li>Named playlists and On-The-Go, with <code>.m3u8</code> import and export using paths relative to the library folder.</li>
+<li>Rating (0 to 5), play count, last played and skip count per track, in the app's own database, surviving a rescan, a retag
+  and a file move within the library.</li>
+<li>Incremental rescan: size and mtime stored per file; a rescan with no changes in under ten seconds.</li>
+<li>Search as you type over artists, albums and songs, grouped by kind.</li>
+<li>Sort that matches the firmware's <code>lib_collate_key()</code> exactly (<code>app/library/lib_collate.c</code>): sort tag wins, a leading
+  article skipped, ASCII case folded, Latin-1 and Latin Extended-A accents folded (ss, ae, oe, th, ij expand), then
+  symbols (space first), digits, letters; key compared with <code>memcmp</code>, cut at 96 bytes.</li>
+<li>Every query off the UI isolate; the scanner writes in bulk without stalling the UI.</li>
+<li>Schema migrations that are generated or at least tested, since the database holds data the user cannot rebuild
+  (ratings, playlists).</li>
+<li>Testable in pure Dart unit tests on a Linux CI host, without a device or emulator.</li>
+<li>Source-neutral track model (a track has a source and a location) so R2 (NAS) and R3 (device card) are additions.</li>
+<li>Licence compatible with MPL-2.0 distribution on the App Store and Google Play; actively maintained.</li>
+</ul>
+<h2 id="options-considered">Options considered<a class="headerlink" href="#options-considered" title="Permanent link">&para;</a></h2>
+<p>Facts from pub.dev and GitHub, checked 2026-11-21. Toolchain: Flutter 3.50.1, Dart 3.14.0.</p>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Version (date)</th>
+<th>Licence · publisher</th>
+<th>Platforms</th>
+<th>FTS</th>
+<th>Off-UI isolate</th>
+<th>Migrations</th>
+<th>Host unit tests</th>
+<th>Maintained</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>drift</strong> + sqlite3</td>
+<td>2.35.4 (2026-11-08); sqlite3 3.9.1 (2026-11-08)</td>
+<td>MIT · simonbinder.eu (verified), Flutter Favorite</td>
+<td>Android, iOS, desktop, web</td>
+<td>FTS5 in the bundled SQLite on every platform</td>
+<td><code>NativeDatabase.createInBackground</code>, <code>computeWithDatabase</code></td>
+<td><code>make-migrations</code>: schema snapshots, step-by-step code and generated tests</td>
+<td>Yes, <code>NativeDatabase.memory()</code> in <code>dart test</code></td>
+<td>Yes: commits 2026-11-20</td>
+</tr>
+<tr>
+<td>sqflite</td>
+<td>2.4.6 (2026-11-10)</td>
+<td>BSD-2-Clause · tekartik.com, Flutter Favorite</td>
+<td>Android, iOS, macOS (desktop via <code>sqflite_common_ffi</code>)</td>
+<td>Uses the OS SQLite: FTS5 not enabled in Android's framework SQLite</td>
+<td>Platform channel / own thread</td>
+<td>Hand-written <code>onUpgrade</code></td>
+<td>Via <code>sqflite_common_ffi</code> (a different engine path than production)</td>
+<td>Yes: commits 2026-11-15</td>
+</tr>
+<tr>
+<td>ObjectBox</td>
+<td>5.3.2 (2026-05-20); 6.0.0-preview.6 (2026-11-03)</td>
+<td>Apache-2.0 (binding; native core is a closed-source download) · objectbox.io</td>
+<td>Android, iOS, desktop</td>
+<td>No full-text search found; vector search only</td>
+<td>Yes</td>
+<td>Automatic model sync, UID-based</td>
+<td>Needs the native library downloaded on the host</td>
+<td>Yes: commits 2026-11-17</td>
+</tr>
+<tr>
+<td>isar</td>
+<td>3.1.0+1 (2023-04-25); 4.0.0-dev.14 (2023-08)</td>
+<td>Apache-2.0 · isar.dev</td>
+<td>all</td>
+<td>Word index</td>
+<td>Yes</td>
+<td>Implicit</td>
+<td>Native lib download</td>
+<td><strong>No</strong>: last commit 2025-06-14, no release since 2023, README says v4 "not ready for production"</td>
+</tr>
+<tr>
+<td>isar_community</td>
+<td>3.4.1 (2026-10-13)</td>
+<td>Apache-2.0 · isar-community.dev</td>
+<td>Android, iOS, desktop</td>
+<td>Word index (multi-entry)</td>
+<td>Yes</td>
+<td>Implicit</td>
+<td>Native lib download; README says run tests with <code>-j 1</code></td>
+<td>Fork "focusing primarily on bug fixes and small updates for version 3"; small (163 likes)</td>
+</tr>
+<tr>
+<td>realm</td>
+<td>20.2.0 (2025-09-24)</td>
+<td>Apache-2.0 · realm.io</td>
+<td>Android, iOS, desktop</td>
+<td>Yes (RQL <code>TEXT</code>)</td>
+<td>Yes</td>
+<td>Schema version + callback</td>
+<td>Native</td>
+<td><strong>Deprecated</strong>: README "We announced the deprecation of Atlas Device Sync + Realm SDKs in September 2024"; last commit 2025-10-23</td>
+</tr>
+<tr>
+<td>sembast</td>
+<td>3.10.1 (2026-11-09)</td>
+<td>BSD-3-Clause · tekartik.com</td>
+<td>all</td>
+<td>No</td>
+<td>Whole DB in memory, single isolate</td>
+<td>Manual</td>
+<td>Yes, pure Dart</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>hive / hive_ce</td>
+<td>hive 2.2.3 (2022-06-30); hive_ce 2.24.0 (2026-11-19)</td>
+<td>hive: unknown on pub.dev · hive_ce: Apache-2.0 / BSD-3 · iodesignteam.com</td>
+<td>all</td>
+<td>No</td>
+<td>Boxes in memory</td>
+<td>Manual adapters</td>
+<td>Yes</td>
+<td>hive: no; hive_ce: yes</td>
+</tr>
+</tbody>
+</table>
+<p><strong>drift.</strong> A typed layer over SQLite with reactive queries (<code>watch()</code>), which suits lists that update while a scan
+runs. Since <code>sqlite3</code> 3.x the SQLite library is supplied by a Dart build hook: prebuilt from upstream sources in the
+package's GitHub releases, checked by sha256, compiled with <code>SQLITE_ENABLE_FTS5</code> among other options, and the same binary
+family on Android, iOS and Linux, so production and CI run the same engine. <code>sqlite3_flutter_libs</code> is now
+<code>0.6.0+eol</code> ("Not used anymore, update to version 3.x of package:sqlite3"), and the drift docs say depending on it is no
+longer needed. FTS5 tables are declared in a <code>.drift</code> file with the <code>fts5</code> module enabled in <code>build.yaml</code>. It needs
+<code>build_runner</code> codegen (<code>drift_dev</code>). We use that codegen because it gives compile-checked SQL and the migration
+tooling. Plain SQL is available when the query builder gets in the way. The maintainer is one very active person
+(Simon Binder), who also maintains <code>sqlite3</code>.</p>
+<p><strong>sqflite.</strong> Mature and simple, but it uses the operating system's SQLite. Android's framework SQLite does not enable FTS5
+(Room users get <code>no such module: FTS5</code> and are told to bundle SQLite). FTS4 would mean different SQL on each platform,
+and host tests would go through <code>sqflite_common_ffi</code> instead of the production path. It has no typed queries and no
+migration tooling.</p>
+<p><strong>ObjectBox, isar_community.</strong> Fast object stores, but neither has SQL-style joins and grouping for the
+artist/album/genre browse, nor a tested migration story for data the user cannot rebuild. ObjectBox has no full-text
+search, and its core is a binary download. isar is abandoned; <code>isar_community</code> is a small maintenance fork of v3 and
+too thin a base for a database we keep for years. <strong>Realm</strong> is deprecated. <strong>sembast</strong> and <strong>hive_ce</strong> keep data in
+memory and have no FTS or ordered secondary indexes, which rules them out at 20,000 tracks.</p>
+<h2 id="decision">Decision<a class="headerlink" href="#decision" title="Permanent link">&para;</a></h2>
+<p><strong>Use drift 2.35 on <code>sqlite3</code> 3.9 (bundled SQLite through build hooks), with FTS5, opened in a background isolate.</strong>
+Do not depend on <code>sqlite3_flutter_libs</code>. Use <code>drift_flutter</code> only if its 0.3.x release has dropped the <code>+eol</code>
+dependencies by the time of the spike; otherwise open <code>NativeDatabase.createInBackground(file)</code> with <code>path_provider</code> for
+the path. It is the only option that meets every requirement: relational browse queries, FTS5 identical on both
+platforms, a background isolate, generated and tested migrations, and in-memory host tests running the production
+engine.</p>
+<p><strong>Shape of the schema</strong> (the library engineer owns the details):</p>
+<ul>
+<li><code>sources(id, kind [local_folder | media_store | nas | device], uri_or_bookmark, display_name)</code>. R1 creates
+  <code>local_folder</code> and, on Android, <code>media_store</code> (the shared music collection, decision 0012).</li>
+<li><code>tracks(id, source_id, rel_path, size, mtime, track_key, title, title_sort_key BLOB, artist_id, album_id, genre_id,
+  disc_no, track_no, year, duration_ms, codec, sample_rate, bit_depth, playable_code, art_ref)</code>, unique on
+  <code>(source_id, rel_path)</code>. Every track has a source and a location, so a NAS or device track is just another row.</li>
+<li><code>artists</code>, <code>albums</code> (with album artist, year, <code>is_compilation</code>), <code>genres</code>. Each has <code>name</code>, <code>sort_name</code> (the sort tag,
+  if any) and <code>sort_key BLOB</code> (indexed).</li>
+<li><code>track_stats(track_key PRIMARY KEY, rating, play_count, skip_count, last_played)</code>. Keyed by content, not by row or
+  path, so it is never deleted when tracks are removed. "Reset ratings and play counts" is the only thing that clears it.</li>
+<li><code>playlists(id, name, kind [otg | named], position)</code> and <code>playlist_entries(playlist_id, position, track_key,
+  rel_path_hint)</code>.</li>
+<li><code>search_fts</code> as an FTS5 table (<code>kind, name, ref_id</code>, <code>tokenize='unicode61 remove_diacritics 2'</code>, <code>prefix='1 2 3'</code>),
+  rebuilt by the scanner. A query is prefix terms (<code>"beat"*</code>) grouped by <code>kind</code>.</li>
+</ul>
+<p><strong>Collation.</strong> Port <code>lib_collate_key()</code> byte for byte to a pure-Dart function in the domain layer (<code>collateKey(name,
+sort) -&gt; Uint8List</code>, cut at 96 bytes), and store its output as an indexed <code>BLOB</code>. SQLite compares BLOBs with <code>memcmp</code>,
+and a shorter key that is a prefix sorts first, which is exactly <code>lib_collate_cmp()</code>. So <code>ORDER BY sort_key</code> gives the
+firmware's order with no custom collation registered per connection, and the fast-scroll letter is
+<code>lib_collate_bucket()</code> applied to the first byte. Unit tests reuse the firmware's cases in <code>tests/test_library.c</code>
+(<code>collate_case_and_the</code>, <code>collate_diacritics</code>, <code>collate_classes</code>, <code>collate_sort_tag_wins</code>). Ties break as the firmware
+does in <code>app/library/lib_build.c</code> (full key, then id).</p>
+<p><strong>Stable track key (<code>track_key</code>).</strong> A content fingerprint of the audio, not of the tags or the path, so it survives a
+retag, a rename and a move.</p>
+<ul>
+<li><code>track_key = "a1:" + hex(SHA-256(codec ‖ audio_payload_length ‖ first 64 KiB of audio payload ‖ last 64 KiB of audio
+  payload))</code>. The audio payload is defined per container so that metadata never enters the hash. FLAC: the frames after
+  the last metadata block. MP3: the frames between ID3v2 and any trailing ID3v1/APE/Lyrics3 tag. MP4/M4A/ALAC: the
+  <code>mdat</code> contents. WAV: the <code>data</code> chunk. Ogg/Opus: the packet bodies of the audio pages, not page headers, because a
+  longer comment header renumbers pages.</li>
+<li><strong>FLAC fast path:</strong> where STREAMINFO carries a non-zero MD5 of the decoded audio, use
+  <code>"f1:" + md5 + total_samples + sample_rate</code> with no extra read. The firmware could compute this key cheaply too,
+  which matters for R3 rating exchange.</li>
+<li>Cost: about 128 KiB read per new or changed file, well inside the five-minute first-scan target. Unchanged files
+  (same size and mtime) are not read at all.</li>
+<li><strong>Move detection:</strong> a rescan diffs the walk against <code>tracks</code> by <code>(source_id, rel_path)</code>. Paths that have disappeared
+  are held as "missing" until the walk ends. Each new path gets a <code>track_key</code>. A new path whose key equals a missing
+  row's key is a move, and that row's location is updated in place, keeping its id, queue references and playlist
+  entries. Rows still missing at the end are deleted. Their <code>track_stats</code> stay, so a folder removed and added back gets
+  its ratings back.</li>
+<li>Rejected: path (breaks on a move); whole-file hash (breaks on a retag, and reading 150 GB is far too slow); tags plus
+  duration (breaks on a retag, and collides for untagged files).</li>
+<li>Known limits: byte-identical duplicates share one stats row (acceptable, and shown to be so in tests). A re-encode or
+  re-rip is a new track. A one-to-one tag-plus-duration match within a single scan could carry stats over, but it is
+  left out of R1 unless the owner asks for it.</li>
+</ul>
+<h2 id="consequences-and-risks">Consequences and risks<a class="headerlink" href="#consequences-and-risks" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Build-time download.</strong> The <code>sqlite3</code> hook downloads its prebuilt library from GitHub releases during <code>flutter build</code>
+  and <code>dart test</code>. The app still makes no network connection at run time, but CI needs GitHub reachable, and builds
+  depend on those release assets staying up. Fallbacks the hook supports: <code>url_pattern</code> to a mirror, or <code>source: source</code>
+  to compile the SQLite amalgamation (public domain) ourselves. Escalate only if the owner objects to build-time
+  downloads.</li>
+<li>Codegen: <code>build_runner</code> for drift. Generated files are committed and CI checks they are current.</li>
+<li>Single maintainer for drift and sqlite3. Both are very active, MIT, and SQL is portable, so a forced move to raw
+  <code>sqlite3</code> would be survivable.</li>
+<li>Our own copy of SQLite adds about 1 to 2 MB per architecture to the app.</li>
+<li>The key algorithm becomes a compatibility contract (it keys the user's ratings). It carries a version prefix (<code>a1:</code>,
+  <code>f1:</code>), and changing it needs a migration that recomputes keys before stats are re-joined.</li>
+<li>Writes from the scanner isolate must go through <code>computeWithDatabase</code> (or the same drift instance) so <code>watch()</code>
+  streams in the UI see them.</li>
+<li><strong>Spec drift to raise with the lead:</strong> <code>docs/ui.md</code> says <code>"A "</code> and <code>"An "</code> are not ignored yet, but
+  <code>lib_collate.c</code> already skips them. The app follows the code. The doc needs correcting by whoever owns firmware docs.</li>
+</ul>
+<h2 id="to-verify-in-the-phase-1-spike">To verify in the phase 1 spike<a class="headerlink" href="#to-verify-in-the-phase-1-spike" title="Permanent link">&para;</a></h2>
+<ol>
+<li><code>SELECT sqlite_version()</code> and <code>PRAGMA compile_options</code> on an iOS simulator, an iOS device, an Android emulator
+   (arm64 and x86_64) and Linux CI. <code>CREATE VIRTUAL TABLE ... USING fts5</code> succeeds on all of them.</li>
+<li><code>drift_flutter</code> 0.3.1 with its <code>+eol</code> dependencies: does it pull a second SQLite or conflict with the hook? Decide
+   between <code>drift_flutter</code> and plain <code>NativeDatabase.createInBackground</code>.</li>
+<li>App size delta and a clean release build on both platforms with no extra native configuration.</li>
+<li><code>dart test</code> with <code>NativeDatabase.memory()</code> on GitHub's Linux runner. Measure the hook download time and whether it
+   is cached.</li>
+<li>20,000 generated tracks: bulk insert time through <code>computeWithDatabase</code>, Songs page query under 16 ms, FTS prefix
+   query under 50 ms, and UI frame times during a scan.</li>
+<li><code>track_key</code> stability: retag a FLAC, MP3, M4A and Ogg/Opus fixture (including growing the tag past its padding),
+   rename and move them, and check the key is unchanged. Re-encode one and check the key changes.</li>
+<li>Are size and mtime reliable through Android SAF (<code>DocumentFile.lastModified</code>) and iOS security-scoped bookmarks?
+   If not, choose another change signal.</li>
+<li><code>make-migrations</code> round trip: v1 to v2 with a generated test, run in CI.</li>
+</ol>
+<h2 id="implementation-phase-1-2026-11-22">Implementation (phase 1, 2026-11-22)<a class="headerlink" href="#implementation-phase-1-2026-11-22" title="Permanent link">&para;</a></h2>
+<p>Built in <code>mobile/lib/data/db/</code> (database), <code>mobile/lib/data/scan/</code> (scanner, tag reader) and
+<code>mobile/lib/domain/library/</code> (track model, collation, ports). Where it differs from the decision above, and why:</p>
+<ul>
+<li><strong>drift 2.35.4 and sqlite3 3.9.1 as decided, without <code>drift_flutter</code> and without <code>path_provider</code>.</strong> <code>drift_flutter</code>
+  0.3.1 still depends on the <code>+eol</code> <code>sqlite3_flutter_libs</code> and <code>sqlcipher_flutter_libs</code>, and <code>path_provider</code> 2.1 now
+  pulls <code>jni</code>, <code>jni_flutter</code>, <code>objective_c</code> and <code>ffi</code> into the app for one directory name. The database is opened with
+  <code>NativeDatabase.createInBackground</code> behind a <code>LazyDatabase</code>, in the directory that <code>neupod_storage.appSupportPath()</code>
+  returns: Android <code>noBackupFilesDir</code>, iOS <code>Application Support/library</code> marked excluded from backup, never shown in
+  Files or Finder. Excluded from backups because version 1 holds only what a rescan rebuilds; phase 3 revisits this
+  when ratings and play counts arrive (they should survive a phone restore).</li>
+<li><strong>Phase 1 schema (version 1)</strong> is the subset the vertical slice needs: <code>sources</code> and <code>tracks</code>, with <code>artist</code> and
+  <code>album</code> as text on the track, the title sort tag in <code>title_sort</code>, <code>title_sort_key</code> as an indexed BLOB
+  (<code>ORDER BY title_sort_key, id</code>), <code>reason_code</code> (an <code>UnreadableReason</code> code, never English text) and <code>scan_version</code>
+  per row (the tag reader and sort key the row was read with: a row from another version is read again on the next
+  scan, once, whatever its size and mtime, and an unavailable folder or a partial walk does not keep re-reading the
+  rest). The schema snapshot is committed in <code>mobile/drift_schemas/library/drift_schema_v1.json</code>. Migrations are
+  stepwise from version 1, tested against the snapshots, and a downgrade is refused (decision 0008). The
+  <code>artists</code>/<code>albums</code>/<code>genres</code> tables, <code>track_key</code>, <code>track_stats</code>, playlists and FTS5 come with their phase 3 and 6
+  items, as schema version 2 with a <code>make-migrations</code> test. Version 1 holds nothing the user cannot rebuild by
+  rescanning.</li>
+<li><strong>Collation</strong> is ported exactly as decided (<code>collateKey</code>, <code>compareKeys</code>, <code>collateBucket</code> in
+  <code>domain/library/collation.dart</code>). Besides the cases of <code>tests/test_library.c</code>, a golden table generated from the C
+  source itself (<code>scripts/app/gen-collate-golden.sh</code>, 1,176 names: every Latin-1 and Latin Extended-A/B code point,
+  articles, symbols, other scripts, long names) is checked byte for byte.</li>
+<li><strong>Tag reading (decision 0003), phase 1 subset:</strong> FLAC (STREAMINFO, Vorbis comments) and MP3 (ID3v2.2 to 2.4 text
+  frames, Xing/Info with the LAME delay and padding, VBRI, else an estimate), title, artist, album, track number and
+  duration, ported from <code>app/audio/meta.c</code>. Other formats are listed by file name until phase 3.</li>
+<li><strong><code>track_stats</code> (phase 3, decision 0011, owner decision 20)</strong> is keyed by the firmware's path and size, not by
+  <code>track_key</code>; a tag-free audio fingerprint (<code>tracks.audio_fingerprint</code>) carries it over a move or a retag. It is in
+  its own database, <code>stats.sqlite</code>, which phone backups keep; the library database stays excluded from backups.</li>
+</ul>
+<h2 id="sources">Sources<a class="headerlink" href="#sources" title="Permanent link">&para;</a></h2>
+<p>All checked 2026-11-21.</p>
+<ul>
+<li>drift on pub.dev: <a href="https://pub.dev/packages/drift">https://pub.dev/packages/drift</a>; repo <a href="https://github.com/simolus3/drift">https://github.com/simolus3/drift</a></li>
+<li>drift platforms (bundled SQLite, <code>sqlite3_flutter_libs</code> not needed): <a href="https://drift.simonbinder.eu/platforms/">https://drift.simonbinder.eu/platforms/</a></li>
+<li>drift isolates: <a href="https://drift.simonbinder.eu/isolates/">https://drift.simonbinder.eu/isolates/</a></li>
+<li>drift migrations (<code>make-migrations</code>): <a href="https://drift.simonbinder.eu/migrations/">https://drift.simonbinder.eu/migrations/</a></li>
+<li>drift testing (<code>NativeDatabase.memory</code>): <a href="https://drift.simonbinder.eu/testing/">https://drift.simonbinder.eu/testing/</a></li>
+<li>drift FTS5: <a href="https://drift.simonbinder.eu/sql_api/extensions/">https://drift.simonbinder.eu/sql_api/extensions/</a></li>
+<li>drift_flutter: <a href="https://pub.dev/packages/drift_flutter">https://pub.dev/packages/drift_flutter</a></li>
+<li>sqlite3 on pub.dev: <a href="https://pub.dev/packages/sqlite3">https://pub.dev/packages/sqlite3</a>; hook options and compile flags
+  <a href="https://github.com/simolus3/sqlite3.dart/blob/main/sqlite3/doc/hook.md">https://github.com/simolus3/sqlite3.dart/blob/main/sqlite3/doc/hook.md</a>; changelog
+  <a href="https://github.com/simolus3/sqlite3.dart/blob/main/sqlite3/CHANGELOG.md">https://github.com/simolus3/sqlite3.dart/blob/main/sqlite3/CHANGELOG.md</a></li>
+<li>sqlite3_flutter_libs (0.6.0+eol): <a href="https://pub.dev/packages/sqlite3_flutter_libs">https://pub.dev/packages/sqlite3_flutter_libs</a></li>
+<li>sqflite: <a href="https://pub.dev/packages/sqflite">https://pub.dev/packages/sqflite</a>; Android FTS5 absence
+  <a href="https://slack-chats.kotlinlang.org/t/34195444/room-3-with-fts5">https://slack-chats.kotlinlang.org/t/34195444/room-3-with-fts5</a>,
+  <a href="https://www.b4x.com/android/forum/threads/sqlite3-fts5.110369/">https://www.b4x.com/android/forum/threads/sqlite3-fts5.110369/</a></li>
+<li>ObjectBox: <a href="https://pub.dev/packages/objectbox">https://pub.dev/packages/objectbox</a>, <a href="https://github.com/objectbox/objectbox-dart">https://github.com/objectbox/objectbox-dart</a></li>
+<li>isar: <a href="https://pub.dev/packages/isar">https://pub.dev/packages/isar</a>, <a href="https://github.com/isar/isar">https://github.com/isar/isar</a>; isar_community
+  <a href="https://pub.dev/packages/isar_community">https://pub.dev/packages/isar_community</a>, <a href="https://github.com/isar-community/isar-community">https://github.com/isar-community/isar-community</a></li>
+<li>realm: <a href="https://pub.dev/packages/realm">https://pub.dev/packages/realm</a>, <a href="https://github.com/realm/realm-dart">https://github.com/realm/realm-dart</a></li>
+<li>sembast: <a href="https://pub.dev/packages/sembast">https://pub.dev/packages/sembast</a>; hive <a href="https://pub.dev/packages/hive">https://pub.dev/packages/hive</a>; hive_ce
+  <a href="https://pub.dev/packages/hive_ce">https://pub.dev/packages/hive_ce</a></li>
+<li>SQLite FTS5 (unicode61, <code>remove_diacritics</code>, prefix indexes): <a href="https://sqlite.org/fts5.html">https://sqlite.org/fts5.html</a>; BLOB comparison by
+  <code>memcmp</code>: <a href="https://sqlite.org/datatype3.html#comparisons">https://sqlite.org/datatype3.html#comparisons</a>; SQLite licence <a href="https://sqlite.org/copyright.html">https://sqlite.org/copyright.html</a></li>
+<li>Firmware collation: <code>app/library/lib_collate.c</code>, <code>app/include/library.h</code>, <code>tests/test_library.c</code>,
+  <code>docs/adr/0017-music-library-index.md</code></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

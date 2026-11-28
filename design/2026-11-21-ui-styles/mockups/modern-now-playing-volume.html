@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>neuPod mock-up: Modern Now Playing, wheel turning</title>
+<!-- 600x450 px. Design mock-up, not firmware output. Font: Montserrat Medium. Icons: Lucide (ISC). Album art squares are placeholders. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500&display=swap">
+<style>body{margin:0}</style>
+</head>
+<body>
+<div style="width: 600px; height: 450px; box-sizing: border-box; display: flex; flex-direction: column; color: #f0f0f0; font-family: Montserrat, system-ui, sans-serif; font-weight: 500; overflow: hidden; background: linear-gradient(rgba(0,0,0,.3), rgba(0,0,0,.55)), radial-gradient(110% 100% at 15% 25%, rgba(217,115,78,.55), rgba(217,115,78,0) 60%), radial-gradient(120% 110% at 90% 100%, rgba(30,70,110,.85), rgba(22,50,79,0) 65%), #050608">
+  <div style="height: 45px; flex: none; box-sizing: border-box; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 19px; background: rgba(10,10,12,.5); border-bottom: 1px solid rgba(255,255,255,.1)">
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 22px; color: #b8b8b8"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="#f0f0f0" stroke="#f0f0f0" stroke-width="2" stroke-linejoin="round"><path d="M7 4l12 8-12 8z"/></svg><span>3 of 12</span></div>
+    <div style="font-size: 26px">Now Playing</div>
+    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 1px">
+      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f0f0f0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 9px"><path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/></svg>
+      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7a7a7a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 9px"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg>
+      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f0f0f0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 9px"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></svg>
+      <div style="width: 44px; height: 22px; box-sizing: border-box; padding: 2px; border: 2px solid rgba(255,255,255,.6); border-radius: 8px">
+        <div style="width: 78%; height: 100%; border-radius: 4px; background: linear-gradient(#8cecb4, #30b870)"></div>
+      </div>
+      <div style="width: 3px; height: 9px; background: rgba(255,255,255,.6); border-radius: 0 2px 2px 0"></div>
+    </div>
+  </div>
+  <div style="flex: 1; min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; padding: 22px 19px 0">
+    <div style="display: flex; gap: 22px; height: 210px; flex: none">
+      <div role="img" aria-label="Album art placeholder" style="width: 210px; height: 210px; flex: none; border-radius: 16px; background: linear-gradient(135deg, #16324f 50%, #d9734e 50%); box-shadow: 0 14px 34px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.2)"></div>
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+        <div style="font-size: 38px; line-height: 41px; white-space: nowrap">Harbour Lights</div>
+        <div style="margin-top: 6px; font-size: 26px; line-height: 29px; color: #d8d8d8; white-space: nowrap">Aurora Lane</div>
+        <div style="margin-top: 4px; font-size: 22px; line-height: 24px; color: #c0c0c0; white-space: nowrap">First Light · 2019</div>
+        <div style="margin-top: auto; font-size: 22px; line-height: 24px; color: #a8a8a8; white-space: nowrap">FLAC 16/44.1</div>
+      </div>
+    </div>
+    <div style="margin-top: 41px; height: 44px; flex: none; box-sizing: border-box; display: flex; align-items: center; gap: 14px; padding: 0 14px; border-radius: 22px; background: rgba(0,0,0,.4); border: 1px solid rgba(255,255,255,.14); box-shadow: inset 0 1px 0 rgba(255,255,255,.12)">
+      <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="#f0f0f0" stroke="#f0f0f0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/></svg>
+      <div style="flex: 1; height: 8px; border-radius: 4px; background: rgba(255,255,255,.2); overflow: hidden">
+        <div style="width: 62%; height: 100%; border-radius: 4px; background: #f0f0f0"></div>
+      </div>
+      <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f0f0f0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path fill="#f0f0f0" d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/></svg>
+    </div>
+  </div>
+</div>
+</body>
+</html>

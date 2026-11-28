@@ -1,0 +1,2287 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/app/decisions/0004-folder-access/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
+    
+    
+      
+        <title>0004: Folder access - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#0004-folder-access" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              0004: Folder access
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../constitution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Constitution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../bluetooth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../wifi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../touch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Touch input (600x450 boards)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../y2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Innioasis Y2 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../esp32s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-S3 platform (dev board)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../rp2350-amoled241/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Waveshare RP2350 AMOLED dev board
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../i2c-peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../teardown/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Donor teardown (photos, findings)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0017-music-library-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0018-ui-resolution-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0018 UI resolution profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0019-bluetooth-audio-sink-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0019 Bluetooth audio boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0020-hold/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0020 Hold
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0021-power-sleep/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0021 Power and sleep
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0022-one-player-ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0022 One player UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0023-headphone-jack-reuse/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0023 Headphone jack reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#options-considered" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Options considered
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#consequences-and-risks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Consequences and risks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#to-verify-in-the-phase-1-spike" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        To verify in the phase 1 spike
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-phase-1-2026-11-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation (phase 1, 2026-11-22)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#icloud-files-not-downloaded-phase-3-2026-11-25" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        iCloud files not downloaded (phase 3, 2026-11-25)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sources
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="0004-folder-access">0004: Folder access<a class="headerlink" href="#0004-folder-access" title="Permanent link">&para;</a></h1>
+<p>Status: Accepted (phase 1, 2026-11-22; see Implementation) · Owner: Library engineer</p>
+<h2 id="context">Context<a class="headerlink" href="#context" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Android: pick one or more folders with the system picker (SAF <code>ACTION_OPEN_DOCUMENT_TREE</code>); keep <strong>read-only</strong>
+  access across restarts (<code>takePersistableUriPermission</code>).</li>
+<li>Android: also offer the shared music collection (MediaStore audio); permission <code>READ_MEDIA_AUDIO</code> on API 33+,
+  <code>READ_EXTERNAL_STORAGE</code> (with <code>maxSdkVersion="32"</code>) below.</li>
+<li>iOS: the app's Documents folder visible in Files and Finder (<code>UIFileSharingEnabled</code>,
+  <code>LSSupportsOpeningDocumentsInPlace</code>); plus folders picked elsewhere in Files (iCloud Drive, external drive), kept
+  with a bookmark of the security-scoped URL.</li>
+<li>iOS: iCloud files that are not downloaded are detected and handled, not mistaken for missing or broken files.</li>
+<li>Recursive listing with size and last-modified for 20,000 tracks: a no-change rescan under 10 s.</li>
+<li>Random-access reads of file headers for the tag reader (<a href="../0003-tag-reader/">0003</a>) from a background isolate,
+  without a platform-channel hop per read.</li>
+<li>Hand the audio engine something it can open natively and gaplessly.</li>
+<li>Never write, move or delete; request nothing beyond what reading needs. No network.</li>
+<li>Minimum OS (owner, 2026-11-21): iOS 18+, Android 10 (API 29)+. Flutter 3.50 itself supports Android 24+ and iOS 15+.</li>
+</ul>
+<h2 id="options-considered">Options considered<a class="headerlink" href="#options-considered" title="Permanent link">&para;</a></h2>
+<p>Checked on pub.dev, GitHub and the platform docs on 2026-11-21.</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Version</th>
+<th>Last release</th>
+<th>Licence</th>
+<th>Platforms</th>
+<th>Tree pick + persist</th>
+<th>Fast listing (projection)</th>
+<th>Byte access</th>
+<th>iOS bookmark</th>
+<th>Maintained</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Own small plugin in <code>mobile/</code></strong> (Kotlin + Swift, Pigeon 30.0.4 for the API)</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>MPL-2.0 (ours); Pigeon BSD-3</td>
+<td>both</td>
+<td>yes, read-only flags</td>
+<td>yes, recursive in Kotlin, one call</td>
+<td>detached fd (Android), path (iOS)</td>
+<td>yes</td>
+<td>us</td>
+</tr>
+<tr>
+<td><code>saf_util</code> + <code>saf_stream</code></td>
+<td>3.1.1 / 4.0.3</td>
+<td>2026-09-30 / 2026-10-21</td>
+<td>BSD-3-Clause</td>
+<td>Android only</td>
+<td>yes (<code>persistablePermission</code>)</td>
+<td>yes, <code>DocumentsContract</code> query with projection, one level per call</td>
+<td><code>getFileDescriptor</code> (fd int), streams</td>
+<td>-</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>file_picker</code> (<code>getDirectoryPath</code>)</td>
+<td>13.4.1</td>
+<td>2026-11-21</td>
+<td>MIT</td>
+<td>both</td>
+<td>pick only; no persisted iOS bookmark API</td>
+<td>no listing</td>
+<td>-</td>
+<td>no</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>shared_storage</code></td>
+<td>0.8.1</td>
+<td>2024-02-16</td>
+<td>MIT</td>
+<td>Android</td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+<td>discontinued</td>
+</tr>
+<tr>
+<td><code>docman</code>, <code>saf</code>, <code>flutter_saf</code>, <code>document_tree_android</code></td>
+<td>1.2.0 / 2.1.2 / 0.1.0 / 1.0.0</td>
+<td>2025-01 to 2026-11</td>
+<td>MIT/BSD-3</td>
+<td>Android</td>
+<td>yes</td>
+<td>varies</td>
+<td>varies</td>
+<td>-</td>
+<td>small or new</td>
+</tr>
+<tr>
+<td><code>file_anchor</code> (+ <code>_ios</code>, <code>_android</code>)</td>
+<td>0.1.0</td>
+<td>2026-09-13</td>
+<td>MIT</td>
+<td>both</td>
+<td>yes</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>yes</td>
+<td>one release, no users</td>
+</tr>
+<tr>
+<td><code>directory_bookmarks</code></td>
+<td>0.1.2</td>
+<td>2024-11-26</td>
+<td>MIT</td>
+<td>Android, macOS (not iOS)</td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+<td>macOS only</td>
+<td>stale</td>
+</tr>
+<tr>
+<td><code>on_audio_query</code> (MediaStore)</td>
+<td>2.9.0</td>
+<td>2023-05-15</td>
+<td>BSD-3-Clause</td>
+<td>Android, iOS</td>
+<td>n/a</td>
+<td>MediaStore query</td>
+<td>-</td>
+<td>n/a</td>
+<td>stale</td>
+</tr>
+<tr>
+<td><code>media_store_plus</code></td>
+<td>0.1.3</td>
+<td>2024-09-22</td>
+<td>MIT</td>
+<td>Android</td>
+<td>n/a</td>
+<td>write-oriented</td>
+<td>-</td>
+<td>n/a</td>
+<td>stale</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Android listing, the fast path.</strong> <code>DocumentFile.listFiles()</code> then <code>length()</code>/<code>lastModified()</code> costs one binder
+query per file per attribute; the Android guide itself warns that iterating a large tree "might reduce performance",
+and field reports put a direct query hundreds of times faster. The fast path is one
+<code>ContentResolver.query(DocumentsContract.buildChildDocumentsUriUsingTree(tree, docId), [DOCUMENT_ID, DISPLAY_NAME,
+MIME_TYPE, SIZE, LAST_MODIFIED], ...)</code> per directory, walked breadth-first in Kotlin on a background thread, results
+streamed to Dart in batches. 300 CDs is roughly 600 directories, so a rescan is about 600 queries plus a database diff.
+<code>saf_util.list</code> already does this query, one level per channel call; our plugin does the whole walk in one call.</p>
+<p><strong>Android byte access.</strong> <code>ContentResolver.openFileDescriptor(uri, "r")</code> then <code>ParcelFileDescriptor.detachFd()</code> gives
+an int fd owned by Dart; the tag reader does <code>pread</code> and <code>close</code> through <code>dart:ffi</code> (package <code>ffi</code>, BSD-3) in its
+isolate, with no channel traffic per read. (Alternative to test: open <code>/proc/self/fd/N</code> with <code>dart:io</code>.) MediaStore
+items use the same route with their <code>content://media/...</code> URI; on API 30+ the <code>DATA</code> path is also readable with
+<code>READ_MEDIA_AUDIO</code>, but not on Android 10 without <code>requestLegacyExternalStorage</code>, so we use the URI on every version.</p>
+<p><strong>iOS.</strong> Documents needs no permission: the two Info.plist keys make it appear under On My iPhone and in Finder.
+Other folders: <code>UIDocumentPickerViewController(forOpeningContentTypes: [.folder])</code> (iOS 13+) returns a security-scoped
+URL that covers the whole tree "including any new items"; we store <code>bookmarkData()</code> (<code>.withSecurityScope</code> is
+macOS-only; iOS bookmarks of picker URLs are implicitly scoped), resolve it at launch, re-save if stale, and keep
+<code>startAccessingSecurityScopedResource()</code> active for each library root while the app runs. Children of the root are
+then ordinary paths that <code>dart:io</code> and AVFoundation can open from any isolate. Listing is <code>FileManager</code> enumeration
+with <code>fileSizeKey</code>, <code>contentModificationDateKey</code>, <code>ubiquitousItemDownloadingStatusKey</code>, inside <code>NSFileCoordinator</code>
+as Apple asks. iCloud items not on the device appear as hidden <code>.Name.ext.icloud</code> placeholders (or with status
+<code>notDownloaded</code>); we list them as tracks greyed <code>Not downloaded</code> with folder-convention names, and never download
+on our own (see risks).</p>
+<h2 id="decision">Decision<a class="headerlink" href="#decision" title="Permanent link">&para;</a></h2>
+<p>Build one small in-repo plugin (<code>mobile/packages/neupod_storage</code>, Kotlin + Swift, API defined with Pigeon) with five
+calls: <code>pickFolder()</code>, <code>listRoots()</code> / <code>removeRoot()</code>, <code>walk(root) -&gt; stream of {relPath, size, mtime, uri, state}</code>,
+<code>openRead(uri) -&gt; fd</code> (Android) / path (iOS), and <code>mediaStoreAudio(sinceGeneration)</code> on Android. No maintained
+package covers iOS folder bookmarks, and the Android packages either list one level per call or are stale; the native
+code needed is a few hundred lines on each side. <code>saf_util</code> (BSD-3, active) is the fallback for the Android half if
+the plugin slips.</p>
+<p>The audio engine gets a <strong>URI string</strong>: <code>content://...</code> on Android (Media3's <code>DefaultDataSource</code> opens <code>content</code>
+URIs itself, and the persisted grant belongs to the whole app process), <code>file://...</code> under an actively accessed root
+on iOS. The URI goes to <code>neupod_audio</code> (<a href="../0001-audio-engine/">0001</a>): Media3 opens <code>content://</code> itself, and on iOS
+AVAudioFile opens the <code>file://</code> URL. <strong>Only <code>neupod_storage</code> resolves bookmarks and starts or stops security-scoped
+access</strong>; the audio plugin never does, so neither can end access the other still needs. Not an fd and not a Dart byte
+stream (a Dart stream source would need a localhost HTTP proxy, which fits badly with "no network connection").</p>
+<h2 id="consequences-and-risks">Consequences and risks<a class="headerlink" href="#consequences-and-risks" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Android 11+ cannot pick the root of internal storage, the root of a reliable SD card, or <code>Download</code></strong> as a tree.
+  Music in <code>Music/</code> or any subfolder is fine. The UI must say this when the picker refuses.</li>
+<li><strong>MediaStore source and folder art:</strong> <code>READ_MEDIA_AUDIO</code> covers audio only. <code>Folder.jpg</code>/<code>cover.jpg</code> next to the
+  tracks are images, and <code>READ_MEDIA_IMAGES</code> is restricted by Play policy. Tracks from the shared collection get
+  embedded art only; folder-art fallback works for SAF-picked folders. <strong>Resolved: owner decision 8.</strong> Spike:
+  <code>ContentResolver.loadThumbnail</code> on the album URI may recover some folder art under <code>READ_MEDIA_AUDIO</code>.</li>
+<li><strong>iCloud not downloaded:</strong> reading or playing an evicted file makes iOS fetch it from iCloud. R1 promises no network
+  connection. <strong>Resolved: owner decision 7</strong>, a Download action that asks iOS to fetch; the app never reads an
+  evicted file without that tap. iOS 18.4+ reportedly changed when evicted files are refreshed (forum report, unanswered); test.</li>
+<li><strong>Scan surviving the app being closed:</strong> Android can keep a scan going in a foreground service or WorkManager.
+  iOS cannot run an arbitrary long task after the user closes the app; the scan checkpoints and resumes at next
+  launch, and keeps going while music plays in the background (the app is then not suspended). <strong>Resolved: owner
+  decision 8.</strong></li>
+<li>The iOS picker grants read-write to the tree; read-only is enforced by our code only (no write API in the plugin).
+  On Android we request <code>FLAG_GRANT_READ_URI_PERMISSION</code> only.</li>
+<li>Removable drives on iOS: a bookmark to an unplugged drive fails to resolve; the root shows as unavailable, its tracks
+  stay in the library greyed until the user removes the folder.</li>
+<li>Persisted SAF grants are capped (128, raised to 512 in Android 11, per AOSP and CommonsWare); we hold one per root.</li>
+<li>Permissions requested: Android <code>READ_MEDIA_AUDIO</code> (33+) and <code>READ_EXTERNAL_STORAGE</code> with <code>maxSdkVersion="32"</code>, only
+  when the user turns on the shared collection; none for SAF. iOS: none.</li>
+</ul>
+<h2 id="to-verify-in-the-phase-1-spike">To verify in the phase 1 spike<a class="headerlink" href="#to-verify-in-the-phase-1-spike" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Android emulator (API 29 and 36): pick <code>Music/Library</code>, reboot, confirm the grant survives
+   (<code>persistedUriPermissions</code>).</li>
+<li>Walk a generated 20,000-file, 2,000-directory tree: time the Kotlin walk and the Dart diff; target under 5 s total
+   no-change rescan on the emulator; compare with <code>DocumentFile</code> to record the gap.</li>
+<li><code>detachFd</code> + FFI <code>pread</code> from a background isolate: 5,000 header reads; check fds are always closed (count
+   <code>/proc/self/fd</code>). Try <code>/proc/self/fd/N</code> with <code>RandomAccessFile</code> as the simpler alternative.</li>
+<li>Same fd path on a non-local provider (Google Drive if installed): <code>openFileDescriptor</code> may return a pipe (not
+   seekable); confirm we detect and grey it. (Moot for R1: the picker is local-only, see Implementation.)</li>
+<li><code>neupod_audio</code> plays a <code>content://</code> tree URI and a MediaStore URI gaplessly on Android, and a
+   bookmarked iCloud Drive file URL on iOS after relaunch.</li>
+<li>iPhone: drag a folder in Finder into Documents; pick an iCloud Drive folder with some files evicted; confirm the
+   placeholder names and status keys on the current iOS; relaunch and resolve the bookmark; a USB drive unplugged.</li>
+<li>Android 10 device or emulator: MediaStore query with <code>READ_EXTERNAL_STORAGE</code>, URI reads work without legacy storage.</li>
+</ol>
+<h2 id="implementation-phase-1-2026-11-22">Implementation (phase 1, 2026-11-22)<a class="headerlink" href="#implementation-phase-1-2026-11-22" title="Permanent link">&para;</a></h2>
+<p>Built as decided, in <code>mobile/packages/neupod_storage</code> (Kotlin + Swift, Pigeon 30.0.4 as a dev dependency only), used
+by <code>mobile/lib/data/platform/storage_folder_access.dart</code>. Where it differs from the decision above, and why:</p>
+<ul>
+<li><strong>Calls.</strong> <code>pickFolder</code>, <code>listRoots</code>, <code>removeRoot</code>, <code>startWalk</code> / <code>nextWalkBatch</code> / <code>cancelWalk</code>, <code>openFd</code>
+  (Android), <code>appSupportPath</code> (the private directory for the library database, so <code>path_provider</code> is not needed; see
+  <a href="../0005-database/">0005</a>) and <code>debugAddRoot</code> (iOS debug builds only). <code>mediaStoreAudio</code> is left to its own phase 3 item ("Android:
+  the device's shared music collection"), so phase 1 requests <strong>no permission at all</strong> on either platform. (Phase 3:
+  built as <code>addSharedCollection</code> plus a root of kind <code>sharedCollection</code> that the same walk calls list, see
+  <a href="../0012-android-shared-collection/">0012</a>.)</li>
+<li><strong>Walk as pages, not a stream.</strong> The walk is pull-based: each <code>nextWalkBatch</code> continues the breadth-first
+  DocumentsContract walk (Android) or the <code>FileManager</code> enumerator (iOS) on a background thread until it has about N
+  files. Dart wraps it as a <code>Stream&lt;List&lt;StorageEntry&gt;&gt;</code>; cancelling the subscription calls <code>cancelWalk</code>. This gives
+  back-pressure and cancel with plain host-API calls, where a Pigeon event channel cannot take a root argument.</li>
+<li><strong>Callback-style async (<code>@asyncCallback</code>).</strong> Pigeon 28+ generates Kotlin <code>suspend</code> functions for <code>@async</code>, which
+  would add <code>kotlinx-coroutines-android</code> to the app. The callback form needs no new shipped library.</li>
+<li><strong>No <code>ffi</code> package.</strong> <code>FdStorageReader</code> calls <code>pread</code>/<code>lseek</code>/<code>close</code> (the <code>64</code> variants where libc has them) through
+  <code>dart:ffi</code> and <code>DynamicLibrary.process()</code>, with <code>malloc</code>/<code>free</code> from libc too, so nothing new ships. <code>lseek</code> to the
+  end gives the length and fails on a pipe, which is how a non-seekable provider descriptor is detected and refused.</li>
+<li><strong>iOS bookmarks</strong> are kept in the plugin's own <code>UserDefaults</code> key, resolved and held open (one
+  <code>startAccessingSecurityScopedResource</code> per root) when the plugin registers at launch, and re-saved when stale.
+  Listing runs inside <code>NSFileCoordinator</code> with <code>.immediatelyAvailableMetadataOnly</code>, one coordinated read per page.
+  iCloud placeholders (<code>.Name.ext.icloud</code>) and items whose downloading status is <code>notDownloaded</code> come back with
+  <code>state = notDownloaded</code> and their real name; other hidden files are skipped. The privacy manifest declares the file
+  timestamp (3B52.1, C617.1) and <code>UserDefaults</code> (CA92.1) reasons.</li>
+<li><strong>Test hook.</strong> <code>debugAddRoot(path)</code> stores a bookmark exactly as a pick does, so the iOS integration test covers
+  bookmark storage, resolution after relaunch, walking and reading. It throws in release builds. The picker UI itself
+  is driven on Android (adb, <code>scripts/app/drive_saf_picker.py</code>) but not on the iOS simulator.</li>
+<li><strong>Hidden entries.</strong> Names starting with <code>.</code> are skipped on both platforms (except iCloud placeholders on iOS).</li>
+<li><strong>Complete or not.</strong> The last page of a walk says whether every folder was listed (<code>complete</code>). It is false when a
+  subfolder could not be read (Android: the child query failed; iOS: the enumerator's error handler fired), when the
+  tree is deeper than 64 levels or a document id repeats (a provider loop), when the coordinated read fails, or when the
+  root is no longer reachable at the end (an unplugged drive makes the enumerator simply run dry). The scanner deletes
+  tracks for files missing from a walk only after a complete one.</li>
+<li><strong>Threading.</strong> Every ContentResolver call (roots, grants, walks) runs on one background executor and <code>openFd</code> on a
+  second one, so a provider that blocks an open cannot stall a walk or the platform thread (<code>removeRoot</code>, <code>startWalk</code>
+  and <code>openFd</code> are asynchronous in the API). On iOS all bookmark, access and walk state lives on one serial queue;
+  bookmarks are resolved there at launch, not on the main thread, and a bookmark that did not resolve is tried again on
+  every <code>listRoots</code>. <code>removeRoot</code> cancels the root's walks before giving up access.</li>
+<li><strong>On-device storage only (lead decision, 2026-11-22, under R1's no-network rule).</strong> The Android picker is opened with
+  <code>EXTRA_LOCAL_ONLY</code>, so cloud providers (Drive and the like), whose reads are network fetches, are not offered, and
+  entries flagged <code>FLAG_VIRTUAL_DOCUMENT</code> (no bytes of their own) are skipped. Spike item 4 (a non-local provider) is
+  therefore moot for R1; the pipe check in <code>FdStorageReader</code> stays as a guard. On iOS the picker cannot be limited this
+  way; iCloud Drive is covered by owner decision 7 (not-downloaded files are never read).</li>
+<li><strong>Handles.</strong> <code>openHandle</code> takes the <code>StorageEntry</code> and refuses a not-downloaded one by construction. A <code>ReaderHandle</code>
+  is used exactly once (<code>open</code> or <code>discard</code>); <code>pread</code> is retried on <code>EINTR</code>, and failures carry <code>errno</code>.</li>
+</ul>
+<h2 id="icloud-files-not-downloaded-phase-3-2026-11-25">iCloud files not downloaded (phase 3, 2026-11-25)<a class="headerlink" href="#icloud-files-not-downloaded-phase-3-2026-11-25" title="Permanent link">&para;</a></h2>
+<p>Owner decision 7: such files are listed with a Download action; the app never fetches them itself, and a tap asks iOS to
+download the file. Built as follows.</p>
+<ul>
+<li><strong>Detection, metadata only</strong> (<code>ICloudItem</code> in <code>NeupodStoragePlugin.swift</code>). A file is not downloaded when any of these
+  holds: it is a hidden placeholder <code>.Name.ext.icloud</code>; its <code>ubiquitousItemDownloadingStatus</code> is <code>notDownloaded</code>; or
+  <code>lstat</code> shows the APFS dataless flag (<code>SF_DATALESS</code>), which File Provider sets on any file whose content is not local,
+  so a third-party provider that reports no downloading status is caught too (the risk noted below). <code>lstat</code> and
+  resource values read the inode and the provider's metadata; neither materialises the file. A placeholder is listed
+  under the real file's name <strong>and URL</strong>, so the track's URI does not change once the file arrives. Size is 0.</li>
+<li><strong>Security-scoped bookmarks.</strong> The bookmark of a picked iCloud Drive folder covers the files in it whether or not they
+  are downloaded; access is held for the root as before, so metadata reads, the download request and the later read all
+  work under it. Nothing new is bookmarked per file.</li>
+<li><strong>Never blocking.</strong> The walk's coordinated read keeps <code>.immediatelyAvailableMetadataOnly</code> and now has a watchdog: if
+  the coordination has not started within 15 s (another process holding a write, a provider not answering), the
+  coordinator is cancelled and the walk ends incomplete, so the scan keeps what it had. Each walk lists its pages on its
+  own serial queue, not the plugin's: a stuck enumerator holds up only its own walk, never <code>listRoots</code>, <code>removeRoot</code>,
+  <code>requestDownload</code> or another root's walk. The Dart side gives up on <code>startWalk</code> and on each walk page after 2 minutes
+  and on <code>listRoots</code> after 30 s (<code>StorageException('timeout')</code>; the scan then keeps what it had). Those are the limits:
+  a <code>listRoots</code> stuck in the system (a bookmark resolving against a gone drive) still holds the plugin queue until the
+  system answers, but no caller waits on it past 30 s. The scanner never opens a not-downloaded entry (<code>openHandle</code>
+  refuses it by construction), nor a cover file that is not downloaded.</li>
+<li><strong>Listing.</strong> A new not-downloaded file is listed by its file name (the device's untagged fallback), greyed
+  <code>Not downloaded</code>. A file read before and then evicted keeps its tags, size and audio fingerprint, so it is still
+  listed by its title and its ratings and play counts are still found; eviction is not a move. While it stays away a
+  rescan does not touch it; once it is local the next scan reads it, whatever its size and time say.</li>
+<li><strong>Art.</strong> A not-downloaded track offers no embedded-art source on its own file (the row keeps where its picture is,
+  so the source and the cache key come back with the file); its folder's cover file is still offered. A walk that sees
+  the cover file itself not downloaded clears it from the folder's tracks, even when the walk is incomplete. And on iOS
+  the art cache's opener reads the source's download state first and refuses anything not on the phone, so a picture
+  is never the reason iOS fetches a file, even before a scan has seen an eviction.</li>
+<li><strong>The Download action</strong> (<code>requestDownload</code> calls <code>FileManager.startDownloadingUbiquitousItem(at:)</code> for a file under a
+  held root, and nothing else). Then <code>downloadStates</code> is polled every 2 s for the files asked for only, from metadata
+  (<code>downloaded</code>, <code>notDownloaded</code>, <code>downloading</code>, <code>failed</code> from <code>ubiquitousItemDownloadingError</code>, <code>missing</code>), for at most
+  10 minutes, while the app is in front. When a file is <code>downloaded</code> the ordinary incremental scan runs, 2.5 s after
+  the last file arrived (songs tapped one after another share one walk), and picks it up with its tags and art. If
+  that scan still lists a file as not downloaded (its metadata lagging the state read), the row stays <code>Downloading</code> and
+  it is scanned once more; then the library's word stands. A downloading error the file already had before the
+  request is not reported as <code>failed</code> (iOS keeps the last error on an item until a new attempt replaces it): the plugin
+  notes it at the request and reports only a different one.</li>
+<li><strong>Why a poll, not <code>NSMetadataQuery</code>.</strong> A metadata query sees only the app's own ubiquity container, which needs the
+  iCloud entitlement and a container the app does not have; it cannot watch a folder the user picked in iCloud Drive. An
+  <code>NSFilePresenter</code> per file would work but adds native state and lifecycle for the same result. Rescanning only on the
+  next return to the front would leave the row stale while the user waits. The poll is a handful of metadata reads.</li>
+<li><strong>Data safety.</strong> <code>startDownloadingUbiquitousItem</code> is an OS action on the user's own file: iOS fetches its content
+  unchanged. The read-only guard now forbids the iCloud calls that change a file's place or copy (<code>setUbiquitous</code>,
+  <code>evictUbiquitousItem</code>) and allows the one download call, with its reason.</li>
+<li><strong>A queued song evicted later</strong> (lead call, 2026-11-26, under decisions 7 and 19). A song can be evicted after it was
+  queued. neupod_audio's engine checks the file's download state from metadata (<code>LocalFile.swift</code>, the same three
+  signs as the walk) before it opens the current item or pre-schedules the next, and fails one that is not on the
+  phone as <code>Not downloaded</code>; the player skips it as it skips an unplayable song, so AVFoundation never fetches it. The
+  lock screen reads embedded art only from a file on the phone. neupod_audio's privacy manifest declares the file
+  timestamp API for its <code>lstat</code>. The simulator test queues a placeholder-only song before a real one: the real one
+  plays.</li>
+<li><strong>Search</strong> rebuilds its index after every finished scan (it watches the library view), and its rows read
+  <code>Downloading</code> once asked for.</li>
+<li><strong>Limits.</strong> <code>requestDownload</code> gives up after 30 s on the Dart side. The notes of a file's earlier downloading error
+  are dropped once its request settles (downloaded, failed or gone) and capped at 256 files.</li>
+<li><strong>Tests.</strong> Unit: the scanner with walks that report files away and back; the state-to-step mapping and the controller
+  with a fake platform; the row and the action in the shell. iOS simulator (<code>integration_test/folder_access_test.dart</code>):
+  a real placeholder file in a bookmarked folder is walked, stated and scanned without being read, and a download
+  request for it is refused or ignored without touching it. Also: a not-downloaded song's art has no source on its own
+  file; a cover file evicted later is cleared after an incomplete walk; the iOS art opener refuses every state but
+  <code>downloaded</code>; songs arriving together share a scan; the retry; a reload keeps the bar on the same song. A real
+  evicted iCloud file, the status key and the dataless
+  flag cannot be made on the simulator (no iCloud account; the flag is set only by the system): that is the owner's
+  device check (PROGRESS, phase 3).</li>
+</ul>
+<p>For the device check (phase 1) and phase 3:</p>
+<ul>
+<li>Third-party File Provider extensions may present dataless files without <code>ubiquitousItemDownloadingStatus</code>; the walk
+  then reports them as local, and reading them may make the provider fetch them. Check on the owner's iPhone with any
+  provider apps installed.</li>
+<li>Nested or duplicate roots (a folder picked inside another, or Documents picked as a folder) are not detected yet:
+  their files would be scanned twice. Phase 3 (incremental rescan, removing a folder) handles it.</li>
+</ul>
+<h2 id="sources">Sources<a class="headerlink" href="#sources" title="Permanent link">&para;</a></h2>
+<p>All checked 2026-11-21.</p>
+<ul>
+<li>Android, documents and other files (tree picker, Android 11 restrictions, persist permissions, performance caution):
+  https://developer.android.com/training/data-storage/shared/documents-files</li>
+<li>Android, media store (permissions by API level, direct paths on 11+, Android 10 legacy flag, <code>DATA</code> column):
+  https://developer.android.com/training/data-storage/shared/media</li>
+<li>DocumentsContract: https://developer.android.com/reference/android/provider/DocumentsContract</li>
+<li>CommonsWare, Scoped Storage Stories: DocumentsContract and listFiles() Woe:
+  https://commonsware.com/blog/2019/11/23/scoped-storage-stories-documentscontract.html ;
+  https://commonsware.com/blog/2019/12/14/scoped-storage-stories-listfiles-woe.html</li>
+<li>Persisted grant limit: https://commonsware.com/blog/2020/06/13/count-your-saf-uri-permission-grants.html ;
+  https://issuetracker.google.com/149315521</li>
+<li>Apple, Providing access to directories: https://developer.apple.com/documentation/uikit/providing-access-to-directories</li>
+<li>Apple, <code>bookmarkData(options:...)</code>, <code>withSecurityScope</code> (macOS only), <code>startDownloadingUbiquitousItem(at:)</code>,
+  <code>UIFileSharingEnabled</code>, <code>LSSupportsOpeningDocumentsInPlace</code>: https://developer.apple.com/documentation/foundation/url/bookmarkdata(options:includingresourcevaluesforkeys:relativeto:) ;
+  https://developer.apple.com/documentation/foundation/nsurl/bookmarkcreationoptions/withsecurityscope ;
+  https://developer.apple.com/documentation/foundation/filemanager/startdownloadingubiquitousitem(at:) ;
+  https://developer.apple.com/documentation/bundleresources/information-property-list/uifilesharingenabled ;
+  https://developer.apple.com/documentation/bundleresources/information-property-list/lssupportsopeningdocumentsinplace</li>
+<li>iCloud placeholders: https://fatbobman.com/en/posts/advanced-icloud-documents/ ; iOS 18.4 report:
+  https://developer.apple.com/forums/thread/785030</li>
+<li>saf_util: https://pub.dev/packages/saf_util , https://github.com/flutter-cavalry/saf_util (<code>SafUtilPlugin.kt</code>);
+  saf_stream: https://pub.dev/packages/saf_stream</li>
+<li>file_picker: https://pub.dev/packages/file_picker ; shared_storage: https://pub.dev/packages/shared_storage ;
+  file_anchor: https://pub.dev/packages/file_anchor ; directory_bookmarks: https://pub.dev/packages/directory_bookmarks ;
+  on_audio_query: https://pub.dev/packages/on_audio_query ; media_store_plus: https://pub.dev/packages/media_store_plus</li>
+<li>just_audio (Media3 <code>DefaultDataSource</code>, <code>StreamAudioSource</code> proxy): https://pub.dev/packages/just_audio ;
+  https://github.com/ryanheise/just_audio</li>
+<li>Pigeon: https://pub.dev/packages/pigeon ; ffi: https://pub.dev/packages/ffi</li>
+<li>Flutter supported platforms: https://docs.flutter.dev/reference/supported-platforms</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,2139 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/esp32s3/">
+      
+      
+        <link rel="prev" href="../y2/">
+      
+      
+        <link rel="next" href="../wiring-phase1/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
+    
+    
+      
+        <title>ESP32-S3 platform (dev board) - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#esp32-s3-platform-waveshare-esp32-s3-touch-amoled-241" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              ESP32-S3 platform (dev board)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../constitution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Constitution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bluetooth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wifi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../touch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Touch input (600x450 boards)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../y2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Innioasis Y2 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-S3 platform (dev board)
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-S3 platform (dev board)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#build-and-flash" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build and flash
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-differs-from-the-other-platforms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it differs from the other platforms
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ui-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UI profile
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bench-result-14-nov-2026-600x450-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bench result (14 Nov 2026, 600x450 profile)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rp2350-amoled241/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Waveshare RP2350 AMOLED dev board
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../i2c-peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../teardown/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Donor teardown (photos, findings)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-music-library-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0018-ui-resolution-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0018 UI resolution profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0019-bluetooth-audio-sink-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0019 Bluetooth audio boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0020-hold/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0020 Hold
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0021-power-sleep/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0021 Power and sleep
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0022-one-player-ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0022 One player UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0023-headphone-jack-reuse/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0023 Headphone jack reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#build-and-flash" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build and flash
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-differs-from-the-other-platforms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it differs from the other platforms
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ui-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UI profile
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bench-result-14-nov-2026-600x450-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bench result (14 Nov 2026, 600x450 profile)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="esp32-s3-platform-waveshare-esp32-s3-touch-amoled-241">ESP32-S3 platform (Waveshare ESP32-S3-Touch-AMOLED-2.41)<a class="headerlink" href="#esp32-s3-platform-waveshare-esp32-s3-touch-amoled-241" title="Permanent link">&para;</a></h1>
+<p>The full neuPod runtime on an ESP32-S3 dev board: boot self-checks, settings, storage and library, the LVGL UI, input, and the
+audio core with a <strong>null sink</strong> (the board has no audio hardware). It is built from the same <code>app/</code> sources as the RP2350
+<code>neupod</code> target, with a board HAL in <code>platforms/esp32s3/main/hal/</code>. This is a <strong>dev platform</strong>, not a product target (the
+product target is the RP2350B, <a href="../adr/0001-rp2350-phase1-platform/">ADR-0001</a>); it exists to run the real runtime on a touch AMOLED
+panel and to prove the HAL interfaces on a third architecture.</p>
+<p><strong>Not in yet:</strong> Wi-Fi and BLE (the radio HAL answers "not present" and nothing joins a network), a battery gauge (the board has no
+fuel gauge; the battery divider on GPIO17 is not read), the IMU and RTC.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Chip</td>
+<td>ESP32-S3R8: dual Xtensa LX7 at 240 MHz, 8 MB octal PSRAM, 16 MB flash. Wi-Fi + BLE 5 only: <strong>no Classic Bluetooth, so no A2DP</strong></td>
+</tr>
+<tr>
+<td>Display</td>
+<td>450 x 600 RM690B0 AMOLED on QSPI (SPI2: CS 9, CLK 10, D0-3 11-14, RST 21), used as <strong>600 x 450 landscape</strong> (MADCTL 0x30). Panel power enable and TE are on the TCA9554 expander (EXIO1, EXIO0); <code>board.c</code> must write it (output 0x03, config 0xDC) every boot or the panel stays dark</td>
+</tr>
+<tr>
+<td>Touch</td>
+<td>FT6336 at I2C 0x38, reset GPIO3, polled (its interrupt is EXIO2)</td>
+</tr>
+<tr>
+<td>I2C</td>
+<td>one bus, SDA 47 / SCL 48: TCA9554 0x20, FT6336 0x38, QMI8658 0x6B, PCF85063 0x51</td>
+</tr>
+<tr>
+<td>microSD</td>
+<td>SPI (SPI3): CS 2, SCK 4, MOSI 5, MISO 6, 20 MHz</td>
+</tr>
+<tr>
+<td>Power</td>
+<td><code>KEY_BAT</code> GPIO15 (side key, active low), <code>BAT_CTRL</code> GPIO16 (soft latch: <strong>driven high first thing</strong>, or the board switches off on battery when the key is released), <code>BAT_ADC</code> GPIO17</td>
+</tr>
+<tr>
+<td>Console</td>
+<td>the USB-C port, native USB-Serial/JTAG (<code>303a:1001</code>), stdio plus the key map of <a href="../runtime/#input-sources-and-the-testbed-key-map">Runtime</a></td>
+</tr>
+</tbody>
+</table>
+<p>The pin map and the panel facts were proven by the bring-up probe (<a href="https://github.com/StuartF303/neuPod/tree/main/testbed/esp32amoled241/bringup"><code>testbed/esp32amoled241/bringup</code></a>).</p>
+<h2 id="build-and-flash">Build and flash<a class="headerlink" href="#build-and-flash" title="Permanent link">&para;</a></h2>
+<p>Same container as CI (ESP-IDF v5.3.2). From the repository root, with the submodules fetched (<code>git submodule update --init lib/lvgl</code>):</p>
+<div class="highlight"><pre><span></span><code>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--user<span class="w"> </span><span class="k">$(</span>id<span class="w"> </span>-u<span class="k">)</span>:<span class="k">$(</span>id<span class="w"> </span>-g<span class="k">)</span><span class="w"> </span>-e<span class="w"> </span><span class="nv">HOME</span><span class="o">=</span>/tmp<span class="w"> </span>-v<span class="w"> </span><span class="s2">"</span><span class="nv">$PWD</span><span class="s2">"</span>:/project<span class="w"> </span>-w<span class="w"> </span>/project<span class="w"> </span>espressif/idf:v5.3.2<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>bash<span class="w"> </span>-c<span class="w"> </span><span class="s1">'. $IDF_PATH/export.sh &amp;&amp; scripts/build.sh esp32s3'</span>
+</code></pre></div>
+<p>or, with ESP-IDF installed, <code>. ~/esp/esp-idf/export.sh &amp;&amp; scripts/build.sh esp32s3</code>. The result is <code>build/esp32s3/neupod.bin</code> (about 1 MB
+of a 4 MB app partition). Flash the bootloader, partition table and app (<strong>this replaces whatever is on the board</strong>; the factory image
+is restored with <code>esptool write-flash 0 factory-flash-16MB.bin</code> from a backup taken first):</p>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>build/esp32s3
+esptool<span class="w"> </span>--chip<span class="w"> </span>esp32s3<span class="w"> </span>--port<span class="w"> </span>/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_*<span class="w"> </span>-b<span class="w"> </span><span class="m">460800</span><span class="w"> </span>write-flash<span class="w"> </span>@flash_args
+</code></pre></div>
+<p>The console is the same USB port (115200 is nominal; it is USB). Keys typed there drive the UI like the Pico rig's UART.</p>
+<h2 id="how-it-differs-from-the-other-platforms">How it differs from the other platforms<a class="headerlink" href="#how-it-differs-from-the-other-platforms" title="Permanent link">&para;</a></h2>
+<p><strong>FatFs.</strong> ESP-IDF ships its own <code>fatfs</code> component (<code>ff.h</code>, <code>diskio.h</code>, <code>f_*</code> and <code>disk_*</code> symbols), which collides with
+neuPod's. The build <strong>excludes the IDF component entirely</strong> (<code>EXCLUDE_COMPONENTS fatfs</code> in <code>platforms/esp32s3/CMakeLists.txt</code>) and
+uses <code>app/third_party/fatfs</code> with the shared <code>ffconf.h</code> and <code>app/storage/diskio.c</code> over <code>hal_storage</code>, the same layering as the Y2 and
+the host. <code>hal_storage</code> talks to the card through IDF's <code>sdspi</code> host and <code>sdmmc</code> protocol code (identification, sector read and write).
+The reasons: the card's file system behaviour (exFAT, long names, the <code>FF_*</code> options the library and settings code were tested with)
+stays identical on every board, the vendored copy has one configuration check, and there is no <code>ff.h</code> on any include path to pick the wrong one.
+IDF's VFS/<code>esp_vfs_fat</code> layer is not used: <code>nfs.h</code> is the file API.</p>
+<p><strong>RTOS.</strong> <code>app/os/os_freertos.c</code> builds unchanged apart from three guarded items: the FreeRTOS headers live under <code>freertos/</code>; every runtime task
+is created with <code>xTaskCreatePinnedToCore(..., core 0)</code>; and <code>os_start()</code> retires <code>app_main</code>'s task (the IDF scheduler is already running). Stacks are
+<strong>doubled</strong> (<code>OS_STACK_SCALE 2</code>): Xtensa's windowed-register frames and newlib's <code>printf</code> are larger than Thumb-2's, and the library scan overflowed
+the 8 KB storage stack on the bench (the hardware stack-end watchpoint, <code>CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK</code>, is on to catch the next one).</p>
+<p><strong>The audio core (ADR-0011).</strong> The RP2350's core 1 is bare metal; the S3's FreeRTOS is SMP, so the shape is kept with tasks:</p>
+<table>
+<thead>
+<tr>
+<th>Where</th>
+<th>What</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CPU 0</td>
+<td>every RTOS task of the runtime (storage, UI, input, monitor, check tasks, haptic, wifi) and all IDF service tasks</td>
+</tr>
+<tr>
+<td>CPU 1</td>
+<td><code>audio</code>: the audio core loop (<code>audio_core_main</code>, priority 5, 28 KB stack), and <code>vclk</code>: the block clock task (priority 20)</td>
+</tr>
+</tbody>
+</table>
+<p><code>hal_audio.c</code> is the null sink with a real-time block clock: a 1 MHz general-purpose timer interrupt on CPU 1 (allocated by the core that calls
+<code>hal_audio_open()</code>, deadlines absolute and drift-free) wakes <code>vclk</code>, which calls the block callback. The callback was written for interrupt context,
+so a task that preempts the decoder on the same CPU is a safe home for it. Measured: 5804 us period, jitter under 70 us, 0 under-runs. The core-1
+rules scripts (<code>check_core1_rules</code>, the closure check) apply to the RP2350 image only.</p>
+<p><strong>Memory.</strong> 512 KB internal SRAM is shared by the static data, task stacks and DMA buffers; the 8 MB PSRAM takes the big buffers. By object file,
+in <code>main/linker.lf</code> (no attributes in <code>app/</code>):</p>
+<table>
+<thead>
+<tr>
+<th>In PSRAM</th>
+<th>Why there</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>codec arena (99 KB), compressed-data ring (32 KB)</td>
+<td>decoder working memory and the SD-to-decoder ring; not latency critical</td>
+</tr>
+<tr>
+<td>UI render buffers (72 KB at 600x450)</td>
+<td>too big for internal RAM next to the stacks</td>
+</tr>
+<tr>
+<td>LVGL's pool (192 KB, <code>NEUPOD_LVGL_POOL_BYTES</code>)</td>
+<td>widgets, styles, layers; sized like the hosted builds: 72 KB ran out on the Music screens</td>
+</tr>
+<tr>
+<td>display shadow (527 KB, allocated at run time)</td>
+<td>see below</td>
+</tr>
+</tbody>
+</table>
+<p>Internal: the PCM ring (32 KB), the library buffers, a 2 KB SD staging buffer (PSRAM or unaligned buffers are copied through it, so no read or write depends on a bounce-buffer allocation), the display's two DMA strips (19 KB each), task stacks. After boot about 76 KB of
+internal heap is free (32 KB at the lowest, while the boot-check tasks run together): enough now, but the Wi-Fi/BLE stacks will need to
+be budgeted against it (trim the doubled stacks that measure small: the monitor line prints each task's stack-free minimum).</p>
+<p><strong>Display bring-up (what the dark-panel hunt found).</strong> The bring-up probe and the first runtime builds left the panel dark, while the factory image lit it. The factory
+firmware's init table was read out of its image (and matches Waveshare's <code>10_FactoryProgram</code> demo source). It differs from the probe's in the tail: after sleep-out it sets the
+window, sends <strong>display-on (0x29), MADCTL 0x30 and full brightness (0x51 0xFF) inside the init, before any pixel</strong>, and the driver sends 0x29 once more; the probe switched the display on
+only after the first frame. The expander turned out to be the real cause (bench, 21 Nov 2026): at a cold power-on the TCA9554 reads input 0xFE, output 0xFF, polarity 0x00, config 0xFF (all inputs) and the panel stays dark; after the factory firmware has run it reads output 0x03, config 0xDC (EXIO0 and EXIO1 PWR_EN driven high, EXIO5 driven low, the rest inputs) and the panel lights. That state survives an ESP32 reset and is lost only on a power cycle, so the earlier "fix" (the factory init table) only seemed to work on a warm expander. <code>board.c</code> now writes output 0x03 then config 0xDC and waits 20 ms before display init; this lit the panel from a full cold power cycle. <strong>Display tests must start from a full power cycle (USB and battery both out).</strong> Note the schematic labels EXIO0 "TE", which would be an input from the panel, yet the factory drives it high as an output, and so do we because that is the state proven to work; what EXIO0 and EXIO5 really do is not known. <code>hal_display.c</code> follows the factory sequence. The probe's <code>esp_lcd_sh8601</code> 2.0.1 is the same driver version the
+factory uses, with the same QSPI configuration (40 MHz, mode 0, 0x02/0x32 framing).</p>
+<p><strong>Display.</strong> <code>hal_display.c</code> talks to the RM690B0 through <code>esp_lcd</code>'s SPI panel IO in QSPI mode (SH8601 framing: opcode 0x02 for commands,
+0x32 + 0x2C00 for pixels), so no extra component is needed (the probe used <code>espressif/esp_lcd_sh8601</code>; the runtime does not). The controller wants
+windows that start even and end odd, and LVGL hands over arbitrary partial areas: a full <strong>shadow of the panel in PSRAM</strong>, already in the panel's
+byte order, takes each <code>hal_display_blit()</code> and the area is pushed from it widened to even edges, whatever the caller's alignment. Landscape is
+MADCTL 0x30 and a 16-row offset. <code>hal_display_name()</code> is <code>RM690B0</code>; brightness is command 0x51.</p>
+<p><strong>Input.</strong> One side key (<code>hal_input_power_key()</code>, GPIO15, active low) and the touch panel (<code>hal_touch.h</code>). There is no wheel and no Hold switch: <code>hal_input_init()</code>
+answers <code>HAL_ENODEV</code>, so the boot check marks the wheel degraded, exactly as on the RP2350 AMOLED board (touch and the console keys do not depend on it). A key press
+that is already down at power-on is ignored until it has been released once. The runtime's input task owns the touch controller: it calls <code>hal_touch_init()</code> under the
+I2C mutex once the bus is up and polls <code>hal_touch_read()</code> every 2 ms (<code>app/input/touch_gesture.c</code>, <a href="../touch/">Touch</a>); <code>hal_touch.c</code> throttles the bus to one read per 8 ms and
+uses the i2c_master driver, which locks the bus per transaction, so it shares the bus safely with <code>hal_i2c</code>. The touch HAL maps the controller's portrait coordinates to landscape
+(<code>x = y</code>, <code>y = 449 - x</code>; the factory demo's <code>x = 599 - y</code>, <code>y = x</code> came out 180 degrees rotated on the bench, 2026-11-15). The display (factory init table) and this mapping are bench-confirmed; the three <code>TOUCH_*</code>
+switches at the top of <code>hal_touch.c</code> are the one place to change the mapping.</p>
+<p><strong>Radio.</strong> <code>hal_wifi_present()</code> is false, every Wi-Fi call answers <code>HAL_ENODEV</code>, and <code>hal_bt_init()</code> answers <code>HAL_ENOTSUP</code>; the boot check reports both as
+unavailable. No network is ever joined. <code>hal_system_late_init()</code> has nothing to start.</p>
+<p><strong>Crypto.</strong> <code>app/crypto</code> is compiled against IDF's mbed TLS (hardware AES/SHA); <code>hal_chip_id()</code> is the factory MAC. <code>hal_random()</code> is the hardware RNG register, which
+without the radio on is a noise source rather than a certified TRNG: fine for the secrets file's per-record nonces, to be revisited when Wi-Fi/BLE are.</p>
+<p><strong>Power.</strong> <code>BAT_CTRL</code> is latched high by the first start-up init function of the image (<code>ESP_SYSTEM_INIT_FN</code> in <code>board.c</code>, before the heap and PSRAM are up), and the 0.3 s PSRAM
+memory test is off, to keep the window in which a power-on key press could be released early as short as possible. <code>hal_system_poweroff()</code> drops the latch, waits 200 ms and
+<strong>returns false if the board is still running</strong> (USB power: the charger keeps it alive; it is probed, not assumed), so the UI takes its "powering off" overlay away; on battery
+the power simply goes. <code>hal_random()</code> is the hardware RNG register (not a certified TRNG while the radio is off; fine for per-record nonces; revisit with Wi-Fi/BLE).</p>
+<h2 id="ui-profile">UI profile<a class="headerlink" href="#ui-profile" title="Permanent link">&para;</a></h2>
+<p>The build sets <code>NEUPOD_UI_PROFILE=600x450</code> (default for this platform, <code>platforms/esp32s3/CMakeLists.txt</code>; <code>-DNEUPOD_UI_PROFILE=320x240</code> gives the small one, which then sits in
+the top-left corner). The profile is a compile-time constant, wired through the IDF component as <code>NEUPOD_UI_PROFILE_600</code>. Its two partial-render buffers (600 x 30 x 2 bytes each,
+72 KB together) are placed in PSRAM with the other big buffers (<code>ui</code> in <code>linker.lf</code>): they would not fit the internal RAM next to the stacks. Bench, 600x450:
+boot frame 7.5 ms average, a full-pane Settings screen about 40 ms average (the pane is redrawn whole), internal heap free 76 KB after boot (32 KB at the lowest).</p>
+<p>Measured stack minimums (bench, idle UI): <code>audio</code> 27.2 KB free of 28 KB, <code>vclk</code> 4.3 KB of 5 KB, <code>input</code> 1.8 KB of 4 KB, <code>storage</code> 9.4 KB of 16 KB, <code>ui</code> 16.5 KB of 24 KB. A decode
+on the audio core has not been measured (there is no music on the bench card yet): the audio stack is 28 KB and <code>vclk</code> 5 KB so that the deeper decoder path has room; re-check
+<code>core1_stack_free</code> in the monitor line the first time a FLAC and an MP3 play.</p>
+<h2 id="bench-result-14-nov-2026-600x450-profile">Bench result (14 Nov 2026, 600x450 profile)<a class="headerlink" href="#bench-result-14-nov-2026-600x450-profile" title="Permanent link">&para;</a></h2>
+<p>Boot log, USB console, on the board with a 32 GB FAT32 card (no music on it):</p>
+<div class="highlight"><pre><span></span><code>neuPod 0.1.0-dev (nogit) starting on esp32s3
+display: RM690B0 600x450 landscape, QSPI 40 MHz, shadow 527 KB in PSRAM
+boot: display   ok      : RM690B0 600x450
+boot: battery   DEGRADED: gauge (0x36): no response
+boot: haptics   DEGRADED: driver (0x5A): no response
+boot: audio     DEGRADED: output is the null sink (no DAC output)
+boot: wifi      DEGRADED: no Wi-Fi on this platform (Bluetooth only)
+boot: storage   ok      : SDHC 31.2 GB, FAT32, read-only
+boot: bluetooth DEGRADED: Bluetooth start failed: not supported
+boot: wheel     DEGRADED: receiver: no response
+touch: FT6336 chip id 0x64 (0x64 = FT6336) firmware 0x01 vendor 0x11
+input: touch panel ready (600x450)
+</code></pre></div>
+<p>The UI navigates from the console keys (Home, Music, Extras, Settings), the library scan runs and finishes, and a changed setting is written to the card and read back after a
+reset (<code>settings: loaded (7 items, seq 3)</code>), which proves the whole SD path: sdspi, sdmmc, <code>diskio.c</code>, FatFs and the write lock.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

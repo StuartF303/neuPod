@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" width="320" height="240" role="img" aria-label="Main menu: list of top-level items on the left, now-playing artwork on the right">
+  <style>text{font-family:-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;fill:#1d1d1b}</style>
+  <defs>
+    <linearGradient id="bar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f7f7f5"/><stop offset="1" stop-color="#d9d9d4"/>
+    </linearGradient>
+    <linearGradient id="sel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5f9df0"/><stop offset="1" stop-color="#2663c6"/>
+    </linearGradient>
+    <linearGradient id="art" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5a6b8a"/><stop offset="1" stop-color="#1e2a44"/>
+    </linearGradient>
+    <linearGradient id="art2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#b8743a"/><stop offset="1" stop-color="#4a2a10"/>
+    </linearGradient>
+    <linearGradient id="art3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4f8a6b"/><stop offset="1" stop-color="#143324"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="320" height="240" fill="#ffffff"/>
+  <rect x="0" y="0" width="320" height="24" fill="url(#bar)"/>
+  <line x1="0" y1="24" x2="320" y2="24" stroke="#b9b9b3" stroke-width="1"/>
+  <text x="160" y="17" text-anchor="middle" font-size="13" font-weight="600">neuPod</text>
+  <!-- battery -->
+  <rect x="289" y="7" width="22" height="10" rx="2" fill="none" stroke="#5b5a56" stroke-width="1"/>
+  <rect x="290.5" y="8.5" width="15" height="7" rx="1" fill="#3fa34d"/>
+  <rect x="311" y="10" width="2" height="4" fill="#5b5a56"/>
+  <rect x="0" y="24" width="160" height="24" fill="url(#sel)"/>
+  <text x="10" y="40.2" font-size="12.5" fill="#ffffff">Music</text>
+  <text x="150" y="40.2" font-size="12.5" text-anchor="end" fill="#ffffff">›</text>
+  <text x="10" y="64.2" font-size="12.5" fill="#1d1d1b">Podcasts</text>
+  <text x="150" y="64.2" font-size="12.5" text-anchor="end" fill="#1d1d1b">›</text>
+  <text x="10" y="88.2" font-size="12.5" fill="#1d1d1b">Photos</text>
+  <text x="150" y="88.2" font-size="12.5" text-anchor="end" fill="#1d1d1b">›</text>
+  <text x="10" y="112.2" font-size="12.5" fill="#1d1d1b">Extras</text>
+  <text x="150" y="112.2" font-size="12.5" text-anchor="end" fill="#1d1d1b">›</text>
+  <text x="10" y="136.2" font-size="12.5" fill="#1d1d1b">Settings</text>
+  <text x="150" y="136.2" font-size="12.5" text-anchor="end" fill="#1d1d1b">›</text>
+  <text x="10" y="160.2" font-size="12.5" fill="#1d1d1b">Shuffle Songs</text>
+  <text x="150" y="160.2" font-size="12.5" text-anchor="end" fill="#1d1d1b">›</text>
+  <text x="10" y="184.2" font-size="12.5" fill="#1d1d1b">Now Playing</text>
+  <text x="150" y="184.2" font-size="12.5" text-anchor="end" fill="#1d1d1b">›</text>
+  <line x1="160" y1="24" x2="160" y2="240" stroke="#d9d9d4"/>
+  <rect x="160" y="24" width="160" height="216" fill="#f4f4f1"/>
+  <rect x="192" y="56" width="96" height="96" rx="3" fill="url(#art)"/>
+  <circle cx="240.0" cy="104.0" r="21.12" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="2.88"/>
+  <circle cx="240.0" cy="104.0" r="4.800000000000001" fill="#ffffff" fill-opacity="0.5"/>
+  <text x="240" y="176" text-anchor="middle" font-size="11" fill="#5b5a56">Now playing</text>
+  <text x="240" y="192" text-anchor="middle" font-size="11.5" font-weight="600">Track title</text>
+  <text x="240" y="206" text-anchor="middle" font-size="10.5" fill="#5b5a56">Artist · Album</text>
+
+</svg>

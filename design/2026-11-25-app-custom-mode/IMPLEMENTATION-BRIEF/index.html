@@ -1,0 +1,2283 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/design/2026-11-25-app-custom-mode/IMPLEMENTATION-BRIEF/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
+    
+    
+      
+        <title>Implementation brief: Custom mode for the device view (AP-1) - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#implementation-brief-custom-mode-for-the-device-view-ap-1" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Implementation brief: Custom mode for the device view (AP-1)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../constitution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Constitution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../bluetooth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../wifi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../touch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Touch input (600x450 boards)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../y2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Innioasis Y2 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../esp32s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-S3 platform (dev board)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../rp2350-amoled241/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Waveshare RP2350 AMOLED dev board
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../i2c-peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../teardown/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Donor teardown (photos, findings)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0017-music-library-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0018-ui-resolution-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0018 UI resolution profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0019-bluetooth-audio-sink-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0019 Bluetooth audio boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0020-hold/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0020 Hold
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0021-power-sleep/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0021 Power and sleep
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0022-one-player-ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0022 One player UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0023-headphone-jack-reuse/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0023 Headphone jack reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#before-the-first-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before the first step
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-data-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The data model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-contrast-rule-as-numbers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The contrast rule, as numbers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#assets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The steps
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The steps">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-the-model-and-the-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. The model and the rule
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-one-paint-type-for-the-device" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. One paint type for the device
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-custom-paint-solid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Custom paint, solid
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-transparency-and-the-board" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Transparency and the board
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-the-mode-setting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. The mode setting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-settings-rows-and-the-lists" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Settings rows and the lists
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-the-part-editor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. The part editor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-accessibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Accessibility
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9-finish" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Finish
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stop-and-ask-the-owner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stop and ask the owner
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#done" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Done
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="implementation-brief-custom-mode-for-the-device-view-ap-1">Implementation brief: Custom mode for the device view (AP-1)<a class="headerlink" href="#implementation-brief-custom-mode-for-the-device-view-ap-1" title="Permanent link">&para;</a></h1>
+<p>You are building the design in <a href="../">README.md</a> in this folder, in the Flutter app under <code>mobile/</code>. This brief
+stands alone: everything you need to build is here or in the mock-ups. Read the README for the reasons, look at every
+PNG in <code>mockups/</code>, and open the matching <code>.html</code> when you need an exact size or colour. <code>render.py</code> in this folder is
+the reference for the colour arithmetic; where this brief and <code>render.py</code> disagree, stop and ask.</p>
+<p>You work through <a href="../PROGRESS/">PROGRESS.md</a> one item at a time and tick each item when its PR merges. It is the only
+record of where you are.</p>
+<p><strong>Not yours to decide:</strong> anything under the README's Open questions. Build what was drawn and leave the question open.</p>
+<h2 id="before-the-first-step">Before the first step<a class="headerlink" href="#before-the-first-step" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Read <code>docs/app/TEAM-BRIEF.md</code> and <code>CONTRIBUTING.md</code>; their rules win over this brief.</li>
+<li>Read <code>mobile/lib/ui/device/README.md</code>, <code>device_finish.dart</code>, <code>wheel_painter.dart</code>, <code>device_view.dart</code>,
+   <code>mobile/lib/ui/screens/shell/shell_style.dart</code>, <code>mobile/lib/ui/screens/browse/settings_screen.dart</code> and
+   <code>mobile/lib/domain/style/colour_math.dart</code>.</li>
+<li>Run the app's tests. Everything passes before you change anything; if not, stop and report.</li>
+<li>This feature changes paint, not layout. <code>device_geometry.dart</code>, the hit zones and the wheel's numbers are not
+   touched. A golden of Light or Dark mode that changes is a bug.</li>
+</ol>
+<h2 id="the-data-model">The data model<a class="headerlink" href="#the-data-model" title="Permanent link">&para;</a></h2>
+<p>Pure Dart, in <code>mobile/lib/domain/style/</code>. No Flutter imports.</p>
+<div class="highlight"><pre><span></span><code><span class="n">enum</span><span class="w"> </span><span class="n">LookPart</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">body</span><span class="p">,</span><span class="w"> </span><span class="n">wheel</span><span class="p">,</span><span class="w"> </span><span class="n">centre</span><span class="w"> </span><span class="p">}</span>
+<span class="n">enum</span><span class="w"> </span><span class="n">LookScreen</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">light</span><span class="p">,</span><span class="w"> </span><span class="n">dark</span><span class="p">,</span><span class="w"> </span><span class="n">auto</span><span class="w"> </span><span class="p">}</span>
+<span class="n">enum</span><span class="w"> </span><span class="n">ModeSetting</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">light</span><span class="p">,</span><span class="w"> </span><span class="n">dark</span><span class="p">,</span><span class="w"> </span><span class="n">auto</span><span class="p">,</span><span class="w"> </span><span class="n">custom</span><span class="w"> </span><span class="p">}</span>
+
+<span class="c1">/// Whole numbers, as the editor sets them. RGB is computed, never stored.</span>
+<span class="kd">final</span><span class="w"> </span><span class="kd">class</span><span class="w"> </span><span class="nc">PartPaint</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">final</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">hue</span><span class="p">;</span><span class="w">          </span><span class="c1">// 0..359</span>
+<span class="w">  </span><span class="kd">final</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">saturation</span><span class="p">;</span><span class="w">   </span><span class="c1">// 0..100</span>
+<span class="w">  </span><span class="kd">final</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">brightness</span><span class="p">;</span><span class="w">   </span><span class="c1">// 0..100</span>
+<span class="w">  </span><span class="kd">final</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">transparency</span><span class="p">;</span><span class="w"> </span><span class="c1">// 0..85 body, 0..60 wheel and centre</span>
+<span class="p">}</span>
+
+<span class="kd">final</span><span class="w"> </span><span class="kd">class</span><span class="w"> </span><span class="nc">CustomLook</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">final</span><span class="w"> </span><span class="kt">String</span><span class="w"> </span><span class="n">id</span><span class="p">;</span><span class="w">        </span><span class="c1">// made once, never reused</span>
+<span class="w">  </span><span class="kd">final</span><span class="w"> </span><span class="kt">String</span><span class="w"> </span><span class="n">name</span><span class="p">;</span><span class="w">      </span><span class="c1">// 1..16 characters</span>
+<span class="w">  </span><span class="kd">final</span><span class="w"> </span><span class="n">PartPaint</span><span class="w"> </span><span class="n">body</span><span class="p">,</span><span class="w"> </span><span class="n">wheel</span><span class="p">,</span><span class="w"> </span><span class="n">centre</span><span class="p">;</span>
+<span class="w">  </span><span class="kd">final</span><span class="w"> </span><span class="kt">String</span><span class="w"> </span><span class="n">board</span><span class="p">;</span><span class="w">     </span><span class="c1">// 'main-top' | 'main-bottom' | 'copper'; unknown falls back to 'main-top'</span>
+<span class="w">  </span><span class="kd">final</span><span class="w"> </span><span class="n">LookScreen</span><span class="w"> </span><span class="n">screen</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kd">final</span><span class="w"> </span><span class="kd">class</span><span class="w"> </span><span class="nc">CustomLooks</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">final</span><span class="w"> </span><span class="n">List</span><span class="o">&lt;</span><span class="n">CustomLook</span><span class="o">&gt;</span><span class="w"> </span><span class="n">looks</span><span class="p">;</span><span class="w"> </span><span class="c1">// 0..6, in list order</span>
+<span class="w">  </span><span class="kd">final</span><span class="w"> </span><span class="kt">String</span><span class="o">?</span><span class="w"> </span><span class="n">lookInUse</span><span class="p">;</span><span class="w">      </span><span class="c1">// an id in looks, or null</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>JSON is the README's section 10 example, field for field. Reading clamps every number into its range and drops a
+seventh look and beyond; it never throws on a bad value.</p>
+<p>Not stored, always computed: RGB, gradients, ink, the flat flag, the transparency kept.</p>
+<h2 id="the-contrast-rule-as-numbers">The contrast rule, as numbers<a class="headerlink" href="#the-contrast-rule-as-numbers" title="Permanent link">&para;</a></h2>
+<p><code>paintPart(PartPaint p, LookPart part, {List&lt;int&gt;? grounds, double need = 4.5})</code> returns the colours to draw with.
+It must give the same results as <code>paint()</code> in <code>render.py</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Constant</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ink</td>
+<td><code>0x000000</code> or <code>0xffffff</code> only</td>
+</tr>
+<tr>
+<td>Target</td>
+<td>4.5; 7.0 with Increase Contrast</td>
+</tr>
+<tr>
+<td>Switch for one flat colour</td>
+<td>relative luminance 0.179: black at or above, white below</td>
+</tr>
+<tr>
+<td>Gradient ends, mixed toward white (top) and black (bottom)</td>
+<td>body 0.10 (stops at 0, 0.45 for the colour itself, 1); wheel 0.06; centre 0.06</td>
+</tr>
+<tr>
+<td>Most transparency</td>
+<td>body 85; wheel 60; centre 60</td>
+</tr>
+<tr>
+<td>Step when giving back transparency</td>
+<td>5</td>
+</tr>
+<tr>
+<td>Mix</td>
+<td>per channel, in sRGB bytes: <code>round(a + (b - a) * t)</code></td>
+</tr>
+<tr>
+<td>Contrast</td>
+<td><code>contrastRatio</code> in <code>colour_math.dart</code> (WCAG 2)</td>
+</tr>
+</tbody>
+</table>
+<p>Steps:</p>
+<ol>
+<li><code>t = min(p.transparency, most)</code>; <code>flat = false</code>; <code>base = hsv(p)</code>.</li>
+<li><code>stops = flat ? [base, base, base] : [mix(base, white, amp), base, mix(base, black, amp)]</code>.</li>
+<li><code>under = stops</code>, or when <code>t &gt; 0</code> and <code>grounds</code> is given, every stop composited over every ground:
+   <code>mix(stop, ground, t / 100)</code>.</li>
+<li><code>black = min contrast(0x000000, u)</code> over <code>under</code>; <code>white</code> likewise. <code>ink = black &gt;= white ? black : white</code>;
+   <code>worst = max(black, white)</code>.</li>
+<li>If <code>worst &lt; need</code> and not <code>flat</code>: <code>flat = true</code>, go to 2.</li>
+<li>While <code>worst &lt; need</code> and <code>t &gt; 0</code>: <code>t -= 5</code>, go to 2.</li>
+<li>Return <code>base</code>, <code>stops</code>, <code>ink</code>, <code>worst</code>, <code>t</code> (the transparency kept) and <code>flat</code>.</li>
+</ol>
+<p><code>grounds</code> is given for the <strong>wheel only</strong>: the board's <code>frostDark</code> and <code>frostLight</code>. The body and the centre pass
+none.</p>
+<p>Other inks: the phone's status bar is black when <code>relativeLuminance(body.stops[0]) &gt;= 0.179</code>, else white. The
+wordmark uses the body's ink. Edges: ink at 30 % (60 % with Increase Contrast); groove ink at 22 %; frame outer edge
+body ink at 16 %. Tints, with <code>t</code> the transparency kept as a fraction: finger on the ring <code>0.07 + 0.06 t</code> for black
+ink or <code>0.08 + 0.06 t</code> for white; pressed <code>0.13 + 0.10 t</code> or <code>0.14 + 0.10 t</code>.</p>
+<p>Increase Contrast: <code>transparency = 0</code>, then for <code>d = 0, 1, 2, ...</code> try <code>brightness - d</code> then <code>brightness + d</code> (inside
+0..100) and take the first whose <code>paintPart(..., need: 7.0).worst &gt;= 7.0</code>.</p>
+<p>Check values (from <code>python3 render.py --numbers</code>; base, ink, worst, transparency kept, flat; wheel over <code>main-top</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Look</th>
+<th>Body</th>
+<th>Wheel</th>
+<th>Centre</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Harbour</td>
+<td><code>#2b5370</code> white 6.28, 0, no</td>
+<td><code>#f0e9dd</code> black 15.28, 0, no</td>
+<td><code>#23445c</code> white 8.62, 0, no</td>
+</tr>
+<tr>
+<td>Sea glass</td>
+<td><code>#74b2a3</code> black 7.04, 55, no</td>
+<td><code>#dcf5ef</code> black 16.06, 0, no</td>
+<td><code>#5c998a</code> black 5.71, 0, no</td>
+</tr>
+<tr>
+<td>Clear case</td>
+<td><code>#dde6eb</code> black 13.30, 85, no</td>
+<td><code>#ebf2f5</code> black 4.86, 60, <strong>flat</strong></td>
+<td><code>#d8e1e6</code> black 13.95, 60, no</td>
+</tr>
+<tr>
+<td>Flare (the README's awkward case)</td>
+<td><code>#db1a61</code> white 4.85, 0, <strong>flat</strong></td>
+<td><code>#4c172b</code> white 12.16, 0, no</td>
+<td><code>#f26118</code> black 5.77, 0, no</td>
+</tr>
+</tbody>
+</table>
+<h2 id="assets">Assets<a class="headerlink" href="#assets" title="Permanent link">&para;</a></h2>
+<p>Per board, under <code>mobile/assets/boards/</code> and listed in <code>pubspec.yaml</code>:</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>What</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>&lt;id&gt;.webp</code></td>
+<td>1200 x 3120 px, opaque, sRGB. Pixel (600, 2040) is the anchor</td>
+</tr>
+<tr>
+<td><code>&lt;id&gt;.frost.webp</code></td>
+<td>the same picture, Gaussian blur radius 36 px, saved at 300 x 780 px</td>
+</tr>
+<tr>
+<td>an entry in <code>boards.json</code></td>
+<td><code>id</code>, <code>name</code>, <code>ground</code> (<code>#rrggbb</code>), <code>frostDark</code>, <code>frostLight</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>mobile/tool/build_board.dart</code> (or a script beside it) makes the frost copy and measures <code>frostDark</code> and <code>frostLight</code>:
+the darkest and lightest pixel, by relative luminance, of the frost copy inside radius 384 px (at full size) of the
+anchor.</p>
+<p><strong>The pictures do not exist yet.</strong> Build with placeholders: export the three from this folder's <code>render.py</code>
+(<code>board_svg</code>) and keep their <code>PLACEHOLDER · NOT A NEUPOD BOARD</code> lettering. Ids <code>main-top</code>, <code>main-bottom</code>, <code>copper</code>;
+names <code>Main board, top</code>, <code>Main board, bottom</code>, <code>Copper only</code>. Never add a picture of a board that is not neuPod's
+own. Real pictures are the owner's to supply (README Open question 2); a release check in step 9 keeps placeholders
+out of a store build.</p>
+<p>Drawing a picture: scale <code>W / 1200</code>; put the anchor on the wheel's centre; paint <code>ground</code> wherever the picture does
+not reach.</p>
+<h2 id="the-steps">The steps<a class="headerlink" href="#the-steps" title="Permanent link">&para;</a></h2>
+<p>Each step is one PR unless it says otherwise. Every step: unit and golden tests pass, <code>flutter analyze</code> clean, no
+existing golden changes.</p>
+<h3 id="1-the-model-and-the-rule">1. The model and the rule<a class="headerlink" href="#1-the-model-and-the-rule" title="Permanent link">&para;</a></h3>
+<p>Files: <code>mobile/lib/domain/style/custom_look.dart</code>, <code>custom_paint.dart</code> (new); <code>colour_math.dart</code> (add <code>hsvToRgb</code>,
+<code>mix</code>); <code>mobile/test/domain/style/custom_look_test.dart</code>, <code>custom_paint_test.dart</code> (new).</p>
+<p>Accept when: the JSON round-trips and clamps; <code>paintPart</code> matches the check values above exactly; a test walks hue in
+15s, saturation in 10s and brightness in 5s for all three parts solid, and the wheel at 60 % over each board's frost
+pair, and every result has <code>worst &gt;= 4.5</code>; the Increase Contrast function returns <code>worst &gt;= 7.0</code> for the same walk.</p>
+<h3 id="2-one-paint-type-for-the-device">2. One paint type for the device<a class="headerlink" href="#2-one-paint-type-for-the-device" title="Permanent link">&para;</a></h3>
+<p>Files: <code>mobile/lib/ui/device/device_finish.dart</code>, <code>wheel_painter.dart</code>, <code>device_view.dart</code>, <code>device_options.dart</code>.</p>
+<p><code>DeviceFinish</code> is an enum of two finishes. Add a value class (<code>DevicePaint</code>) holding what the painters read: body
+stops and opacity, ring and centre stops and opacities, edge, groove, legend ink, wordmark ink, press and touch
+tints, status-bar ink, and whether there is a cap, a badge and a board. The two finishes map onto it with their
+table values unchanged. The painters read <code>DevicePaint</code> only.</p>
+<p>Accept when: every existing device and wheel golden is byte-identical.</p>
+<h3 id="3-custom-paint-solid">3. Custom paint, solid<a class="headerlink" href="#3-custom-paint-solid" title="Permanent link">&para;</a></h3>
+<p>Files: <code>device_view.dart</code>, <code>wheel_painter.dart</code>, new <code>mobile/lib/ui/device/custom_device_paint.dart</code> (a look, a
+board and the accessibility flags in; a <code>DevicePaint</code> out).</p>
+<p>Solid parts only. Legends, edge, groove and tints in ink. The frame's outer 1 px edge. Status-bar style from the
+body's top colour.</p>
+<p>Goldens: <code>device_393x852_custom_harbour</code>, <code>_custom_chalk</code>, <code>_custom_flare</code>, <code>_custom_default_light</code>,
+<code>_custom_default_dark</code>; <code>wheel_states_custom_harbour</code> (idle, ring, menu, centre, disabled).</p>
+<p>Accept when: the goldens agree with <code>look-opaque.png</code>, <code>awkward-pale-classic-light.png</code>,
+<code>awkward-saturated-modern-dark.png</code>, <code>default-light.png</code>, <code>default-dark.png</code> in structure, colour and ink.</p>
+<h3 id="4-transparency-and-the-board">4. Transparency and the board<a class="headerlink" href="#4-transparency-and-the-board" title="Permanent link">&para;</a></h3>
+<p>Files: <code>device_view.dart</code>, <code>wheel_painter.dart</code>, new <code>mobile/lib/ui/device/board_picture.dart</code>,
+<code>mobile/assets/boards/*</code>, <code>pubspec.yaml</code>, <code>mobile/tool/build_board.dart</code>.</p>
+<p>The README's nine layers, in order. The cap. The wordmark's badge. The frost copy clipped to the wheel and to the
+centre. Pictures decoded once and cached; none decoded when every part is solid.</p>
+<p>Goldens: <code>device_393x852_custom_seaglass</code>, <code>_custom_clear</code>, and Clear case at 375x667 and 440x956 (the anchor);
+<code>wheel_states_custom_clear</code>.</p>
+<p>Accept when: the anchor sits on the wheel's centre at all three sizes; the goldens agree with
+<code>look-part-transparent.png</code>, <code>look-clear-case.png</code> and <code>wheel-states-see-through.png</code>; an asset test fails a board
+whose frost pair makes a white wheel (0, 0, 100) asked for 60 % keep less than 50 %.</p>
+<h3 id="5-the-mode-setting">5. The mode setting<a class="headerlink" href="#5-the-mode-setting" title="Permanent link">&para;</a></h3>
+<p>Files: <code>mobile/lib/ui/screens/shell/shell_style.dart</code>, <code>mobile/lib/app/neupod_app.dart</code>, <code>device_options.dart</code>, new
+<code>mobile/lib/app/custom_looks_provider.dart</code>.</p>
+<p><code>StyleChoice.mode</code> becomes <code>ModeSetting</code>. In Custom the screen's mode is the look's <code>screen</code> (Auto follows the
+phone) and the device's paint is the look's. A <code>customLooksProvider</code> holds <code>CustomLooks</code>, seeded with the three
+starters (README section 7), behind a small store interface. Settings are not persisted anywhere in the app yet
+(<code>docs/app/PROGRESS.md</code>, phase 6): keep looks in memory behind that interface with the JSON codec ready, and wire
+the store when the Settings item lands. Do not invent a storage mechanism here.</p>
+<p>Accept when: Light, Dark and Auto behave exactly as before; Custom with no look in use falls back to Auto.</p>
+<h3 id="6-settings-rows-and-the-lists">6. Settings rows and the lists<a class="headerlink" href="#6-settings-rows-and-the-lists" title="Permanent link">&para;</a></h3>
+<p>Files: <code>settings_screen.dart</code>; new <code>mobile/lib/ui/screens/custom/looks_screen.dart</code>, <code>look_screen.dart</code>,
+<code>reset_delete_screen.dart</code>, <code>board_screen.dart</code>; <code>mobile/lib/ui/screens/README.md</code>.</p>
+<p>Mode cycles Light, Dark, Auto, Custom. The Custom look row. The looks list with tick, preview after 250 ms at rest
+and <code>New look</code> (greyed with <code>6 of 6</code> at six). A look's seven rows. Name through the existing wheel text entry, 16
+characters. Reset and Delete, each behind the centred panel. The board picker with its preview pane. No scroll bar
+is drawn on these screens.</p>
+<p>Goldens, Classic Light and Modern Dark, standard tier: <code>settings_custom</code>, <code>custom_looks</code>, <code>custom_look</code>,
+<code>custom_board</code>, <code>custom_reset_delete</code>; Classic Light at the largest tier for <code>custom_looks</code> and <code>custom_look</code>.</p>
+<p>Accept when: they agree with <code>settings-mode-rows.png</code>, <code>looks-list.png</code>, <code>look.png</code> and <code>board-picker.png</code>; nothing
+scrolls at the standard tier; every row has its screen-reader label as README section 8.</p>
+<h3 id="7-the-part-editor">7. The part editor<a class="headerlink" href="#7-the-part-editor" title="Permanent link">&para;</a></h3>
+<p>Files: new <code>mobile/lib/ui/screens/custom/part_picker_screen.dart</code>, <code>part_picker_view.dart</code>, <code>colour_wheel.dart</code>.</p>
+<p>The layout of README section 2 at 600x450. Wheel: Hue 5 a detent, wrapping; Saturation and Brightness 4; Transparency
+5; ends give <code>endReached()</code>. Previous and Next move the field; the centre steps the part; Menu goes back. Each
+change repaints the device at once and is saved. The legend note. The part's edge pulse (not with Reduce Motion).
+With direct touch on: drag on the colour wheel, drag on a bar, tap a field or a tab. The wheel's semantics: label
+the field, value the number and the part.</p>
+<p>Goldens: <code>custom_part_body</code>, <code>custom_part_wheel_clear</code>, <code>custom_part_centre</code> in Classic Light and Modern Dark;
+<code>custom_part_body</code> at the large and largest tiers in Classic Light.</p>
+<p>Accept when: they agree with <code>editor-body.png</code>, <code>editor-wheel.png</code>, <code>editor-centre.png</code> and
+<code>editor-largest-text.png</code>; a widget test makes Harbour from the default with the wheel bus alone; a widget test
+shows <code>Held at</code> when the rule gives transparency back.</p>
+<h3 id="8-accessibility">8. Accessibility<a class="headerlink" href="#8-accessibility" title="Permanent link">&para;</a></h3>
+<p>Files: <code>custom_device_paint.dart</code>, <code>part_picker_view.dart</code>, <code>mobile/lib/app/device_platform.dart</code> and the
+<code>neupod_device</code> plugin if a platform flag is missing.</p>
+<p>Reduce Transparency and Increase Contrast as README section 8. Find the current Flutter and platform APIs for both
+and check them against current documentation; if Flutter does not expose Reduce Transparency, read it through the
+plugin. Android: use what the system offers and say in the PR what that is.</p>
+<p>Goldens: <code>device_393x852_custom_clear_reduce_transparency</code>, <code>_custom_seaglass_increase_contrast</code>.</p>
+<p>Accept when: they agree with <code>a11y-reduce-transparency.png</code> and <code>a11y-increase-contrast.png</code>; no board picture is
+decoded with either setting on; the stored look is unchanged by both.</p>
+<h3 id="9-finish">9. Finish<a class="headerlink" href="#9-finish" title="Permanent link">&para;</a></h3>
+<p>Files: <code>docs/app/README.md</code>, <code>docs/app/PROGRESS.md</code>, <code>mobile/lib/ui/device/README.md</code>, <code>CHANGELOG.md</code>, the Licences
+data if an asset needs a line, CI.</p>
+<p>A release check that fails the build when <code>boards.json</code> still marks a picture as a placeholder. The device check on
+the owner's iPhone and Pixel: every screen here, both styles, the three starters, each accessibility setting,
+recorded with the date. This folder's README updated where the build ended up different, with the reason.</p>
+<h2 id="stop-and-ask-the-owner">Stop and ask the owner<a class="headerlink" href="#stop-and-ask-the-owner" title="Permanent link">&para;</a></h2>
+<ul>
+<li>anything that depends on a README Open question;</li>
+<li>the rule and <code>render.py</code> disagree, or a check value cannot be matched;</li>
+<li>an existing golden would have to change;</li>
+<li>a platform has no way to read an accessibility setting;</li>
+<li>the same step has failed its acceptance three times.</li>
+</ul>
+<p>When you stop, leave the tree clean, <code>PROGRESS.md</code> current, and say exactly what you need.</p>
+<h2 id="done">Done<a class="headerlink" href="#done" title="Permanent link">&para;</a></h2>
+<p>Every item in <code>PROGRESS.md</code> is ticked or marked <code>BLOCKED</code> with an owner question attached, CI is green on <code>main</code>, and
+the final report lists what shipped, what is blocked and on what, and what was and was not checked on the phones.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

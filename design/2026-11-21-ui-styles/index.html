@@ -1,0 +1,2396 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Replacement logic board and firmware for the iPod Classic 6G">
+      
+      
+      
+        <link rel="canonical" href="https://stuartf303.github.io/neuPod/design/2026-11-21-ui-styles/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
+    
+    
+      
+        <title>UI styles: Classic and Modern, 21 November 2026 - neuPod</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#ui-styles-classic-and-modern-21-november-2026" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="neuPod" class="md-header__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            neuPod
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              UI styles: Classic and Modern, 21 November 2026
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="neuPod" class="md-nav__button md-logo" aria-label="neuPod" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    neuPod
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuartF303/neuPod" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuartF303/neuPod
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../constitution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Constitution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Firmware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime (RTOS, tasks, boot)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio (I2S, tones, WAV)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../bluetooth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bluetooth (BTstack, settings store)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wifi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wi-Fi (lwIP, clock, secrets)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ui-input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wheel input widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../touch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Touch input (600x450 boards)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../y2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Innioasis Y2 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../esp32s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-S3 platform (dev board)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiring-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 1 wiring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../click-wheel-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Click-wheel protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../display-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Display bring-up tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    microSD storage and tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../rp2350-amoled241/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Waveshare RP2350 AMOLED dev board
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../i2c-peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C peripherals (fuel gauge, haptics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench practice and test order
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../teardown/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Donor teardown (photos, findings)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture decision records
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0001-rp2350-phase1-platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0001 RP2350 as Phase 1 platform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0002-display-st7789-spi-phase1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0002 ST7789 SPI display
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0003-audio-quality-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0003 Audio quality policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0004-donor-ipod-classic-6g/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0004 Donor iPod Classic 6G
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0005-firmware-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0005 Firmware architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0006-storage-microsd-sdio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0006 Storage microSD SDIO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0007-bluetooth-audio-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0007 Bluetooth audio path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0008-card-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0008 Card format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0009-rtos-freertos-smp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0009 RTOS FreeRTOS (amended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0010-ui-lvgl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0010 UI toolkit LVGL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0011-bare-metal-audio-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0011 Bare-metal audio core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0012-audio-codec-final-board/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0012 Final-board audio codec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0013-bluetooth-ram-psram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0013 BT stage 2 RAM and PSRAM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0014-ota-ab-partitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0014 OTA A/B partitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0015-clock-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0015 Clock plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0016-gapless-playback-and-play-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0016 Gapless playback and the play queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0017-music-library-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0017 Music library index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0018-ui-resolution-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0018 UI resolution profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0019-bluetooth-audio-sink-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0019 Bluetooth audio boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0020-hold/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0020 Hold
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0021-power-sleep/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0021 Power and sleep
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0022-one-player-ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0022 One player UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0023-headphone-jack-reuse/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADR-0023 Headphone jack reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#owner-decisions-21-november-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Owner decisions (21 November 2026)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-style-owns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a style owns
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#status-bar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status bar
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#now-playing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Now Playing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feedback-three-places" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Feedback: three places
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#music-screens" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Music screens
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#classic-light-the-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classic, Light: the values
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#modern-dark-the-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Modern, Dark: the values
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#other-resolutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other resolutions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-overrides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this overrides
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="ui-styles-classic-and-modern-21-november-2026">UI styles: Classic and Modern, 21 November 2026<a class="headerlink" href="#ui-styles-classic-and-modern-21-november-2026" title="Permanent link">&para;</a></h1>
+<p>A design session with the owner on how the firmware UI should look and behave. It builds on the
+<a href="../2026-11-12-ui-review/">12 November design review</a> and overrides it where the two disagree.</p>
+<p><strong>The brief (owner):</strong> the interface should look and feel like the original click-wheel player's. New components and some
+animation will be added, but as much of the original as possible is kept, for familiarity.</p>
+<p>This folder holds:</p>
+<ul>
+<li>this README: the decisions, the rules and the exact values;</li>
+<li><code>mockups/</code>: every screen that was drawn, as a PNG and as the standalone HTML it was rendered from (the HTML is the
+  reference for exact colours, gradients and sizes);</li>
+<li><a href="IMPLEMENTATION-BRIEF/">IMPLEMENTATION-BRIEF.md</a>: the working instructions for building it;</li>
+<li><a href="PROGRESS/">PROGRESS.md</a>: the checklist of work, ticked off as it merges.</li>
+</ul>
+<p>The mock-ups are design intent drawn in HTML, not firmware output. They are drawn at <strong>600x450</strong>, the touch AMOLED boards'
+profile, in Montserrat Medium (22 / 26 / 38 px) with Lucide icons. Album art squares are placeholders. Track names on the
+first screens are the test fixtures; the Music screens use real names from the owner's library.</p>
+<h2 id="owner-decisions-21-november-2026">Owner decisions (21 November 2026)<a class="headerlink" href="#owner-decisions-21-november-2026" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Two styles, two modes each.</strong> A theme is a <em>style</em> (Classic or Modern) and a <em>mode</em> (Light or Dark). Auto still
+   switches the mode when the backlight dims.</li>
+<li><strong>Classic is the 6G look as shipped</strong>: gradient selection bar, glossy status bar, green shaded battery. It is drawn
+   fresh, not copied from the original's artwork.</li>
+<li><strong>Modern goes beyond it</strong>: "art-led glass". True black, a backdrop and accent taken from the album art, translucent
+   tinted chrome. It borrows the layering idea from current phone design but not live blur or refraction.</li>
+<li><strong>A monochrome style is parked.</strong> When it returns it may bring its own fonts, provided they go through the same
+   rendering rules (display-text filter, glyph coverage, licences screen).</li>
+<li><strong>The AMOLED leads.</strong> Design at 600x450 first; 480x360 and 320x240 are scale-downs that must pass the layout audit.</li>
+<li><strong>Status bar is the same on every screen</strong>: play state at the left, title in the middle, hardware icons at the right.</li>
+<li><strong>Play state is one of three glyph groups</strong>: play; play then the two-arrow loop (repeat); play then the crossing
+   arrows (shuffle). Merged single icons were looked for in five open icon sets and none works at status-bar size.</li>
+<li><strong>Track position stays</strong> (<code>3 of 12</code>) after the play glyph.</li>
+<li><strong>No clock.</strong> There is no RTC, so the time is unknown after every cold start. The clock is dropped everywhere.</li>
+<li><strong>Headphones icon</strong> only while a 3.5 mm plug is in the jack. <strong>A jack-plug icon</strong> in its place when the output is set
+    to Line. <strong>Bluetooth icon is blue</strong> when a headset is connected or in use.</li>
+<li><strong>Volume on Now Playing is not permanent.</strong> Turning the wheel swaps the progress bar for a volume bar with a quiet
+    speaker at one end and a loud one at the other; it reverts when the wheel rests. No dB figure.</li>
+<li><strong>Volume on any other screen</strong> swaps the status-bar title for a small volume bar for about a second. The bottom HUD
+    strip goes away.</li>
+<li><strong>The format is less prominent</strong>: one small grey line (<code>FLAC 16/44.1</code>), no pill. The output is not written on Now
+    Playing at all; the status-bar icon says it.</li>
+<li><strong>The toast strip goes away.</strong> Messages go to one of three places (below).</li>
+</ol>
+<h2 id="what-a-style-owns">What a style owns<a class="headerlink" href="#what-a-style-owns" title="Permanent link">&para;</a></h2>
+<p>Today a theme is a table of 14 colours (<code>app/ui/ui_theme.[ch]</code>) and components such as the battery are fixed drawings.
+From now on:</p>
+<table>
+<thead>
+<tr>
+<th>A style owns</th>
+<th>Shared by every style</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Its colour table, one per mode, with the same 14 token names</td>
+<td>Layout: every position and size in <code>ui_metrics_t</code></td>
+</tr>
+<tr>
+<td>A small set of skins: status bar fill, battery, selection bar, scroll bar, progress and volume bars, panel, art frame, list ground</td>
+<td>Row counts (7 single-line, 5 two-line)</td>
+</tr>
+<tr>
+<td>Whether it draws an art backdrop</td>
+<td>Fonts, glyph coverage, the display-text filter</td>
+</tr>
+<tr>
+<td></td>
+<td>Wheel and button behaviour, copy, screen structure</td>
+</tr>
+</tbody>
+</table>
+<p>Both styles therefore run the same screens and the same snapshot tours.</p>
+<h2 id="status-bar">Status bar<a class="headerlink" href="#status-bar" title="Permanent link">&para;</a></h2>
+<p><img alt="Status bar states, Classic" src="mockups/classic-status-states.png" />
+<img alt="Play states, Modern" src="mockups/modern-play-states.png" /></p>
+<p>Three zones, in this order, on every screen:</p>
+<p><strong>Left: play state, then context.</strong></p>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Glyphs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stopped</td>
+<td>nothing</td>
+</tr>
+<tr>
+<td>Playing</td>
+<td>play triangle</td>
+</tr>
+<tr>
+<td>Paused</td>
+<td>pause bars</td>
+</tr>
+<tr>
+<td>Shuffle on</td>
+<td>transport glyph, then crossing arrows (Lucide <code>shuffle</code>)</td>
+</tr>
+<tr>
+<td>Repeat all</td>
+<td>transport glyph, then two-arrow loop (Lucide <code>repeat</code>)</td>
+</tr>
+<tr>
+<td>Repeat one</td>
+<td>transport glyph, then loop with a 1 (Lucide <code>repeat-1</code>)</td>
+</tr>
+<tr>
+<td>Shuffle and repeat</td>
+<td>transport glyph, crossing arrows, loop</td>
+</tr>
+</tbody>
+</table>
+<p>The mode glyphs stay while paused. After the glyphs comes the screen's context text where it has one: <code>3 of 12</code> on Now
+Playing, the count on a list (<code>1,204</code>, <code>9 albums</code>). Home and menus show the glyphs only.</p>
+<p><strong>Centre: the screen title.</strong> It gives way, for one to two seconds, to a message or to the volume bar (see Feedback).</p>
+<p><strong>Right: hardware, right-aligned, always in this order:</strong> Wi-Fi, Bluetooth, output (headphones or jack plug), lock,
+battery. A member that does not apply is not drawn and the others close up toward the battery.</p>
+<table>
+<thead>
+<tr>
+<th>Icon</th>
+<th>Shown</th>
+<th>Colour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Wi-Fi</td>
+<td>station joined</td>
+<td>ink</td>
+</tr>
+<tr>
+<td>Bluetooth</td>
+<td>a headset is saved</td>
+<td>dim when not connected; <strong>blue</strong> when connected or in use</td>
+</tr>
+<tr>
+<td>Headphones</td>
+<td>a plug is in the 3.5 mm jack and the output is wired</td>
+<td>ink</td>
+</tr>
+<tr>
+<td>Jack plug</td>
+<td>Audio output is set to Line</td>
+<td>ink</td>
+</tr>
+<tr>
+<td>Battery</td>
+<td>always</td>
+<td>style skin; rules as built (green charging, red below 15 %)</td>
+</tr>
+</tbody>
+</table>
+<p>The jack-plug glyph is not in Lucide and was drawn for this design: see <code>mockups/classic-status-states.html</code>.</p>
+<p>Not yet drawn, listed so they are not forgotten: fast-forward and rewind while scanning, opening (matters for network
+streaming), can't-play, recording, and the three busy dots for a background library update.</p>
+<h2 id="now-playing">Now Playing<a class="headerlink" href="#now-playing" title="Permanent link">&para;</a></h2>
+<p><img alt="Now Playing, Classic" src="mockups/classic-now-playing.png" />
+<img alt="Now Playing while the wheel turns, Classic" src="mockups/classic-now-playing-volume.png" />
+<img alt="Now Playing, Modern" src="mockups/modern-now-playing.png" />
+<img alt="Now Playing while the wheel turns, Modern" src="mockups/modern-now-playing-volume.png" /></p>
+<ul>
+<li>At rest: art, title, artist, <code>Album . Year</code>, the small format line, the progress bar with elapsed and remaining and the
+  repeat / shuffle word between them.</li>
+<li>Wheel moves: the progress bar and the times are replaced in place by the volume bar with a speaker glyph at each end.
+  It returns to progress when the wheel has rested (use the existing 1.2 s hold).</li>
+<li>The permanent volume strip, the dB figure, the format pill and the output pill are removed.</li>
+<li>Seek mode and page 2 are unchanged in behaviour and take the style's skins.</li>
+</ul>
+<h2 id="feedback-three-places">Feedback: three places<a class="headerlink" href="#feedback-three-places" title="Permanent link">&para;</a></h2>
+<p>The sliding toast strip and the bottom volume HUD are removed in both styles. A message goes to exactly one of:</p>
+<p><img alt="Status bar message" src="mockups/classic-feedback-status.png" />
+<img alt="Row feedback" src="mockups/classic-feedback-row.png" />
+<img alt="Panel" src="mockups/classic-feedback-panel.png" /></p>
+<table>
+<thead>
+<tr>
+<th>Place</th>
+<th>Use it when</th>
+<th>It must not</th>
+<th>Messages that move here</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Status bar title</strong> (swaps for about 2 s)</td>
+<td>Something changed by itself and the user only needs to know</td>
+<td>Need an answer; exceed about 24 characters</td>
+<td><code>Headphones unplugged</code>, <code>Couldn't reconnect - paused</code>, <code>Line out off</code>, <code>No audio output</code>, headset connected / disconnected, <code>Library updated</code>, and the transient refusals <code>Busy</code>, <code>Can't pair now</code>, <code>Not now</code>, <code>Bluetooth is starting</code></td>
+</tr>
+<tr>
+<td><strong>The row</strong></td>
+<td>The feedback is about the row under the selection bar</td>
+<td>Say anything unrelated to that row</td>
+<td>Success as a flash of the bar with a tick: <code>Added to On-The-Go</code>, <code>Removed from On-The-Go</code>. A reason on a greyed row, visible before the press: <code>Not in the library</code>, <code>Not an audio device</code>, <code>Plug into the jack first</code>, <code>No speaker in this device</code>, <code>Nothing playing</code>, unplayable codecs (<code>AAC, can't play</code>)</td>
+</tr>
+<tr>
+<td><strong>Centred panel</strong> (Select or Menu dismisses)</td>
+<td>Something was lost or is about to be</td>
+<td>Be used for routine confirmations</td>
+<td><code>Battery empty</code>, <code>Can't save: settings full</code>, <code>Paired, but not saved (read-only card)</code>, <code>Card is full</code>, <code>Card read error</code>, <code>Library update stopped</code></td>
+</tr>
+</tbody>
+</table>
+<p>Rules:</p>
+<ul>
+<li>Volume and a message share the status-bar title. Volume wins; the message shows after it.</li>
+<li><code>Can't open: too many screens</code> is an internal limit and should not reach the user: fix the cause or log it.</li>
+<li>The firmware raises about 50 toasts today (<code>grep ui_toast_show app/ui</code>). Every one must be assigned to a place; none
+  may be silently dropped.</li>
+</ul>
+<h2 id="music-screens">Music screens<a class="headerlink" href="#music-screens" title="Permanent link">&para;</a></h2>
+<p><img alt="Music menu" src="mockups/classic-music-menu.png" />
+<img alt="An artist's albums" src="mockups/classic-artist-albums.png" />
+<img alt="Cover Flow, Classic" src="mockups/classic-cover-flow.png" />
+<img alt="Album" src="mockups/classic-album.png" />
+<img alt="Cover Flow, Modern" src="mockups/modern-cover-flow.png" />
+<img alt="Album, Modern" src="mockups/modern-album.png" /></p>
+<ul>
+<li><strong>Music menu</strong>: split like Home. Cover Flow, Playlists, Artists, Albums, Songs, Genres, Compilations, Update Library;
+  the right pane previews the highlighted item (four covers for Albums).</li>
+<li><strong>An artist's albums</strong>: All Songs first, then a two-line row per album with a cover thumbnail, the year and the song
+  count. Drawn in year order (designer's call, see Open questions).</li>
+<li><strong>Cover Flow</strong>: Classic is the angled version with reflections on black. Modern is five flat rounded covers
+  (220 / 150 / 100 px) over a backdrop washed in the centre album's colours.</li>
+<li><strong>Album</strong>: the status-bar title is the album; a header shows the cover, the artist, the year and the song count; then
+  numbered tracks.</li>
+</ul>
+<h2 id="classic-light-the-values">Classic, Light: the values<a class="headerlink" href="#classic-light-the-values" title="Permanent link">&para;</a></h2>
+<p>All at 600x450. <code>A | B</code> in a gradient means a hard step at the midpoint (the gloss line).</p>
+<table>
+<thead>
+<tr>
+<th>Part</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ground / text</td>
+<td><code>#ffffff</code>; ink <code>#181818</code>, secondary <code>#606060</code>, tertiary <code>#767676</code>, disabled <code>#a0a0a0</code></td>
+</tr>
+<tr>
+<td>Status bar</td>
+<td>45 px; top to bottom <code>#fdfdfd</code>, <code>#dcdfe3</code> at 50 % | <code>#c6cad0</code> at 51 %, <code>#b6bbc2</code>; 1 px <code>#8c9199</code> under it; glyphs <code>#3a3d42</code>, dim <code>#9a9ea5</code>, Bluetooth active <code>#1858c8</code></td>
+</tr>
+<tr>
+<td>Battery</td>
+<td>body 44x22, 2 px <code>#5d626a</code> outline, radius 4, inside <code>#f4f5f6</code>; fill top to bottom <code>#c9f5a3</code>, <code>#63c62f</code> at 45 % | <code>#3f9c1c</code> at 55 %, <code>#58b82a</code>; terminal 4x10</td>
+</tr>
+<tr>
+<td>Selection bar</td>
+<td>full width, square; <code>#6db3f5</code>, <code>#2f80e0</code> at 50 % | <code>#1b62cf</code> at 51 %, <code>#1858c8</code>; white text with a 1 px dark shadow</td>
+</tr>
+<tr>
+<td>Selection flash</td>
+<td><code>#d6eafd</code>, <code>#a9d0f8</code> | <code>#93c3f5</code>, <code>#8abdf3</code>; text and tick <code>#10233f</code></td>
+</tr>
+<tr>
+<td>Right pane (Home, Music)</td>
+<td><code>#f3f4f6</code> to <code>#dde0e4</code>, 1 px <code>#b9bdc4</code> at its left; art with a soft drop shadow</td>
+</tr>
+<tr>
+<td>Scroll bar</td>
+<td>14 px gutter <code>#d5d8dc</code> to <code>#f1f2f4</code>; thumb left to right <code>#8fc3f6</code>, <code>#2f80e0</code>, <code>#1858c8</code>, radius 4</td>
+</tr>
+<tr>
+<td>Progress / volume bar</td>
+<td>12 px, radius 6; track <code>#c9ccd1</code> to <code>#eceef0</code> with 1 px <code>#9da2a9</code>; fill as the selection bar, starting <code>#8fc3f6</code></td>
+</tr>
+<tr>
+<td>Art</td>
+<td>square corners; on Now Playing a 56 px reflection at 30 % fading to nothing</td>
+</tr>
+<tr>
+<td>Album header</td>
+<td>121 px, <code>#f3f4f6</code> to <code>#e3e6e9</code>, 1 px <code>#b9bdc4</code> under it, 96 px art</td>
+</tr>
+<tr>
+<td>Panel</td>
+<td>452 px wide, white, 1 px <code>#6f757d</code>, radius 10; title strip in the status-bar gradient; the <code>OK</code> row is a 52 px selection bar; scrim <code>rgba(40,44,52,.45)</code></td>
+</tr>
+<tr>
+<td>Cover Flow</td>
+<td>black to <code>#1a1c20</code>; centre 200 px, sides 156 px turned 58 degrees, reflections</td>
+</tr>
+</tbody>
+</table>
+<h2 id="modern-dark-the-values">Modern, Dark: the values<a class="headerlink" href="#modern-dark-the-values" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Part</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ground</td>
+<td><code>#050608</code>, effectively black</td>
+</tr>
+<tr>
+<td>Backdrop</td>
+<td>two soft washes in the art's two main colours (one near a top corner at about 45 to 55 % strength, one near the opposite bottom corner at about 75 to 85 %), under a darkening scrim of 30 % at the top to 50 to 55 % at the bottom. Made <strong>once per track</strong> from the art (a small blurred, darkened copy), never blurred live. No art: the ground alone</td>
+</tr>
+<tr>
+<td>Accent</td>
+<td>the art's dominant colour with its lightness clamped until white text on it is at least 4.5:1. In the mock-ups <code>#d9734e</code> becomes <code>#b8502c</code> (7:1) and <code>#e9c46a</code> becomes <code>#8a5a12</code> (5.9:1)</td>
+</tr>
+<tr>
+<td>Text</td>
+<td>ink <code>#f0f0f0</code>, secondary <code>#b0b0b0</code> to <code>#c8c8c8</code>, disabled <code>#7c7c7c</code></td>
+</tr>
+<tr>
+<td>Status bar</td>
+<td><code>rgba(10,10,12,.5)</code> over the backdrop, 1 px <code>rgba(255,255,255,.10)</code> under it; dim glyphs <code>#7a7a7a</code>; Bluetooth active <code>#5aa2ff</code> (fixed, not the accent)</td>
+</tr>
+<tr>
+<td>Battery</td>
+<td>capsule 44x22, 2 px <code>rgba(255,255,255,.6)</code>, radius 8; fill <code>#8cecb4</code> to <code>#30b870</code>, radius 4; terminal 3x9</td>
+</tr>
+<tr>
+<td>List ground</td>
+<td><code>rgba(0,0,0,.38)</code> to <code>.42</code> over the backdrop; dividers <code>rgba(255,255,255,.08)</code></td>
+</tr>
+<tr>
+<td>Selection bar</td>
+<td>inset 6 px, radius 14 (one line) or 16 (two lines); the accent, with a highlight of <code>rgba(255,255,255,.16)</code> fading out by 55 % of its height, a 1 px light top edge <code>rgba(255,255,255,.28)</code> and a shadow <code>0 6px 16px rgba(0,0,0,.45)</code>; white text</td>
+</tr>
+<tr>
+<td>Selection flash</td>
+<td>the bar keeps its colour and gains a 3 px ring <code>rgba(255,255,255,.6)</code> and a tick</td>
+</tr>
+<tr>
+<td>Scroll bar</td>
+<td>4 px, <code>rgba(255,255,255,.45)</code>, no track</td>
+</tr>
+<tr>
+<td>Progress bar</td>
+<td>6 px, radius 3; track <code>rgba(255,255,255,.2)</code>; fill a light tint of the art colour (<code>#f2a586</code> in the mock-up)</td>
+</tr>
+<tr>
+<td>Volume (Now Playing)</td>
+<td>a floating capsule 44 px high, radius 22, <code>rgba(0,0,0,.4)</code>, 1 px <code>rgba(255,255,255,.14)</code>; bar 8 px, fill <code>#f0f0f0</code></td>
+</tr>
+<tr>
+<td>Art</td>
+<td>radius 16, shadow <code>0 12px 30px rgba(0,0,0,.6)</code>, 1 px light top edge</td>
+</tr>
+<tr>
+<td>Panel</td>
+<td>452 px wide, <code>rgba(28,28,32,.92)</code>, 1 px <code>rgba(255,255,255,.16)</code>, radius 22; <code>OK</code> is a 50 px accent button, radius 14; scrim <code>rgba(0,0,0,.6)</code></td>
+</tr>
+<tr>
+<td>Cover Flow</td>
+<td>flat covers 220 / 150 / 100 px, radii 20 / 16 / 12, opacity 1 / .85 / .6</td>
+</tr>
+</tbody>
+</table>
+<p>The existing rule that every colour is RGB565-exact was written for the LCD. Keep it for flat fills; gradient stops and
+alpha blends on the AMOLED are exempt.</p>
+<h2 id="other-resolutions">Other resolutions<a class="headerlink" href="#other-resolutions" title="Permanent link">&para;</a></h2>
+<p>Lengths scale through the existing metrics profiles: 600x450 values times 4/5 for 480x360 and 8/15 for 320x240, rounded
+as <code>ui_metrics.c</code> already does. Row counts do not change. On 320x240 the left of the status bar is tight when shuffle and
+repeat are both on; the track position may drop out in that one state.</p>
+<h2 id="open-questions">Open questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
+<p>Not decided. Do not settle these by guessing; ask the owner.</p>
+<p><strong>Gate 2 (22 November 2026), app spec owner decision 13:</strong> 9 is decided (placeholder cover, "Nothing playing" and the
+song count). Classic Light is adjusted to 4.5:1 contrast where the values below fall short, and Bluetooth saved versus
+connected gets a cue besides colour (bears on 4).</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Question</th>
+<th>What was drawn meanwhile</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>Classic Dark and Modern Light</strong> have not been designed</td>
+<td>Only Classic Light and Modern Dark exist</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>Typeface.</strong> The 6G used a Helvetica-like face; both styles use Montserrat for now</td>
+<td>Montserrat</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Row "done" feedback in Classic</strong>: the pale flash drawn, or the original's quick blink</td>
+<td>Pale flash with a tick</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Saved but unconnected Bluetooth</strong>: dimmed icon (as built) or hidden</td>
+<td>Dimmed</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>Modern recolouring</strong>: in Cover Flow and Album the backdrop and accent follow the album on screen; elsewhere the playing track. Or always the playing track?</td>
+<td>Follows the album on screen in those two views</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>Album order under an artist</strong>: by year or by name</td>
+<td>By year</td>
+</tr>
+<tr>
+<td>7</td>
+<td><strong>Thumbnails on album rows</strong> cost a decode per row</td>
+<td>Drawn with thumbnails</td>
+</tr>
+<tr>
+<td>8</td>
+<td><strong>Classic Cover Flow angled</strong> needs the performance test first; the firmware has only the flat one</td>
+<td>Angled</td>
+</tr>
+<tr>
+<td>9</td>
+<td><strong>Home right-hand pane when nothing is playing</strong>, now that the clock is gone</td>
+<td>Not drawn</td>
+</tr>
+<tr>
+<td>10</td>
+<td><strong>Performance.</strong> Modern depends on alpha blending and a full-screen backdrop at speed on a microcontroller. Untested</td>
+<td>See the brief, phase 0</td>
+</tr>
+<tr>
+<td>11</td>
+<td><strong>Long names</strong> (for example <code>Ministry of Sound - the Annual IV - [Disc 1 of 2] (Judge Jules) (Disc 1)</code>): tickers in lists; Cover Flow's title line needs a rule</td>
+<td>Not drawn</td>
+</tr>
+<tr>
+<td>12</td>
+<td><strong>Left of the status bar at 320x240</strong> with shuffle and repeat both on</td>
+<td>Not drawn</td>
+</tr>
+</tbody>
+</table>
+<h2 id="what-this-overrides">What this overrides<a class="headerlink" href="#what-this-overrides" title="Permanent link">&para;</a></h2>
+<ul>
+<li>12 November review: the toast strip (DS-5, owner decision 8), the volume HUD (NP-4), the Now Playing pills and volume
+  strip (NP-1), the clock in the status bar's left slot (DS-3), the rounded inset selection bar as the only look (DS-4;
+  it becomes Modern's).</li>
+<li><code>docs/ui.md</code> describes the UI as built. It stays correct until each piece of this design merges, and is updated in the
+  same PR as the code.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Documentation licensed CC BY 4.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>
